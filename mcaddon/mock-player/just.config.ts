@@ -47,7 +47,7 @@ const pkgVersion: string = JSON.parse(fs.readFileSync(path.join(__dirname, "pack
 
 const bundleTaskOptions: BundleTaskParameters = {
   entryPoint: path.join(__dirname, "./scripts/main.ts"),
-  external: ["@minecraft/server", "@minecraft/server-ui"],
+  external: ["@minecraft/server", "@minecraft/server-ui", "@minecraft/server-gametest"],
   outfile: path.resolve(__dirname, "./dist/scripts/main.js"),
   minifyWhitespace: false,
   sourcemap: true,
