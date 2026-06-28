@@ -37,12 +37,13 @@ const TAG_IDLE: TagDef = { label: "无状态", value: `${TAG_PREFIX}idle` };
 const TAG_AUTO_MINE: TagDef = { label: "自动挖掘", value: `${TAG_PREFIX}autoMine` };
 const TAG_AUTO_PLACE: TagDef = { label: "自动放置", value: `${TAG_PREFIX}autoPlace` };
 const TAG_AUTO_ATTACK: TagDef = { label: "自动攻击", value: `${TAG_PREFIX}autoAttack` };
+const TAG_CONTROL: TagDef = { label: "体态控制", value: `${TAG_PREFIX}control` };
 
 /** 可共存的标签组 */
 const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
 
 /** 互斥的标签组 */
-const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK];
+const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL];
 
 /** 所有已定义的标签 */
 const ALL_TAGS: TagDef[] = [...COEXIST_TAGS, ...EXCLUSIVE_TAGS];
@@ -133,6 +134,8 @@ interface BotRecord {
   entityId?: string;
   /** 持久化的标签列表 */
   tags: string[];
+  /** 体态控制器玩家 ID（仅 TAG_CONTROL 时有效） */
+  controllerId?: string;
   /** 潜行状态 */
   isSneaking: boolean;
   /** 最后已知位置（死亡时清空，由 respawnPoint 或在线刷新填充） */
@@ -990,6 +993,82 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       return { status: CustomCommandStatus.Success, message: `§a正在让假人移动...` };
     }
   );
+
+  // ── /mp:control <name> [true|false] ────────────────
+  registry.registerCommand(
+    {
+      name: "mp:control",
+      description: "体态控制：开启后假人持续跟随玩家位置/朝向/视角",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
+      optionalParameters: [{ name: "enable", type: CustomCommandParamType.Boolean }],
+    },
+    (origin, ...args) => {
+      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
+      const player = origin.sourceEntity as Player;
+      const targetName = args[0] as string;
+      const enable = args[1] as boolean | undefined;
+
+      if (!targetName) {
+        return { status: CustomCommandStatus.Failure, message: "用法: /mp:control <假人> [true|false]" };
+      }
+
+      system.run(() => {
+        const record = botRegistry.get(targetName);
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+
+        const turnOn = enable ?? true;
+
+        if (turnOn) {
+          // 开启体态控制：添加 TAG_CONTROL，移除其他互斥标签，记录控制器
+          record.tags = record.tags.filter((t) => !EXCLUSIVE_SET.has(t));
+          if (!record.tags.includes(TAG_CONTROL.value)) {
+            record.tags.push(TAG_CONTROL.value);
+          }
+          record.controllerId = player.id;
+
+          // 立即同步一次
+          if (record.online) {
+            const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+            if (entity) {
+              syncEntityTags(entity, record.tags);
+              const lookTarget = getPlayerLookTarget(player);
+              (entity as SimulatedPlayer).teleport(player.location, { rotation: player.getRotation() });
+              (entity as SimulatedPlayer).lookAtLocation(lookTarget, LookDuration.Continuous);
+            }
+          }
+
+          player.sendMessage(`§a已开启假人 §e${targetName}§a 的体态控制`);
+        } else {
+          // 关闭体态控制
+          record.tags = record.tags.filter((t) => t !== TAG_CONTROL.value);
+          record.controllerId = undefined;
+
+          // 如果没有任何互斥标签了，回退到无状态
+          const hasExclusive = record.tags.some((t) => EXCLUSIVE_SET.has(t));
+          if (!hasExclusive) {
+            record.tags.push(TAG_IDLE.value);
+          }
+
+          if (record.online) {
+            const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+            if (entity) syncEntityTags(entity, record.tags);
+          }
+
+          player.sendMessage(`§e已关闭假人 §e${targetName}§e 的体态控制，体态固定`);
+        }
+
+        botRegistry.set(record.name, record);
+        saveBotRecord(record);
+      });
+
+      return { status: CustomCommandStatus.Success, message: "§a正在处理体态控制..." };
+    }
+  );
 });
 
 // ─── 世界加载：从持久化恢复注册表 ──────────────────────
@@ -1043,6 +1122,21 @@ const TAG_BEHAVIORS: TagBehavior[] = [
     intervalTicks: 3,
     execute(bot, _record) {
       bot.jump();
+    },
+  },
+  {
+    tagValue: TAG_CONTROL.value,
+    intervalTicks: 1,
+    execute(bot, record) {
+      if (!record.controllerId) return;
+      const controller = world.getEntity(record.controllerId);
+      if (!controller) return;
+
+      const playerRot = (controller as Player).getRotation();
+      const lookTarget = getPlayerLookTarget(controller as Player);
+
+      bot.teleport(controller.location, { rotation: playerRot });
+      bot.lookAtLocation(lookTarget, LookDuration.Continuous);
     },
   },
 ];
