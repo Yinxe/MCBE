@@ -667,7 +667,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
     },
     (_origin) => {
       return { status: CustomCommandStatus.Success, message: buildTagListMessage() };
-    },
+    }
   );
 
   // ── /mp:tag <name> <add|remove|list> [tagName] ────
@@ -681,9 +681,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
         { name: "name", type: CustomCommandParamType.String },
         { name: "action", type: CustomCommandParamType.String },
       ],
-      optionalParameters: [
-        { name: "tagName", type: CustomCommandParamType.String },
-      ],
+      optionalParameters: [{ name: "tagName", type: CustomCommandParamType.String }],
     },
     (origin, ...args) => {
       if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
@@ -899,12 +897,20 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
         }
 
         try {
-          (entity as SimulatedPlayer).teleport(player.location);
+          const bot = entity as SimulatedPlayer;
+          const playerRot = player.getRotation();
+          const lookTarget = getPlayerLookTarget(player);
+
+          // 传送到玩家位置并同步朝向和视角
+          bot.teleport(player.location, { rotation: playerRot });
+          bot.lookAtLocation(lookTarget, LookDuration.Continuous);
+
           // 刷新最后位置
           if (record.lastPoint) {
             record.lastPoint.location = player.location;
             record.lastPoint.dimension = player.dimension.id;
-            record.lastPoint.rotation = (entity as SimulatedPlayer).getRotation();
+            record.lastPoint.rotation = playerRot;
+            record.lastPoint.lookTarget = lookTarget;
           }
           botRegistry.set(record.name, record);
           saveBotRecord(record);
