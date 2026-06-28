@@ -14,7 +14,9 @@ export function registerMenuCommand(registry: any): void {
     (origin: any) => {
       if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "§c该命令只能由玩家执行" };
       const player = origin.sourceEntity as Player;
-      system.run(() => { showMainMenu(player); });
+      system.run(() => {
+        showMainMenu(player);
+      });
       return { status: CustomCommandStatus.Success, message: "§a正在打开菜单..." };
     }
   );

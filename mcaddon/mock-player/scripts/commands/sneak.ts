@@ -23,7 +23,10 @@ export function registerSneakCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
         const shouldSneak = sneak ?? true;
         setSneaking(record, shouldSneak);
         player.sendMessage(shouldSneak ? `§a假人 §e${targetName}§a 已潜行` : `§a假人 §e${targetName}§a 已站起`);

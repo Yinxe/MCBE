@@ -21,8 +21,14 @@ export function registerOnlineCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName) ?? loadBotRecord(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
-        if (record.online) { player.sendMessage(`§e假人 §e${targetName}§e 已经在线`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+        if (record.online) {
+          player.sendMessage(`§e假人 §e${targetName}§e 已经在线`);
+          return;
+        }
         try {
           onlineBot(record);
           player.sendMessage(`§a假人 §e${record.name}§a 已上线`);

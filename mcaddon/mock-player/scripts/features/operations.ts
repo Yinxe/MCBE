@@ -6,12 +6,7 @@ import { Player, Vector3, world, GameMode, Dimension } from "@minecraft/server";
 import { spawnSimulatedPlayer, LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord, PositionState, BOT_TAG } from "./types";
-import {
-  TAG_CONTROL,
-  TAG_IDLE,
-  EXCLUSIVE_SET,
-  syncEntityTags,
-} from "./tags";
+import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, syncEntityTags } from "./tags";
 import { getPlayerLookTarget } from "./utils";
 import { botRegistry, saveBotRecord, removeBotRecord } from "./persistence";
 

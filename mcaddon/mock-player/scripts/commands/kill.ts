@@ -21,9 +21,18 @@ export function registerKillCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
-        if (!record.online) { player.sendMessage(`§e假人 §e${targetName}§e 不在线，无法杀死`); return; }
-        if (record.death) { player.sendMessage(`§e假人 §e${targetName}§e 已经死亡，无需重复杀死`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+        if (!record.online) {
+          player.sendMessage(`§e假人 §e${targetName}§e 不在线，无法杀死`);
+          return;
+        }
+        if (record.death) {
+          player.sendMessage(`§e假人 §e${targetName}§e 已经死亡，无需重复杀死`);
+          return;
+        }
         try {
           killBot(record);
           player.sendMessage(`§a已杀死假人 §e${targetName}`);

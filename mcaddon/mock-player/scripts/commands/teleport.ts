@@ -1,6 +1,13 @@
 // ─── /mp:tp / /mp:tphere — 传送管理 ──────────────────
 
-import { system, world, Player, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import {
+  system,
+  world,
+  Player,
+  CustomCommandStatus,
+  CommandPermissionLevel,
+  CustomCommandParamType,
+} from "@minecraft/server";
 import { botRegistry } from "../features/persistence";
 import { tpPlayerToBot, tpBotToPlayer } from "../features/operations";
 
@@ -22,7 +29,10 @@ export function registerTpCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
         try {
           tpPlayerToBot(player, record);
           player.sendMessage(`§a已传送到假人 §e${targetName}§a 身边`);
@@ -53,7 +63,10 @@ export function registerTpHereCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
         try {
           tpBotToPlayer(record, player);
           player.sendMessage(`§a已将假人 §e${targetName}§a 传送到身边`);

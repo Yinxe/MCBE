@@ -1,6 +1,14 @@
 // ─── /mp:create — 创建模拟玩家 ────────────────────────
 
-import { system, world, Player, Vector3, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import {
+  system,
+  world,
+  Player,
+  Vector3,
+  CustomCommandStatus,
+  CommandPermissionLevel,
+  CustomCommandParamType,
+} from "@minecraft/server";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../features/tags";
 import { getPlayerLookTarget } from "../features/utils";
 import { generateBotName } from "../features/persistence";

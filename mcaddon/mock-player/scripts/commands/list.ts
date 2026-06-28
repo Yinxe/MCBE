@@ -1,6 +1,13 @@
 // ─── /mp:list — 列出模拟玩家 ──────────────────────────
 
-import { system, world, Player, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import {
+  system,
+  world,
+  Player,
+  CustomCommandStatus,
+  CommandPermissionLevel,
+  CustomCommandParamType,
+} from "@minecraft/server";
 import { BotRecord, PositionState, BOT_TAG } from "../features/types";
 import { TAG_IDLE, getTagDef } from "../features/tags";
 import { formatPos, formatDimensionId } from "../features/utils";

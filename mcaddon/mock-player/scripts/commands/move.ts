@@ -1,6 +1,13 @@
 // ─── /mp:move — 移动模拟玩家 ──────────────────────────
 
-import { system, Player, Vector3, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import {
+  system,
+  Player,
+  Vector3,
+  CustomCommandStatus,
+  CommandPermissionLevel,
+  CustomCommandParamType,
+} from "@minecraft/server";
 import { botRegistry } from "../features/persistence";
 import { moveBot } from "../features/operations";
 
@@ -23,7 +30,10 @@ export function registerMoveCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
         try {
           const fullPath = moveBot(record, targetLocation);
           if (!fullPath) {

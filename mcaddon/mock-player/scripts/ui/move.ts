@@ -21,8 +21,14 @@ export function showMoveForm(player: Player, botName: string): void {
     const targetPos = parseCoordinateInput(coordInput) ?? player.location;
 
     const record = botRegistry.get(botName);
-    if (!record) { player.sendMessage(`§c模拟玩家 §e${botName}§c 已被删除`); return; }
-    if (!record.online || record.death) { player.sendMessage("§c模拟玩家不在线或已死亡"); return; }
+    if (!record) {
+      player.sendMessage(`§c模拟玩家 §e${botName}§c 已被删除`);
+      return;
+    }
+    if (!record.online || record.death) {
+      player.sendMessage("§c模拟玩家不在线或已死亡");
+      return;
+    }
 
     system.run(() => {
       try {
@@ -30,7 +36,9 @@ export function showMoveForm(player: Player, botName: string): void {
         if (!fullPath) {
           player.sendMessage(`§e${botName}§e 无法完全到达目标位置（路径不完整）`);
         } else {
-          player.sendMessage(`§a${botName}§a 正在前往 §e${Math.floor(targetPos.x)} ${Math.floor(targetPos.y)} ${Math.floor(targetPos.z)}`);
+          player.sendMessage(
+            `§a${botName}§a 正在前往 §e${Math.floor(targetPos.x)} ${Math.floor(targetPos.y)} ${Math.floor(targetPos.z)}`
+          );
         }
       } catch (e: any) {
         player.sendMessage(`§c移动失败: ${e.message}`);
@@ -53,7 +61,10 @@ export function confirmDelete(player: Player, botName: string): void {
     if (response.selection !== 0) return;
 
     const record = botRegistry.get(botName);
-    if (!record) { player.sendMessage(`§c模拟玩家 §e${botName}§c 不存在`); return; }
+    if (!record) {
+      player.sendMessage(`§c模拟玩家 §e${botName}§c 不存在`);
+      return;
+    }
 
     system.run(() => {
       try {

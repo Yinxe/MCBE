@@ -21,8 +21,14 @@ export function registerOfflineCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
-        if (!record.online) { player.sendMessage(`§e假人 §e${targetName}§e 已经离线`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+        if (!record.online) {
+          player.sendMessage(`§e假人 §e${targetName}§e 已经离线`);
+          return;
+        }
         try {
           offlineBot(record);
           player.sendMessage(`§a假人 §e${record.name}§a 已下线`);

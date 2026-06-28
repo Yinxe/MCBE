@@ -1,6 +1,13 @@
 // ─── /mp:tags / /mp:tag — 标签管理 ─────────────────────
 
-import { system, world, Player, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import {
+  system,
+  world,
+  Player,
+  CustomCommandStatus,
+  CommandPermissionLevel,
+  CustomCommandParamType,
+} from "@minecraft/server";
 import { BOT_TAG } from "../features/types";
 import { EXCLUSIVE_SET, getTagDef, resolveTag, buildTagListMessage, syncEntityTags } from "../features/tags";
 import { botRegistry, saveBotRecord } from "../features/persistence";
@@ -40,11 +47,15 @@ export function registerTagCommand(registry: any): void {
       const targetName = args[0] as string;
       const action = (args[1] as string)?.toLowerCase();
       const tagInput = args[2] as string | undefined;
-      if (!targetName || !action) return { status: CustomCommandStatus.Failure, message: "用法: /mp:tag <假人> <add|remove|list> [标签名]" };
+      if (!targetName || !action)
+        return { status: CustomCommandStatus.Failure, message: "用法: /mp:tag <假人> <add|remove|list> [标签名]" };
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
 
         // ── list ──
         if (action === "list") {
@@ -57,14 +68,23 @@ export function registerTagCommand(registry: any): void {
           return;
         }
 
-        if (!tagInput) { player.sendMessage(`§c请指定标签名，可用标签：\n${buildTagListMessage()}`); return; }
+        if (!tagInput) {
+          player.sendMessage(`§c请指定标签名，可用标签：\n${buildTagListMessage()}`);
+          return;
+        }
 
         const tagDef = resolveTag(tagInput);
-        if (!tagDef) { player.sendMessage(`§c未知标签 "§e${tagInput}§c"\n${buildTagListMessage()}`); return; }
+        if (!tagDef) {
+          player.sendMessage(`§c未知标签 "§e${tagInput}§c"\n${buildTagListMessage()}`);
+          return;
+        }
 
         // ── add ──
         if (action === "add") {
-          if (record.tags.includes(tagDef.value)) { player.sendMessage(`§e假人 §e${targetName}§e 已有标签 §e${tagDef.label}`); return; }
+          if (record.tags.includes(tagDef.value)) {
+            player.sendMessage(`§e假人 §e${targetName}§e 已有标签 §e${tagDef.label}`);
+            return;
+          }
           if (EXCLUSIVE_SET.has(tagDef.value)) record.tags = record.tags.filter((t) => !EXCLUSIVE_SET.has(t));
           record.tags.push(tagDef.value);
           if (record.online) {
@@ -79,7 +99,10 @@ export function registerTagCommand(registry: any): void {
 
         // ── remove ──
         if (action === "remove") {
-          if (!record.tags.includes(tagDef.value)) { player.sendMessage(`§e假人 §e${targetName}§e 没有标签 §e${tagDef.label}`); return; }
+          if (!record.tags.includes(tagDef.value)) {
+            player.sendMessage(`§e假人 §e${targetName}§e 没有标签 §e${tagDef.label}`);
+            return;
+          }
           record.tags = record.tags.filter((t) => t !== tagDef.value);
           if (record.online) {
             const entity = record.entityId ? world.getEntity(record.entityId) : undefined;

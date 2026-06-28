@@ -1,6 +1,13 @@
 // ─── /mp:respawn / /mp:setRespawn — 重生管理 ─────────
 
-import { system, world, Player, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import {
+  system,
+  world,
+  Player,
+  CustomCommandStatus,
+  CommandPermissionLevel,
+  CustomCommandParamType,
+} from "@minecraft/server";
 import { TAG_RESPAWN, TAG_BOT } from "../features/tags";
 import { getPlayerLookTarget } from "../features/utils";
 import { botRegistry, saveBotRecord } from "../features/persistence";
@@ -24,7 +31,10 @@ export function registerRespawnCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
 
         const hasTag = record.tags.includes(TAG_RESPAWN.value);
         if (hasTag) {
@@ -65,7 +75,10 @@ export function registerSetRespawnCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
         const lookTarget = getPlayerLookTarget(player);
         record.respawnPoint = {
           location: player.location,

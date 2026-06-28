@@ -24,7 +24,10 @@ export function registerControlCommand(registry: any): void {
 
       system.run(() => {
         const record = botRegistry.get(targetName);
-        if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
 
         const turnOn = enable ?? true;
         // 只在状态需要变更时才调用 toggleControl
@@ -36,7 +39,9 @@ export function registerControlCommand(registry: any): void {
           toggleControl(record, player);
           player.sendMessage(`§e已关闭假人 §e${targetName}§e 的体态控制，体态固定`);
         } else {
-          player.sendMessage(turnOn ? `§e假人 §e${targetName}§e 已处于控制模式` : `§e假人 §e${targetName}§e 未处于控制模式`);
+          player.sendMessage(
+            turnOn ? `§e假人 §e${targetName}§e 已处于控制模式` : `§e假人 §e${targetName}§e 未处于控制模式`
+          );
         }
         // toggleControl 已处理持久化和标签同步
       });

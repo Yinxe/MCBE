@@ -4,13 +4,7 @@ import { Player, system } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 
 import { BOT_TAG } from "../features/types";
-import {
-  TAG_BOT,
-  TAG_CONTROL,
-  COEXIST_TAGS,
-  EXCLUSIVE_TAGS,
-  getTagDef,
-} from "../features/tags";
+import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/tags";
 import { botRegistry } from "../features/persistence";
 import { setTags } from "../features/operations";
 import { showMainMenu } from "./menu";
@@ -86,9 +80,7 @@ export function showTagManagement(player: Player, botName: string): void {
 // ─── 标签速查 ─────────────────────────────────────────
 
 export function showTagLookup(player: Player): void {
-  const form = new ActionFormData()
-    .title("§l标签速查")
-    .body("§7可共存标签（可同时开启多个）：");
+  const form = new ActionFormData().title("§l标签速查").body("§7可共存标签（可同时开启多个）：");
 
   for (const tag of COEXIST_TAGS) {
     form.button(`§a${tag.label}`);
