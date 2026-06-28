@@ -12,3 +12,7 @@ _遇到问题持续增加踩坑记录_
 - **`world.getPlayers({ tags }) 只返回在线&存活的玩家**：死亡或离线的模拟玩家不会出现在查询结果中。需要自行维护注册表（`Map<string, BotRecord>`）来追踪所有已创建的假人，包括其在线/死亡状态。
 - **SimulatedPlayer 状态追踪需要多个事件配合**：`entityDie`（死亡）、`playerSpawn`（重生）、`playerJoin`（加入）、`playerLeave`（离开）四个事件缺一不可。注意 `playerSpawn` 需要区分 `initialSpawn`（首次加入）和重生。
 - **`Entity.name` 与 `Player.name` 区别**：`Entity` 有 `nameTag`（可修改），`Player` 有 `readonly name`。对于模拟玩家，`spawnSimulatedPlayer` 传入的名字会同时设置两者，但在 `entityDie` 事件中 `deadEntity` 类型为 `Entity`，需要通过 `nameTag` 获取名字。
+- **动态属性存储 JSON 字符串时注意 32KB 限制**：`world.setDynamicProperty` 支持 `string` 类型，单个 key 的 value 上限约 32KB。一个假人一条 key（前缀 `mockplayer:players:<name>`）完全够用，注意在批量操作时监控 `getDynamicPropertyTotalByteCount()`。
+- **`world.getDynamicPropertyIds()` 可枚举所有 key**：可以遍历所有动态属性 ID，通过前缀过滤来批量加载。无需额外维护索引 key。
+- **`worldLoad` 事件可用于重启后恢复数据**：`world.afterEvents.worldLoad` 在世界加载完成后触发，可在 early-execution mode 中订阅。此时可以安全读写动态属性。
+- **`spawnSimulatedPlayer` 的 `DimensionLocation` 参数名是 `dimension` 不是 `dim`**：容易写成简写导致 TS 类型错误。`DimensionLocation` 包含 `dimension: Dimension`、`x`、`y`、`z`。
