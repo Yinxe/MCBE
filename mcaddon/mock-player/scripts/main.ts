@@ -910,11 +910,13 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
           const playerRot = player.getRotation();
           const lookTarget = getPlayerLookTarget(player);
 
-          // 传送到玩家位置并同步朝向和视角
+          // 传送到玩家位置并同步朝向、视角、潜行
           bot.teleport(player.location, { rotation: playerRot });
           bot.lookAtLocation(lookTarget, LookDuration.Continuous);
+          bot.isSneaking = player.isSneaking;
 
-          // 刷新最后位置
+          // 刷新潜行和最后位置
+          record.isSneaking = player.isSneaking;
           if (record.lastPoint) {
             record.lastPoint.location = player.location;
             record.lastPoint.dimension = player.dimension.id;
@@ -1183,6 +1185,8 @@ const TAG_BEHAVIORS: TagBehavior[] = [
 
       bot.teleport(controller.location, { rotation: playerRot });
       bot.lookAtLocation(lookTarget, LookDuration.Continuous);
+      bot.isSneaking = (controller as Player).isSneaking;
+      record.isSneaking = bot.isSneaking;
     },
   },
 ];
