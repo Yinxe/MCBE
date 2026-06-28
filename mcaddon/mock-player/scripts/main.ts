@@ -15,6 +15,7 @@ import { spawnSimulatedPlayer, LookDuration, SimulatedPlayer } from "@minecraft/
 // ─── 常量 ──────────────────────────────────────────────
 
 const BOT_TAG = "mp:bot";
+const RESPAWN_TAG = "mockplayer:tag:respawn";
 const DP_PREFIX = "mockplayer:players:";
 
 // ─── 类型定义 ──────────────────────────────────────────
@@ -27,9 +28,6 @@ interface PositionState {
   lookTarget: Vector3;
 }
 
-/** 假人死亡策略 */
-type DeathStrategy = "respawn" | "offline";
-
 /** 假人持久化记录 */
 interface BotRecord {
   name: string;
@@ -37,7 +35,8 @@ interface BotRecord {
   death: boolean;
   /** SimulatedPlayer 的实体 ID（在线时有效） */
   entityId?: string;
-  deathStrategy: DeathStrategy;
+  /** 持久化的标签列表（不含 BOT_TAG） */
+  tags: string[];
   /** 潜行状态 */
   isSneaking: boolean;
   /** 最后已知位置 */
@@ -177,8 +176,8 @@ function buildListMessage(records: BotRecord[], filterOnline?: boolean, filterDe
       r.death && r.deathPoint
         ? `${formatPos(r.deathPoint.location)} §8${formatDimensionId(r.deathPoint.dimension)} §7(死亡点)`
         : formatState(r.lastPoint);
-    const strategy = r.deathStrategy === "offline" ? " §7[下线策略]" : "";
-    return `${icon} §e${r.name}§7 — ${txt}§7 | ${pos}${strategy}`;
+    const tagHint = r.tags.includes(RESPAWN_TAG) ? " §b[自动重生]" : "";
+    return `${icon} §e${r.name}§7 — ${txt}§7 | ${pos}${tagHint}`;
   });
 
   lines.unshift(`§a假人列表 (§b${filtered.length}§a/${records.length}§a):`);
@@ -221,17 +220,12 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
         { name: "name", type: CustomCommandParamType.String },
         { name: "location", type: CustomCommandParamType.Location },
         { name: "dimension", type: CustomCommandParamType.String },
-        {
-          name: "deathStrategy",
-          type: CustomCommandParamType.String,
-        },
       ],
     },
     (origin, ...args) => {
       const userName = args[0] as string | undefined;
       const userLocation = args[1] as Vector3 | undefined;
       const dimensionName = args[2] as string | undefined;
-      const strategy = (args[3] as string | undefined) ?? "respawn";
       if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
 
       const player = origin.sourceEntity as Player;
@@ -253,6 +247,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
         try {
           const bot = spawnSimulatedPlayer({ x: pos.x, y: pos.y, z: pos.z, dimension }, botName, GameMode.Survival);
           bot.addTag(BOT_TAG);
+          bot.addTag(RESPAWN_TAG);
 
           // 应用所有状态
           bot.teleport(pos, { rotation: playerRot });
@@ -264,7 +259,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
             online: true,
             death: false,
             entityId: bot.id,
-            deathStrategy: strategy === "offline" ? "offline" : "respawn",
+            tags: [RESPAWN_TAG],
             isSneaking: player.isSneaking,
             lastPoint: currentState,
             respawnPoint: currentState,
@@ -273,7 +268,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
           botRegistry.set(botName, record);
           saveBotRecord(record);
 
-          player.sendMessage(`§a成功创建假人 §e${botName}§7 [${strategy === "offline" ? "死亡下线" : "死亡重生"}]`);
+          player.sendMessage(`§a成功创建假人 §e${botName}§b [自动重生]`);
         } catch (e: any) {
           player.sendMessage(`§c创建假人失败: ${e.message}`);
         }
@@ -398,6 +393,10 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
             GameMode.Survival
           );
           bot.addTag(BOT_TAG);
+          // 恢复所有持久化标签
+          for (const t of record.tags) {
+            bot.addTag(t);
+          }
           applyPositionState(bot, state, record.isSneaking);
 
           record.online = true;
@@ -518,7 +517,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
   registry.registerCommand(
     {
       name: "mp:respawn",
-      description: "重生一个死亡的假人，恢复其重生点状态",
+      description: "切换假人的自动重生标签（死亡时自动复活）",
       cheatsRequired: false,
       permissionLevel: CommandPermissionLevel.Any,
       mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
@@ -535,41 +534,37 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
           player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
           return;
         }
-        if (!record.online) {
-          player.sendMessage(`§e假人 §e${targetName}§e 不在线，请使用 /mp:online 先上线`);
-          return;
+
+        const hasTag = record.tags.includes(RESPAWN_TAG);
+        if (hasTag) {
+          // 移除标签
+          record.tags = record.tags.filter((t) => t !== RESPAWN_TAG);
+          // 如果在线，也从实体上移除
+          if (record.online) {
+            const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+            if (entity?.hasTag(RESPAWN_TAG)) {
+              entity.removeTag(RESPAWN_TAG);
+            }
+          }
+          player.sendMessage(`§e假人 §e${record.name}§e 已关闭自动重生，死亡后将下线`);
+        } else {
+          // 添加标签
+          record.tags.push(RESPAWN_TAG);
+          // 如果在线，也加到实体上
+          if (record.online) {
+            const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+            if (entity && !entity.hasTag(RESPAWN_TAG)) {
+              entity.addTag(RESPAWN_TAG);
+            }
+          }
+          player.sendMessage(`§a假人 §e${record.name}§a 已开启自动重生`);
         }
-        if (!record.death) {
-          player.sendMessage(`§e假人 §e${targetName}§e 尚未死亡，无需重生`);
-          return;
-        }
 
-        const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-        if (!entity || !entity.hasTag(BOT_TAG)) {
-          player.sendMessage(`§c无法在世界中找到假人 §e${targetName}§c 的实体，请使用 /mp:online`);
-          return;
-        }
-
-        try {
-          const bot = entity as SimulatedPlayer;
-          bot.respawn();
-
-          // 恢复重生点状态
-          applyPositionState(bot, record.respawnPoint, record.isSneaking);
-
-          record.death = false;
-          record.deathPoint = null;
-          record.lastPoint = { ...record.respawnPoint };
-          botRegistry.set(record.name, record);
-          saveBotRecord(record);
-
-          player.sendMessage(`§a假人 §e${targetName}§a 已重生`);
-        } catch (e: any) {
-          player.sendMessage(`§c假人重生失败: ${e.message}`);
-        }
+        botRegistry.set(record.name, record);
+        saveBotRecord(record);
       });
 
-      return { status: CustomCommandStatus.Success, message: `§a正在重生假人 §e${targetName}...` };
+      return { status: CustomCommandStatus.Success, message: `§a正在切换假人 §e${targetName}§a 的重生标签...` };
     }
   );
 });
@@ -598,26 +593,41 @@ world.afterEvents.entityDie.subscribe((event) => {
   const record = botRegistry.get(entity.nameTag);
   if (!record) return;
 
+  const bot = entity as SimulatedPlayer;
+
   // 记录死亡点
   const deathState: PositionState = {
     location: entity.location,
     dimension: entity.dimension.id,
-    rotation: (entity as Player).getRotation(),
-    lookTarget: record.lastPoint.lookTarget, // 沿用最后的视角
+    rotation: bot.getRotation(),
+    lookTarget: record.lastPoint.lookTarget,
   };
 
   record.death = true;
   record.deathPoint = deathState;
-  record.lastPoint = deathState; // 最后点更新为死亡点位置
+  record.lastPoint = deathState;
 
-  // 根据策略处理
-  if (record.deathStrategy === "offline") {
-    record.online = false;
-    record.entityId = undefined;
-    (entity as SimulatedPlayer).disconnect();
+  // 有自动重生标签 → 被动复活，恢复到重生点
+  if (entity.hasTag(RESPAWN_TAG)) {
+    try {
+      bot.respawn();
+      applyPositionState(bot, record.respawnPoint, record.isSneaking);
+
+      record.death = false;
+      record.deathPoint = null;
+      record.lastPoint = { ...record.respawnPoint };
+      saveBotRecord(record);
+      return;
+    } catch (e: any) {
+      console.warn(`[MockPlayer] 假人 ${record.name} 自动重生失败: ${e.message}`);
+    }
   }
 
+  // 无自动重生标签 → 死亡下线
+  record.online = false;
+  record.entityId = undefined;
   saveBotRecord(record);
+  bot.disconnect();
 });
 
 // 假人重生（非首次加入）

@@ -16,6 +16,8 @@ _遇到问题持续增加踩坑记录_
 - **`world.getDynamicPropertyIds()` 可枚举所有 key**：可以遍历所有动态属性 ID，通过前缀过滤来批量加载。无需额外维护索引 key。
 - **`worldLoad` 事件可用于重启后恢复数据**：`world.afterEvents.worldLoad` 在世界加载完成后触发，可在 early-execution mode 中订阅。此时可以安全读写动态属性。
 - **`spawnSimulatedPlayer` 的 `DimensionLocation` 参数名是 `dimension` 不是 `dim`**：容易写成简写导致 TS 类型错误。`DimensionLocation` 包含 `dimension: Dimension`、`x`、`y`、`z`。
-- **`SimulatedPlayer.respawn()` 在实体死亡后仍可用**：杀死假人后，只要实体还在世界中，调用 `respawn()` 即可重生。配合 `applyPositionState` 可以在重生后恢复所有体态。
+- **`SimulatedPlayer.respawn()` 只能在 entityDie 中调用**：假人死亡后，实体很快被移除，无法再从命令回调中获取实体引用。`respawn()` 必须在 `entityDie` 事件处理函数中调用，这是唯一还能操作实体的时机。之前以为可以通过命令回调 respawn（`/mp:respawn`），实际上死亡后实体 ID 已经无效了。
 - **`world.getEntity(id)` 可通过 ID 查找任意实体**：存储 `entityId` 后，即使假人死亡了也能通过 ID 找回并操作。注意死亡后实体可能在一段时间后被世界移除。
 - **`entity.dimension.id` 在死亡实体上仍可访问**：`entityDie` 事件中的 `deadEntity` 虽然已死，但 `dimension.id`、`location`、`getRotation()` 等方法/属性仍然可用。
+- **Entity 的 tags 不随持久化保存**：`addTag` 添加的标签只在实体存活期间存在。重新上线时需要从 `BotRecord.tags` 中恢复所有业务标签（如 `mockplayer:tag:respawn`）。`BOT_TAG` 作为基础标识每次上线时单独添加。
+- **`entity.removeTag()` 可移除标签**：用于在线切换假人行为时实时更新实体上的标签状态。
