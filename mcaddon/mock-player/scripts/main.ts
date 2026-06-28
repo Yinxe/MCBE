@@ -585,7 +585,9 @@ world.afterEvents.worldLoad.subscribe(() => {
 
 // ─── 状态事件监听 ──────────────────────────────────────
 
-// 假人死亡
+// ─── 假人状态事件监听（含通知） ────────────────────────
+
+// 假人死亡 → 通知
 world.afterEvents.entityDie.subscribe((event) => {
   const entity = event.deadEntity;
   if (!entity.hasTag(BOT_TAG)) return;
@@ -594,6 +596,7 @@ world.afterEvents.entityDie.subscribe((event) => {
   if (!record) return;
 
   const bot = entity as SimulatedPlayer;
+  const botName = record.name;
 
   // 记录死亡点
   const deathState: PositionState = {
@@ -607,6 +610,10 @@ world.afterEvents.entityDie.subscribe((event) => {
   record.deathPoint = deathState;
   record.lastPoint = deathState;
 
+  world.sendMessage(
+    `§7[§a假人§7] §c${botName} 死亡了 §7@ ${formatPos(deathState.location)} §8${formatDimensionId(deathState.dimension)}`
+  );
+
   // 有自动重生标签 → 被动复活，恢复到重生点
   if (entity.hasTag(RESPAWN_TAG)) {
     try {
@@ -617,9 +624,11 @@ world.afterEvents.entityDie.subscribe((event) => {
       record.deathPoint = null;
       record.lastPoint = { ...record.respawnPoint };
       saveBotRecord(record);
+
+      world.sendMessage(`§7[§a假人§7] §b${botName} 已自动复活`);
       return;
     } catch (e: any) {
-      console.warn(`[MockPlayer] 假人 ${record.name} 自动重生失败: ${e.message}`);
+      world.sendMessage(`§7[§a假人§7] §c${botName} 自动重生失败: ${e.message}`);
     }
   }
 
@@ -628,9 +637,10 @@ world.afterEvents.entityDie.subscribe((event) => {
   record.entityId = undefined;
   saveBotRecord(record);
   bot.disconnect();
+  world.sendMessage(`§7[§a假人§7] §e${botName} 已死亡下线`);
 });
 
-// 假人重生（非首次加入）
+// 假人重生（非首次加入）→ 通知
 world.afterEvents.playerSpawn.subscribe((event) => {
   if (event.initialSpawn) return;
   const player = event.player;
@@ -641,21 +651,26 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     record.death = false;
     record.online = true;
     saveBotRecord(record);
+    world.sendMessage(`§7[§a假人§7] §b${record.name} 重生了`);
   }
 });
 
-// 假人加入世界
+// 假人加入世界 → 通知
 world.afterEvents.playerJoin.subscribe((event) => {
   const record = botRegistry.get(event.playerName);
-  if (record) record.online = true;
+  if (!record) return;
+
+  record.online = true;
+  world.sendMessage(`§7[§a假人§7] §a${record.name} 加入了游戏`);
 });
 
-// 假人离开世界
+// 假人离开世界 → 通知
 world.afterEvents.playerLeave.subscribe((event) => {
   const record = botRegistry.get(event.playerName);
-  if (record) {
-    record.online = false;
-    record.entityId = undefined;
-    saveBotRecord(record);
-  }
+  if (!record) return;
+
+  record.online = false;
+  record.entityId = undefined;
+  saveBotRecord(record);
+  world.sendMessage(`§7[§a假人§7] §e${record.name} 离开了游戏`);
 });
