@@ -1126,7 +1126,7 @@ const TAG_BEHAVIORS: TagBehavior[] = [
   },
   {
     tagValue: TAG_CONTROL.value,
-    intervalTicks: 1,
+    intervalTicks: 2,
     execute(bot, record) {
       if (!record.controllerId) return;
       const controller = world.getEntity(record.controllerId);
@@ -1142,6 +1142,7 @@ const TAG_BEHAVIORS: TagBehavior[] = [
 ];
 
 function startTagBehaviors(): void {
+  // 标签行为引擎
   for (const behavior of TAG_BEHAVIORS) {
     system.runInterval(() => {
       for (const [, record] of botRegistry) {
@@ -1159,6 +1160,34 @@ function startTagBehaviors(): void {
       }
     }, behavior.intervalTicks);
   }
+
+  // 所有在线存活假人每 5 秒自动持久化数据
+  system.runInterval(() => {
+    for (const [, record] of botRegistry) {
+      if (!record.online || record.death) continue;
+      if (!record.entityId) continue;
+
+      const entity = world.getEntity(record.entityId);
+      if (!entity || !entity.hasTag(BOT_TAG)) continue;
+
+      // 刷新位置/朝向/维度
+      if (!record.lastPoint) {
+        record.lastPoint = {
+          location: entity.location,
+          dimension: entity.dimension.id,
+          rotation: (entity as Player).getRotation(),
+          lookTarget: record.respawnPoint.lookTarget,
+        };
+      } else {
+        record.lastPoint.location = entity.location;
+        record.lastPoint.dimension = entity.dimension.id;
+        record.lastPoint.rotation = (entity as Player).getRotation();
+      }
+      record.isSneaking = (entity as Player).isSneaking;
+
+      saveBotRecord(record);
+    }
+  }, 100); // 100 ticks = 5s
 }
 
 // ─── 假人状态事件监听（含通知） ────────────────────────
