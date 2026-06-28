@@ -39,8 +39,8 @@ interface BotRecord {
   tags: string[];
   /** 潜行状态 */
   isSneaking: boolean;
-  /** 最后已知位置 */
-  lastPoint: PositionState;
+  /** 最后已知位置（死亡时清空，由 respawnPoint 或在线刷新填充） */
+  lastPoint: PositionState | null;
   /** 重生点 */
   respawnPoint: PositionState;
   /** 死亡点（死亡时记录，重生后清空） */
@@ -175,7 +175,9 @@ function buildListMessage(records: BotRecord[], filterOnline?: boolean, filterDe
     const pos =
       r.death && r.deathPoint
         ? `${formatPos(r.deathPoint.location)} §8${formatDimensionId(r.deathPoint.dimension)} §7(死亡点)`
-        : formatState(r.lastPoint);
+        : r.lastPoint
+          ? formatState(r.lastPoint)
+          : formatState(r.respawnPoint) + " §7(重生点)";
     const tagHint = r.tags.includes(RESPAWN_TAG) ? " §b[自动重生]" : "";
     return `${icon} §e${r.name}§7 — ${txt}§7 | ${pos}${tagHint}`;
   });
@@ -300,7 +302,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
         // 刷新在线假人的最新位置
         for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
           const record = botRegistry.get(bot.name);
-          if (record) {
+          if (record && record.lastPoint) {
             record.lastPoint.location = bot.location;
             record.lastPoint.dimension = bot.dimension.id;
             record.lastPoint.rotation = bot.getRotation();
@@ -377,8 +379,8 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
           return;
         }
 
-        // 使用 lastPoint 恢复最近的状态
-        const state = record.lastPoint;
+        // 使用最后已知位置恢复，死亡后 lastPoint 已清空则用重生点
+        const state = record.lastPoint ?? record.respawnPoint;
         const dim = world.getDimension(state.dimension);
 
         try {
@@ -444,9 +446,12 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
         const online = world.getPlayers({ tags: [BOT_TAG] }).find((b: Player) => b.name === targetName);
         if (online) {
           // 下线前刷新存档
-          record.lastPoint.location = online.location;
-          record.lastPoint.dimension = online.dimension.id;
-          record.lastPoint.rotation = online.getRotation();
+          record.lastPoint = {
+            location: online.location,
+            dimension: online.dimension.id,
+            rotation: online.getRotation(),
+            lookTarget: record.lastPoint?.lookTarget ?? record.respawnPoint.lookTarget,
+          };
           record.isSneaking = online.isSneaking;
 
           try {
@@ -567,6 +572,141 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       return { status: CustomCommandStatus.Success, message: `§a正在切换假人 §e${targetName}§a 的重生标签...` };
     }
   );
+
+  // ── /mp:setRespawn <name> ─────────────────────────
+  registry.registerCommand(
+    {
+      name: "mp:setRespawn",
+      description: "将假人的重生点设为玩家当前位置和姿态",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
+    },
+    (origin, ...args) => {
+      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
+      const player = origin.sourceEntity as Player;
+      const targetName = args[0] as string;
+      if (!targetName) return { status: CustomCommandStatus.Failure, message: "请指定假人名字" };
+
+      system.run(() => {
+        const record = botRegistry.get(targetName);
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+
+        const lookTarget = getPlayerLookTarget(player);
+        record.respawnPoint = {
+          location: player.location,
+          dimension: player.dimension.id,
+          rotation: player.getRotation(),
+          lookTarget,
+        };
+
+        botRegistry.set(record.name, record);
+        saveBotRecord(record);
+        player.sendMessage(`§a已更新假人 §e${record.name}§a 的重生点到当前位置`);
+      });
+
+      return { status: CustomCommandStatus.Success, message: `§a正在设置重生点...` };
+    }
+  );
+
+  // ── /mp:tp <name> ─────────────────────────────────
+  registry.registerCommand(
+    {
+      name: "mp:tp",
+      description: "传送到假人身边（假人必须在线且存活）",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
+    },
+    (origin, ...args) => {
+      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
+      const player = origin.sourceEntity as Player;
+      const targetName = args[0] as string;
+      if (!targetName) return { status: CustomCommandStatus.Failure, message: "请指定假人名字" };
+
+      system.run(() => {
+        const record = botRegistry.get(targetName);
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+        if (!record.online || record.death) {
+          player.sendMessage(`§c假人 §e${targetName}§c 不在线或已死亡，无法传送`);
+          return;
+        }
+
+        const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+        if (!entity || !entity.hasTag(BOT_TAG)) {
+          player.sendMessage(`§c无法在世界中找到假人 §e${targetName}§c 的实体`);
+          return;
+        }
+
+        try {
+          player.teleport(entity.location);
+          player.sendMessage(`§a已传送到假人 §e${targetName}§a 身边`);
+        } catch (e: any) {
+          player.sendMessage(`§c传送失败: ${e.message}`);
+        }
+      });
+
+      return { status: CustomCommandStatus.Success, message: `§a正在传送...` };
+    }
+  );
+
+  // ── /mp:tphere <name> ─────────────────────────────
+  registry.registerCommand(
+    {
+      name: "mp:tphere",
+      description: "让假人传送到玩家身边（假人必须在线且存活）",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
+    },
+    (origin, ...args) => {
+      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
+      const player = origin.sourceEntity as Player;
+      const targetName = args[0] as string;
+      if (!targetName) return { status: CustomCommandStatus.Failure, message: "请指定假人名字" };
+
+      system.run(() => {
+        const record = botRegistry.get(targetName);
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+        if (!record.online || record.death) {
+          player.sendMessage(`§c假人 §e${targetName}§c 不在线或已死亡，无法传送`);
+          return;
+        }
+
+        const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+        if (!entity || !entity.hasTag(BOT_TAG)) {
+          player.sendMessage(`§c无法在世界中找到假人 §e${targetName}§c 的实体`);
+          return;
+        }
+
+        try {
+          (entity as SimulatedPlayer).teleport(player.location);
+          // 刷新最后位置
+          if (record.lastPoint) {
+            record.lastPoint.location = player.location;
+            record.lastPoint.dimension = player.dimension.id;
+            record.lastPoint.rotation = (entity as SimulatedPlayer).getRotation();
+          }
+          botRegistry.set(record.name, record);
+          saveBotRecord(record);
+          player.sendMessage(`§a已将假人 §e${targetName}§a 传送到身边`);
+        } catch (e: any) {
+          player.sendMessage(`§c传送失败: ${e.message}`);
+        }
+      });
+
+      return { status: CustomCommandStatus.Success, message: `§a正在传送假人...` };
+    }
+  );
 });
 
 // ─── 世界加载：从持久化恢复注册表 ──────────────────────
@@ -603,12 +743,12 @@ world.afterEvents.entityDie.subscribe((event) => {
     location: entity.location,
     dimension: entity.dimension.id,
     rotation: bot.getRotation(),
-    lookTarget: record.lastPoint.lookTarget,
+    lookTarget: record.lastPoint?.lookTarget ?? record.respawnPoint.lookTarget,
   };
 
   record.death = true;
   record.deathPoint = deathState;
-  record.lastPoint = deathState;
+  record.lastPoint = null; // 死亡清空最后点
 
   world.sendMessage(
     `§7[§a假人§7] §c${botName} 死亡了 §7@ ${formatPos(deathState.location)} §8${formatDimensionId(deathState.dimension)}`
