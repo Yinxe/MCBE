@@ -1069,6 +1069,52 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       return { status: CustomCommandStatus.Success, message: "§a正在处理体态控制..." };
     }
   );
+
+  // ── /mp:sneak <name> [true|false] ──────────────────
+  registry.registerCommand(
+    {
+      name: "mp:sneak",
+      description: "设置假人的潜行状态",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
+      optionalParameters: [{ name: "sneak", type: CustomCommandParamType.Boolean }],
+    },
+    (origin, ...args) => {
+      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
+      const player = origin.sourceEntity as Player;
+      const targetName = args[0] as string;
+      const sneak = args[1] as boolean | undefined;
+
+      if (!targetName) {
+        return { status: CustomCommandStatus.Failure, message: "用法: /mp:sneak <假人> [true|false]" };
+      }
+
+      system.run(() => {
+        const record = botRegistry.get(targetName);
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+
+        const shouldSneak = sneak ?? true;
+        record.isSneaking = shouldSneak;
+
+        if (record.online) {
+          const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+          if (entity?.hasTag(BOT_TAG)) {
+            (entity as Player).isSneaking = shouldSneak;
+          }
+        }
+
+        botRegistry.set(record.name, record);
+        saveBotRecord(record);
+        player.sendMessage(shouldSneak ? `§a假人 §e${targetName}§a 已潜行` : `§a假人 §e${targetName}§a 已站起`);
+      });
+
+      return { status: CustomCommandStatus.Success, message: "§a正在设置潜行..." };
+    }
+  );
 });
 
 // ─── 世界加载：从持久化恢复注册表 ──────────────────────
