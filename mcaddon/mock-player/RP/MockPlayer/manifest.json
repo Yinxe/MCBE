@@ -5,9 +5,9 @@
     "description": "Sample Add-on Resource Pack",
     "uuid": "fa6a1d4b-86ed-46a7-94bb-95362965bbb6",
     "version": [
+      1,
       0,
-      0,
-      1
+      0
     ],
     "min_engine_version": [
       1,
@@ -21,9 +21,9 @@
       "type": "resources",
       "uuid": "523d72d2-3ba9-498a-bc63-8beb5fe268cb",
       "version": [
+        1,
         0,
-        0,
-        1
+        0
       ]
     }
   ],

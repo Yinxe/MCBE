@@ -1,6 +1,6 @@
 {
   "name": "mock-player",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "productName": "Minecraft Add-On Starter Project",
   "description": "MockPlayer — customize this description in manifest.json or via the editor.",
   "private": true,

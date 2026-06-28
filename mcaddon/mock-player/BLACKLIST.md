@@ -21,3 +21,12 @@ _遇到问题持续增加踩坑记录_
 - **`entity.dimension.id` 在死亡实体上仍可访问**：`entityDie` 事件中的 `deadEntity` 虽然已死，但 `dimension.id`、`location`、`getRotation()` 等方法/属性仍然可用。
 - **Entity 的 tags 不随持久化保存**：`addTag` 添加的标签只在实体存活期间存在。重新上线时需要从 `BotRecord.tags` 中恢复所有业务标签（如 `mockplayer:tag:respawn`）。`BOT_TAG` 作为基础标识每次上线时单独添加。
 - **`entity.removeTag()` 可移除标签**：用于在线切换假人行为时实时更新实体上的标签状态。
+- **`playerInteractWithEntity` 使用 `beforeEvents` 而非 `afterEvents`**：`afterEvents.playerInteractWithEntity` 对玩家类型实体（包括 SimulatedPlayer）可能不触发。必须用 `world.beforeEvents.playerInteractWithEntity`，它一定会触发，且可以通过 `event.cancel = true` 取消默认交互行为。
+- **Before 事件回调运行在 restricted-execution mode**：`beforeEvents` 的回调文档标注 "called with restricted-execution privilege"，不能在回调中直接调用 `form.show()` 等受限 API。需要用 `system.run()` 或 `system.runTimeout()` 延迟到主线程执行。
+- **空手交互的 `itemStack` 判断**：`beforeEvents.playerInteractWithEntity.itemStack` 在空手时是 `undefined`，但手持空气时（`minecraft:air`）也可能是 ItemStack 对象。稳健判断：`if (itemStack && itemStack.typeId !== "minecraft:air") return;`。
+- **`@minecraft/server-ui` v2 ModalFormData 使用 options 对象**：v2 的 `textField`/`toggle`/`dropdown` 方法接收 options 对象而非直接的默认值。例如 `toggle("标签", { defaultValue: true })` 而非 `toggle("标签", true)`。查看 `ModalFormDataToggleOptions` 接口。
+- **`Player.setSpawnPoint()` 使用 `DimensionLocation` 含独立坐标**：该方法接受 `{ dimension, x, y, z }`（`DimensionLocation` 接口），不是 `{ dimension, location: Vector3 }`。坐标是平铺的三个字段 `x`、`y`、`z`。
+- **`LookDuration.Continuous` 是枚举值，不是数字 `1`**：直接写 `1` 会导致类型错误，必须 `import { LookDuration } from "@minecraft/server-gametest"` 并使用枚举值。
+- **`Player.name` 是只读属性**：`Player` 有 `readonly name`（唯一标识名）和从 `Entity` 继承的 `nameTag`（可修改的头顶显示名）。`spawnSimulatedPlayer` 的第二个参数同时设置两者。
+- **批量在线操作使用 `system.runTimeout` 错开间隔**：多个实体操作（如同时上线/下线多个假人）同时执行可能出问题。使用 `system.runTimeout(() => {...}, tickDelay)` 每次延迟 4 tick 逐个执行。
+- **设置重生点要同步调用 `Player.setSpawnPoint()`**：仅更新 `BotRecord.respawnPoint` 不够，`SimulatedPlayer.respawn()` 默认使用世界出生点。必须同时调用 `bot.setSpawnPoint({ dimension, x, y, z })` 设置实体的实际出生点。

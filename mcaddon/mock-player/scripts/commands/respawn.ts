@@ -1,7 +1,7 @@
 // ─── /mp:respawn / /mp:setRespawn — 重生管理 ─────────
 
 import { system, world, Player, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
-import { TAG_RESPAWN } from "../features/tags";
+import { TAG_RESPAWN, TAG_BOT } from "../features/tags";
 import { getPlayerLookTarget } from "../features/utils";
 import { botRegistry, saveBotRecord } from "../features/persistence";
 import { syncEntityTags } from "../features/tags";
@@ -73,6 +73,18 @@ export function registerSetRespawnCommand(registry: any): void {
           rotation: player.getRotation(),
           lookTarget,
         };
+        // 同步设置实体出生点，确保 bot.respawn() 在正确位置复活
+        if (record.online && record.entityId) {
+          const bot = world.getEntity(record.entityId);
+          if (bot && bot.hasTag(TAG_BOT.value)) {
+            (bot as Player).setSpawnPoint({
+              dimension: world.getDimension(record.respawnPoint.dimension),
+              x: record.respawnPoint.location.x,
+              y: record.respawnPoint.location.y,
+              z: record.respawnPoint.location.z,
+            });
+          }
+        }
         botRegistry.set(record.name, record);
         saveBotRecord(record);
         player.sendMessage(`§a已更新假人 §e${record.name}§a 的重生点到当前位置`);

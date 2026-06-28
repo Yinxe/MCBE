@@ -57,24 +57,32 @@ export function showOnlineManagement(player: Player): void {
 
     const formValues = response.formValues as boolean[];
 
+    // 每个变更操作间隔 4 tick，避免同时触发大量实体操作
+    let tickDelay = 0;
+    let changedCount = 0;
     for (let i = 0; i < records.length; i++) {
       if (formValues[i] === initialState[i]) continue;
       const record = botRegistry.get(records[i].name);
       if (!record) continue;
 
-      system.run(() => {
+      const shouldOnline = formValues[i];
+      system.runTimeout(() => {
         try {
-          if (formValues[i] && !record.online) {
+          if (shouldOnline && !record.online) {
             onlineBot(record);
-          } else if (!formValues[i] && record.online) {
+          } else if (!shouldOnline && record.online) {
             offlineBot(record);
           }
         } catch (e: any) {
           player.sendMessage(`§c${record.name} 状态切换失败: ${e.message}`);
         }
-      });
+      }, tickDelay);
+      tickDelay += 4;
+      changedCount++;
     }
 
-    player.sendMessage("§a在线状态已更新");
+    if (changedCount > 0) {
+      player.sendMessage(`§a正在更新 ${changedCount} 个模拟玩家的在线状态...`);
+    }
   });
 }
