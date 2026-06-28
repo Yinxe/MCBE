@@ -1,4 +1,15 @@
-import { world, system, CommandPermissionLevel, CustomCommandParamType, CustomCommandStatus, GameMode, StartupEvent, Player, Vector3, Vector2 } from "@minecraft/server";
+import {
+  world,
+  system,
+  CommandPermissionLevel,
+  CustomCommandParamType,
+  CustomCommandStatus,
+  GameMode,
+  StartupEvent,
+  Player,
+  Vector3,
+  Vector2,
+} from "@minecraft/server";
 import { spawnSimulatedPlayer, LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
 // ─── 常量 ──────────────────────────────────────────────
@@ -213,7 +224,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       });
 
       return { status: CustomCommandStatus.Success, message: `§a正在创建假人 §e${botName}...` };
-    },
+    }
   );
 
   // ── /mp:list [online] [death] ────────────────────
@@ -247,7 +258,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       });
 
       return { status: CustomCommandStatus.Success, message: "§a正在查询假人列表..." };
-    },
+    }
   );
 
   // ── /mp:delete <name> ────────────────────────────
@@ -286,7 +297,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       });
 
       return { status: CustomCommandStatus.Success, message: `§a正在删除假人 §e${targetName}...` };
-    },
+    }
   );
 
   // ── /mp:online <name> ────────────────────────────
@@ -322,7 +333,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
           const bot = spawnSimulatedPlayer(
             { x: record.lastLocation.x, y: record.lastLocation.y, z: record.lastLocation.z, dimension: dim },
             record.name,
-            GameMode.Survival,
+            GameMode.Survival
           );
           bot.addTag(BOT_TAG);
           restoreBotState(bot, record);
@@ -339,7 +350,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       });
 
       return { status: CustomCommandStatus.Success, message: `§a正在上线假人 §e${targetName}...` };
-    },
+    }
   );
 
   // ── /mp:offline <name> ───────────────────────────
@@ -394,7 +405,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       });
 
       return { status: CustomCommandStatus.Success, message: `§a正在下线假人 §e${targetName}...` };
-    },
+    }
   );
 });
 
