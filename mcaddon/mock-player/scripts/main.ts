@@ -934,22 +934,20 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
   registry.registerCommand(
     {
       name: "mp:move",
-      description: "让模拟玩家自动寻路到指定坐标",
+      description: "让模拟玩家自动寻路到指定坐标，不填坐标则寻路到玩家位置",
       cheatsRequired: false,
       permissionLevel: CommandPermissionLevel.Any,
-      mandatoryParameters: [
-        { name: "name", type: CustomCommandParamType.String },
-        { name: "location", type: CustomCommandParamType.Location },
-      ],
+      mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
+      optionalParameters: [{ name: "location", type: CustomCommandParamType.Location }],
     },
     (origin, ...args) => {
       if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
       const player = origin.sourceEntity as Player;
       const targetName = args[0] as string;
-      const targetLocation = args[1] as Vector3;
+      const targetLocation = (args[1] as Vector3 | undefined) ?? player.location;
 
-      if (!targetName || !targetLocation) {
-        return { status: CustomCommandStatus.Failure, message: "用法: /mp:move <假人> <x> <y> <z>" };
+      if (!targetName) {
+        return { status: CustomCommandStatus.Failure, message: "用法: /mp:move <假人> [x] [y] [z]" };
       }
 
       system.run(() => {
