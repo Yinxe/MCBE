@@ -929,6 +929,69 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       return { status: CustomCommandStatus.Success, message: `§a正在传送假人...` };
     }
   );
+
+  // ── /mp:move <name> <x y z> ───────────────────────
+  registry.registerCommand(
+    {
+      name: "mp:move",
+      description: "让模拟玩家自动寻路到指定坐标",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      mandatoryParameters: [
+        { name: "name", type: CustomCommandParamType.String },
+        { name: "location", type: CustomCommandParamType.Location },
+      ],
+    },
+    (origin, ...args) => {
+      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
+      const player = origin.sourceEntity as Player;
+      const targetName = args[0] as string;
+      const targetLocation = args[1] as Vector3;
+
+      if (!targetName || !targetLocation) {
+        return { status: CustomCommandStatus.Failure, message: "用法: /mp:move <假人> <x> <y> <z>" };
+      }
+
+      system.run(() => {
+        const record = botRegistry.get(targetName);
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+        if (!record.online || record.death) {
+          player.sendMessage(`§c假人 §e${targetName}§c 不在线或已死亡，无法移动`);
+          return;
+        }
+
+        const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+        if (!entity || !entity.hasTag(BOT_TAG)) {
+          player.sendMessage(`§c无法在世界中找到假人 §e${targetName}§c 的实体`);
+          return;
+        }
+
+        const bot = entity as SimulatedPlayer;
+
+        try {
+          // 取消当前移动
+          bot.stopMoving();
+
+          const result = bot.navigateToLocation(targetLocation, 1);
+
+          if (!result.isFullPath) {
+            player.sendMessage(`§e假人 §e${targetName}§e 无法到达目标位置（路径不完整），但已开始移动`);
+          } else {
+            player.sendMessage(
+              `§a假人 §e${targetName}§a 正在前往 §e${Math.floor(targetLocation.x)} ${Math.floor(targetLocation.y)} ${Math.floor(targetLocation.z)}`
+            );
+          }
+        } catch (e: any) {
+          player.sendMessage(`§c假人移动失败: ${e.message}`);
+        }
+      });
+
+      return { status: CustomCommandStatus.Success, message: `§a正在让假人移动...` };
+    }
+  );
 });
 
 // ─── 世界加载：从持久化恢复注册表 ──────────────────────
