@@ -14,9 +14,105 @@ import { spawnSimulatedPlayer, LookDuration, SimulatedPlayer } from "@minecraft/
 
 // ─── 常量 ──────────────────────────────────────────────
 
-const BOT_TAG = "mp:bot";
-const RESPAWN_TAG = "mockplayer:tag:respawn";
+const TAG_PREFIX = "mockplayer:tag:";
+const BOT_TAG = `${TAG_PREFIX}bot`;
 const DP_PREFIX = "mockplayer:players:";
+
+// ─── 标签系统 ──────────────────────────────────────────
+
+interface TagDef {
+  /** 显示名 */
+  label: string;
+  /** tag 值（含前缀） */
+  value: string;
+}
+
+// 可共存的标签（可同时拥有多个）
+const TAG_BOT: TagDef = { label: "假人标识", value: `${TAG_PREFIX}bot` };
+const TAG_RESPAWN: TagDef = { label: "自动重生", value: `${TAG_PREFIX}respawn` };
+const TAG_AUTO_JUMP: TagDef = { label: "自动跳跃", value: `${TAG_PREFIX}autoJump` };
+
+// 互斥的标签（同一时间只能有一个生效）
+const TAG_IDLE: TagDef = { label: "无状态", value: `${TAG_PREFIX}idle` };
+const TAG_AUTO_MINE: TagDef = { label: "自动挖掘", value: `${TAG_PREFIX}autoMine` };
+const TAG_AUTO_PLACE: TagDef = { label: "自动放置", value: `${TAG_PREFIX}autoPlace` };
+const TAG_AUTO_ATTACK: TagDef = { label: "自动攻击", value: `${TAG_PREFIX}autoAttack` };
+
+/** 可共存的标签组 */
+const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
+
+/** 互斥的标签组 */
+const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK];
+
+/** 所有已定义的标签 */
+const ALL_TAGS: TagDef[] = [...COEXIST_TAGS, ...EXCLUSIVE_TAGS];
+
+/** 新的假人默认拥有的标签（value 列表） */
+const DEFAULT_TAGS: string[] = [TAG_BOT.value, TAG_RESPAWN.value, TAG_IDLE.value];
+
+/** 互斥标签的 value 集合，用于快速判断 */
+const EXCLUSIVE_SET: Set<string> = new Set(EXCLUSIVE_TAGS.map((t) => t.value));
+
+function getTagDef(value: string): TagDef | undefined {
+  return ALL_TAGS.find((t) => t.value === value);
+}
+
+/** 根据用户输入的文本解析出对应的 TagDef（支持 value / label / 短名） */
+function resolveTag(input: string): TagDef | undefined {
+  // 1. 精确匹配 value
+  let tag = ALL_TAGS.find((t) => t.value === input);
+  if (tag) return tag;
+
+  // 2. 精确匹配 label
+  tag = ALL_TAGS.find((t) => t.label === input);
+  if (tag) return tag;
+
+  // 3. 作为短名匹配（自动补前缀）
+  const prefixed = input.startsWith(TAG_PREFIX) ? input : `${TAG_PREFIX}${input}`;
+  tag = ALL_TAGS.find((t) => t.value === prefixed);
+  if (tag) return tag;
+
+  // 4. 忽略大小写匹配
+  const lower = input.toLowerCase();
+  tag = ALL_TAGS.find((t) => t.value.toLowerCase() === `${TAG_PREFIX}${lower}`);
+  if (tag) return tag;
+
+  return undefined;
+}
+
+/** 构建可用标签列表文字 */
+function buildTagListMessage(): string {
+  const lines: string[] = ["§a可用标签:"];
+
+  lines.push("§7━━ 可共存 ────");
+  for (const t of COEXIST_TAGS) {
+    lines.push(` §e${t.label}§7 (${t.value})`);
+  }
+
+  lines.push("§7━━ 互斥 ────");
+  for (const t of EXCLUSIVE_TAGS) {
+    lines.push(` §e${t.label}§7 (${t.value})`);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * 将标签列表同步到实体：
+ * 1. 移除所有 `mockplayer:tag:` 前缀的自定义标签
+ * 2. 重新添加当前标签列表中的所有标签
+ */
+function syncEntityTags(entity: import("@minecraft/server").Entity, tags: string[]): void {
+  const existing = entity.getTags();
+  for (const tag of existing) {
+    if (tag.startsWith(TAG_PREFIX)) {
+      entity.removeTag(tag);
+    }
+  }
+  for (const tag of tags) {
+    entity.addTag(tag);
+  }
+}
 
 // ─── 类型定义 ──────────────────────────────────────────
 
@@ -35,7 +131,7 @@ interface BotRecord {
   death: boolean;
   /** SimulatedPlayer 的实体 ID（在线时有效） */
   entityId?: string;
-  /** 持久化的标签列表（不含 BOT_TAG） */
+  /** 持久化的标签列表 */
   tags: string[];
   /** 潜行状态 */
   isSneaking: boolean;
@@ -178,7 +274,7 @@ function buildListMessage(records: BotRecord[], filterOnline?: boolean, filterDe
         : r.lastPoint
           ? formatState(r.lastPoint)
           : formatState(r.respawnPoint) + " §7(重生点)";
-    const tagHint = r.tags.includes(RESPAWN_TAG) ? " §b[自动重生]" : "";
+    const tagHint = r.tags.includes(TAG_RESPAWN.value) ? " §b[自动重生]" : "";
     return `${icon} §e${r.name}§7 — ${txt}§7 | ${pos}${tagHint}`;
   });
 
@@ -248,25 +344,27 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       system.run(() => {
         try {
           const bot = spawnSimulatedPlayer({ x: pos.x, y: pos.y, z: pos.z, dimension }, botName, GameMode.Survival);
-          bot.addTag(BOT_TAG);
-          bot.addTag(RESPAWN_TAG);
-
-          // 应用所有状态
-          bot.teleport(pos, { rotation: playerRot });
-          bot.isSneaking = player.isSneaking;
-          bot.lookAtLocation(lookTarget, LookDuration.Continuous);
 
           const record: BotRecord = {
             name: botName,
             online: true,
             death: false,
             entityId: bot.id,
-            tags: [RESPAWN_TAG],
+            tags: [...DEFAULT_TAGS],
             isSneaking: player.isSneaking,
             lastPoint: currentState,
             respawnPoint: currentState,
             deathPoint: null,
           };
+
+          // 同步标签到实体
+          syncEntityTags(bot, record.tags);
+
+          // 应用所有状态
+          bot.teleport(pos, { rotation: playerRot });
+          bot.isSneaking = player.isSneaking;
+          bot.lookAtLocation(lookTarget, LookDuration.Continuous);
+
           botRegistry.set(botName, record);
           saveBotRecord(record);
 
@@ -394,11 +492,7 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
             record.name,
             GameMode.Survival
           );
-          bot.addTag(BOT_TAG);
-          // 恢复所有持久化标签
-          for (const t of record.tags) {
-            bot.addTag(t);
-          }
+          syncEntityTags(bot, record.tags);
           applyPositionState(bot, state, record.isSneaking);
 
           record.online = true;
@@ -540,29 +634,19 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
           return;
         }
 
-        const hasTag = record.tags.includes(RESPAWN_TAG);
+        const hasTag = record.tags.includes(TAG_RESPAWN.value);
         if (hasTag) {
-          // 移除标签
-          record.tags = record.tags.filter((t) => t !== RESPAWN_TAG);
-          // 如果在线，也从实体上移除
-          if (record.online) {
-            const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-            if (entity?.hasTag(RESPAWN_TAG)) {
-              entity.removeTag(RESPAWN_TAG);
-            }
-          }
+          record.tags = record.tags.filter((t) => t !== TAG_RESPAWN.value);
           player.sendMessage(`§e假人 §e${record.name}§e 已关闭自动重生，死亡后将下线`);
         } else {
-          // 添加标签
-          record.tags.push(RESPAWN_TAG);
-          // 如果在线，也加到实体上
-          if (record.online) {
-            const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-            if (entity && !entity.hasTag(RESPAWN_TAG)) {
-              entity.addTag(RESPAWN_TAG);
-            }
-          }
+          record.tags.push(TAG_RESPAWN.value);
           player.sendMessage(`§a假人 §e${record.name}§a 已开启自动重生`);
+        }
+
+        // 同步到实体（如果在线）
+        if (record.online) {
+          const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+          if (entity) syncEntityTags(entity, record.tags);
         }
 
         botRegistry.set(record.name, record);
@@ -570,6 +654,132 @@ system.beforeEvents.startup.subscribe((event: StartupEvent) => {
       });
 
       return { status: CustomCommandStatus.Success, message: `§a正在切换假人 §e${targetName}§a 的重生标签...` };
+    }
+  );
+
+  // ── /mp:tags ──────────────────────────────────────
+  registry.registerCommand(
+    {
+      name: "mp:tags",
+      description: "列出所有可用的假人标签",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+    },
+    (_origin) => {
+      return { status: CustomCommandStatus.Success, message: buildTagListMessage() };
+    },
+  );
+
+  // ── /mp:tag <name> <add|remove|list> [tagName] ────
+  registry.registerCommand(
+    {
+      name: "mp:tag",
+      description: "管理假人的标签：add / remove / list",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      mandatoryParameters: [
+        { name: "name", type: CustomCommandParamType.String },
+        { name: "action", type: CustomCommandParamType.String },
+      ],
+      optionalParameters: [
+        { name: "tagName", type: CustomCommandParamType.String },
+      ],
+    },
+    (origin, ...args) => {
+      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
+      const player = origin.sourceEntity as Player;
+      const targetName = args[0] as string;
+      const action = (args[1] as string)?.toLowerCase();
+      const tagInput = args[2] as string | undefined;
+
+      if (!targetName || !action) {
+        return { status: CustomCommandStatus.Failure, message: "用法: /mp:tag <假人> <add|remove|list> [标签名]" };
+      }
+
+      system.run(() => {
+        const record = botRegistry.get(targetName);
+        if (!record) {
+          player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`);
+          return;
+        }
+
+        // ── list ──
+        if (action === "list") {
+          const tagLabels = record.tags.map((v) => {
+            const def = getTagDef(v);
+            return def ? `§e${def.label}§7` : `§7${v}`;
+          });
+          if (tagLabels.length === 0) {
+            player.sendMessage(`§e假人 §e${targetName}§e 没有标签`);
+          } else {
+            player.sendMessage(`§a假人 §e${targetName}§a 的标签: ${tagLabels.join(", ")}`);
+          }
+          return;
+        }
+
+        // add / remove 需要 tagName
+        if (!tagInput) {
+          player.sendMessage(`§c请指定标签名，可用标签：\n${buildTagListMessage()}`);
+          return;
+        }
+
+        const tagDef = resolveTag(tagInput);
+        if (!tagDef) {
+          player.sendMessage(`§c未知标签 "§e${tagInput}§c"\n${buildTagListMessage()}`);
+          return;
+        }
+
+        // ── add ──
+        if (action === "add") {
+          if (record.tags.includes(tagDef.value)) {
+            player.sendMessage(`§e假人 §e${targetName}§e 已有标签 §e${tagDef.label}`);
+            return;
+          }
+
+          // 如果是互斥标签，移除所有其他互斥标签
+          if (EXCLUSIVE_SET.has(tagDef.value)) {
+            record.tags = record.tags.filter((t) => !EXCLUSIVE_SET.has(t));
+          }
+
+          record.tags.push(tagDef.value);
+
+          // 同步到实体
+          if (record.online) {
+            const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+            if (entity) syncEntityTags(entity, record.tags);
+          }
+
+          botRegistry.set(record.name, record);
+          saveBotRecord(record);
+          player.sendMessage(`§a已为假人 §e${targetName}§a 添加标签 §e${tagDef.label}`);
+          return;
+        }
+
+        // ── remove ──
+        if (action === "remove") {
+          if (!record.tags.includes(tagDef.value)) {
+            player.sendMessage(`§e假人 §e${targetName}§e 没有标签 §e${tagDef.label}`);
+            return;
+          }
+
+          record.tags = record.tags.filter((t) => t !== tagDef.value);
+
+          // 同步到实体
+          if (record.online) {
+            const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+            if (entity) syncEntityTags(entity, record.tags);
+          }
+
+          botRegistry.set(record.name, record);
+          saveBotRecord(record);
+          player.sendMessage(`§a已为假人 §e${targetName}§a 移除标签 §e${tagDef.label}`);
+          return;
+        }
+
+        player.sendMessage(`§c未知操作 "§e${action}§c"，可用操作: add / remove / list`);
+      });
+
+      return { status: CustomCommandStatus.Success, message: "§a正在处理标签操作..." };
     }
   );
 
@@ -721,9 +931,68 @@ world.afterEvents.worldLoad.subscribe(() => {
     saveBotRecord(record);
   }
   console.warn(`[MockPlayer] 从持久化恢复 ${botRegistry.size} 个假人记录`);
+
+  // 世界加载完成后启动标签行为引擎
+  startTagBehaviors();
 });
 
-// ─── 状态事件监听 ──────────────────────────────────────
+// ─── 标签行为引擎 ──────────────────────────────────────
+
+interface TagBehavior {
+  /** 对应的标签值 */
+  tagValue: string;
+  /** 每次执行的间隔 tick */
+  intervalTicks: number;
+  /** 执行任务 */
+  execute: (bot: SimulatedPlayer, record: BotRecord) => void;
+}
+
+const TAG_BEHAVIORS: TagBehavior[] = [
+  {
+    tagValue: TAG_AUTO_MINE.value,
+    intervalTicks: 8,
+    execute(bot, _record) {
+      const hit = bot.getBlockFromViewDirection({ maxDistance: 6 });
+      if (hit) {
+        bot.breakBlock(hit.block.location, hit.face);
+      }
+    },
+  },
+  {
+    tagValue: TAG_AUTO_ATTACK.value,
+    intervalTicks: 15,
+    execute(bot, _record) {
+      bot.attack();
+    },
+  },
+  {
+    tagValue: TAG_AUTO_JUMP.value,
+    intervalTicks: 3,
+    execute(bot, _record) {
+      bot.jump();
+    },
+  },
+];
+
+function startTagBehaviors(): void {
+  for (const behavior of TAG_BEHAVIORS) {
+    system.runInterval(() => {
+      for (const [, record] of botRegistry) {
+        if (!record.online || record.death) continue;
+        if (!record.tags.includes(behavior.tagValue)) continue;
+
+        const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+        if (!entity || !entity.hasTag(BOT_TAG)) continue;
+
+        try {
+          behavior.execute(entity as SimulatedPlayer, record);
+        } catch {
+          // 单次执行失败不影响其他假人
+        }
+      }
+    }, behavior.intervalTicks);
+  }
+}
 
 // ─── 假人状态事件监听（含通知） ────────────────────────
 
@@ -755,7 +1024,7 @@ world.afterEvents.entityDie.subscribe((event) => {
   );
 
   // 有自动重生标签 → 被动复活，恢复到重生点
-  if (entity.hasTag(RESPAWN_TAG)) {
+  if (entity.hasTag(TAG_RESPAWN.value)) {
     try {
       bot.respawn();
       applyPositionState(bot, record.respawnPoint, record.isSneaking);
