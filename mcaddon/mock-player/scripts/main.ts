@@ -274,7 +274,13 @@ function buildListMessage(records: BotRecord[], filterOnline?: boolean, filterDe
         : r.lastPoint
           ? formatState(r.lastPoint)
           : formatState(r.respawnPoint) + " §7(重生点)";
-    const tagHint = r.tags.includes(TAG_RESPAWN.value) ? " §b[自动重生]" : "";
+    const displayTags = r.tags
+      .filter((t) => t !== TAG_BOT.value && t !== TAG_IDLE.value)
+      .map((t) => {
+        const def = getTagDef(t);
+        return def ? `§b${def.label}§7` : t;
+      });
+    const tagHint = displayTags.length > 0 ? ` §7[${displayTags.join(" §7| ")}]` : "";
     return `${icon} §e${r.name}§7 — ${txt}§7 | ${pos}${tagHint}`;
   });
 
