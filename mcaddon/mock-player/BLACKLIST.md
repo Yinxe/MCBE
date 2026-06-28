@@ -9,3 +9,6 @@ _遇到问题持续增加踩坑记录_
 - **自定义命令参数的维度类型处理**：`CustomCommandParamType` 没有内置的维度类型，需使用 `String` 类型参数接收维度名，然后用 `world.getDimension(dimensionName)` 解析。维度 ID 值为 `"overworld"`、`"nether"`、`"the_end"`。
 - **`spawnSimulatedPlayer` 无视坐标永远生成在西北角**：该函数传入的 `DimensionLocation` 参数中的坐标被忽略，假人始终在世界西北角生成。需要创建后用 `bot.teleport(pos, { rotation })` 传送修正位置和朝向。
 - **`lookAtLocation` 的 `LookDuration` 选择**：`LookDuration.Instant` 只让假人看一眼就回正，`LookDuration.Continuous` 才能持续看向目标位置。
+- **`world.getPlayers({ tags }) 只返回在线&存活的玩家**：死亡或离线的模拟玩家不会出现在查询结果中。需要自行维护注册表（`Map<string, BotRecord>`）来追踪所有已创建的假人，包括其在线/死亡状态。
+- **SimulatedPlayer 状态追踪需要多个事件配合**：`entityDie`（死亡）、`playerSpawn`（重生）、`playerJoin`（加入）、`playerLeave`（离开）四个事件缺一不可。注意 `playerSpawn` 需要区分 `initialSpawn`（首次加入）和重生。
+- **`Entity.name` 与 `Player.name` 区别**：`Entity` 有 `nameTag`（可修改），`Player` 有 `readonly name`。对于模拟玩家，`spawnSimulatedPlayer` 传入的名字会同时设置两者，但在 `entityDie` 事件中 `deadEntity` 类型为 `Entity`，需要通过 `nameTag` 获取名字。
