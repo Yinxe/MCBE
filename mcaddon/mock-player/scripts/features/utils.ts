@@ -160,12 +160,15 @@ export function serializeItemStack(item: ItemStack): SerializedItemStack {
   }
 
   // 嵌套容器（潜影盒、收纳袋等）
-  if (item.hasComponent("minecraft:inventory")) {
+  // ⚠️ ItemInventoryComponent.container 可能抛出 InvalidContainerError
+  //    （特别在新创建的 ItemStack 上，容器尚未初始化）
+  //    加 try-catch 兜底，不影响外层物品序列化
+  try {
     const invComp = item.getComponent("minecraft:inventory") as any;
-    if (invComp.container) {
+    if (invComp?.container) {
       data.container = serializeContainer(invComp.container);
     }
-  }
+  } catch {}
 
   return data;
 }
@@ -243,30 +246,71 @@ export function deserializeItemStack(data: SerializedItemStack | null | undefine
     // 此处仅记录，实际需要通过 ItemBookComponent 的 createWritableBook / createSignedBook 方法
   }
 
-  // 嵌套容器（先设置物品，再往其容器内填内容）
-  if (data.container && item.hasComponent("minecraft:inventory")) {
-    const invComp = item.getComponent("minecraft:inventory") as any;
-    if (invComp.container) {
-      const nested = invComp.container;
-      const items = data.container;
-      for (let i = 0; i < Math.min(nested.size, items.length); i++) {
-        nested.setItem(i, items[i] ? deserializeItemStack(items[i]) : undefined);
-      }
-    }
-  }
+  // 嵌套容器由 deserializeContainer / fillNestedContainer 处理
+  // 此处只创建「外壳物品」，内部容器在已放入目标容器后递归填充
 
   return item;
 }
 
 /**
- * 反序列化整组物品到容器
+ * 反序列化整组物品到容器（含嵌套容器）
+ *
+ * 流程：先 setItem 放入目标容器 → 取回 → 填充嵌套容器 → 写回
+ * 这样 ItemInventoryComponent 在目标容器上下文中初始化，
+ * 避免 setItem 拷贝时内部容器数据丢失。
+ *
  * @param container 目标容器
  * @param items 序列化物品数组（index = slot）
  */
 export function deserializeContainer(container: Container, items: (SerializedItemStack | null | undefined)[]): void {
   for (let i = 0; i < Math.min(container.size, items.length); i++) {
-    container.setItem(i, deserializeItemStack(items[i]));
+    const data = items[i];
+    if (!data) {
+      container.setItem(i, undefined);
+      continue;
+    }
+    // 先放入「外壳物品」（不含嵌套容器填充）
+    container.setItem(i, deserializeItemStack(data));
+    // 再取回填充内部容器（在目标容器上下文中操作）
+    fillNestedContainer(container, i, data.container);
   }
+}
+
+/**
+ * 递归填充容器物品的嵌套容器
+ * 确保 ItemInventoryComponent 在已放入容器的物品上初始化，
+ * 避免 setItem 拷贝丢失内部容器数据
+ */
+function fillNestedContainer(
+  parentContainer: Container,
+  parentSlot: number,
+  nestedData: (SerializedItemStack | null)[] | undefined,
+): void {
+  if (!nestedData) return;
+  try {
+    const parentItem = parentContainer.getItem(parentSlot);
+    if (!parentItem) return;
+    const invComp = parentItem.getComponent("minecraft:inventory") as any;
+    if (!invComp?.container) return;
+
+    const inner = invComp.container;
+    const len = Math.min(inner.size, nestedData.length);
+
+    // 第一遍：填充外层物品（不含其内部容器）
+    for (let i = 0; i < len; i++) {
+      const nd = nestedData[i];
+      inner.setItem(i, nd ? deserializeItemStack(nd) : undefined);
+    }
+    // 第二遍：递归填充物品自身的嵌套容器
+    for (let i = 0; i < len; i++) {
+      const nd = nestedData[i];
+      if (nd?.container) {
+        fillNestedContainer(inner, i, nd.container);
+      }
+    }
+    // 写回（getItem 可能返回拷贝）
+    parentContainer.setItem(parentSlot, parentItem);
+  } catch {}
 }
 
 // ─── 经验值计算 ──────────────────────────────────────────
@@ -322,14 +366,35 @@ export function serializeEquipment(
   return result;
 }
 
-/** 反序列化恢复装备栏 */
+/** 反序列化恢复装备栏（含嵌套容器两阶段填充） */
 export function deserializeEquipment(
   equip: EntityEquippableComponent,
   data: Record<string, SerializedItemStack>
 ): void {
   for (const [name, slot] of Object.entries(EQUIP_SLOT_MAP)) {
     const serialized = data[name];
+    // 阶段一：放入外壳物品
     equip.setEquipment(slot, serialized ? deserializeItemStack(serialized) : undefined);
+    // 阶段二：填充嵌套容器（如有）
+    if (serialized?.container) {
+      try {
+        const placed = equip.getEquipment(slot);
+        if (!placed) continue;
+        const invComp = placed.getComponent("minecraft:inventory") as any;
+        if (!invComp?.container) continue;
+        const inner = invComp.container;
+        const len = Math.min(inner.size, serialized.container.length);
+        for (let i = 0; i < len; i++) {
+          const nd = serialized.container[i];
+          inner.setItem(i, nd ? deserializeItemStack(nd) : undefined);
+        }
+        for (let i = 0; i < len; i++) {
+          const nd = serialized.container[i];
+          if (nd?.container) fillNestedContainer(inner, i, nd.container);
+        }
+        equip.setEquipment(slot, placed);
+      } catch {}
+    }
   }
 }
 
