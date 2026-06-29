@@ -1,10 +1,15 @@
 // ─── 核心操作（共享业务逻辑） ──────────────────────────
 // 所有操作同步执行，需在 system.run() 内调用
 // 操作不发送任何消息，由调用层（commands/ui）处理反馈
+//
+// ⚠️ 注意区分职责：
+//   创建/上线 → 只生成实体，背包/装备/经验恢复由 playerJoin 事件完成
+//   下线/死亡 → 调用 saveBotFullState 保存背包/装备/经验，再由事件兜底
 
 import {
   Player,
   Vector3,
+  Vector2,
   world,
   GameMode,
   Dimension,
@@ -18,9 +23,7 @@ import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, syncEntityTags } from "./tags";
 import {
   getPlayerLookTarget,
   serializeContainer,
-  deserializeContainer,
   serializeEquipment,
-  deserializeEquipment,
   captureExperience,
 } from "./utils";
 import {
@@ -28,10 +31,10 @@ import {
   saveBotRecord,
   removeBotRecord,
   saveBotInventory,
-  loadBotInventory,
   saveBotEquipment,
-  loadBotEquipment,
   removeBotInventory,
+  isBotRestored,
+  removeBotRestored,
 } from "./persistence";
 
 // ─── 创建 ──────────────────────────────────────────────
@@ -46,10 +49,42 @@ export interface CreateBotOptions {
   isSneaking: boolean;
 }
 
+/**
+ * 生成假人后统一设置标签/位置/朝向/注册
+ * createBot 和 onlineBot 的公共尾部逻辑
+ * 背包/装备/经验不在此恢复——它们由 playerJoin 事件负责
+ */
+function finalizeBotSpawn(
+  bot: SimulatedPlayer,
+  record: BotRecord,
+  location: Vector3,
+  rotation: Vector2,
+  lookTarget: Vector3,
+  isSneaking: boolean,
+): void {
+  syncEntityTags(bot, record.tags);
+  bot.teleport(location, { rotation });
+  bot.isSneaking = isSneaking;
+  bot.lookAtLocation(lookTarget, LookDuration.Continuous);
+
+  botRegistry.set(record.name, record);
+  saveBotRecord(record);
+}
+
+/**
+ * 创建新假人
+ * - 生成 SimulatedPlayer
+ * - 构建 BotRecord（初始标签、位置、重生点）
+ * - 背包/装备/经验由 playerJoin 事件从持久化恢复（新假人无保存数据，自动跳过）
+ */
 export function createBot(options: CreateBotOptions): BotRecord {
   const { name, location, dimension, initialTags, rotation, lookTarget, isSneaking } = options;
 
-  const bot = spawnSimulatedPlayer({ x: location.x, y: location.y, z: location.z, dimension }, name, GameMode.Survival);
+  const bot = spawnSimulatedPlayer(
+    { x: location.x, y: location.y, z: location.z, dimension },
+    name,
+    GameMode.Survival,
+  );
 
   const currentState: PositionState = {
     location,
@@ -71,19 +106,19 @@ export function createBot(options: CreateBotOptions): BotRecord {
     experience: { level: 0, xpProgress: 0, totalXp: 0 },
   };
 
-  syncEntityTags(bot, record.tags);
-  bot.teleport(location, { rotation: { x: rotation.x, y: rotation.y } });
-  bot.isSneaking = isSneaking;
-  bot.lookAtLocation(lookTarget, LookDuration.Continuous);
-
-  botRegistry.set(name, record);
-  saveBotRecord(record);
-
+  finalizeBotSpawn(bot, record, location, { x: rotation.x, y: rotation.y }, lookTarget, isSneaking);
   return record;
 }
 
 // ─── 上线 ──────────────────────────────────────────────
 
+/**
+ * 恢复离线假人上线
+ * - 从记录中取最后位置/重生点生成 SimulatedPlayer
+ * - 背包/装备/经验由后续的 playerJoin 事件恢复
+ * - ⚠️ 注意：spawnSimulatedPlayer 无视坐标（永远在西边角生成）
+ *   所以必须跟随 teleport 修正位置
+ */
 export function onlineBot(record: BotRecord): SimulatedPlayer {
   const state = record.lastPoint ?? record.respawnPoint;
   const dim = world.getDimension(state.dimension);
@@ -91,55 +126,60 @@ export function onlineBot(record: BotRecord): SimulatedPlayer {
   const bot = spawnSimulatedPlayer(
     { x: state.location.x, y: state.location.y, z: state.location.z, dimension: dim },
     record.name,
-    GameMode.Survival
+    GameMode.Survival,
   );
 
-  syncEntityTags(bot, record.tags);
-
-  bot.teleport(state.location, { rotation: state.rotation });
-  bot.isSneaking = record.isSneaking;
-  bot.lookAtLocation(state.lookTarget, LookDuration.Continuous);
-
-  // 恢复背包
-  const saved = loadBotInventory(record.name);
-  if (saved) {
-    const inv = bot.getComponent("minecraft:inventory") as EntityInventoryComponent;
-    if (inv?.container) {
-      deserializeContainer(inv.container, saved);
-    }
-  }
-
-  // 恢复装备栏
-  const savedEquip = loadBotEquipment(record.name);
-  if (savedEquip) {
-    const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
-    if (equip) {
-      deserializeEquipment(equip, savedEquip);
-    }
-  }
-
-  // 恢复经验
-  const exp = record.experience;
-  if (exp.level > 0 || exp.xpProgress > 0) {
-    try {
-      bot.addLevels(exp.level - bot.level);
-      bot.addExperience(exp.xpProgress - bot.xpEarnedAtCurrentLevel);
-    } catch {
-      // 经验恢复失败不影响上线
-    }
-  }
+  // 背包/装备/经验在 playerJoin 事件中恢复
 
   record.online = true;
   record.death = false;
   record.entityId = bot.id;
-  botRegistry.set(record.name, record);
-  saveBotRecord(record);
+  finalizeBotSpawn(bot, record, state.location, state.rotation, state.lookTarget, record.isSneaking);
 
   return bot;
 }
 
+// ─── 保存假人完整状态（背包 + 装备 + 经验）───────────────
+
+/**
+ * 保存假人的全部运行时状态到持久化
+ * - 背包 36 格 → saveBotInventory（每格独立 key）
+ * - 装备 5 槽 → saveBotEquipment（每槽独立 key）
+ * - 经验值 → record.experience + saveBotRecord
+ *
+ * ⚠️ 注意：改了 record.experience 后必须 saveBotRecord，否则不持久化
+ * 此函数在以下场景被调用：
+ *   - offlineBot（主动下线）
+ *   - entityDie（死亡，无论是否自动重生）
+ *   - playerLeave（尽力保存，实体可能已不可访问）
+ *   - behavior 100tick 周期（仅装备+经验）
+ */
+export function saveBotFullState(bot: Player, record: BotRecord): void {
+  // ⚠️ 高危防护：假人刚生成时背包为空，恢复完成前禁止保存
+  // 否则空背包会覆盖持久化的真实数据
+  if (!isBotRestored(record.name)) return;
+
+  const inv = bot.getComponent("minecraft:inventory") as EntityInventoryComponent;
+  if (inv?.container) {
+    saveBotInventory(record.name, serializeContainer(inv.container));
+  }
+  const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  if (equip) {
+    saveBotEquipment(record.name, serializeEquipment(equip));
+  }
+  record.experience = captureExperience(bot);
+  saveBotRecord(record);
+}
+
 // ─── 下线 ──────────────────────────────────────────────
 
+/**
+ * 主动下线假人
+ * - 保存当前状态（最后位置 + 背包 + 装备 + 经验）
+ * - disconnect 移除实体
+ * - ⚠️ disconnect 后 playerLeave 事件会触发，但此时实体已不可访问
+ *   所以保存必须在 disconnect 前完成
+ */
 export function offlineBot(record: BotRecord): void {
   const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
   const online = entity as SimulatedPlayer | undefined;
@@ -153,20 +193,7 @@ export function offlineBot(record: BotRecord): void {
     };
     record.isSneaking = online.isSneaking;
 
-    // 保存背包
-    const inv = online.getComponent("minecraft:inventory") as EntityInventoryComponent;
-    if (inv?.container) {
-      saveBotInventory(record.name, serializeContainer(inv.container));
-    }
-
-    // 保存装备栏
-    const equip = online.getComponent("minecraft:equippable") as EntityEquippableComponent;
-    if (equip) {
-      saveBotEquipment(record.name, serializeEquipment(equip));
-    }
-
-    // 保存经验
-    record.experience = captureExperience(online);
+    saveBotFullState(online, record);
 
     online.disconnect();
   }
@@ -175,6 +202,7 @@ export function offlineBot(record: BotRecord): void {
   record.entityId = undefined;
   botRegistry.set(record.name, record);
   saveBotRecord(record);
+
 }
 
 // ─── 删除 ──────────────────────────────────────────────
@@ -189,6 +217,9 @@ export function deleteBot(record: BotRecord): void {
   botRegistry.delete(record.name);
   removeBotRecord(record.name);
   removeBotInventory(record.name);
+  // 离线删除：disconnect() 不会触发 playerLeave，必须手动清除恢复标记
+  // 否则同名新假人会被 isBotRestored 误判为已恢复，空背包覆盖持久化数据
+  removeBotRestored(record.name);
 }
 
 // ─── 杀死 ──────────────────────────────────────────────

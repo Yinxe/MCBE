@@ -1,9 +1,14 @@
 // ─── 标签行为引擎 ──────────────────────────────────────
+// 按标签驱动假人的自动行为（自动挖掘/放置/攻击/跳跃/体态控制）
+// 每个行为独立 runInterval 轮询，互不影响
+//
+// 同时承载位置/经验/装备的周期持久化（100tick ≈ 5秒）
+// 因为装备栏没有对应的事件，只能轮询兜底
 
 import { Player, system, world, EntityEquippableComponent } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { botRegistry, saveBotRecord, saveBotEquipment } from "./persistence";
+import { botRegistry, saveBotRecord, saveBotEquipment, isBotRestored } from "./persistence";
 import { TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL } from "./tags";
 import { BOT_TAG, BotRecord } from "./types";
 import { getPlayerLookTarget, serializeEquipment, captureExperience } from "./utils";
@@ -28,6 +33,7 @@ const TAG_BEHAVIORS: TagBehavior[] = [
   },
   {
     // 自动放置 — 每 8 tick 在瞄准的方块面上放置方块
+    // ⚠️ useItemInSlotOnBlock 使用快捷栏第 1 格（slot 0），请确保该格有可放置的方块
     tagValue: TAG_AUTO_PLACE.value,
     intervalTicks: 8,
     execute(bot, _record) {
@@ -38,9 +44,9 @@ const TAG_BEHAVIORS: TagBehavior[] = [
     },
   },
   {
-    // 自动攻击 — 每 5 tick 攻击一次
+    // 自动攻击 — 每 5 tick 攻击一次（attack 使用射线检测目标）
     tagValue: TAG_AUTO_ATTACK.value,
-    intervalTicks:5,
+    intervalTicks: 5,
     execute(bot, _record) {
       bot.attack();
     },
@@ -55,6 +61,7 @@ const TAG_BEHAVIORS: TagBehavior[] = [
   },
   {
     // 体态控制 — 每 2 tick 同步控制器玩家的位置/朝向/潜行
+    // 控制器通过 /mp:control <bot> 设置，record.controllerId 存储控制器的 entityId
     tagValue: TAG_CONTROL.value,
     intervalTicks: 2,
     execute(bot, record) {
@@ -90,14 +97,25 @@ export function startTagBehaviors(): void {
     }, behavior.intervalTicks);
   }
 
-  // 每 100 ticks（约 5 秒）自动持久化在线存活假人的位置/朝向
+  // 每 100 ticks（约 5 秒）自动持久化在线存活假人的位置/朝向/经验/装备
+  //
+  // 为什么需要这个循环？
+  //   背包有 playerInventoryItemChange 事件实时保存
+  //   装备栏没有对应事件——EntityEquippableComponent 的装备变化不触发任何事件
+  //   经验值也没有变化事件
+  //   因此只能轮询兜底
+  //
+  // ⚠️ 注意：背包不在循环中保存（由事件驱动更实时高效）
   system.runInterval(() => {
     for (const [, record] of botRegistry) {
       if (!record.online || record.death) continue;
       if (!record.entityId) continue;
       const entity = world.getEntity(record.entityId);
       if (!entity || !entity.hasTag(BOT_TAG)) continue;
+      // 恢复完成前禁止保存任意状态，防止空背包/西北角位置覆盖持久化数据
+      if (!isBotRestored(record.name)) continue;
 
+      // 位置
       if (!record.lastPoint) {
         record.lastPoint = {
           location: entity.location,
@@ -111,10 +129,12 @@ export function startTagBehaviors(): void {
         record.lastPoint.rotation = (entity as Player).getRotation();
       }
       record.isSneaking = (entity as Player).isSneaking;
+
+      // 经验
       record.experience = captureExperience(entity as Player);
       saveBotRecord(record);
 
-      // 同步保存装备栏
+      // 装备栏（背包由 playerInventoryItemChange 事件实时保存）
       const equip = (entity as Player).getComponent("minecraft:equippable") as EntityEquippableComponent;
       if (equip) {
         saveBotEquipment((entity as Player).name, serializeEquipment(equip));

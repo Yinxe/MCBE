@@ -1,34 +1,34 @@
-// ─── MockPlayer 入口 ─────────────────────────────────
-// 职责：启动命令注册 + 恢复持久化 + 启动行为引擎 + 事件监听 + 玩家交互
+// ─── MockPlayer 入口 ─────────────────────────────────────
+// 职责：命令注册 + 持久化恢复 + 启动行为引擎 + 事件监听
+//
+// 启动流程：
+//   1. system.beforeEvents.startup — 注册自定义命令（early-execution mode）
+//   2. world.afterEvents.worldLoad  — 恢复持久化 → 启动标签行为引擎 → 注册事件监听
+//
+// 所有事件订阅委托给 events/index.ts 的 registerAllEvents()
+// main.ts 保持最小职责：只做初始化编排，不塞业务逻辑
 
-import {
-  world,
-  system,
-  Player,
-  ItemUseAfterEvent,
-  PlayerInteractWithEntityBeforeEvent,
-  PlayerInventoryItemChangeAfterEvent,
-} from "@minecraft/server";
+import { world, system } from "@minecraft/server";
 
 import { registerAllCommands } from "./commands/index";
-import { botRegistry, saveBotRecord, loadAllBotRecords, saveBotSlot } from "./features/persistence";
+import { registerAllEvents } from "./events/index";
+import { botRegistry, saveBotRecord, loadAllBotRecords } from "./features/persistence";
 import { startTagBehaviors } from "./features/behavior";
-import { onEntityDie, onPlayerSpawn, onPlayerJoin, onPlayerLeave } from "./features/events";
-import { TAG_BOT } from "./features/tags";
-import { BOT_TAG } from "./features/types";
-import { serializeItemStack } from "./features/utils";
-import { showMainMenu, showOperationPanel } from "./ui/menu";
-import { showTagManagement } from "./ui/tags";
 
-// ─── 命令注册 ──────────────────────────────────────────
+// ─── 命令注册（early-execution mode） ─────────────────────
+// customCommandRegistry 不在 world 上，而是在 StartupEvent 上
+// 必须在 early-execution mode 中注册
 
 system.beforeEvents.startup.subscribe((event) => {
   registerAllCommands(event);
 });
 
-// ─── 世界加载：恢复持久化数据 + 启动行为引擎 ──────────
+// ─── 世界加载：恢复持久化 + 启动引擎 + 注册事件 ─────────
+// worldLoad 在 world 完全加载后触发，此时可以安全读写动态属性
 
 world.afterEvents.worldLoad.subscribe(() => {
+  // 从 DynamicProperty 加载所有假人记录
+  // 重启后所有假人默认为 offline 状态
   const loaded = loadAllBotRecords();
   for (const record of loaded) {
     record.online = false;
@@ -39,54 +39,10 @@ world.afterEvents.worldLoad.subscribe(() => {
   }
   console.warn(`[MockPlayer] 从持久化恢复 ${botRegistry.size} 个模拟玩家记录`);
 
+  // 启动标签行为引擎（自动挖掘/放置/攻击/跳跃/体态控制）
+  // 同时启动 100tick 周期持久化（位置/经验/装备栏）
   startTagBehaviors();
-});
 
-// ─── 事件监听 ──────────────────────────────────────────
-
-world.afterEvents.entityDie.subscribe(onEntityDie);
-world.afterEvents.playerSpawn.subscribe(onPlayerSpawn);
-world.afterEvents.playerJoin.subscribe(onPlayerJoin);
-world.afterEvents.playerLeave.subscribe(onPlayerLeave);
-
-// ─── 背包变化自动保存（仅模拟玩家） ──────────────────────
-
-world.afterEvents.playerInventoryItemChange.subscribe((event: PlayerInventoryItemChangeAfterEvent) => {
-  const { player, slot, itemStack } = event;
-  if (!player.hasTag(BOT_TAG)) return;
-
-  const serialized = itemStack ? serializeItemStack(itemStack) : null;
-  saveBotSlot(player.name, slot, serialized);
-});
-
-// ─── 玩家交互 ──────────────────────────────────────────
-
-/** 木棍使用 → 打开主菜单 */
-world.afterEvents.itemUse.subscribe((event: ItemUseAfterEvent) => {
-  const item = event.itemStack;
-  if (!item || item.typeId !== "minecraft:stick") return;
-  showMainMenu(event.source);
-});
-
-/** 空手右击/长按假人 → 取消默认交互并打开面板 */
-world.beforeEvents.playerInteractWithEntity.subscribe((event: PlayerInteractWithEntityBeforeEvent) => {
-  const { player, target, itemStack } = event;
-
-  // 不是模拟玩家则不处理
-  if (!target.hasTag(TAG_BOT.value)) return;
-
-  // 手上有非空物品则不处理
-  if (itemStack && itemStack.typeId !== "minecraft:air") return;
-
-  // 取消默认交互行为
-  event.cancel = true;
-
-  // before 回调在 restricted mode，需要 system.run 延迟执行
-  system.run(() => {
-    if (player.isSneaking) {
-      showTagManagement(player, (target as Player).name);
-    } else {
-      showOperationPanel(player, (target as Player).name);
-    }
-  });
+  // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
+  registerAllEvents();
 });

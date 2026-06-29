@@ -289,11 +289,6 @@ export function getTotalXpForLevels(targetLevel: number): number {
   return total;
 }
 
-/** 根据 level + xpProgress 计算出完整总经验值 */
-export function calculateTotalXp(level: number, xpProgress: number): number {
-  return getTotalXpForLevels(level) + xpProgress;
-}
-
 /** 从 Player 捕获当前经验值到 ExperienceRecord */
 export function captureExperience(player: Player): ExperienceRecord {
   const level = player.level;

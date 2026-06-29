@@ -30,3 +30,10 @@ _遇到问题持续增加踩坑记录_
 - **`Player.name` 是只读属性**：`Player` 有 `readonly name`（唯一标识名）和从 `Entity` 继承的 `nameTag`（可修改的头顶显示名）。`spawnSimulatedPlayer` 的第二个参数同时设置两者。
 - **批量在线操作使用 `system.runTimeout` 错开间隔**：多个实体操作（如同时上线/下线多个假人）同时执行可能出问题。使用 `system.runTimeout(() => {...}, tickDelay)` 每次延迟 4 tick 逐个执行。
 - **设置重生点要同步调用 `Player.setSpawnPoint()`**：仅更新 `BotRecord.respawnPoint` 不够，`SimulatedPlayer.respawn()` 默认使用世界出生点。必须同时调用 `bot.setSpawnPoint({ dimension, x, y, z })` 设置实体的实际出生点。
+- **ItemStack 不能直接 JSON.stringify 序列化**：Script API 的 `ItemStack` 不是纯数据对象，必须手动抽取 `typeId`/`amount`/`nameTag`/`lore`/组件数据等字段。写入时使用 `container.setItem(slot, newStack)`。部分数据（BlockEntityTag、AttributeModifiers、HideFlags 等）Script API 无法读取。
+- **装备栏（盔甲+副手）没有变化事件**：`EntityEquippableComponent` 的装备变化不触发任何 `afterEvents`。只能通过 100tick 周期轮询 + 死亡/下线事件兜底。对比之下，背包有 `playerInventoryItemChange` 事件可以实时保存。
+- **`PlayerJoinAfterEvent` 只有 `playerName`，没有 `player` 属性**：要获取 Player 对象需使用 `world.getPlayers({ name, tags })`。与 `PlayerSpawnAfterEvent`（有 `player` 属性）不同，注意区分。
+- **`playerSpawn.initialSpawn` 的含义**：`initialSpawn=true` 是首次生成（`spawnSimulatedPlayer` 触发），`initialSpawn=false` 是死亡重生（`bot.respawn()` 触发）。恢复背包的时机应该是 `playerJoin`（仅加入时触发），而不是 `playerSpawn`（重生时会错误覆盖背包）。
+- **死亡时无论是否自动重生都要先保存状态**：`entityDie` 中有自动重生分支时，保存逻辑必须在分支之前执行。必须先 `saveBotFullState()` 再 `bot.respawn()`，否则自动重生的假人丢失死亡时的状态快照。
+- **`saveBotFullState` 改了 `record.experience` 后必须调 `saveBotRecord`**：经验值存在 `BotRecord` 中，修改后不保存不会持久化。其他模块同理——任何对 `record` 对象的修改后都需要显式调用 `saveBotRecord`。
+- **背包持久化避免 32KB 上限使用每格独立 key**：单条 DynamicProperty 上限约 32KB。一个装满潜影盒的背包（36格 × 27格子物品）远超此限制。每格独立 key（`<name>:inv:<slot>`）彻底规避此问题。
