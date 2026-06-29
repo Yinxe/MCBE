@@ -37,3 +37,4 @@ _遇到问题持续增加踩坑记录_
 - **死亡时无论是否自动重生都要先保存状态**：`entityDie` 中有自动重生分支时，保存逻辑必须在分支之前执行。必须先 `saveBotFullState()` 再 `bot.respawn()`，否则自动重生的假人丢失死亡时的状态快照。
 - **`saveBotFullState` 改了 `record.experience` 后必须调 `saveBotRecord`**：经验值存在 `BotRecord` 中，修改后不保存不会持久化。其他模块同理——任何对 `record` 对象的修改后都需要显式调用 `saveBotRecord`。
 - **背包持久化避免 32KB 上限使用每格独立 key**：单条 DynamicProperty 上限约 32KB。一个装满潜影盒的背包（36格 × 27格子物品）远超此限制。每格独立 key（`<name>:inv:<slot>`）彻底规避此问题。
+- **`ItemStack.getComponent("minecraft:inventory")` 运行时对原版潜影盒/收纳袋返回 `undefined`**：类型定义中有 `ItemInventoryComponent`（componentId `"minecraft:inventory"`），但运行时只对自定义 BP 物品（含 `minecraft:storage_item` 组件）生效。原版潜影盒/收纳袋的内部物品 Script API 无法读取、无法序列化，重启后内容丢失。解决方向：`structureManager.createFromWorld` 对特殊物品做结构快照存储（`scripts/lib/ItemStorage.ts`），绕过 Script API 序列化限制直接由引擎保留完整 NBT。目前因时间原因未实装，等待 Mojang 修复或后续实现 ItemStorage 模块。

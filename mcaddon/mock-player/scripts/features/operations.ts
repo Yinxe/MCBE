@@ -28,6 +28,7 @@ import {
   serializeEquipment,
   captureExperience,
   getEquipmentSlot,
+  deserializeItemStack,
 } from "./utils";
 import {
   botRegistry,
@@ -36,6 +37,8 @@ import {
   saveBotInventory,
   saveBotEquipment,
   removeBotInventory,
+  loadBotInventory,
+  loadBotEquipment,
   isBotRestored,
   removeBotRestored,
 } from "./persistence";
@@ -337,7 +340,29 @@ export function offlineBot(record: BotRecord): void {
 
 // ─── 删除 ──────────────────────────────────────────────
 
-export function deleteBot(record: BotRecord): void {
+/**
+ * 删除假人（可选回收物品和经验到指定玩家）
+ * @param record 假人记录
+ * @param reclaimTo 回收目标玩家（传 null/undefined 则不回收直接删除）
+ */
+export function deleteBot(record: BotRecord, reclaimTo?: Player): void {
+  // 先回收物品和经验（如有指定玩家）
+  if (reclaimTo) {
+    try {
+      const result = reclaimBot(reclaimTo, record);
+      const parts: string[] = [];
+      if (result.items > 0) parts.push(`${result.items} 件物品`);
+      if (result.overflow > 0) parts.push(`${result.overflow} 件溢出掉落`);
+      if (result.xp > 0) parts.push(`${result.xp} XP（Lv.${result.xpLevel}）`);
+      if (parts.length > 0) {
+        reclaimTo.sendMessage(`§7回收自 §e${record.name}§7: ${parts.join("、")}`);
+      }
+    } catch (e: any) {
+      reclaimTo?.sendMessage(`§c回收 ${record.name} 物品时出错: ${e.message}`);
+    }
+  }
+
+  // 断开连接
   if (record.online) {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
@@ -472,12 +497,138 @@ export function setSneaking(record: BotRecord, sneaking: boolean): void {
   if (record.online) {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
-      (entity as Player).isSneaking = sneaking;
+      syncEntityTags(entity, record.tags);
     }
   }
 
   botRegistry.set(record.name, record);
   saveBotRecord(record);
+}
+
+// ─── 回收 ──────────────────────────────────────────────
+
+export interface ReclaimResult {
+  /** 转移物品数 */
+  items: number;
+  /** 溢出掉落数 */
+  overflow: number;
+  /** 转移经验值 */
+  xp: number;
+  /** 转移经验等级 */
+  xpLevel: number;
+}
+
+/**
+ * 回收假人全部物品和经验到玩家
+ * 在线假人：直接从实体读取（完整 NBT 保留）
+ * 离线假人：从持久化数据重建（潜影盒内容已知限制不保留）
+ * 物品优先进入玩家背包，溢出掉落在地
+ */
+export function reclaimBot(player: Player, record: BotRecord): ReclaimResult {
+  const result: ReclaimResult = { items: 0, overflow: 0, xp: 0, xpLevel: 0 };
+
+  const pInv = player.getComponent("minecraft:inventory") as EntityInventoryComponent;
+  if (!pInv?.container) throw new Error("无法获取玩家背包");
+
+  // ── 从实体回收（在线 & 非死亡） ──
+  if (record.online && !record.death) {
+    const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+    if (!entity || !entity.hasTag(BOT_TAG)) throw new Error("无法在世界中找到该模拟玩家");
+    const bot = entity as Player;
+
+    // 背包 36 格
+    const botInv = bot.getComponent("minecraft:inventory") as EntityInventoryComponent;
+    if (botInv?.container) {
+      for (let i = 0; i < botInv.container.size; i++) {
+        const item = botInv.container.getItem(i);
+        if (!item) continue;
+        botInv.container.setItem(i, undefined);
+        const remainder = pInv.container.addItem(item);
+        if (remainder) {
+          player.dimension.spawnItem(remainder, player.location);
+          result.overflow++;
+        }
+        result.items++;
+      }
+    }
+
+    // 装备 5 槽（头/胸/腿/靴/副手，主手已在背包中）
+    const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+    if (equip) {
+      for (const slot of SWAP_SLOTS) {
+        const item = equip.getEquipment(slot);
+        if (!item) continue;
+        equip.setEquipment(slot, undefined);
+        const remainder = pInv.container.addItem(item);
+        if (remainder) {
+          player.dimension.spawnItem(remainder, player.location);
+          result.overflow++;
+        }
+        result.items++;
+      }
+    }
+
+    // 经验
+    result.xpLevel = record.experience.level;
+    result.xp = record.experience.totalXp;
+    if (result.xp > 0) {
+      try { player.addExperience(result.xp); } catch {}
+    }
+
+    // 清空假人状态
+    record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
+    saveBotFullState(bot, record);
+
+  // ── 从持久化回收（离线/死亡） ──
+  } else {
+    // 背包
+    const savedInv = loadBotInventory(record.name);
+    if (savedInv) {
+      for (const data of savedInv) {
+        if (!data) continue;
+        const item = deserializeItemStack(data);
+        if (!item) continue;
+        const remainder = pInv.container.addItem(item);
+        if (remainder) {
+          player.dimension.spawnItem(remainder, player.location);
+          result.overflow++;
+        }
+        result.items++;
+      }
+    }
+
+    // 装备
+    const savedEquip = loadBotEquipment(record.name);
+    if (savedEquip) {
+      for (const data of Object.values(savedEquip)) {
+        if (!data) continue;
+        const item = deserializeItemStack(data);
+        if (!item) continue;
+        const remainder = pInv.container.addItem(item);
+        if (remainder) {
+          player.dimension.spawnItem(remainder, player.location);
+          result.overflow++;
+        }
+        result.items++;
+      }
+    }
+
+    // 经验
+    result.xpLevel = record.experience.level;
+    result.xp = record.experience.totalXp;
+    if (result.xp > 0) {
+      try { player.addExperience(result.xp); } catch {}
+    }
+
+    // 清空持久化数据
+    removeBotInventory(record.name);
+    record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
+  }
+
+  botRegistry.set(record.name, record);
+  saveBotRecord(record);
+
+  return result;
 }
 
 // ─── 标签更新 ──────────────────────────────────────────

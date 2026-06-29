@@ -107,6 +107,15 @@ export interface SerializedItemStack {
    * 嵌套容器（潜影盒/收纳袋内部物品），递归序列化
    * null = 空位，数组长度 = 容器大小
    * 反序列化时先建外层物品，再递归填充内部容器
+   *
+   * ⚠️ 已知限制：运行时 item.hasComponent("minecraft:inventory") 对原版
+   * 潜影盒/收纳袋返回 false，getComponent 返回 undefined。
+   * 该字段永远无法被 populate，定义仅保留类型结构参考。
+   * ItemInventoryComponent 实际只对自定义 BP 物品
+   *（含 minecraft:storage_item 组件）生效。
+   * 如要完整保存潜影盒内容，需用 structureManager 做结构快照存储
+   *（见 scripts/lib/ItemStorage.ts 预留模块）。
+   * Mojang 相关 Bug/Feature Request 未解决前此字段无实际效果。
    */
   container?: (SerializedItemStack | null)[];
 }

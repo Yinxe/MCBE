@@ -136,7 +136,16 @@ export function saveBotSlot(name: string, slot: number, item: SerializedItemStac
   }
 }
 
-/** 保存假人全部 36 格背包 */
+/**
+ * 保存假人全部 36 格背包
+ *
+ * ⚠️ 当前使用 DynamicProperty 按格序列化，潜影盒/收纳袋的内部物品
+ *    因 API 限制不会真实保存（见 serializeItemStack 注释）。
+ *    如需支持，需要在存/加载时分流：
+ *      - 普通物品 → DynamicProperty（现有逻辑）
+ *      - 特殊物品（typeId 白名单中的容器类）→ structureManager
+ *    见 scripts/lib/ItemStorage.ts 预留实现。
+ */
 export function saveBotInventory(name: string, items: (SerializedItemStack | null)[]): void {
   const nonEmpty = items.filter((i) => i !== null).length;
   for (let i = 0; i < items.length && i < 36; i++) {

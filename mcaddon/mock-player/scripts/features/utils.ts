@@ -160,13 +160,18 @@ export function serializeItemStack(item: ItemStack): SerializedItemStack {
   }
 
   // 嵌套容器（潜影盒、收纳袋等）
-  // ⚠️ ItemInventoryComponent.container 可能抛出 InvalidContainerError
-  //    加 try-catch 兜底，不影响外层物品序列化
+  // ⚠️ 已知截止 @minecraft/server@2.8.0 的 API 限制：
+  //    item.hasComponent("minecraft:inventory") 对原版潜影盒/收纳袋
+  //    在运行时返回 false，getComponent 返回 undefined。
+  //    ItemInventoryComponent 实际只对自定义 BP 物品
+  //   （含 minecraft:storage_item 组件）生效。
+  //    此 try-catch 永远走空分支，仅保留诊断日志便于追踪 Mojang 修复。
+  // 解决思路：对特殊物品（typeId 白名单）使用 structureManager 做结构快照，
+  //    见 scripts/lib/ItemStorage.ts 预留模块。
   try {
     const invComp = item.getComponent("minecraft:inventory") as any;
     if (invComp?.container) {
       data.container = serializeContainer(invComp.container);
-      console.warn(`[MockPlayer] [DIAG] 序列化容器 ${item.typeId} 容器大小=${invComp.container.size} 嵌套物品=${data.container?.filter(x=>!!x).length || 0}`);
     } else {
       console.warn(`[MockPlayer] [DIAG] 序列化容器 ${item.typeId} hasComp=${item.hasComponent("minecraft:inventory")} invComp=${typeof invComp} container=${typeof invComp?.container}`);
     }
@@ -288,6 +293,12 @@ export function deserializeContainer(container: Container, items: (SerializedIte
  * 递归填充容器物品的嵌套容器
  * 确保 ItemInventoryComponent 在已放入容器的物品上初始化，
  * 避免 setItem 拷贝丢失内部容器数据
+ *
+ * ⚠️ 当前无法生效：同 serializeItemStack 中的 API 限制——
+ *    运行时 getComponent("minecraft:inventory") 始终返回 undefined，
+ *    因此 fillNestedContainer 永远走 invComp?.container 为空的分支。
+ *    保留此函数以保持两阶段反序列化骨架，待 API 修复或实现
+ *    结构存储方案后启用（见 scripts/lib/ItemStorage.ts）。
  */
 function fillNestedContainer(
   parentContainer: Container,

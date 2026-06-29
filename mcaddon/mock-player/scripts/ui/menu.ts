@@ -20,6 +20,7 @@ import {
   swapEquipmentWithBot,
   unequipBotAll,
   saveBotEquipState,
+  reclaimBot,
 } from "../features/operations";
 import { showCreateForm } from "./create";
 import { showOnlineManagement } from "./online";
@@ -156,10 +157,12 @@ export function showOperationPanel(player: Player, botName: string): void {
   form.button("§d标签"); // 10
   form.button("§a重生点"); // 11
   form.button("§d查看数据"); // 12
+  // ── 回收 ──
+  form.button("§b回收全部"); // 13
   // ── 危险 ──
-  form.button("§c杀死"); // 13
-  form.button("§c删除"); // 14
-  form.button("§7← 返回"); // 15
+  form.button("§c杀死"); // 14
+  form.button("§c删除"); // 15
+  form.button("§7← 返回"); // 16
 
   form.show(player).then((response) => {
     if (response.canceled) return;
@@ -242,15 +245,34 @@ export function showOperationPanel(player: Player, botName: string): void {
         sendData(player, currentRecord);
         showOperationPanel(player, botName);
         break;
-      case 13: // 杀死
+      case 13: // 回收
+        system.run(() => {
+          try {
+            const result = reclaimBot(player, currentRecord);
+            const parts: string[] = [];
+            if (result.items > 0) parts.push(`§a${result.items}§7 件物品`);
+            if (result.overflow > 0) parts.push(`§e${result.overflow}§7 件溢出掉落`);
+            if (result.xp > 0) parts.push(`§b${result.xp} XP§7（Lv.${result.xpLevel}）`);
+            if (parts.length === 0) {
+              player.sendMessage(`§e假人 §e${botName}§e 背包是空的`);
+            } else {
+              player.sendMessage(`§a已从 §e${botName}§a 回收: ${parts.join("、")}`);
+            }
+          } catch (e: any) {
+            player.sendMessage(`§c回收失败: ${e.message}`);
+          }
+        });
+        showOperationPanel(player, botName);
+        break;
+      case 14: // 杀死
         if (!canAct) { player.sendMessage("§c模拟玩家不在线或已死亡"); break; }
         system.run(() => { try { killBot(currentRecord); player.sendMessage(`§a已杀死 §e${botName}`); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
         showOperationPanel(player, botName);
         break;
-      case 14: // 删除
+      case 15: // 删除
         confirmDelete(player, botName);
         break;
-      case 15: // 返回
+      case 16: // 返回
         showBotList(player);
         break;
     }

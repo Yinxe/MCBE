@@ -26,8 +26,8 @@ export function registerDeleteCommand(registry: any): void {
           return;
         }
         try {
-          deleteBot(record);
-          player.sendMessage(`§a已删除假人 §e${targetName}`);
+          deleteBot(record, player);
+          player.sendMessage(`§a已删除假人 §e${targetName}，物品和经验已回收`);
         } catch (e: any) {
           player.sendMessage(`§c删除假人失败: ${e.message}`);
         }

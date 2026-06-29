@@ -52,7 +52,7 @@ export function showMoveForm(player: Player, botName: string): void {
 export function confirmDelete(player: Player, botName: string): void {
   const form = new MessageFormData()
     .title("§l确认删除")
-    .body(`§7确定要删除模拟玩家 §e${botName}§7 吗？\n\n§c此操作不可撤销！`)
+    .body(`§7确定要删除模拟玩家 §e${botName}§7 吗？\n\n§6背包、装备和经验将被回收。\n§c此操作不可撤销！`)
     .button1("§c确认删除")
     .button2("§7取消");
 
@@ -68,8 +68,8 @@ export function confirmDelete(player: Player, botName: string): void {
 
     system.run(() => {
       try {
-        deleteBot(record);
-        player.sendMessage(`§a已删除模拟玩家 §e${botName}`);
+        deleteBot(record, player);
+        player.sendMessage(`§a已删除模拟玩家 §e${botName}，物品和经验已回收`);
       } catch (e: any) {
         player.sendMessage(`§c删除失败: ${e.message}`);
       }
