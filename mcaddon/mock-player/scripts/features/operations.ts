@@ -2,13 +2,37 @@
 // 所有操作同步执行，需在 system.run() 内调用
 // 操作不发送任何消息，由调用层（commands/ui）处理反馈
 
-import { Player, Vector3, world, GameMode, Dimension } from "@minecraft/server";
+import {
+  Player,
+  Vector3,
+  world,
+  GameMode,
+  Dimension,
+  EntityInventoryComponent,
+  EntityEquippableComponent,
+} from "@minecraft/server";
 import { spawnSimulatedPlayer, LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord, PositionState, BOT_TAG } from "./types";
+import { BotRecord, PositionState, BOT_TAG, SerializedItemStack } from "./types";
 import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, syncEntityTags } from "./tags";
-import { getPlayerLookTarget } from "./utils";
-import { botRegistry, saveBotRecord, removeBotRecord } from "./persistence";
+import {
+  getPlayerLookTarget,
+  serializeContainer,
+  deserializeContainer,
+  serializeEquipment,
+  deserializeEquipment,
+  captureExperience,
+} from "./utils";
+import {
+  botRegistry,
+  saveBotRecord,
+  removeBotRecord,
+  saveBotInventory,
+  loadBotInventory,
+  saveBotEquipment,
+  loadBotEquipment,
+  removeBotInventory,
+} from "./persistence";
 
 // ─── 创建 ──────────────────────────────────────────────
 
@@ -44,6 +68,7 @@ export function createBot(options: CreateBotOptions): BotRecord {
     lastPoint: currentState,
     respawnPoint: currentState,
     deathPoint: null,
+    experience: { level: 0, xpProgress: 0, totalXp: 0 },
   };
 
   syncEntityTags(bot, record.tags);
@@ -75,6 +100,35 @@ export function onlineBot(record: BotRecord): SimulatedPlayer {
   bot.isSneaking = record.isSneaking;
   bot.lookAtLocation(state.lookTarget, LookDuration.Continuous);
 
+  // 恢复背包
+  const saved = loadBotInventory(record.name);
+  if (saved) {
+    const inv = bot.getComponent("minecraft:inventory") as EntityInventoryComponent;
+    if (inv?.container) {
+      deserializeContainer(inv.container, saved);
+    }
+  }
+
+  // 恢复装备栏
+  const savedEquip = loadBotEquipment(record.name);
+  if (savedEquip) {
+    const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+    if (equip) {
+      deserializeEquipment(equip, savedEquip);
+    }
+  }
+
+  // 恢复经验
+  const exp = record.experience;
+  if (exp.level > 0 || exp.xpProgress > 0) {
+    try {
+      bot.addLevels(exp.level - bot.level);
+      bot.addExperience(exp.xpProgress - bot.xpEarnedAtCurrentLevel);
+    } catch {
+      // 经验恢复失败不影响上线
+    }
+  }
+
   record.online = true;
   record.death = false;
   record.entityId = bot.id;
@@ -98,6 +152,22 @@ export function offlineBot(record: BotRecord): void {
       lookTarget: record.lastPoint?.lookTarget ?? record.respawnPoint.lookTarget,
     };
     record.isSneaking = online.isSneaking;
+
+    // 保存背包
+    const inv = online.getComponent("minecraft:inventory") as EntityInventoryComponent;
+    if (inv?.container) {
+      saveBotInventory(record.name, serializeContainer(inv.container));
+    }
+
+    // 保存装备栏
+    const equip = online.getComponent("minecraft:equippable") as EntityEquippableComponent;
+    if (equip) {
+      saveBotEquipment(record.name, serializeEquipment(equip));
+    }
+
+    // 保存经验
+    record.experience = captureExperience(online);
+
     online.disconnect();
   }
 
@@ -118,6 +188,7 @@ export function deleteBot(record: BotRecord): void {
   }
   botRegistry.delete(record.name);
   removeBotRecord(record.name);
+  removeBotInventory(record.name);
 }
 
 // ─── 杀死 ──────────────────────────────────────────────

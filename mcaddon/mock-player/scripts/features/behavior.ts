@@ -1,12 +1,12 @@
 // ─── 标签行为引擎 ──────────────────────────────────────
 
-import { Player, system, world } from "@minecraft/server";
+import { Player, system, world, EntityEquippableComponent } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { botRegistry, saveBotRecord } from "./persistence";
+import { botRegistry, saveBotRecord, saveBotEquipment } from "./persistence";
 import { TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL } from "./tags";
 import { BOT_TAG, BotRecord } from "./types";
-import { getPlayerLookTarget } from "./utils";
+import { getPlayerLookTarget, serializeEquipment, captureExperience } from "./utils";
 
 // ─── 行为定义 ──────────────────────────────────────────
 
@@ -111,7 +111,14 @@ export function startTagBehaviors(): void {
         record.lastPoint.rotation = (entity as Player).getRotation();
       }
       record.isSneaking = (entity as Player).isSneaking;
+      record.experience = captureExperience(entity as Player);
       saveBotRecord(record);
+
+      // 同步保存装备栏
+      const equip = (entity as Player).getComponent("minecraft:equippable") as EntityEquippableComponent;
+      if (equip) {
+        saveBotEquipment((entity as Player).name, serializeEquipment(equip));
+      }
     }
   }, 100);
 }

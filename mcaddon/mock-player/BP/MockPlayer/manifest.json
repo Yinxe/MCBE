@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "MockPlayer-v1.0.0",
+    "name": "MockPlayer-v1.0.1",
     "description": "模拟玩家",
     "uuid": "49df180b-e16a-4740-9edd-c655127fcd22",
     "version": [
       1,
       0,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         1,
         0,
-        0
+        1
       ],
       "uuid": "256118ca-af02-43d2-a0f1-da5b460474d6",
       "type": "data"
@@ -34,7 +34,7 @@
       "version": [
         1,
         0,
-        0
+        1
       ],
       "entry": "scripts/main.js"
     }

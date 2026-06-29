@@ -1,13 +1,22 @@
 // ─── MockPlayer 入口 ─────────────────────────────────
 // 职责：启动命令注册 + 恢复持久化 + 启动行为引擎 + 事件监听 + 玩家交互
 
-import { world, system, Player, ItemUseAfterEvent, PlayerInteractWithEntityBeforeEvent } from "@minecraft/server";
+import {
+  world,
+  system,
+  Player,
+  ItemUseAfterEvent,
+  PlayerInteractWithEntityBeforeEvent,
+  PlayerInventoryItemChangeAfterEvent,
+} from "@minecraft/server";
 
 import { registerAllCommands } from "./commands/index";
-import { botRegistry, saveBotRecord, loadAllBotRecords } from "./features/persistence";
+import { botRegistry, saveBotRecord, loadAllBotRecords, saveBotSlot } from "./features/persistence";
 import { startTagBehaviors } from "./features/behavior";
 import { onEntityDie, onPlayerSpawn, onPlayerJoin, onPlayerLeave } from "./features/events";
 import { TAG_BOT } from "./features/tags";
+import { BOT_TAG } from "./features/types";
+import { serializeItemStack } from "./features/utils";
 import { showMainMenu, showOperationPanel } from "./ui/menu";
 import { showTagManagement } from "./ui/tags";
 
@@ -39,6 +48,16 @@ world.afterEvents.entityDie.subscribe(onEntityDie);
 world.afterEvents.playerSpawn.subscribe(onPlayerSpawn);
 world.afterEvents.playerJoin.subscribe(onPlayerJoin);
 world.afterEvents.playerLeave.subscribe(onPlayerLeave);
+
+// ─── 背包变化自动保存（仅模拟玩家） ──────────────────────
+
+world.afterEvents.playerInventoryItemChange.subscribe((event: PlayerInventoryItemChangeAfterEvent) => {
+  const { player, slot, itemStack } = event;
+  if (!player.hasTag(BOT_TAG)) return;
+
+  const serialized = itemStack ? serializeItemStack(itemStack) : null;
+  saveBotSlot(player.name, slot, serialized);
+});
 
 // ─── 玩家交互 ──────────────────────────────────────────
 
