@@ -161,14 +161,18 @@ export function serializeItemStack(item: ItemStack): SerializedItemStack {
 
   // 嵌套容器（潜影盒、收纳袋等）
   // ⚠️ ItemInventoryComponent.container 可能抛出 InvalidContainerError
-  //    （特别在新创建的 ItemStack 上，容器尚未初始化）
   //    加 try-catch 兜底，不影响外层物品序列化
   try {
     const invComp = item.getComponent("minecraft:inventory") as any;
     if (invComp?.container) {
       data.container = serializeContainer(invComp.container);
+      console.warn(`[MockPlayer] [DIAG] 序列化容器 ${item.typeId} 容器大小=${invComp.container.size} 嵌套物品=${data.container?.filter(x=>!!x).length || 0}`);
+    } else {
+      console.warn(`[MockPlayer] [DIAG] 序列化容器 ${item.typeId} hasComp=${item.hasComponent("minecraft:inventory")} invComp=${typeof invComp} container=${typeof invComp?.container}`);
     }
-  } catch {}
+  } catch (e: any) {
+    console.warn(`[MockPlayer] [DIAG] 序列化容器异常 ${item.typeId}: ${e.message}`);
+  }
 
   return data;
 }
@@ -269,6 +273,10 @@ export function deserializeContainer(container: Container, items: (SerializedIte
       container.setItem(i, undefined);
       continue;
     }
+    const hasContainer = !!data.container && data.container.length > 0;
+    if (hasContainer) {
+      console.warn(`[MockPlayer] [DIAG] 反序列化 slot=${i} ${data.typeId} 有嵌套容器=${data.container?.filter(x=>!!x).length || 0}/${data.container?.length || 0}`);
+    }
     // 先放入「外壳物品」（不含嵌套容器填充）
     container.setItem(i, deserializeItemStack(data));
     // 再取回填充内部容器（在目标容器上下文中操作）
@@ -291,10 +299,15 @@ function fillNestedContainer(
     const parentItem = parentContainer.getItem(parentSlot);
     if (!parentItem) return;
     const invComp = parentItem.getComponent("minecraft:inventory") as any;
-    if (!invComp?.container) return;
+    if (!invComp?.container) {
+      console.warn(`[MockPlayer] [DIAG] 填充容器失败: slot=${parentSlot} 无可访问容器组件`);
+      return;
+    }
 
     const inner = invComp.container;
     const len = Math.min(inner.size, nestedData.length);
+    const nonNull = nestedData.filter(x => !!x).length;
+    console.warn(`[MockPlayer] [DIAG] 填充容器 slot=${parentSlot} ${parentItem.typeId} 内部容器大小=${inner.size} 待填充=${nonNull}/${len}`);
 
     // 第一遍：填充外层物品（不含其内部容器）
     for (let i = 0; i < len; i++) {
@@ -310,7 +323,24 @@ function fillNestedContainer(
     }
     // 写回（getItem 可能返回拷贝）
     parentContainer.setItem(parentSlot, parentItem);
-  } catch {}
+
+    // 验证：立即读回来检查
+    const verify = parentContainer.getItem(parentSlot);
+    if (verify) {
+      const verifyComp = verify.getComponent("minecraft:inventory") as any;
+      if (verifyComp?.container) {
+        let stillHas = 0;
+        for (let i = 0; i < Math.min(verifyComp.container.size, len); i++) {
+          if (verifyComp.container.getItem(i)) stillHas++;
+        }
+        console.warn(`[MockPlayer] [DIAG] ✅ 写回验证 slot=${parentSlot} 容器物品=${stillHas}/${nonNull}`);
+      } else {
+        console.warn(`[MockPlayer] [DIAG] ❌ 写回验证 slot=${parentSlot} 容器组件丢失`);
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[MockPlayer] [DIAG] 填充容器异常 slot=${parentSlot}: ${e.message}`);
+  }
 }
 
 // ─── 经验值计算 ──────────────────────────────────────────
