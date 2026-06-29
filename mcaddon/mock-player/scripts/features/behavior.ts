@@ -1,12 +1,12 @@
 // ─── 标签行为引擎 ──────────────────────────────────────
 
-import { world, system, Player } from "@minecraft/server";
-import { SimulatedPlayer, LookDuration } from "@minecraft/server-gametest";
+import { Player, system, world } from "@minecraft/server";
+import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord, BOT_TAG } from "./types";
-import { TAG_AUTO_MINE, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_CONTROL } from "./tags";
-import { getPlayerLookTarget } from "./utils";
 import { botRegistry, saveBotRecord } from "./persistence";
+import { TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL } from "./tags";
+import { BOT_TAG, BotRecord } from "./types";
+import { getPlayerLookTarget } from "./utils";
 
 // ─── 行为定义 ──────────────────────────────────────────
 
@@ -27,9 +27,20 @@ const TAG_BEHAVIORS: TagBehavior[] = [
     },
   },
   {
-    // 自动攻击 — 每 15 tick 攻击一次
+    // 自动放置 — 每 8 tick 在瞄准的方块面上放置方块
+    tagValue: TAG_AUTO_PLACE.value,
+    intervalTicks: 8,
+    execute(bot, _record) {
+      const hit = bot.getBlockFromViewDirection({ maxDistance: 6 });
+      if (hit) {
+        bot.useItemInSlotOnBlock(0, hit.block.location, hit.face);
+      }
+    },
+  },
+  {
+    // 自动攻击 — 每 5 tick 攻击一次
     tagValue: TAG_AUTO_ATTACK.value,
-    intervalTicks: 15,
+    intervalTicks:5,
     execute(bot, _record) {
       bot.attack();
     },
@@ -66,13 +77,12 @@ export function startTagBehaviors(): void {
   // 每个标签行为独立轮询
   for (const behavior of TAG_BEHAVIORS) {
     system.runInterval(() => {
-      for (const [, record] of botRegistry) {
-        if (!record.online || record.death) continue;
-        if (!record.tags.includes(behavior.tagValue)) continue;
-        const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-        if (!entity || !entity.hasTag(BOT_TAG)) continue;
+      const bots = world.getPlayers({ tags: [BOT_TAG] });
+      for (const bot of bots) {
+        const record = botRegistry.get(bot.name);
+        if (!record || !record.tags.includes(behavior.tagValue)) continue;
         try {
-          behavior.execute(entity as SimulatedPlayer, record);
+          behavior.execute(bot as SimulatedPlayer, record);
         } catch {
           // 单次执行失败不影响其他假人
         }
