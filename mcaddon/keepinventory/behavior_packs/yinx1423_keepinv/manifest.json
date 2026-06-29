@@ -1,0 +1,55 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Keep Inventory Add-on",
+    "description": "死亡不掉落 · 无需开启作弊 · 保留成就 · Keep inventory on death without cheats — achievements friendly",
+    "uuid": "67f9c4dd-b4c8-4639-86d1-563884335058",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      26,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Behavior",
+      "version": [
+        1,
+        0,
+        0
+      ],
+      "uuid": "583ce21f-6234-475d-954b-bb984dc9aff9",
+      "type": "data"
+    },
+    {
+      "description": "Script",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "72b4f896-ab29-4773-87e7-6e8eb4d2342f",
+      "version": [
+        0,
+        0,
+        1
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": [
+        2,
+        5,
+        0
+      ]
+    }
+  ],
+  "metadata": {
+    "product_type": "addon"
+  }
+}
