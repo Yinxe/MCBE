@@ -16,6 +16,7 @@ import { registerControlCommand } from "./control";
 import { registerSneakCommand } from "./sneak";
 import { registerTagsCommand, registerTagCommand } from "./tag";
 import { registerMenuCommand } from "./menu";
+import { registerDataCommand } from "./data";
 
 export function registerAllCommands(event: StartupEvent): void {
   const registry = event.customCommandRegistry;
@@ -36,4 +37,5 @@ export function registerAllCommands(event: StartupEvent): void {
   registerTagsCommand(registry);
   registerTagCommand(registry);
   registerMenuCommand(registry);
+  registerDataCommand(registry);
 }

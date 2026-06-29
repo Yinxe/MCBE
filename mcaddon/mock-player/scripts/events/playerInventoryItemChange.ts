@@ -10,7 +10,7 @@
 // PlayerInventoryType 只有 Hotbar(0-8) 和 Inventory(9-35) 两种
 // 不包含装备槽
 
-import { world, PlayerInventoryItemChangeAfterEvent } from "@minecraft/server";
+import { world, system, PlayerInventoryItemChangeAfterEvent } from "@minecraft/server";
 
 import { BOT_TAG } from "../features/types";
 import { saveBotSlot, isBotRestored } from "../features/persistence";
@@ -22,7 +22,11 @@ export function onPlayerInventoryItemChange(event: PlayerInventoryItemChangeAfte
   // 假人刚生成时背包为空，恢复完成前禁止保存单格数据
   if (!isBotRestored(player.name)) return;
 
-  const serialized = itemStack ? serializeItemStack(itemStack) : null;
-  saveBotSlot(player.name, slot, serialized);
-  console.warn(`[MockPlayer] 背包变化 ${player.name} slot=${slot} ${itemStack?.typeId ?? "空"}`);
+  // ⚠️ 事件回调可能运行在受限模式（getCanDestroy 等 ItemStack 方法受限）
+  // 使用 system.run 切换到主 tick 执行序列化
+  system.run(() => {
+    const serialized = itemStack ? serializeItemStack(itemStack) : null;
+    saveBotSlot(player.name, slot, serialized);
+    console.warn(`[MockPlayer] 背包变化 ${player.name} slot=${slot} ${itemStack?.typeId ?? "空"}`);
+  });
 }

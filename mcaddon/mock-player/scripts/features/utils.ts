@@ -114,11 +114,10 @@ export function serializeItemStack(item: ItemStack): SerializedItemStack {
   const lore = item.getLore();
   if (lore.length > 0) data.lore = lore;
 
-  const canDestroy = item.getCanDestroy();
-  if (canDestroy.length > 0) data.canDestroy = canDestroy;
-
-  const canPlaceOn = item.getCanPlaceOn();
-  if (canPlaceOn.length > 0) data.canPlaceOn = canPlaceOn;
+  // ⚠️ getCanDestroy / getCanPlaceOn 在受限模式下调用会抛异常
+  // 加 try-catch 兜底，不影响核心数据保存
+  try { const d = item.getCanDestroy(); if (d.length > 0) data.canDestroy = d; } catch {}
+  try { const p = item.getCanPlaceOn(); if (p.length > 0) data.canPlaceOn = p; } catch {}
 
   // 耐久
   const durability = item.getComponent("minecraft:durability");
