@@ -88,6 +88,7 @@ export function createBot(options: CreateBotOptions): BotRecord {
     name,
     GameMode.Survival,
   );
+  console.warn(`[MockPlayer] 创建假人 ${name}（目标 ${dimension.id} ${Math.floor(location.x)} ${Math.floor(location.y)} ${Math.floor(location.z)}）`);
 
   const currentState: PositionState = {
     location,
@@ -131,6 +132,7 @@ export function onlineBot(record: BotRecord): SimulatedPlayer {
     record.name,
     GameMode.Survival,
   );
+  console.warn(`[MockPlayer] 上线假人 ${record.name}（${state.dimension} ${Math.floor(state.location.x)} ${Math.floor(state.location.y)} ${Math.floor(state.location.z)}）`);
 
   // 背包/装备/经验在 playerJoin 事件中恢复
 
@@ -197,32 +199,45 @@ export function equipBotArmor(bot: Player, player: Player, armorItem: ItemStack)
   return true;
 }
 
+/** 交换单个装备槽（调用方保证 pEquip/bEquip 非空） */
+function swapSlot(pEquip: EntityEquippableComponent, bEquip: EntityEquippableComponent, slot: EquipmentSlot): void {
+  const pItem = pEquip.getEquipment(slot);
+  const bItem = bEquip.getEquipment(slot);
+  pEquip.setEquipment(slot, bItem);
+  bEquip.setEquipment(slot, pItem);
+}
+
+/** 获取双方 EquippableComponent，任一为空返回 false */
+function getBothEquip(player: Player, bot: Player): [EntityEquippableComponent, EntityEquippableComponent] | undefined {
+  const p = player.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  const b = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  return p && b ? [p, b] : undefined;
+}
+
 /** 与假人互换主手物品 */
 export function swapMainhandWithBot(player: Player, bot: Player): boolean {
-  const pEquip = player.getComponent("minecraft:equippable") as EntityEquippableComponent;
-  const bEquip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
-  if (!pEquip || !bEquip) return false;
+  const both = getBothEquip(player, bot);
+  if (!both) return false;
+  swapSlot(both[0], both[1], EquipmentSlot.Mainhand);
+  console.warn(`[MockPlayer] 交换主手 ${bot.name} ←→ ${player.name}`);
+  return true;
+}
 
-  const pItem = pEquip.getEquipment(EquipmentSlot.Mainhand);
-  const bItem = bEquip.getEquipment(EquipmentSlot.Mainhand);
-
-  pEquip.setEquipment(EquipmentSlot.Mainhand, bItem);
-  bEquip.setEquipment(EquipmentSlot.Mainhand, pItem);
+/** 与假人互换副手物品 */
+export function swapOffhandWithBot(player: Player, bot: Player): boolean {
+  const both = getBothEquip(player, bot);
+  if (!both) return false;
+  swapSlot(both[0], both[1], EquipmentSlot.Offhand);
+  console.warn(`[MockPlayer] 交换副手 ${bot.name} ←→ ${player.name}`);
   return true;
 }
 
 /** 与假人互换全部装备（头盔/胸甲/护腿/靴子/副手） */
 export function swapEquipmentWithBot(player: Player, bot: Player): boolean {
-  const pEquip = player.getComponent("minecraft:equippable") as EntityEquippableComponent;
-  const bEquip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
-  if (!pEquip || !bEquip) return false;
-
-  for (const slot of SWAP_SLOTS) {
-    const pItem = pEquip.getEquipment(slot);
-    const bItem = bEquip.getEquipment(slot);
-    pEquip.setEquipment(slot, bItem);
-    bEquip.setEquipment(slot, pItem);
-  }
+  const both = getBothEquip(player, bot);
+  if (!both) return false;
+  for (const slot of SWAP_SLOTS) swapSlot(both[0], both[1], slot);
+  console.warn(`[MockPlayer] 交换装备 ${bot.name} ←→ ${player.name}`);
   return true;
 }
 
@@ -237,31 +252,40 @@ export function saveBotEquipState(bot: Player, record: BotRecord): void {
   }
   record.experience = captureExperience(bot);
   saveBotRecord(record);
+  console.warn(`[MockPlayer] 装备状态保存完成 ${record.name}`);
 }
 
-/** 脱下假人全部装备，放入玩家背包 */
+/** 一键卸甲：卸下假人主手 + 副手 + 全部装备，回收至玩家背包 */
 export function unequipBotAll(player: Player, bot: Player): boolean {
   const bEquip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
   const pInv = player.getComponent("minecraft:inventory") as EntityInventoryComponent;
   if (!bEquip || !pInv?.container) return false;
 
-  for (const slot of SWAP_SLOTS) {
+  // 所有要回收的槽：主手 + 5 装备槽
+  const allSlots = [EquipmentSlot.Mainhand, ...SWAP_SLOTS];
+  let count = 0;
+  for (const slot of allSlots) {
     const item = bEquip.getEquipment(slot);
     if (!item) continue;
     bEquip.setEquipment(slot, undefined);
+    count++;
     // 尝试放入玩家背包，放不下的掉落在地
     const remainder = pInv.container.addItem(item);
     if (remainder) {
       player.dimension.spawnItem(remainder, player.location);
     }
   }
+  console.warn(`[MockPlayer] 一键卸甲 ${bot.name}——${count} 件 → ${player.name}`);
   return true;
 }
 
 export function saveBotFullState(bot: Player, record: BotRecord): void {
   // ⚠️ 高危防护：假人刚生成时背包为空，恢复完成前禁止保存
   // 否则空背包会覆盖持久化的真实数据
-  if (!isBotRestored(record.name)) return;
+  if (!isBotRestored(record.name)) {
+    console.warn(`[MockPlayer] ⛔ 全量保存被拦截 ${record.name}——尚未恢复完成`);
+    return;
+  }
 
   const inv = bot.getComponent("minecraft:inventory") as EntityInventoryComponent;
   if (inv?.container) {
@@ -273,6 +297,7 @@ export function saveBotFullState(bot: Player, record: BotRecord): void {
   }
   record.experience = captureExperience(bot);
   saveBotRecord(record);
+  console.warn(`[MockPlayer] 全量状态保存完成 ${record.name}`);
 }
 
 // ─── 下线 ──────────────────────────────────────────────
@@ -297,6 +322,7 @@ export function offlineBot(record: BotRecord): void {
     };
     record.isSneaking = online.isSneaking;
 
+    console.warn(`[MockPlayer] 下线保存 ${record.name}（${record.lastPoint.dimension} ${Math.floor(record.lastPoint.location.x)} ${Math.floor(record.lastPoint.location.y)} ${Math.floor(record.lastPoint.location.z)}）`);
     saveBotFullState(online, record);
 
     online.disconnect();

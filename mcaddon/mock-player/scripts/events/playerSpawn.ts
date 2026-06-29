@@ -19,10 +19,10 @@ export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   const player = event.player;
   if (!player.hasTag(BOT_TAG)) return;
   const record = botRegistry.get(player.name);
-  if (record) {
-    record.death = false;
-    record.online = true;
-    saveBotRecord(record);
-    world.sendMessage(`§7[§a假人§7] §b${record.name} 重生了`);
-  }
+  if (!record) return;
+  console.warn(`[MockPlayer] 事件 playerSpawn(重生) ${record.name}`);
+  record.death = false;
+  record.online = true;
+  saveBotRecord(record);
+  world.sendMessage(`§7[§a假人§7] §b${record.name} 重生了`);
 }

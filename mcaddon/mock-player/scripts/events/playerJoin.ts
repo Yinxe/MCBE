@@ -17,6 +17,7 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   const record = botRegistry.get(event.playerName);
   if (!record) return;
 
+  console.warn(`[MockPlayer] 事件 playerJoin ${event.playerName}`);
   record.online = true;
   saveBotRecord(record);
 

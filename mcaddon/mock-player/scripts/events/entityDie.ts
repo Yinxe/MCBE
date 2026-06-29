@@ -26,6 +26,8 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   const record = botRegistry.get(entity.nameTag);
   if (!record) return;
 
+  console.warn(`[MockPlayer] 事件 entityDie ${record.name}（${entity.dimension.id} ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y)} ${Math.floor(entity.location.z)}）`);
+
   const bot = entity as SimulatedPlayer;
   const deathState: PositionState = {
     location: entity.location,

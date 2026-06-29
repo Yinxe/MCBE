@@ -1,11 +1,16 @@
-// ─── playerInteractWithEntity — 空手→操作面板 / 持装备→穿戴到假人 ─
+// ─── playerInteractWithEntity — 站立→操作面板 / 潜行→标签 ─
+//
+// 交互逻辑：
+//   站立 + 长按 → 打开操作面板（无空手条件限制）
+//   潜行 + 长按 → 打开标签管理（无空手条件限制）
+//
+// ⚠️ 踩坑：
+//   beforeEvents 回调运行在 restricted-execution mode
+//   不能直接调用 form.show()，需要用 system.run() 延迟执行
 
 import { world, system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/server";
 
 import { TAG_BOT } from "../features/tags";
-import { isWearableItem } from "../features/utils";
-import { equipBotArmor, saveBotEquipState } from "../features/operations";
-import { botRegistry } from "../features/persistence";
 import { showOperationPanel } from "../ui/menu";
 import { showTagManagement } from "../ui/tags";
 
@@ -14,25 +19,9 @@ export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBefore
 
   // 不是模拟玩家则不处理
   if (!target.hasTag(TAG_BOT.value)) return;
+  console.warn(`[MockPlayer] 交互 ${(target as Player).name}（手持 ${itemStack?.typeId ?? "空"} 潜行=${player.isSneaking}）`);
 
-  // 手上有物品 → 判断是否为可穿戴装备
-  if (itemStack && itemStack.typeId !== "minecraft:air") {
-    if (isWearableItem(itemStack.typeId)) {
-      // 穿戴装备到假人
-      event.cancel = true;
-      system.run(() => {
-        const record = botRegistry.get((target as Player).name);
-        if (equipBotArmor(target as Player, player, itemStack) && record) {
-          saveBotEquipState(target as Player, record);
-          player.sendMessage(`§a已为 §e${(target as Player).name}§a 穿戴装备`);
-        }
-      });
-    }
-    // 非装备物品 → 不处理，让默认行为继续
-    return;
-  }
-
-  // 空手 → 取消默认交互并打开菜单
+  // 取消默认交互行为（玩家之间默认行为不可预测）
   event.cancel = true;
 
   // before 回调在 restricted mode，需要 system.run 延迟执行

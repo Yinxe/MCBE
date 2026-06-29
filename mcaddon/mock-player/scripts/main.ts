@@ -41,8 +41,10 @@ world.afterEvents.worldLoad.subscribe(() => {
 
   // 启动标签行为引擎（自动挖掘/放置/攻击/跳跃/体态控制）
   // 同时启动 100tick 周期持久化（位置/经验/装备栏）
+  console.warn(`[MockPlayer] 启动引擎`);
   startTagBehaviors();
 
   // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
+  console.warn(`[MockPlayer] 注册事件`);
   registerAllEvents();
 });

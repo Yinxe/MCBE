@@ -24,4 +24,5 @@ export function onPlayerInventoryItemChange(event: PlayerInventoryItemChangeAfte
 
   const serialized = itemStack ? serializeItemStack(itemStack) : null;
   saveBotSlot(player.name, slot, serialized);
+  console.warn(`[MockPlayer] 背包变化 ${player.name} slot=${slot} ${itemStack?.typeId ?? "空"}`);
 }

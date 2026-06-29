@@ -18,6 +18,7 @@ import { saveBotFullState } from "../features/operations";
 export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   const record = botRegistry.get(event.playerName);
   if (!record) return;
+  console.warn(`[MockPlayer] 事件 playerLeave ${event.playerName}`);
 
   // 实体可能还在，尽力保存
   if (record.entityId) {

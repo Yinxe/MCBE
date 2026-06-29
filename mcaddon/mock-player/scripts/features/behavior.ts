@@ -107,6 +107,7 @@ export function startTagBehaviors(): void {
   //
   // ⚠️ 注意：背包不在循环中保存（由事件驱动更实时高效）
   system.runInterval(() => {
+    const saved: string[] = [];
     for (const [, record] of botRegistry) {
       if (!record.online || record.death) continue;
       if (!record.entityId) continue;
@@ -139,6 +140,8 @@ export function startTagBehaviors(): void {
       if (equip) {
         saveBotEquipment((entity as Player).name, serializeEquipment(equip));
       }
+      saved.push(record.name);
     }
+    if (saved.length > 0) console.warn(`[MockPlayer] 周期保存 ${saved.join(",")}`);
   }, 100);
 }

@@ -47,8 +47,7 @@ export function showTagManagement(player: Player, botName: string): void {
 
   form.show(player).then((response) => {
     if (response.canceled || !response.formValues) {
-      showTagManagement(player, botName);
-      return;
+      return; // 取消返回上级（操作面板）
     }
 
     const currentRecord = botRegistry.get(botName);
