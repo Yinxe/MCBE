@@ -15,6 +15,8 @@ import {
   Dimension,
   EntityInventoryComponent,
   EntityEquippableComponent,
+  EquipmentSlot,
+  ItemStack,
 } from "@minecraft/server";
 import { spawnSimulatedPlayer, LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
@@ -25,6 +27,7 @@ import {
   serializeContainer,
   serializeEquipment,
   captureExperience,
+  getEquipmentSlot,
 } from "./utils";
 import {
   botRegistry,
@@ -154,6 +157,107 @@ export function onlineBot(record: BotRecord): SimulatedPlayer {
  *   - playerLeave（尽力保存，实体可能已不可访问）
  *   - behavior 100tick 周期（仅装备+经验）
  */
+// ─── 物品交互（装备/互换） ──────────────────────────────
+
+/** 可互换的装备槽列表（不含主手） */
+const SWAP_SLOTS = [EquipmentSlot.Head, EquipmentSlot.Chest, EquipmentSlot.Legs, EquipmentSlot.Feet, EquipmentSlot.Offhand];
+
+/**
+ * 将玩家手中的装备穿到假人身上（自动交换）
+ * 在 system.run() 内调用
+ */
+export function equipBotArmor(bot: Player, player: Player, armorItem: ItemStack): boolean {
+  const slot = getEquipmentSlot(armorItem.typeId);
+  if (!slot) return false;
+
+  const bEquip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  if (!bEquip) return false;
+
+  const currentItem = bEquip.getEquipment(slot);
+  bEquip.setEquipment(slot, armorItem);
+
+  // 处理玩家手中的物品变化
+  const inv = player.getComponent("minecraft:inventory") as EntityInventoryComponent;
+  if (inv?.container) {
+    const handSlot = player.selectedSlotIndex;
+    if (currentItem) {
+      // 假人原有装备 → 换到玩家手中
+      inv.container.setItem(handSlot, currentItem);
+    } else {
+      // 假人该槽为空 → 消耗玩家手中的物品
+      const handStack = inv.container.getItem(handSlot);
+      if (handStack && handStack.amount > 1) {
+        handStack.amount--;
+        inv.container.setItem(handSlot, handStack);
+      } else {
+        inv.container.setItem(handSlot, undefined);
+      }
+    }
+  }
+  return true;
+}
+
+/** 与假人互换主手物品 */
+export function swapMainhandWithBot(player: Player, bot: Player): boolean {
+  const pEquip = player.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  const bEquip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  if (!pEquip || !bEquip) return false;
+
+  const pItem = pEquip.getEquipment(EquipmentSlot.Mainhand);
+  const bItem = bEquip.getEquipment(EquipmentSlot.Mainhand);
+
+  pEquip.setEquipment(EquipmentSlot.Mainhand, bItem);
+  bEquip.setEquipment(EquipmentSlot.Mainhand, pItem);
+  return true;
+}
+
+/** 与假人互换全部装备（头盔/胸甲/护腿/靴子/副手） */
+export function swapEquipmentWithBot(player: Player, bot: Player): boolean {
+  const pEquip = player.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  const bEquip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  if (!pEquip || !bEquip) return false;
+
+  for (const slot of SWAP_SLOTS) {
+    const pItem = pEquip.getEquipment(slot);
+    const bItem = bEquip.getEquipment(slot);
+    pEquip.setEquipment(slot, bItem);
+    bEquip.setEquipment(slot, pItem);
+  }
+  return true;
+}
+
+/**
+ * 仅保存假人装备栏 + 经验（不含背包）
+ * 替换 saveBotFullState 用于互换/脱下装备等场景，避免全量扫描 36 格背包
+ */
+export function saveBotEquipState(bot: Player, record: BotRecord): void {
+  const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  if (equip) {
+    saveBotEquipment(record.name, serializeEquipment(equip));
+  }
+  record.experience = captureExperience(bot);
+  saveBotRecord(record);
+}
+
+/** 脱下假人全部装备，放入玩家背包 */
+export function unequipBotAll(player: Player, bot: Player): boolean {
+  const bEquip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
+  const pInv = player.getComponent("minecraft:inventory") as EntityInventoryComponent;
+  if (!bEquip || !pInv?.container) return false;
+
+  for (const slot of SWAP_SLOTS) {
+    const item = bEquip.getEquipment(slot);
+    if (!item) continue;
+    bEquip.setEquipment(slot, undefined);
+    // 尝试放入玩家背包，放不下的掉落在地
+    const remainder = pInv.container.addItem(item);
+    if (remainder) {
+      player.dimension.spawnItem(remainder, player.location);
+    }
+  }
+  return true;
+}
+
 export function saveBotFullState(bot: Player, record: BotRecord): void {
   // ⚠️ 高危防护：假人刚生成时背包为空，恢复完成前禁止保存
   // 否则空背包会覆盖持久化的真实数据

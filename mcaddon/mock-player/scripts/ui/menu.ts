@@ -15,6 +15,10 @@ import {
   onlineBot,
   toggleControl,
   setSneaking,
+  swapMainhandWithBot,
+  swapEquipmentWithBot,
+  unequipBotAll,
+  saveBotEquipState,
 } from "../features/operations";
 import { showCreateForm } from "./create";
 import { showOnlineManagement } from "./online";
@@ -130,16 +134,19 @@ export function showOperationPanel(player: Player, botName: string): void {
 
   form.button("§6◆ TPHERE — 假人传送到身边"); // 0 - 最常用
   form.button(record.online ? "§b◆ 上线/下线 §a[在线]" : "§7◆ 上线/下线 §7[离线]"); // 1
-  form.button(record.isSneaking ? "§b◆ 潜行 §a[开]" : "§b◆ 潜行 §7[关]"); // 2
+  form.button("§6◆ 互换主手"); // 2
+  form.button("§6◆ 互换装备"); // 3
+  form.button("§e◆ 脱下装备"); // 4
+  form.button(record.isSneaking ? "§b◆ 潜行 §a[开]" : "§b◆ 潜行 §7[关]"); // 5
   const hasControl = record.tags.includes(TAG_CONTROL.value);
-  form.button(hasControl ? "§b◆ 控制 §a[开]" : "§7◆ 控制 §c[关]"); // 3
-  form.button("§6◆ 移动"); // 4
-  form.button("§6◆ TPA — 传送到假人"); // 5
-  form.button("§d◆ 标签"); // 6
-  form.button("§a◆ 重生点"); // 7
-  form.button("§c◆ 杀死"); // 8
-  form.button("§c◆ 删除"); // 9
-  form.button("§7← 返回"); // 10
+  form.button(hasControl ? "§b◆ 控制 §a[开]" : "§7◆ 控制 §c[关]"); // 6
+  form.button("§6◆ 移动"); // 7
+  form.button("§6◆ TPA — 传送到假人"); // 8
+  form.button("§d◆ 标签"); // 9
+  form.button("§a◆ 重生点"); // 10
+  form.button("§c◆ 杀死"); // 11
+  form.button("§c◆ 删除"); // 12
+  form.button("§7← 返回"); // 13
 
   form.show(player).then((response) => {
     if (response.canceled) return;
@@ -184,7 +191,73 @@ export function showOperationPanel(player: Player, botName: string): void {
         });
         showOperationPanel(player, botName);
         break;
-      case 2: // 潜行
+      case 2: // 互换主手
+        if (!canAct) {
+          player.sendMessage("§c模拟玩家不在线或已死亡");
+          break;
+        }
+        { const eid = currentRecord.entityId;
+          if (!eid) { player.sendMessage("§c无法获取假人实体"); break; }
+          const botEnt = world.getEntity(eid);
+          if (!botEnt || !botEnt.hasTag(TAG_BOT.value)) { player.sendMessage("§c无法获取假人实体"); break; }
+          const bot = botEnt as Player;
+          system.run(() => {
+            try {
+              swapMainhandWithBot(player, bot);
+              // 主手变化走 playerInventoryItemChange 事件自动保存，无需显式持久化
+              player.sendMessage(`§a已与 §e${botName}§a 互换主手物品`);
+            } catch (e: any) {
+              player.sendMessage(`§c互换主手失败: ${e.message}`);
+            }
+          });
+        }
+        showOperationPanel(player, botName);
+        break;
+      case 3: // 互换装备
+        if (!canAct) {
+          player.sendMessage("§c模拟玩家不在线或已死亡");
+          break;
+        }
+        { const eid = currentRecord.entityId;
+          if (!eid) { player.sendMessage("§c无法获取假人实体"); break; }
+          const botEnt = world.getEntity(eid);
+          if (!botEnt || !botEnt.hasTag(TAG_BOT.value)) { player.sendMessage("§c无法获取假人实体"); break; }
+          const bot = botEnt as Player;
+          system.run(() => {
+            try {
+              swapEquipmentWithBot(player, bot);
+              saveBotEquipState(bot, currentRecord);
+              player.sendMessage(`§a已与 §e${botName}§a 互换全部装备`);
+            } catch (e: any) {
+              player.sendMessage(`§c互换装备失败: ${e.message}`);
+            }
+          });
+        }
+        showOperationPanel(player, botName);
+        break;
+      case 4: // 脱下装备
+        if (!canAct) {
+          player.sendMessage("§c模拟玩家不在线或已死亡");
+          break;
+        }
+        { const eid = currentRecord.entityId;
+          if (!eid) { player.sendMessage("§c无法获取假人实体"); break; }
+          const botEnt = world.getEntity(eid);
+          if (!botEnt || !botEnt.hasTag(TAG_BOT.value)) { player.sendMessage("§c无法获取假人实体"); break; }
+          const bot = botEnt as Player;
+          system.run(() => {
+            try {
+              unequipBotAll(player, bot);
+              saveBotEquipState(bot, currentRecord);
+              player.sendMessage(`§a已脱下 §e${botName}§a 的全部装备`);
+            } catch (e: any) {
+              player.sendMessage(`§c脱下装备失败: ${e.message}`);
+            }
+          });
+        }
+        showOperationPanel(player, botName);
+        break;
+      case 5: // 潜行
         system.run(() => {
           try {
             setSneaking(currentRecord, !currentRecord.isSneaking);
@@ -195,7 +268,7 @@ export function showOperationPanel(player: Player, botName: string): void {
         });
         showOperationPanel(player, botName);
         break;
-      case 3: // 控制
+      case 6: // 控制
         if (!canAct) {
           player.sendMessage("§c模拟玩家不在线或已死亡");
           break;
@@ -214,14 +287,14 @@ export function showOperationPanel(player: Player, botName: string): void {
         });
         showOperationPanel(player, botName);
         break;
-      case 4: // 移动
+      case 7: // 移动
         if (!canAct) {
           player.sendMessage("§c模拟玩家不在线或已死亡");
           break;
         }
         showMoveForm(player, botName);
         break;
-      case 5: // TPA — 传送到假人
+      case 8: // TPA — 传送到假人
         if (!canAct) {
           player.sendMessage("§c模拟玩家不在线或已死亡");
           break;
@@ -235,10 +308,10 @@ export function showOperationPanel(player: Player, botName: string): void {
           }
         });
         break;
-      case 6: // 标签
+      case 9: // 标签
         showTagManagement(player, botName);
         break;
-      case 7: // 重生点
+      case 10: // 重生点
         system.run(() => {
           try {
             const lookTarget = getPlayerLookTarget(player);
@@ -269,7 +342,7 @@ export function showOperationPanel(player: Player, botName: string): void {
         });
         showOperationPanel(player, botName);
         break;
-      case 8: // 杀死
+      case 11: // 杀死
         if (!canAct) {
           player.sendMessage("§c模拟玩家不在线或已死亡");
           break;
@@ -284,10 +357,10 @@ export function showOperationPanel(player: Player, botName: string): void {
         });
         showOperationPanel(player, botName);
         break;
-      case 9: // 删除
+      case 12: // 删除
         confirmDelete(player, botName);
         break;
-      case 10: // 返回
+      case 13: // 返回
         showBotList(player);
         break;
     }
