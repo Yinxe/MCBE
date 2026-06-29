@@ -11,9 +11,9 @@ import { onlineBot, offlineBot } from "../features/operations";
 
 /** 获取状态图标 */
 function getStatusIcon(death: boolean, online: boolean): string {
-  if (death) return "§c💀";
-  if (online) return "§a✔";
-  return "§7❌";
+  if (death) return "§4[死亡]";
+  if (online) return "§a[在线]";
+  return "§7[离线]";
 }
 
 /** 获取位置摘要 */

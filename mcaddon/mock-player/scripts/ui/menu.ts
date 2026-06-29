@@ -24,9 +24,9 @@ import { showMoveForm, confirmDelete } from "./move";
 // ─── 工具 ──────────────────────────────────────────────
 
 function getStatusIcon(record: BotRecord): string {
-  if (record.death) return "§c💀";
-  if (record.online) return "§a✔";
-  return "§7❌";
+  if (record.death) return "§4[死亡]";
+  if (record.online) return "§a[在线]";
+  return "§7[离线]";
 }
 
 function getPosSummary(record: BotRecord): string {
@@ -44,10 +44,10 @@ function getPosSummary(record: BotRecord): string {
 export function showMainMenu(player: Player): void {
   const form = new ActionFormData()
     .title("§l模拟玩家管理")
-    .button("§l✨ 创建模拟玩家")
-    .button("§l📋 模拟玩家列表")
-    .button("§l⚙ 在线管理")
-    .button("§l🏷 标签速查");
+    .button("§6◆ 创建模拟玩家")
+    .button("§a◆ 模拟玩家列表")
+    .button("§b◆ 在线管理")
+    .button("§d◆ 标签速查");
 
   form.show(player).then((response) => {
     if (response.canceled) return;
@@ -117,7 +117,7 @@ export function showOperationPanel(player: Player, botName: string): void {
     return;
   }
 
-  const statusText = record.death ? "§c[死亡]" : record.online ? "§a[存活]" : "§7[离线]";
+  const statusText = record.death ? "§4[死亡]" : record.online ? "§a[在线]" : "§7[离线]";
   const tagLabels = record.tags
     .filter((t) => t !== TAG_BOT.value)
     .map((t) => {
@@ -128,18 +128,18 @@ export function showOperationPanel(player: Player, botName: string): void {
 
   const form = new ActionFormData().title(`§l${botName} ${statusText}`).body(`${getPosSummary(record)}${tagStr}`);
 
-  form.button(record.online ? "§e◆ 上线/下线 §a[在线]" : "§e◆ 上线/下线 §7[离线]");
-  form.button("§d◆ 标签");
-  form.button("§b◆ 移动");
-  form.button("§b◆ TPHERE"); // 假人传送到玩家
-  form.button("§b◆ TPA"); // 玩家传送到假人
-  form.button("§a◆ 重生点"); // setrespawn — 更新重生点
+  form.button("§6◆ TPHERE — 假人传送到身边"); // 0 - 最常用
+  form.button(record.online ? "§b◆ 上线/下线 §a[在线]" : "§7◆ 上线/下线 §7[离线]"); // 1
+  form.button(record.isSneaking ? "§b◆ 潜行 §a[开]" : "§b◆ 潜行 §7[关]"); // 2
   const hasControl = record.tags.includes(TAG_CONTROL.value);
-  form.button(hasControl ? "§6◆ 控制 §a[开]" : "§7◆ 控制 §c[关]");
-  form.button(record.isSneaking ? "§b◆ 潜行 §a[开]" : "§b◆ 潜行 §7[关]");
-  form.button("§c◆ 杀死");
-  form.button("§4◆ 删除");
-  form.button("§7← 返回");
+  form.button(hasControl ? "§b◆ 控制 §a[开]" : "§7◆ 控制 §c[关]"); // 3
+  form.button("§6◆ 移动"); // 4
+  form.button("§6◆ TPA — 传送到假人"); // 5
+  form.button("§d◆ 标签"); // 6
+  form.button("§a◆ 重生点"); // 7
+  form.button("§c◆ 杀死"); // 8
+  form.button("§c◆ 删除"); // 9
+  form.button("§7← 返回"); // 10
 
   form.show(player).then((response) => {
     if (response.canceled) return;
@@ -153,7 +153,22 @@ export function showOperationPanel(player: Player, botName: string): void {
     const canAct = currentRecord.online && !currentRecord.death;
 
     switch (sel) {
-      case 0: // 上线/下线
+      case 0: // TPHERE — 假人传送到身边
+        if (!canAct) {
+          player.sendMessage("§c模拟玩家不在线或已死亡");
+          break;
+        }
+        system.run(() => {
+          try {
+            tpBotToPlayer(currentRecord, player);
+            player.sendMessage(`§a已将 §e${botName}§a 传送到身边`);
+          } catch (e: any) {
+            player.sendMessage(`§c${e.message}`);
+          }
+        });
+        showOperationPanel(player, botName);
+        break;
+      case 1: // 上线/下线
         system.run(() => {
           try {
             if (currentRecord.online) {
@@ -169,32 +184,44 @@ export function showOperationPanel(player: Player, botName: string): void {
         });
         showOperationPanel(player, botName);
         break;
-      case 1: // 标签
-        showTagManagement(player, botName);
-        break;
-      case 2: // 移动
-        if (!canAct) {
-          player.sendMessage("§c模拟玩家不在线或已死亡");
-          break;
-        }
-        showMoveForm(player, botName);
-        break;
-      case 3: // TPHERE — 假人传送到玩家
-        if (!canAct) {
-          player.sendMessage("§c模拟玩家不在线或已死亡");
-          break;
-        }
+      case 2: // 潜行
         system.run(() => {
           try {
-            tpBotToPlayer(currentRecord, player);
-            player.sendMessage(`§a已将 §e${botName}§a 传送到身边`);
+            setSneaking(currentRecord, !currentRecord.isSneaking);
+            player.sendMessage(currentRecord.isSneaking ? `§a§e${botName}§a 已潜行` : `§a§e${botName}§a 已站起`);
           } catch (e: any) {
             player.sendMessage(`§c${e.message}`);
           }
         });
         showOperationPanel(player, botName);
         break;
-      case 4: // TPA — 玩家传送到假人
+      case 3: // 控制
+        if (!canAct) {
+          player.sendMessage("§c模拟玩家不在线或已死亡");
+          break;
+        }
+        system.run(() => {
+          try {
+            toggleControl(currentRecord, player);
+            player.sendMessage(
+              currentRecord.tags.includes(TAG_CONTROL.value)
+                ? `§a已开启 §e${botName}§a 控制模式`
+                : `§e已关闭 §e${botName}§e 控制模式`
+            );
+          } catch (e: any) {
+            player.sendMessage(`§c${e.message}`);
+          }
+        });
+        showOperationPanel(player, botName);
+        break;
+      case 4: // 移动
+        if (!canAct) {
+          player.sendMessage("§c模拟玩家不在线或已死亡");
+          break;
+        }
+        showMoveForm(player, botName);
+        break;
+      case 5: // TPA — 传送到假人
         if (!canAct) {
           player.sendMessage("§c模拟玩家不在线或已死亡");
           break;
@@ -208,7 +235,10 @@ export function showOperationPanel(player: Player, botName: string): void {
           }
         });
         break;
-      case 5: // 重生点
+      case 6: // 标签
+        showTagManagement(player, botName);
+        break;
+      case 7: // 重生点
         system.run(() => {
           try {
             const lookTarget = getPlayerLookTarget(player);
@@ -233,36 +263,6 @@ export function showOperationPanel(player: Player, botName: string): void {
             botRegistry.set(currentRecord.name, currentRecord);
             saveBotRecord(currentRecord);
             player.sendMessage(`§a已更新 §e${botName}§a 的重生点`);
-          } catch (e: any) {
-            player.sendMessage(`§c${e.message}`);
-          }
-        });
-        showOperationPanel(player, botName);
-        break;
-      case 6: // 控制
-        if (!canAct) {
-          player.sendMessage("§c模拟玩家不在线或已死亡");
-          break;
-        }
-        system.run(() => {
-          try {
-            toggleControl(currentRecord, player);
-            player.sendMessage(
-              currentRecord.tags.includes(TAG_CONTROL.value)
-                ? `§a已开启 §e${botName}§a 控制模式`
-                : `§e已关闭 §e${botName}§e 控制模式`
-            );
-          } catch (e: any) {
-            player.sendMessage(`§c${e.message}`);
-          }
-        });
-        showOperationPanel(player, botName);
-        break;
-      case 7: // 潜行
-        system.run(() => {
-          try {
-            setSneaking(currentRecord, !currentRecord.isSneaking);
-            player.sendMessage(currentRecord.isSneaking ? `§a§e${botName}§a 已潜行` : `§a§e${botName}§a 已站起`);
           } catch (e: any) {
             player.sendMessage(`§c${e.message}`);
           }
