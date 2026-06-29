@@ -1,6 +1,6 @@
 // ─── /mp:data <name> — 查看模拟玩家完整数据 ────────────
 
-import { Player, world, system, EntityInventoryComponent, EntityEquippableComponent, EquipmentSlot, CustomCommandParamType, CommandPermissionLevel } from "@minecraft/server";
+import { Player, world, system, EntityInventoryComponent, EntityEquippableComponent, EquipmentSlot, CustomCommandParamType, CommandPermissionLevel, CustomCommandStatus } from "@minecraft/server";
 
 import { BotRecord } from "../features/types";
 import { getTagDef } from "../features/tags";
@@ -118,19 +118,19 @@ export function registerDataCommand(registry: any): void {
       optionalParameters: [{ name: "name", type: CustomCommandParamType.String }],
     },
     (origin: any, ...args: any[]) => {
-      if (!origin.sourceEntity) return { status: 1, message: "该命令只能由玩家执行" };
+      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
       const player = origin.sourceEntity as Player;
 
       const nameInput = args[0] as string | undefined;
       if (!nameInput) {
         player.sendMessage("§c用法: /mp:data <假人名>");
-        return { status: 1, message: "缺少参数" };
+        return { status: CustomCommandStatus.Failure, message: "缺少参数" };
       }
 
       const record = botRegistry.get(nameInput);
       if (!record) {
         player.sendMessage(`§c未找到模拟玩家 §e${nameInput}§c`);
-        return { status: 1, message: "未找到" };
+        return { status: CustomCommandStatus.Failure, message: "未找到" };
       }
 
       // ⚠️ 命令回调运行在 restricted-execution mode
@@ -139,7 +139,7 @@ export function registerDataCommand(registry: any): void {
       system.run(() => {
         sendData(player, record);
       });
-      return { status: 0, message: "ok" };
+      return { status: CustomCommandStatus.Success, message: "ok" };
     },
   );
 }

@@ -9,7 +9,7 @@ import {
   CommandPermissionLevel,
   CustomCommandParamType,
 } from "@minecraft/server";
-import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../features/tags";
+import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../features/tags";
 import { getPlayerLookTarget } from "../features/utils";
 import { generateBotName } from "../features/persistence";
 import { createBot } from "../features/operations";
@@ -46,7 +46,7 @@ export function registerCreateCommand(registry: any): void {
             name: botName,
             location: pos,
             dimension,
-            initialTags: [TAG_BOT.value, TAG_RESPAWN.value, TAG_IDLE.value],
+            initialTags: DEFAULT_TAGS,
             rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
             lookTarget,
             isSneaking: player.isSneaking,
