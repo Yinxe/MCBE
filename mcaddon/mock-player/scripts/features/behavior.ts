@@ -7,8 +7,7 @@ import { EntityEquippableComponent, Player, system, world } from "@minecraft/ser
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, isBotRestored, saveBotEquipment, saveBotRecord } from "./persistence";
-import { TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL } from "./tags";
-import { BOT_TAG } from "./types";
+import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL } from "./tags";
 import { captureExperience, getPlayerLookTarget, serializeEquipment } from "./utils";
 
 // ─── 启动引擎 ──────────────────────────────────────────
@@ -25,7 +24,7 @@ export function startTagBehaviors(): void {
       try {
         const hit = (bot as SimulatedPlayer).getBlockFromViewDirection({ maxDistance: 6 });
         if (hit) (bot as SimulatedPlayer).breakBlock(hit.block.location, hit.face);
-      } catch { /* 单次失败不影响其他假人 */ }
+      } catch (e: any) { console.warn(`[MockPlayer] 自动挖掘异常 ${bot.name}: ${e?.message ?? e}`); }
     }
   }, 8);
 
@@ -35,7 +34,7 @@ export function startTagBehaviors(): void {
     for (const bot of bots) {
       const record = botRegistry.get(bot.name);
       if (!record) continue;
-      try { (bot as SimulatedPlayer).attack(); } catch {}
+      try { (bot as SimulatedPlayer).attack(); } catch (e: any) { console.warn(`[MockPlayer] 自动攻击异常 ${bot.name}: ${e?.message ?? e}`); }
     }
   }, 5);
 
@@ -45,7 +44,7 @@ export function startTagBehaviors(): void {
     for (const bot of bots) {
       const record = botRegistry.get(bot.name);
       if (!record) continue;
-      try { (bot as SimulatedPlayer).jump(); } catch {}
+      try { (bot as SimulatedPlayer).jump(); } catch (e: any) { console.warn(`[MockPlayer] 自动跳跃异常 ${bot.name}: ${e?.message ?? e}`); }
     }
   }, 3);
 
@@ -64,7 +63,7 @@ export function startTagBehaviors(): void {
         (bot as SimulatedPlayer).lookAtLocation(lookTarget, LookDuration.Continuous);
         (bot as SimulatedPlayer).isSneaking = (controller as Player).isSneaking;
         record.isSneaking = (bot as SimulatedPlayer).isSneaking;
-      } catch {}
+      } catch (e: any) { console.warn(`[MockPlayer] 体态控制异常 ${bot.name}: ${e?.message ?? e}`); }
     }
   }, 2);
 

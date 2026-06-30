@@ -1,14 +1,12 @@
 // ─── 共享类型和常量 ────────────────────────────────────
 // 所有核心数据类型定义在此文件，不依赖其他模块
 
-import { Vector3, Vector2 } from "@minecraft/server";
+import { Vector3, Vector2, EquipmentSlot } from "@minecraft/server";
 
 // ─── 常量 ──────────────────────────────────────────────
 
 /** 实体标签前缀 — MC 的 addTag/removeTag 中用此前缀标识属于 MockPlayer 的标签 */
 export const TAG_PREFIX = "mockplayer:tag:";
-/** 假人基础标识标签（用于 entity.hasTag 快速判断） */
-export const BOT_TAG = `${TAG_PREFIX}bot`;
 /**
  * DynamicProperty key 前缀
  * 用于持久化 key：
@@ -17,6 +15,26 @@ export const BOT_TAG = `${TAG_PREFIX}bot`;
  *   <DP_PREFIX><name>:equip:<X> — 装备栏 X（head/chest/legs/feet/offhand）
  */
 export const DP_PREFIX = "mockplayer:players:";
+
+// ─── 装备槽常量 ──────────────────────────────────────────
+
+/** 装备槽名称列表（字符串形式，用于 DP key 后缀） */
+export const EQUIP_SLOT_NAMES = ["head", "chest", "legs", "feet", "offhand"] as const;
+
+/** 装备槽名称 → EquipmentSlot 枚举映射 */
+export const EQUIP_SLOT_MAP: Record<string, EquipmentSlot> = {
+  head: EquipmentSlot.Head,
+  chest: EquipmentSlot.Chest,
+  legs: EquipmentSlot.Legs,
+  feet: EquipmentSlot.Feet,
+  offhand: EquipmentSlot.Offhand,
+};
+
+/** 可互换的装备槽列表（不含主手），用于装备互换/卸甲 */
+export const SWAP_SLOTS = [EquipmentSlot.Head, EquipmentSlot.Chest, EquipmentSlot.Legs, EquipmentSlot.Feet, EquipmentSlot.Offhand];
+
+/** 假人背包格数（快捷栏 9 + 主背包 27） */
+export const INVENTORY_SIZE = 36;
 
 // ─── 类型定义 ──────────────────────────────────────────
 

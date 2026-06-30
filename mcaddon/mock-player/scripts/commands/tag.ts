@@ -8,8 +8,7 @@ import {
   CommandPermissionLevel,
   CustomCommandParamType,
 } from "@minecraft/server";
-import { BOT_TAG } from "../features/types";
-import { EXCLUSIVE_SET, getTagDef, resolveTag, buildTagListMessage, syncEntityTags } from "../features/tags";
+import { BOT_TAG, EXCLUSIVE_SET, getTagDef, resolveTag, buildTagListMessage, syncEntityTags } from "../features/tags";
 import { botRegistry, saveBotRecord } from "../features/persistence";
 
 /** /mp:tags — 列出所有可用标签 */

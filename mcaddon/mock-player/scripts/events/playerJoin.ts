@@ -9,7 +9,7 @@
 
 import { world, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEquippableComponent } from "@minecraft/server";
 
-import { BOT_TAG } from "../features/types";
+import { BOT_TAG } from "../features/tags";
 import { botRegistry, saveBotRecord, loadBotInventory, loadBotEquipment, markBotRestored } from "../features/persistence";
 import { deserializeContainer, deserializeEquipment, getTotalXpForLevels } from "../features/utils";
 

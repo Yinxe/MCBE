@@ -4,3 +4,4 @@ lib/
 *.mcaddon
 *.mcpack
 .env
+.slim/deepwork/

@@ -20,8 +20,8 @@ import {
 } from "@minecraft/server";
 import { spawnSimulatedPlayer, LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord, PositionState, BOT_TAG, SerializedItemStack } from "./types";
-import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, syncEntityTags } from "./tags";
+import { BotRecord, PositionState, SerializedItemStack, SWAP_SLOTS } from "./types";
+import { BOT_TAG, TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, syncEntityTags } from "./tags";
 import {
   getPlayerLookTarget,
   serializeContainer,
@@ -147,25 +147,7 @@ export function onlineBot(record: BotRecord): SimulatedPlayer {
   return bot;
 }
 
-// ─── 保存假人完整状态（背包 + 装备 + 经验）───────────────
-
-/**
- * 保存假人的全部运行时状态到持久化
- * - 背包 36 格 → saveBotInventory（每格独立 key）
- * - 装备 5 槽 → saveBotEquipment（每槽独立 key）
- * - 经验值 → record.experience + saveBotRecord
- *
- * ⚠️ 注意：改了 record.experience 后必须 saveBotRecord，否则不持久化
- * 此函数在以下场景被调用：
- *   - offlineBot（主动下线）
- *   - entityDie（死亡，无论是否自动重生）
- *   - playerLeave（尽力保存，实体可能已不可访问）
- *   - behavior 100tick 周期（仅装备+经验）
- */
 // ─── 物品交互（装备/互换） ──────────────────────────────
-
-/** 可互换的装备槽列表（不含主手） */
-const SWAP_SLOTS = [EquipmentSlot.Head, EquipmentSlot.Chest, EquipmentSlot.Legs, EquipmentSlot.Feet, EquipmentSlot.Offhand];
 
 /**
  * 将玩家手中的装备穿到假人身上（自动交换）
@@ -282,6 +264,21 @@ export function unequipBotAll(player: Player, bot: Player): boolean {
   return true;
 }
 
+// ─── 保存假人完整状态（背包 + 装备 + 经验）───────────────
+
+/**
+ * 保存假人的全部运行时状态到持久化
+ * - 背包 36 格 → saveBotInventory（每格独立 key）
+ * - 装备 5 槽 → saveBotEquipment（每槽独立 key）
+ * - 经验值 → record.experience + saveBotRecord
+ *
+ * ⚠️ 注意：改了 record.experience 后必须 saveBotRecord，否则不持久化
+ * 此函数在以下场景被调用：
+ *   - offlineBot（主动下线）
+ *   - entityDie（死亡，无论是否自动重生）
+ *   - playerLeave（尽力保存，实体可能已不可访问）
+ *   - behavior 100tick 周期（仅装备+经验）
+ */
 export function saveBotFullState(bot: Player, record: BotRecord): void {
   // ⚠️ 高危防护：假人刚生成时背包为空，恢复完成前禁止保存
   // 否则空背包会覆盖持久化的真实数据
@@ -497,6 +494,7 @@ export function setSneaking(record: BotRecord, sneaking: boolean): void {
   if (record.online) {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
+      (entity as SimulatedPlayer).isSneaking = sneaking;
       syncEntityTags(entity, record.tags);
     }
   }

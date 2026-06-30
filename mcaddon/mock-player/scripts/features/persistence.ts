@@ -10,7 +10,7 @@
 // 清理时只删 inv: 和 equip: 子 key，不动主 record
 
 import { world } from "@minecraft/server";
-import { BotRecord, DP_PREFIX, SerializedItemStack } from "./types";
+import { BotRecord, DP_PREFIX, SerializedItemStack, INVENTORY_SIZE } from "./types";
 
 // ─── 全局状态 ──────────────────────────────────────────────
 
@@ -148,7 +148,7 @@ export function saveBotSlot(name: string, slot: number, item: SerializedItemStac
  */
 export function saveBotInventory(name: string, items: (SerializedItemStack | null)[]): void {
   const nonEmpty = items.filter((i) => i !== null).length;
-  for (let i = 0; i < items.length && i < 36; i++) {
+  for (let i = 0; i < items.length && i < INVENTORY_SIZE; i++) {
     saveBotSlot(name, i, items[i]);
   }
   console.warn(`[MockPlayer] 背包保存 ${name}——${nonEmpty}/${items.length} 格`);
@@ -162,13 +162,13 @@ export function saveBotInventory(name: string, items: (SerializedItemStack | nul
 export function loadBotInventory(name: string): (SerializedItemStack | null)[] | undefined {
   const ids = world.getDynamicPropertyIds();
   const prefix = `${DP_PREFIX}${name}${INV_PREFIX}`;
-  const result: (SerializedItemStack | null)[] = new Array(36).fill(null);
+  const result: (SerializedItemStack | null)[] = new Array(INVENTORY_SIZE).fill(null);
   let found = false;
   for (const id of ids) {
     if (!id.startsWith(prefix)) continue;
     const slotStr = id.slice(prefix.length);
     const slot = parseInt(slotStr);
-    if (isNaN(slot) || slot < 0 || slot > 35) continue;
+    if (isNaN(slot) || slot < 0 || slot >= INVENTORY_SIZE) continue;
     const value = world.getDynamicProperty(id);
     if (typeof value === "string") {
       try {
@@ -180,7 +180,7 @@ export function loadBotInventory(name: string): (SerializedItemStack | null)[] |
     }
   }
   const count = result.filter((i) => i !== null).length;
-  if (found) console.warn(`[MockPlayer] 背包加载 ${name}——${count}/36 格`);
+  if (found) console.warn(`[MockPlayer] 背包加载 ${name}——${count}/${INVENTORY_SIZE} 格`);
   return found ? result : undefined;
 }
 
@@ -193,9 +193,6 @@ export function loadBotInventory(name: string): (SerializedItemStack | null)[] |
 // 所以装备在 entityDie 中保存最可靠
 
 const EQUIP_PREFIX = ":equip:";
-
-/** 装备槽位名列表 */
-export const EQUIP_SLOTS = ["head", "chest", "legs", "feet", "offhand"] as const;
 
 /** 保存单个装备槽 */
 export function saveBotEquipSlot(name: string, slot: string, item: SerializedItemStack | null): void {

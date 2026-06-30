@@ -11,7 +11,7 @@
 
 import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 
-import { BOT_TAG } from "../features/types";
+import { BOT_TAG } from "../features/tags";
 import { botRegistry, saveBotRecord, removeBotRestored } from "../features/persistence";
 import { saveBotFullState } from "../features/operations";
 

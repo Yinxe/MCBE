@@ -3,8 +3,7 @@
 import { Player, system } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 
-import { BOT_TAG } from "../features/types";
-import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/tags";
+import { BOT_TAG, TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/tags";
 import { botRegistry } from "../features/persistence";
 import { setTags } from "../features/operations";
 import { showMainMenu } from "./menu";

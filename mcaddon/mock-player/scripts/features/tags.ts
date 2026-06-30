@@ -32,6 +32,9 @@ export const DEFAULT_TAGS: string[] = [TAG_BOT.value, TAG_RESPAWN.value, TAG_IDL
 /** 互斥标签的 value 集合，用于快速判断 */
 export const EXCLUSIVE_SET: Set<string> = new Set(EXCLUSIVE_TAGS.map((t) => t.value));
 
+/** 假人基础标识标签值（字符串快捷引用，等价于 TAG_BOT.value） */
+export const BOT_TAG = TAG_BOT.value;
+
 // ─── 标签查询 ──────────────────────────────────────────
 
 export function getTagDef(value: string): TagDef | undefined {

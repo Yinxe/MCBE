@@ -8,8 +8,8 @@ import {
   CommandPermissionLevel,
   CustomCommandParamType,
 } from "@minecraft/server";
-import { BotRecord, PositionState, BOT_TAG } from "../features/types";
-import { TAG_IDLE, getTagDef } from "../features/tags";
+import { BotRecord, PositionState } from "../features/types";
+import { BOT_TAG, TAG_IDLE, getTagDef } from "../features/tags";
 import { formatPos, formatDimensionId } from "../features/utils";
 import { botRegistry } from "../features/persistence";
 

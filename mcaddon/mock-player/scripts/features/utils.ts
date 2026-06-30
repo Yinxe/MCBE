@@ -12,7 +12,7 @@ import {
   EquipmentSlot,
   EntityEquippableComponent,
 } from "@minecraft/server";
-import { PositionState, SerializedItemStack, SerializedEnchantment, ExperienceRecord } from "./types";
+import { PositionState, SerializedItemStack, SerializedEnchantment, ExperienceRecord, EQUIP_SLOT_MAP } from "./types";
 
 // ─── 坐标方向 ──────────────────────────────────────────
 
@@ -385,15 +385,6 @@ export function captureExperience(player: Player): ExperienceRecord {
 }
 
 // ─── 装备序列化 ──────────────────────────────────────────
-
-/** 装备槽名字 → EquipmentSlot 映射 */
-const EQUIP_SLOT_MAP: Record<string, EquipmentSlot> = {
-  head: EquipmentSlot.Head,
-  chest: EquipmentSlot.Chest,
-  legs: EquipmentSlot.Legs,
-  feet: EquipmentSlot.Feet,
-  offhand: EquipmentSlot.Offhand,
-};
 
 /** 序列化装备栏（head/chest/legs/feet/offhand）*/
 export function serializeEquipment(

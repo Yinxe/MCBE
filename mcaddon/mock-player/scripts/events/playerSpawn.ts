@@ -10,7 +10,7 @@
 
 import { world, PlayerSpawnAfterEvent } from "@minecraft/server";
 
-import { BOT_TAG } from "../features/types";
+import { BOT_TAG } from "../features/tags";
 import { botRegistry, saveBotRecord } from "../features/persistence";
 
 export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {

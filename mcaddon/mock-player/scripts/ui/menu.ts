@@ -3,7 +3,7 @@
 import { Player, world, system } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 
-import { BotRecord, BOT_TAG } from "../features/types";
+import { BotRecord } from "../features/types";
 import { TAG_CONTROL, TAG_BOT, getTagDef } from "../features/tags";
 import { formatPos, formatDimensionId, getPlayerLookTarget } from "../features/utils";
 import { botRegistry, saveBotRecord } from "../features/persistence";
@@ -46,6 +46,13 @@ function getPosSummary(record: BotRecord): string {
   return `${formatPos(record.respawnPoint.location)} §8${formatDimensionId(record.respawnPoint.dimension)} §7(重生点)`;
 }
 
+/** 从 BotRecord 解析在线假人实体，无法获取时返回 undefined */
+function resolveBotEntity(record: BotRecord): Player | undefined {
+  if (!record.entityId) return undefined;
+  const entity = world.getEntity(record.entityId);
+  return entity?.hasTag(TAG_BOT.value) ? (entity as Player) : undefined;
+}
+
 // ─── 主菜单 ──────────────────────────────────────────
 
 export function showMainMenu(player: Player): void {
@@ -86,6 +93,7 @@ function showBotList(player: Player): void {
 
   const form = new ActionFormData().title("§l模拟玩家列表").body(`§7共 §b${records.length} §7个`);
 
+  // 排序：离线(0) → 死亡(1) → 在线(2)，优先展示「可操作」的假人
   const sorted = [...records].sort((a, b) => {
     const orderA = a.death ? 1 : a.online ? 2 : 0;
     const orderB = b.death ? 1 : b.online ? 2 : 0;
@@ -184,6 +192,7 @@ export function showOperationPanel(player: Player, botName: string): void {
       case 1: // TPA — 传送
         if (!canAct) { player.sendMessage("§c模拟玩家不在线或已死亡"); break; }
         system.run(() => { try { tpPlayerToBot(player, currentRecord); player.sendMessage(`§a已传送到 §e${botName}§a 身边`); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
+        showOperationPanel(player, botName);
         break;
       case 2: // 移动
         if (!canAct) { player.sendMessage("§c模拟玩家不在线或已死亡"); break; }
@@ -195,25 +204,25 @@ export function showOperationPanel(player: Player, botName: string): void {
         break;
       case 4: // 交换主手
         if (!canAct) { player.sendMessage("§c模拟玩家不在线或已死亡"); break; }
-        { const eid = currentRecord.entityId; if (!eid) { player.sendMessage("§c无法获取假人实体"); break; } const botEnt = world.getEntity(eid); if (!botEnt || !botEnt.hasTag(TAG_BOT.value)) { player.sendMessage("§c无法获取假人实体"); break; } const bot = botEnt as Player;
+        { const bot = resolveBotEntity(currentRecord); if (!bot) { player.sendMessage("§c无法获取假人实体"); break; }
           system.run(() => { try { swapMainhandWithBot(player, bot); player.sendMessage(`§a已与 §e${botName}§a 交换主手`); } catch (e: any) { player.sendMessage(`§c交换主手失败: ${e.message}`); } }); }
         showOperationPanel(player, botName);
         break;
       case 5: // 交换副手
         if (!canAct) { player.sendMessage("§c模拟玩家不在线或已死亡"); break; }
-        { const eid = currentRecord.entityId; if (!eid) { player.sendMessage("§c无法获取假人实体"); break; } const botEnt = world.getEntity(eid); if (!botEnt || !botEnt.hasTag(TAG_BOT.value)) { player.sendMessage("§c无法获取假人实体"); break; } const bot = botEnt as Player;
+        { const bot = resolveBotEntity(currentRecord); if (!bot) { player.sendMessage("§c无法获取假人实体"); break; }
           system.run(() => { try { swapOffhandWithBot(player, bot); player.sendMessage(`§a已与 §e${botName}§a 交换副手`); } catch (e: any) { player.sendMessage(`§c交换副手失败: ${e.message}`); } }); }
         showOperationPanel(player, botName);
         break;
       case 6: // 交换装备
         if (!canAct) { player.sendMessage("§c模拟玩家不在线或已死亡"); break; }
-        { const eid = currentRecord.entityId; if (!eid) { player.sendMessage("§c无法获取假人实体"); break; } const botEnt = world.getEntity(eid); if (!botEnt || !botEnt.hasTag(TAG_BOT.value)) { player.sendMessage("§c无法获取假人实体"); break; } const bot = botEnt as Player;
+        { const bot = resolveBotEntity(currentRecord); if (!bot) { player.sendMessage("§c无法获取假人实体"); break; }
           system.run(() => { try { swapEquipmentWithBot(player, bot); saveBotEquipState(bot, currentRecord); player.sendMessage(`§a已与 §e${botName}§a 交换装备`); } catch (e: any) { player.sendMessage(`§c交换装备失败: ${e.message}`); } }); }
         showOperationPanel(player, botName);
         break;
       case 7: // 一键卸甲
         if (!canAct) { player.sendMessage("§c模拟玩家不在线或已死亡"); break; }
-        { const eid = currentRecord.entityId; if (!eid) { player.sendMessage("§c无法获取假人实体"); break; } const botEnt = world.getEntity(eid); if (!botEnt || !botEnt.hasTag(TAG_BOT.value)) { player.sendMessage("§c无法获取假人实体"); break; } const bot = botEnt as Player;
+        { const bot = resolveBotEntity(currentRecord); if (!bot) { player.sendMessage("§c无法获取假人实体"); break; }
           system.run(() => { try { unequipBotAll(player, bot); saveBotEquipState(bot, currentRecord); player.sendMessage(`§a已将 §e${botName}§a 一键卸甲`); } catch (e: any) { player.sendMessage(`§c一键卸甲失败: ${e.message}`); } }); }
         showOperationPanel(player, botName);
         break;

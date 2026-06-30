@@ -14,8 +14,8 @@
 import { world, Player, EntityDieAfterEvent } from "@minecraft/server";
 import { SimulatedPlayer, LookDuration } from "@minecraft/server-gametest";
 
-import { BOT_TAG, PositionState } from "../features/types";
-import { TAG_RESPAWN } from "../features/tags";
+import { PositionState } from "../features/types";
+import { BOT_TAG, TAG_RESPAWN } from "../features/tags";
 import { formatPos, formatDimensionId } from "../features/utils";
 import { botRegistry, saveBotRecord } from "../features/persistence";
 import { saveBotFullState } from "../features/operations";

@@ -3,8 +3,7 @@
 import { Player, system } from "@minecraft/server";
 import { ModalFormData } from "@minecraft/server-ui";
 
-import { BOT_TAG } from "../features/types";
-import { getTagDef } from "../features/tags";
+import { BOT_TAG, getTagDef } from "../features/tags";
 import { formatPos, formatDimensionId } from "../features/utils";
 import { botRegistry } from "../features/persistence";
 import { onlineBot, offlineBot } from "../features/operations";
