@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "SmartWarehouse",
+    "description": "SmartWarehouse Resource Pack — visuals and assets for intelligent storage",
+    "uuid": "7e985eb5-5e3d-41cc-89c4-653605d41009",
+    "version": [
+      0,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      26,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Add-on Pack Resources",
+      "type": "resources",
+      "uuid": "523d72d2-3ba9-498a-bc63-8beb5fe268cb",
+      "version": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "449a7a85-99e0-4c33-8b69-07356daa8a34",
+      "version": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

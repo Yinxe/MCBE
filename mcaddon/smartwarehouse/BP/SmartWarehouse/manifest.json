@@ -1,0 +1,68 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "SmartWarehouse",
+    "description": "SmartWarehouse Behavior Pack — intelligent storage management for Minecraft",
+    "uuid": "449a7a85-99e0-4c33-8b69-07356daa8a34",
+    "version": [
+      0,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      26,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Behavior",
+      "version": [
+        0,
+        0,
+        0
+      ],
+      "uuid": "dbfd2bf9-86c3-4886-bfb5-a41c52dcf7ab",
+      "type": "data"
+    },
+    {
+      "description": "Script resources",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "f23d3980-7ca3-4d75-a98c-24d38767b449",
+      "version": [
+        0,
+        0,
+        0
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "7e985eb5-5e3d-41cc-89c4-653605d41009",
+      "version": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": [
+        2,
+        8,
+        0
+      ]
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": [
+        2,
+        1,
+        0
+      ]
+    }
+  ]
+}
