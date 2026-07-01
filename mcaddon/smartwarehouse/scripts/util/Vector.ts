@@ -72,3 +72,25 @@ export function compareLocationForPrimary(a: BlockLocation, b: BlockLocation): n
   if (a.z !== b.z) return a.z - b.z;
   return a.y - b.y;
 }
+
+/**
+ * 检查两个仓库区域之间是否存在重叠或间距不足。
+ *
+ * 判断逻辑：将两个区域各向四周扩展 `spacing` 格后，检查三个轴向上是否全部交集。
+ * 如果三个轴向上都有交集，则说明间距不足或存在重叠。
+ *
+ * @param a - 第一个仓库区域
+ * @param b - 第二个仓库区域
+ * @param spacing - 要求的最小间距（方块数）
+ * @returns 如果区域间距不足（小于 spacing）或重叠，返回 true
+ */
+export function areasTooClose(a: WarehouseArea, b: WarehouseArea, spacing: number): boolean {
+  return (
+    a.min.x - spacing <= b.max.x &&
+    a.max.x + spacing >= b.min.x &&
+    a.min.y - spacing <= b.max.y &&
+    a.max.y + spacing >= b.min.y &&
+    a.min.z - spacing <= b.max.z &&
+    a.max.z + spacing >= b.min.z
+  );
+}

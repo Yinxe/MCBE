@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import { toBlockLocation } from "../types";
 import { DEFAULT_WAREHOUSE_SETTINGS, normalizeWarehouseId, WarehouseRepository } from "../storage/WarehouseRepository";
-import { areaVolume, isInsideArea, normalizeArea } from "../util/Vector";
+import { areaVolume, areasTooClose, isInsideArea, normalizeArea } from "../util/Vector";
 import { ContainerScanner } from "./ContainerScanner";
 
 /**
@@ -27,6 +27,12 @@ const MAX_SCAN_VOLUME = 65_536;
  * 超过此数量的容器会被拒绝注册，防止数据膨胀。
  */
 const MAX_CONTAINERS = 512;
+
+/**
+ * 仓库之间的最小间距（方块数）。
+ * 两个仓库区域在各轴向上都必须至少相距此距离，防止重叠和容器归属混乱。
+ */
+const MIN_WAREHOUSE_SPACING = 4;
 
 /**
  * 仓库服务（WarehouseService）
@@ -82,6 +88,8 @@ export class WarehouseService {
     if (this.repository.exists(id)) throw new Error(`仓库 ${id} 已存在`);
     const area = normalizeArea(pointA, pointB);
     this.assertScanVolume(area);
+    // 检查新仓库与所有已有仓库是否间距不足
+    this.assertWarehouseSpacing(area, dimensionId, undefined);
     const dimension = world.getDimension(dimensionId);
     const containers = this.scanner.scan(dimension, area, defaultRole);
     this.assertContainerCount(containers);
@@ -151,6 +159,7 @@ export class WarehouseService {
     const warehouse = this.requireWarehouse(id);
     const area = normalizeArea(pointA, pointB);
     this.assertScanVolume(area);
+    this.assertWarehouseSpacing(area, warehouse.dimensionId, id);
     const dimension = world.getDimension(warehouse.dimensionId);
     const scanned = this.scanner.scan(
       dimension,
@@ -259,6 +268,29 @@ export class WarehouseService {
   private assertContainerCount(containers: Record<ContainerId, StoredContainer>): void {
     const count = Object.keys(containers).length;
     if (count > MAX_CONTAINERS) throw new Error(`仓库容器过多：${count} > ${MAX_CONTAINERS}`);
+  }
+
+  /**
+   * 校验新仓库区域与所有已有仓库之间的间距是否满足最小距离要求。
+   * 同一维度下，两个仓库在三个轴向上必须至少相隔 MIN_WAREHOUSE_SPACING 格，
+   * 防止重叠和容器归属混乱。
+   *
+   * @param area        新仓库的区域
+   * @param dimensionId 新仓库所在的维度
+   * @param excludeId   排除的仓库 ID（调整大小时排除自身）
+   * @throws 如果间距不足
+   */
+  private assertWarehouseSpacing(area: WarehouseArea, dimensionId: string, excludeId: WarehouseId | undefined): void {
+    const existing = this.repository.loadAll();
+    for (const other of existing) {
+      if (other.id === excludeId) continue;
+      if (other.dimensionId !== dimensionId) continue;
+      if (areasTooClose(area, other.area, MIN_WAREHOUSE_SPACING)) {
+        throw new Error(
+          `仓库 "${other.displayName}" 距离过近（最小间距 ${MIN_WAREHOUSE_SPACING} 格），请选择其他区域`
+        );
+      }
+    }
   }
 
   /**
