@@ -9,7 +9,7 @@ import type {
   WarehouseId,
   WarehouseSettings,
 } from "../types";
-import { toBlockLocation } from "../types";
+import { toBlockLocation, ROLE_LABELS } from "../types";
 import { DEFAULT_WAREHOUSE_SETTINGS, normalizeWarehouseId, WarehouseRepository } from "../storage/WarehouseRepository";
 import { areaVolume, areasTooClose, isInsideArea, normalizeArea } from "../util/Vector";
 import { ContainerScanner } from "./ContainerScanner";
@@ -383,7 +383,7 @@ export class WarehouseService {
         if (!isSupportedContainerType(event.block.typeId)) return;
         const warehouse = this.findWarehouseAt(event.dimension.id, location);
         if (warehouse) {
-          this.addContainerToWarehouse(warehouse.id, event.block, location);
+          this.addContainerToWarehouse(warehouse.id, event.block, location, event.player);
         }
       } catch (e) {
         console.warn("[SmartWarehouse] playerPlaceBlock 处理器错误:", e);
@@ -396,7 +396,7 @@ export class WarehouseService {
         const location = toBlockLocation(event.block.location);
         const warehouse = this.findWarehouseAt(event.dimension.id, location);
         if (warehouse) {
-          this.removeContainerFromWarehouse(warehouse.id, event.dimension.id, location);
+          this.removeContainerFromWarehouse(warehouse.id, event.dimension.id, location, event.player);
         }
       } catch (e) {
         console.warn("[SmartWarehouse] playerBreakBlock 处理器错误:", e);
@@ -408,12 +408,13 @@ export class WarehouseService {
    * 增量添加容器到仓库（放置事件）。
    *
    * 扫描新方块的实际占用位置（处理双箱），创建 StoredContainer 后，
-   * 合并到仓库数据中并持久化。
+   * 合并到仓库数据中并持久化，并通过 `trySendMessage` 向玩家反馈。
    */
   private addContainerToWarehouse(
     warehouseId: WarehouseId,
     block: import("@minecraft/server").Block,
-    location: BlockLocation
+    location: BlockLocation,
+    player: import("@minecraft/server").Player
   ): void {
     const warehouse = this.requireWarehouse(warehouseId);
     const occupiedLocations = this.scanner.getOccupiedLocations(
@@ -442,18 +443,25 @@ export class WarehouseService {
     };
     this.repository.save(updated);
     this.markRuntimeDirty(warehouseId);
+
+    try {
+      player.sendMessage(
+        `§a容器已添加至仓库 "${warehouse.displayName}"（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[warehouse.settings.defaultNewContainerRole]}）`
+      );
+    } catch { /* 玩家可能已断线，忽略 */ }
   }
 
   /**
    * 增量从仓库移除容器（破坏事件）。
    *
    * 根据被破坏方块的坐标，从仓库容器列表中查找并移除对应记录，
-   * 然后持久化。
+   * 然后持久化，并通过 `trySendMessage` 向玩家反馈。
    */
   private removeContainerFromWarehouse(
     warehouseId: WarehouseId,
     dimensionId: string,
-    location: BlockLocation
+    location: BlockLocation,
+    player: import("@minecraft/server").Player
   ): void {
     const warehouse = this.requireWarehouse(warehouseId);
 
@@ -472,5 +480,9 @@ export class WarehouseService {
     };
     this.repository.save(updated);
     this.markRuntimeDirty(warehouseId);
+
+    try {
+      player.sendMessage(`§e容器已从仓库 "${warehouse.displayName}" 移除（${containerId}）`);
+    } catch { /* 玩家可能已断线，忽略 */ }
   }
 }
