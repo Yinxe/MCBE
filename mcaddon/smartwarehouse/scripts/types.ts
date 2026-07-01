@@ -196,6 +196,20 @@ export interface WarehouseRuntimeModel {
    * 触发按需重建运行时索引，避免每次操作都重建。
    */
   dirty: boolean;
+
+  /**
+   * 上一次检查仓库区域所在区块是否已加载的游戏刻。
+   * 与 `inputCursor` 配合使用，每 40 tick 约 2 秒检查一次，避免每 tick 都采样。
+   */
+  areaLoadedCheckedTick: number;
+
+  /**
+   * 缓存的上一次区域加载检查结果。
+   * - `true`：所有采样点均位于已加载区块
+   * - `false`：至少有一个采样点在未加载区块
+   * - `undefined`：尚未检查
+   */
+  areaLoaded: boolean | undefined;
 }
 
 /**

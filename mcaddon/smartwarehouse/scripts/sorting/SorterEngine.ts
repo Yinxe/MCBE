@@ -1,5 +1,5 @@
-import { world, Dimension, ItemStack } from "@minecraft/server";
-import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, ContainerId } from "../types";
+import { world, system, Dimension, ItemStack } from "@minecraft/server";
+import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, WarehouseArea, ContainerId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { WarehouseRuntimeRegistry } from "../runtime/WarehouseRuntimeRegistry";
 import { Logger } from "../util/Logger";
@@ -76,12 +76,85 @@ export class SorterEngine {
     // 没有输入容器则无事可做
     if (model.inputContainerIds.length === 0) return;
 
+    // 区块加载预检：每 40 tick（~2 秒）采样仓库区域角落，
+    // 如果任何角落位于未加载区块，跳过本次分拣
+    this.checkAreaLoaded(warehouse, model);
+    if (model.areaLoaded === false) {
+      return; // 区块未加载，静默跳过，下个周期重试
+    }
+
     // 轮询调度：取模选取当前输入容器，游标 +1，实现多个输入容器间的负载均衡
     const inputIndex = model.inputCursor % model.inputContainerIds.length;
     const inputContainerId = model.inputContainerIds[inputIndex];
     model.inputCursor = (model.inputCursor + 1) % model.inputContainerIds.length;
 
     this.processInputContainer(warehouse, model, inputContainerId);
+  }
+
+  // ─── 区块加载预检 ──────────────────────────────────────────────
+
+  /**
+   * 采样仓库区域的 8 个角落检测区块是否已加载。
+   *
+   * **为何需要**：如果仓库所在区块全部或部分未加载，`getContainerFromStored`
+   * 会逐个返回 undefined 并跳过，但逐个尝试效率低下。直接预检整个区域，如果
+   * 有任何角落不可达，本次分拣直接跳过。
+   *
+   * **缓存策略**：每 40 tick（约 2 秒）才重新检查一次，避免每 tick 都采样。
+   * 检查结果缓存在 `model.areaLoaded` 中。
+   *
+   * @param warehouse - 仓库数据（含区域信息）
+   * @param model - 运行时模型（含缓存字段）
+   */
+  private checkAreaLoaded(warehouse: WarehouseData, model: WarehouseRuntimeModel): void {
+    // 缓存有效期 40 tick ≈ 2 秒，避免每 tick 重复采样
+    const RECHECK_INTERVAL = 40;
+    if (
+      model.areaLoaded !== undefined &&
+      system.currentTick - model.areaLoadedCheckedTick < RECHECK_INTERVAL
+    ) {
+      return; // 缓存仍有效
+    }
+
+    const dimension = this.getDimensionSafe(warehouse.dimensionId);
+    if (!dimension) {
+      model.areaLoaded = false;
+      model.areaLoadedCheckedTick = system.currentTick;
+      return;
+    }
+
+    // 采样区域 8 个角落
+    const { min, max } = warehouse.area;
+    const corners: { x: number; y: number; z: number }[] = [
+      { x: min.x, y: min.y, z: min.z },
+      { x: max.x, y: min.y, z: min.z },
+      { x: min.x, y: min.y, z: max.z },
+      { x: max.x, y: min.y, z: max.z },
+      { x: min.x, y: max.y, z: min.z },
+      { x: max.x, y: max.y, z: min.z },
+      { x: min.x, y: max.y, z: max.z },
+      { x: max.x, y: max.y, z: max.z },
+    ];
+
+    for (const corner of corners) {
+      try {
+        const block = dimension.getBlock(corner);
+        if (!block) {
+          model.areaLoaded = false;
+          model.areaLoadedCheckedTick = system.currentTick;
+          return;
+        }
+        // 访问 permutation 确认区块真正加载（getBlock 在部分版本可能返回占位对象）
+        const _ = block.permutation;
+      } catch {
+        model.areaLoaded = false;
+        model.areaLoadedCheckedTick = system.currentTick;
+        return;
+      }
+    }
+
+    model.areaLoaded = true;
+    model.areaLoadedCheckedTick = system.currentTick;
   }
 
   // ─── 输入容器处理 ───────────────────────────────────────────────

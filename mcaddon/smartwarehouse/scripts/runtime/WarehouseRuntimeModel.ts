@@ -42,6 +42,10 @@ export function buildWarehouseRuntimeModel(warehouse: WarehouseData): WarehouseR
     lastBuiltAt: Date.now(),
     /** 标记模型是否已被标记为脏（需要重新加载） */
     dirty: false,
+    /** 区块加载状态检查的上一次游戏刻（初始为 0，首次使用前触发检查） */
+    areaLoadedCheckedTick: 0,
+    /** 区块加载状态缓存（undefined = 尚未检查） */
+    areaLoaded: undefined,
   };
 
   for (const container of Object.values(warehouse.containers)) {
