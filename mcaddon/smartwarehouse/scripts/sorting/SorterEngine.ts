@@ -196,14 +196,15 @@ export class SorterEngine {
 
       const loc = stored.primaryLocation;
 
-      // ── 槽位游标：取当前格，空则前进 ──
+      // ── 槽位游标：取当前格 ──
       let slot = model.inputSlotCursors.get(containerId) ?? 0;
       if (slot >= container.size) slot = 0;
 
+      // 如果当前格为空，直接跳到下一个非空槽（不浪费 interval）
       const stack = container.getItem(slot);
       if (!stack) {
-        // 空槽位：游标前进，下个 interval 尝试下一格
-        model.inputSlotCursors.set(containerId, (slot + 1) % container.size);
+        const nextSlot = this.findNextNonEmptySlot(container, slot);
+        model.inputSlotCursors.set(containerId, nextSlot);
         return;
       }
 
@@ -510,6 +511,19 @@ export class SorterEngine {
    * @param dimensionId - 维度 ID（如 "overworld"、"nether"、"the_end"）
    * @returns 维度对象，获取失败时返回 undefined
    */
+  /**
+   * 从指定槽位开始查找下一个非空槽位。
+   * 绕回遍历所有槽位，如果全空则返回 0（没找到也无妨，下次还会触发空槽检测）。
+   */
+  private findNextNonEmptySlot(container: import("@minecraft/server").Container, startSlot: number): number {
+    for (let i = 1; i < container.size; i++) {
+      const checkSlot = (startSlot + i) % container.size;
+      const item = container.getItem(checkSlot);
+      if (item) return checkSlot;
+    }
+    return (startSlot + 1) % container.size; // 全空，简单前进
+  }
+
   private getDimensionSafe(dimensionId: string): Dimension | undefined {
     try {
       return world.getDimension(dimensionId);
