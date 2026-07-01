@@ -60,7 +60,7 @@ function playEffect(
 
   const center = {
     x: pos.x + 0.5,
-    y: pos.y - 0.25,
+    y: pos.y + 0.455,
     z: pos.z + 0.5,
   };
 
