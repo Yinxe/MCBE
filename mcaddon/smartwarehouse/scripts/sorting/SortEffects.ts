@@ -48,10 +48,10 @@ function buildParticleParams(occupiedLocations: BlockLocation[]): [{ x: number; 
     molang.setFloat("off_l", offset.z * 0.5);
     molang.setFloat("off_h", -0.025);
 
-    // 发射位置在底部中心（两个方块的中点）
+    // 发射位置在底部中心（两个方块的中点），下移 0.25 让粒子视觉居中
     const center = {
       x: (primary.x + occupiedLocations[1].x) / 2 + 0.5,
-      y: primary.y,      // bottomCenter
+      y: primary.y - 0.25,
       z: (primary.z + occupiedLocations[1].z) / 2 + 0.5,
     };
     return [center, molang];
@@ -62,9 +62,10 @@ function buildParticleParams(occupiedLocations: BlockLocation[]): [{ x: number; 
   molang.setFloat("size_l", CHEST_SIZE);
   molang.setFloat("off_h", -0.025);
 
+  // 发射位置在底部中心，下移 0.25 让粒子视觉居中
   const center = {
     x: primary.x + 0.5,
-    y: primary.y,        // bottomCenter
+    y: primary.y - 0.25,
     z: primary.z + 0.5,
   };
   return [center, molang];

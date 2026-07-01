@@ -1,4 +1,5 @@
 import type { Block, Dimension } from "@minecraft/server";
+import { ItemStack } from "@minecraft/server";
 import type { BlockLocation, ContainerId, ContainerRole, StoredContainer, WarehouseArea } from "../types";
 import { compareLocationForPrimary } from "../util/Vector";
 import { makeContainerId } from "./ContainerId";
@@ -114,13 +115,25 @@ export class ContainerScanner {
   }
 
   /**
+   * 唯一物品探针的 ID，用于大箱子检测。
+   * 该物品不会在游戏中正常出现，用于短时间放置在箱子槽位中作为标记，
+   * 检查相邻箱子是否也包含此物品（验证它们是否共享同一个库存）。
+   */
+  private static readonly PROBE_ID = "minecraft:structure_void";
+
+  /**
    * 解析一个容器实际占用的所有方块位置集合。
    *
    * - 对于非箱子类型（桶、潜影盒）：仅返回当前位置（单个方块）。
-   * - 对于箱子 / 陷阱箱：检查四个水平方向，如果某个相邻箱子与当前箱子
-   *   **共享同一个 Container 对象**（即大箱子的两个半块），则返回两个位置。
-   *   这是 Bedrock 版检测大箱子的可靠方式：大箱子（54 槽位）的两个半块
-   *   返回同一个 Container 实例，而两个独立单箱返回不同的 Container。
+   * - 对于箱子 / 陷阱箱：使用**占位物品探针法**检测相邻箱子是否共享库存。
+   *   具体做法：
+   *   1. 在当前箱子 slot 0 暂时放入一个独特物品（探针）。
+   *   2. 检查每个相邻箱子的 slot 0 是否也出现了该物品。
+   *   3. 如果是 → 两个半块共享同一个库存 → 是大箱子。
+   *   4. 恢复 slot 0 的原始物品。
+   *
+   *   此方法比 Container 引用比较（===）更可靠，
+   *   因为 Bedrock 每次调用 getComponent 可能返回不同的 JS 对象。
    *
    * @param dimension 目标维度
    * @param location 当前方块坐标
@@ -131,27 +144,38 @@ export class ContainerScanner {
     // 非箱子类型直接返回当前位置
     if (!isChestType(block.typeId)) return [location];
 
-    // 获取当前箱子的 Container，用于后续引用比较
-    const thisContainer = block.getComponent("inventory")?.container;
-    if (!thisContainer) return [location];
+    // 使用占位物品法检测相邻箱子是否共享库存
+    const container = block.getComponent("inventory")?.container;
+    if (!container) return [location];
 
-    // 检查四个水平方向，看哪个邻居与当前箱子共享同一个 Container
-    for (const offset of NEIGHBOR_OFFSETS) {
-      const neighborLocation: BlockLocation = {
-        x: location.x + offset.x,
-        y: location.y + offset.y,
-        z: location.z + offset.z,
-      };
-      const neighbor = tryGetBlock(dimension, neighborLocation);
-      if (!neighbor || neighbor.typeId !== block.typeId || !hasInventory(neighbor)) continue;
+    const probe = new ItemStack(ContainerScanner.PROBE_ID, 1);
+    const original = container.getItem(0);
 
-      const neighborContainer = neighbor.getComponent("inventory")?.container;
-      if (neighborContainer && thisContainer === neighborContainer) {
-        return [location, neighborLocation]; // 同一大箱子
+    try {
+      container.setItem(0, probe);
+
+      for (const offset of NEIGHBOR_OFFSETS) {
+        const neighborLocation: BlockLocation = {
+          x: location.x + offset.x,
+          y: location.y + offset.y,
+          z: location.z + offset.z,
+        };
+        const neighbor = tryGetBlock(dimension, neighborLocation);
+        if (!neighbor || neighbor.typeId !== block.typeId || !hasInventory(neighbor)) continue;
+
+        const neighborContainer = neighbor.getComponent("inventory")?.container;
+        if (!neighborContainer) continue;
+
+        const neighborSlot0 = neighborContainer.getItem(0);
+        if (neighborSlot0 && neighborSlot0.typeId === ContainerScanner.PROBE_ID) {
+          return [location, neighborLocation];
+        }
       }
+    } finally {
+      // 无论如何都要恢复原始物品
+      container.setItem(0, original);
     }
 
-    // 找不到共享容器，是单箱
     return [location];
   }
 }
