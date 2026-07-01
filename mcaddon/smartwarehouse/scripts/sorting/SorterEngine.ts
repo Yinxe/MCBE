@@ -195,39 +195,44 @@ export class SorterEngine {
 
       const loc = stored.primaryLocation;
 
-      // 遍历所有槽位，无法分类的物品不阻塞后续槽位
-      for (let slot = 0; slot < container.size; slot++) {
-        const stack = container.getItem(slot);
-        if (!stack) continue; // 空槽位，跳过
+      // ── 槽位游标：取当前格，空则前进 ──
+      let slot = model.inputSlotCursors.get(containerId) ?? 0;
+      if (slot >= container.size) slot = 0;
 
-        const originalAmount = stack.amount;
-
-        const remaining = this.moveStackIntoWarehouse(stack, warehouse, model, dimension);
-
-        if (remaining === undefined) {
-          // 整堆全部成功放置 → 清空输入槽位
-          try {
-            container.setItem(slot);
-            log.info(`槽位 ${slot} 已清空（${stack.typeId} x${originalAmount} 已放置）`);
-          } catch (setError) {
-            // setItem 失败极罕见（容器被破坏/区块卸载），
-            // 但一旦发生会导致物品已移到目标但输入槽未清空。
-            // 记录致命错误以便管理员发现。
-            log.error(`致命错误：槽位 ${slot} 清空失败，物品已在目标容器中但输入槽未清空: ${setError}`);
-          }
-        } else if (remaining.amount < originalAmount) {
-          // 部分放置成功 → 余量写回槽位
-          try {
-            container.setItem(slot, remaining);
-            log.info(
-              `槽位 ${slot} 部分放置：${remaining.amount}/${originalAmount} ${stack.typeId} 返回`
-            );
-          } catch (setError) {
-            log.error(`致命错误：槽位 ${slot} 回写失败，剩余 ${remaining.amount} 个物品已丢失: ${setError}`);
-          }
-        }
-        // 无法分类 → 保持不动，遍历下一个槽位
+      const stack = container.getItem(slot);
+      if (!stack) {
+        // 空槽位：游标前进，下个 interval 尝试下一格
+        model.inputSlotCursors.set(containerId, (slot + 1) % container.size);
+        return;
       }
+
+      const originalAmount = stack.amount;
+      log.info(`槽 ${slot}：${stack.typeId} x${originalAmount}`);
+
+      const remaining = this.moveStackIntoWarehouse(stack, warehouse, model, dimension);
+
+      if (remaining === undefined) {
+        // 整堆全部成功放置 → 清空输入槽位
+        try {
+          container.setItem(slot);
+          log.info(`槽 ${slot} 已清空（全部 ${originalAmount} 个已放置）`);
+        } catch (setError) {
+          log.error(`致命错误：槽 ${slot} 清空失败，物品已在目标容器但输入槽未清空: ${setError}`);
+        }
+      } else if (remaining.amount < originalAmount) {
+        // 部分放置成功 → 余量写回槽位
+        try {
+          container.setItem(slot, remaining);
+          log.info(`槽 ${slot} 部分放置：${remaining.amount}/${originalAmount} 返回`);
+        } catch (setError) {
+          log.error(`致命错误：槽 ${slot} 回写失败，剩余 ${remaining.amount} 个物品已丢失: ${setError}`);
+        }
+      } else {
+        log.info(`槽 ${slot} 无法分类（${originalAmount} 个未变动）`);
+      }
+
+      // 无论结果如何，游标 +1（回绕），不阻塞
+      model.inputSlotCursors.set(containerId, (slot + 1) % container.size);
     } catch (error) {
       log.error(`处理输入容器 ${containerId} 时出错: ${error}`);
     }

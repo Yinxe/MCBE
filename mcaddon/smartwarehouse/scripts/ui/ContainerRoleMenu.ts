@@ -49,9 +49,17 @@ export async function showContainerRoleMenu(
   // ── 管理员玩家：ModalForm 统一设置 ──
   const currentRoleIndex = ROLE_ORDER.indexOf(container.role);
   const roleOptions = ROLE_ORDER.map((r) => `${ROLE_LABELS[r]} — ${ROLE_DESCRIPTIONS[r]}`);
+  const currentRoleLabel = ROLE_LABELS[container.role];
+  const roleDesc = ROLE_DESCRIPTIONS[container.role];
 
   const form = new ModalFormData()
-    .title("容器设置")
+    .title(`容器设置 · ${warehouse.displayName}`)
+    .label(
+      `§7容器: ${warehouse.displayName}\n` +
+      `§7ID: ${containerId}\n` +
+      `§7状态: ${container.enabled ? "§a已启用" : "§c已禁用"}\n` +
+      `§7角色: §f${currentRoleLabel} — ${roleDesc}§r`
+    )
     .toggle("启用容器", { defaultValue: container.enabled })
     .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
     .toggle("删除此容器（提交后需确认）", { defaultValue: false });

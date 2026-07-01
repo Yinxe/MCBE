@@ -230,11 +230,20 @@ export interface WarehouseRuntimeModel {
    * 用于快速找到存储特定物品类型的容器，key 为物品类型 ID。
    */
   itemTypeIndex: Map<string, ContainerId[]>;
+
   /**
    * 轮询游标，用于在 input 容器之间轮询分配存入任务，
    * 避免总是使用同一个容器造成热点。
    */
   inputCursor: number;
+
+  /**
+   * 每个输入容器当前处理的槽位游标（容器 ID → 槽位索引）。
+   * 每次 interval 仅处理该游标指向的一个槽位，处理完毕后游标 +1。
+   * 当游标超出容器大小时回绕到 0。
+   * 配合 processingSpeed 实现"每 interval 分拣一个物品"的效果。
+   */
+  inputSlotCursors: Map<ContainerId, number>;
   /** 最后一次重建索引的游戏刻时间戳 */
   lastBuiltAt: number;
   /**

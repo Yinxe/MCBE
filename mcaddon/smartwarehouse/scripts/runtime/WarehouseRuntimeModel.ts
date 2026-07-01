@@ -38,6 +38,8 @@ export function buildWarehouseRuntimeModel(warehouse: WarehouseData): WarehouseR
     itemTypeIndex: new Map<string, ContainerId[]>(),
     /** 轮询调度输入容器时的游标位置 */
     inputCursor: 0,
+    /** 输入容器槽位游标（容器 ID → 下一格索引），每 interval 处理一格后 +1 */
+    inputSlotCursors: new Map(),
     /** 模型构建时间戳，用于缓存过期判断 */
     lastBuiltAt: Date.now(),
     /** 标记模型是否已被标记为脏（需要重新加载） */
