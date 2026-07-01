@@ -127,7 +127,7 @@ export class ContainerScanner {
    * @param block 当前方块对象
    * @returns 该容器占用的所有方块位置数组
    */
-  private getOccupiedLocations(dimension: Dimension, location: BlockLocation, block: Block): BlockLocation[] {
+  getOccupiedLocations(dimension: Dimension, location: BlockLocation, block: Block): BlockLocation[] {
     // 非箱子类型直接返回当前位置
     if (!isChestType(block.typeId)) return [location];
 

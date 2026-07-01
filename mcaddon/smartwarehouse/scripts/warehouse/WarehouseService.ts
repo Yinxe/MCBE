@@ -13,6 +13,9 @@ import { toBlockLocation } from "../types";
 import { DEFAULT_WAREHOUSE_SETTINGS, normalizeWarehouseId, WarehouseRepository } from "../storage/WarehouseRepository";
 import { areaVolume, areasTooClose, isInsideArea, normalizeArea } from "../util/Vector";
 import { ContainerScanner } from "./ContainerScanner";
+import { hasInventory, isSupportedContainerType } from "./ContainerTypes";
+import { makeContainerId } from "./ContainerId";
+import { compareLocationForPrimary } from "../util/Vector";
 
 /**
  * 单次扫描操作允许的最大方块体积上限。
@@ -364,37 +367,110 @@ export class WarehouseService {
   /**
    * 注册方块放置和破坏事件的自动维护监听器。
    *
-   * 当玩家在某个仓库区域内放置或破坏容器方块时，
-   * 自动触发对应仓库的重新扫描，并标记运行时脏。
+   * **范围缩小**：仅在放置/破坏受支持的容器方块（箱子、桶、潜影盒）时触发。
+   *
+   * **增量更新**：不进行全区域扫描，而是直接添加或移除单个容器记录，
+   * 大幅降低性能开销。
    *
    * 事件处理器内部的错误会被捕获并通过 console.warn 记录，
    * 这样单个事件处理失败不会影响整个脚本的运行。
    */
   registerBlockMaintenance(): void {
-    // 监听方块放置事件：如果放置的方块在仓库区域内，重新扫描该仓库
+    // 方块放置：仅当放置的是受支持的容器时，增量添加
     world.afterEvents.playerPlaceBlock.subscribe((event) => {
       try {
         const location = toBlockLocation(event.block.location);
+        if (!isSupportedContainerType(event.block.typeId)) return;
         const warehouse = this.findWarehouseAt(event.dimension.id, location);
         if (warehouse) {
-          this.rescanWarehouse(warehouse.id);
+          this.addContainerToWarehouse(warehouse.id, event.block, location);
         }
       } catch (e) {
-        console.warn("[SmartWarehouse] playerPlaceBlock 事件处理器错误:", e);
+        console.warn("[SmartWarehouse] playerPlaceBlock 处理器错误:", e);
       }
     });
 
-    // 监听方块破坏事件：如果破坏的方块在仓库区域内，重新扫描该仓库
+    // 方块破坏：仅当破坏的是受支持的容器时，增量删除
     world.afterEvents.playerBreakBlock.subscribe((event) => {
       try {
         const location = toBlockLocation(event.block.location);
         const warehouse = this.findWarehouseAt(event.dimension.id, location);
         if (warehouse) {
-          this.rescanWarehouse(warehouse.id);
+          this.removeContainerFromWarehouse(warehouse.id, event.dimension.id, location);
         }
       } catch (e) {
-        console.warn("[SmartWarehouse] playerBreakBlock 事件处理器错误:", e);
+        console.warn("[SmartWarehouse] playerBreakBlock 处理器错误:", e);
       }
     });
+  }
+
+  /**
+   * 增量添加容器到仓库（放置事件）。
+   *
+   * 扫描新方块的实际占用位置（处理双箱），创建 StoredContainer 后，
+   * 合并到仓库数据中并持久化。
+   */
+  private addContainerToWarehouse(
+    warehouseId: WarehouseId,
+    block: import("@minecraft/server").Block,
+    location: BlockLocation
+  ): void {
+    const warehouse = this.requireWarehouse(warehouseId);
+    const occupiedLocations = this.scanner.getOccupiedLocations(
+      world.getDimension(warehouse.dimensionId),
+      location,
+      block
+    );
+    const primary = [...occupiedLocations].sort(compareLocationForPrimary)[0];
+    const id = makeContainerId(warehouse.dimensionId, primary);
+    const now = Date.now();
+
+    const container: StoredContainer = {
+      id,
+      dimensionId: warehouse.dimensionId,
+      primaryLocation: primary,
+      occupiedLocations: occupiedLocations.sort(compareLocationForPrimary),
+      role: warehouse.settings.defaultNewContainerRole,
+      enabled: warehouse.settings.defaultNewContainerEnabled,
+      discoveredAt: now,
+      updatedAt: now,
+    };
+
+    const updated: WarehouseData = {
+      ...warehouse,
+      containers: { ...warehouse.containers, [id]: container },
+    };
+    this.repository.save(updated);
+    this.markRuntimeDirty(warehouseId);
+  }
+
+  /**
+   * 增量从仓库移除容器（破坏事件）。
+   *
+   * 根据被破坏方块的坐标，从仓库容器列表中查找并移除对应记录，
+   * 然后持久化。
+   */
+  private removeContainerFromWarehouse(
+    warehouseId: WarehouseId,
+    dimensionId: string,
+    location: BlockLocation
+  ): void {
+    const warehouse = this.requireWarehouse(warehouseId);
+
+    // 查找被破坏位置属于哪个容器
+    const targetEntry = Object.entries(warehouse.containers).find(([, c]) =>
+      c.occupiedLocations.some((l) => l.x === location.x && l.y === location.y && l.z === location.z)
+    );
+    if (!targetEntry) return;
+
+    const [containerId] = targetEntry;
+    const { [containerId]: _removed, ...rest } = warehouse.containers;
+
+    const updated: WarehouseData = {
+      ...warehouse,
+      containers: rest,
+    };
+    this.repository.save(updated);
+    this.markRuntimeDirty(warehouseId);
   }
 }
