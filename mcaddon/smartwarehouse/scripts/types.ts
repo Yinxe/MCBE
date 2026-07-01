@@ -100,6 +100,8 @@ export interface WarehouseSettings {
   processingSpeed: ProcessingSpeed;
   /** 是否输出调试日志 */
   debug: boolean;
+  /** 是否显示仓库边界光幕 */
+  showBoundary: boolean;
 }
 
 /**

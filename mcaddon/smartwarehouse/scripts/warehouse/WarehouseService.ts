@@ -16,6 +16,7 @@ import { ContainerScanner } from "./ContainerScanner";
 import { hasInventory, isSupportedContainerType } from "./ContainerTypes";
 import { makeContainerId } from "./ContainerId";
 import { compareLocationForPrimary } from "../util/Vector";
+import { BoundaryDisplay } from "./BoundaryDisplay";
 
 /**
  * 单次扫描操作允许的最大方块体积上限。
@@ -56,12 +57,14 @@ export class WarehouseService {
    * @param scanner             容器扫描器（可注入，便于测试）
    * @param markRuntimeDirty    脏标记回调函数，仓库数据变更时调用以通知运行时缓存失效
    * @param notifyScheduler     调度刷新回调，仓库启用/禁用/速度变化/删除时通知调度器刷新 interval
+   * @param boundaryDisplay     边界显示调度器（可选）
    */
   constructor(
     private readonly repository: WarehouseRepository,
     private readonly scanner = new ContainerScanner(),
     private readonly markRuntimeDirty: (warehouseId: WarehouseId) => void = () => undefined,
-    private readonly notifyScheduler?: (warehouseId: WarehouseId) => void
+    private readonly notifyScheduler?: (warehouseId: WarehouseId) => void,
+    private readonly boundaryDisplay?: BoundaryDisplay
   ) {}
 
   /**
@@ -204,6 +207,7 @@ export class WarehouseService {
     this.repository.delete(id);
     this.markRuntimeDirty(id);
     this.notifyScheduler?.(id);
+    this.boundaryDisplay?.stop(id);
   }
 
   /**
@@ -269,6 +273,16 @@ export class WarehouseService {
     this.repository.save(updated);
     this.markRuntimeDirty(id);
     this.notifyScheduler?.(id);
+
+    // 边界显示变化：启停 BoundaryDisplay
+    if (this.boundaryDisplay && "showBoundary" in settings) {
+      if (updated.settings.showBoundary) {
+        this.boundaryDisplay.start(id, updated.area, updated.dimensionId);
+      } else {
+        this.boundaryDisplay.stop(id);
+      }
+    }
+
     return updated;
   }
 

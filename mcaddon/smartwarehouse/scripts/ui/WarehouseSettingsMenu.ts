@@ -44,13 +44,14 @@ export async function showWarehouseSettingsMenu(
     .dropdown("处理速度", speedLabels, { defaultValueIndex: Math.max(0, defaultSpeedIndex) })
     .toggle("自动创建分类", { defaultValue: settings.autoCreateCategories })
     .toggle("启用仓库", { defaultValue: settings.enabled })
+    .toggle("显示边界光幕", { defaultValue: settings.showBoundary })
     .toggle("删除此仓库（提交后需确认）", { defaultValue: false });
 
   const response = await form.show(player);
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 7) {
+  if (!values || values.length < 8) {
     player.sendMessage("§c表单数据异常，请重试");
     return;
   }
@@ -61,7 +62,8 @@ export async function showWarehouseSettingsMenu(
   const newSpeedIndex = values[3] as number;
   const newAutoCreate = values[4] as boolean;
   const newWarehouseEnabled = values[5] as boolean;
-  const shouldDelete = values[6] as boolean;
+  const newShowBoundary = values[6] as boolean;
+  const shouldDelete = values[7] as boolean;
 
   try {
     // 1. 名称变更
@@ -89,6 +91,9 @@ export async function showWarehouseSettingsMenu(
     }
     if (newWarehouseEnabled !== settings.enabled) {
       settingsUpdate.enabled = newWarehouseEnabled;
+    }
+    if (newShowBoundary !== settings.showBoundary) {
+      settingsUpdate.showBoundary = newShowBoundary;
     }
 
     if (Object.keys(settingsUpdate).length > 0) {

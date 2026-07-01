@@ -6,6 +6,7 @@ import { SorterEngine } from "./sorting/SorterEngine";
 import { SortingScheduler } from "./sorting/SortingScheduler";
 import { WarehouseRepository } from "./storage/WarehouseRepository";
 import { WarehouseService } from "./warehouse/WarehouseService";
+import { BoundaryDisplay } from "./warehouse/BoundaryDisplay";
 
 // ── 系统初始化（在脚本启动时执行一次）───────────────────
 
@@ -21,15 +22,20 @@ const engine = new SorterEngine(repository, runtime);
 // 分拣调度器：按固定间隔触发分拣引擎，实现自动分类功能
 const scheduler = new SortingScheduler(repository, engine);
 
+// 边界显示：为启用了 showBoundary 的仓库渲染粒子光幕
+const boundaryDisplay = new BoundaryDisplay();
+
 // 核心业务服务层：负责仓库创建、删除、容器扫描等业务逻辑。
 // 第三个参数为脏标记回调函数：当仓库数据发生变更时通知运行时标记为脏（dirty），
 // 以便后续按需重建运行时索引。
 // 第四个参数为调度刷新回调：当仓库启用/禁用/速度变化/删除时通知调度器刷新 interval。
+// 第五个参数为边界显示实例：showBoundary 开关变化时自动启停粒子渲染。
 const service = new WarehouseService(
   repository,
   undefined,
   (id) => runtime.markDirty(id),
-  (id) => scheduler.refreshOne(id)
+  (id) => scheduler.refreshOne(id),
+  boundaryDisplay
 );
 
 // 注册方块放置/破坏事件监听：当仓管区域内的方块发生变化时，自动标记运行时索引为脏
@@ -47,6 +53,14 @@ commandRouter.register();
 // （world.getDynamicProperty 只能在世界完全加载后调用）
 system.run(() => {
   scheduler.startAll();
+
+  // 为已启用 showBoundary 的仓库启动边界显示
+  const warehouses = repository.loadAll();
+  for (const w of warehouses) {
+    if (w.settings.showBoundary) {
+      boundaryDisplay.start(w.id, w.area, w.dimensionId);
+    }
+  }
 });
 
 console.warn("[SmartWarehouse] 加载完成");

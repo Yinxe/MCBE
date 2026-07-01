@@ -22,6 +22,7 @@ export const DEFAULT_WAREHOUSE_SETTINGS: WarehouseSettings = {
   enabled: true,
   processingSpeed: 8,
   debug: false,
+  showBoundary: false,
 };
 
 /**
