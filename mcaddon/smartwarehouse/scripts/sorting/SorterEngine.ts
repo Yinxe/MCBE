@@ -83,6 +83,9 @@ export class SorterEngine {
       return; // 区块未加载，静默跳过，下个周期重试
     }
 
+    // 处理速度控制：若未到下一个处理 tick，跳过本次
+    if (system.currentTick < model.nextProcessTick) return;
+
     // 轮询调度：取模选取当前输入容器，游标 +1，实现多个输入容器间的负载均衡
     const inputIndex = model.inputCursor % model.inputContainerIds.length;
     const inputContainerId = model.inputContainerIds[inputIndex];
@@ -405,7 +408,7 @@ export class SorterEngine {
     for (const containerId of candidates) {
       const stored = warehouse.containers[containerId];
       // 容器记录不存在或角色不再是 "normal" → 只有在索引路径下才标记为脏
-      if (!stored || stored.role !== "normal") {
+      if (!stored || stored.role !== "normal" || !stored.enabled) {
         if (hasIndexEntry) stale.add(containerId);
         continue;
       }
@@ -452,7 +455,7 @@ export class SorterEngine {
         // 跳过已在候选列表（已检查过）的容器
         if (candidates.includes(containerId)) continue;
         const stored = warehouse.containers[containerId];
-        if (!stored || stored.role !== "normal") continue;
+        if (!stored || stored.role !== "normal" || !stored.enabled) continue;
         const container = getContainerFromStored(dimension, stored);
         if (!container) continue;
         if (containerHasType(container, typeId)) {

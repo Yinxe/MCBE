@@ -29,7 +29,7 @@ const scheduler = new SortingScheduler(repository, engine);
 service.registerBlockMaintenance();
 
 // 注册工具交互事件：玩家手持木锄右键点击方块时触发选区操作
-registerToolInteraction(service);
+registerToolInteraction(repository, service);
 
 // 注册自定义指令：包括 sw:create（创建仓库）、sw:resize（调整大小）、
 // sw:rescan（重新扫描）、sw:delete（删除仓库）等

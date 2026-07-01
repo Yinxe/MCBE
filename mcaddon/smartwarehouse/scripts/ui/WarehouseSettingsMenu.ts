@@ -1,0 +1,138 @@
+import type { Player } from "@minecraft/server";
+import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
+import type { WarehouseId, WarehouseSettings } from "../types";
+import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
+import type { WarehouseRepository } from "../storage/WarehouseRepository";
+import type { WarehouseService } from "../warehouse/WarehouseService";
+
+/**
+ * 显示仓库设置表单。
+ * 通过 ModalForm 提供仓库名称、默认角色、启用状态、处理速度等设置项。
+ * 提交后自动应用变更。额外提供删除仓库功能（需二次确认）。
+ *
+ * @param player     - 操作的玩家
+ * @param warehouseId - 要设置的仓库 ID
+ * @param repository  - 仓库数据持久化仓储
+ * @param service     - 仓库服务实例
+ */
+export async function showWarehouseSettingsMenu(
+  player: Player,
+  warehouseId: WarehouseId,
+  repository: WarehouseRepository,
+  service: WarehouseService
+): Promise<void> {
+  const warehouse = repository.load(warehouseId);
+  if (!warehouse) {
+    player.sendMessage("§c仓库不存在");
+    return;
+  }
+
+  const settings = warehouse.settings;
+
+  // ── 主设置表单 ──────────────────────────────────
+  const roleLabels = ROLE_ORDER.map((r) => ROLE_LABELS[r]);
+  const defaultRoleIndex = ROLE_ORDER.indexOf(settings.defaultNewContainerRole);
+  const speedLabels = Object.values(SPEED_LABELS);
+  const speedValues = Object.keys(SPEED_LABELS).map(Number) as Array<keyof typeof SPEED_LABELS>;
+  const defaultSpeedIndex = speedValues.indexOf(settings.processingSpeed as keyof typeof SPEED_LABELS);
+
+  const form = new ModalFormData()
+    .title("仓库设置")
+    .textField("仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
+    .dropdown("默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex) })
+    .dropdown("新容器默认启用", ["是", "否"], { defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1 })
+    .dropdown("处理速度", speedLabels, { defaultValueIndex: Math.max(0, defaultSpeedIndex) })
+    .toggle("自动创建分类", { defaultValue: settings.autoCreateCategories })
+    .toggle("启用仓库", { defaultValue: settings.enabled });
+
+  const response = await form.show(player);
+  if (response.canceled) return;
+
+  const values = response.formValues;
+  if (!values || values.length < 6) {
+    player.sendMessage("§c表单数据异常，请重试");
+    return;
+  }
+
+  const newName = values[0] as string;
+  const newRoleIndex = values[1] as number;
+  const newEnabledIndex = values[2] as number;
+  const newSpeedIndex = values[3] as number;
+  const newAutoCreate = values[4] as boolean;
+  const newWarehouseEnabled = values[5] as boolean;
+
+  try {
+    // 1. 名称变更
+    if (newName && newName.trim() !== "" && newName.trim() !== warehouse.displayName) {
+      service.renameWarehouse(warehouseId, newName.trim());
+    }
+
+    // 2. 收集设置变更
+    const selectedRole = ROLE_ORDER[newRoleIndex];
+    const selectedSpeed = speedValues[newSpeedIndex] as WarehouseSettings["processingSpeed"];
+    const settingsUpdate: Partial<WarehouseSettings> = {};
+
+    if (selectedRole && selectedRole !== settings.defaultNewContainerRole) {
+      settingsUpdate.defaultNewContainerRole = selectedRole;
+    }
+    const newDefaultEnabled = newEnabledIndex === 0;
+    if (newDefaultEnabled !== settings.defaultNewContainerEnabled) {
+      settingsUpdate.defaultNewContainerEnabled = newDefaultEnabled;
+    }
+    if (selectedSpeed && selectedSpeed !== settings.processingSpeed) {
+      settingsUpdate.processingSpeed = selectedSpeed;
+    }
+    if (newAutoCreate !== settings.autoCreateCategories) {
+      settingsUpdate.autoCreateCategories = newAutoCreate;
+    }
+    if (newWarehouseEnabled !== settings.enabled) {
+      settingsUpdate.enabled = newWarehouseEnabled;
+    }
+
+    if (Object.keys(settingsUpdate).length > 0) {
+      service.updateSettings(warehouseId, settingsUpdate);
+    }
+
+    player.sendMessage("§a仓库设置已更新");
+  } catch (error) {
+    player.sendMessage(`§c更新设置失败: ${error}`);
+    return;
+  }
+
+  // ── 删除仓库（单独的确认步骤） ──────────────────
+  await showDeleteWarehouseConfirm(player, warehouseId, warehouse.displayName, service);
+}
+
+/**
+ * 显示删除仓库的确认表单。
+ * 需要通过一个独立的 ActionForm 二次确认才能删除。
+ *
+ * @param player        - 操作的玩家
+ * @param warehouseId   - 要删除的仓库 ID
+ * @param displayName   - 仓库显示名称
+ * @param service       - 仓库服务实例
+ */
+async function showDeleteWarehouseConfirm(
+  player: Player,
+  warehouseId: WarehouseId,
+  displayName: string,
+  service: WarehouseService
+): Promise<void> {
+  const form = new ActionFormData()
+    .title("删除仓库")
+    .body(`确定要删除仓库 "${displayName}" 吗？\n\n此操作不可撤销，所有容器数据将被清除。`)
+    .button("§c确认删除")
+    .button("取消");
+
+  const response = await form.show(player);
+  if (response.canceled || response.selection === undefined) return;
+
+  if (response.selection === 0) {
+    try {
+      service.deleteWarehouse(warehouseId);
+      player.sendMessage(`§a仓库 "${displayName}" 已删除`);
+    } catch (error) {
+      player.sendMessage(`§c删除仓库失败: ${error}`);
+    }
+  }
+}

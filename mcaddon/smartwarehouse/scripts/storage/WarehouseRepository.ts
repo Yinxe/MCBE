@@ -16,9 +16,11 @@ const INDEX_KEY = "sw:index";
 const CONTAINERS_PER_SHARD = 128;
 
 export const DEFAULT_WAREHOUSE_SETTINGS: WarehouseSettings = {
-  defaultNewContainerRole: "disabled",
+  defaultNewContainerRole: "normal",
+  defaultNewContainerEnabled: true,
   autoCreateCategories: false,
   enabled: true,
+  processingSpeed: 8,
   debug: false,
 };
 

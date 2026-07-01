@@ -61,6 +61,7 @@ export class ContainerScanner {
    * @param dimension  目标维度
    * @param area       要扫描的矩形边界框（含边界）
    * @param defaultRole  新发现容器的默认角色
+   * @param defaultEnabled  新发现的容器默认是否启用
    * @param existing   之前已知的容器记录，用于保留角色（role）和发现时间（discoveredAt）
    * @returns 容器 ID → StoredContainer 的记录
    */
@@ -68,6 +69,7 @@ export class ContainerScanner {
     dimension: Dimension,
     area: WarehouseArea,
     defaultRole: ContainerRole,
+    defaultEnabled: boolean = true,
     existing: Record<ContainerId, StoredContainer> = {}
   ): Record<ContainerId, StoredContainer> {
     const dimensionId = dimension.id;
@@ -100,6 +102,7 @@ export class ContainerScanner {
             primaryLocation: primary,
             occupiedLocations: occupied.sort(compareLocationForPrimary),
             role: previous?.role ?? defaultRole,
+            enabled: previous?.enabled ?? defaultEnabled,
             discoveredAt: previous?.discoveredAt ?? now,
             updatedAt: now,
           };

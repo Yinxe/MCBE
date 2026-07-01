@@ -7,6 +7,7 @@ import type {
   WarehouseArea,
   WarehouseData,
   WarehouseId,
+  WarehouseSettings,
 } from "../types";
 import { toBlockLocation } from "../types";
 import { DEFAULT_WAREHOUSE_SETTINGS, normalizeWarehouseId, WarehouseRepository } from "../storage/WarehouseRepository";
@@ -69,11 +70,12 @@ export class WarehouseService {
    * 5. 校验容器数量是否超过上限
    * 6. 写入持久化存储并标记脏
    *
-   * @param name        仓库显示名称
-   * @param dimensionId 仓库所在维度 ID
-   * @param pointA      区域角点 A
-   * @param pointB      区域角点 B
-   * @param defaultRole 新容器的默认角色
+   * @param name            仓库显示名称
+   * @param dimensionId     仓库所在维度 ID
+   * @param pointA          区域角点 A
+   * @param pointB          区域角点 B
+   * @param defaultRole     新容器的默认角色
+   * @param defaultEnabled  新容器默认是否启用
    * @returns 创建的仓库数据对象
    * @throws 如果仓库 ID 已存在、区域过大或容器过多
    */
@@ -82,7 +84,8 @@ export class WarehouseService {
     dimensionId: string,
     pointA: BlockLocation,
     pointB: BlockLocation,
-    defaultRole: ContainerRole
+    defaultRole: ContainerRole,
+    defaultEnabled: boolean = true
   ): WarehouseData {
     const id = normalizeWarehouseId(name);
     if (this.repository.exists(id)) throw new Error(`仓库 ${id} 已存在`);
@@ -91,7 +94,7 @@ export class WarehouseService {
     // 检查新仓库与所有已有仓库是否间距不足
     this.assertWarehouseSpacing(area, dimensionId, undefined);
     const dimension = world.getDimension(dimensionId);
-    const containers = this.scanner.scan(dimension, area, defaultRole);
+    const containers = this.scanner.scan(dimension, area, defaultRole, defaultEnabled);
     this.assertContainerCount(containers);
 
     const data: WarehouseData = {
@@ -100,7 +103,7 @@ export class WarehouseService {
       displayName: name.trim(),
       dimensionId,
       area,
-      settings: { ...DEFAULT_WAREHOUSE_SETTINGS, defaultNewContainerRole: defaultRole },
+      settings: { ...DEFAULT_WAREHOUSE_SETTINGS, defaultNewContainerRole: defaultRole, defaultNewContainerEnabled: defaultEnabled },
       containerShardCount: 0,
       containerCount: Object.keys(containers).length,
       containerShardGeneration: 0,
@@ -129,6 +132,7 @@ export class WarehouseService {
       dimension,
       warehouse.area,
       warehouse.settings.defaultNewContainerRole,
+      warehouse.settings.defaultNewContainerEnabled,
       warehouse.containers
     );
     this.assertContainerCount(containers);
@@ -165,6 +169,7 @@ export class WarehouseService {
       dimension,
       area,
       warehouse.settings.defaultNewContainerRole,
+      warehouse.settings.defaultNewContainerEnabled,
       warehouse.containers
     );
     // 只保留主位置在新区域内的容器（区域缩小时丢弃外部容器）
@@ -203,7 +208,21 @@ export class WarehouseService {
    * @returns 更新后的仓库数据对象
    * @throws 如果仓库不存在或容器不属于该仓库
    */
-  setContainerRole(id: WarehouseId, containerId: string, role: ContainerRole): WarehouseData {
+  /**
+   * 设置容器角色和启用状态。
+   *
+   * @param id          仓库 ID
+   * @param containerId 容器 ID
+   * @param role        新角色（null 表示不修改角色）
+   * @param enabled     是否启用（null 表示不修改启用状态）
+   * @returns 更新后的仓库数据
+   */
+  setContainerRoleAndState(
+    id: WarehouseId,
+    containerId: string,
+    role: ContainerRole | null,
+    enabled: boolean | null
+  ): WarehouseData {
     const warehouse = this.requireWarehouse(id);
     const container = warehouse.containers[containerId];
     if (!container) throw new Error(`容器 ${containerId} 不属于仓库 ${id}`);
@@ -211,8 +230,49 @@ export class WarehouseService {
       ...warehouse,
       containers: {
         ...warehouse.containers,
-        [containerId]: { ...container, role, updatedAt: Date.now() },
+        [containerId]: {
+          ...container,
+          ...(role !== null && { role }),
+          ...(enabled !== null && { enabled }),
+          updatedAt: Date.now(),
+        },
       },
+    };
+    this.repository.save(updated);
+    this.markRuntimeDirty(id);
+    return updated;
+  }
+
+  /**
+   * 更新仓库设置。
+   *
+   * @param id       仓库 ID
+   * @param settings 新的设置（部分更新，只传要改的字段）
+   * @returns 更新后的仓库数据
+   */
+  updateSettings(id: WarehouseId, settings: Partial<WarehouseSettings>): WarehouseData {
+    const warehouse = this.requireWarehouse(id);
+    const updated: WarehouseData = {
+      ...warehouse,
+      settings: { ...warehouse.settings, ...settings },
+    };
+    this.repository.save(updated);
+    this.markRuntimeDirty(id);
+    return updated;
+  }
+
+  /**
+   * 重命名仓库。
+   *
+   * @param id      仓库 ID
+   * @param newName 新的显示名称
+   * @returns 更新后的仓库数据
+   */
+  renameWarehouse(id: WarehouseId, newName: string): WarehouseData {
+    const warehouse = this.requireWarehouse(id);
+    const updated: WarehouseData = {
+      ...warehouse,
+      displayName: newName.trim(),
     };
     this.repository.save(updated);
     this.markRuntimeDirty(id);

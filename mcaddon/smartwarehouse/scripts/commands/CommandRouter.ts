@@ -314,7 +314,7 @@ export class CommandRouter {
     // 使用异步的原因：createWarehouse 可能涉及文件 IO 或网络操作
     system.run(() => {
       try {
-        const warehouse = this.service.createWarehouse(normalized.id, dimensionId, pointA, pointB, "disabled");
+        const warehouse = this.service.createWarehouse(normalized.id, dimensionId, pointA, pointB, "normal", true);
         trySendMessage(
           player,
           `§a仓库 "${warehouse.displayName}" 创建成功！共发现 ${Object.keys(warehouse.containers).length} 个容器`

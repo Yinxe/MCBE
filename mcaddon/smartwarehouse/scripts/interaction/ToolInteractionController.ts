@@ -5,6 +5,7 @@ import { toBlockLocation } from "../types";
 import { Logger } from "../util/Logger";
 import { makeOccupiedLocationKey } from "../warehouse/ContainerId";
 import { isSupportedContainerType } from "../warehouse/ContainerTypes";
+import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { getSession, setSession, clearSession, clearSessionById } from "./SelectionSessionStore";
 import { showMainMenu } from "../ui/MainMenu";
@@ -37,9 +38,10 @@ const recentUseOn = new Map<string, number>();
  * 注册所有工具交互事件监听器。
  * 必须在世界初始化时调用一次，之后玩家手持木锄即可与仓库系统交互。
  *
+ * @param repository - 仓库数据持久化仓储
  * @param service - 仓库服务实例，提供仓库查询、创建、修改等核心操作。
  */
-export function registerToolInteraction(service: WarehouseService): void {
+export function registerToolInteraction(repository: WarehouseRepository, service: WarehouseService): void {
   // ── 方块交互事件（玩家手持木锄右键点击方块） ──────────────
   // 在事件触发前（beforeEvents）拦截，可以取消默认行为（如打开箱子界面）。
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
@@ -89,7 +91,7 @@ export function registerToolInteraction(service: WarehouseService): void {
 
     // 延迟到下一个 tick 执行，以规避某些执行上下文（如 restricted execution context）的限制。
     system.run(() => {
-      showMainMenu(player).catch((error) => {
+      showMainMenu(player, repository, service).catch((error) => {
         logger.error(`MainMenu error for ${player.name}: ${error}`);
       });
     });
@@ -193,7 +195,8 @@ function handleNonContainerClick(
         dimensionId,
         pointA,
         pointB,
-        session.defaultNewContainerRole
+        session.defaultNewContainerRole,
+        session.defaultNewContainerEnabled
       );
       player.sendMessage(
         `§a仓库 "${result.displayName}" 创建成功！共发现 ${Object.keys(result.containers).length} 个容器`

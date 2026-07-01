@@ -37,14 +37,52 @@ export interface WarehouseArea {
 }
 
 /**
- * 容器角色，决定容器在仓库分类系统中的行为：
- * - "disabled": 禁用，不参与任何分类/存取
- * - "normal":   普通容器，按物品类型分类存放
- * - "misc":     杂项容器，存放未归类物品
- * - "bulk":     批量容器，用于大批量物品存储
- * - "input":    输入容器，系统优先将物品存入此类容器
+ * 容器角色，决定容器在仓库分类系统中的分类行为：
+ * - "normal":  普通容器，按物品类型自动分类存放已有同类物品
+ * - "misc":    杂项容器，存放所有无法归类到普通容器的物品（兜底）
+ * - "bulk":    批量容器，用于大批量同种物品的存储（不自动整理内部）
+ * - "input":   输入容器，物品从此流入自动分拣系统
+ *
+ * 注意：容器是否启用（enabled/disabled）是独立于角色的状态，
+ * 禁用容器不参与任何分拣操作。
  */
-export type ContainerRole = "disabled" | "normal" | "misc" | "bulk" | "input";
+export type ContainerRole = "normal" | "misc" | "bulk" | "input";
+
+/** 容器角色对应的中文描述文本 */
+export const ROLE_DESCRIPTIONS: Record<ContainerRole, string> = {
+  normal: "适合多物品分类归纳进入同一个箱子",
+  misc: "用于存储无法归类的物品",
+  bulk: "适合存储单一类型数量较大的物品和潜影盒",
+  input: "物品从此流入自动分拣系统",
+};
+
+/** 容器角色对应的中文标签 */
+export const ROLE_LABELS: Record<ContainerRole, string> = {
+  normal: "普通仓位",
+  misc: "其他仓位",
+  bulk: "大宗仓位",
+  input: "输入",
+};
+
+/** 所有角色的有序列表，用于 UI 下拉选项的顺序 */
+export const ROLE_ORDER: ContainerRole[] = ["input", "normal", "misc", "bulk"];
+
+/**
+ * 仓库处理速度选项，单位为游戏刻（tick）。
+ * 值越小处理越频繁，但服务器负载越高。
+ */
+export type ProcessingSpeed = 4 | 8 | 16 | 20;
+
+/** 处理速度对应的中文标签 */
+export const SPEED_LABELS: Record<ProcessingSpeed, string> = {
+  4: "极速（4 tick）",
+  8: "快速（8 tick）",
+  16: "标准（16 tick）",
+  20: "慢速（20 tick）",
+};
+
+/** 默认处理速度 */
+export const DEFAULT_PROCESSING_SPEED: ProcessingSpeed = 8;
 
 /**
  * 仓库全局设置，控制仓库的行为开关和默认配置
@@ -52,10 +90,14 @@ export type ContainerRole = "disabled" | "normal" | "misc" | "bulk" | "input";
 export interface WarehouseSettings {
   /** 新发现容器默认分配的角色 */
   defaultNewContainerRole: ContainerRole;
+  /** 新发现的容器默认是否启用 */
+  defaultNewContainerEnabled: boolean;
   /** 是否自动创建分类（根据物品类型自动归类） */
   autoCreateCategories: boolean;
   /** 仓库是否启用 */
   enabled: boolean;
+  /** 仓库处理速度（游戏刻间隔） */
+  processingSpeed: ProcessingSpeed;
   /** 是否输出调试日志 */
   debug: boolean;
 }
@@ -117,8 +159,10 @@ export interface StoredContainer {
   primaryLocation: BlockLocation;
   /** 容器占用的所有方块位置（可能有多格容器，如大箱子） */
   occupiedLocations: BlockLocation[];
-  /** 容器角色 */
+  /** 容器角色（影响分类行为） */
   role: ContainerRole;
+  /** 容器是否启用（禁用容器不参与任何分拣操作，独立于角色） */
+  enabled: boolean;
   /** 容器首次被发现的游戏刻时间戳 */
   discoveredAt: number;
   /** 容器信息最后更新的游戏刻时间戳 */
@@ -210,6 +254,12 @@ export interface WarehouseRuntimeModel {
    * - `undefined`：尚未检查
    */
   areaLoaded: boolean | undefined;
+
+  /**
+   * 下一次允许处理该仓库的游戏刻。
+   * 由处理速度（processingSpeed）控制，实现每仓库独立的分拣频率。
+   */
+  nextProcessTick: number;
 }
 
 /**
@@ -224,6 +274,8 @@ export type SelectionSession =
       warehouseName: string;
       /** 新容器的默认角色 */
       defaultNewContainerRole: ContainerRole;
+      /** 新容器默认是否启用 */
+      defaultNewContainerEnabled: boolean;
       /** 选区的第一个角点坐标（未设置时为 undefined） */
       pointA?: BlockLocation;
     }

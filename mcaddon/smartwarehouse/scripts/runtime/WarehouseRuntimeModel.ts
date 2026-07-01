@@ -46,6 +46,8 @@ export function buildWarehouseRuntimeModel(warehouse: WarehouseData): WarehouseR
     areaLoadedCheckedTick: 0,
     /** 区块加载状态缓存（undefined = 尚未检查） */
     areaLoaded: undefined,
+    /** 下一 tick 可处理该仓库的时间（由 processingSpeed 控制） */
+    nextProcessTick: 0,
   };
 
   for (const container of Object.values(warehouse.containers)) {
@@ -63,12 +65,14 @@ export function buildWarehouseRuntimeModel(warehouse: WarehouseData): WarehouseR
       }
       model.occupiedLocationIndex.set(locationKey, container.id);
     }
-    // 按角色分类归入不同列表，便于分拣引擎按策略选择容器
-    if (container.role === "input") model.inputContainerIds.push(container.id);
+    // 按启用状态和角色分类归入不同列表
+    // 未启用的容器不参与任何分拣操作
+    if (!container.enabled) {
+      model.disabledContainerIds.push(container.id);
+    } else if (container.role === "input") model.inputContainerIds.push(container.id);
     else if (container.role === "normal") model.normalContainerIds.push(container.id);
     else if (container.role === "misc") model.miscContainerIds.push(container.id);
     else if (container.role === "bulk") model.bulkContainerIds.push(container.id);
-    else model.disabledContainerIds.push(container.id);
   }
 
   return model;
