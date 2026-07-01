@@ -225,6 +225,12 @@ export function tryFillShulkerBoxes(outerContainer: Container, stack: ItemStack)
 
       if (remaining === undefined || remaining.amount < before) {
         // 潜影盒内容有变化，将修改后的物品写回外层容器
+        //
+        // 为什么需要 setItem？Container.getItem(slot) 返回的是 ItemStack
+        // 副本而非引用。对副本内部容器（invComp.container）的修改只影响
+        // 这个副本，不会自动同步回外层槽位。必须显式 setItem 持久化。
+        // ContainerScanner.ts 的探针模式也印证了这一行为（先 getItem 取出，
+        // 修改后 setItem 写回）。
         outerContainer.setItem(slot, slotStack);
       }
     } catch (error) {

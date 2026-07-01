@@ -294,6 +294,11 @@ export class SorterEngine {
     // 优先级 3：大宗容器（盒箱混存）
     // 大宗箱以第一个有效物品的种类为准，同时匹配箱内散装和盒内物品。
     // 空箱接受任何第一个放入的物品以设定种类。
+    //
+    // 设计笔记：大宗箱不走 itemTypeIndex 而是每次都全量扫描
+    // `model.bulkContainerIds`。原因是 bulk 数量极少（典型场景 1-5），
+    // 硬扫成本远低于索引维护（脏数据检测、惰性清除、回退扫描的复杂度）。
+    // 索引在 normal 箱数量大（几十上百）时有巨大收益，在 bulk 箱上收益为负。
     const bulkMatches = model.bulkContainerIds.filter((id) => {
       const stored = warehouse.containers[id];
       if (!stored) return false;
@@ -386,6 +391,11 @@ export class SorterEngine {
    *
    * 此类容器专用于单一物品类型，混合存储潜影盒与散装物品。
    *
+   * 设计笔记：本方法不走 `itemTypeIndex` 也不向索引写入。原因是：
+   * - `findExistingTypeContainers` 在 :508 行以 `role !== "normal"` 过滤了 bulk。
+   * - bulk 容器数量极少（~1-5），每次全量扫描的成本远低于索引自愈的复杂度。
+   * - 索引是 normal 箱在数量大时的优化手段，对 bulk 箱收益为负。
+   *
    * @param stack - 当前待放置的物品堆
    * @param containerIds - 候选大宗容器 ID 列表
    * @param warehouse - 仓库数据
@@ -424,7 +434,6 @@ export class SorterEngine {
       // 第 1 步：优先填入箱内已有的潜影盒
       remaining = tryFillShulkerBoxes(target, remaining);
       if (remaining === undefined) {
-        this.addToTypeIndex(model, typeId, containerId);
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         return undefined;
       }
@@ -437,7 +446,6 @@ export class SorterEngine {
         log.info(
           `[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`
         );
-        this.addToTypeIndex(model, typeId, containerId);
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
       }
 
