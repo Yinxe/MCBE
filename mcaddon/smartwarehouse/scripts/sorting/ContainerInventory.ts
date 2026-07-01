@@ -159,7 +159,9 @@ export function getBulkChestFirstType(container: Container): string | undefined 
     if (isShulkerBoxItem(item)) {
       // 当 API 不可用时，getComponent 返回 undefined → 跳过该盒子
       try {
-        const invComp = item.getComponent("minecraft:inventory") as ItemInventoryComponent | undefined;
+        const invComp =
+          (item.getComponent("inventory") as ItemInventoryComponent | undefined) ??
+          (item.getComponent("minecraft:inventory") as ItemInventoryComponent | undefined);
         if (!invComp?.container) continue; // 空盒或 API 不可用，跳过
         const innerFirst = findFirstNonEmptySlot(invComp.container);
         if (innerFirst < 0) continue; // 空盒，继续找下一个
@@ -204,13 +206,20 @@ export function tryFillShulkerBoxes(outerContainer: Container, stack: ItemStack)
     if (!isShulkerBoxItem(slotStack)) continue;
 
     try {
-      const invComp = slotStack.getComponent("minecraft:inventory") as ItemInventoryComponent | undefined;
+      // 尝试两种组件 ID 格式（Bedrock 不同版本可能有差异）
+      const invComp =
+        (slotStack.getComponent("inventory") as ItemInventoryComponent | undefined) ??
+        (slotStack.getComponent("minecraft:inventory") as ItemInventoryComponent | undefined);
+
       if (!invComp?.container) {
+        // API 不可用，打印所有可用组件供诊断
+        const available = slotStack.getComponents().map((c) => (c as any).typeId ?? c.constructor?.name).join(", ");
         console.warn(
           `[SmartWarehouse] 潜影盒 ${slotStack.typeId} 没有 inventory 组件，` +
-          "当前运行时版本可能不支持读取潜影盒内物品，请升级 @minecraft/server。"
+          `可用组件: [${available}], ` +
+          `当前 @minecraft/server 版本可能暂不支持读取物品容器`
         );
-        // API 不可用，跳过所有潜影盒（无需再试，一次警告就够了）
+        // 跳过所有潜影盒（无需再试，一次警告就够了）
         return remaining;
       }
 
