@@ -1,5 +1,5 @@
+import type { BlockInventoryComponent, Dimension, ItemInventoryComponent } from "@minecraft/server";
 import { Container, ItemStack } from "@minecraft/server";
-import type { Dimension, BlockInventoryComponent, ItemInventoryComponent } from "@minecraft/server";
 import type { StoredContainer } from "../types";
 import { SHULKER_BOX_IDS } from "../warehouse/ContainerTypes";
 
@@ -148,6 +148,11 @@ export function isShulkerBoxItem(stack: ItemStack): boolean {
  * - 如果第一个有效物品是潜影盒，则读取盒内的第一个物品类型。
  * - 容器全空时返回 `undefined`（表示尚未确定种类）。
  *
+ * **已知限制**：潜影盒内部的读取依赖 `ItemInventoryComponent`，
+ * 而该组件在原版潜影盒上暂不可用（用 NBT 而非 storage_item 体系），
+ * 因此当前运行时下本函数会跳过所有潜影盒，只识别散装物品的种类。
+ * 详见 `tryFillShulkerBoxes` 的注释。
+ *
  * @param container - 大宗容器的容器对象
  * @returns 物品种类 ID，或 undefined（空箱/无法读取）
  */
@@ -187,9 +192,26 @@ export function getBulkChestFirstType(container: Container): string | undefined 
  * 2. 调用 `Container.addItem()` 尝试放入。
  * 3. 如果有物品成功放入，将修改后的潜影盒写回外层容器的槽位。
  *
- * **API 兼容性**：如果 `ItemStack.getComponent("minecraft:inventory")` 在当前
- * 运行时版本中不可用（返回 undefined），则打印一条警告并跳过所有潜影盒，
- * 物品会通过常规空槽位流程放置。
+ * **已知限制**：`ItemInventoryComponent`（即 `getComponent("inventory")`）
+ * 仅在绑定了 `minecraft:storage_item` 组件的物品上可用。原版潜影盒
+ * 沿用的是旧 NBT 系统（`BlockEntityTag`），而 Script API 不暴露 NBT，
+ * 因此**当前游戏运行时无法通过 Script API 读取/修改潜影盒物品的内部容器**。
+ *
+ * 参考调研结论：
+ * - GitHub 上没有任何项目能通过 Script API 读取潜影盒 ItemStack 内部物品。
+ * - 所有 ItemEditor 类项目只改名字/lore/附魔等表层属性，不读容器内容。
+ * - `getComponents()` 在潜影盒 ItemStack 上返回空数组，说明组件框架
+ *   本身未对该物品类型启用。
+ * - 社区目前没有绕过方案。
+ *
+ * 解决路径（需等待 Mojang 推进）：
+ * - **路径 A**：Mojang 将潜影盒从 `BlockEntityTag` 迁移到
+ *   `minecraft:storage_item` 组件体系（时间未知）。
+ * - **路径 B**：本插件自定义实现 `minecraft:storage_item` 物品替代潜影盒
+ *   （可完全控制，但需要玩家使用自定义容器）。
+ *
+ * 当前降级行为：API 不可用时打印警告并跳过所有潜影盒，
+ * 物品通过常规空槽位流程放置，不崩溃不丢物品。
  *
  * @param outerContainer - 大宗容器的容器对象
  * @param stack - 待放入的物品堆
@@ -201,7 +223,7 @@ export function tryFillShulkerBoxes(outerContainer: Container, stack: ItemStack)
   for (let slot = 0; slot < outerContainer.size; slot++) {
     if (remaining === undefined) return undefined;
 
-    const slotStack = outerContainer.getItem(slot);
+    const slotStack: ItemStack | undefined = outerContainer.getItem(slot);
     if (!slotStack) continue;
     if (!isShulkerBoxItem(slotStack)) continue;
 
@@ -212,12 +234,15 @@ export function tryFillShulkerBoxes(outerContainer: Container, stack: ItemStack)
         (slotStack.getComponent("minecraft:inventory") as ItemInventoryComponent | undefined);
 
       if (!invComp?.container) {
-        // API 不可用，打印所有可用组件供诊断
-        const available = slotStack.getComponents().map((c) => (c as any).typeId ?? c.constructor?.name).join(", ");
+        // API 不可用：打印所有可用组件供诊断，说明根因
+        const available = slotStack.getComponents().map((c) => c.typeId).join(", ");
         console.warn(
           `[SmartWarehouse] 潜影盒 ${slotStack.typeId} 没有 inventory 组件，` +
-          `可用组件: [${available}], ` +
-          `当前 @minecraft/server 版本可能暂不支持读取物品容器`
+          `可用组件: [${available}]。` +
+          `根因：原版潜影盒使用旧 NBT 系统（BlockEntityTag），` +
+          `Script API 的 ItemInventoryComponent 仅对 ` +
+          `minecraft:storage_item 组件生效，潜影盒尚未迁移至此体系。` +
+          `降级：跳过潜影盒填充，物品转为放入空槽位。`
         );
         // 跳过所有潜影盒（无需再试，一次警告就够了）
         return remaining;
