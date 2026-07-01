@@ -1,0 +1,78 @@
+{
+	"format_version": "1.21.0",
+	"particle_effect": {
+		"description": {
+			"identifier": "smartwarehouse:sort",
+			"basic_render_parameters": {
+				"material": "particles_add",
+				"texture": "textures/smartwarehouse/particle/sort_gradient"
+			}
+		},
+    "curves": {
+      "variable.wi": {
+        "type": "linear",
+        "input": "v.particle_lifetime - 7",
+        "horizontal_range": 5,
+        "nodes": [ 1, 0, -1, 0, 0, 0 ]
+      },
+      "variable.li": {
+        "type": "linear",
+        "input": "v.particle_lifetime - 7",
+        "horizontal_range": 5,
+        "nodes": [ 0, 1, 0, -1, 0, 0 ]
+      },
+      "variable.hi": {
+        "type": "linear",
+        "input": "v.particle_lifetime - 7",
+        "horizontal_range": 5,
+        "nodes": [ 0, 0, 0, 0, 1, -1 ]
+      },
+      "variable.ga": {
+        "type": "bezier_chain",
+        "input": "Math.sin(90 * v.emitter_age / v.emitter_lifetime)",
+        "nodes": {
+          "0.0": { "value": 0.3, "slope": 0.25 },
+          "0.30": { "value": 0.55, "left_slope": 0.25, "right_slope": 0.1 },
+          "0.80": { "value": 0.65, "left_slope": 0.1, "right_slope": -0.65 },
+          "1.0": { "value": 0.00, "slope": -0.65 }
+        }
+      }
+    },
+		"components": {
+			"minecraft:emitter_initialization": {
+				"creation_expression": "v.count = 0; v.duration = v.duration ?? 1.15; v.size = v.size ?? 0.96; v.size_w = v.size_w ?? v.size; v.size_l = v.size_l ?? v.size * 1; v.size_h = v.size_h ?? v.size; v.off_h = v.off_h ?? 0; v.off_w = v.off_w ?? 0;  v.off_l = v.off_l ?? 0;"
+			},
+			"minecraft:emitter_rate_instant": {
+				"num_particles": 6
+			},
+			"minecraft:emitter_lifetime_once": {
+				"active_time": "(v.duration ?? 1.15) + 0.05"
+			},
+			"minecraft:emitter_shape_point": {},
+			"minecraft:particle_lifetime_expression": {
+				"max_lifetime": "v.count = v.count + 1; return v.count + 6;",
+				"expiration_expression": "v.particle_age >= v.duration"
+			},
+			"minecraft:particle_motion_parametric": {
+				"relative_position": ["v.wi * v.size_w * 0.5 + v.off_w", "(v.hi + 1) * v.size_h * 0.5 + v.off_h", "v.li * v.size_l * 0.5 + v.off_l"]
+			},
+			"minecraft:particle_appearance_billboard": {
+				"size": ["v.wi == 0 ? v.size_w * 0.5 : v.size_l * 0.5", "v.hi == 0 ? v.size_h * 0.5 : v.size_l * 0.5"],
+				"facing_camera_mode": "direction_z",
+				"direction": {
+					"mode": "custom",
+					"custom_direction": ["v.wi", "v.hi", "v.li"]
+				},
+				"uv": {
+					"texture_width": 1024,
+					"texture_height": 128,
+					"uv": [ "864 - Math.mod(6 * 340 * (v.emitter_age / v.duration), 1024)", 0 ],
+					"uv_size": [320, 128]
+				}
+			},
+			"minecraft:particle_appearance_tinting": {
+				"color": [ 0.37, 0.80, 0.37, "v.ga" ]
+			}
+		}
+	}
+}
