@@ -59,6 +59,7 @@ interface ManifestDependency {
   [key: string]: unknown;
 }
 interface ManifestHeader {
+  name: string;
   version: number[];
   [key: string]: unknown;
 }
@@ -77,6 +78,11 @@ function syncManifestVersion() {
     const manifest: Manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
     manifest.header.version = versionArr;
+
+    // Inject version into display name (strip any prior version suffix first)
+    const currentName = manifest.header.name;
+    const baseName = currentName.replace(/\s+v?\d+\.\d+\.\d+([-+][\w.]+)?$/, "");
+    manifest.header.name = `${baseName} v${pkgVersion}`;
 
     if (manifest.modules) {
       manifest.modules.forEach((m: ManifestModule) => {
