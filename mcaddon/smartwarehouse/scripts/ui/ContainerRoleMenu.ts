@@ -1,6 +1,6 @@
 import type { Player } from "@minecraft/server";
-import { ActionFormData } from "@minecraft/server-ui";
-import type { ContainerId, StoredContainer, WarehouseData } from "../types";
+import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
+import type { ContainerId, ContainerRole, StoredContainer, WarehouseData } from "../types";
 import { ROLE_LABELS, ROLE_ORDER, ROLE_DESCRIPTIONS } from "../types";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import type { WarehouseService } from "../warehouse/WarehouseService";
@@ -10,7 +10,7 @@ import type { WarehouseService } from "../warehouse/WarehouseService";
  *
  * 根据玩家权限提供不同界面：
  * - 非管理员：只读查看容器信息（仓库名、容器 ID、启用状态、角色），仅有关闭按钮。
- * - 管理员：可切换容器启用/禁用状态，并可选择新的容器角色。
+ * - 管理员：使用 ModalForm 统一设置容器的启用状态、角色，并提供删除（禁用）选项。
  *
  * @param player      - 请求查看/修改容器设置的玩家
  * @param warehouse   - 容器所属的仓库数据
@@ -29,65 +29,64 @@ export async function showContainerRoleMenu(
 
   if (!isManager) {
     // ── 非管理员玩家：只读查看容器信息 ──
-    const statusText = container.enabled ? "启用" : "禁用";
     const roleLabel = ROLE_LABELS[container.role];
     const roleDesc = ROLE_DESCRIPTIONS[container.role];
 
     const form = new ActionFormData()
-      .title("容器设置")
+      .title("容器信息")
       .body(
         `仓库: ${warehouse.displayName}\n` +
-          `容器ID: ${containerId}\n\n` +
-          `状态: ${statusText}\n` +
-          `角色: ${roleLabel} — ${roleDesc}`
+          `容器ID: ${containerId}\n` +
+          `状态: ${container.enabled ? "§a启用" : "§c禁用"}\n` +
+          `角色: ${roleLabel}\n` +
+          `描述: ${roleDesc}`
       )
       .button("关闭");
     await form.show(player);
     return;
   }
 
-  // ── 管理员玩家：显示切换开关和角色选择 ──
-  const statusLine = container.enabled
-    ? `当前状态: 启用 · 角色: ${ROLE_LABELS[container.role]}`
-    : "当前状态: 禁用";
+  // ── 管理员玩家：ModalForm 统一设置 ──
+  const currentRoleIndex = ROLE_ORDER.indexOf(container.role);
+  const roleOptions = ROLE_ORDER.map((r) => `${ROLE_LABELS[r]} — ${ROLE_DESCRIPTIONS[r]}`);
 
-  const form = new ActionFormData()
+  const form = new ModalFormData()
     .title("容器设置")
-    .body(
-      `仓库: ${warehouse.displayName}\n` +
-        `容器ID: ${containerId}\n\n` +
-        statusLine
-    );
-
-  // 按钮 0：切换启用/禁用
-  if (container.enabled) {
-    form.button("§c禁用此容器");
-  } else {
-    form.button("§a启用此容器");
-  }
-
-  // 按钮 1~4：对应 ROLE_ORDER[0] ~ ROLE_ORDER[3]
-  for (const role of ROLE_ORDER) {
-    form.button(`${ROLE_LABELS[role]} — ${ROLE_DESCRIPTIONS[role]}`);
-  }
+    .toggle("启用容器", { defaultValue: container.enabled })
+    .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
+    .toggle("删除此容器（提交后需确认）", { defaultValue: false });
 
   const response = await form.show(player);
-  if (response.canceled || response.selection === undefined) return;
+  if (response.canceled) return;
 
+  const values = response.formValues;
+  if (!values || values.length < 3) return;
+
+  const newEnabled = values[0] as boolean;
+  const newRoleIndex = values[1] as number;
+  const shouldDelete = values[2] as boolean;
+
+  if (shouldDelete) {
+    // ── 删除确认 ──
+    const confirm = new ActionFormData()
+      .title("确认删除")
+      .body(`确定要删除容器 ${containerId} 吗？此操作不可撤销。`)
+      .button("§c确认删除")
+      .button("取消");
+    const confirmResponse = await confirm.show(player);
+    if (confirmResponse.canceled || confirmResponse.selection !== 0) return;
+
+    // 执行删除：禁用容器
+    service.setContainerRoleAndState(warehouse.id, containerId, null, false);
+    player.sendMessage("§c容器已禁用");
+    return;
+  }
+
+  // ── 提交角色和状态变更 ──
   try {
-    if (response.selection === 0) {
-      // 切换启用/禁用
-      service.setContainerRoleAndState(warehouse.id, containerId, null, !container.enabled);
-      const newStatus = container.enabled ? "禁用" : "启用";
-      player.sendMessage(`§a已${newStatus}此容器`);
-    } else {
-      // 角色选择：selection 为 1~4，对应 ROLE_ORDER 索引 0~3
-      const roleIndex = response.selection - 1;
-      const selectedRole = ROLE_ORDER[roleIndex];
-      if (!selectedRole) return;
-      service.setContainerRoleAndState(warehouse.id, containerId, selectedRole, null);
-      player.sendMessage(`§a已将容器角色设置为 ${ROLE_LABELS[selectedRole]}`);
-    }
+    const newRole = ROLE_ORDER[newRoleIndex];
+    service.setContainerRoleAndState(warehouse.id, containerId, newRole, newEnabled);
+    player.sendMessage(`§a容器已更新：${newEnabled ? "启用" : "禁用"}，角色=${ROLE_LABELS[newRole]}`);
   } catch (error) {
     player.sendMessage(`§c操作失败: ${error}`);
   }

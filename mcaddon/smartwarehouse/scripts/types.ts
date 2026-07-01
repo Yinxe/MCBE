@@ -128,6 +128,8 @@ export interface WarehouseMeta {
   dimensionId: DimensionId;
   /** 仓库覆盖的方块区域 */
   area: WarehouseArea;
+  /** 仓库所有者的玩家 ID */
+  ownerId: string;
   /** 仓库设置 */
   settings: WarehouseSettings;
   /**

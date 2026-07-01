@@ -15,3 +15,17 @@ import type { Player } from "@minecraft/server";
 export function canManageWarehouse(player: Player): boolean {
   return player.hasTag("op");
 }
+
+/**
+ * 检查玩家是否是仓库的所有者。
+ *
+ * 如果仓库没有设置 ownerId（兼容旧数据），则回退到 canManageWarehouse（OP 标签）的逻辑。
+ *
+ * @param player - 要检查的玩家
+ * @param ownerId - 仓库所有者的玩家 ID
+ * @returns 如果玩家是仓库所有者或管理员则返回 true
+ */
+export function isWarehouseOwner(player: Player, ownerId: string | undefined): boolean {
+  if (!ownerId) return canManageWarehouse(player); // 向后兼容
+  return player.id === ownerId || canManageWarehouse(player);
+}

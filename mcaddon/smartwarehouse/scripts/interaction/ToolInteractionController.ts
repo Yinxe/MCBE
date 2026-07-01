@@ -196,7 +196,8 @@ function handleNonContainerClick(
         pointA,
         pointB,
         session.defaultNewContainerRole,
-        session.defaultNewContainerEnabled
+        session.defaultNewContainerEnabled,
+        player.id
       );
       player.sendMessage(
         `§a仓库 "${result.displayName}" 创建成功！共发现 ${Object.keys(result.containers).length} 个容器`

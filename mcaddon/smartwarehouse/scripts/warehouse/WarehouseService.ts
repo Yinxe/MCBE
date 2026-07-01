@@ -85,7 +85,8 @@ export class WarehouseService {
     pointA: BlockLocation,
     pointB: BlockLocation,
     defaultRole: ContainerRole,
-    defaultEnabled: boolean = true
+    defaultEnabled: boolean = true,
+    ownerId: string = ""
   ): WarehouseData {
     const id = normalizeWarehouseId(name);
     if (this.repository.exists(id)) throw new Error(`仓库 ${id} 已存在`);
@@ -103,6 +104,7 @@ export class WarehouseService {
       displayName: name.trim(),
       dimensionId,
       area,
+      ownerId,
       settings: { ...DEFAULT_WAREHOUSE_SETTINGS, defaultNewContainerRole: defaultRole, defaultNewContainerEnabled: defaultEnabled },
       containerShardCount: 0,
       containerCount: Object.keys(containers).length,

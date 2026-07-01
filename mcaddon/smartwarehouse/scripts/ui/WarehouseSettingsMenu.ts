@@ -8,7 +8,7 @@ import type { WarehouseService } from "../warehouse/WarehouseService";
 /**
  * 显示仓库设置表单。
  * 通过 ModalForm 提供仓库名称、默认角色、启用状态、处理速度等设置项。
- * 提交后自动应用变更。额外提供删除仓库功能（需二次确认）。
+ * 表单中新增"删除此仓库"开关，提交后若开关为 true 则弹出二次确认。
  *
  * @param player     - 操作的玩家
  * @param warehouseId - 要设置的仓库 ID
@@ -43,13 +43,14 @@ export async function showWarehouseSettingsMenu(
     .dropdown("新容器默认启用", ["是", "否"], { defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1 })
     .dropdown("处理速度", speedLabels, { defaultValueIndex: Math.max(0, defaultSpeedIndex) })
     .toggle("自动创建分类", { defaultValue: settings.autoCreateCategories })
-    .toggle("启用仓库", { defaultValue: settings.enabled });
+    .toggle("启用仓库", { defaultValue: settings.enabled })
+    .toggle("删除此仓库（提交后需确认）", { defaultValue: false });
 
   const response = await form.show(player);
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 6) {
+  if (!values || values.length < 7) {
     player.sendMessage("§c表单数据异常，请重试");
     return;
   }
@@ -60,6 +61,7 @@ export async function showWarehouseSettingsMenu(
   const newSpeedIndex = values[3] as number;
   const newAutoCreate = values[4] as boolean;
   const newWarehouseEnabled = values[5] as boolean;
+  const shouldDelete = values[6] as boolean;
 
   try {
     // 1. 名称变更
@@ -99,8 +101,10 @@ export async function showWarehouseSettingsMenu(
     return;
   }
 
-  // ── 删除仓库（单独的确认步骤） ──────────────────
-  await showDeleteWarehouseConfirm(player, warehouseId, warehouse.displayName, service);
+  // ── 删除仓库（仅在开关开启时弹出确认） ──────────
+  if (shouldDelete) {
+    await showDeleteWarehouseConfirm(player, warehouseId, warehouse.displayName, service);
+  }
 }
 
 /**

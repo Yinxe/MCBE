@@ -30,7 +30,8 @@ import {
   type CustomCommandOrigin,
   type CustomCommandResult,
 } from "@minecraft/server";
-import type { BlockLocation, WarehouseId } from "../types";
+import type { Vector3 } from "@minecraft/server";
+import type { WarehouseId } from "../types";
 import { normalizeWarehouseId } from "../storage/WarehouseRepository";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import { Logger } from "../util/Logger";
@@ -100,32 +101,6 @@ function parseCommandPlayer(origin: CustomCommandOrigin): Player | string {
 }
 
 /**
- * 构造一个 BlockLocation 坐标对象
- * 用于统一表示三维空间中的方块位置
- *
- * @param x X 轴坐标
- * @param y Y 轴坐标
- * @param z Z 轴坐标
- * @returns BlockLocation 对象 { x, y, z }
- */
-function makePoint(x: number, y: number, z: number): BlockLocation {
-  return { x, y, z };
-}
-
-/**
- * 校验一组数值是否全部为整数
- *
- * 用于在命令参数解析阶段确保用户输入的坐标值是合法的整数，
- * 避免浮点数坐标导致不可预期的行为。
- *
- * @param values 待校验的数值数组
- * @returns 全部为整数时返回 true，否则返回 false
- */
-function hasIntegerCoordinates(values: number[]): boolean {
-  return values.every((value) => Number.isInteger(value));
-}
-
-/**
  * 安全地向指定玩家发送消息
  *
  * 由于部分操作在 system.run() 的异步回调中执行，此时玩家可能已经断线，
@@ -171,13 +146,9 @@ function regionCommand(name: string, description: string): CustomCommand {
   return {
     ...commandBase(name, description),
     mandatoryParameters: [
-      { name: "name", type: CustomCommandParamType.String },   // 仓库名称
-      { name: "x1",   type: CustomCommandParamType.Integer },  // 第一点 X 坐标
-      { name: "y1",   type: CustomCommandParamType.Integer },  // 第一点 Y 坐标
-      { name: "z1",   type: CustomCommandParamType.Integer },  // 第一点 Z 坐标
-      { name: "x2",   type: CustomCommandParamType.Integer },  // 第二点 X 坐标
-      { name: "y2",   type: CustomCommandParamType.Integer },  // 第二点 Y 坐标
-      { name: "z2",   type: CustomCommandParamType.Integer },  // 第二点 Z 坐标
+      { name: "name", type: CustomCommandParamType.String },    // 仓库名称
+      { name: "pos1", type: CustomCommandParamType.Location },  // 第一组坐标（支持 ~ ^ 相对坐标）
+      { name: "pos2", type: CustomCommandParamType.Location },  // 第二组坐标（支持 ~ ^ 相对坐标）
     ],
   };
 }
@@ -235,19 +206,19 @@ export class CommandRouter {
     // 订阅引擎启动事件，在 startup 阶段注册自定义命令
     system.beforeEvents.startup.subscribe((event) => {
       // sw:create —— 创建一个新的 SmartWarehouse 仓库
-      // 参数：仓库名称 + 区域对角线两点坐标（共 7 个）
+      // 参数：仓库名称 + 两组坐标（共 3 个参数），坐标支持 ~ ^ 相对标记
       event.customCommandRegistry.registerCommand(
         regionCommand("sw:create", "创建 SmartWarehouse 仓库"),
-        (origin, name: string, x1: number, y1: number, z1: number, x2: number, y2: number, z2: number) =>
-          this.handleCreate(origin, name, x1, y1, z1, x2, y2, z2)
+        (origin, name: string, pos1: Vector3, pos2: Vector3) =>
+          this.handleCreate(origin, name, pos1, pos2)
       );
 
       // sw:resize —— 调整已有仓库的覆盖区域
-      // 参数：仓库名称 + 新的区域对角线两点坐标（共 7 个）
+      // 参数：仓库名称 + 两组坐标（共 3 个参数），坐标支持 ~ ^ 相对标记
       event.customCommandRegistry.registerCommand(
         regionCommand("sw:resize", "调整 SmartWarehouse 仓库区域"),
-        (origin, name: string, x1: number, y1: number, z1: number, x2: number, y2: number, z2: number) =>
-          this.handleResize(origin, name, x1, y1, z1, x2, y2, z2)
+        (origin, name: string, pos1: Vector3, pos2: Vector3) =>
+          this.handleResize(origin, name, pos1, pos2)
       );
 
       // sw:rescan —— 重新扫描指定仓库区域内的所有容器
@@ -287,12 +258,8 @@ export class CommandRouter {
   private handleCreate(
     origin: CustomCommandOrigin,
     name: string,
-    x1: number,
-    y1: number,
-    z1: number,
-    x2: number,
-    y2: number,
-    z2: number
+    pos1: Vector3,
+    pos2: Vector3
   ): CustomCommandResult {
     // 步骤 1：验证玩家身份与权限
     const player = parseCommandPlayer(origin);
@@ -302,19 +269,15 @@ export class CommandRouter {
     const normalized = parseWarehouseId(name);
     if (!normalized.ok) return failure(normalized.message);
 
-    // 步骤 3：校验坐标是否均为整数
-    if (!hasIntegerCoordinates([x1, y1, z1, x2, y2, z2])) return failure("坐标必须为整数");
-
-    // 步骤 4：获取玩家当前所在维度（用于确定仓库所在世界）
+    // 步骤 3：获取玩家当前所在维度
     const dimensionId = player.dimension.id;
-    const pointA = makePoint(x1, y1, z1);
-    const pointB = makePoint(x2, y2, z2);
+    const pointA = { x: Math.floor(pos1.x), y: Math.floor(pos1.y), z: Math.floor(pos1.z) };
+    const pointB = { x: Math.floor(pos2.x), y: Math.floor(pos2.y), z: Math.floor(pos2.z) };
 
-    // 步骤 5：通过 system.run() 异步执行仓库创建
-    // 使用异步的原因：createWarehouse 可能涉及文件 IO 或网络操作
+    // 步骤 4：通过 system.run() 异步执行仓库创建
     system.run(() => {
       try {
-        const warehouse = this.service.createWarehouse(normalized.id, dimensionId, pointA, pointB, "normal", true);
+        const warehouse = this.service.createWarehouse(normalized.id, dimensionId, pointA, pointB, "misc", true, player.id);
         trySendMessage(
           player,
           `§a仓库 "${warehouse.displayName}" 创建成功！共发现 ${Object.keys(warehouse.containers).length} 个容器`
@@ -337,18 +300,15 @@ export class CommandRouter {
    *
    * @param origin 命令发起者上下文
    * @param name   仓库名称
-   * @param x1-z2  新的区域对角线两点坐标
+   * @param pos1   新的区域第一组坐标
+   * @param pos2   新的区域第二组坐标
    * @returns 命令执行结果
    */
   private handleResize(
     origin: CustomCommandOrigin,
     name: string,
-    x1: number,
-    y1: number,
-    z1: number,
-    x2: number,
-    y2: number,
-    z2: number
+    pos1: Vector3,
+    pos2: Vector3
   ): CustomCommandResult {
     // 验证玩家身份与权限
     const player = parseCommandPlayer(origin);
@@ -358,11 +318,8 @@ export class CommandRouter {
     const parsed = parseWarehouseId(name);
     if (!parsed.ok) return failure(parsed.message);
 
-    // 校验坐标均为整数
-    if (!hasIntegerCoordinates([x1, y1, z1, x2, y2, z2])) return failure("坐标必须为整数");
-
-    const pointA = makePoint(x1, y1, z1);
-    const pointB = makePoint(x2, y2, z2);
+    const pointA = { x: Math.floor(pos1.x), y: Math.floor(pos1.y), z: Math.floor(pos1.z) };
+    const pointB = { x: Math.floor(pos2.x), y: Math.floor(pos2.y), z: Math.floor(pos2.z) };
 
     // 异步执行仓库区域调整
     system.run(() => {

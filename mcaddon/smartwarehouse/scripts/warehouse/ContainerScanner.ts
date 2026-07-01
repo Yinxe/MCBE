@@ -117,11 +117,10 @@ export class ContainerScanner {
    * 解析一个容器实际占用的所有方块位置集合。
    *
    * - 对于非箱子类型（桶、潜影盒）：仅返回当前位置（单个方块）。
-   * - 对于箱子 / 陷阱箱：根据 `minecraft:cardinal_direction` 方块状态
-   *   判断箱子沿哪个轴向延伸：
-   *   - north（北）/ south（南）→ 沿东西方向（x 轴）连接
-   *   - east（东）/ west（西）  → 沿南北方向（z 轴）连接
-   *   - 未知方向 → 回退为单箱处理。
+   * - 对于箱子 / 陷阱箱：检查四个水平方向，如果某个相邻箱子与当前箱子
+   *   **共享同一个 Container 对象**（即大箱子的两个半块），则返回两个位置。
+   *   这是 Bedrock 版检测大箱子的可靠方式：大箱子（54 槽位）的两个半块
+   *   返回同一个 Container 实例，而两个独立单箱返回不同的 Container。
    *
    * @param dimension 目标维度
    * @param location 当前方块坐标
@@ -132,38 +131,27 @@ export class ContainerScanner {
     // 非箱子类型直接返回当前位置
     if (!isChestType(block.typeId)) return [location];
 
-    // 获取箱子的朝向状态
-    const direction = block.permutation.getState("minecraft:cardinal_direction") as string | undefined;
+    // 获取当前箱子的 Container，用于后续引用比较
+    const thisContainer = block.getComponent("inventory")?.container;
+    if (!thisContainer) return [location];
 
-    // 根据箱子朝向确定轴向偏移量：
-    // north/south → 检查东西方向（x 轴）
-    // east/west   → 检查南北方向（z 轴）
-    const axisOffsets: BlockLocation[] =
-      direction === "north" || direction === "south"
-        ? [
-            { x: 1, y: 0, z: 0 },
-            { x: -1, y: 0, z: 0 },
-          ]
-        : [
-            { x: 0, y: 0, z: 1 },
-            { x: 0, y: 0, z: -1 },
-          ];
-
-    // 在轴向的两个方向上分别检查是否有同类型箱子相邻
-    for (const offset of axisOffsets) {
+    // 检查四个水平方向，看哪个邻居与当前箱子共享同一个 Container
+    for (const offset of NEIGHBOR_OFFSETS) {
       const neighborLocation: BlockLocation = {
         x: location.x + offset.x,
         y: location.y + offset.y,
         z: location.z + offset.z,
       };
       const neighbor = tryGetBlock(dimension, neighborLocation);
-      // 如果相邻方块类型相同且拥有物品栏，则视为双箱
-      if (neighbor?.typeId === block.typeId && hasInventory(neighbor)) {
-        return [location, neighborLocation];
+      if (!neighbor || neighbor.typeId !== block.typeId || !hasInventory(neighbor)) continue;
+
+      const neighborContainer = neighbor.getComponent("inventory")?.container;
+      if (neighborContainer && thisContainer === neighborContainer) {
+        return [location, neighborLocation]; // 同一大箱子
       }
     }
 
-    // 未发现相邻箱子，视为单箱
+    // 找不到共享容器，是单箱
     return [location];
   }
 }

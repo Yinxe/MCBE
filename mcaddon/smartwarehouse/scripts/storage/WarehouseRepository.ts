@@ -16,7 +16,7 @@ const INDEX_KEY = "sw:index";
 const CONTAINERS_PER_SHARD = 128;
 
 export const DEFAULT_WAREHOUSE_SETTINGS: WarehouseSettings = {
-  defaultNewContainerRole: "normal",
+  defaultNewContainerRole: "misc",
   defaultNewContainerEnabled: true,
   autoCreateCategories: false,
   enabled: true,
@@ -171,6 +171,7 @@ export class WarehouseRepository {
       displayName: data.displayName,
       dimensionId: data.dimensionId,
       area: data.area,
+      ownerId: data.ownerId,
       settings: data.settings,
       containerShardCount: shardCount,
       containerCount: entries.length,

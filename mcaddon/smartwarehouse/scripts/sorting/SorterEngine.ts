@@ -92,6 +92,9 @@ export class SorterEngine {
     model.inputCursor = (model.inputCursor + 1) % model.inputContainerIds.length;
 
     this.processInputContainer(warehouse, model, inputContainerId);
+
+    // 更新下次处理 tick，确保处理速度生效
+    model.nextProcessTick = system.currentTick + warehouse.settings.processingSpeed;
   }
 
   // ─── 区块加载预检 ──────────────────────────────────────────────
