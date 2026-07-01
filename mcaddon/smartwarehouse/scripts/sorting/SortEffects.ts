@@ -12,12 +12,20 @@ const log = new Logger("SortEffects");
  *   bulk   → 天蓝
  *   input  → 金色
  * 对于大箱子，每个半块位置各播放一次。
+ *
+ * 粒子大小根据方块类型调整：
+ * - 箱子/陷阱箱（非完整方块）：小尺寸，光效贴箱表面
+ * - 木桶/潜影盒（完整方块）：大尺寸，光效超出方块边缘
  */
 
-/** 箱子类型的默认粒子大小 */
+/** 箱子类型（非完整方块）的粒子大小 */
 const CHEST_SIZE = 0.96;
-/** 粒子高度偏移 */
-const OFF_H = -0.475;
+/** 完整方块（木桶、潜影盒）的粒子大小 */
+const FULL_BLOCK_SIZE = 1.08;
+/** 完整方块的粒子高度偏移（让光效居中可见） */
+const FULL_BLOCK_OFF_H = -0.52;
+/** 箱子类型的高度偏移 */
+const CHEST_OFF_H = -0.475;
 
 /** 角色 → RGB 颜色映射 */
 const ROLE_COLORS: Record<ContainerRole, { r: number; g: number; b: number }> = {
@@ -26,6 +34,24 @@ const ROLE_COLORS: Record<ContainerRole, { r: number; g: number; b: number }> = 
   bulk:   { r: 0.53, g: 0.81, b: 0.92 },  // 天蓝
   input:  { r: 1.00, g: 0.84, b: 0.00 },  // 金色
 };
+
+/**
+ * 判断方块类型是否为完整方块（木桶、潜影盒等）。
+ * 完整方块需要用更大的粒子尺寸让光效可见。
+ */
+function isFullBlock(blockTypeId: string): boolean {
+  return !blockTypeId.includes("chest") && !blockTypeId.includes("trapped_chest");
+}
+
+/**
+ * 获取方块对应的粒子大小和高度偏移。
+ */
+function getParticleParams(blockTypeId: string): { size: number; off_h: number } {
+  if (isFullBlock(blockTypeId)) {
+    return { size: FULL_BLOCK_SIZE, off_h: FULL_BLOCK_OFF_H };
+  }
+  return { size: CHEST_SIZE, off_h: CHEST_OFF_H };
+}
 
 /**
  * 在单个方块位置播放一次粒子效果。
@@ -48,12 +74,21 @@ function playEffect(
   volume: number
 ): void {
   const color = ROLE_COLORS[role];
+
+  // 查方块类型选择粒子大小
+  let blockTypeId = "minecraft:chest";
+  try {
+    const block = dimension.getBlock(pos);
+    if (block) blockTypeId = block.typeId;
+  } catch { /* 默认使用箱子尺寸 */ }
+
+  const { size, off_h } = getParticleParams(blockTypeId);
   const molang = new MolangVariableMap();
-  molang.setFloat("size", CHEST_SIZE);
-  molang.setFloat("size_w", CHEST_SIZE);
-  molang.setFloat("size_l", CHEST_SIZE);
-  molang.setFloat("size_h", CHEST_SIZE);
-  molang.setFloat("off_h", OFF_H);
+  molang.setFloat("size", size);
+  molang.setFloat("size_w", size);
+  molang.setFloat("size_l", size);
+  molang.setFloat("size_h", size);
+  molang.setFloat("off_h", off_h);
   molang.setFloat("color_r", color.r);
   molang.setFloat("color_g", color.g);
   molang.setFloat("color_b", color.b);
