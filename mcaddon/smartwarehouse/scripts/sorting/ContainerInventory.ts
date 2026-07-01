@@ -1,6 +1,7 @@
 import { Container, ItemStack } from "@minecraft/server";
-import type { Dimension, BlockInventoryComponent } from "@minecraft/server";
+import type { Dimension, BlockInventoryComponent, ItemInventoryComponent } from "@minecraft/server";
 import type { StoredContainer } from "../types";
+import { SHULKER_BOX_IDS } from "../warehouse/ContainerTypes";
 
 /**
  * 安全地从持久化存储的容器信息中获取 Minecraft 方块容器对象（`Container`）。
@@ -125,4 +126,112 @@ export function tryMoveStackIntoContainer(stack: ItemStack, target: Container): 
     // 返回原始物品堆，防止调用方误认为全部放完而清空输入槽
     return stack;
   }
+}
+
+// ─── 大宗容器专用函数（潜影盒内容读取与填充） ────────────────────
+
+/**
+ * 判断物品堆是否为潜影盒（任意颜色）。
+ *
+ * @param stack - 要检查的物品堆
+ * @returns 如果是潜影盒则返回 true
+ */
+export function isShulkerBoxItem(stack: ItemStack): boolean {
+  return SHULKER_BOX_IDS.has(stack.typeId);
+}
+
+/**
+ * 获取大宗容器当前存储的物品种类。
+ *
+ * 逻辑：
+ * - 扫描容器所有非空槽位，跳过空的潜影盒。
+ * - 如果第一个有效物品是潜影盒，则读取盒内的第一个物品类型。
+ * - 容器全空时返回 `undefined`（表示尚未确定种类）。
+ *
+ * @param container - 大宗容器的容器对象
+ * @returns 物品种类 ID，或 undefined（空箱/无法读取）
+ */
+export function getBulkChestFirstType(container: Container): string | undefined {
+  for (let slot = 0; slot < container.size; slot++) {
+    const item = container.getItem(slot);
+    if (!item) continue;
+
+    if (isShulkerBoxItem(item)) {
+      // 当 API 不可用时，getComponent 返回 undefined → 跳过该盒子
+      try {
+        const invComp = item.getComponent("minecraft:inventory") as ItemInventoryComponent | undefined;
+        if (!invComp?.container) continue; // 空盒或 API 不可用，跳过
+        const innerFirst = findFirstNonEmptySlot(invComp.container);
+        if (innerFirst < 0) continue; // 空盒，继续找下一个
+        const innerItem = invComp.container.getItem(innerFirst);
+        if (innerItem) return innerItem.typeId;
+      } catch {
+        console.warn(`[SmartWarehouse] 读取潜影盒内容失败（API 可能不可用），跳过`);
+        continue;
+      }
+    } else {
+      // 散装物品：直接返回其类型
+      return item.typeId;
+    }
+  }
+  return undefined; // 全空或所有物品都是空盒
+}
+
+/**
+ * 尝试将物品堆放入容器内已有的潜影盒中。
+ *
+ * 遍历容器的所有槽位，对每个潜影盒：
+ * 1. 获取其内部的 `Container`。
+ * 2. 调用 `Container.addItem()` 尝试放入。
+ * 3. 如果有物品成功放入，将修改后的潜影盒写回外层容器的槽位。
+ *
+ * **API 兼容性**：如果 `ItemStack.getComponent("minecraft:inventory")` 在当前
+ * 运行时版本中不可用（返回 undefined），则打印一条警告并跳过所有潜影盒，
+ * 物品会通过常规空槽位流程放置。
+ *
+ * @param outerContainer - 大宗容器的容器对象
+ * @param stack - 待放入的物品堆
+ * @returns 未能放入的剩余物品堆；全部放入则返回 undefined
+ */
+export function tryFillShulkerBoxes(outerContainer: Container, stack: ItemStack): ItemStack | undefined {
+  let remaining: ItemStack | undefined = stack;
+
+  for (let slot = 0; slot < outerContainer.size; slot++) {
+    if (remaining === undefined) return undefined;
+
+    const slotStack = outerContainer.getItem(slot);
+    if (!slotStack) continue;
+    if (!isShulkerBoxItem(slotStack)) continue;
+
+    try {
+      const invComp = slotStack.getComponent("minecraft:inventory") as ItemInventoryComponent | undefined;
+      if (!invComp?.container) {
+        console.warn(
+          `[SmartWarehouse] 潜影盒 ${slotStack.typeId} 没有 inventory 组件，` +
+          "当前运行时版本可能不支持读取潜影盒内物品，请升级 @minecraft/server。"
+        );
+        // API 不可用，跳过所有潜影盒（无需再试，一次警告就够了）
+        return remaining;
+      }
+
+      const innerContainer = invComp.container;
+      // 如果盒子已满且没有同类物品，跳过
+      if (innerContainer.emptySlotsCount === 0 && !containerHasType(innerContainer, remaining.typeId)) {
+        continue;
+      }
+
+      const before = remaining.amount;
+      remaining = innerContainer.addItem(remaining);
+
+      if (remaining === undefined || remaining.amount < before) {
+        // 潜影盒内容有变化，将修改后的物品写回外层容器
+        outerContainer.setItem(slot, slotStack);
+      }
+    } catch (error) {
+      console.warn(`[SmartWarehouse] 潜影盒操作异常: ${error}，跳过`);
+      continue;
+    }
+  }
+
+  return remaining;
 }

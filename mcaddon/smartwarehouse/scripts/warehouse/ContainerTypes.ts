@@ -5,7 +5,7 @@ import type { Block } from "@minecraft/server";
  * 原版 Minecraft 共有 16 种染色潜影盒 + 1 种未染色潜影盒。
  * 用于在扫描容器时快速判断方块是否为潜影盒。
  */
-const SHULKER_BOX_IDS = new Set([
+export const SHULKER_BOX_IDS = new Set([
   "minecraft:undyed_shulker_box",
   "minecraft:shulker_box",
   "minecraft:white_shulker_box",

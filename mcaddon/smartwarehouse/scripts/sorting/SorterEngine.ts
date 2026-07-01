@@ -8,6 +8,9 @@ import {
   containerHasType,
   isContainerEmpty,
   tryMoveStackIntoContainer,
+  isShulkerBoxItem,
+  getBulkChestFirstType,
+  tryFillShulkerBoxes,
 } from "./ContainerInventory";
 import { playSortEffect } from "./SortEffects";
 
@@ -23,7 +26,8 @@ const log = new Logger("SorterEngine");
  * 1. **已有同类物品的普通容器**（优先利用运行时 `itemTypeIndex` 索引实现快速查找，
  *    索引会在发现脏数据时惰性修正）。
  * 2. **空的普通容器**（仅在 `autoCreateCategories` 开启时启用，用于自动创建新分类）。
- * 3. **杂项容器**（兜底，任何物品最终都能放入杂项容器）。
+ * 3. **大宗容器**（盒箱混存——优先填满箱内潜影盒，再填充空槽位，以第一个物品确定种类）。
+ * 4. **杂项容器**（兜底，任何物品最终都能放入杂项容器）。
  *
  * ### 设计要点
  *
@@ -287,15 +291,20 @@ export class SorterEngine {
       if (remaining === undefined) return undefined;
     }
 
-    // 优先级 3：已有同类物品的大宗容器
-    // 大宗箱专用于单一物品类型，如果已有此类物品则放入
-    const bulkContainsType = model.bulkContainerIds.filter((id) => {
+    // 优先级 3：大宗容器（盒箱混存）
+    // 大宗箱以第一个有效物品的种类为准，同时匹配箱内散装和盒内物品。
+    // 空箱接受任何第一个放入的物品以设定种类。
+    const bulkMatches = model.bulkContainerIds.filter((id) => {
       const stored = warehouse.containers[id];
       if (!stored) return false;
-      const targetContainer = getContainerFromStored(dimension, stored);
-      return targetContainer !== undefined && containerHasType(targetContainer, typeId);
+      const target = getContainerFromStored(dimension, stored);
+      if (!target) return false;
+      // 空箱 → 接受第一个物品以设定种类
+      if (isContainerEmpty(target)) return true;
+      // 已有物品 → 检查第一个有效物品是否匹配
+      return getBulkChestFirstType(target) === typeId;
     });
-    remaining = this.tryContainers(remaining, bulkContainsType, warehouse, model, dimension, typeId, "bulk");
+    remaining = this.tryBulkContainers(remaining, bulkMatches, warehouse, model, dimension, typeId);
     if (remaining === undefined) return undefined;
 
     // 优先级 4：杂项容器（兜底）
@@ -362,6 +371,77 @@ export class SorterEngine {
       }
 
       if (remaining === undefined) return undefined; // 全部放完，提前退出
+    }
+
+    return remaining;
+  }
+
+  /**
+   * 尝试将物品放入大宗容器中。
+   *
+   * 大宗容器的插入逻辑与普通容器不同：
+   * 1. **优先填满箱内已有的潜影盒** —— 遍历容器槽位，对每个潜影盒调用
+   *    `tryFillShulkerBoxes`，将物品放入盒内。
+   * 2. **再填充空槽位** —— 调用 `tryMoveStackIntoContainer` 放入散装空间。
+   *
+   * 此类容器专用于单一物品类型，混合存储潜影盒与散装物品。
+   *
+   * @param stack - 当前待放置的物品堆
+   * @param containerIds - 候选大宗容器 ID 列表
+   * @param warehouse - 仓库数据
+   * @param model - 运行态模型
+   * @param dimension - 维度
+   * @param typeId - 物品类型 ID
+   * @returns 剩余的物品堆，全部放完则返回 undefined
+   */
+  private tryBulkContainers(
+    stack: ItemStack | undefined,
+    containerIds: ContainerId[],
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    dimension: Dimension,
+    typeId: string,
+  ): ItemStack | undefined {
+    if (!stack) return undefined;
+
+    let remaining: ItemStack | undefined = stack;
+
+    for (const containerId of containerIds) {
+      if (remaining === undefined) return undefined;
+
+      const stored = warehouse.containers[containerId];
+      if (!stored) continue;
+      const loc = stored.primaryLocation;
+
+      const target = getContainerFromStored(dimension, stored);
+      if (!target) {
+        log.info(`[bulk] ${containerId} @ (${loc.x},${loc.y},${loc.z}) — 容器不可达，跳过`);
+        continue;
+      }
+
+      const beforeAmount = remaining.amount;
+
+      // 第 1 步：优先填入箱内已有的潜影盒
+      remaining = tryFillShulkerBoxes(target, remaining);
+      if (remaining === undefined) {
+        this.addToTypeIndex(model, typeId, containerId);
+        playSortEffect(dimension, stored.occupiedLocations, stored.role);
+        return undefined;
+      }
+
+      // 第 2 步：剩余物品填入空槽位（散装）
+      remaining = tryMoveStackIntoContainer(remaining, target);
+
+      const placed = beforeAmount - (remaining?.amount ?? 0);
+      if (placed > 0) {
+        log.info(
+          `[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`
+        );
+        this.addToTypeIndex(model, typeId, containerId);
+        playSortEffect(dimension, stored.occupiedLocations, stored.role);
+      }
+
+      if (remaining === undefined) return undefined;
     }
 
     return remaining;
