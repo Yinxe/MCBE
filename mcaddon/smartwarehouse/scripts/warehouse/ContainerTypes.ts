@@ -6,6 +6,7 @@ import type { Block } from "@minecraft/server";
  * 用于在扫描容器时快速判断方块是否为潜影盒。
  */
 const SHULKER_BOX_IDS = new Set([
+  "minecraft:undyed_shulker_box",
   "minecraft:shulker_box",
   "minecraft:white_shulker_box",
   "minecraft:orange_shulker_box",
