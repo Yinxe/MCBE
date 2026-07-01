@@ -46,7 +46,12 @@ export function isChestType(typeId: string): boolean {
  * @returns 如果是支持的容器类型，返回 true
  */
 export function isSupportedContainerType(typeId: string): boolean {
-  return isChestType(typeId) || typeId === "minecraft:barrel" || SHULKER_BOX_IDS.has(typeId);
+  const result = isChestType(typeId) || typeId === "minecraft:barrel" || SHULKER_BOX_IDS.has(typeId);
+  // 调试：打印潜影盒类方块是否被识别为容器
+  if (typeId.includes("shulker")) {
+    console.warn(`[SmartWarehouse] 潜影盒检测: typeId=${typeId}, isContainer=${result}`);
+  }
+  return result;
 }
 
 /**
@@ -54,9 +59,21 @@ export function isSupportedContainerType(typeId: string): boolean {
  * 某些方块虽然类型 ID 匹配容器，但可能因损坏或其他原因缺少物品栏组件。
  * 该函数通过查询 "@minecraft/server" 的 inventory 组件来确认。
  *
+ * 部分 Bedrock 版本中潜影盒可能使用完整组件 ID "minecraft:inventory"
+ * 而非简写 "inventory"，因此同时检查两者。
+ *
  * @param block 要检查的方块对象
  * @returns 如果方块拥有 inventory 组件，返回 true
  */
 export function hasInventory(block: Block): boolean {
-  return Boolean(block.getComponent("inventory"));
+  const result = Boolean(block.getComponent("inventory")) || Boolean(block.getComponent("minecraft:inventory"));
+  if (block.typeId.includes("shulker")) {
+    console.warn(
+      `[SmartWarehouse] 潜影盒 HasInventory: typeId=${block.typeId}, ` +
+      `inventory=${Boolean(block.getComponent("inventory"))}, ` +
+      `minecraft:inventory=${Boolean(block.getComponent("minecraft:inventory"))}, ` +
+      `result=${result}`
+    );
+  }
+  return result;
 }

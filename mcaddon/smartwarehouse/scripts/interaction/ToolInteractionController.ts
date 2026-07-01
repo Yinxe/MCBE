@@ -47,25 +47,12 @@ export function registerToolInteraction(repository: WarehouseRepository, service
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
     const player = event.player;
     const itemStack = event.itemStack;
-
-    // 仅处理手持木锄的交互，其它工具忽略
     if (!itemStack || itemStack.typeId !== TOOL_ID) return;
-
-    // 只处理第一次按下，忽略按住时重复触发的后续事件
     if (!event.isFirstEvent) return;
-
-    // 记录此次交互时间戳，用于屏蔽后续 itemUse 事件的误触发
     recentUseOn.set(player.id, Date.now());
-
-    // 取消默认的方块交互行为（例如阻止打开容器界面），由我们接管
     event.cancel = true;
-
-    // 将事件的坐标转换为游戏内统一的方块坐标格式
     const blockLocation = toBlockLocation(event.block.location);
 
-    // 根据点击的方块类型分发处理：
-    // - 如果是受支持的容器方块 → 显示容器角色菜单
-    // - 否则 → 作为选择区域的选点操作
     if (isSupportedContainerType(event.block.typeId)) {
       handleContainerClick(player, service, event.block.dimension.id, blockLocation);
     } else {
@@ -73,28 +60,53 @@ export function registerToolInteraction(repository: WarehouseRepository, service
     }
   });
 
-  // ── 物品使用事件（玩家手持木锄对空右键，未点击任何方块） ────
-  // 使用 afterEvents 是因为需要在正常交互完成后触发。
+  // ── 物品使用事件（对空右键 / 未触发 playerInteractWithBlock 的兜底） ────
+  // 部分容器（如潜影盒）在特定 Bedrock 版本中不触发 playerInteractWithBlock。
+  // 此处通过 getBlockFromViewDirection 检测玩家视线是否对着容器，若是则
+  // 作为容器点击处理而非弹出主菜单。
   world.afterEvents.itemUse.subscribe((event) => {
     const player = event.source;
     const itemStack = event.itemStack;
-
-    // 仅处理木锄
     if (!itemStack || itemStack.typeId !== TOOL_ID) return;
 
-    // 防抖检查：如果玩家刚刚右键点击过方块（在 DEBOUNCE_MS 毫秒内），
-    // 则跳过此次事件，避免重复弹出主菜单。
+    // 防抖：避免与 playerInteractWithBlock 重复处理
     const lastUseOn = recentUseOn.get(player.id);
-    if (lastUseOn && Date.now() - lastUseOn < DEBOUNCE_MS) {
+    if (lastUseOn && Date.now() - lastUseOn < DEBOUNCE_MS) return;
+    recentUseOn.set(player.id, Date.now());
+
+    // 检测玩家视线前方是否对着容器方块（潜影盒兜底）
+    const raycast = player.getBlockFromViewDirection({ maxDistance: 6 });
+    if (raycast?.block && isSupportedContainerType(raycast.block.typeId)) {
+      const blockLocation = toBlockLocation(raycast.block.location);
+      handleContainerClick(player, service, raycast.block.dimension.id, blockLocation);
       return;
     }
 
-    // 延迟到下一个 tick 执行，以规避某些执行上下文（如 restricted execution context）的限制。
-    system.run(() => {
+    // 视线无容器 → 弹出主菜单
+    system.runTimeout(() => {
       showMainMenu(player, repository, service).catch((error) => {
         logger.error(`MainMenu error for ${player.name}: ${error}`);
       });
-    });
+    }, 1);
+  });
+
+  // ── 物品使用事件（玩家手持木锄对空右键，未点击任何方块） ────
+  world.afterEvents.itemUse.subscribe((event) => {
+    const player = event.source;
+    const itemStack = event.itemStack;
+    if (!itemStack || itemStack.typeId !== TOOL_ID) return;
+
+    // 防抖
+    const lastUseOn = recentUseOn.get(player.id);
+    if (lastUseOn && Date.now() - lastUseOn < DEBOUNCE_MS) return;
+    recentUseOn.set(player.id, Date.now());
+
+    // 弹出主菜单
+    system.runTimeout(() => {
+      showMainMenu(player, repository, service).catch((error) => {
+        logger.error(`MainMenu error for ${player.name}: ${error}`);
+      });
+    }, 1);
   });
 
   // ── 玩家离开事件 —— 清理该玩家的所有状态 ─────────────────
