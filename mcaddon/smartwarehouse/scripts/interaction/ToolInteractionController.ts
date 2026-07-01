@@ -187,33 +187,34 @@ function handleNonContainerClick(
   const pointA = session.pointA;
   const pointB = location;
 
-  try {
-    if (session.type === "createWarehouse") {
-      // 调用服务层创建仓库，传入仓库名称、维度、两个对角点以及默认容器角色
-      const result = service.createWarehouse(
-        session.warehouseName,
-        dimensionId,
-        pointA,
-        pointB,
-        session.defaultNewContainerRole,
-        session.defaultNewContainerEnabled,
-        player.id
-      );
-      player.sendMessage(
-        `§a仓库 "${result.displayName}" 创建成功！共发现 ${Object.keys(result.containers).length} 个容器`
-      );
-    } else {
-      // 预留的 resizeWarehouse（调整仓库范围）功能，当前 MVP 版本尚未实现
-      player.sendMessage("§c调整仓库功能待后续实现");
-      return;
-    }
-  } catch (error) {
-    // 操作失败时清除会话，让玩家可以重新开始
+  if (session.type === "createWarehouse") {
+    // 先捕获 session 数据，之后可以安全清除会话
+    const { warehouseName, defaultNewContainerRole, defaultNewContainerEnabled } = session;
     clearSession(player);
-    player.sendMessage(`§c操作失败: ${error}，请重新开始`);
+
+    // 延迟到下一 tick 执行创建，确保不在受限执行上下文中
+    system.runTimeout(() => {
+      try {
+        const result = service.createWarehouse(
+          warehouseName,
+          dimensionId,
+          pointA,
+          pointB,
+          defaultNewContainerRole,
+          defaultNewContainerEnabled,
+          player.id
+        );
+        player.sendMessage(
+          `§a仓库 "${result.displayName}" 创建成功！共发现 ${Object.keys(result.containers).length} 个容器`
+        );
+      } catch (error) {
+        player.sendMessage(`§c操作失败: ${error}，请重新开始`);
+      }
+    }, 1);
+  } else {
+    // 预留的 resizeWarehouse（调整仓库范围）功能，当前 MVP 版本尚未实现
+    player.sendMessage("§c调整仓库功能待后续实现");
     return;
   }
-
-  // 操作成功完成后清理会话状态
   clearSession(player);
 }
