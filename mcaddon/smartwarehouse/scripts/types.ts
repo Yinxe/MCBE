@@ -257,11 +257,6 @@ export interface WarehouseRuntimeModel {
    */
   areaLoaded: boolean | undefined;
 
-  /**
-   * 下一次允许处理该仓库的游戏刻。
-   * 由处理速度（processingSpeed）控制，实现每仓库独立的分拣频率。
-   */
-  nextProcessTick: number;
 }
 
 /**

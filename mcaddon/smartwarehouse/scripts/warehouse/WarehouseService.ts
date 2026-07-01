@@ -52,11 +52,13 @@ export class WarehouseService {
    * @param repository          仓库数据的持久化存储仓库
    * @param scanner             容器扫描器（可注入，便于测试）
    * @param markRuntimeDirty    脏标记回调函数，仓库数据变更时调用以通知运行时缓存失效
+   * @param notifyScheduler     调度刷新回调，仓库启用/禁用/速度变化/删除时通知调度器刷新 interval
    */
   constructor(
     private readonly repository: WarehouseRepository,
     private readonly scanner = new ContainerScanner(),
-    private readonly markRuntimeDirty: (warehouseId: WarehouseId) => void = () => undefined
+    private readonly markRuntimeDirty: (warehouseId: WarehouseId) => void = () => undefined,
+    private readonly notifyScheduler?: (warehouseId: WarehouseId) => void
   ) {}
 
   /**
@@ -113,6 +115,7 @@ export class WarehouseService {
     };
     this.repository.create(data);
     this.markRuntimeDirty(data.id);
+    this.notifyScheduler?.(data.id);
     return data;
   }
 
@@ -182,6 +185,7 @@ export class WarehouseService {
     const updated = { ...warehouse, area, containers };
     this.repository.save(updated);
     this.markRuntimeDirty(id);
+    this.notifyScheduler?.(id);
     return updated;
   }
 
@@ -196,6 +200,7 @@ export class WarehouseService {
   deleteWarehouse(id: WarehouseId): void {
     this.repository.delete(id);
     this.markRuntimeDirty(id);
+    this.notifyScheduler?.(id);
   }
 
   /**
@@ -260,6 +265,7 @@ export class WarehouseService {
     };
     this.repository.save(updated);
     this.markRuntimeDirty(id);
+    this.notifyScheduler?.(id);
     return updated;
   }
 

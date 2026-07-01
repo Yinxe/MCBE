@@ -83,18 +83,12 @@ export class SorterEngine {
       return; // 区块未加载，静默跳过，下个周期重试
     }
 
-    // 处理速度控制：若未到下一个处理 tick，跳过本次
-    if (system.currentTick < model.nextProcessTick) return;
-
     // 轮询调度：取模选取当前输入容器，游标 +1，实现多个输入容器间的负载均衡
     const inputIndex = model.inputCursor % model.inputContainerIds.length;
     const inputContainerId = model.inputContainerIds[inputIndex];
     model.inputCursor = (model.inputCursor + 1) % model.inputContainerIds.length;
 
     this.processInputContainer(warehouse, model, inputContainerId);
-
-    // 更新下次处理 tick，确保处理速度生效
-    model.nextProcessTick = system.currentTick + warehouse.settings.processingSpeed;
   }
 
   // ─── 区块加载预检 ──────────────────────────────────────────────

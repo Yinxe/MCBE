@@ -46,8 +46,6 @@ export function buildWarehouseRuntimeModel(warehouse: WarehouseData): WarehouseR
     areaLoadedCheckedTick: 0,
     /** 区块加载状态缓存（undefined = 尚未检查） */
     areaLoaded: undefined,
-    /** 下一 tick 可处理该仓库的时间（由 processingSpeed 控制） */
-    nextProcessTick: 0,
   };
 
   for (const container of Object.values(warehouse.containers)) {
