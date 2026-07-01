@@ -53,10 +53,10 @@ export async function showContainerRoleMenu(
   const roleDesc = ROLE_DESCRIPTIONS[container.role];
 
   const form = new ModalFormData()
-    .title(`容器设置 · ${warehouse.displayName}`)
+    .title("容器设置")
     .label(
-      `§7容器: ${warehouse.displayName}\n` +
-      `§7ID: ${containerId}\n` +
+      `§7仓库: ${warehouse.displayName}\n` +
+      `§7容器ID: ${containerId}\n` +
       `§7状态: ${container.enabled ? "§a已启用" : "§c已禁用"}\n` +
       `§7角色: §f${currentRoleLabel} — ${roleDesc}§r`
     )
