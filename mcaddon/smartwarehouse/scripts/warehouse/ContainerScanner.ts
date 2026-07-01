@@ -1,4 +1,5 @@
 import type { Block, Dimension } from "@minecraft/server";
+import { ItemStack } from "@minecraft/server";
 import type { BlockLocation, ContainerId, ContainerRole, StoredContainer, WarehouseArea } from "../types";
 import { compareLocationForPrimary } from "../util/Vector";
 import { makeContainerId } from "./ContainerId";
@@ -114,50 +115,88 @@ export class ContainerScanner {
   }
 
   /**
-   * 大箱子容器的最小 slot 数门槛。
-   * 单箱 27 格，双箱 54 格。超过 27 格即视为双箱。
+   * 唯一物品探针的 ID，用于大箱子检测。
+   */
+  private static readonly PROBE_ID = "minecraft:structure_void";
+
+  /**
+   * 大箱子判定门槛：单箱 27 格，双箱 54 格，超过 27 即为大箱子。
    */
   private static readonly DOUBLE_CHEST_MIN_SIZE = 28;
 
   /**
+   * 对大箱子执行探针检测，找出另一半的坐标。
+   * 仅在 container.size > 27 时调用。
+   * setItem 在受限执行上下文中会抛异常，捕获后返回 undefined。
+   */
+  private probeDoubleChest(
+    dimension: Dimension,
+    location: BlockLocation,
+    block: Block
+  ): BlockLocation | undefined {
+    const container = block.getComponent("inventory")?.container;
+    if (!container) return undefined;
+
+    const probeSlot = container.size - 1;
+    const probe = new ItemStack(ContainerScanner.PROBE_ID, 1);
+    let original: import("@minecraft/server").ItemStack | undefined;
+
+    // 放探针（受限上下文此处会抛异常 → 返回 undefined）
+    try {
+      original = container.getItem(probeSlot);
+      container.setItem(probeSlot, probe);
+    } catch {
+      return undefined;
+    }
+
+    // 检查邻居
+    let found: BlockLocation | undefined;
+    try {
+      for (const offset of NEIGHBOR_OFFSETS) {
+        const nl: BlockLocation = { x: location.x + offset.x, y: location.y + offset.y, z: location.z + offset.z };
+        const neighbor = tryGetBlock(dimension, nl);
+        if (!neighbor || neighbor.typeId !== block.typeId || !hasInventory(neighbor)) continue;
+        try {
+          const nc = neighbor.getComponent("inventory")?.container;
+          if (nc && nc.getItem(probeSlot)?.typeId === ContainerScanner.PROBE_ID) {
+            found = nl;
+            break;
+          }
+        } catch { /* 跳过 */ }
+      }
+    } finally {
+      // 恢复探针槽
+      try { container.setItem(probeSlot, original); } catch { /* 忽略 */ }
+    }
+    return found;
+  }
+
+  /**
    * 解析一个容器实际占用的所有方块位置集合。
    *
-   * - 对于非箱子类型（桶、潜影盒）：仅返回当前位置（单个方块）。
-   * - 对于箱子 / 陷阱箱：检测 Container.size 是否 > 27。
-   *   在 Bedrock 中，大箱子的两个半块共享同一个 54 格 Container，
-   *   而两个独立单箱各有 27 格 Container。通过 Container.size 判断
-   *   可以避免在受限执行上下文中调用 setItem。
+   * - 非箱子类型：返回当前位置。
+   * - 单箱（size ≤ 27）：不触发 setItem，直接返回当前位置。
+   * - 大箱子（size > 27）：用探针法找另一半，setItem 受限时安全降级为单箱。
    *
    * @param dimension 目标维度
    * @param location 当前方块坐标
    * @param block 当前方块对象
-   * @returns 该容器占用的所有方块位置数组
+   * @returns 该容器占用的方块位置数组
    */
   getOccupiedLocations(dimension: Dimension, location: BlockLocation, block: Block): BlockLocation[] {
-    // 非箱子类型直接返回当前位置
     if (!isChestType(block.typeId)) return [location];
 
-    const container = block.getComponent("inventory")?.container;
-    if (!container || container.size < ContainerScanner.DOUBLE_CHEST_MIN_SIZE) {
-      return [location]; // 单箱（27 格）或未知
-    }
+    // 读取 Container（不触 setItem）
+    let container: import("@minecraft/server").Container | undefined;
+    try { container = block.getComponent("inventory")?.container; } catch { return [location]; }
+    if (!container) return [location];
 
-    // 54 格 → 大箱子，找到哪个邻居共享此 Container（通过相同 size 判定）
-    for (const offset of NEIGHBOR_OFFSETS) {
-      const neighborLocation: BlockLocation = {
-        x: location.x + offset.x,
-        y: location.y + offset.y,
-        z: location.z + offset.z,
-      };
-      const neighbor = tryGetBlock(dimension, neighborLocation);
-      if (!neighbor || neighbor.typeId !== block.typeId || !hasInventory(neighbor)) continue;
+    // 单箱 → 直接返回
+    if (container.size < ContainerScanner.DOUBLE_CHEST_MIN_SIZE) return [location];
 
-      const neighborContainer = neighbor.getComponent("inventory")?.container;
-      if (neighborContainer && neighborContainer.size >= ContainerScanner.DOUBLE_CHEST_MIN_SIZE) {
-        return [location, neighborLocation];
-      }
-    }
-
+    // 大箱子 → 探针法
+    const neighbor = this.probeDoubleChest(dimension, location, block);
+    if (neighbor) return [location, neighbor];
     return [location];
   }
 }
