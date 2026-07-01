@@ -94,6 +94,8 @@ export class WarehouseService {
       area,
       settings: { ...DEFAULT_WAREHOUSE_SETTINGS, defaultNewContainerRole: defaultRole },
       containerShardCount: 0,
+      containerCount: Object.keys(containers).length,
+      containerShardGeneration: 0,
       containers,
     };
     this.repository.create(data);

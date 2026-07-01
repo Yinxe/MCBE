@@ -93,6 +93,16 @@ export interface WarehouseMeta {
    * 容器数据被分割到多个分片中。此字段记录分片总数。
    */
   containerShardCount: number;
+  /**
+   * 容器总数。冗余存储在 meta 中，用于 `load()` 时的完整性校验。
+   * 与各分片中实际容器数量之和对比，不一致说明数据已损坏。
+   */
+  containerCount: number;
+  /**
+   * 分片写入世代号。每次 `save()` 递增，写入新的分片键后更新 meta。
+   * 崩溃恢复时，旧世代的分片数据不会被新数据覆盖，保证一致性。
+   */
+  containerShardGeneration: number;
 }
 
 /**

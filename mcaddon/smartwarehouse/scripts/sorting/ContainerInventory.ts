@@ -105,6 +105,24 @@ export function isContainerEmpty(container: Container): boolean {
  * @param target - 目标容器
  * @returns 未能放入的剩余物品堆；如果全部成功放入则返回 undefined
  */
+/**
+ * 尝试将物品堆放入目标容器中。
+ *
+ * 底层调用 Minecraft 的 `Container.addItem()` API。
+ * 使用 try-catch 包裹，任何异常（如容器在调用过程中被破坏、区块卸载）
+ * 都会被捕获并记录，异常时返回原始物品堆，避免调用方误判为"全部放入"
+ * 而清空输入槽，从而防止物品丢失。
+ *
+ * @param stack - 待放入的物品堆
+ * @param target - 目标容器
+ * @returns 未能放入的剩余物品堆；全部放入返回 undefined；异常时返回原堆
+ */
 export function tryMoveStackIntoContainer(stack: ItemStack, target: Container): ItemStack | undefined {
-  return target.addItem(stack);
+  try {
+    return target.addItem(stack);
+  } catch (error) {
+    console.error(`[SmartWarehouse] addItem 失败: ${error}`);
+    // 返回原始物品堆，防止调用方误认为全部放完而清空输入槽
+    return stack;
+  }
 }

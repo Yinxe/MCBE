@@ -5,7 +5,6 @@ import { WarehouseRuntimeRegistry } from "../runtime/WarehouseRuntimeRegistry";
 import { Logger } from "../util/Logger";
 import {
   getContainerFromStored,
-  findFirstNonEmptySlot,
   containerHasType,
   isContainerEmpty,
   tryMoveStackIntoContainer,
@@ -90,16 +89,16 @@ export class SorterEngine {
   /**
    * 处理单个输入容器的分拣。
    *
-   * 步骤：
-   * 1. 从仓库数据中获取容器的持久化存储信息（`StoredContainer`）。
-   * 2. 根据 `dimensionId` 获取维度对象，若维度不可达则跳过。
-   * 3. 安全地获取方块容器对象（`Container`），若容器不可达则跳过。
-   * 4. 查找输入容器中的第一个非空物品槽位。
-   * 5. 若找到了物品，调用 `moveStackIntoWarehouse` 尝试将其放入仓库中的存储容器。
-   * 6. 根据返回值更新输入容器槽位：
-   *    - `undefined`：整堆全部放完 → 清空输入槽位。
-   *    - 剩余量 < 原来量 → 部分放入，余量写回输入槽位。
-   *    - 剩余量 == 原来量 → 无任何移动。
+   * 遍历容器中所有槽位，逐个尝试分拣。无法分类的物品**留在原地**，
+   * 不会阻塞后续槽位的处理，且下个 tick 会再次尝试。
+   *
+   * 步骤（每个槽位）：
+   * 1. 获取该槽位的物品堆。
+   * 2. 调用 `moveStackIntoWarehouse` 尝试放入仓库中的存储容器。
+   * 3. 根据返回值更新槽位：
+   *    - `undefined`：整堆全部放完 → 清空槽位。
+   *    - 剩余量 < 原来量 → 部分放入，余量写回槽位。
+   *    - 剩余量 == 原来量 → 无法分类，保持不动，继续下一槽。
    *
    * **容错设计**：整个方法被 try-catch 包裹，确保单个容器异常不会瓦解调度循环。
    */
@@ -121,29 +120,40 @@ export class SorterEngine {
       const container = getContainerFromStored(dimension, stored);
       if (!container) return;
 
-      // 找到第一个有物品的槽位
-      const slot = findFirstNonEmptySlot(container);
-      if (slot === -1) return; // 输入容器全空，无需分拣
-
-      const stack = container.getItem(slot);
-      if (!stack) return;
-
-      const originalAmount = stack.amount;
       const loc = stored.primaryLocation;
-      log.info(`正在分拣 ${stack.typeId} x${originalAmount} 从 ${containerId} @ (${loc.x},${loc.y},${loc.z})`);
 
-      const remaining = this.moveStackIntoWarehouse(stack, warehouse, model, dimension);
+      // 遍历所有槽位，无法分类的物品不阻塞后续槽位
+      for (let slot = 0; slot < container.size; slot++) {
+        const stack = container.getItem(slot);
+        if (!stack) continue; // 空槽位，跳过
 
-      if (remaining === undefined) {
-        // 整堆全部成功放置 → 清空输入槽位
-        container.setItem(slot);
-        log.info(`输入槽位已清空（全部 ${originalAmount} 个已放置）`);
-      } else if (remaining.amount < originalAmount) {
-        // 部分放置成功 → 将无法放入的部分写回输入槽位
-        container.setItem(slot, remaining);
-        log.info(`部分放置：${remaining.amount} 个（共 ${originalAmount} 个）返回输入槽位`);
-      } else {
-        log.info(`无任何转移（${originalAmount} 个未变动）`);
+        const originalAmount = stack.amount;
+
+        const remaining = this.moveStackIntoWarehouse(stack, warehouse, model, dimension);
+
+        if (remaining === undefined) {
+          // 整堆全部成功放置 → 清空输入槽位
+          try {
+            container.setItem(slot);
+            log.info(`槽位 ${slot} 已清空（${stack.typeId} x${originalAmount} 已放置）`);
+          } catch (setError) {
+            // setItem 失败极罕见（容器被破坏/区块卸载），
+            // 但一旦发生会导致物品已移到目标但输入槽未清空。
+            // 记录致命错误以便管理员发现。
+            log.error(`致命错误：槽位 ${slot} 清空失败，物品已在目标容器中但输入槽未清空: ${setError}`);
+          }
+        } else if (remaining.amount < originalAmount) {
+          // 部分放置成功 → 余量写回槽位
+          try {
+            container.setItem(slot, remaining);
+            log.info(
+              `槽位 ${slot} 部分放置：${remaining.amount}/${originalAmount} ${stack.typeId} 返回`
+            );
+          } catch (setError) {
+            log.error(`致命错误：槽位 ${slot} 回写失败，剩余 ${remaining.amount} 个物品已丢失: ${setError}`);
+          }
+        }
+        // 无法分类 → 保持不动，遍历下一个槽位
       }
     } catch (error) {
       log.error(`处理输入容器 ${containerId} 时出错: ${error}`);
