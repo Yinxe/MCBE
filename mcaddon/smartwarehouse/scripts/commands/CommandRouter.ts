@@ -128,8 +128,7 @@ function commandBase(name: string, description: string): Omit<CustomCommand, "ma
   return {
     name,
     description,
-    permissionLevel: CommandPermissionLevel.Admin,  // 仅管理员可执行
-    cheatsRequired: true,                            // 需要开启作弊模式
+    permissionLevel: CommandPermissionLevel.Admin,  // 仅管理员（OP）可执行
   };
 }
 

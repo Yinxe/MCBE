@@ -18,7 +18,7 @@ export async function showWarehouseCreateForm(player: Player): Promise<void> {
   const form = new ModalFormData()
     .title("创建仓库")
     .textField("仓库名称", "输入仓库名称...")
-    .dropdown("默认容器角色", roleLabels, { defaultValueIndex: 0 })
+    .dropdown("默认容器角色", roleLabels, { defaultValueIndex: 2 })  // 默认其他仓位(misc, ROLE_ORDER[2])
     .dropdown("新容器默认启用", ["是", "否"], { defaultValueIndex: 0 });
 
   const response = await form.show(player);
