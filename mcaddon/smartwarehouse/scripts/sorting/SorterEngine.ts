@@ -347,7 +347,7 @@ export class SorterEngine {
         // 记录索引，下回同类物品快速定位到此容器
         this.addToTypeIndex(model, typeId, containerId);
         // 播放分拣动画（粒子 + 音效）
-        playSortEffect(dimension, stored.occupiedLocations);
+        playSortEffect(dimension, stored.occupiedLocations, stored.role);
       }
 
       if (remaining === undefined) return undefined; // 全部放完，提前退出

@@ -70,9 +70,9 @@
 					"uv_size": [320, 128]
 				}
 			},
-			"minecraft:particle_appearance_tinting": {
-				"color": [ 0.37, 0.80, 0.37, "v.ga" ]
-			}
+"minecraft:particle_appearance_tinting": {
+    "color": [ "v.color_r ?? 0.37", "v.color_g ?? 0.80", "v.color_b ?? 0.37", "v.ga" ]
+}
 		}
 	}
 }
