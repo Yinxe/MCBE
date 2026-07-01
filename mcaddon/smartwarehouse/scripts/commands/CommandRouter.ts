@@ -7,7 +7,7 @@
  * 1. 在服务器启动阶段注册所有自定义命令（sw:create / sw:resize / sw:rescan / sw:delete）
  * 2. 验证命令执行者的身份（必须是玩家）与权限（必须拥有 op 标签）
  * 3. 解析命令参数（仓库名称、坐标等），进行基础校验后委托给 WarehouseService
- * 4. 统一通过 system.run() 进行异步执行，并通过 trySendMessage() 安全地向玩家反馈结果
+ * 4. 统一通过 system.runTimeout() 进行异步执行，并通过 trySendMessage() 安全地向玩家反馈结果
  *
  * 权限机制：
  * - 所有命令在注册时 permissionLevel 设为 Admin，且 cheatsRequired 为 true
@@ -103,7 +103,7 @@ function parseCommandPlayer(origin: CustomCommandOrigin): Player | string {
 /**
  * 安全地向指定玩家发送消息
  *
- * 由于部分操作在 system.run() 的异步回调中执行，此时玩家可能已经断线，
+ * 由于部分操作在 system.runTimeout() 的异步回调中执行，此时玩家可能已经断线，
  * 直接调用 player.sendMessage() 会抛出异常。本函数捕获此异常以静默忽略。
  *
  * @param player 目标玩家对象
@@ -246,7 +246,7 @@ export class CommandRouter {
    * 2. 规范化仓库名称
    * 3. 校验坐标值均为整数
    * 4. 获取玩家当前维度 ID
-   * 5. 通过 system.run() 异步调用 WarehouseService.createWarehouse()
+   * 5. 通过 system.runTimeout() 异步调用 WarehouseService.createWarehouse()
    * 6. 反馈创建结果（成功 / 失败）
    *
    * @param origin 命令发起者上下文
@@ -273,8 +273,8 @@ export class CommandRouter {
     const pointA = { x: Math.floor(pos1.x), y: Math.floor(pos1.y), z: Math.floor(pos1.z) };
     const pointB = { x: Math.floor(pos2.x), y: Math.floor(pos2.y), z: Math.floor(pos2.z) };
 
-    // 步骤 4：通过 system.run() 异步执行仓库创建
-    system.run(() => {
+    // 步骤 4：通过 system.runTimeout() 异步执行仓库创建
+    system.runTimeout(() => {
       try {
         const warehouse = this.service.createWarehouse(normalized.id, dimensionId, pointA, pointB, "misc", true, player.id);
         trySendMessage(
@@ -320,8 +320,8 @@ export class CommandRouter {
     const pointA = { x: Math.floor(pos1.x), y: Math.floor(pos1.y), z: Math.floor(pos1.z) };
     const pointB = { x: Math.floor(pos2.x), y: Math.floor(pos2.y), z: Math.floor(pos2.z) };
 
-    // 异步执行仓库区域调整
-    system.run(() => {
+    // 延迟 1 tick 异步执行仓库区域调整
+    system.runTimeout(() => {
       try {
         const warehouse = this.service.resizeWarehouse(parsed.id, pointA, pointB);
         trySendMessage(
@@ -355,8 +355,8 @@ export class CommandRouter {
     const parsed = parseWarehouseId(name);
     if (!parsed.ok) return failure(parsed.message);
 
-    // 异步执行重新扫描
-    system.run(() => {
+    // 延迟 1 tick 异步执行重新扫描
+    system.runTimeout(() => {
       try {
         const warehouse = this.service.rescanWarehouse(parsed.id);
         trySendMessage(
@@ -390,8 +390,8 @@ export class CommandRouter {
     const parsed = parseWarehouseId(name);
     if (!parsed.ok) return failure(parsed.message);
 
-    // 异步执行仓库删除
-    system.run(() => {
+    // 延迟 1 tick 异步执行仓库删除
+    system.runTimeout(() => {
       try {
         this.service.deleteWarehouse(parsed.id);
         trySendMessage(player, `§a仓库 ${parsed.id} 已删除`);
