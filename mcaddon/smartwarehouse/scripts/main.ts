@@ -1,3 +1,4 @@
+import { system } from "@minecraft/server";
 import { CommandRouter } from "./commands/CommandRouter";
 import { registerToolInteraction } from "./interaction/ToolInteractionController";
 import { WarehouseRuntimeRegistry } from "./runtime/WarehouseRuntimeRegistry";
@@ -42,7 +43,10 @@ registerToolInteraction(repository, service);
 const commandRouter = new CommandRouter(service);
 commandRouter.register();
 
-// 启动所有已启用仓库的独立调度 interval
-scheduler.startAll();
+// 延迟到下一 tick 启动调度，因为 dynamicProperty 在脚本早期执行阶段不可用
+// （world.getDynamicProperty 只能在世界完全加载后调用）
+system.run(() => {
+  scheduler.startAll();
+});
 
 console.warn("[SmartWarehouse] 加载完成");
