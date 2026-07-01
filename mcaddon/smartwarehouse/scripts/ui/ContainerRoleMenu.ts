@@ -50,11 +50,18 @@ export async function showContainerRoleMenu(
   const currentRoleIndex = ROLE_ORDER.indexOf(container.role);
   const roleOptions = ROLE_ORDER.map((r) => `${ROLE_LABELS[r]} — ${ROLE_DESCRIPTIONS[r]}`);
   const currentRoleLabel = ROLE_LABELS[container.role];
+  const roleDesc = ROLE_DESCRIPTIONS[container.role];
 
   const form = new ModalFormData()
-    .title(`容器设置 · ${warehouse.displayName}`)
-    .toggle(`启用容器（当前：${container.enabled ? "已启用" : "已禁用"}）`, { defaultValue: container.enabled })
-    .dropdown(`容器角色（当前：${currentRoleLabel}）`, roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
+    .title("容器设置")
+    .label(
+      `§7仓库: ${warehouse.displayName}\n` +
+      `§7容器ID: ${containerId}\n` +
+      `§7状态: ${container.enabled ? "§a已启用" : "§c已禁用"}\n` +
+      `§7角色: §f${currentRoleLabel} — ${roleDesc}§r`
+    )
+    .toggle("启用容器", { defaultValue: container.enabled })
+    .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
     .toggle("删除此容器（提交后需确认）", { defaultValue: false });
 
   const response = await form.show(player);
@@ -63,9 +70,12 @@ export async function showContainerRoleMenu(
   const values = response.formValues;
   if (!values || values.length < 3) return;
 
-  const newEnabled = values[0] as boolean;
-  const newRoleIndex = values[1] as number;
-  const shouldDelete = values[2] as boolean;
+  // 兼容处理：部分 Bedrock 版本中 ModalFormData.label() 会占用 formValues 的索引 0
+  // 如果数组长度为 4，说明 label 占了第一格（值为 undefined），需要偏移 1 位
+  const offset = values.length === 4 ? 1 : 0;
+  const newEnabled = values[0 + offset] as boolean;
+  const newRoleIndex = values[1 + offset] as number;
+  const shouldDelete = values[2 + offset] as boolean;
 
   if (shouldDelete) {
     // ── 删除确认 ──
