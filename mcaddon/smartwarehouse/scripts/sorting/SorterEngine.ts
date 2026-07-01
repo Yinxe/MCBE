@@ -287,7 +287,18 @@ export class SorterEngine {
       if (remaining === undefined) return undefined;
     }
 
-    // 优先级 3：杂项容器（兜底）
+    // 优先级 3：已有同类物品的大宗容器
+    // 大宗箱专用于单一物品类型，如果已有此类物品则放入
+    const bulkContainsType = model.bulkContainerIds.filter((id) => {
+      const stored = warehouse.containers[id];
+      if (!stored) return false;
+      const targetContainer = getContainerFromStored(dimension, stored);
+      return targetContainer !== undefined && containerHasType(targetContainer, typeId);
+    });
+    remaining = this.tryContainers(remaining, bulkContainsType, warehouse, model, dimension, typeId, "bulk");
+    if (remaining === undefined) return undefined;
+
+    // 优先级 4：杂项容器（兜底）
     remaining = this.tryContainers(remaining, model.miscContainerIds, warehouse, model, dimension, typeId, "misc");
     return remaining; // 返回 undefined 表示最后一个容器处理完了全部
   }
