@@ -1,4 +1,5 @@
-import { type Container, type ItemStack } from "@minecraft/server";
+import { system, type Container, type ItemStack } from "@minecraft/server";
+import type { ContainerId } from "../types";
 import { Logger } from "../util/Logger";
 
 const log = new Logger("SlotOrganizer");
@@ -106,7 +107,61 @@ function buildPerType(stacks: ItemStack[]): Record<string, { stacks: number; tot
  * ```
  * ============================================================================
  */
+/** 分拣后自动整理的混乱度阈值 */
+const AUTO_ORGANIZE_THRESHOLD = 0.3;
+/** 容器锁安全网超时 tick */
+const LOCK_SAFETY_TICKS = 100;
+
 export class SlotOrganizer {
+  /** 容器锁：containerId → 过期 tick（0 = 未锁定） */
+  private readonly locks = new Map<ContainerId, number>();
+
+  // ─── 锁管理 ──────────────────────────────────────────────────
+
+  /** 检查容器是否被锁定（分拣引擎跳过已锁定容器） */
+  isLocked(containerId: ContainerId): boolean {
+    const expiry = this.locks.get(containerId) ?? 0;
+    return system.currentTick < expiry;
+  }
+
+  /** 尝试获取容器写锁 */
+  tryLock(containerId: ContainerId): boolean {
+    if (this.isLocked(containerId)) return false;
+    this.locks.set(containerId, system.currentTick + LOCK_SAFETY_TICKS);
+    return true;
+  }
+
+  /** 释放容器写锁 */
+  unlock(containerId: ContainerId): void {
+    this.locks.set(containerId, 0);
+  }
+
+  /**
+   * 分拣引擎向目标容器放入物品后调用。
+   * 计算混乱度，超过阈值则自动整理。
+   *
+   * @returns 是否执行了整理
+   */
+  onDeposit(container: Container, containerId: ContainerId): boolean {
+    try {
+      const m = this.calculateMessiness(container);
+      if (m.total <= AUTO_ORGANIZE_THRESHOLD) return false;
+
+      // 获取写锁（若被其他操作占用则跳过本次整理）
+      if (!this.tryLock(containerId)) return false;
+
+      try {
+        const analysis = this.analyze(container);
+        const result = this.apply(container, analysis);
+        return result.success;
+      } finally {
+        this.unlock(containerId);
+      }
+    } catch {
+      return false;
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // 混乱度评分（独立使用，不修改容器）
   // ═══════════════════════════════════════════════════════════════

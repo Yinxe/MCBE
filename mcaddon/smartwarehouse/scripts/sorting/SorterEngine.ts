@@ -13,6 +13,7 @@ import {
   tryFillShulkerBoxes,
 } from "./ContainerInventory";
 import { playSortEffect } from "./SortEffects";
+import { SlotOrganizer } from "./SlotOrganizer";
 
 const log = new Logger("SorterEngine");
 
@@ -42,7 +43,8 @@ const log = new Logger("SorterEngine");
 export class SorterEngine {
   constructor(
     private readonly repository: WarehouseRepository,
-    private readonly runtime: WarehouseRuntimeRegistry
+    private readonly runtime: WarehouseRuntimeRegistry,
+    private readonly organizer?: SlotOrganizer
   ) {}
 
   // ─── 公开入口 ───────────────────────────────────────────────────
@@ -355,6 +357,9 @@ export class SorterEngine {
       if (!stored) continue;
       const loc = stored.primaryLocation;
 
+      // 跳过正在被整理器写锁锁定的容器（避免分拣与整理冲突）
+      if (this.organizer?.isLocked(containerId)) continue;
+
       const targetContainer = getContainerFromStored(dimension, stored);
       if (!targetContainer) {
         log.info(`[${tag ?? "?"}] ${containerId} @ (${loc.x},${loc.y},${loc.z}) — 容器不可达，跳过`);
@@ -373,6 +378,8 @@ export class SorterEngine {
         this.addToTypeIndex(model, typeId, containerId);
         // 播放分拣动画（粒子 + 音效）
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
+        // 触发目标容器的混乱度检查，必要时自动整理
+        this.organizer?.onDeposit(targetContainer, containerId);
       }
 
       if (remaining === undefined) return undefined; // 全部放完，提前退出
@@ -423,6 +430,9 @@ export class SorterEngine {
       if (!stored) continue;
       const loc = stored.primaryLocation;
 
+      // 跳过正在被整理器写锁锁定的容器
+      if (this.organizer?.isLocked(containerId)) continue;
+
       const target = getContainerFromStored(dimension, stored);
       if (!target) {
         log.info(`[bulk] ${containerId} @ (${loc.x},${loc.y},${loc.z}) — 容器不可达，跳过`);
@@ -435,6 +445,7 @@ export class SorterEngine {
       remaining = tryFillShulkerBoxes(target, remaining);
       if (remaining === undefined) {
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
+        this.organizer?.onDeposit(target, containerId);
         return undefined;
       }
 
@@ -447,6 +458,7 @@ export class SorterEngine {
           `[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`
         );
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
+        this.organizer?.onDeposit(target, containerId);
       }
 
       if (remaining === undefined) return undefined;

@@ -2,6 +2,7 @@ import { system } from "@minecraft/server";
 import { CommandRouter } from "./commands/CommandRouter";
 import { registerToolInteraction } from "./interaction/ToolInteractionController";
 import { WarehouseRuntimeRegistry } from "./runtime/WarehouseRuntimeRegistry";
+import { SlotOrganizer } from "./sorting/SlotOrganizer";
 import { SorterEngine } from "./sorting/SorterEngine";
 import { SortingScheduler } from "./sorting/SortingScheduler";
 import { WarehouseRepository } from "./storage/WarehouseRepository";
@@ -16,8 +17,11 @@ const repository = new WarehouseRepository();
 // 运行时缓存层：在内存中维护仓库索引，提供高性能查询
 const runtime = new WarehouseRuntimeRegistry(repository);
 
+// 容器整理器：负责混乱度评分和自动整理
+const organizer = new SlotOrganizer();
+
 // 分拣引擎：负责计算物品应存入哪个容器，以及执行实际的物品转移操作
-const engine = new SorterEngine(repository, runtime);
+const engine = new SorterEngine(repository, runtime, organizer);
 
 // 分拣调度器：按固定间隔触发分拣引擎，实现自动分类功能
 const scheduler = new SortingScheduler(repository, engine);
