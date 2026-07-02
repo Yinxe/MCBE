@@ -516,7 +516,7 @@ export class WarehouseService {
         [newId]: {
           id: newId, dimensionId: old.dimensionId,
           primaryLocation: primary,
-          occupiedLocations: occupied.sort(compareLocationForPrimary),
+          occupiedLocations: [...occupied].sort(compareLocationForPrimary),
           role: old.role, enabled: old.enabled,
           discoveredAt: old.discoveredAt, updatedAt: Date.now(),
         },
@@ -547,6 +547,9 @@ export class WarehouseService {
       { role: warehouse.settings.defaultNewContainerRole, enabled: warehouse.settings.defaultNewContainerEnabled },
     );
 
+    // 校验容器数量上限
+    this.assertContainerCount(newContainers);
+
     this.repository.patchContainers(warehouseId, newContainers);
     this.markRuntimeDirty(warehouseId);
 
@@ -563,7 +566,7 @@ export class WarehouseService {
    */
   private removeContainerFromWarehouse(
     warehouseId: WarehouseId,
-    dimensionId: string,
+    _dimensionId: string,
     location: BlockLocation,
     player: import("@minecraft/server").Player
   ): void {

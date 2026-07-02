@@ -25,7 +25,9 @@ function getContainerDetails(warehouse: WarehouseData, container: StoredContaine
     const dimension = world.getDimension(warehouse.dimensionId);
     const block = dimension.getBlock(container.primaryLocation);
     if (!block) return undefined;
-    const inv = block.getComponent("inventory") as import("@minecraft/server").BlockInventoryComponent | undefined;
+    const inv =
+      (block.getComponent("inventory") as import("@minecraft/server").BlockInventoryComponent | undefined) ??
+      (block.getComponent("minecraft:inventory") as import("@minecraft/server").BlockInventoryComponent | undefined);
     const mcContainer = inv?.container;
     if (!mcContainer) return undefined;
 
@@ -122,7 +124,7 @@ export async function showContainerRoleMenu(
     )
     .toggle("启用容器", { defaultValue: container.enabled })
     .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
-    .toggle("删除此容器（提交后需确认）", { defaultValue: false });
+    .toggle("§c禁用此容器（关闭后不参与分拣）", { defaultValue: false });
 
   const response = await form.show(player);
   if (response.canceled) return;
@@ -135,19 +137,18 @@ export async function showContainerRoleMenu(
   const offset = values.length === 4 ? 1 : 0;
   const newEnabled = values[0 + offset] as boolean;
   const newRoleIndex = values[1 + offset] as number;
-  const shouldDelete = values[2 + offset] as boolean;
+  const shouldDisable = values[2 + offset] as boolean;
 
-  if (shouldDelete) {
-    // ── 删除确认 ──
+  if (shouldDisable) {
+    // ── 禁用确认 ──
     const confirm = new ActionFormData()
-      .title("确认删除")
-      .body(`确定要删除容器 ${containerId} 吗？此操作不可撤销。`)
-      .button("§c确认删除")
+      .title("禁用容器")
+      .body(`确定要禁用容器 ${containerId} 吗？禁用后该容器不参与分拣，数据保留。`)
+      .button("§c确认禁用")
       .button("取消");
     const confirmResponse = await confirm.show(player);
     if (confirmResponse.canceled || confirmResponse.selection !== 0) return;
 
-    // 执行删除：禁用容器
     service.setContainerRoleAndState(warehouse.id, containerId, null, false);
     player.sendMessage("§c容器已禁用");
     return;
