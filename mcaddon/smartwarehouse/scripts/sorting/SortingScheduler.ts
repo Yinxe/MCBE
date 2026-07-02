@@ -73,7 +73,7 @@ export class SortingScheduler {
 
     const handle = system.runInterval(() => {
       try {
-        // 玩家距离检查：附近无玩家则跳过（16 格范围）
+        // 玩家接近检查：附近无玩家则跳过（区域各轴外扩 8 格）
         const warehouse = this.repository.load(id);
         if (!warehouse || !this.hasPlayerNearby(warehouse)) return;
 

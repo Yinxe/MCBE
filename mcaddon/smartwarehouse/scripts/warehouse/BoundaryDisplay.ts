@@ -13,6 +13,13 @@ const log = new Logger("BoundaryDisplay");
  * 在仓库 12 条棱上喷洒原版 endrod 粒子，形成白色线框长方体。
  * 每条棱上粒子间距 0.6 格，相邻粒子形成连续线条。
  *
+ * 显示条件（通过 start 启动的持久边界）：
+ * 1. 仓库设置 showBoundary = true
+ * 2. 附近（区域各轴外扩 8 格）有玩家
+ * 3. 该玩家手持木锄（minecraft:wooden_hoe）
+ *
+ * 临时边界（showTemporarily）不需要木锄，用于创建/调整后的视觉反馈。
+ *
  * 不依赖任何自定义粒子资源，纯原版粒子。
  * ============================================================================
  */
@@ -52,10 +59,11 @@ export class BoundaryDisplay {
   showTemporarily(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId): void {
     this.stop(warehouseId);
 
-    this.drawEdges(warehouseId, area, dimensionId);
+    // 临时边界不需要木锄，作为创建/调整后的视觉确认反馈
+    this.drawEdges(warehouseId, area, dimensionId, false);
 
     const handle = system.runInterval(() => {
-      this.drawEdges(warehouseId, area, dimensionId);
+      this.drawEdges(warehouseId, area, dimensionId, false);
     }, BoundaryDisplay.REFRESH_INTERVAL);
     this.handles.set(warehouseId, handle);
 
@@ -104,10 +112,25 @@ export class BoundaryDisplay {
 
   /** 玩家缓存 tick */
   private static PLAYER_CACHE_TICK = 20;
-  private playerCache: { x: number; z: number }[] = [];
+  /** 木锄物品 ID */
+  private static readonly HOE_ID = "minecraft:wooden_hoe";
+  private playerCache: { x: number; z: number; hasHoe: boolean }[] = [];
   private playerCacheUpdatedAt = 0;
 
-  private drawEdges(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId): void {
+  /**
+   * 绘制仓库边界粒子线框。
+   *
+   * @param warehouseId  仓库 ID
+   * @param area         仓库区域
+   * @param dimensionId  维度
+   * @param requireHoe   是否要求附近玩家手持木锄才绘制（持久边界=true，临时边界=false）
+   */
+  private drawEdges(
+    warehouseId: WarehouseId,
+    area: WarehouseArea,
+    dimensionId: DimensionId,
+    requireHoe = true
+  ): void {
     try {
       const dimension = world.getDimension(dimensionId);
       const { min, max } = area;
@@ -121,18 +144,25 @@ export class BoundaryDisplay {
         const _ = testBlock.permutation;
       } catch { return; }
 
-      // ── 玩家距离检查（每 20 tick 刷新缓存） ──
+      // ── 玩家接近检查（每 20 tick 刷新缓存） ──
       const now = system.currentTick;
       if (now - this.playerCacheUpdatedAt > BoundaryDisplay.PLAYER_CACHE_TICK) {
         this.playerCacheUpdatedAt = now;
         this.playerCache = world.getPlayers()
           .filter(p => p.dimension.id === dimensionId)
-          .map(p => ({ x: p.location.x, z: p.location.z }));
+          .map(p => ({
+            x: p.location.x,
+            z: p.location.z,
+            hasHoe: BoundaryDisplay.HOE_ID === p.getComponent("inventory")
+              ?.container?.getItem(p.selectedSlotIndex)?.typeId,
+          }));
       }
       if (this.playerCache.length > 0) {
         const margin = BoundaryDisplay.PROXIMITY_MARGIN;
-        const nearby = this.playerCache.some((p) => isNearAreaXZ(p, area, margin));
-        if (!nearby) return;
+        const valid = this.playerCache.some((p) =>
+          isNearAreaXZ(p, area, margin) && (!requireHoe || p.hasHoe)
+        );
+        if (!valid) return;
       }
 
       // 8 个顶点（max+1 以确保线框包围整个区域，而非缩在里面）
