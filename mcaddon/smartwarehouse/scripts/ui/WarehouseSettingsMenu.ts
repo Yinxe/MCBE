@@ -30,6 +30,18 @@ export async function showWarehouseSettingsMenu(
 
   const settings = warehouse.settings;
 
+  // ── 容器概况（从内存统计，不扫描容器） ─────────
+  const cList = Object.values(warehouse.containers);
+  const statsLine =
+    `§7容器 §f${cList.length}个  ` +
+    `§a普通${cList.filter((c) => c.role === "normal" && c.enabled).length} ` +
+    `§b大宗${cList.filter((c) => c.role === "bulk" && c.enabled).length} ` +
+    `§d杂项${cList.filter((c) => c.role === "misc" && c.enabled).length} ` +
+    `§6输入${cList.filter((c) => c.role === "input" && c.enabled).length}` +
+    (cList.filter((c) => !c.enabled).length > 0
+      ? `  §8禁用${cList.filter((c) => !c.enabled).length}`
+      : "");
+
   // ── 主设置表单 ──────────────────────────────────
   const roleLabels = ROLE_ORDER.map((r) => ROLE_LABELS[r]);
   const defaultRoleIndex = ROLE_ORDER.indexOf(settings.defaultNewContainerRole);
@@ -39,6 +51,7 @@ export async function showWarehouseSettingsMenu(
 
   const form = new ModalFormData()
     .title("仓库设置")
+    .label(statsLine)
     .textField("仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
     .dropdown("默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex) })
     .dropdown("新容器默认启用", ["是", "否"], { defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1 })
@@ -46,7 +59,7 @@ export async function showWarehouseSettingsMenu(
     .toggle("自动创建分类", { defaultValue: settings.autoCreateCategories })
     .toggle("启用仓库", { defaultValue: settings.enabled })
     .toggle("显示边界光幕", { defaultValue: settings.showBoundary })
-    .textField("§8━━━ 操作 ━━━", "", { defaultValue: "§7⚠ 每次只能开启一种操作" })
+    .label("§8━━━ 操作 ━━━")
     .toggle("§c删除此仓库（提交后需确认）", { defaultValue: false })
     .toggle("§e调整此仓库区域（提交后需选择新区域）", { defaultValue: false });
 
@@ -54,20 +67,20 @@ export async function showWarehouseSettingsMenu(
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 10) {
+  if (!values || values.length < 11) {
     player.sendMessage("§c表单数据异常，请重试");
     return;
   }
 
-  const newName = values[0] as string;
-  const newRoleIndex = values[1] as number;
-  const newEnabledIndex = values[2] as number;
-  const newSpeedIndex = values[3] as number;
-  const newAutoCreate = values[4] as boolean;
-  const newWarehouseEnabled = values[5] as boolean;
-  const newShowBoundary = values[6] as boolean;
-  const shouldDelete = values[8] as boolean;
-  const shouldResize = values[9] as boolean;
+  const newName = values[1] as string;
+  const newRoleIndex = values[2] as number;
+  const newEnabledIndex = values[3] as number;
+  const newSpeedIndex = values[4] as number;
+  const newAutoCreate = values[5] as boolean;
+  const newWarehouseEnabled = values[6] as boolean;
+  const newShowBoundary = values[7] as boolean;
+  const shouldDelete = values[9] as boolean;
+  const shouldResize = values[10] as boolean;
 
   if (shouldDelete && shouldResize) {
     player.sendMessage("§c「删除仓库」和「调整区域」不能同时开启，请重新选择");

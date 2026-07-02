@@ -105,16 +105,16 @@ export class BoundaryDisplay {
       const { min, max } = area;
       const step = BoundaryDisplay.STEP;
 
-      // 8 个顶点
+      // 8 个顶点（max+1 以确保线框包围整个区域，而非缩在里面）
       const corners = [
-        { x: min.x, y: min.y, z: min.z }, // 0: 前下左
-        { x: max.x, y: min.y, z: min.z }, // 1: 前下右
-        { x: max.x, y: min.y, z: max.z }, // 2: 后下右
-        { x: min.x, y: min.y, z: max.z }, // 3: 后下左
-        { x: min.x, y: max.y, z: min.z }, // 4: 前上左
-        { x: max.x, y: max.y, z: min.z }, // 5: 前上右
-        { x: max.x, y: max.y, z: max.z }, // 6: 后上右
-        { x: min.x, y: max.y, z: max.z }, // 7: 后上左
+        { x: min.x, y: min.y, z: min.z },         // 0: 前下左
+        { x: max.x + 1, y: min.y, z: min.z },     // 1: 前下右
+        { x: max.x + 1, y: min.y, z: max.z + 1 }, // 2: 后下右
+        { x: min.x, y: min.y, z: max.z + 1 },     // 3: 后下左
+        { x: min.x, y: max.y + 1, z: min.z },     // 4: 前上左
+        { x: max.x + 1, y: max.y + 1, z: min.z }, // 5: 前上右
+        { x: max.x + 1, y: max.y + 1, z: max.z + 1 }, // 6: 后上右
+        { x: min.x, y: max.y + 1, z: max.z + 1 }, // 7: 后上左
       ];
 
       // 12 条棱（顶点索引对）
