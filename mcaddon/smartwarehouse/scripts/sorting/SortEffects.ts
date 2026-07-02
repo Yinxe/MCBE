@@ -126,6 +126,43 @@ export function playSortEffect(
 }
 
 /**
+ * 播放搜索标记效果。
+ * 使用紫色粒子标记匹配到的容器位置。每个方块位置播放一次。
+ *
+ * @param dimension - 容器所在维度
+ * @param locations - 要标记的方块坐标列表
+ */
+export function playSearchEffect(
+  dimension: Dimension,
+  locations: BlockLocation[]
+): void {
+  try {
+    // 紫色：R=0.76 G=0.35 B=0.98
+    const size = FULL_BLOCK_SIZE;
+    const off_h = FULL_BLOCK_OFF_H;
+    const molang = new MolangVariableMap();
+    molang.setFloat("size", size);
+    molang.setFloat("size_w", size);
+    molang.setFloat("size_l", size);
+    molang.setFloat("size_h", size);
+    molang.setFloat("off_h", off_h);
+    molang.setFloat("color_r", 0.76);
+    molang.setFloat("color_g", 0.35);
+    molang.setFloat("color_b", 0.98);
+
+    for (const loc of locations) {
+      dimension.spawnParticle("smartwarehouse:sort", {
+        x: loc.x + 0.5,
+        y: loc.y + 0.455,
+        z: loc.z + 0.5,
+      }, molang);
+    }
+  } catch (error) {
+    log.error(`播放搜索标记效果失败: ${error}`);
+  }
+}
+
+/**
  * 播放物品存入效果。
  * 颜色由容器角色决定。大箱子的每个半块各播一次。
  *

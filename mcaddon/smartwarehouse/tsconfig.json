@@ -20,8 +20,10 @@
        "rootDir": ".",
        "baseUrl":"BP/",
        "listFiles":false,
-       "noEmitHelpers":true,
-       "skipLibCheck": true
+        "noEmitHelpers":true,
+        "resolveJsonModule": true,
+        "allowSyntheticDefaultImports": true,
+        "skipLibCheck": true
     },
     "include":[ 
        "scripts/**/*"

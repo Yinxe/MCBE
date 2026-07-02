@@ -2,6 +2,7 @@ import type { Player } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { showWarehouseCreateForm } from "./WarehouseCreateFlow";
 import { showWarehouseManageMenu } from "./WarehouseManageMenu";
+import { showSearchUI } from "./SearchUI";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 
@@ -22,7 +23,8 @@ export async function showMainMenu(
     .title("SmartWarehouse")
     .body("选择一个操作")
     .button("创建仓库")
-    .button("管理仓库");
+    .button("管理仓库")
+    .button("容器搜索");
 
   const response = await form.show(player);
   if (response.canceled) return;
@@ -31,5 +33,7 @@ export async function showMainMenu(
     await showWarehouseCreateForm(player);
   } else if (response.selection === 1) {
     await showWarehouseManageMenu(player, repository, service);
+  } else if (response.selection === 2) {
+    await showSearchUI(player, repository);
   }
 }
