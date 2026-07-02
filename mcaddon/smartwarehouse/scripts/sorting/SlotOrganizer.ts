@@ -360,22 +360,43 @@ export class SlotOrganizer {
    * @returns 整理结果
    */
   apply(container: Container, analysis: ContainerAnalysis): OrganizeResult {
-    const { sortedItems, occupiedSlots, checksum, startSlot, endSlot, rawItems } = analysis;
+    const { sortedItems, occupiedSlots, startSlot, endSlot, rawItems } = analysis;
 
-    // ── 校验 ──
-    const verify = new Map(checksum);
+    // ── 校验：以当前容器实际内容为准 ──
+    // 不依赖 analyze 阶段构建的 checksum（容器可能在间隔中被修改）
+    const current = new Map<string, { stacks: number; total: number }>();
+    const end = Math.min(endSlot, container.size);
+    for (let slot = startSlot; slot < end; slot++) {
+      try {
+        const stack = container.getItem(slot);
+        if (stack) {
+          const e = current.get(stack.typeId) ?? { stacks: 0, total: 0 };
+          e.stacks++;
+          e.total += stack.amount;
+          current.set(stack.typeId, e);
+        }
+      } catch { /* 跳过读取失败的槽位 */ }
+    }
+
     for (const item of sortedItems) {
-      const entry = verify.get(item.typeId);
+      const entry = current.get(item.typeId);
       if (!entry) {
-        return this.makeError(`校验失败：出现未知种类 ${item.typeId}`, rawItems, sortedItems, endSlot - startSlot, occupiedSlots.size);
+        return this.makeError(
+          `校验失败：容器缺少 ${item.typeId}（物品可能已被移动）`,
+          rawItems, sortedItems, endSlot - startSlot, occupiedSlots.size
+        );
       }
       entry.stacks--;
       entry.total -= item.amount;
     }
-    for (const [typeId, entry] of verify) {
+    for (const [typeId, entry] of current) {
       if (entry.stacks !== 0 || entry.total !== 0) {
+        log.error(
+          `校验失败: ${typeId} stacks=${entry.stacks} total=${entry.total} | ` +
+          `sortedItems: ${sortedItems.filter(i => i.typeId === typeId).map(i => `x${i.amount}`).join(",")}`
+        );
         return this.makeError(
-          `校验失败：${typeId} 数量不匹配(stacks=${entry.stacks}, total=${entry.total})`,
+          `校验失败：${typeId} 数量不匹配(stacks=${entry.stacks},total=${entry.total})`,
           rawItems, sortedItems, endSlot - startSlot, occupiedSlots.size
         );
       }
