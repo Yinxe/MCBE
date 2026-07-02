@@ -1,6 +1,7 @@
 import { world, system, type Dimension, type Player } from "@minecraft/server";
 import type { WarehouseId, WarehouseArea, DimensionId, WarehouseData } from "../types";
 import { Logger } from "../util/Logger";
+import { isNearAreaXZ } from "../util/Vector";
 
 const log = new Logger("BoundaryDisplay");
 
@@ -23,6 +24,8 @@ export class BoundaryDisplay {
   private static readonly REFRESH_INTERVAL = 40; // 2 秒
   private static readonly TEMP_DURATION_TICKS = 200; // 10 秒（20 tick/秒）
   private static readonly STEP = 0.6; // 粒子间距
+  /** 仓库区域外扩格数，范围内有玩家才显示边界 */
+  private static readonly PROXIMITY_MARGIN = 8;
 
   // ─── 生命周期 ───────────────────────────────────────────────────
 
@@ -127,15 +130,9 @@ export class BoundaryDisplay {
           .map(p => ({ x: p.location.x, z: p.location.z }));
       }
       if (this.playerCache.length > 0) {
-        const cx = (min.x + max.x) / 2;
-        const cz = (min.z + max.z) / 2;
-        let playerNearby = false;
-        for (const p of this.playerCache) {
-          const dx = cx - p.x;
-          const dz = cz - p.z;
-          if (dx * dx + dz * dz <= 256) { playerNearby = true; break; }
-        }
-        if (!playerNearby) return;
+        const margin = BoundaryDisplay.PROXIMITY_MARGIN;
+        const nearby = this.playerCache.some((p) => isNearAreaXZ(p, area, margin));
+        if (!nearby) return;
       }
 
       // 8 个顶点（max+1 以确保线框包围整个区域，而非缩在里面）

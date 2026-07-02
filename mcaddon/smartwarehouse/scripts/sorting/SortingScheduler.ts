@@ -3,6 +3,7 @@ import type { WarehouseId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { SorterEngine } from "./SorterEngine";
 import { Logger } from "../util/Logger";
+import { isNearAreaXZ } from "../util/Vector";
 
 const log = new Logger("SortingScheduler");
 
@@ -19,6 +20,9 @@ const log = new Logger("SortingScheduler");
  * 单个仓库异常不影响其他仓库。
  */
 export class SortingScheduler {
+  /** 仓库区域外扩格数，范围内有玩家才执行分拣 */
+  private static readonly PROXIMITY_MARGIN = 8;
+
   /** 仓库 ID → system.runInterval 句柄 */
   private readonly handles = new Map<WarehouseId, number>();
 
@@ -128,7 +132,7 @@ export class SortingScheduler {
   private playerCacheTick = 0;
 
   /**
-   * 检查仓库附近 16 格内是否有玩家。
+   * 检查仓库附近（区域各轴外扩 8 格）是否有玩家。
    * 使用缓存每 20 tick 刷新一次玩家位置。
    */
   private hasPlayerNearby(warehouse: import("../types").WarehouseData): boolean {
@@ -148,14 +152,7 @@ export class SortingScheduler {
     const players = this.playerCache.get(warehouse.dimensionId);
     if (!players) return false;
 
-    const cx = (warehouse.area.min.x + warehouse.area.max.x) / 2;
-    const cz = (warehouse.area.min.z + warehouse.area.max.z) / 2;
-
-    for (const p of players) {
-      const dx = cx - p.x;
-      const dz = cz - p.z;
-      if (dx * dx + dz * dz <= 256) return true; // 16² = 256
-    }
-    return false;
+    const margin = SortingScheduler.PROXIMITY_MARGIN;
+    return players.some((p) => isNearAreaXZ(p, warehouse.area, margin));
   }
 }

@@ -40,6 +40,28 @@ export function areaVolume(area: WarehouseArea): number {
 }
 
 /**
+ * 判断坐标点是否在仓库区域的 XZ 平面扩展范围内。
+ * 常用于玩家接近检测：将仓库区域各轴向外扩展 margin 格后做轴对齐矩形判断。
+ *
+ * @param point  - 待检查的点（仅使用 x, z，接受玩家浮点坐标）
+ * @param area   - 仓库区域
+ * @param margin - 向外扩展的格数
+ * @returns 是否在扩展区域内
+ */
+export function isNearAreaXZ(
+  point: { x: number; z: number },
+  area: WarehouseArea,
+  margin: number
+): boolean {
+  return (
+    point.x >= area.min.x - margin &&
+    point.x <= area.max.x + margin &&
+    point.z >= area.min.z - margin &&
+    point.z <= area.max.z + margin
+  );
+}
+
+/**
  * 判断给定坐标是否位于仓库区域内部（包含边界）。
  * 各分量均在 [min, max] 闭区间内即视为在区域内。
  *
