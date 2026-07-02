@@ -1,4 +1,4 @@
-import { world } from "@minecraft/server";
+import { world, PlayerPermissionLevel } from "@minecraft/server";
 
 /**
  * 日志工具类，提供统一的日志输出能力。
@@ -28,13 +28,16 @@ export class Logger {
   }
 
   /**
-   * 向所有拥有 "op" 标签的管理员玩家发送游戏内消息。
+   * 向所有 OP 管理员玩家发送游戏内消息。
+   * 权限判定使用 PlayerPermissionLevel.Operator 而非 tag("op")，与 PlayerAuth 保持一致。
    * 消息前缀使用 §e 颜色码（黄色），便于在聊天中区分。
    * @param message - 要发送的消息内容
    */
   tellAdmins(message: string): void {
     for (const player of world.getPlayers()) {
-      if (player.hasTag("op")) player.sendMessage(`§e[${this.prefix}]§r ${message}`);
+      if (player.playerPermissionLevel >= PlayerPermissionLevel.Operator) {
+        player.sendMessage(`§e[${this.prefix}]§r ${message}`);
+      }
     }
   }
 }

@@ -48,10 +48,10 @@ export function isChestType(typeId: string): boolean {
  */
 export function isSupportedContainerType(typeId: string): boolean {
   const result = isChestType(typeId) || typeId === "minecraft:barrel" || SHULKER_BOX_IDS.has(typeId);
-  // 调试：打印潜影盒类方块是否被识别为容器
-  if (typeId.includes("shulker")) {
-    console.warn(`[SmartWarehouse] 潜影盒检测: typeId=${typeId}, isContainer=${result}`);
-  }
+  // 调试：打印潜影盒类方块是否被识别为容器（需要时取消注释）
+  // if (typeId.includes("shulker")) {
+  //   console.warn(`[SmartWarehouse] 潜影盒检测: typeId=${typeId}, isContainer=${result}`);
+  // }
   return result;
 }
 
@@ -68,13 +68,14 @@ export function isSupportedContainerType(typeId: string): boolean {
  */
 export function hasInventory(block: Block): boolean {
   const result = Boolean(block.getComponent("inventory")) || Boolean(block.getComponent("minecraft:inventory"));
-  if (block.typeId.includes("shulker")) {
-    console.warn(
-      `[SmartWarehouse] 潜影盒 HasInventory: typeId=${block.typeId}, ` +
-      `inventory=${Boolean(block.getComponent("inventory"))}, ` +
-      `minecraft:inventory=${Boolean(block.getComponent("minecraft:inventory"))}, ` +
-      `result=${result}`
-    );
-  }
+  // 调试：打印潜影盒 inventory 组件检测结果（需要时取消注释）
+  // if (block.typeId.includes("shulker")) {
+  //   console.warn(
+  //     `[SmartWarehouse] 潜影盒 HasInventory: typeId=${block.typeId}, ` +
+  //     `inventory=${Boolean(block.getComponent("inventory"))}, ` +
+  //     `minecraft:inventory=${Boolean(block.getComponent("minecraft:inventory"))}, ` +
+  //     `result=${result}`
+  //   );
+  // }
   return result;
 }
