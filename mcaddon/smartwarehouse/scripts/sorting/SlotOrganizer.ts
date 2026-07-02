@@ -1,4 +1,4 @@
-import { system, type Container, type ItemStack } from "@minecraft/server";
+import { system, ItemStack, type Container } from "@minecraft/server";
 import type { ContainerId } from "../types";
 import { Logger } from "../util/Logger";
 
@@ -314,41 +314,39 @@ export class SlotOrganizer {
       }
     }
 
-    // 排序
-    const sorted = [...rawItems].sort((a, b) => a.typeId.localeCompare(b.typeId));
-
-    // 合并相邻可堆叠，逐 item 容错，出错时回退到不合并
-    const merged: ItemStack[] = [];
-    for (const item of sorted) {
-      try {
-        const last = merged[merged.length - 1];
-        if (last && last.amount < last.maxAmount && item.isStackableWith(last)) {
-          const space = last.maxAmount - last.amount;
-          const toMove = Math.min(item.amount, space);
-          if (toMove > 0) {
-            last.amount += toMove;
-          }
-          // 仅当有剩余时才修改 item.amount（避免 amount=0 抛异常）
-          if (item.amount > toMove) {
-            item.amount -= toMove;
-            merged.push(item);
-          } // 全量合并：不修改 item，也不 push
-        } else {
-          merged.push(item);
-        }
-      } catch (e) {
-        log.error(`合并物品 ${item.typeId} 时出错: ${e}，跳过合并`);
-        merged.push(item); // 出错时保留原物品
-      }
-    }
-
-    // 校验和
+    // ══ 构建校验和（在 merge 修改任何 ItemStack 之前）══
     const checksum = new Map<string, { stacks: number; total: number }>();
     for (const item of rawItems) {
       const e = checksum.get(item.typeId) ?? { stacks: 0, total: 0 };
       e.stacks++;
       e.total += item.amount;
       checksum.set(item.typeId, e);
+    }
+
+    // 排序
+    const sorted = [...rawItems].sort((a, b) => a.typeId.localeCompare(b.typeId));
+
+    // 合并相邻可堆叠（使用 clone 避免污染原 ItemStack）
+    const merged: ItemStack[] = [];
+    for (const item of sorted) {
+      const last = merged[merged.length - 1];
+      if (last && item.isStackableWith(last)) {
+        const toMove = Math.min(item.amount, last.maxAmount - last.amount);
+        if (toMove > 0) {
+          // 安全：last.amount + toMove ∈ [1, maxAmount]
+          const clone = last.clone();
+          clone.amount = last.amount + toMove;
+          merged[merged.length - 1] = clone;
+        }
+        // 剩余部分（item.amount > toMove）保留为新堆
+        if (item.amount > toMove) {
+          const clone = item.clone();
+          clone.amount = item.amount - toMove;
+          merged.push(clone);
+        }
+      } else {
+        merged.push(item.clone());
+      }
     }
 
     const messiness = this.calculateMessiness(container, options);
@@ -393,17 +391,17 @@ export class SlotOrganizer {
           rawItems, sortedItems, endSlot - startSlot, occupiedSlots.size
         );
       }
-      entry.stacks--;
       entry.total -= item.amount;
     }
+    // 只校验 total（堆叠数合并后必然减少，不检查 stacks）
     for (const [typeId, entry] of current) {
-      if (entry.stacks !== 0 || entry.total !== 0) {
+      if (entry.total !== 0) {
         log.error(
-          `校验失败: ${typeId} stacks=${entry.stacks} total=${entry.total} | ` +
+          `校验失败: ${typeId} total=${entry.total} | ` +
           `sortedItems: ${sortedItems.filter(i => i.typeId === typeId).map(i => `x${i.amount}`).join(",")}`
         );
         return this.makeError(
-          `校验失败：${typeId} 数量不匹配(stacks=${entry.stacks},total=${entry.total})`,
+          `校验失败：${typeId} 数量不匹配(total=${entry.total})`,
           rawItems, sortedItems, endSlot - startSlot, occupiedSlots.size
         );
       }
