@@ -21,10 +21,26 @@ export interface OrganizeOptions {
  * 整理操作的结果。
  */
 export interface OrganizeResult {
-  /** 是否成功完成（部分失败也算成功，因为不丢物品） */
+  /** 是否成功完成 */
   success: boolean;
   /** 发生变动的物品堆数量（合并+移动） */
   movedStacks: number;
+  /** 整理前的物品堆数 */
+  beforeStacks: number;
+  /** 整理后的物品堆数 */
+  afterStacks: number;
+  /** 整理前的物品种类数 */
+  beforeTypes: number;
+  /** 整理后的物品种类数 */
+  afterTypes: number;
+  /** 每种物品的统计：typeId → { stacks, total } */
+  perType: Record<string, { stacks: number; total: number }>;
+  /** 总槽位数 */
+  totalSlots: number;
+  /** 已使用的槽位数 */
+  usedSlots: number;
+  /** 容量使用率百分比（0-100） */
+  usagePercent: number;
   /** 错误描述（仅 success = false 时存在） */
   error?: string;
 }
@@ -70,6 +86,18 @@ const DEFAULT_OPTIONS: OrganizeOptions = {
  * - 玩家背包除快捷栏 9~36
  * ============================================================================
  */
+/** 从 ItemStack 数组生成每种物品的统计 */
+function buildPerType(stacks: ItemStack[]): Record<string, { stacks: number; total: number }> {
+  const map: Record<string, { stacks: number; total: number }> = {};
+  for (const s of stacks) {
+    const e = map[s.typeId] ?? { stacks: 0, total: 0 };
+    e.stacks++;
+    e.total += s.amount;
+    map[s.typeId] = e;
+  }
+  return map;
+}
+
 export class SlotOrganizer {
   /**
    * 整理容器中指定范围内的物品。
@@ -83,8 +111,34 @@ export class SlotOrganizer {
     const endSlot = Math.min(opts.endSlot, container.size);
     const startSlot = Math.max(0, opts.startSlot);
 
+    // 容量统计（范围内容量）
+    const capacity = {
+      totalSlots: endSlot - startSlot,
+      usedSlots: 0,
+      get usagePercent() { return this.totalSlots > 0 ? Math.round((this.usedSlots / this.totalSlots) * 100) : 0; },
+    };
+
+    const makeResult = (p: {
+      success: boolean; movedStacks: number; error?: string;
+      beforeStacks?: number; afterStacks?: number;
+      beforeTypes?: number; afterTypes?: number;
+      perType?: Record<string, { stacks: number; total: number }>;
+    }): OrganizeResult => ({
+      success: p.success,
+      movedStacks: p.movedStacks,
+      beforeStacks: p.beforeStacks ?? 0,
+      afterStacks: p.afterStacks ?? 0,
+      beforeTypes: p.beforeTypes ?? 0,
+      afterTypes: p.afterTypes ?? 0,
+      perType: p.perType ?? {},
+      totalSlots: capacity.totalSlots,
+      usedSlots: capacity.usedSlots,
+      usagePercent: capacity.usagePercent,
+      error: p.error,
+    });
+
     if (startSlot >= endSlot || startSlot >= container.size) {
-      return { success: true, movedStacks: 0 };
+      return makeResult({ success: true, movedStacks: 0 });
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -104,12 +158,22 @@ export class SlotOrganizer {
       } catch (e) {
         const msg = `槽位 ${slot} 读取失败: ${e}`;
         log.error(msg);
-        return { success: false, movedStacks: 0, error: msg };
+        return makeResult({ success: false, movedStacks: 0, error: msg });
       }
     }
 
+    capacity.usedSlots = occupiedSlots.size;
+    const beforeStacks = items.length;
+    const beforeTypes = new Set(items.map((i) => i.typeId)).size;
+    const beforePerType = buildPerType(items);
+
     if (items.length <= 1) {
-      return { success: true, movedStacks: 0 };
+      return makeResult({
+        success: true, movedStacks: 0,
+        beforeStacks, afterStacks: beforeStacks,
+        beforeTypes, afterTypes: beforeTypes,
+        perType: beforePerType,
+      });
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -131,7 +195,6 @@ export class SlotOrganizer {
     items.sort((a, b) => a.typeId.localeCompare(b.typeId));
 
     // 3b: 合并相邻可堆叠物品
-    // 使用 isStackableWith() 而非 typeId 比较，确保附魔/改名/Lore 不同的物品不被错误合并
     const merged: ItemStack[] = [];
     for (const item of items) {
       const last = merged[merged.length - 1];
@@ -140,13 +203,15 @@ export class SlotOrganizer {
         const toMove = Math.min(item.amount, space);
         last.amount += toMove;
         item.amount -= toMove;
-        if (item.amount > 0) {
-          merged.push(item);
-        }
+        if (item.amount > 0) merged.push(item);
       } else {
         merged.push(item);
       }
     }
+
+    const afterStacks = merged.length;
+    const afterTypes = new Set(merged.map((i) => i.typeId)).size;
+    const afterPerType = buildPerType(merged);
 
     // ═══════════════════════════════════════════════════════════════
     // 第 4 步：写入前校验——确保数据完整性
@@ -154,21 +219,22 @@ export class SlotOrganizer {
     for (const item of merged) {
       const entry = checksum.get(item.typeId);
       if (!entry) {
-        const msg = `校验失败：整理后出现未知物品种类 ${item.typeId}，已中止`;
-        log.error(msg);
-        return { success: false, movedStacks: 0, error: msg };
+        return makeResult({
+          success: false, movedStacks: 0, error: `校验失败：整理后出现未知物品种类 ${item.typeId}，已中止`,
+          beforeStacks, afterStacks, beforeTypes, afterTypes, perType: beforePerType,
+        });
       }
       entry.stacks--;
       entry.total -= item.amount;
     }
 
-    // 检查是否有遗漏或多余的数据
     for (const [typeId, entry] of checksum) {
       if (entry.stacks !== 0 || entry.total !== 0) {
-        const msg = `校验失败：物品种类 ${typeId} 数量不匹配 ` +
-          `(剩余 stacks=${entry.stacks}, total=${entry.total})，已中止`;
-        log.error(msg);
-        return { success: false, movedStacks: 0, error: msg };
+        return makeResult({
+          success: false, movedStacks: 0,
+          error: `校验失败：${typeId} 数量不匹配(剩余 stacks=${entry.stacks}, total=${entry.total})，已中止`,
+          beforeStacks, afterStacks, beforeTypes, afterTypes, perType: beforePerType,
+        });
       }
     }
 
@@ -178,7 +244,6 @@ export class SlotOrganizer {
     let writeErrors = 0;
     let slot = startSlot;
 
-    // 5a: 写入排序合并后的物品（跳过锁定槽位，不超出 endSlot）
     for (const item of merged) {
       while (slot < endSlot && opts.lockedSlots?.has(slot)) slot++;
       if (slot >= endSlot) break;
@@ -191,18 +256,18 @@ export class SlotOrganizer {
       }
     }
 
-    // 5b: 清空原范围内多余的槽位
     for (const os of occupiedSlots) {
       if (os >= slot) {
         try { container.setItem(os, undefined); } catch { /* 忽略 */ }
       }
     }
 
-    const movedStacks = Math.abs(items.length - merged.length);
-    if (writeErrors > 0) {
-      log.info(`整理完成，但有 ${writeErrors} 个槽位写入失败`);
-    }
-
-    return { success: writeErrors === 0, movedStacks };
+    return makeResult({
+      success: writeErrors === 0,
+      movedStacks: beforeStacks - afterStacks,
+      beforeStacks, afterStacks, beforeTypes, afterTypes,
+      perType: afterPerType,
+      error: writeErrors > 0 ? `${writeErrors} 个槽位写入失败` : undefined,
+    });
   }
 }
