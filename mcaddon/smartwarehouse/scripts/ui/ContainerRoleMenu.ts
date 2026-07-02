@@ -1,7 +1,7 @@
 import { world, type Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import type { ContainerId, ContainerRole, StoredContainer, WarehouseData } from "../types";
-import { ROLE_LABELS, ROLE_ORDER, ROLE_DESCRIPTIONS } from "../types";
+import type { ContainerId, StoredContainer, WarehouseData } from "../types";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_ORDER } from "../types";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 
@@ -58,7 +58,7 @@ function getContainerDetails(warehouse: WarehouseData, container: StoredContaine
 function formatDetailsLine(details: ContainerDetails | undefined): string {
   if (!details) return "§8容器不可达";
   const usage = `${details.usedSlots}/${details.totalSlots}`;
-  return `§7${details.blockType}  §f${usage} §7槽  §f${details.totalItems} §7物品  §f${details.uniqueTypes} §7种类`;
+  return `§7${details.blockType}  §f${usage} §7Slots  §f${details.totalItems} §7Items  §f${details.uniqueTypes} §7Types`;
 }
 
 /**
