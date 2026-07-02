@@ -27,10 +27,12 @@ const log = new Logger("SorterEngine");
  *
  * 1. **已有同类物品的普通容器**（优先利用运行时 `itemTypeIndex` 索引实现快速查找，
  *    索引会在发现脏数据时惰性修正）。
- * 2. **同族物品的普通容器**（仅当该物品所属的族在 `enabledFamilies` 中启用时生效，
+ * 2. **大宗容器**（盒箱混存——优先填满箱内潜影盒，再填充空槽位，以第一个物品确定种类）。
+ *    放大宗前放家庭前：高产量单品（如白色羊毛）应优先路由到专用大宗箱，
+ *    而不是与少量彩色羊毛一起混入家庭箱。
+ * 3. **同族物品的普通容器**（仅当该物品所属的族在 `enabledFamilies` 中启用时生效，
  *    将同一族的物品聚集到同一个容器中）。
- * 3. **空的普通容器**（仅在 `autoCreateCategories` 开启时启用，用于自动创建新分类）。
- * 4. **大宗容器**（盒箱混存——优先填满箱内潜影盒，再填充空槽位，以第一个物品确定种类）。
+ * 4. **空的普通容器**（仅在 `autoCreateCategories` 开启时启用，用于自动创建新分类）。
  * 5. **杂项容器**（兜底，任何物品最终都能放入杂项容器）。
  *
  * ### 设计要点
@@ -257,9 +259,10 @@ export class SorterEngine {
    * 优先级顺序：
    * 1. **已有同类物品的普通容器** —— 通过 `findExistingTypeContainers` 查找，
    *    利用运行时索引加速。
-   * 2. **空的普通容器** —— 当 `autoCreateCategories` 开启时启用，用于自动创建新分类。
-   *    筛选出所有空的普通容器依次尝试。
-   * 3. **杂项容器** —— 兜底方案，任何物品最终都能放入杂项容器。
+   * 2. **大宗容器** —— 高产量单品优先路由到专用大宗箱。
+   * 3. **同族物品的普通容器** —— 同一家族（如各色羊毛）聚集到同一容器。
+   * 4. **空的普通容器** —— 当 `autoCreateCategories` 开启时启用，用于自动创建新分类。
+   * 5. **杂项容器** —— 兜底方案，任何物品最终都能放入杂项容器。
    *
    * 每一优先级都会调用 `tryContainers` 遍历候选容器列表并尝试放入。
    * 一旦整堆全部放完（返回 undefined），立即返回，不再尝试后续优先级。
@@ -284,31 +287,24 @@ export class SorterEngine {
     remaining = this.tryContainers(remaining, existingTypeContainers, warehouse, model, dimension, typeId, "match");
     if (remaining === undefined) return undefined;
 
-    // 优先级 2：同族物品的普通容器
-    // 检查物品是否属于已启用的同族分类，若是则将同族物品聚集到同一容器
-    const family = getFamily(typeId);
-    const enabledFamilies = warehouse.settings.enabledFamilies ?? [];
-    if (family && enabledFamilies.includes(family.id)) {
-      const familyContainers = this.findExistingFamilyContainers(warehouse, model, family.id, dimension);
-      remaining = this.tryContainers(remaining, familyContainers, warehouse, model, dimension, typeId, "family");
-      if (remaining === undefined) return undefined;
-    }
-
-    // 优先级 3：空的普通容器（自动创建分类）
-    if (warehouse.settings.autoCreateCategories) {
-      const emptyNormalIds = model.normalContainerIds.filter((id) => {
-        const stored = warehouse.containers[id];
-        if (!stored) return false;
-        const targetContainer = getContainerFromStored(dimension, stored);
-        return targetContainer !== undefined && isContainerEmpty(targetContainer);
-      });
-      remaining = this.tryContainers(remaining, emptyNormalIds, warehouse, model, dimension, typeId, "autocreate");
-      if (remaining === undefined) return undefined;
-    }
-
-    // 优先级 3：大宗容器（盒箱混存）
+    // 优先级 2：大宗容器（盒箱混存）
+    // 放大宗前放家庭前：高产量单品（如白色羊毛）应优先路由到专用大宗箱。
     // 大宗箱以第一个有效物品的种类为准，同时匹配箱内散装和盒内物品。
     // 空箱接受任何第一个放入的物品以设定种类。
+    //
+    // ── 设计笔记：大宗 > 家庭的优先级决策 ──────────────────────
+    //
+    // 场景：白色羊毛量产数百倍于有色羊毛。
+    //       大宗箱专收白色羊毛，家庭箱收各色羊毛。
+    //       大宗优先 → 白色羊毛按精确类型进大宗，
+    //                  有色羊毛因 bulk 不匹配 fallthrough 到家庭。
+    //       家庭优先 → 白色羊毛被「羊毛家庭」截胡进家庭箱，
+    //                  大宗箱永远收不到白色羊毛。
+    //
+    // 结论：大宗 > 家庭。单品大宗需求优先于同族聚集。
+    // 副作用：该族首个非大宗物品需要 autoCreate/misc 兜底
+    //        （家族冷启动问题，不影响正确性）。
+    // ───────────────────────────────────────────────────────────
     //
     // 设计笔记：大宗箱不走 itemTypeIndex 而是每次都全量扫描
     // `model.bulkContainerIds`。原因是 bulk 数量极少（典型场景 1-5），
@@ -319,13 +315,24 @@ export class SorterEngine {
       if (!stored) return false;
       const target = getContainerFromStored(dimension, stored);
       if (!target) return false;
-      // 空箱 → 接受第一个物品以设定种类
       if (isContainerEmpty(target)) return true;
-      // 已有物品 → 检查第一个有效物品是否匹配
       return getBulkChestFirstType(target) === typeId;
     });
     remaining = this.tryBulkContainers(remaining, bulkMatches, warehouse, model, dimension, typeId);
     if (remaining === undefined) return undefined;
+
+    // 优先级 3：同族物品的普通容器
+    // 检查物品是否属于已启用的同族分类，若是则将同族物品聚集到同一容器。
+    // 放在大宗之后：白色羊毛等高产量单品应优先流入大宗箱而非家庭箱。
+    const family = getFamily(typeId);
+    const enabledFamilies = warehouse.settings.enabledFamilies ?? [];
+    if (family && enabledFamilies.includes(family.id)) {
+      const familyContainers = this.findExistingFamilyContainers(warehouse, model, family.id, dimension);
+      remaining = this.tryContainers(remaining, familyContainers, warehouse, model, dimension, typeId, "family");
+      if (remaining === undefined) return undefined;
+    }
+
+    // 优先级 4：空的普通容器（自动创建分类）
 
     // 优先级 4：杂项容器（兜底）
     remaining = this.tryContainers(remaining, model.miscContainerIds, warehouse, model, dimension, typeId, "misc");

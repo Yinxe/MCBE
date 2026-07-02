@@ -1,0 +1,12 @@
+import fs from "fs";
+const c = fs.readFileSync("../scripts/data/ItemFamilies.ts", "utf8");
+const items = [...c.matchAll(/"minecraft:[^"]+"/g)].map(m => m[0]);
+const unique = new Set(items);
+const families = [...c.matchAll(/displayName: "([^"]+)"/g)].map(m => m[1]);
+const ids = [...c.matchAll(/id: "([^"]+)"/g)].map(m => m[1]).filter(id => id !== "displayName");
+console.log("家族数:", families.length);
+console.log("物品引用总数:", items.length);
+console.log("唯一物品数:", unique.size);
+console.log("重复数:", items.length - unique.size);
+console.log("\n所有家族:");
+ids.forEach((id, i) => console.log(`  ${id} (${families[i]})`));
