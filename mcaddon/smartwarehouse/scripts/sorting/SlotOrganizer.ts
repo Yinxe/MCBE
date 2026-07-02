@@ -142,7 +142,8 @@ export class SlotOrganizer {
    * @returns 是否执行了整理
    */
   onDeposit(container: Container, containerId: ContainerId, threshold: number): boolean {
-    if (threshold <= 0) return false;
+    // 0=最敏感(每次整理), 1.0=永不整理(混乱度不可能超过1.0)
+    if (threshold >= 1.0) return false;
 
     try {
       const m = this.calculateMessiness(container);
