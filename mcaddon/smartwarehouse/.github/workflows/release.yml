@@ -1,0 +1,55 @@
+name: Build & Release .mcaddon
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync version from tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          npm version "$TAG" --no-git-tag-version --allow-same-version
+          echo "Version synced to: $(node -p 'require("./package.json").version')"
+
+      - name: Build & package .mcaddon
+        run: npm run build
+        env:
+          PROJECT_NAME: SmartWarehouse
+
+      - name: Create .env for mcaddon task
+        run: |
+          echo 'PROJECT_NAME="SmartWarehouse"' > .env
+          echo 'MINECRAFT_PRODUCT="BedrockGDK"' >> .env
+
+      - name: Create .mcaddon
+        run: npx just-scripts mcaddon
+        env:
+          PROJECT_NAME: SmartWarehouse
+
+      - name: Upload .mcaddon to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/packages/SmartWarehouse-v*.mcaddon
+          tag: ${{ github.ref_name }}
+          overwrite: true
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
