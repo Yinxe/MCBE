@@ -149,8 +149,19 @@ function handleContainerClick(
   );
 
   if (!containerEntry) {
-    // 理论上不应发生，但做防御性处理
-    player.sendMessage("§c无法找到容器信息");
+    // 容器被活塞移动/替换后，记录坐标与实际坐标不一致。
+    // 尝试触发一次增量修复：如果该位置确实是个容器，通知玩家 rescan。
+    try {
+      const block = world.getDimension(dimensionId).getBlock(location);
+      if (block && isSupportedContainerType(block.typeId)) {
+        player.sendMessage("§e该容器坐标与记录不一致（可能被活塞移动），正在尝试修复...");
+        // 增量扫描：先按新位置注册，后续 rescan 完整修复
+        service.rescanWarehouse(warehouse.id);
+        player.sendMessage("§a已触发仓库重扫，容器数据将在下次扫描后更新");
+        return;
+      }
+    } catch { /* 静默 */ }
+    player.sendMessage("§c无法找到容器信息（数据可能已过期，可尝试 /sw:rescan 修复）");
     return;
   }
 
