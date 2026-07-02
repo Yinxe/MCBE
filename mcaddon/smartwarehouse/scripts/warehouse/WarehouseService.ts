@@ -430,11 +430,106 @@ export class WarehouseService {
     });
   }
 
+  // ─── 合箱 / 拆箱 ───────────────────────────────────────────────
+
+  /**
+   * 合箱：新放置的箱子与已有箱子合并成大箱子。
+   * 新容器继承原单箱的角色/启用/发现时间。
+   *
+   * **边界兼容**：大箱子可以跨仓库边界（一半在内一半在外），
+   * 整个双箱都归仓库管理。
+   *
+   * @returns 更新后的 containers 映射（未持久化）
+   */
+  private mergeContainer(
+    containers: Record<ContainerId, StoredContainer>,
+    newOccupied: BlockLocation[],
+    dimId: string,
+    defaults: { role: ContainerRole; enabled: boolean },
+  ): Record<ContainerId, StoredContainer> {
+    const newPrimary = [...newOccupied].sort(compareLocationForPrimary)[0];
+    const newId = makeContainerId(dimId, newPrimary);
+    const now = Date.now();
+    let role = defaults.role;
+    let enabled = defaults.enabled;
+    let discoveredAt = now;
+    let result = containers;
+
+    // 移除与新容器坐标重叠的旧容器
+    for (const [eid, ec] of Object.entries(containers)) {
+      const overlap = ec.occupiedLocations.some(el =>
+        newOccupied.some(nl => nl.x === el.x && nl.y === el.y && nl.z === el.z)
+      );
+      if (overlap) {
+        role = ec.role;
+        enabled = ec.enabled;
+        discoveredAt = ec.discoveredAt;
+        const { [eid]: _, ...rest } = result;
+        result = rest;
+      }
+    }
+
+    // 添加新容器
+    const { [newId]: _, ...deduped } = result;
+    return {
+      ...deduped,
+      [newId]: {
+        id: newId, dimensionId: dimId,
+        primaryLocation: newPrimary,
+        occupiedLocations: [...newOccupied].sort(compareLocationForPrimary),
+        role, enabled, discoveredAt, updatedAt: now,
+      },
+    };
+  }
+
+  /**
+   * 拆箱：大箱子被破坏一半 → 剩下的单箱继承原大箱的数据。
+   *
+   * @returns 更新后的 containers 映射（未持久化），或 undefined（拆箱不适用）
+   */
+  private splitContainer(
+    containers: Record<ContainerId, StoredContainer>,
+    containerId: ContainerId,
+    destroyedLoc: BlockLocation,
+  ): Record<ContainerId, StoredContainer> | undefined {
+    const old = containers[containerId];
+    if (!old || old.occupiedLocations.length !== 2) return undefined;
+
+    // 找剩下那一半的坐标
+    const remainingLoc = old.occupiedLocations.find(
+      l => l.x !== destroyedLoc.x || l.y !== destroyedLoc.y || l.z !== destroyedLoc.z
+    );
+    if (!remainingLoc) return undefined;
+
+    try {
+      const dim = world.getDimension(old.dimensionId);
+      const block = dim.getBlock(remainingLoc);
+      if (!block || !isSupportedContainerType(block.typeId)) return undefined;
+
+      const occupied = this.scanner.getOccupiedLocations(dim, remainingLoc, block);
+      const primary = [...occupied].sort(compareLocationForPrimary)[0];
+      const newId = makeContainerId(old.dimensionId, primary);
+
+      const { [containerId]: _, ...rest } = containers;
+      return {
+        ...rest,
+        [newId]: {
+          id: newId, dimensionId: old.dimensionId,
+          primaryLocation: primary,
+          occupiedLocations: occupied.sort(compareLocationForPrimary),
+          role: old.role, enabled: old.enabled,
+          discoveredAt: old.discoveredAt, updatedAt: Date.now(),
+        },
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  // ─── 事件处理器 ──────────────────────────────────────────────────
+
   /**
    * 增量添加容器到仓库（放置事件）。
-   *
-   * 扫描新方块的实际占用位置（处理双箱），创建 StoredContainer 后，
-   * 合并到仓库数据中并持久化，并通过 `trySendMessage` 向玩家反馈。
    */
   private addContainerToWarehouse(
     warehouseId: WarehouseId,
@@ -443,45 +538,28 @@ export class WarehouseService {
     player: import("@minecraft/server").Player
   ): void {
     const warehouse = this.requireWarehouse(warehouseId);
-    const occupiedLocations = this.scanner.getOccupiedLocations(
-      world.getDimension(warehouse.dimensionId),
-      location,
-      block
+    const dim = world.getDimension(warehouse.dimensionId);
+    const occupied = this.scanner.getOccupiedLocations(dim, location, block);
+
+    const newContainers = this.mergeContainer(
+      warehouse.containers, occupied,
+      warehouse.dimensionId,
+      { role: warehouse.settings.defaultNewContainerRole, enabled: warehouse.settings.defaultNewContainerEnabled },
     );
-    const primary = [...occupiedLocations].sort(compareLocationForPrimary)[0];
-    const id = makeContainerId(warehouse.dimensionId, primary);
-    const now = Date.now();
 
-    const container: StoredContainer = {
-      id,
-      dimensionId: warehouse.dimensionId,
-      primaryLocation: primary,
-      occupiedLocations: occupiedLocations.sort(compareLocationForPrimary),
-      role: warehouse.settings.defaultNewContainerRole,
-      enabled: warehouse.settings.defaultNewContainerEnabled,
-      discoveredAt: now,
-      updatedAt: now,
-    };
-
-    const updated: WarehouseData = {
-      ...warehouse,
-      containers: { ...warehouse.containers, [id]: container },
-    };
-    this.repository.save(updated);
+    this.repository.patchContainers(warehouseId, newContainers);
     this.markRuntimeDirty(warehouseId);
 
     try {
       player.sendMessage(
-        `§a容器已添加至仓库 "${warehouse.displayName}"（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[warehouse.settings.defaultNewContainerRole]}）`
+        `§a容器已添加至仓库 "${warehouse.displayName}"` +
+        `（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[warehouse.settings.defaultNewContainerRole]}）`
       );
-    } catch { /* 玩家可能已断线，忽略 */ }
+    } catch { /* 忽略 */ }
   }
 
   /**
    * 增量从仓库移除容器（破坏事件）。
-   *
-   * 根据被破坏方块的坐标，从仓库容器列表中查找并移除对应记录，
-   * 然后持久化，并通过 `trySendMessage` 向玩家反馈。
    */
   private removeContainerFromWarehouse(
     warehouseId: WarehouseId,
@@ -491,24 +569,26 @@ export class WarehouseService {
   ): void {
     const warehouse = this.requireWarehouse(warehouseId);
 
-    // 查找被破坏位置属于哪个容器
-    const targetEntry = Object.entries(warehouse.containers).find(([, c]) =>
-      c.occupiedLocations.some((l) => l.x === location.x && l.y === location.y && l.z === location.z)
+    const entry = Object.entries(warehouse.containers).find(([, c]) =>
+      c.occupiedLocations.some(l => l.x === location.x && l.y === location.y && l.z === location.z)
     );
-    if (!targetEntry) return;
+    if (!entry) return;
+    const [containerId] = entry;
 
-    const [containerId] = targetEntry;
-    const { [containerId]: _removed, ...rest } = warehouse.containers;
+    // 先尝试拆箱（大箱→单箱降级）
+    const split = this.splitContainer(warehouse.containers, containerId, location);
+    if (split) {
+      this.repository.patchContainers(warehouseId, split);
+      this.markRuntimeDirty(warehouseId);
+      try { player.sendMessage(`§e大箱子 ${containerId} 已降级为单箱`); } catch { /* 忽略 */ }
+      return;
+    }
 
-    const updated: WarehouseData = {
-      ...warehouse,
-      containers: rest,
-    };
-    this.repository.save(updated);
+    // 普通删除
+    const { [containerId]: _, ...rest } = warehouse.containers;
+    this.repository.patchContainers(warehouseId, rest);
     this.markRuntimeDirty(warehouseId);
 
-    try {
-      player.sendMessage(`§e容器已从仓库 "${warehouse.displayName}" 移除（${containerId}）`);
-    } catch { /* 玩家可能已断线，忽略 */ }
+    try { player.sendMessage(`§e容器已从仓库 "${warehouse.displayName}" 移除（${containerId}）`); } catch { /* 忽略 */ }
   }
 }

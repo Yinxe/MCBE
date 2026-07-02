@@ -187,6 +187,44 @@ export class WarehouseRepository {
   }
 
   /**
+   * 增量更新容器的分片数据（不递增世代号，不清理旧键）。
+   *
+   * 用于合箱/拆箱等高频小变更场景，避免全量 save() 的世代递增开销。
+   * 因为不改变世代号，所以直接覆写当前世代的分片键。
+   *
+   * @param id         仓库 ID
+   * @param containers 新的完整容器映射
+   */
+  patchContainers(id: WarehouseId, containers: Record<ContainerId, StoredContainer>): void {
+    const meta = this.store.getJson<WarehouseMeta | undefined>(metaKey(id), undefined);
+    if (!meta) return;
+
+    const entries = Object.entries(containers);
+    const shardCount = Math.max(1, Math.ceil(entries.length / CONTAINERS_PER_SHARD));
+
+    // 覆写当前世代的分片（不递增 gen）
+    for (let i = 0; i < shardCount; i++) {
+      const slice = entries.slice(i * CONTAINERS_PER_SHARD, (i + 1) * CONTAINERS_PER_SHARD);
+      this.store.setJson(shardKey(id, meta.containerShardGeneration, i), {
+        version: 1,
+        warehouseId: id,
+        shardIndex: i,
+        containers: Object.fromEntries(slice),
+      });
+    }
+
+    // 如果分片数减少，清理多余的分片
+    for (let i = shardCount; i < meta.containerShardCount; i++) {
+      this.store.delete(shardKey(id, meta.containerShardGeneration, i));
+    }
+
+    // 只更新 containerCount，不改变世代号
+    meta.containerCount = entries.length;
+    meta.containerShardCount = shardCount;
+    this.store.setJson(metaKey(id), meta);
+  }
+
+  /**
    * 创建一个新仓库。
    * 包含两步操作：先持久化数据（save），再更新索引（saveIndex）。
    * 如果索引更新失败则回滚（删除已写入的仓库数据），防止出现有数据但无索引的孤儿仓库。
