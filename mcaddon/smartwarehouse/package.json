@@ -1,6 +1,6 @@
 {
   "name": "SmartWarehouse",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "productName": "Minecraft Add-On Starter Project",
   "description": "SmartWarehouse — customize this description in manifest.json or via the editor.",
   "private": true,
@@ -23,7 +23,6 @@
   "dependencies": {
     "@minecraft/math": "2.2.7",
     "@minecraft/server": "^2.6.0",
-    "@minecraft/server-ui": "^2.0.0",
-    "@minecraft/vanilla-data": "1.21.90"
+    "@minecraft/server-ui": "^2.0.0"
   }
 }

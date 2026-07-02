@@ -9,6 +9,8 @@ import type { ModConfigStore } from "../storage/ModConfigStore";
 import { getSession, setSession, clearSession, clearSessionById } from "./SelectionSessionStore";
 import { showMainMenu } from "../ui/MainMenu";
 import { showContainerRoleMenu } from "../ui/ContainerRoleMenu";
+import { SlotOrganizer } from "../sorting/SlotOrganizer";
+import { formatOrganizeResult } from "../util/OrganizeFormatter";
 
 /**
  * 防抖时间窗口（毫秒）。
@@ -30,13 +32,21 @@ const recentUseOn = new Map<string, number>();
  * 注册所有工具交互事件监听器。
  * 必须在世界初始化时调用一次，之后玩家手持信物即可与仓库系统交互。
  *
+ * 注册的事件包括：
+ * - 手持信物右键方块（不潜行） → 容器角色菜单 / 仓库创建选点
+ * - 手持信物右键方块（潜行）   → 快速整理（容器 / 背包）
+ * - 手持信物对空右键          → 主菜单
+ * - 玩家离开                  → 清理会话状态
+ *
  * @param repository  - 仓库数据持久化仓储
  * @param service     - 仓库服务实例，提供仓库查询、创建、修改等核心操作。
  * @param configStore - 模组配置仓储（用于获取信物 ID）
  */
 export function registerToolInteraction(repository: WarehouseRepository, service: WarehouseService, configStore: ModConfigStore): void {
-  // ── 方块交互事件（玩家手持信物右键点击方块） ──────────────
+  // ── 方块交互事件（玩家手持信物点击方块） ──────────────────
   // 在事件触发前（beforeEvents）拦截，可以取消默认行为（如打开箱子界面）。
+  // 不潜行 → 现有行为（容器角色菜单 / 仓库创建选点）
+  // 潜行   → 快速整理（容器整理 / 背包整理）
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
     const player = event.player;
     const itemStack = event.itemStack;
@@ -46,7 +56,10 @@ export function registerToolInteraction(repository: WarehouseRepository, service
     event.cancel = true;
     const blockLocation = toBlockLocation(event.block.location);
 
-    if (isSupportedContainerType(event.block.typeId)) {
+    if (player.isSneaking) {
+      // 潜行 + 信物 + 方块点击 → 快速整理
+      triggerQuickOrganize(player, event.block);
+    } else if (isSupportedContainerType(event.block.typeId)) {
       handleContainerClick(player, service, event.block.dimension.id, blockLocation);
     } else {
       handleNonContainerClick(player, service, event.block.dimension.id, blockLocation);
@@ -225,5 +238,56 @@ function handleNonContainerClick(
   } else {
     clearSession(player);
     return;
+  }
+}
+
+/**
+ * 处理潜行 + 信物 + 方块点击的快速整理。
+ *
+ * @param player - 操作的玩家
+ * @param block  - 被点击的方块
+ */
+function triggerQuickOrganize(player: Player, block: import("@minecraft/server").Block): void {
+  const organizer = new SlotOrganizer();
+
+  if (isSupportedContainerType(block.typeId)) {
+    // 整理容器
+    system.run(() => {
+      try {
+        const inv = block.getComponent("inventory")?.container;
+        if (!inv) {
+          player.sendMessage("§c无法获取容器");
+          return;
+        }
+        const result = organizer.organize(inv);
+        const name = block.typeId.replace("minecraft:", "");
+        for (const line of formatOrganizeResult(result, name)) {
+          player.sendMessage(line);
+        }
+      } catch (error) {
+        logger.error(`容器整理失败: ${error}`);
+        player.sendMessage("§c容器整理失败");
+      }
+    });
+  } else {
+    // 整理玩家背包
+    system.run(() => {
+      try {
+        const invComp = player.getComponent("inventory") as
+          { container: import("@minecraft/server").Container } | undefined;
+        if (!invComp?.container) {
+          player.sendMessage("§c无法获取背包容器");
+          return;
+        }
+        const analysis = organizer.analyze(invComp.container, { startSlot: 9, endSlot: 36 });
+        const result = organizer.apply(invComp.container, analysis);
+        for (const line of formatOrganizeResult(result, "背包")) {
+          player.sendMessage(line);
+        }
+      } catch (error) {
+        logger.error(`背包整理失败: ${error}`);
+        player.sendMessage("§c背包整理失败");
+      }
+    });
   }
 }

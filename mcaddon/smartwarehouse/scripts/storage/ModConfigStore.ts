@@ -11,7 +11,6 @@
  */
 
 import { world } from "@minecraft/server";
-import { MinecraftItemTypes } from "@minecraft/vanilla-data";
 import { ITEM_NAME_MAP } from "../data/ItemNameMap";
 
 // ─── 常量 ───────────────────────────────────────────────────────
@@ -38,18 +37,18 @@ function labelFromMap(typeId: string): string {
  */
 export const TOKEN_OPTIONS: { label: string; itemId: string | null }[] = [
   { label: "§7关闭 (无信物)", itemId: null },
-  { label: `§e${labelFromMap(MinecraftItemTypes.WoodenHoe)} (默认)`, itemId: MinecraftItemTypes.WoodenHoe },
-  { label: `§a${labelFromMap(MinecraftItemTypes.Stick)}`, itemId: MinecraftItemTypes.Stick },
-  { label: `§d${labelFromMap(MinecraftItemTypes.ParrotSpawnEgg)}`, itemId: MinecraftItemTypes.ParrotSpawnEgg },
-  { label: `§b${labelFromMap(MinecraftItemTypes.NautilusShell)}`, itemId: MinecraftItemTypes.NautilusShell },
-  { label: `§6${labelFromMap(MinecraftItemTypes.DiscFragment5)}`, itemId: MinecraftItemTypes.DiscFragment5 },
-  { label: `§b${labelFromMap(MinecraftItemTypes.NetherStar)}`, itemId: MinecraftItemTypes.NetherStar },
-  { label: `§6${labelFromMap(MinecraftItemTypes.BlazePowder)}`, itemId: MinecraftItemTypes.BlazePowder },
-  { label: `§f${labelFromMap(MinecraftItemTypes.Feather)}`, itemId: MinecraftItemTypes.Feather },
-  { label: `§7${labelFromMap(MinecraftItemTypes.Flint)}`, itemId: MinecraftItemTypes.Flint },
-  { label: `§6${labelFromMap(MinecraftItemTypes.BlazeRod)}`, itemId: MinecraftItemTypes.BlazeRod },
-  { label: `§b${labelFromMap(MinecraftItemTypes.BreezeRod)}`, itemId: MinecraftItemTypes.BreezeRod },
-  { label: `§f${labelFromMap(MinecraftItemTypes.Arrow)}`, itemId: MinecraftItemTypes.Arrow },
+  { label: `§e${labelFromMap("minecraft:wooden_hoe")} (默认)`, itemId: "minecraft:wooden_hoe" },
+  { label: `§a${labelFromMap("minecraft:stick")}`, itemId: "minecraft:stick" },
+  { label: `§d${labelFromMap("minecraft:parrot_spawn_egg")}`, itemId: "minecraft:parrot_spawn_egg" },
+  { label: `§b${labelFromMap("minecraft:nautilus_shell")}`, itemId: "minecraft:nautilus_shell" },
+  { label: `§6${labelFromMap("minecraft:disc_fragment_5")}`, itemId: "minecraft:disc_fragment_5" },
+  { label: `§b${labelFromMap("minecraft:nether_star")}`, itemId: "minecraft:nether_star" },
+  { label: `§6${labelFromMap("minecraft:blaze_powder")}`, itemId: "minecraft:blaze_powder" },
+  { label: `§f${labelFromMap("minecraft:feather")}`, itemId: "minecraft:feather" },
+  { label: `§7${labelFromMap("minecraft:flint")}`, itemId: "minecraft:flint" },
+  { label: `§6${labelFromMap("minecraft:blaze_rod")}`, itemId: "minecraft:blaze_rod" },
+  { label: `§b${labelFromMap("minecraft:breeze_rod")}`, itemId: "minecraft:breeze_rod" },
+  { label: `§f${labelFromMap("minecraft:arrow")}`, itemId: "minecraft:arrow" },
 ];
 
 // ─── 类型 ───────────────────────────────────────────────────────
