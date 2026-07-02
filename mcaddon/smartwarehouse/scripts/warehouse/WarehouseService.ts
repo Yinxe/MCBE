@@ -336,12 +336,17 @@ export class WarehouseService {
   }
 
   /**
-   * 在仓库创建或调整区域成功后，临时显示边界 10 秒作为视觉确认反馈。
-   * 如果仓库已启用永久边界显示（showBoundary = true），则跳过临时显示。
+   * 在仓库创建或调整区域后，刷新边界显示以使用新区域数据。
+   *
+   * - showBoundary = true：刷新持久 interval 的 area 闭包（stop + start）
+   * - showBoundary = false：临时显示 10 秒作为视觉确认反馈
    */
   private showBoundaryTemporarily(data: WarehouseData): void {
     if (!this.boundaryDisplay) return;
-    if (data.settings.showBoundary) return;
+    if (data.settings.showBoundary) {
+      this.boundaryDisplay.refresh(data.id, data.area, data.dimensionId);
+      return;
+    }
     this.boundaryDisplay.showTemporarily(data.id, data.area, data.dimensionId);
   }
 
