@@ -143,21 +143,40 @@ export class SlotOrganizer {
    */
   onDeposit(container: Container, containerId: ContainerId, threshold: number): boolean {
     if (threshold <= 0) return false;
+
     try {
       const m = this.calculateMessiness(container);
-      if (m.total <= threshold) return false;
+      log.info(
+        `onDeposit ${containerId}: messiness=${(m.total * 100).toFixed(0)}% ` +
+        `(order=${(m.order * 100).toFixed(0)}% stack=${(m.stack * 100).toFixed(0)}%) ` +
+        `threshold=${(threshold * 100).toFixed(0)}%`
+      );
 
-      // 获取写锁（若被其他操作占用则跳过本次整理）
-      if (!this.tryLock(containerId)) return false;
+      if (m.total <= threshold) {
+        log.info(`onDeposit ${containerId}: messiness below threshold, skip organize`);
+        return false;
+      }
+
+      if (!this.tryLock(containerId)) {
+        log.info(`onDeposit ${containerId}: lock busy, skip organize`);
+        return false;
+      }
 
       try {
+        log.info(`onDeposit ${containerId}: organizing...`);
         const analysis = this.analyze(container);
         const result = this.apply(container, analysis);
+        if (result.success) {
+          log.info(`onDeposit ${containerId}: organize done, moved ${result.movedStacks} stacks`);
+        } else {
+          log.error(`onDeposit ${containerId}: organize failed: ${result.error}`);
+        }
         return result.success;
       } finally {
         this.unlock(containerId);
       }
-    } catch {
+    } catch (e) {
+      log.error(`onDeposit ${containerId}: error: ${e}`);
       return false;
     }
   }

@@ -23,7 +23,7 @@ export const DEFAULT_WAREHOUSE_SETTINGS: WarehouseSettings = {
   processingSpeed: 8,
   debug: false,
   showBoundary: false,
-  autoSortThreshold: 40,
+  autoSortThreshold: 0,
 };
 
 /**
