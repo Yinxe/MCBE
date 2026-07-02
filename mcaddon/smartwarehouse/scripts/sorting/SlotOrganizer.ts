@@ -317,21 +317,28 @@ export class SlotOrganizer {
     // 排序
     const sorted = [...rawItems].sort((a, b) => a.typeId.localeCompare(b.typeId));
 
-    // 合并相邻可堆叠（注意：ItemStack.amount 下限为 1，不可设为 0）
+    // 合并相邻可堆叠，逐 item 容错，出错时回退到不合并
     const merged: ItemStack[] = [];
     for (const item of sorted) {
-      const last = merged[merged.length - 1];
-      if (last && last.amount < last.maxAmount && item.isStackableWith(last)) {
-        const space = last.maxAmount - last.amount;
-        const toMove = Math.min(item.amount, space);
-        last.amount += toMove;
-        // 仅当有剩余时才修改 item.amount（避免 amount=0 抛异常）
-        if (item.amount > toMove) {
-          item.amount -= toMove;
+      try {
+        const last = merged[merged.length - 1];
+        if (last && last.amount < last.maxAmount && item.isStackableWith(last)) {
+          const space = last.maxAmount - last.amount;
+          const toMove = Math.min(item.amount, space);
+          if (toMove > 0) {
+            last.amount += toMove;
+          }
+          // 仅当有剩余时才修改 item.amount（避免 amount=0 抛异常）
+          if (item.amount > toMove) {
+            item.amount -= toMove;
+            merged.push(item);
+          } // 全量合并：不修改 item，也不 push
+        } else {
           merged.push(item);
-        } // 全量合并：不修改 item，也不 push
-      } else {
-        merged.push(item);
+        }
+      } catch (e) {
+        log.error(`合并物品 ${item.typeId} 时出错: ${e}，跳过合并`);
+        merged.push(item); // 出错时保留原物品
       }
     }
 
