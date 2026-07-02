@@ -317,18 +317,19 @@ export class SlotOrganizer {
     // 排序
     const sorted = [...rawItems].sort((a, b) => a.typeId.localeCompare(b.typeId));
 
-    // 合并相邻可堆叠
+    // 合并相邻可堆叠（注意：ItemStack.amount 下限为 1，不可设为 0）
     const merged: ItemStack[] = [];
     for (const item of sorted) {
-      // 防御：跳过 amount 异常的物品
-      if (item.amount < 1) continue;
       const last = merged[merged.length - 1];
       if (last && last.amount < last.maxAmount && item.isStackableWith(last)) {
         const space = last.maxAmount - last.amount;
         const toMove = Math.min(item.amount, space);
         last.amount += toMove;
-        item.amount -= toMove;
-        if (item.amount > 0) merged.push(item);
+        // 仅当有剩余时才修改 item.amount（避免 amount=0 抛异常）
+        if (item.amount > toMove) {
+          item.amount -= toMove;
+          merged.push(item);
+        } // 全量合并：不修改 item，也不 push
       } else {
         merged.push(item);
       }

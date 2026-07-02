@@ -62,7 +62,7 @@ export async function showWarehouseSettingsMenu(
     .slider(
       "§7自动整理混乱度阈值\n" +
       "§7混乱度高于阈值时触发整理  §a40%§7推荐\n" +
-      "§c0每次整理  §a20敏感  §a40适中  §e60宽松  §c100永不",
+      "§c0每次整理  §a20敏感  §a40适中  §e60宽松  §c100永不\n",
       0, 100,
       { defaultValue: settings.autoSortThreshold, valueStep: 20 },
     )

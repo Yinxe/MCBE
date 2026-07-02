@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "SmartWarehouse v0.0.16",
+    "name": "SmartWarehouse v0.0.17",
     "description": "SmartWarehouse Behavior Pack — intelligent storage management for Minecraft",
     "uuid": "449a7a85-99e0-4c33-8b69-07356daa8a34",
     "version": [
       0,
       0,
-      16
+      17
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         0,
         0,
-        16
+        17
       ],
       "uuid": "dbfd2bf9-86c3-4886-bfb5-a41c52dcf7ab",
       "type": "data"
@@ -34,7 +34,7 @@
       "version": [
         0,
         0,
-        16
+        17
       ],
       "entry": "scripts/main.js"
     }
@@ -45,7 +45,7 @@
       "version": [
         0,
         0,
-        16
+        17
       ]
     },
     {
