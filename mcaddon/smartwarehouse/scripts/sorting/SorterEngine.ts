@@ -357,9 +357,6 @@ export class SorterEngine {
       if (!stored) continue;
       const loc = stored.primaryLocation;
 
-      // 跳过正在被整理器写锁锁定的容器（避免分拣与整理冲突）
-      if (this.organizer?.isLocked(containerId)) continue;
-
       const targetContainer = getContainerFromStored(dimension, stored);
       if (!targetContainer) {
         log.info(`[${tag ?? "?"}] ${containerId} @ (${loc.x},${loc.y},${loc.z}) — 容器不可达，跳过`);
@@ -429,9 +426,6 @@ export class SorterEngine {
       const stored = warehouse.containers[containerId];
       if (!stored) continue;
       const loc = stored.primaryLocation;
-
-      // 跳过正在被整理器写锁锁定的容器
-      if (this.organizer?.isLocked(containerId)) continue;
 
       const target = getContainerFromStored(dimension, stored);
       if (!target) {
