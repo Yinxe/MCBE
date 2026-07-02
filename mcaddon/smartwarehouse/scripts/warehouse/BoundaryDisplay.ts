@@ -1,5 +1,5 @@
-import { world, system, type Dimension } from "@minecraft/server";
-import type { WarehouseId, WarehouseArea, DimensionId } from "../types";
+import { world, system, type Dimension, type Player } from "@minecraft/server";
+import type { WarehouseId, WarehouseArea, DimensionId, WarehouseData } from "../types";
 import { Logger } from "../util/Logger";
 
 const log = new Logger("BoundaryDisplay");
@@ -99,11 +99,44 @@ export class BoundaryDisplay {
 
   // ─── 12 条棱 ──────────────────────────────────────────────────
 
+  /** 玩家缓存 tick */
+  private static PLAYER_CACHE_TICK = 20;
+  private playerCache: { x: number; z: number }[] = [];
+  private playerCacheUpdatedAt = 0;
+
   private drawEdges(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId): void {
     try {
       const dimension = world.getDimension(dimensionId);
       const { min, max } = area;
       const step = BoundaryDisplay.STEP;
+
+      // ── 区块加载检查 ──
+      try {
+        const testBlock = dimension.getBlock({ x: min.x, y: min.y, z: min.z });
+        if (!testBlock) return;
+        // 访问 permutation 确认区块真正加载
+        const _ = testBlock.permutation;
+      } catch { return; }
+
+      // ── 玩家距离检查（每 20 tick 刷新缓存） ──
+      const now = system.currentTick;
+      if (now - this.playerCacheUpdatedAt > BoundaryDisplay.PLAYER_CACHE_TICK) {
+        this.playerCacheUpdatedAt = now;
+        this.playerCache = world.getPlayers()
+          .filter(p => p.dimension.id === dimensionId)
+          .map(p => ({ x: p.location.x, z: p.location.z }));
+      }
+      if (this.playerCache.length > 0) {
+        const cx = (min.x + max.x) / 2;
+        const cz = (min.z + max.z) / 2;
+        let playerNearby = false;
+        for (const p of this.playerCache) {
+          const dx = cx - p.x;
+          const dz = cz - p.z;
+          if (dx * dx + dz * dz <= 256) { playerNearby = true; break; }
+        }
+        if (!playerNearby) return;
+      }
 
       // 8 个顶点（max+1 以确保线框包围整个区域，而非缩在里面）
       const corners = [

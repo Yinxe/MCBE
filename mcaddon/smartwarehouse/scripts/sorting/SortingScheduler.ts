@@ -1,4 +1,4 @@
-import { system } from "@minecraft/server";
+import { world, system } from "@minecraft/server";
 import type { WarehouseId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { SorterEngine } from "./SorterEngine";
@@ -69,6 +69,10 @@ export class SortingScheduler {
 
     const handle = system.runInterval(() => {
       try {
+        // 玩家距离检查：附近无玩家则跳过（16 格范围）
+        const warehouse = this.repository.load(id);
+        if (!warehouse || !this.hasPlayerNearby(warehouse)) return;
+
         this.engine.processWarehouse(id);
       } catch (error) {
         log.error(`仓库 ${id} 调度出错: ${error}`);
@@ -115,5 +119,43 @@ export class SortingScheduler {
   /** 获取当前正在调度的仓库数量 */
   get activeCount(): number {
     return this.handles.size;
+  }
+
+  // ─── 玩家距离检查 ──────────────────────────────────────────────
+
+  /** 最近 20 tick 内缓存的玩家位置（维度ID → 位置列表） */
+  private playerCache = new Map<string, { x: number; z: number }[]>();
+  private playerCacheTick = 0;
+
+  /**
+   * 检查仓库附近 16 格内是否有玩家。
+   * 使用缓存每 20 tick 刷新一次玩家位置。
+   */
+  private hasPlayerNearby(warehouse: import("../types").WarehouseData): boolean {
+    const now = system.currentTick;
+    if (now - this.playerCacheTick > 20) {
+      this.playerCacheTick = now;
+      this.playerCache.clear();
+      for (const player of world.getPlayers()) {
+        const dim = player.dimension.id;
+        const pos = player.location;
+        let list = this.playerCache.get(dim);
+        if (!list) { list = []; this.playerCache.set(dim, list); }
+        list.push({ x: pos.x, z: pos.z });
+      }
+    }
+
+    const players = this.playerCache.get(warehouse.dimensionId);
+    if (!players) return false;
+
+    const cx = (warehouse.area.min.x + warehouse.area.max.x) / 2;
+    const cz = (warehouse.area.min.z + warehouse.area.max.z) / 2;
+
+    for (const p of players) {
+      const dx = cx - p.x;
+      const dz = cz - p.z;
+      if (dx * dx + dz * dz <= 256) return true; // 16² = 256
+    }
+    return false;
   }
 }
