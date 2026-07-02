@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "SmartWarehouse v0.0.19",
+    "name": "SmartWarehouse v0.0.20",
     "description": "SmartWarehouse Resource Pack — visuals and assets for intelligent storage",
     "uuid": "7e985eb5-5e3d-41cc-89c4-653605d41009",
     "version": [
       0,
       0,
-      19
+      20
     ],
     "min_engine_version": [
       1,
@@ -23,7 +23,7 @@
       "version": [
         0,
         0,
-        19
+        20
       ]
     }
   ],
@@ -33,7 +33,7 @@
       "version": [
         0,
         0,
-        19
+        20
       ]
     }
   ],

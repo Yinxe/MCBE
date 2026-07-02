@@ -230,33 +230,19 @@ export class SlotOrganizer {
     const effectiveSlots = lastNonEmptySlot - startSlot + 1;
 
     if (nonEmptySlots <= 1) {
-      return {
-        total: 0, order: 0, stack: 0,
-        effectiveSlots, disorderSlots: 0,
-        nonEmptySlots, suboptimalStacks: 0,
-      };
+      return { total: 0, order: 0, stack: 0, effectiveSlots, disorderSlots: 0, nonEmptySlots, suboptimalStacks: 0 };
     }
 
-    // ── 顺序评分（70%） ──
-    // 构建理想序列：排序后的 typeId + padding
-    const sortedTypes = [...items].sort((a, b) => a.typeId.localeCompare(b.typeId)).map((i) => i.typeId);
-
-    let disorderSlots = 0;
-    let idealIdx = 0;
-    for (let i = 0; i < effectiveSlots; i++) {
-      const actual = slotTypes[i];
-      if (actual && idealIdx < sortedTypes.length && actual === sortedTypes[idealIdx]) {
-        idealIdx++;
-      } else {
-        disorderSlots++;
-      }
+    // ── 顺序评分（70%）—— 相邻逆序对 ──
+    // 只统计非空物品间的相邻逆序对，一个错位只影响相邻关系，不会级联拉满
+    // 例：[A,C,B,D] → 仅 C>B 一对逆序 → 1/3 × 0.7 = 0.23
+    const typeSeq = items.map((i) => i.typeId);
+    let inversions = 0;
+    for (let i = 0; i < typeSeq.length - 1; i++) {
+      if (typeSeq[i].localeCompare(typeSeq[i + 1]) > 0) inversions++;
     }
-    // 剩余未匹配的理想条目也计入乱序
-    disorderSlots += Math.max(0, sortedTypes.length - idealIdx);
-    // 上限不超过 effectiveSlots
-    disorderSlots = Math.min(disorderSlots, effectiveSlots);
-
-    const order = effectiveSlots > 0 ? (disorderSlots / effectiveSlots) * 0.7 : 0;
+    const maxInversions = Math.max(1, typeSeq.length - 1);
+    const order = (inversions / maxInversions) * 0.7;
 
     // ── 堆叠评分（30%） ──
     // 按 typeId 分组统计堆叠情况
@@ -280,7 +266,7 @@ export class SlotOrganizer {
     const stack = nonEmptySlots > 0 ? (suboptimalStacks / nonEmptySlots) * 0.3 : 0;
     const total = Math.min(1, order + stack);
 
-    return { total, order, stack, effectiveSlots, disorderSlots, nonEmptySlots, suboptimalStacks };
+    return { total, order, stack, effectiveSlots, disorderSlots: inversions, nonEmptySlots, suboptimalStacks };
   }
 
   // ═══════════════════════════════════════════════════════════════
