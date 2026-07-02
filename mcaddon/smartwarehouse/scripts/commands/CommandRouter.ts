@@ -34,6 +34,7 @@ import type { Vector3, EntityInventoryComponent } from "@minecraft/server";
 import type { ContainerId, WarehouseId } from "../types";
 import { ROLE_LABELS, ROLE_ORDER } from "../types";
 import { SlotOrganizer } from "../sorting/SlotOrganizer";
+import { formatOrganizeResult } from "../util/OrganizeFormatter";
 import { normalizeWarehouseId } from "../storage/WarehouseRepository";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import { Logger } from "../util/Logger";
@@ -470,21 +471,8 @@ export class CommandRouter {
           return;
         }
 
-        // ── 打印整理结果 ──
-        trySendMessage(player, `§a背包整理完成`);
-        trySendMessage(player,
-          `§7堆叠: §f${result.beforeStacks} → ${result.afterStacks} §7(合并 §e${result.movedStacks} §7组)`);
-        trySendMessage(player,
-          `§7种类: §f${result.beforeTypes} §7种  §7容量: §f${result.usedSlots}/${result.totalSlots} §7(${result.usagePercent}%)`);
-
-        const sorted = Object.entries(result.perType)
-          .sort(([, a], [, b]) => b.total - a.total);
-        for (const [typeId, stat] of sorted.slice(0, 8)) {
-          const shortName = typeId.includes(":") ? typeId.split(":")[1] : typeId;
-          trySendMessage(player, `  §7${shortName}: §f${stat.stacks}堆 §f${stat.total}个`);
-        }
-        if (sorted.length > 8) {
-          trySendMessage(player, `  §8...还有 ${sorted.length - 8} 种物品`);
+        for (const line of formatOrganizeResult(result, "背包")) {
+          trySendMessage(player, line);
         }
       } catch (error) {
         trySendMessage(player, `§c整理失败: ${error instanceof Error ? error.message : String(error)}`);

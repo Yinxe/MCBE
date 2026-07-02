@@ -3,6 +3,8 @@ import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import type { ContainerId, StoredContainer, WarehouseData } from "../types";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_ORDER } from "../types";
 import { canManageWarehouse } from "../util/PlayerAuth";
+import { SlotOrganizer } from "../sorting/SlotOrganizer";
+import { formatOrganizeResult } from "../util/OrganizeFormatter";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 
 // ─── 容器详情辅助 ─────────────────────────────────────────────
@@ -13,12 +15,11 @@ interface ContainerDetails {
   usedSlots: number;
   totalItems: number;
   uniqueTypes: number;
+  messiness?: { total: number; order: number; stack: number; };
 }
 
 /**
- * 从 StoredContainer 读取容器的实际运行时详情。
- * 返回方块类型、槽位使用情况、物品数量等信息。
- * 如果容器不可达（区块未加载等），返回 undefined。
+ * 从 StoredContainer 读取容器的实际运行时详情（含混乱度评分）。
  */
 function getContainerDetails(warehouse: WarehouseData, container: StoredContainer): ContainerDetails | undefined {
   try {
@@ -48,19 +49,28 @@ function getContainerDetails(warehouse: WarehouseData, container: StoredContaine
       } catch { /* 跳过 */ }
     }
 
-    return { blockType, totalSlots, usedSlots, totalItems, uniqueTypes: uniqueTypesSet.size };
+    // 计算混乱度
+    const org = new SlotOrganizer();
+    const messiness = org.calculateMessiness(mcContainer);
+
+    return { blockType, totalSlots, usedSlots, totalItems, uniqueTypes: uniqueTypesSet.size, messiness };
   } catch {
     return undefined;
   }
 }
 
 /**
- * 格式化容器详情文本行（供 UI 显示用）。
+ * 格式化容器详情文本行（含混乱度）。
  */
 function formatDetailsLine(details: ContainerDetails | undefined): string {
   if (!details) return "§8容器不可达";
   const usage = `${details.usedSlots}/${details.totalSlots}`;
-  return `§7${details.blockType}  §f${usage} §7Slots  §f${details.totalItems} §7Items  §f${details.uniqueTypes} §7Types`;
+  let line = `§7${details.blockType}  §f${usage} §7Slots  §f${details.totalItems} §7Items  §f${details.uniqueTypes} §7Types`;
+  if (details.messiness) {
+    const m = details.messiness;
+    line += `\n§7混乱度 §f${(m.total * 100).toFixed(0)}% §7(顺序§e${(m.order * 100).toFixed(0)}§7 堆叠§e${(m.stack * 100).toFixed(0)}§7)`;
+  }
+  return line;
 }
 
 /**
@@ -123,18 +133,44 @@ export async function showContainerRoleMenu(
       `§7角色: §f${currentRoleLabel} — ${roleDesc}§r`
     )
     .toggle("启用容器", { defaultValue: container.enabled })
-    .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });
+    .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
+    .toggle("§e立即整理（按物品 ID 排序合并）", { defaultValue: false });
 
   const response = await form.show(player);
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 2) return;
+  if (!values || values.length < 3) return;
 
-  // 兼容 label 占索引
-  const offset = values.length === 3 ? 1 : 0;
+  // 兼容 label 占索引 (3字段+label=4, 3字段无label=3)
+  const offset = values.length >= 4 ? 1 : 0;
   const newEnabled = values[0 + offset] as boolean;
   const newRoleIndex = values[1 + offset] as number;
+  const shouldOrganize = values[2 + offset] as boolean;
+
+  // ── 整理容器 ──
+  if (shouldOrganize) {
+    try {
+      const dim = world.getDimension(warehouse.dimensionId);
+      const block = dim.getBlock(container.primaryLocation);
+      if (block) {
+        const inv = (block.getComponent("inventory") ?? block.getComponent("minecraft:inventory")) as
+          import("@minecraft/server").BlockInventoryComponent | undefined;
+        const mcContainer = inv?.container;
+        if (mcContainer) {
+          const organizer = new SlotOrganizer();
+          const result = organizer.organize(mcContainer);
+          const name = block.typeId.replace("minecraft:", "");
+          for (const line of formatOrganizeResult(result, name)) {
+            player.sendMessage(line);
+          }
+        }
+      }
+    } catch (error) {
+      player.sendMessage(`§c整理出错: ${error}`);
+    }
+    return;
+  }
 
   // ── 提交角色和状态变更 ──
   try {
