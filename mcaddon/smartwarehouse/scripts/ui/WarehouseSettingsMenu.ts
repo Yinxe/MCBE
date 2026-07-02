@@ -1,10 +1,10 @@
 import type { Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
+import { clearSession, setSession } from "../interaction/SelectionSessionStore";
+import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseId, WarehouseSettings } from "../types";
 import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
-import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
-import { setSession, clearSession } from "../interaction/SelectionSessionStore";
 
 /**
  * 显示仓库设置表单。
@@ -61,6 +61,7 @@ export async function showWarehouseSettingsMenu(
     .toggle("显示边界光幕", { defaultValue: settings.showBoundary })
     .slider(
       "§7自动整理混乱度阈值（0=关闭）\n" +
+      "§8当容器混乱程度高于阈值将会触发自动整理"+
       "§80-10% §7刚整理完  §a20% §7轻微  §a40%§7中等←推荐  §e60%§7显著  §c80%§7极限\n" +
       "§7阈值越高越不敏感，日常使用建议 §a40%§7，仅在中度杂乱时触发整理",
       0, 100,

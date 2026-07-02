@@ -553,10 +553,13 @@ export class WarehouseService {
     this.repository.patchContainers(warehouseId, newContainers);
     this.markRuntimeDirty(warehouseId);
 
+    const isMerge = occupied.length > 1;
     try {
       player.sendMessage(
-        `§a容器已添加至仓库 "${warehouse.displayName}"` +
-        `（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[warehouse.settings.defaultNewContainerRole]}）`
+        isMerge
+          ? `§a箱子已合并为大箱子，容器信息已更新（${block.typeId.replace("minecraft:", "")}）`
+          : `§a容器已添加至仓库 "${warehouse.displayName}"` +
+            `（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[warehouse.settings.defaultNewContainerRole]}）`
       );
     } catch { /* 忽略 */ }
   }

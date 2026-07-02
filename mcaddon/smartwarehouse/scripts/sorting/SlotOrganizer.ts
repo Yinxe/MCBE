@@ -319,6 +319,8 @@ export class SlotOrganizer {
     // 合并相邻可堆叠
     const merged: ItemStack[] = [];
     for (const item of sorted) {
+      // 防御：跳过 amount 异常的物品
+      if (item.amount < 1) continue;
       const last = merged[merged.length - 1];
       if (last && last.amount < last.maxAmount && item.isStackableWith(last)) {
         const space = last.maxAmount - last.amount;
@@ -383,6 +385,11 @@ export class SlotOrganizer {
 
     for (const item of sortedItems) {
       if (slot >= endSlot) break;
+      // 防御：跳过 amount 异常的物品
+      if (item.amount < 1) {
+        log.info(`槽位 ${slot} 跳过 amount=${item.amount} 的物品`);
+        continue;
+      }
       try {
         container.setItem(slot, item);
         slot++;
