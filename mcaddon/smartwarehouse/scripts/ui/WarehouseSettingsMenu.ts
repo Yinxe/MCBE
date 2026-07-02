@@ -60,8 +60,9 @@ export async function showWarehouseSettingsMenu(
     .toggle("启用仓库", { defaultValue: settings.enabled })
     .toggle("显示边界光幕", { defaultValue: settings.showBoundary })
     .slider(
-      "§7自动整理阈值（0=关闭，步进20）\n" +
-      "§820%整洁 §a40%适中 §e60%杂乱 §c100%极限",
+      "§7自动整理混乱度阈值（0=关闭）\n" +
+      "§80-10% §7刚整理完  §a20% §7轻微  §a40%§7中等←推荐  §e60%§7显著  §c80%§7极限\n" +
+      "§7阈值越高越不敏感，日常使用建议 §a40%§7，仅在中度杂乱时触发整理",
       0, 100,
       { defaultValue: settings.autoSortThreshold, valueStep: 20 },
     )
