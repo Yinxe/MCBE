@@ -128,6 +128,43 @@ export function tryMoveStackIntoContainer(stack: ItemStack, target: Container): 
   }
 }
 
+/**
+ * 计算容器对于指定家族的纯度分数。
+ *
+ * 纯度 = 容器中属于目标家族的物品种类数 ÷ 容器中所有物品种类总数。
+ *
+ * 分数范围 [0, 1]：
+ * - `1.0` = 容器中只有该家族的物品（最纯，优先选择）
+ * - `0.0` = 容器中没有该家族的物品
+ *
+ * **用途**：
+ * - 家族分拣时对候选容器按纯度降序排列，让物品优先流入更"专一"的容器，
+ *   避免已混杂多个家族的容器承受过大的物品压力。
+ * - UI 展示容器的家族纯度排行。
+ *
+ * @param container - Minecraft 容器实例
+ * @param familyMemberSet - 目标家族的所有物品 typeId 集合（Set 用于 O(1) 查找）
+ * @returns 纯度分数（0-1）
+ */
+export function getFamilyPurity(container: Container, familyMemberSet: Set<string>): number {
+  const allTypes = new Set<string>();
+  const targetTypes = new Set<string>();
+
+  for (let slot = 0; slot < container.size; slot++) {
+    const item = container.getItem(slot);
+    if (!item) continue;
+    const typeId = item.typeId;
+    if (allTypes.has(typeId)) continue;
+    allTypes.add(typeId);
+    if (familyMemberSet.has(typeId)) {
+      targetTypes.add(typeId);
+    }
+  }
+
+  if (allTypes.size === 0) return 0;
+  return targetTypes.size / allTypes.size;
+}
+
 // ─── 大宗容器专用函数（潜影盒内容读取与填充） ────────────────────
 
 /**

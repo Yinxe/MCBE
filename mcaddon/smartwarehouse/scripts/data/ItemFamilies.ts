@@ -1054,8 +1054,6 @@ const redstone: ItemFamily = {
     "minecraft:detector_rail",
     "minecraft:golden_rail",
     "minecraft:sculk_sensor",
-    "minecraft:sculk_shrieker",
-    "minecraft:sculk_catalyst",
     "minecraft:tnt",
   ],
 };
@@ -1254,7 +1252,6 @@ const nether: ItemFamily = {
     "minecraft:crimson_nylium",
     "minecraft:warped_nylium",
     "minecraft:soul_sand",
-    "minecraft:soul_soil",
     "minecraft:glowstone",
     "minecraft:shroomlight",
     "minecraft:nether_wart_block",
@@ -1273,9 +1270,6 @@ const nether: ItemFamily = {
     "minecraft:red_nether_brick_wall",
     "minecraft:chiseled_nether_bricks",
     "minecraft:cracked_nether_bricks",
-    "minecraft:soul_torch",
-    "minecraft:soul_lantern",
-    "minecraft:soul_campfire",
     "minecraft:weeping_vines",
     "minecraft:twisting_vines",
     "minecraft:nether_sprouts",
@@ -1473,6 +1467,21 @@ const music_disc: ItemFamily = {
     "minecraft:music_disc_ward",
     "minecraft:music_disc_11",
     "minecraft:music_disc_5",
+  ],
+};
+
+const ancient_city: ItemFamily = {
+  id: "ancient_city", // 古城方块（幽匿/灵魂灯笼/尖啸体/催发体）
+  displayName: "古城方块",
+  items: [
+    "minecraft:sculk", // 幽匿块
+    "minecraft:sculk_vein", // 幽匿脉络
+    "minecraft:sculk_catalyst", // 幽匿催发体
+    "minecraft:sculk_shrieker", // 幽匿尖啸体
+    "minecraft:soul_soil", // 灵魂土
+    "minecraft:soul_torch", // 灵魂火把
+    "minecraft:soul_lantern", // 灵魂灯笼
+    "minecraft:soul_campfire", // 灵魂营火
   ],
 };
 

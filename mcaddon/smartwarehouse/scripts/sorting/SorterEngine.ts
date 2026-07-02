@@ -1,4 +1,4 @@
-import { world, system, Dimension, ItemStack } from "@minecraft/server";
+import { world, system, Dimension, ItemStack, Container } from "@minecraft/server";
 import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, WarehouseArea, ContainerId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { WarehouseRuntimeRegistry } from "../runtime/WarehouseRuntimeRegistry";
@@ -11,6 +11,7 @@ import {
   isShulkerBoxItem,
   getBulkChestFirstType,
   tryFillShulkerBoxes,
+  getFamilyPurity,
 } from "./ContainerInventory";
 import { playSortEffect } from "./SortEffects";
 import { SlotOrganizer } from "./SlotOrganizer";
@@ -633,11 +634,16 @@ export class SorterEngine {
     const family = getFamilyById(familyId);
     if (!family) return [];
 
+    // 预计算成员 Set，在验证和纯度计算中复用
+    const memberSet = new Set(family.items);
+
     const candidates = model.familyTypeIndex.get(familyId);
     const hasIndex = candidates !== undefined && candidates.length > 0;
 
     const valid: ContainerId[] = [];
     const stale = new Set<ContainerId>();
+    // 缓存已验证通过的容器引用，避免 purity 排序时重复 getContainerFromStored
+    const containerCache = new Map<ContainerId, Container>();
 
     // ── 有索引：检查索引项，标记过期 ──────────────
     if (hasIndex) {
@@ -664,6 +670,7 @@ export class SorterEngine {
 
         if (hasFamilyItem) {
           valid.push(containerId);
+          containerCache.set(containerId, container);
         } else {
           stale.add(containerId);
         }
@@ -684,7 +691,9 @@ export class SorterEngine {
     // 场景 A（初始）：索引为空，手工放入的家族物品从未被分拣引擎发现
     // 场景 B（回退）：索引被清空后，全量扫描重建
     const needsFullScan = !hasIndex || (valid.length === 0 && stale.size > 0);
-    if (!needsFullScan) return valid;
+    if (!needsFullScan) {
+      return this.sortByFamilyPurity(valid, memberSet, containerCache);
+    }
 
     for (const containerId of model.normalContainerIds) {
       // 跳过已检查过的容器
@@ -696,6 +705,7 @@ export class SorterEngine {
       for (const typeId of family.items) {
         if (containerHasType(container, typeId)) {
           valid.push(containerId);
+          containerCache.set(containerId, container);
           break;
         }
       }
@@ -706,7 +716,7 @@ export class SorterEngine {
       model.familyTypeIndex.set(familyId, [...valid]);
     }
 
-    return valid;
+    return this.sortByFamilyPurity(valid, memberSet, containerCache);
   }
 
   /**
@@ -725,6 +735,45 @@ export class SorterEngine {
     } else {
       model.familyTypeIndex.set(familyId, [containerId]);
     }
+  }
+
+  /**
+   * 按家族纯度对候选容器列表降序排序。
+   *
+   * 纯度越高的容器越优先接收物品，使得家族物品自然流入更"专一"的容器，
+   * 避免已混杂多个家族的容器承受过大的物品压力。
+   *
+   * @param containerIds  - 候选容器 ID 列表
+   * @param memberSet     - 目标家族物品 typeId 集合（预计算，O(1) 成员检测）
+   * @param containerCache - 验证阶段已获取的容器引用缓存
+   * @returns 按纯度降序排序后的容器 ID 列表
+   */
+  private sortByFamilyPurity(
+    containerIds: ContainerId[],
+    memberSet: Set<string>,
+    containerCache: Map<ContainerId, Container>
+  ): ContainerId[] {
+    if (containerIds.length <= 1) return containerIds;
+
+    const scored: { id: ContainerId; purity: number; index: number }[] = [];
+
+    let hasPositivePurity = false;
+    for (let i = 0; i < containerIds.length; i++) {
+      const containerId = containerIds[i];
+      // 优先从缓存获取容器（避免索引扫描阶段已获取的容器被重复拉取）
+      const container = containerCache.get(containerId);
+      if (!container) { scored.push({ id: containerId, purity: 0, index: i }); continue; }
+      const purity = getFamilyPurity(container, memberSet);
+      if (purity > 0) hasPositivePurity = true;
+      scored.push({ id: containerId, purity, index: i });
+    }
+
+    // 全部候选不可达或纯度均为 0 → 无需排序，保持原始顺序
+    if (!hasPositivePurity) return containerIds;
+
+    // 降序排列；同纯度时按原始索引保持稳定（确定性保证）
+    scored.sort((a, b) => b.purity - a.purity || a.index - b.index);
+    return scored.map((s) => s.id);
   }
 
   /**

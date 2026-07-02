@@ -6,6 +6,8 @@ import { canManageWarehouse } from "../util/PlayerAuth";
 import { SlotOrganizer } from "../sorting/SlotOrganizer";
 import { formatOrganizeResult } from "../util/OrganizeFormatter";
 import type { WarehouseService } from "../warehouse/WarehouseService";
+import { getFamilyPurity, getContainerFromStored } from "../sorting/ContainerInventory";
+import { getFamilyById } from "../data/ItemFamilies";
 
 // ─── 容器详情辅助 ─────────────────────────────────────────────
 
@@ -74,6 +76,56 @@ function formatDetailsLine(details: ContainerDetails | undefined): string {
 }
 
 /**
+ * 构建该容器中已启用的家族纯度排行文本。
+ *
+ * 只显示纯度 > 0（容器中有该家族物品）的家族，按纯度降序排列。
+ * 返回空字符串表示无匹配。
+ */
+function formatFamilyPurityInfo(warehouse: WarehouseData, container: StoredContainer): string {
+  try {
+    const enabledFamilies = warehouse.settings.enabledFamilies ?? [];
+    if (enabledFamilies.length === 0) return "";
+
+    const dimension = world.getDimension(warehouse.dimensionId);
+    const mcContainer = getContainerFromStored(dimension, container);
+    if (!mcContainer) return "";
+
+    // 一次性扫描容器，收集所有物品种类（避免对每个家族独立全槽扫描）
+    const allTypes = new Set<string>();
+    for (let slot = 0; slot < mcContainer.size; slot++) {
+      const item = mcContainer.getItem(slot);
+      if (item) allTypes.add(item.typeId);
+    }
+    if (allTypes.size === 0) return "";
+
+    const entries: { name: string; purity: number }[] = [];
+    for (const familyId of enabledFamilies) {
+      const family = getFamilyById(familyId);
+      if (!family) continue;
+      const memberSet = new Set(family.items);
+      let matchCount = 0;
+      for (const typeId of allTypes) {
+        if (memberSet.has(typeId)) matchCount++;
+      }
+      if (matchCount > 0) {
+        entries.push({ name: family.displayName, purity: matchCount / allTypes.size });
+      }
+    }
+    if (entries.length === 0) return "";
+
+    entries.sort((a, b) => b.purity - a.purity);
+
+    // 取前三名，防止排行太长挤占表单空间
+    const top = entries.slice(0, 3);
+    const parts = top.map((e, i) => `§e#${i + 1}§f${e.name} §a${(e.purity * 100).toFixed(0)}%`);
+    const suffix = entries.length > 3 ? ` §8+${entries.length - 3}` : "";
+    return `\n§8┊ §7家族分布 ${parts.join(" §8│ ")}${suffix}§r`;
+  } catch {
+    return "";
+  }
+}
+
+/**
  * 显示容器设置菜单。
  *
  * 根据玩家权限提供不同界面：
@@ -102,6 +154,8 @@ export async function showContainerRoleMenu(
     const roleLabel = ROLE_LABELS[container.role];
     const roleDesc = ROLE_DESCRIPTIONS[container.role];
 
+    const familyLine = formatFamilyPurityInfo(warehouse, container);
+
     const form = new ActionFormData()
       .title("容器信息")
       .body(
@@ -110,7 +164,8 @@ export async function showContainerRoleMenu(
         `§7容器ID: ${containerId}\n` +
         `§7状态: ${container.enabled ? "§a启用" : "§c禁用"}\n` +
         `§7角色: ${roleLabel}\n` +
-        `§7描述: ${roleDesc}`
+        `§7描述: ${roleDesc}` +
+        familyLine
       )
       .button("关闭");
     await form.show(player);
@@ -123,6 +178,8 @@ export async function showContainerRoleMenu(
   const currentRoleLabel = ROLE_LABELS[container.role];
   const roleDesc = ROLE_DESCRIPTIONS[container.role];
 
+  const familyLine = formatFamilyPurityInfo(warehouse, container);
+
   const form = new ModalFormData()
     .title("容器设置")
     .label(
@@ -130,7 +187,8 @@ export async function showContainerRoleMenu(
       `${detailsLine}\n` +
       `§7容器ID: ${containerId}\n` +
       `§7状态: ${container.enabled ? "§a已启用" : "§c已禁用"}\n` +
-      `§7角色: §f${currentRoleLabel} — ${roleDesc}§r`
+      `§7角色: §f${currentRoleLabel} — ${roleDesc}§r` +
+      familyLine
     )
     .toggle("启用容器", { defaultValue: container.enabled })
     .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
