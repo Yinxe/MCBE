@@ -276,10 +276,15 @@ const dye: ItemFamily = {
   ],
 };
 
-const harness: ItemFamily = {
-  id: "harness",
-  displayName: "挽具",
+const animal_gear: ItemFamily = {
+  id: "animal_gear", // 马铠/鞍/挽具/胡萝卜钓竿/诡异菌钓竿/拴绳等骑乘与驾驭 
+  displayName: "骑乘与驾驭",
   items: [
+    "minecraft:leather_horse_armor",
+    "minecraft:iron_horse_armor",
+    "minecraft:golden_horse_armor",
+    "minecraft:diamond_horse_armor",
+    "minecraft:saddle",
     "minecraft:white_harness",
     "minecraft:orange_harness",
     "minecraft:magenta_harness",
@@ -296,6 +301,9 @@ const harness: ItemFamily = {
     "minecraft:green_harness",
     "minecraft:red_harness",
     "minecraft:black_harness",
+    "minecraft:carrot_on_a_stick",
+    "minecraft:warped_fungus_on_a_stick",
+    "minecraft:lead",
   ],
 };
 
@@ -603,9 +611,9 @@ const wood_misc: ItemFamily = {
   ],
 };
 
-const stone_building: ItemFamily = {
-  id: "stone_building",
-  displayName: "石材建筑",
+const stone_core: ItemFamily = {
+  id: "stone_core", // 石头/圆石/石砖/安山岩/闪长岩/花岗岩 + 台阶/楼梯/墙/磨制变体 
+  displayName: "普通石材",
   items: [
     "minecraft:stone",
     "minecraft:smooth_stone",
@@ -651,6 +659,16 @@ const stone_building: ItemFamily = {
     "minecraft:polished_granite",
     "minecraft:polished_granite_stairs",
     "minecraft:polished_granite_slab",
+    "minecraft:stonecutter_block",
+    "minecraft:stone_button",
+    "minecraft:stone_pressure_plate",
+  ],
+};
+
+const deep_rock: ItemFamily = {
+  id: "deep_rock", // 深板岩/凝灰岩/方解石/滴水石 + 抛���/砖/瓦 + 台阶/楼梯/墙 
+  displayName: "深层岩石",
+  items: [
     "minecraft:deepslate",
     "minecraft:cobbled_deepslate",
     "minecraft:polished_deepslate",
@@ -685,6 +703,17 @@ const stone_building: ItemFamily = {
     "minecraft:tuff_brick_stairs",
     "minecraft:tuff_brick_slab",
     "minecraft:tuff_brick_wall",
+    "minecraft:calcite",
+    "minecraft:pointed_dripstone",
+    "minecraft:dripstone_block",
+    "minecraft:reinforced_deepslate",
+  ],
+};
+
+const decorative_stone: ItemFamily = {
+  id: "decorative_stone", // 砂岩/石英/紫珀/海晶石/砖 + 台阶/楼梯/墙 
+  displayName: "装饰石材",
+  items: [
     "minecraft:sandstone",
     "minecraft:sandstone_stairs",
     "minecraft:sandstone_slab",
@@ -743,13 +772,6 @@ const stone_building: ItemFamily = {
     "minecraft:resin_block",
     "minecraft:resin_brick",
     "minecraft:resin_clump",
-    "minecraft:stonecutter_block",
-    "minecraft:stone_button",
-    "minecraft:stone_pressure_plate",
-    "minecraft:calcite",
-    "minecraft:pointed_dripstone",
-    "minecraft:dripstone_block",
-    "minecraft:reinforced_deepslate",
   ],
 };
 
@@ -927,10 +949,6 @@ const wearables: ItemFamily = {
     "minecraft:elytra",
     "minecraft:wolf_armor",
     "minecraft:shield",
-    "minecraft:leather_horse_armor",
-    "minecraft:iron_horse_armor",
-    "minecraft:golden_horse_armor",
-    "minecraft:diamond_horse_armor",
   ],
 };
 
@@ -998,10 +1016,7 @@ const tools: ItemFamily = {
     "minecraft:chest_minecart",
     "minecraft:hopper_minecart",
     "minecraft:tnt_minecart",
-    "minecraft:carrot_on_a_stick",
-    "minecraft:lead",
     "minecraft:name_tag",
-    "minecraft:saddle",
     "minecraft:lodestone_compass",
   ],
 };
@@ -1010,6 +1025,7 @@ const redstone: ItemFamily = {
   id: "redstone",
   displayName: "红石及原件",
   items: [
+    "minecraft:redstone",
     "minecraft:redstone_block",
     "minecraft:redstone_torch",
     "minecraft:redstone_lamp",
@@ -1286,7 +1302,6 @@ const nether: ItemFamily = {
     "minecraft:polished_blackstone_brick_wall",
     "minecraft:polished_blackstone_button",
     "minecraft:polished_blackstone_pressure_plate",
-    "minecraft:warped_fungus_on_a_stick",
   ],
 };
 
@@ -1472,13 +1487,15 @@ export const ALL_FAMILIES: readonly ItemFamily[] = [
   shulker_box,
   candle,
   dye,
-  harness,
+  animal_gear,
   bundle,
   bed,
   logs,
   wood_products,
   wood_misc,
-  stone_building,
+  stone_core,
+  deep_rock,
+  decorative_stone,
   copper_blocks,
   rare_minerals,
   rare_ores,
