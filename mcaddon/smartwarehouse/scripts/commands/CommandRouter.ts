@@ -30,8 +30,10 @@ import {
   type CustomCommandOrigin,
   type CustomCommandResult,
 } from "@minecraft/server";
-import type { Vector3 } from "@minecraft/server";
-import type { WarehouseId } from "../types";
+import type { Vector3, EntityInventoryComponent } from "@minecraft/server";
+import type { ContainerId, WarehouseId } from "../types";
+import { ROLE_LABELS, ROLE_ORDER } from "../types";
+import { SlotOrganizer } from "../sorting/SlotOrganizer";
 import { normalizeWarehouseId } from "../storage/WarehouseRepository";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import { Logger } from "../util/Logger";
@@ -83,6 +85,16 @@ function parseWarehouseId(raw: string): ParseWarehouseIdResult {
 }
 
 /**
+ * 从命令发起者中提取玩家对象（仅校验是否为玩家，不校验 op 权限）。
+ * 用于 sw:organize 等所有玩家均可使用的命令。
+ */
+function parseAnyPlayer(origin: CustomCommandOrigin): Player | string {
+  const entity = origin.sourceEntity ?? origin.initiator;
+  if (!(entity instanceof Player)) return "该命令只能由玩家执行";
+  return entity;
+}
+
+/**
  * 从命令发起者（CustomCommandOrigin）中提取玩家对象并进行权限校验
  *
  * 执行步骤：
@@ -128,7 +140,8 @@ function commandBase(name: string, description: string): Omit<CustomCommand, "ma
   return {
     name,
     description,
-    permissionLevel: CommandPermissionLevel.Admin,  // 仅管理员（OP）可执行
+    permissionLevel: CommandPermissionLevel.Any,
+    cheatsRequired: false,
   };
 }
 
@@ -234,7 +247,15 @@ export class CommandRouter {
         (origin, name: string) => this.handleDelete(origin, name)
       );
 
-      log.info("Custom commands registered (sw:create/sw:resize/sw:rescan/sw:delete)");
+      // sw:organize —— 整理玩家背包（快捷栏除外）
+      // 无需参数，所有玩家可用
+      event.customCommandRegistry.registerCommand(
+        { ...commandBase("sw:organize", "整理玩家背包物品"),
+          mandatoryParameters: [] },
+        (origin) => this.handleOrganize(origin)
+      );
+
+      log.info("Custom commands registered (sw:create/sw:resize/sw:rescan/sw:delete/sw:organize)");
     });
   }
 
@@ -401,5 +422,60 @@ export class CommandRouter {
     });
 
     return success(`已提交仓库删除请求: ${name}`);
+  }
+
+  // ─── 整理命令 ───────────────────────────────────────────────────
+
+  /**
+   * 处理 sw:organize 命令 —— 整理玩家背包（快捷栏除外）。
+   * 使用 SlotOrganizer 对玩家背包 9~35 号槽位进行排序+堆叠合并。
+   */
+  private handleOrganize(origin: CustomCommandOrigin): CustomCommandResult {
+    const player = parseAnyPlayer(origin);
+    if (typeof player === "string") return failure(player);
+
+    system.runTimeout(() => {
+      try {
+        const invComp = player.getComponent("inventory") as
+          EntityInventoryComponent | undefined;
+        if (!invComp?.container) {
+          trySendMessage(player, "§c无法获取背包容器");
+          return;
+        }
+
+        const organizer = new SlotOrganizer();
+        const result = organizer.organize(invComp.container, {
+          startSlot: 9,  // 跳过快捷栏 0-8
+          endSlot: 36,   // 背包共 36 格
+        });
+
+        if (!result.success) {
+          trySendMessage(player, `§c整理失败: ${result.error}`);
+          return;
+        }
+
+        // ── 打印整理结果 ──
+        trySendMessage(player, `§a背包整理完成`);
+        trySendMessage(player,
+          `§7堆叠: §f${result.beforeStacks} → ${result.afterStacks} §7(合并 §e${result.movedStacks} §7组)`);
+        trySendMessage(player,
+          `§7种类: §f${result.beforeTypes} §7种  §7容量: §f${result.usedSlots}/${result.totalSlots} §7(${result.usagePercent}%)`);
+
+        // 按物品量排序打印每种物品
+        const sorted = Object.entries(result.perType)
+          .sort(([, a], [, b]) => b.total - a.total);
+        for (const [typeId, stat] of sorted.slice(0, 8)) {
+          const shortName = typeId.includes(":") ? typeId.split(":")[1] : typeId;
+          trySendMessage(player, `  §7${shortName}: §f${stat.stacks}堆 §f${stat.total}个`);
+        }
+        if (sorted.length > 8) {
+          trySendMessage(player, `  §8...还有 ${sorted.length - 8} 种物品`);
+        }
+      } catch (error) {
+        trySendMessage(player, `§c整理失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+
+    return success("已提交背包整理请求");
   }
 }
