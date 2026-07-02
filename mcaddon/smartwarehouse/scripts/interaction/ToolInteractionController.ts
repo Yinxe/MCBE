@@ -1,9 +1,7 @@
-import { world, system } from "@minecraft/server";
-import type { Player } from "@minecraft/server";
+import { world, system, type Player } from "@minecraft/server";
 import type { BlockLocation } from "../types";
 import { toBlockLocation } from "../types";
 import { Logger } from "../util/Logger";
-import { makeOccupiedLocationKey } from "../warehouse/ContainerId";
 import { isSupportedContainerType } from "../warehouse/ContainerTypes";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
@@ -28,9 +26,8 @@ const DEBOUNCE_MS = 250;
 const logger = new Logger("ToolInteraction");
 
 /**
- * 每位玩家最近一次右键点击方块的时刻（时间戳），用于防抖判断。
- * key: player.id, value: Date.now()
- * 目的是防止 playerInteractWithBlock 之后紧跟着的 itemUse（对空右键）误触发主菜单。
+ * 玩家最近一次右键点击方块的时刻（时间戳），防抖用。
+ * 防止 playerInteractWithBlock 之后紧跟的 itemUse 误弹主菜单。
  */
 const recentUseOn = new Map<string, number>();
 
@@ -62,19 +59,19 @@ export function registerToolInteraction(repository: WarehouseRepository, service
 
   // ── 物品使用事件（对空右键 / 未触发 playerInteractWithBlock 的兜底） ────
   // 部分容器（如潜影盒）在特定 Bedrock 版本中不触发 playerInteractWithBlock。
-  // 此处通过 getBlockFromViewDirection 检测玩家视线是否对着容器，若是则
-  // 作为容器点击处理而非弹出主菜单。
+  // 此处先通过射线检测判断视线是否对着容器，若是则作为容器点击处理；
+  // 否则弹出主菜单。
   world.afterEvents.itemUse.subscribe((event) => {
     const player = event.source;
     const itemStack = event.itemStack;
     if (!itemStack || itemStack.typeId !== TOOL_ID) return;
 
-    // 防抖：避免与 playerInteractWithBlock 重复处理
+    // 防抖：避免与 playerInteractWithBlock 重复触发
     const lastUseOn = recentUseOn.get(player.id);
     if (lastUseOn && Date.now() - lastUseOn < DEBOUNCE_MS) return;
     recentUseOn.set(player.id, Date.now());
 
-    // 检测玩家视线前方是否对着容器方块（潜影盒兜底）
+    // 射线检测 → 容器兜底（潜影盒等可能不触发 playerInteractWithBlock）
     const raycast = player.getBlockFromViewDirection({ maxDistance: 6 });
     if (raycast?.block && isSupportedContainerType(raycast.block.typeId)) {
       const blockLocation = toBlockLocation(raycast.block.location);
@@ -83,25 +80,6 @@ export function registerToolInteraction(repository: WarehouseRepository, service
     }
 
     // 视线无容器 → 弹出主菜单
-    system.runTimeout(() => {
-      showMainMenu(player, repository, service).catch((error) => {
-        logger.error(`MainMenu error for ${player.name}: ${error}`);
-      });
-    }, 1);
-  });
-
-  // ── 物品使用事件（玩家手持木锄对空右键，未点击任何方块） ────
-  world.afterEvents.itemUse.subscribe((event) => {
-    const player = event.source;
-    const itemStack = event.itemStack;
-    if (!itemStack || itemStack.typeId !== TOOL_ID) return;
-
-    // 防抖
-    const lastUseOn = recentUseOn.get(player.id);
-    if (lastUseOn && Date.now() - lastUseOn < DEBOUNCE_MS) return;
-    recentUseOn.set(player.id, Date.now());
-
-    // 弹出主菜单
     system.runTimeout(() => {
       showMainMenu(player, repository, service).catch((error) => {
         logger.error(`MainMenu error for ${player.name}: ${error}`);
