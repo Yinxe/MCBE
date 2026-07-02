@@ -36,9 +36,12 @@ import { ROLE_LABELS, ROLE_ORDER } from "../types";
 import { SlotOrganizer } from "../sorting/SlotOrganizer";
 import { formatOrganizeResult } from "../util/OrganizeFormatter";
 import { normalizeWarehouseId } from "../storage/WarehouseRepository";
+import type { WarehouseRepository } from "../storage/WarehouseRepository";
+import type { ModConfigStore } from "../storage/ModConfigStore";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import { Logger } from "../util/Logger";
 import type { WarehouseService } from "../warehouse/WarehouseService";
+import { showMainMenu } from "../ui/MainMenu";
 
 /** CommandRouter 专用的日志记录器实例，用于输出调试和运行信息 */
 const log = new Logger("CommandRouter");
@@ -194,9 +197,15 @@ export class CommandRouter {
   private registered = false;
 
   /**
-   * @param service WarehouseService 实例，所有命令最终委托给该服务执行
+   * @param service     WarehouseService 实例，所有命令最终委托给该服务执行
+   * @param repository  WarehouseRepository 实例，用于 sw:menu 等需要访问仓库数据的命令
+   * @param configStore ModConfigStore 实例，用于 sw:menu 等需要模组配置的命令
    */
-  constructor(private readonly service: WarehouseService) {}
+  constructor(
+    private readonly service: WarehouseService,
+    private readonly repository: WarehouseRepository,
+    private readonly configStore: ModConfigStore,
+  ) {}
 
   /**
    * 注册所有自定义命令
@@ -256,7 +265,15 @@ export class CommandRouter {
         (origin) => this.handleOrganize(origin)
       );
 
-      log.info("Custom commands registered (sw:create/sw:resize/sw:rescan/sw:delete/sw:organize)");
+      // sw:menu —— 打开 SmartWarehouse 主菜单
+      // 无需参数，所有玩家可用（不依赖信物）
+      event.customCommandRegistry.registerCommand(
+        { ...commandBase("sw:menu", "打开 SmartWarehouse 主菜单"),
+          mandatoryParameters: [] },
+        (origin) => this.handleMenu(origin)
+      );
+
+      log.info("Custom commands registered (sw:create/sw:resize/sw:rescan/sw:delete/sw:organize/sw:menu)");
     });
   }
 
@@ -480,5 +497,22 @@ export class CommandRouter {
     });
 
     return success("已提交背包整理请求");
+  }
+
+  /**
+   * 处理 sw:menu 命令 —— 打开 SmartWarehouse 主菜单。
+   * 所有玩家可用，不依赖信物。
+   */
+  private handleMenu(origin: CustomCommandOrigin): CustomCommandResult {
+    const player = parseAnyPlayer(origin);
+    if (typeof player === "string") return failure(player);
+
+    system.runTimeout(() => {
+      showMainMenu(player, this.repository, this.service, this.configStore).catch((error) => {
+        log.error(`MainMenu error for ${player.name}: ${error}`);
+      });
+    });
+
+    return success("已打开 SmartWarehouse 主菜单");
   }
 }

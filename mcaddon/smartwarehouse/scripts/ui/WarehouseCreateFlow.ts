@@ -7,7 +7,7 @@ import { setSession } from "../interaction/SelectionSessionStore";
  * 显示仓库创建表单。
  * 以模态表单（ModalForm）收集仓库名称、默认容器角色和新容器默认启用状态，
  * 然后将这些信息保存到玩家的选择会话（SelectionSession）中，
- * 随后提示玩家使用木锄在游戏内选择仓库区域（两个对角点）。
+ * 随后提示玩家手持信物在游戏内选择仓库区域（两个对角点）。
  *
  * @param player - 要创建仓库的玩家
  */
@@ -59,5 +59,5 @@ export async function showWarehouseCreateForm(player: Player): Promise<void> {
     defaultNewContainerEnabled,
   });
 
-  player.sendMessage("§a请在两个对角位置使用木锄点击方块来选择仓库区域");
+  player.sendMessage("§a请在两个对角位置使用信物点击方块来选择仓库区域");
 }

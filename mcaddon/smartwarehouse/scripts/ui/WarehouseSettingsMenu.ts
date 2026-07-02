@@ -152,7 +152,7 @@ export async function showWarehouseSettingsMenu(
       type: "resizeWarehouse",
       warehouseId,
     });
-    player.sendMessage("§a请在两个对角位置使用木锄点击方块来选择新的仓库区域");
+    player.sendMessage("§a请在两个对角位置使用信物点击方块来选择新的仓库区域");
   }
 }
 

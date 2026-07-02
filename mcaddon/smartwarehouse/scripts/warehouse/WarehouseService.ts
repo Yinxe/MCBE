@@ -21,11 +21,11 @@ import { BoundaryDisplay } from "./BoundaryDisplay";
 /**
  * 单次扫描操作允许的最大方块体积上限。
  *
- * 65536 = 64×64×16（即一块 64×64 基底、16 格高的柱状区域）。
+ * 32768 = 32×32×32（即单仓库最大边长 32 格）。
  * 该限制确保同步全区域扫描在已加载区块范围内的单个 tick 内完成。
  * 超出此体积可能导致服务端卡顿或被看门狗（watchdog）终止。
  */
-const MAX_SCAN_VOLUME = 65_536;
+const MAX_SCAN_VOLUME = 32_768;
 
 /**
  * 单个仓库允许容纳的最大容器数量上限。
@@ -38,6 +38,9 @@ const MAX_CONTAINERS = 512;
  * 两个仓库区域在各轴向上都必须至少相距此距离，防止重叠和容器归属混乱。
  */
 const MIN_WAREHOUSE_SPACING = 4;
+
+/** 单仓库最大边长（各轴向均不超过此值）。 */
+const MAX_EDGE_LENGTH = 32;
 
 /**
  * 仓库服务（WarehouseService）
@@ -100,6 +103,7 @@ export class WarehouseService {
     if (this.repository.exists(id)) throw new Error(`仓库 ${id} 已存在`);
     const area = normalizeArea(pointA, pointB);
     this.assertScanVolume(area);
+    this.assertEdgeLength(area);
     // 检查新仓库与所有已有仓库是否间距不足
     this.assertWarehouseSpacing(area, dimensionId, undefined);
     const dimension = world.getDimension(dimensionId);
@@ -175,6 +179,7 @@ export class WarehouseService {
     const warehouse = this.requireWarehouse(id);
     const area = normalizeArea(pointA, pointB);
     this.assertScanVolume(area);
+    this.assertEdgeLength(area);
     this.assertWarehouseSpacing(area, warehouse.dimensionId, id);
     const dimension = world.getDimension(warehouse.dimensionId);
     const scanned = this.scanner.scan(
@@ -359,6 +364,21 @@ export class WarehouseService {
   private assertScanVolume(area: WarehouseArea): void {
     const volume = areaVolume(area);
     if (volume > MAX_SCAN_VOLUME) throw new Error(`仓库区域过大：${volume} > ${MAX_SCAN_VOLUME}`);
+  }
+
+  /**
+   * 校验仓库各轴向边长是否超过上限。
+   *
+   * @param area 仓库区域
+   * @throws 如果任一轴向边长超过 MAX_EDGE_LENGTH
+   */
+  private assertEdgeLength(area: WarehouseArea): void {
+    const edgeX = area.max.x - area.min.x + 1;
+    const edgeY = area.max.y - area.min.y + 1;
+    const edgeZ = area.max.z - area.min.z + 1;
+    if (edgeX > MAX_EDGE_LENGTH || edgeY > MAX_EDGE_LENGTH || edgeZ > MAX_EDGE_LENGTH) {
+      throw new Error(`仓库边长过大：${edgeX}×${edgeY}×${edgeZ}，各轴向不能超过 ${MAX_EDGE_LENGTH}`);
+    }
   }
 
   /**

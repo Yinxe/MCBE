@@ -5,15 +5,10 @@ import { Logger } from "../util/Logger";
 import { isSupportedContainerType } from "../warehouse/ContainerTypes";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
+import type { ModConfigStore } from "../storage/ModConfigStore";
 import { getSession, setSession, clearSession, clearSessionById } from "./SelectionSessionStore";
 import { showMainMenu } from "../ui/MainMenu";
 import { showContainerRoleMenu } from "../ui/ContainerRoleMenu";
-
-/**
- * 用于触发交互的工具物品 ID —— 木锄。
- * 玩家手持木锄右键点击方块或对空右键，即可唤起仓库管理菜单。
- */
-const TOOL_ID = "minecraft:wooden_hoe";
 
 /**
  * 防抖时间窗口（毫秒）。
@@ -33,18 +28,19 @@ const recentUseOn = new Map<string, number>();
 
 /**
  * 注册所有工具交互事件监听器。
- * 必须在世界初始化时调用一次，之后玩家手持木锄即可与仓库系统交互。
+ * 必须在世界初始化时调用一次，之后玩家手持信物即可与仓库系统交互。
  *
- * @param repository - 仓库数据持久化仓储
- * @param service - 仓库服务实例，提供仓库查询、创建、修改等核心操作。
+ * @param repository  - 仓库数据持久化仓储
+ * @param service     - 仓库服务实例，提供仓库查询、创建、修改等核心操作。
+ * @param configStore - 模组配置仓储（用于获取信物 ID）
  */
-export function registerToolInteraction(repository: WarehouseRepository, service: WarehouseService): void {
-  // ── 方块交互事件（玩家手持木锄右键点击方块） ──────────────
+export function registerToolInteraction(repository: WarehouseRepository, service: WarehouseService, configStore: ModConfigStore): void {
+  // ── 方块交互事件（玩家手持信物右键点击方块） ──────────────
   // 在事件触发前（beforeEvents）拦截，可以取消默认行为（如打开箱子界面）。
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
     const player = event.player;
     const itemStack = event.itemStack;
-    if (!itemStack || itemStack.typeId !== TOOL_ID) return;
+    if (!itemStack || !configStore.isToken(itemStack.typeId)) return;
     if (!event.isFirstEvent) return;
     recentUseOn.set(player.id, Date.now());
     event.cancel = true;
@@ -64,7 +60,7 @@ export function registerToolInteraction(repository: WarehouseRepository, service
   world.afterEvents.itemUse.subscribe((event) => {
     const player = event.source;
     const itemStack = event.itemStack;
-    if (!itemStack || itemStack.typeId !== TOOL_ID) return;
+    if (!itemStack || !configStore.isToken(itemStack.typeId)) return;
 
     // 防抖：避免与 playerInteractWithBlock 重复触发
     const lastUseOn = recentUseOn.get(player.id);
@@ -81,7 +77,7 @@ export function registerToolInteraction(repository: WarehouseRepository, service
 
     // 视线无容器 → 弹出主菜单
     system.runTimeout(() => {
-      showMainMenu(player, repository, service).catch((error) => {
+      showMainMenu(player, repository, service, configStore).catch((error) => {
         logger.error(`MainMenu error for ${player.name}: ${error}`);
       });
     }, 1);
@@ -173,7 +169,7 @@ function handleNonContainerClick(
   const session = getSession(player);
 
   if (!session) {
-    player.sendMessage("§e请先使用木锄对空右键打开菜单创建仓库");
+    player.sendMessage("§e请先手持信物对空右键打开菜单创建仓库");
     return;
   }
 

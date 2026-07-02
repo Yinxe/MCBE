@@ -2,6 +2,7 @@ import { world, system, type Dimension, type Player } from "@minecraft/server";
 import type { WarehouseId, WarehouseArea, DimensionId, WarehouseData } from "../types";
 import { Logger } from "../util/Logger";
 import { isNearAreaXZ } from "../util/Vector";
+import type { ModConfigStore } from "../storage/ModConfigStore";
 
 const log = new Logger("BoundaryDisplay");
 
@@ -16,9 +17,9 @@ const log = new Logger("BoundaryDisplay");
  * 显示条件（通过 start 启动的持久边界）：
  * 1. 仓库设置 showBoundary = true
  * 2. 附近（区域各轴外扩 8 格）有玩家
- * 3. 该玩家手持木锄（minecraft:wooden_hoe）
+ * 3. 该玩家手持信物（通过 ModConfigStore 配置）
  *
- * 临时边界（showTemporarily）不需要木锄，用于创建/调整后的视觉反馈。
+ * 临时边界（showTemporarily）不需要信物，用于创建/调整后的视觉反馈。
  *
  * 不依赖任何自定义粒子资源，纯原版粒子。
  * ============================================================================
@@ -33,6 +34,11 @@ export class BoundaryDisplay {
   private static readonly STEP = 0.6; // 粒子间距
   /** 仓库区域外扩格数，范围内有玩家才显示边界 */
   private static readonly PROXIMITY_MARGIN = 8;
+
+  /**
+   * @param configStore - 模组配置仓储（用于获取当前信物 ID）
+   */
+  constructor(private readonly configStore: ModConfigStore) {}
 
   // ─── 生命周期 ───────────────────────────────────────────────────
 
@@ -59,7 +65,7 @@ export class BoundaryDisplay {
   showTemporarily(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId): void {
     this.stop(warehouseId);
 
-    // 临时边界不需要木锄，作为创建/调整后的视觉确认反馈
+    // 临时边界不需要信物，作为创建/调整后的视觉确认反馈
     this.drawEdges(warehouseId, area, dimensionId, false);
 
     const handle = system.runInterval(() => {
@@ -112,9 +118,7 @@ export class BoundaryDisplay {
 
   /** 玩家缓存 tick */
   private static PLAYER_CACHE_TICK = 20;
-  /** 木锄物品 ID */
-  private static readonly HOE_ID = "minecraft:wooden_hoe";
-  private playerCache: { x: number; z: number; hasHoe: boolean }[] = [];
+  private playerCache: { x: number; z: number; hasToken: boolean }[] = [];
   private playerCacheUpdatedAt = 0;
 
   /**
@@ -123,7 +127,7 @@ export class BoundaryDisplay {
    * @param warehouseId  仓库 ID
    * @param area         仓库区域
    * @param dimensionId  维度
-   * @param requireHoe   是否要求附近玩家手持木锄才绘制（持久边界=true，临时边界=false）
+   * @param requireHoe   是否要求附近玩家手持信物才绘制（持久边界=true，临时边界=false）
    */
   private drawEdges(
     warehouseId: WarehouseId,
@@ -153,14 +157,15 @@ export class BoundaryDisplay {
           .map(p => ({
             x: p.location.x,
             z: p.location.z,
-            hasHoe: BoundaryDisplay.HOE_ID === p.getComponent("inventory")
-              ?.container?.getItem(p.selectedSlotIndex)?.typeId,
+            hasToken: this.configStore.isToken(
+              p.getComponent("inventory")?.container?.getItem(p.selectedSlotIndex)?.typeId
+            ),
           }));
       }
       if (this.playerCache.length > 0) {
         const margin = BoundaryDisplay.PROXIMITY_MARGIN;
         const valid = this.playerCache.some((p) =>
-          isNearAreaXZ(p, area, margin) && (!requireHoe || p.hasHoe)
+          isNearAreaXZ(p, area, margin) && (!requireHoe || p.hasToken)
         );
         if (!valid) return;
       }

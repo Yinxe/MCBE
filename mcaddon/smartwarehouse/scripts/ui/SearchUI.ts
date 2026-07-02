@@ -7,7 +7,7 @@
  * 1. 通过 ModalForm 提供搜索交互（介绍文字 + 搜索框 + 仓库选择下拉）
  * 2. 执行搜索后将结果通过聊天栏发送给玩家
  * 3. 自动播放紫色粒子标记匹配的容器位置
- * 4. 粒子标记默认持续 10 秒，手持木锄可持续续时
+ * 4. 粒子标记默认持续 10 秒，手持信物可持续续时
  * 5. 同一玩家同一时刻只有一个活跃标记会话（新搜索取代旧标记）
  * ============================================================================
  */
@@ -16,14 +16,13 @@ import { world, system, type Player } from "@minecraft/server";
 import { ModalFormData } from "@minecraft/server-ui";
 import type { BlockLocation, WarehouseData } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
+import type { ModConfigStore } from "../storage/ModConfigStore";
 import { SearchService, formatSearchResult } from "../warehouse/SearchService";
 import { playSearchEffect } from "../sorting/SortEffects";
 import { Logger } from "../util/Logger";
 
 const log = new Logger("SearchUI");
 
-/** 木锄物品 ID */
-const HOE_ID = "minecraft:wooden_hoe";
 /** 粒子刷新间隔（tick） */
 const PARTICLE_INTERVAL = 20;
 /** 默认标记持续时间（tick）：10 秒 */
@@ -41,10 +40,11 @@ const activeMarkerHandles = new Map<string, number>();
 /**
  * 显示容器搜索界面。
  *
- * @param player     - 搜索玩家
- * @param repository - 仓库持久化仓储
+ * @param player      - 搜索玩家
+ * @param repository  - 仓库持久化仓储
+ * @param configStore - 模组配置仓储
  */
-export async function showSearchUI(player: Player, repository: WarehouseRepository): Promise<void> {
+export async function showSearchUI(player: Player, repository: WarehouseRepository, configStore: ModConfigStore): Promise<void> {
   // ── 1. 加载仓库数据，找出最近仓库 ──
   const warehouses = repository
     .loadAll()
@@ -97,13 +97,13 @@ export async function showSearchUI(player: Player, repository: WarehouseReposito
   }
 
   // ── 3. 执行搜索 ──
-  await performSearch(player, selected, query.trim());
+  await performSearch(player, selected, query.trim(), configStore);
 }
 
 /**
  * 执行搜索并展示结果。
  */
-async function performSearch(player: Player, warehouse: WarehouseData, query: string): Promise<void> {
+async function performSearch(player: Player, warehouse: WarehouseData, query: string, configStore: ModConfigStore): Promise<void> {
   const service = new SearchService();
   const dimension = world.getDimension(warehouse.dimensionId);
 
@@ -129,7 +129,7 @@ async function performSearch(player: Player, warehouse: WarehouseData, query: st
   if (locations.length === 0) return;
 
   // ── 6. 播放粒子标记 ──
-  player.sendMessage("§7紫色粒子已标记容器位置 (持续 10 秒，手持木锄可持续续时)");
+  player.sendMessage("§7紫色粒子已标记容器位置 (持续 10 秒，手持信物可持续续时)");
 
   const blLocations: BlockLocation[] = locations.map((l) => ({
     x: Math.floor(l.x),
@@ -137,7 +137,7 @@ async function performSearch(player: Player, warehouse: WarehouseData, query: st
     z: Math.floor(l.z),
   }));
 
-  startMarkerParticles(player, warehouse.dimensionId, blLocations);
+  startMarkerParticles(player, warehouse.dimensionId, blLocations, configStore);
 }
 
 /**
@@ -153,11 +153,12 @@ async function performSearch(player: Player, warehouse: WarehouseData, query: st
  * 每 20 tick 刷新一次粒子。
  * 同一玩家再次调用会先清理旧会话。
  *
- * @param player     - 搜索玩家
+ * @param player      - 搜索玩家
  * @param dimensionId - 容器维度 ID
- * @param locations  - 要标记的方块坐标列表
+ * @param locations   - 要标记的方块坐标列表
+ * @param configStore - 模组配置仓储（用于获取当前信物 ID）
  */
-function startMarkerParticles(player: Player, dimensionId: string, locations: BlockLocation[]): void {
+function startMarkerParticles(player: Player, dimensionId: string, locations: BlockLocation[], configStore: ModConfigStore): void {
   // 清理同一玩家的旧标记会话
   const oldHandle = activeMarkerHandles.get(player.id);
   if (oldHandle !== undefined) {
@@ -177,7 +178,7 @@ function startMarkerParticles(player: Player, dimensionId: string, locations: Bl
     try {
       const inv = player.getComponent("inventory")?.container;
       const held = inv?.getItem(player.selectedSlotIndex);
-      holdingHoe = !!(held && held.typeId === HOE_ID);
+      holdingHoe = configStore.isToken(held?.typeId);
     } catch {
       // 玩家可能已离线
     }
@@ -219,7 +220,7 @@ function startMarkerParticles(player: Player, dimensionId: string, locations: Bl
       if (!graceNotified) {
         graceNotified = true;
         try {
-          player.sendMessage("§e标记即将在 3 秒后消失，手持木锄可继续标记");
+          player.sendMessage("§e标记即将在 3 秒后消失，手持信物可继续标记");
         } catch { /* 忽略 */ }
       }
 
