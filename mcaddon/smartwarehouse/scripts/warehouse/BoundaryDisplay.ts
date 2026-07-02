@@ -17,8 +17,11 @@ const log = new Logger("BoundaryDisplay");
  */
 export class BoundaryDisplay {
   private readonly handles = new Map<WarehouseId, number>();
+  /** 临时显示的延迟停止句柄（10 秒超时） */
+  private readonly tempHandles = new Map<WarehouseId, number>();
 
   private static readonly REFRESH_INTERVAL = 40; // 2 秒
+  private static readonly TEMP_DURATION_TICKS = 200; // 10 秒（20 tick/秒）
   private static readonly STEP = 0.6; // 粒子间距
 
   // ─── 生命周期 ───────────────────────────────────────────────────
@@ -35,11 +38,41 @@ export class BoundaryDisplay {
     this.handles.set(warehouseId, handle);
   }
 
+  /**
+   * 临时显示仓库边界线框，指定时间后自动关闭。
+   * 用于创建/调整操作后的视觉确认反馈，不改变仓库的 showBoundary 永久设置。
+   *
+   * @param warehouseId  - 仓库 ID
+   * @param area         - 仓库区域
+   * @param dimensionId  - 维度 ID
+   */
+  showTemporarily(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId): void {
+    this.stop(warehouseId);
+
+    this.drawEdges(warehouseId, area, dimensionId);
+
+    const handle = system.runInterval(() => {
+      this.drawEdges(warehouseId, area, dimensionId);
+    }, BoundaryDisplay.REFRESH_INTERVAL);
+    this.handles.set(warehouseId, handle);
+
+    const timeoutHandle = system.runTimeout(() => {
+      this.stop(warehouseId);
+      this.tempHandles.delete(warehouseId);
+    }, BoundaryDisplay.TEMP_DURATION_TICKS);
+    this.tempHandles.set(warehouseId, timeoutHandle);
+  }
+
   stop(warehouseId: WarehouseId): void {
     const handle = this.handles.get(warehouseId);
     if (handle !== undefined) {
       system.clearRun(handle);
       this.handles.delete(warehouseId);
+    }
+    const tempHandle = this.tempHandles.get(warehouseId);
+    if (tempHandle !== undefined) {
+      system.clearRun(tempHandle);
+      this.tempHandles.delete(warehouseId);
     }
   }
 
@@ -48,6 +81,10 @@ export class BoundaryDisplay {
       system.clearRun(handle);
     }
     this.handles.clear();
+    for (const handle of this.tempHandles.values()) {
+      system.clearRun(handle);
+    }
+    this.tempHandles.clear();
     log.info("所有仓库边界显示已停止");
   }
 

@@ -223,10 +223,22 @@ function handleNonContainerClick(
         player.sendMessage(`§c操作失败: ${error}，请重新开始`);
       }
     }, 1);
+  } else if (session.type === "resizeWarehouse") {
+    const { warehouseId } = session;
+    clearSession(player);
+
+    system.runTimeout(() => {
+      try {
+        const result = service.resizeWarehouse(warehouseId, pointA, pointB);
+        player.sendMessage(
+          `§a仓库 "${result.displayName}" 调整成功！共发现 ${Object.keys(result.containers).length} 个容器`
+        );
+      } catch (error) {
+        player.sendMessage(`§c操作失败: ${error}，请重新开始`);
+      }
+    }, 1);
   } else {
-    // 预留的 resizeWarehouse（调整仓库范围）功能，当前 MVP 版本尚未实现
-    player.sendMessage("§c调整仓库功能待后续实现");
+    clearSession(player);
     return;
   }
-  clearSession(player);
 }

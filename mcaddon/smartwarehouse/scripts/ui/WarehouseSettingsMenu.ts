@@ -4,6 +4,7 @@ import type { WarehouseId, WarehouseSettings } from "../types";
 import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
+import { setSession, clearSession } from "../interaction/SelectionSessionStore";
 
 /**
  * 显示仓库设置表单。
@@ -45,13 +46,15 @@ export async function showWarehouseSettingsMenu(
     .toggle("自动创建分类", { defaultValue: settings.autoCreateCategories })
     .toggle("启用仓库", { defaultValue: settings.enabled })
     .toggle("显示边界光幕", { defaultValue: settings.showBoundary })
-    .toggle("删除此仓库（提交后需确认）", { defaultValue: false });
+    .textField("§8━━━ 操作 ━━━", "", { defaultValue: "§7⚠ 每次只能开启一种操作" })
+    .toggle("§c删除此仓库（提交后需确认）", { defaultValue: false })
+    .toggle("§e调整此仓库区域（提交后需选择新区域）", { defaultValue: false });
 
   const response = await form.show(player);
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 8) {
+  if (!values || values.length < 10) {
     player.sendMessage("§c表单数据异常，请重试");
     return;
   }
@@ -63,7 +66,13 @@ export async function showWarehouseSettingsMenu(
   const newAutoCreate = values[4] as boolean;
   const newWarehouseEnabled = values[5] as boolean;
   const newShowBoundary = values[6] as boolean;
-  const shouldDelete = values[7] as boolean;
+  const shouldDelete = values[8] as boolean;
+  const shouldResize = values[9] as boolean;
+
+  if (shouldDelete && shouldResize) {
+    player.sendMessage("§c「删除仓库」和「调整区域」不能同时开启，请重新选择");
+    return;
+  }
 
   try {
     // 1. 名称变更
@@ -109,6 +118,17 @@ export async function showWarehouseSettingsMenu(
   // ── 删除仓库（仅在开关开启时弹出确认） ──────────
   if (shouldDelete) {
     await showDeleteWarehouseConfirm(player, warehouseId, warehouse.displayName, service);
+    return;
+  }
+
+  // ── 调整仓库区域（提交后通过交互式选区选择新区域） ──
+  if (shouldResize) {
+    clearSession(player);
+    setSession(player, {
+      type: "resizeWarehouse",
+      warehouseId,
+    });
+    player.sendMessage("§a请在两个对角位置使用木锄点击方块来选择新的仓库区域");
   }
 }
 

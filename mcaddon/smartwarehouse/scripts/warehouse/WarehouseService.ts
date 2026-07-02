@@ -122,6 +122,7 @@ export class WarehouseService {
     this.repository.create(data);
     this.markRuntimeDirty(data.id);
     this.notifyScheduler?.(data.id);
+    this.showBoundaryTemporarily(data);
     return data;
   }
 
@@ -192,6 +193,7 @@ export class WarehouseService {
     this.repository.save(updated);
     this.markRuntimeDirty(id);
     this.notifyScheduler?.(id);
+    this.showBoundaryTemporarily(updated);
     return updated;
   }
 
@@ -331,6 +333,16 @@ export class WarehouseService {
     const warehouse = this.repository.load(id);
     if (!warehouse) throw new Error(`仓库 ${id} 不存在`);
     return warehouse;
+  }
+
+  /**
+   * 在仓库创建或调整区域成功后，临时显示边界 10 秒作为视觉确认反馈。
+   * 如果仓库已启用永久边界显示（showBoundary = true），则跳过临时显示。
+   */
+  private showBoundaryTemporarily(data: WarehouseData): void {
+    if (!this.boundaryDisplay) return;
+    if (data.settings.showBoundary) return;
+    this.boundaryDisplay.showTemporarily(data.id, data.area, data.dimensionId);
   }
 
   /**
