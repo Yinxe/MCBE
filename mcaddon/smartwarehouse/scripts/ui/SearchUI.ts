@@ -7,7 +7,8 @@
  * 1. 通过 ModalForm 提供搜索交互（介绍文字 + 搜索框 + 仓库选择下拉）
  * 2. 执行搜索后将结果通过聊天栏发送给玩家
  * 3. 自动播放紫色粒子标记匹配的容器位置
- * 4. 粒子标记持续 30 秒，玩家手持木锄时持续标记
+ * 4. 粒子标记默认持续 10 秒，手持木锄可持续续时
+ * 5. 同一玩家同一时刻只有一个活跃标记会话（新搜索取代旧标记）
  * ============================================================================
  */
 
@@ -25,8 +26,17 @@ const log = new Logger("SearchUI");
 const HOE_ID = "minecraft:wooden_hoe";
 /** 粒子刷新间隔（tick） */
 const PARTICLE_INTERVAL = 20;
-/** 默认标记持续时间（tick）：30 秒 */
-const DEFAULT_DURATION = 30 * 20;
+/** 默认标记持续时间（tick）：10 秒 */
+const DEFAULT_DURATION = 10 * 20;
+/** 超时后宽限期（tick）：3 秒后彻底消失 */
+const GRACE_DURATION = 3 * 20;
+
+/**
+ * 每个玩家当前的活跃标记会话句柄。
+ * key = player.id，value = handle（system.runInterval 返回值）。
+ * 同一玩家再次搜索时，旧的会话会被清理。
+ */
+const activeMarkerHandles = new Map<string, number>();
 
 /**
  * 显示容器搜索界面。
@@ -119,7 +129,7 @@ async function performSearch(player: Player, warehouse: WarehouseData, query: st
   if (locations.length === 0) return;
 
   // ── 6. 播放粒子标记 ──
-  player.sendMessage(`§7紫色粒子已标记 ${locations.length} 个容器位置 (持续 30 秒，手持木锄可维持标记)`);
+  player.sendMessage("§7紫色粒子已标记容器位置 (持续 10 秒，手持木锄可持续续时)");
 
   const blLocations: BlockLocation[] = locations.map((l) => ({
     x: Math.floor(l.x),
@@ -132,46 +142,105 @@ async function performSearch(player: Player, warehouse: WarehouseData, query: st
 
 /**
  * 启动容器位置标记粒子。
- * 每 20 tick 刷新一次粒子，持续 30 秒。
- * 玩家手持木锄时重置计时器，持续标记。
+ *
+ * 状态机：
+ *   持锄 → timer 保持 0           （标记持续）
+ *   松锄 → timer 递增              （10 秒倒计时）
+ *   超时 → 进入宽限期              （3 秒后消失）
+ *   宽限期内拾锄 → 回到持锄       （续时）
+ *   宽限期结束 → 清理标记
+ *
+ * 每 20 tick 刷新一次粒子。
+ * 同一玩家再次调用会先清理旧会话。
+ *
+ * @param player     - 搜索玩家
+ * @param dimensionId - 容器维度 ID
+ * @param locations  - 要标记的方块坐标列表
  */
 function startMarkerParticles(player: Player, dimensionId: string, locations: BlockLocation[]): void {
-  let elapsed = 0;
-  let active = true;
+  // 清理同一玩家的旧标记会话
+  const oldHandle = activeMarkerHandles.get(player.id);
+  if (oldHandle !== undefined) {
+    system.clearRun(oldHandle);
+  }
+
+  let elapsed = 0;          // 松锄后经过的 tick
+  let graceElapsed = 0;     // 宽限期内经过的 tick
+  let phase: "active" | "grace" | "done" = "active";
+  let graceNotified = false;
 
   const handle = system.runInterval(() => {
-    if (!active) return;
+    if (phase === "done") return;
 
+    // ── 检查玩家手持状态 ──
+    let holdingHoe = false;
+    try {
+      const inv = player.getComponent("inventory")?.container;
+      const held = inv?.getItem(player.selectedSlotIndex);
+      holdingHoe = !!(held && held.typeId === HOE_ID);
+    } catch {
+      // 玩家可能已离线
+    }
+
+    // ── 刷粒子 ──
     try {
       const dimension = world.getDimension(dimensionId);
       playSearchEffect(dimension, locations);
     } catch {
       // 维度不可达时静默停止
-      active = false;
+      cleanup();
       return;
     }
 
-    // 检查玩家手持物品
-    try {
-      const inv = player.getComponent("inventory")?.container;
-      const held = inv?.getItem(player.selectedSlotIndex);
-      if (held && held.typeId === HOE_ID) {
-        elapsed = 0; // 手持木锄时重置计时
-        return;
+    if (phase === "active") {
+      if (holdingHoe) {
+        elapsed = 0; // 持锄 → 一直续时
+      } else {
+        elapsed += PARTICLE_INTERVAL;
       }
-    } catch {
-      // 玩家可能已离线
+
+      if (elapsed >= DEFAULT_DURATION) {
+        // 超时，进入宽限期
+        phase = "grace";
+        graceElapsed = 0;
+        graceNotified = false;
+      }
     }
 
-    elapsed += PARTICLE_INTERVAL;
-    if (elapsed >= DEFAULT_DURATION) {
-      active = false;
-      system.clearRun(handle);
-      try {
-        player.sendMessage("§7容器标记已结束");
-      } catch { /* 忽略 */ }
+    if (phase === "grace") {
+      if (holdingHoe) {
+        // 宽限期内拾锄 → 续时成功
+        phase = "active";
+        elapsed = 0;
+        graceElapsed = 0;
+        return;
+      }
+
+      if (!graceNotified) {
+        graceNotified = true;
+        try {
+          player.sendMessage("§e标记即将在 3 秒后消失，手持木锄可继续标记");
+        } catch { /* 忽略 */ }
+      }
+
+      graceElapsed += PARTICLE_INTERVAL;
+
+      if (graceElapsed >= GRACE_DURATION) {
+        cleanup();
+      }
     }
   }, PARTICLE_INTERVAL);
+
+  activeMarkerHandles.set(player.id, handle);
+
+  function cleanup(): void {
+    phase = "done";
+    system.clearRun(handle);
+    activeMarkerHandles.delete(player.id);
+    try {
+      player.sendMessage("§7容器标记已结束");
+    } catch { /* 忽略 */ }
+  }
 }
 
 /**
