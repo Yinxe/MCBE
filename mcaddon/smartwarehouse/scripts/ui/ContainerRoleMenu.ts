@@ -68,7 +68,7 @@ function formatDetailsLine(details: ContainerDetails | undefined): string {
  *
  * 根据玩家权限提供不同界面：
  * - 非管理员：只读查看容器信息，仅有关闭按钮。
- * - 管理员：使用 ModalForm 统一设置容器的启用状态、角色，并提供删除（禁用）选项。
+ * - 管理员：使用 ModalForm 统一设置容器的启用状态和角色。
  *
  * @param player      - 请求查看/修改容器设置的玩家
  * @param warehouse   - 容器所属的仓库数据
@@ -123,36 +123,18 @@ export async function showContainerRoleMenu(
       `§7角色: §f${currentRoleLabel} — ${roleDesc}§r`
     )
     .toggle("启用容器", { defaultValue: container.enabled })
-    .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
-    .toggle("§c禁用此容器（关闭后不参与分拣）", { defaultValue: false });
+    .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });
 
   const response = await form.show(player);
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 3) return;
+  if (!values || values.length < 2) return;
 
-  // 兼容处理：部分 Bedrock 版本中 ModalFormData.label() 会占用 formValues 的索引 0
-  // 如果数组长度为 4，说明 label 占了第一格（值为 undefined），需要偏移 1 位
-  const offset = values.length === 4 ? 1 : 0;
+  // 兼容 label 占索引
+  const offset = values.length === 3 ? 1 : 0;
   const newEnabled = values[0 + offset] as boolean;
   const newRoleIndex = values[1 + offset] as number;
-  const shouldDisable = values[2 + offset] as boolean;
-
-  if (shouldDisable) {
-    // ── 禁用确认 ──
-    const confirm = new ActionFormData()
-      .title("禁用容器")
-      .body(`确定要禁用容器 ${containerId} 吗？禁用后该容器不参与分拣，数据保留。`)
-      .button("§c确认禁用")
-      .button("取消");
-    const confirmResponse = await confirm.show(player);
-    if (confirmResponse.canceled || confirmResponse.selection !== 0) return;
-
-    service.setContainerRoleAndState(warehouse.id, containerId, null, false);
-    player.sendMessage("§c容器已禁用");
-    return;
-  }
 
   // ── 提交角色和状态变更 ──
   try {
