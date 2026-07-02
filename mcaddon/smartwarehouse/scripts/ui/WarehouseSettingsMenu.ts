@@ -59,6 +59,12 @@ export async function showWarehouseSettingsMenu(
     .toggle("自动创建分类", { defaultValue: settings.autoCreateCategories })
     .toggle("启用仓库", { defaultValue: settings.enabled })
     .toggle("显示边界光幕", { defaultValue: settings.showBoundary })
+    .slider(
+      "§7自动整理阈值（0=关闭，步进20）\n" +
+      "§820%整洁 §a40%适中 §e60%杂乱 §c100%极限",
+      0, 100,
+      { defaultValue: settings.autoSortThreshold, valueStep: 20 },
+    )
     .label("§8━━━ 操作 ━━━")
     .toggle("§c删除此仓库（提交后需确认）", { defaultValue: false })
     .toggle("§e调整此仓库区域（提交后需选择新区域）", { defaultValue: false });
@@ -67,7 +73,7 @@ export async function showWarehouseSettingsMenu(
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 11) {
+  if (!values || values.length < 12) {
     player.sendMessage("§c表单数据异常，请重试");
     return;
   }
@@ -79,8 +85,9 @@ export async function showWarehouseSettingsMenu(
   const newAutoCreate = values[5] as boolean;
   const newWarehouseEnabled = values[6] as boolean;
   const newShowBoundary = values[7] as boolean;
-  const shouldDelete = values[9] as boolean;
-  const shouldResize = values[10] as boolean;
+  const newAutoSortThreshold = values[8] as number;
+  const shouldDelete = values[10] as boolean;
+  const shouldResize = values[11] as boolean;
 
   if (shouldDelete && shouldResize) {
     player.sendMessage("§c「删除仓库」和「调整区域」不能同时开启，请重新选择");
@@ -116,6 +123,9 @@ export async function showWarehouseSettingsMenu(
     }
     if (newShowBoundary !== settings.showBoundary) {
       settingsUpdate.showBoundary = newShowBoundary;
+    }
+    if (newAutoSortThreshold !== settings.autoSortThreshold) {
+      settingsUpdate.autoSortThreshold = newAutoSortThreshold;
     }
 
     if (Object.keys(settingsUpdate).length > 0) {

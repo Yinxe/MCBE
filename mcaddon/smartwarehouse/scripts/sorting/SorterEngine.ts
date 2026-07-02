@@ -376,7 +376,7 @@ export class SorterEngine {
         // 播放分拣动画（粒子 + 音效）
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         // 触发目标容器的混乱度检查，必要时自动整理
-        this.organizer?.onDeposit(targetContainer, containerId);
+        this.organizer?.onDeposit(targetContainer, containerId, warehouse.settings.autoSortThreshold / 100);
       }
 
       if (remaining === undefined) return undefined; // 全部放完，提前退出
@@ -439,7 +439,7 @@ export class SorterEngine {
       remaining = tryFillShulkerBoxes(target, remaining);
       if (remaining === undefined) {
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
-        this.organizer?.onDeposit(target, containerId);
+        this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
         return undefined;
       }
 
@@ -452,7 +452,7 @@ export class SorterEngine {
           `[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`
         );
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
-        this.organizer?.onDeposit(target, containerId);
+        this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
       }
 
       if (remaining === undefined) return undefined;

@@ -107,8 +107,6 @@ function buildPerType(stacks: ItemStack[]): Record<string, { stacks: number; tot
  * ```
  * ============================================================================
  */
-/** 分拣后自动整理的混乱度阈值 */
-const AUTO_ORGANIZE_THRESHOLD = 0.3;
 /** 容器锁安全网超时 tick */
 const LOCK_SAFETY_TICKS = 100;
 
@@ -140,12 +138,14 @@ export class SlotOrganizer {
    * 分拣引擎向目标容器放入物品后调用。
    * 计算混乱度，超过阈值则自动整理。
    *
+   * @param threshold - 混乱度阈值（0-1），0 表示关闭自动整理
    * @returns 是否执行了整理
    */
-  onDeposit(container: Container, containerId: ContainerId): boolean {
+  onDeposit(container: Container, containerId: ContainerId, threshold: number): boolean {
+    if (threshold <= 0) return false;
     try {
       const m = this.calculateMessiness(container);
-      if (m.total <= AUTO_ORGANIZE_THRESHOLD) return false;
+      if (m.total <= threshold) return false;
 
       // 获取写锁（若被其他操作占用则跳过本次整理）
       if (!this.tryLock(containerId)) return false;

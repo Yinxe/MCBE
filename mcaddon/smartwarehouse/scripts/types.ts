@@ -102,6 +102,11 @@ export interface WarehouseSettings {
   debug: boolean;
   /** 是否显示仓库边界光幕 */
   showBoundary: boolean;
+  /**
+   * 自动整理混乱度阈值（0-100）。
+   * 0 = 关闭；>0 时，容器混乱度超过此值则自动触发整理。
+   */
+  autoSortThreshold: number;
 }
 
 /**
