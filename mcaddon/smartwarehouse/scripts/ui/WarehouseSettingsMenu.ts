@@ -1,15 +1,17 @@
 import type { Player } from "@minecraft/server";
+import { system } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { clearSession, setSession } from "../interaction/SelectionSessionStore";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseId, WarehouseSettings } from "../types";
 import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
 import type { WarehouseService } from "../warehouse/WarehouseService";
+import { showFamilyConfigMenu } from "./FamilyConfigMenu";
 
 /**
  * 显示仓库设置表单。
  * 通过 ModalForm 提供仓库名称、默认角色、启用状态、处理速度等设置项。
- * 表单中新增"删除此仓库"开关，提交后若开关为 true 则弹出二次确认。
+ * 底部操作：家庭成员、重新扫描、删除仓库、调整区域（互斥）。
  *
  * @param player     - 操作的玩家
  * @param warehouseId - 要设置的仓库 ID
@@ -32,6 +34,11 @@ export async function showWarehouseSettingsMenu(
 
   // ── 容器概况（从内存统计，不扫描容器） ─────────
   const cList = Object.values(warehouse.containers);
+  const enabledFamilies = settings.enabledFamilies ?? [];
+  const familyText =
+    enabledFamilies.length > 0
+      ? `  §bFamily§f${enabledFamilies.length}`
+      : "";
   const statsLine =
     `§7容器 §f${cList.length}个  ` +
     `§a普通${cList.filter((c) => c.role === "normal" && c.enabled).length} ` +
@@ -40,7 +47,8 @@ export async function showWarehouseSettingsMenu(
     `§6输入${cList.filter((c) => c.role === "input" && c.enabled).length}` +
     (cList.filter((c) => !c.enabled).length > 0
       ? `  §8禁用${cList.filter((c) => !c.enabled).length}`
-      : "");
+      : "") +
+    familyText;
 
   // ── 主设置表单 ──────────────────────────────────
   const roleLabels = ROLE_ORDER.map((r) => ROLE_LABELS[r]);
@@ -67,6 +75,8 @@ export async function showWarehouseSettingsMenu(
       { defaultValue: settings.autoSortThreshold, valueStep: 20 },
     )
     .label("§8━━━ 操作 ━━━")
+    .toggle("§b家庭成员（提交后打开）", { defaultValue: false })
+    .toggle("§a重新扫描仓库（提交后执行）", { defaultValue: false })
     .toggle("§c删除此仓库（提交后需确认）", { defaultValue: false })
     .toggle("§e调整此仓库区域（提交后需选择新区域）", { defaultValue: false });
 
@@ -74,7 +84,7 @@ export async function showWarehouseSettingsMenu(
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 12) {
+  if (!values || values.length < 14) {
     player.sendMessage("§c表单数据异常，请重试");
     return;
   }
@@ -87,11 +97,15 @@ export async function showWarehouseSettingsMenu(
   const newWarehouseEnabled = values[6] as boolean;
   const newShowBoundary = values[7] as boolean;
   const newAutoSortThreshold = values[8] as number;
-  const shouldDelete = values[10] as boolean;
-  const shouldResize = values[11] as boolean;
+  const shouldOpenFamilyConfig = values[10] as boolean;
+  const shouldRescan = values[11] as boolean;
+  const shouldDelete = values[12] as boolean;
+  const shouldResize = values[13] as boolean;
 
-  if (shouldDelete && shouldResize) {
-    player.sendMessage("§c「删除仓库」和「调整区域」不能同时开启，请重新选择");
+  // 操作性开关互斥：只能选一个
+  const ops = [shouldOpenFamilyConfig, shouldRescan, shouldDelete, shouldResize].filter(Boolean).length;
+  if (ops > 1) {
+    player.sendMessage("§c家庭成员、重新扫描、删除仓库、调整区域只能同时开启一个，请重新选择");
     return;
   }
 
@@ -136,6 +150,27 @@ export async function showWarehouseSettingsMenu(
     player.sendMessage("§a仓库设置已更新");
   } catch (error) {
     player.sendMessage(`§c更新设置失败: ${error}`);
+    return;
+  }
+
+  // ── 家庭成员配置（开关开启时弹出子菜单） ──
+  if (shouldOpenFamilyConfig) {
+    await showFamilyConfigMenu(player, warehouseId, repository, service);
+    return;
+  }
+
+  // ── 重新扫描仓库 ──────────────────────────────
+  if (shouldRescan) {
+    system.runTimeout(() => {
+      try {
+        const result = service.rescanWarehouse(warehouseId);
+        player.sendMessage(
+          `§a仓库重新扫描完成！共发现 ${Object.keys(result.containers).length} 个容器`
+        );
+      } catch (error) {
+        player.sendMessage(`§c重新扫描失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
     return;
   }
 

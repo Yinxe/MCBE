@@ -14,6 +14,7 @@ import {
 } from "./ContainerInventory";
 import { playSortEffect } from "./SortEffects";
 import { SlotOrganizer } from "./SlotOrganizer";
+import { getFamily, getFamilyById } from "../data/ItemFamilies";
 
 const log = new Logger("SorterEngine");
 
@@ -26,9 +27,11 @@ const log = new Logger("SorterEngine");
  *
  * 1. **已有同类物品的普通容器**（优先利用运行时 `itemTypeIndex` 索引实现快速查找，
  *    索引会在发现脏数据时惰性修正）。
- * 2. **空的普通容器**（仅在 `autoCreateCategories` 开启时启用，用于自动创建新分类）。
- * 3. **大宗容器**（盒箱混存——优先填满箱内潜影盒，再填充空槽位，以第一个物品确定种类）。
- * 4. **杂项容器**（兜底，任何物品最终都能放入杂项容器）。
+ * 2. **同族物品的普通容器**（仅当该物品所属的族在 `enabledFamilies` 中启用时生效，
+ *    将同一族的物品聚集到同一个容器中）。
+ * 3. **空的普通容器**（仅在 `autoCreateCategories` 开启时启用，用于自动创建新分类）。
+ * 4. **大宗容器**（盒箱混存——优先填满箱内潜影盒，再填充空槽位，以第一个物品确定种类）。
+ * 5. **杂项容器**（兜底，任何物品最终都能放入杂项容器）。
  *
  * ### 设计要点
  *
@@ -281,7 +284,17 @@ export class SorterEngine {
     remaining = this.tryContainers(remaining, existingTypeContainers, warehouse, model, dimension, typeId, "match");
     if (remaining === undefined) return undefined;
 
-    // 优先级 2：空的普通容器（自动创建分类）
+    // 优先级 2：同族物品的普通容器
+    // 检查物品是否属于已启用的同族分类，若是则将同族物品聚集到同一容器
+    const family = getFamily(typeId);
+    const enabledFamilies = warehouse.settings.enabledFamilies ?? [];
+    if (family && enabledFamilies.includes(family.id)) {
+      const familyContainers = this.findExistingFamilyContainers(warehouse, model, family.id, dimension);
+      remaining = this.tryContainers(remaining, familyContainers, warehouse, model, dimension, typeId, "family");
+      if (remaining === undefined) return undefined;
+    }
+
+    // 优先级 3：空的普通容器（自动创建分类）
     if (warehouse.settings.autoCreateCategories) {
       const emptyNormalIds = model.normalContainerIds.filter((id) => {
         const stored = warehouse.containers[id];
@@ -373,6 +386,11 @@ export class SorterEngine {
         );
         // 记录索引，下回同类物品快速定位到此容器
         this.addToTypeIndex(model, typeId, containerId);
+        // 如果物品属于某个启用的同族分类，同步更新 familyTypeIndex
+        const placedFamily = getFamily(typeId);
+        if (placedFamily && (warehouse.settings.enabledFamilies ?? []).includes(placedFamily.id)) {
+          this.addToFamilyIndex(model, placedFamily.id, containerId);
+        }
         // 播放分拣动画（粒子 + 音效）
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         // 触发目标容器的混乱度检查，必要时自动整理
@@ -585,6 +603,121 @@ export class SorterEngine {
     }
 
     return valid;
+  }
+
+  /**
+   * 查找已包含指定同族物品的普通容器。
+   *
+   * 当物品属于某个已启用的同族分类时，根据 `familyTypeIndex` 查找已有同类族物品的容器，
+   * 使得同族物品（如各色羊毛）能够自动聚集到同一容器中。
+   *
+   * @param warehouse - 仓库数据
+   * @param model     - 运行态模型
+   * @param familyId  - 同族分类 ID
+   * @param dimension - 维度
+   * @returns 候选容器 ID 列表
+   */
+  private findExistingFamilyContainers(
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    familyId: string,
+    dimension: Dimension
+  ): ContainerId[] {
+    const family = getFamilyById(familyId);
+    if (!family) return [];
+
+    const candidates = model.familyTypeIndex.get(familyId);
+    const hasIndex = candidates !== undefined && candidates.length > 0;
+
+    const valid: ContainerId[] = [];
+    const stale = new Set<ContainerId>();
+
+    // ── 有索引：检查索引项，标记过期 ──────────────
+    if (hasIndex) {
+      for (const containerId of candidates) {
+        const stored = warehouse.containers[containerId];
+        if (!stored || stored.role !== "normal" || !stored.enabled) {
+          stale.add(containerId);
+          continue;
+        }
+
+        const container = getContainerFromStored(dimension, stored);
+        if (!container) {
+          valid.push(containerId);
+          continue;
+        }
+
+        let hasFamilyItem = false;
+        for (const typeId of family.items) {
+          if (containerHasType(container, typeId)) {
+            hasFamilyItem = true;
+            break;
+          }
+        }
+
+        if (hasFamilyItem) {
+          valid.push(containerId);
+        } else {
+          stale.add(containerId);
+        }
+      }
+
+      // 惰性清除脏索引
+      if (stale.size > 0) {
+        const updated = candidates.filter((id) => !stale.has(id));
+        if (updated.length > 0) {
+          model.familyTypeIndex.set(familyId, updated);
+        } else {
+          model.familyTypeIndex.delete(familyId);
+        }
+      }
+    }
+
+    // ── 回退 / 初始全量扫描 ─────────────────────────
+    // 场景 A（初始）：索引为空，手工放入的家族物品从未被分拣引擎发现
+    // 场景 B（回退）：索引被清空后，全量扫描重建
+    const needsFullScan = !hasIndex || (valid.length === 0 && stale.size > 0);
+    if (!needsFullScan) return valid;
+
+    for (const containerId of model.normalContainerIds) {
+      // 跳过已检查过的容器
+      if (hasIndex && candidates.includes(containerId)) continue;
+      const stored = warehouse.containers[containerId];
+      if (!stored || stored.role !== "normal" || !stored.enabled) continue;
+      const container = getContainerFromStored(dimension, stored);
+      if (!container) continue;
+      for (const typeId of family.items) {
+        if (containerHasType(container, typeId)) {
+          valid.push(containerId);
+          break;
+        }
+      }
+    }
+
+    // 将扫描结果写回索引，下次走快速路径
+    if (valid.length > 0) {
+      model.familyTypeIndex.set(familyId, [...valid]);
+    }
+
+    return valid;
+  }
+
+  /**
+   * 将容器 ID 记录到运行时同族分类索引中。
+   *
+   * @param model       - 运行态模型
+   * @param familyId    - 同族分类 ID
+   * @param containerId - 容器 ID
+   */
+  private addToFamilyIndex(model: WarehouseRuntimeModel, familyId: string, containerId: ContainerId): void {
+    const existing = model.familyTypeIndex.get(familyId);
+    if (existing) {
+      if (!existing.includes(containerId)) {
+        existing.push(containerId);
+      }
+    } else {
+      model.familyTypeIndex.set(familyId, [containerId]);
+    }
   }
 
   /**

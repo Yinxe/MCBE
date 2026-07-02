@@ -24,6 +24,7 @@ export const DEFAULT_WAREHOUSE_SETTINGS: WarehouseSettings = {
   debug: false,
   showBoundary: false,
   autoSortThreshold: 100,
+  enabledFamilies: [],
 };
 
 /**
@@ -127,7 +128,9 @@ export class WarehouseRepository {
       );
     }
 
-    return { ...meta, containers };
+    // 设置字段迁移：用默认值补齐老仓库缺失的字段（如 enabledFamilies）
+    const settings: WarehouseSettings = { ...DEFAULT_WAREHOUSE_SETTINGS, ...meta.settings };
+    return { ...meta, settings, containers };
   }
 
   /**

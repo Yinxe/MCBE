@@ -107,6 +107,11 @@ export interface WarehouseSettings {
    * 0 = 关闭；>0 时，容器混乱度超过此值则自动触发整理。
    */
   autoSortThreshold: number;
+  /**
+   * 已启用的同族物品分类 ID 列表。
+   * 当分拣引擎遇到属于这些族的物品时，优先路由到已有同类族物品的容器。
+   */
+  enabledFamilies: string[];
 }
 
 /**
@@ -237,6 +242,13 @@ export interface WarehouseRuntimeModel {
    * 用于快速找到存储特定物品类型的容器，key 为物品类型 ID。
    */
   itemTypeIndex: Map<string, ContainerId[]>;
+
+  /**
+   * 同族物品分类 → 容器 ID 列表的索引。
+   * 用于快速找到存储某个同族分类物品的容器，key 为族 ID。
+   * 由分拣引擎在放置物品时惰性构建。
+   */
+  familyTypeIndex: Map<string, ContainerId[]>;
 
   /**
    * 轮询游标，用于在 input 容器之间轮询分配存入任务，

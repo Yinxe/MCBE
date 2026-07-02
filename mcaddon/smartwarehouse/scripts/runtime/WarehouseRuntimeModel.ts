@@ -36,6 +36,8 @@ export function buildWarehouseRuntimeModel(warehouse: WarehouseData): WarehouseR
      * 过期条目不会导致数据丢失，仅会产生一次重新发现的性能开销。
      */
     itemTypeIndex: new Map<string, ContainerId[]>(),
+    /** 同族物品分类索引，惰性构建，不被持久化 */
+    familyTypeIndex: new Map<string, ContainerId[]>(),
     /** 轮询调度输入容器时的游标位置 */
     inputCursor: 0,
     /** 输入容器槽位游标（容器 ID → 下一格索引），每 interval 处理一格后 +1 */
