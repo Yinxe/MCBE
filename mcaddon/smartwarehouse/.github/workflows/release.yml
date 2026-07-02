@@ -56,7 +56,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${GITHUB_REF_NAME}" "SmartWarehouse-v${VERSION}.mcaddon" --clobber
+          IS_PRERELEASE=""
+          if echo "${GITHUB_REF_NAME}" | grep -qiE 'beta|alpha|rc'; then IS_PRERELEASE="--prerelease"; fi
+          gh release create "${GITHUB_REF_NAME}" \
+            "SmartWarehouse-v${VERSION}.mcaddon" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "自动构建发布" \
+            ${IS_PRERELEASE} \
+            --target "${GITHUB_SHA}" 2>/dev/null || \
+          gh release upload "${GITHUB_REF_NAME}" \
+            "SmartWarehouse-v${VERSION}.mcaddon" --clobber
 
       - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch'
