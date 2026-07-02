@@ -30,41 +30,37 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Sync version
+      - name: Build
         run: |
           VER="${{ inputs.version || github.ref_name }}"
           VER="${VER#v}"
-          npm version "$VER" --no-git-tag-version --allow-same-version
-          echo "Version synced to: $(node -p 'require("./package.json").version')"
+          echo "Building version: $VER"
+          echo "VERSION=$VER" >> $GITHUB_ENV
 
-      - name: Build & package .mcaddon
-        run: npm run build
-        env:
-          PROJECT_NAME: SmartWarehouse
+          # Compile TypeScript
+          npx tsc
 
-      - name: Create .env for mcaddon task
-        run: |
-          echo 'PROJECT_NAME="SmartWarehouse"' > .env
-          echo 'MINECRAFT_PRODUCT="BedrockGDK"' >> .env
+          # Create .mcaddon (zip containing BP and RP)
+          mkdir -p build/SmartWarehouse_BP/scripts
+          cp -r BP/SmartWarehouse/* build/SmartWarehouse_BP/
+          cp -r RP/SmartWarehouse/* build/SmartWarehouse_RP/
+          cp -r lib/scripts/* build/SmartWarehouse_BP/scripts/
+          cd build
+          zip -r "../SmartWarehouse-v${VER}.mcaddon" .
+          cd ..
+          echo "Package created: SmartWarehouse-v${VER}.mcaddon"
+          ls -lh "SmartWarehouse-v${VER}.mcaddon"
 
-      - name: Create .mcaddon
-        run: npx just-scripts mcaddon
-        env:
-          PROJECT_NAME: SmartWarehouse
-
-      - name: Upload .mcaddon to release
+      - name: Upload to release
         if: github.event_name == 'push'
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: dist/packages/SmartWarehouse-v*.mcaddon
-          tag: ${{ github.ref_name }}
-          overwrite: true
-          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" "SmartWarehouse-v${VERSION}.mcaddon" --clobber
 
-      - name: Upload .mcaddon as artifact
+      - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: SmartWarehouse-${{ inputs.version }}
-          path: dist/packages/SmartWarehouse-v*.mcaddon
+          path: SmartWarehouse-v${{ env.VERSION }}.mcaddon
