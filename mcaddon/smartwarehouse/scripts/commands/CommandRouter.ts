@@ -444,10 +444,26 @@ export class CommandRouter {
         }
 
         const organizer = new SlotOrganizer();
-        const result = organizer.organize(invComp.container, {
-          startSlot: 9,  // 跳过快捷栏 0-8
-          endSlot: 36,   // 背包共 36 格
+
+        // Phase 1: 分析
+        const analysis = organizer.analyze(invComp.container, {
+          startSlot: 9,
+          endSlot: 36,
         });
+
+        // 打印混乱度评分
+        const m = analysis.messiness;
+        trySendMessage(player,
+          `§7混乱度: §f${(m.total * 100).toFixed(0)}% ` +
+          `§7(顺序 §e${(m.order * 100).toFixed(0)}% §7堆叠 §e${(m.stack * 100).toFixed(0)}%)`);
+
+        if (m.total < 0.05) {
+          trySendMessage(player, `§e背包已经很整齐了，无需整理`);
+          return;
+        }
+
+        // Phase 2: 写入
+        const result = organizer.apply(invComp.container, analysis);
 
         if (!result.success) {
           trySendMessage(player, `§c整理失败: ${result.error}`);
@@ -461,7 +477,6 @@ export class CommandRouter {
         trySendMessage(player,
           `§7种类: §f${result.beforeTypes} §7种  §7容量: §f${result.usedSlots}/${result.totalSlots} §7(${result.usagePercent}%)`);
 
-        // 按物品量排序打印每种物品
         const sorted = Object.entries(result.perType)
           .sort(([, a], [, b]) => b.total - a.total);
         for (const [typeId, stat] of sorted.slice(0, 8)) {
