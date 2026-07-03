@@ -53,7 +53,7 @@ ALL.terracotta = { id:"terracotta", displayName:"陶瓦", items:[...listColor("t
 ALL.glazed_terracotta = { id:"glazed_terracotta", displayName:"带釉陶瓦", items:[...listColor("glazed_terracotta"), "minecraft:silver_glazed_terracotta"] };
 ALL.shulker_box = { id:"shulker_box", displayName:"潜影盒", items:[...listColor("shulker_box"),"minecraft:undyed_shulker_box"] };
 ALL.candle = { id:"candle", displayName:"蜡烛", items:[...listColor("candle"),"minecraft:candle"] };
-ALL.dye = { id:"dye", displayName:"染料", items:listColor("dye") };
+ALL.dye = { id:"dye", displayName:"染料", items:[...listColor("dye"), "minecraft:lapis_lazuli"] };
 ALL.harness = { id:"harness", displayName:"挽具", items:listColor("harness") };
 ALL.bundle = { id:"bundle", displayName:"同捆包", items:[..."white,orange,magenta,light_blue,yellow,lime,pink,gray,light_gray,cyan,purple,blue,brown,green,red,black".split(",").map(c=>`minecraft:${c}_bundle`),"minecraft:bundle"] };
 ALL.bed = { id:"bed", displayName:"床", items:listColor("bed") };
@@ -79,7 +79,7 @@ for (const t of WOOD_TYPES) {
     `minecraft:${t}_fence`);
 }
 woodItems.push("minecraft:fence_gate","minecraft:trapdoor","minecraft:wooden_door","minecraft:wooden_button","minecraft:wooden_pressure_plate","minecraft:oak_sign","minecraft:dark_oak_sign");
-woodItems.push("minecraft:bamboo_planks","minecraft:bamboo_slab","minecraft:bamboo_stairs","minecraft:bamboo_door","minecraft:bamboo_trapdoor","minecraft:bamboo_fence","minecraft:bamboo_fence_gate","minecraft:bamboo_sign","minecraft:bamboo_hanging_sign","minecraft:bamboo_button","minecraft:bamboo_pressure_plate","minecraft:bamboo_mosaic","minecraft:bamboo_mosaic_slab","minecraft:bamboo_mosaic_stairs","minecraft:bamboo_raft","minecraft:bamboo_chest_raft","minecraft:pale_oak_boat","minecraft:pale_oak_chest_boat","minecraft:cherry_boat","minecraft:cherry_chest_boat");
+woodItems.push("minecraft:bamboo_planks","minecraft:bamboo_slab","minecraft:bamboo_stairs","minecraft:bamboo_door","minecraft:bamboo_trapdoor","minecraft:bamboo_fence","minecraft:bamboo_fence_gate","minecraft:bamboo_sign","minecraft:bamboo_hanging_sign","minecraft:bamboo_button","minecraft:bamboo_pressure_plate","minecraft:bamboo_mosaic","minecraft:bamboo_mosaic_slab","minecraft:bamboo_mosaic_stairs","minecraft:bamboo_raft","minecraft:bamboo_chest_raft","minecraft:pale_oak_boat","minecraft:pale_oak_chest_boat","minecraft:cherry_boat","minecraft:cherry_chest_boat","minecraft:stick");
 for (const t of ["crimson","warped"]) {
   woodItems.push(`minecraft:${t}_planks`,`minecraft:${t}_slab`,`minecraft:${t}_stairs`,
     `minecraft:${t}_door`,`minecraft:${t}_trapdoor`,`minecraft:${t}_fence`,`minecraft:${t}_fence_gate`,
@@ -88,8 +88,8 @@ for (const t of ["crimson","warped"]) {
 ALL.wood_products = { id:"wood_products", displayName:"木制品", items:woodItems };
 
 // === 其他木制品 ===
-ALL.wood_misc = { id:"wood_misc", displayName:"其他木制品",
-  items:["minecraft:stick","minecraft:bowl","minecraft:ladder","minecraft:chest","minecraft:barrel",
+ALL.wood_misc = { id:"wood_misc", displayName:"人工合成物",
+  items:["minecraft:bowl","minecraft:ladder","minecraft:chest","minecraft:barrel",
     "minecraft:crafting_table","minecraft:cartography_table","minecraft:fletching_table","minecraft:smithing_table","minecraft:loom","minecraft:grindstone",
     "minecraft:lectern","minecraft:jukebox","minecraft:noteblock",
     "minecraft:scaffolding","minecraft:flower_pot","minecraft:armor_stand","minecraft:beehive","minecraft:bee_nest",
@@ -97,6 +97,10 @@ ALL.wood_misc = { id:"wood_misc", displayName:"其他木制品",
     "minecraft:torch","minecraft:redstone_torch",
     "minecraft:lantern",
     "minecraft:painting","minecraft:frame","minecraft:glow_frame",
+    "minecraft:furnace","minecraft:blast_furnace","minecraft:smoker",
+    "minecraft:stonecutter_block",
+    "minecraft:obsidian","minecraft:crying_obsidian",
+    "minecraft:smooth_stone_slab",
   ] };
 
 // === 石材建筑 ===
@@ -138,7 +142,7 @@ ALL.stone_building = { id:"stone_building", displayName:"石材建筑",
     "minecraft:mud_bricks","minecraft:mud_brick_stairs","minecraft:mud_brick_slab","minecraft:mud_brick_wall",
     "minecraft:resin_bricks","minecraft:resin_brick_stairs","minecraft:resin_brick_slab","minecraft:resin_brick_wall",
     "minecraft:chiseled_resin_bricks","minecraft:resin_block","minecraft:resin_brick","minecraft:resin_clump",
-    "minecraft:stonecutter_block","minecraft:stone_button","minecraft:stone_pressure_plate",
+    "minecraft:stone_button","minecraft:stone_pressure_plate",
     "minecraft:calcite","minecraft:pointed_dripstone","minecraft:dripstone_block",
     "minecraft:reinforced_deepslate",
   ] };
@@ -165,10 +169,10 @@ ALL.rare_ores = { id:"rare_ores", displayName:"稀有矿石",
 // === 普通金属/矿物 ===
 ALL.common_minerals = { id:"common_minerals", displayName:"普通金属矿物",
   items:["minecraft:iron_ingot","minecraft:iron_nugget","minecraft:iron_block","minecraft:gold_ingot","minecraft:gold_nugget","minecraft:gold_block",
-    "minecraft:coal","minecraft:coal_block","minecraft:lapis_lazuli","minecraft:lapis_block",
+    "minecraft:coal","minecraft:coal_block","minecraft:lapis_block",
     "minecraft:quartz","minecraft:raw_iron","minecraft:raw_iron_block","minecraft:raw_gold","minecraft:raw_gold_block",
-    "minecraft:raw_copper","minecraft:raw_copper_block","minecraft:copper_ingot","minecraft:copper_block",
-    "minecraft:amethyst_shard","minecraft:netherite_scrap",
+    "minecraft:raw_copper","minecraft:raw_copper_block","minecraft:copper_ingot",
+    "minecraft:amethyst_shard",
   ] };
 ALL.common_ores = { id:"common_ores", displayName:"普通矿石",
   items:["minecraft:iron_ore","minecraft:deepslate_iron_ore","minecraft:gold_ore","minecraft:deepslate_gold_ore",
@@ -294,7 +298,7 @@ ALL.nether = { id:"nether", displayName:"地狱物品",
 ALL.end = { id:"end", displayName:"末地物品",
   items:["minecraft:end_stone","minecraft:end_bricks","minecraft:end_brick_stairs","minecraft:end_stone_brick_slab","minecraft:end_stone_brick_wall",
     "minecraft:end_portal_frame","minecraft:end_crystal","minecraft:end_rod","minecraft:ender_chest",
-    "minecraft:obsidian","minecraft:crying_obsidian","minecraft:dragon_breath","minecraft:dragon_egg","minecraft:dragon_head",
+    "minecraft:dragon_breath","minecraft:dragon_egg","minecraft:dragon_head",
     "minecraft:ender_eye","minecraft:ender_pearl","minecraft:shulker_shell","minecraft:chorus_flower","minecraft:chorus_plant",
     "minecraft:popped_chorus_fruit",
   ] };
