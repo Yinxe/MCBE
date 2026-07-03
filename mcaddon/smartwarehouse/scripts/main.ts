@@ -60,7 +60,7 @@ commandRouter.register();
 // 延迟到下一 tick 启动调度，因为 dynamicProperty 在脚本早期执行阶段不可用
 // （world.getDynamicProperty 只能在世界完全加载后调用）
 system.run(() => {
-  scheduler.startAll();
+  scheduler.start();
 
   // 为已启用 showBoundary 的仓库启动边界显示
   const warehouses = repository.loadAll();

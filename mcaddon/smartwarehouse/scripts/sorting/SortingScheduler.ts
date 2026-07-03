@@ -1,5 +1,5 @@
 import { world, system } from "@minecraft/server";
-import type { WarehouseId } from "../types";
+import type { WarehouseArea, WarehouseId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { SorterEngine } from "./SorterEngine";
 import { Logger } from "../util/Logger";
@@ -8,75 +8,171 @@ import { isNearAreaXZ } from "../util/Vector";
 const log = new Logger("SortingScheduler");
 
 /**
- * 分拣调度器 —— 每个已启用的仓库拥有独立的 system.runInterval。
+ * 分拣调度器 —— 惰性生命周期管理。
+ *
+ * 不再为所有仓库预先创建 runInterval，而是通过一个全局的监控 tick
+ * 按需激活/停用仓库：
+ *
+ * ┌─ 生命周期状态 ──────────────────────────────────────────┐
+ * │                                                         │
+ * │  停用（Inactive）── 玩家接近 ──→ 激活（Active）          │
+ * │    ↑                          │                         │
+ * │    └── 玩家离开 + 延迟 ───────┘                         │
+ * │                                                         │
+ * │  - 停用：无 interval、无运行时模型（内存回收）           │
+ * │  - 激活：创建 interval + 运行时模型（按需构建）           │
+ * │  - 延迟 40 tick（~2秒）防频繁启停                       │
+ * └─────────────────────────────────────────────────────────┘
  *
  * 设计要点：
- * - interval 间隔 = warehouse.settings.processingSpeed（4/8/16/20 tick）
- * - 仓库禁用 → 停止 interval；启用 → 创建 interval
- * - 处理速度变化 → 停止旧的 + 创建新的
- * - 仓库删除 → 清理 interval
- *
- * 容错：每个仓库的处理在 processWarehouse 内部已有 try-catch，
- * 单个仓库异常不影响其他仓库。
+ * - 脚本启动时不创建任何 interval，仅启动监控
+ * - 每 20 tick 扫描玩家位置，管理仓库激活/停用
+ * - 无玩家在线时所有仓库自动停用
+ * - 仓库禁用/删除时立即停用
+ * - 处理速度变化时重启 interval（如果活跃）
+ * - 容错：单个仓库的异常不影响其他仓库
  */
 export class SortingScheduler {
-  /** 仓库区域外扩格数，范围内有玩家才执行分拣 */
+  /** 仓库区域外扩格数，范围内有玩家才激活仓库 */
   private static readonly PROXIMITY_MARGIN = 8;
+  /** 生命周期监控间隔（20 tick ≈ 1 秒） */
+  private static readonly LIFECYCLE_INTERVAL = 20;
+  /** 玩家离开后停用仓库的延迟 tick 数（40 tick ≈ 2 秒），防止频繁启停 */
+  private static readonly DEACTIVATE_DELAY = 40;
 
-  /** 仓库 ID → system.runInterval 句柄 */
+  /** 活跃仓库 ID → system.runInterval 句柄 */
   private readonly handles = new Map<WarehouseId, number>();
+  /** 仓库 ID → 最近一次有玩家附近的 tick */
+  private readonly lastActiveTick = new Map<WarehouseId, number>();
+  /** 生命周期监控 interval 句柄 */
+  private monitorHandle: number | undefined;
+
+  /** 玩家位置缓存（维度ID → 位置列表），每 tick 刷新 */
+  private playerCache = new Map<string, { x: number; z: number }[]>();
 
   constructor(
     private readonly repository: WarehouseRepository,
     private readonly engine: SorterEngine
   ) {}
 
-  // ─── 全局生命周期 ───────────────────────────────────────────────
+  // ─── 生命周期管理 ─────────────────────────────────────────────
 
   /**
-   * 为所有已启用的仓库启动独立调度 interval。
-   * 在脚本启动时调用一次。
-   * 幂等：重复调用前会先 stopAll。
+   * 启动调度系统。
+   *
+   * 仅启动全局监控 tick，不创建任何仓库 interval。
+   * 仓库会在玩家接近相应区域时惰性激活，玩家离开后自动停用。
+   *
+   * 幂等：重复调用安全，会先停止现有监控。
    */
-  startAll(): void {
+  start(): void {
+    this.stop();
+    this.monitorHandle = system.runInterval(() => {
+      this.lifecycleTick();
+    }, SortingScheduler.LIFECYCLE_INTERVAL);
+    log.info("仓库生命周期监控已启动（间隔=20 tick）");
+  }
+
+  /**
+   * 停止所有调度活动：停止监控 + 停用所有仓库。
+   * 幂等。
+   */
+  stop(): void {
     this.stopAll();
+    if (this.monitorHandle !== undefined) {
+      system.clearRun(this.monitorHandle);
+      this.monitorHandle = undefined;
+    }
+    this.lastActiveTick.clear();
+    log.info("仓库生命周期监控已停止");
+  }
+
+  /**
+   * 获取当前正在调度的仓库数量（活跃仓库数）。
+   */
+  get activeCount(): number {
+    return this.handles.size;
+  }
+
+  // ─── 生命周期 tick ──────────────────────────────────────────
+
+  /**
+   * 每 20 tick 执行一次：
+   * 1. 刷新玩家位置缓存
+   * 2. 无玩家在线 → 停用所有仓库，跳过后续
+   * 3. 有玩家 → 遍历仓库，按需激活/停用
+   */
+  private lifecycleTick(): void {
+    // ── 刷新玩家位置缓存 ──
+    this.playerCache.clear();
+    for (const player of world.getPlayers()) {
+      const dim = player.dimension.id;
+      const pos = player.location;
+      let list = this.playerCache.get(dim);
+      if (!list) {
+        list = [];
+        this.playerCache.set(dim, list);
+      }
+      list.push({ x: pos.x, z: pos.z });
+    }
+
+    // 无玩家在线 → 全部停用
+    if (this.playerCache.size === 0) {
+      for (const id of [...this.handles.keys()]) {
+        this.deactivate(id);
+      }
+      return;
+    }
+
+    // ── 遍历仓库，管理生命周期 ──
     const warehouses = this.repository.loadAll();
+    const now = system.currentTick;
+
     for (const w of warehouses) {
-      if (w.settings.enabled) {
-        this.startOne(w.id, w.settings.processingSpeed);
+      if (!w.settings.enabled) {
+        this.deactivate(w.id);
+        this.lastActiveTick.delete(w.id);
+        continue;
+      }
+
+      const nearPlayer = this.hasNearbyPlayer(w.dimensionId, w.area);
+
+      if (nearPlayer) {
+        // 有玩家附近 → 记录活跃时间，必要时惰性激活
+        this.lastActiveTick.set(w.id, now);
+        if (!this.handles.has(w.id)) {
+          // 快照可能已过期，防御性验证仓库仍存在（防止删除→重新激活僵尸 interval）
+          if (!this.repository.load(w.id)) continue;
+          this.activate(w.id, w.settings.processingSpeed);
+        }
+      } else if (this.handles.has(w.id)) {
+        // 无玩家附近 → 检查是否超过停用延迟
+        const lastActive = this.lastActiveTick.get(w.id);
+        if (lastActive !== undefined && now - lastActive > SortingScheduler.DEACTIVATE_DELAY) {
+          this.deactivate(w.id);
+        }
       }
     }
-    log.info(`已启动 ${this.handles.size} 个仓库的独立调度`);
   }
 
   /**
-   * 停止所有仓库的调度 interval。
+   * 检查指定区域在当前玩家缓存中是否有玩家在附近。
    */
-  stopAll(): void {
-    for (const [id, handle] of this.handles) {
-      system.clearRun(handle);
-    }
-    this.handles.clear();
-    log.info("已停止所有仓库调度");
+  private hasNearbyPlayer(dimensionId: string, area: WarehouseArea): boolean {
+    const players = this.playerCache.get(dimensionId);
+    if (!players) return false;
+    return players.some((p) => isNearAreaXZ(p, area, SortingScheduler.PROXIMITY_MARGIN));
   }
 
-  // ─── 单仓库操作 ─────────────────────────────────────────────────
-
   /**
-   * 启动单个仓库的调度 interval。
-   * @param id 仓库 ID
-   * @param speed 处理速度（tick 间隔）
+   * 激活仓库：创建 runInterval + 写入活跃表。
    */
-  startOne(id: WarehouseId, speed: number): void {
-    // 先清理可能已存在的旧 handle
+  private activate(id: WarehouseId, speed: number): void {
+    // 确保没有重复的 handle
     this.stopOne(id);
 
     const handle = system.runInterval(() => {
       try {
-        // 玩家接近检查：附近无玩家则跳过（区域各轴外扩 8 格）
-        const warehouse = this.repository.load(id);
-        if (!warehouse || !this.hasPlayerNearby(warehouse)) return;
-
         this.engine.processWarehouse(id);
       } catch (error) {
         log.error(`仓库 ${id} 调度出错: ${error}`);
@@ -84,14 +180,24 @@ export class SortingScheduler {
     }, speed);
 
     this.handles.set(id, handle);
-    log.info(`仓库 ${id} 调度已启动（间隔=${speed} tick）`);
+    log.info(`仓库 ${id} 已惰性激活（间隔=${speed} tick）`);
   }
 
   /**
-   * 停止单个仓库的调度 interval。
-   * @param id 仓库 ID
+   * 停用仓库：停止 interval + 释放运行时模型 + 清理活跃记录。
    */
-  stopOne(id: WarehouseId): void {
+  private deactivate(id: WarehouseId): void {
+    this.stopOne(id);
+    this.lastActiveTick.delete(id);
+    this.engine.releaseRuntime(id);
+  }
+
+  // ─── 单仓库操作 ─────────────────────────────────────────────
+
+  /**
+   * 停止单个仓库的调度 interval（不释放运行时模型）。
+   */
+  private stopOne(id: WarehouseId): void {
     const handle = this.handles.get(id);
     if (handle !== undefined) {
       system.clearRun(handle);
@@ -100,59 +206,47 @@ export class SortingScheduler {
     }
   }
 
+  // ─── 外部刷新接口 ──────────────────────────────────────────
+
   /**
    * 刷新单个仓库的调度（速度/启用状态变化时调用）。
-   * 如果仓库已启用 → 用新速度重启 interval
-   * 如果仓库已禁用 → 停止 interval
+   *
+   * - 仓库已删除 → 停用
+   * - 仓库已禁用 → 停用
+   * - 仓库活跃中 → 用新速度重启 interval
+   * - 仓库不活跃 → 什么也不做，lifecycleTick 下次会以新配置激活
+   *
    * @param id 仓库 ID
    */
   refreshOne(id: WarehouseId): void {
     const warehouse = this.repository.load(id);
     if (!warehouse) {
-      this.stopOne(id);
+      this.deactivate(id);
       return;
     }
 
-    if (warehouse.settings.enabled) {
-      this.startOne(id, warehouse.settings.processingSpeed);
-    } else {
-      this.stopOne(id);
+    if (!warehouse.settings.enabled) {
+      this.deactivate(id);
+      return;
     }
+
+    // 如果正在活跃，用新速度重启
+    if (this.handles.has(id)) {
+      this.activate(id, warehouse.settings.processingSpeed);
+    }
+    // 如果不活跃，lifecycleTick 下次会以新速度激活
   }
-
-  /** 获取当前正在调度的仓库数量 */
-  get activeCount(): number {
-    return this.handles.size;
-  }
-
-  // ─── 玩家距离检查 ──────────────────────────────────────────────
-
-  /** 最近 20 tick 内缓存的玩家位置（维度ID → 位置列表） */
-  private playerCache = new Map<string, { x: number; z: number }[]>();
-  private playerCacheTick = 0;
 
   /**
-   * 检查仓库附近（区域各轴外扩 8 格）是否有玩家。
-   * 使用缓存每 20 tick 刷新一次玩家位置。
+   * 停用所有仓库（保留监控）。
    */
-  private hasPlayerNearby(warehouse: import("../types").WarehouseData): boolean {
-    const now = system.currentTick;
-    if (now - this.playerCacheTick > 20) {
-      this.playerCacheTick = now;
-      this.playerCache.clear();
-      for (const player of world.getPlayers()) {
-        const dim = player.dimension.id;
-        const pos = player.location;
-        let list = this.playerCache.get(dim);
-        if (!list) { list = []; this.playerCache.set(dim, list); }
-        list.push({ x: pos.x, z: pos.z });
-      }
+  stopAll(): void {
+    for (const [id, handle] of this.handles) {
+      system.clearRun(handle);
+      this.engine.releaseRuntime(id);
     }
-
-    const players = this.playerCache.get(warehouse.dimensionId);
-    if (!players) return false;
-
-    const margin = SortingScheduler.PROXIMITY_MARGIN;
-    return players.some((p) => isNearAreaXZ(p, warehouse.area, margin));
+    this.handles.clear();
+    this.lastActiveTick.clear();
+    log.info("已停止所有仓库调度");
   }
 }

@@ -100,6 +100,14 @@ export class SorterEngine {
     this.processInputContainer(warehouse, model, inputContainerId);
   }
 
+  /**
+   * 释放指定仓库的运行时模型，回收内存。
+   * 由 SortingScheduler 在仓库停用时调用。
+   */
+  releaseRuntime(warehouseId: WarehouseId): void {
+    this.runtime.delete(warehouseId);
+  }
+
   // ─── 区块加载预检 ──────────────────────────────────────────────
 
   /**
