@@ -265,6 +265,41 @@ export class WarehouseService {
   }
 
   /**
+   * 设置大宗容器的目标物品类型。
+   *
+   * 空大宗箱在未配置目标类型时不接受任何物品，玩家必须通过此方法
+   * 或对应的 UI 主动配置大宗箱的存储种类。
+   *
+   * @param id          仓库 ID
+   * @param containerId 容器 ID
+   * @param bulkTypeId  目标物品类型 ID（传 null 或空字符串清除配置）
+   * @returns 更新后的仓库数据
+   */
+  setContainerBulkType(
+    id: WarehouseId,
+    containerId: string,
+    bulkTypeId: string | null
+  ): WarehouseData {
+    const warehouse = this.requireWarehouse(id);
+    const container = warehouse.containers[containerId];
+    if (!container) throw new Error(`容器 ${containerId} 不属于仓库 ${id}`);
+    const updated: WarehouseData = {
+      ...warehouse,
+      containers: {
+        ...warehouse.containers,
+        [containerId]: {
+          ...container,
+          bulkTypeId: bulkTypeId ?? undefined,
+          updatedAt: Date.now(),
+        },
+      },
+    };
+    this.repository.save(updated);
+    this.markRuntimeDirty(id);
+    return updated;
+  }
+
+  /**
    * 更新仓库设置。
    *
    * @param id       仓库 ID

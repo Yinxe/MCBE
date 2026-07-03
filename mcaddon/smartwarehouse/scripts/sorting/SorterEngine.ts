@@ -283,29 +283,14 @@ export class SorterEngine {
     const typeId = stack.typeId;
     let remaining: ItemStack | undefined = stack;
 
-    // 优先级 1：已有同类物品的普通容器
-    const existingTypeContainers = this.findExistingTypeContainers(warehouse, model, typeId, dimension);
-    remaining = this.tryContainers(remaining, existingTypeContainers, warehouse, model, dimension, typeId, "match");
-    if (remaining === undefined) return undefined;
-
-    // 优先级 2：大宗容器（盒箱混存）
-    // 放大宗前放家庭前：高产量单品（如白色羊毛）应优先路由到专用大宗箱。
-    // 大宗箱以第一个有效物品的种类为准，同时匹配箱内散装和盒内物品。
-    // 空箱接受任何第一个放入的物品以设定种类。
+    // ── 优先级 1：单物品（大宗）────────────────────────────────
+    // 大宗容器专收单一类型高产量物品，匹配规则：
+    //   - 非空箱：匹配箱内已有物品种类
+    //   - 空箱：仅当玩家已通过 UI 配置了 bulkTypeId 且与当前物品类型匹配时才接受
+    // 玩家必须主动配置大宗箱的目标物品类型，空箱不再自动接受任意物品。
     //
-    // ── 设计笔记：大宗 > 家庭的优先级决策 ──────────────────────
-    //
-    // 场景：白色羊毛量产数百倍于有色羊毛。
-    //       大宗箱专收白色羊毛，家庭箱收各色羊毛。
-    //       大宗优先 → 白色羊毛按精确类型进大宗，
-    //                  有色羊毛因 bulk 不匹配 fallthrough 到家庭。
-    //       家庭优先 → 白色羊毛被「羊毛家庭」截胡进家庭箱，
-    //                  大宗箱永远收不到白色羊毛。
-    //
-    // 结论：大宗 > 家庭。单品大宗需求优先于同族聚集。
-    // 副作用：该族首个非大宗物品需要 autoCreate/misc 兜底
-    //        （家族冷启动问题，不影响正确性）。
-    // ───────────────────────────────────────────────────────────
+    // 注意：大宗 > 普通。专用大宗箱应优先拦截高产量单品（如白色羊毛），
+    // 避免被多物品普通箱截胡，剩余的散品再 fallthrough 给后续优先级处理。
     //
     // 设计笔记：大宗箱不走 itemTypeIndex 而是每次都全量扫描
     // `model.bulkContainerIds`。原因是 bulk 数量极少（典型场景 1-5），
@@ -316,15 +301,24 @@ export class SorterEngine {
       if (!stored) return false;
       const target = getContainerFromStored(dimension, stored);
       if (!target) return false;
-      if (isContainerEmpty(target)) return true;
+      if (isContainerEmpty(target)) {
+        return stored.bulkTypeId !== undefined && stored.bulkTypeId === typeId;
+      }
       return getBulkChestFirstType(target) === typeId;
     });
     remaining = this.tryBulkContainers(remaining, bulkMatches, warehouse, model, dimension, typeId);
     if (remaining === undefined) return undefined;
 
-    // 优先级 3：同族物品的普通容器
+    // ── 优先级 2：多物品（普通）────────────────────────────────
+    // 已有同类物品的普通容器，用于多物品混合分类。
+    // 放在大宗之后：大宗拦截高产量单品后，剩余散品走普通分类。
+    const existingTypeContainers = this.findExistingTypeContainers(warehouse, model, typeId, dimension);
+    remaining = this.tryContainers(remaining, existingTypeContainers, warehouse, model, dimension, typeId, "match");
+    if (remaining === undefined) return undefined;
+
+    // ── 优先级 3：家庭同族 ──────────────────────────────────────
     // 检查物品是否属于已启用的同族分类，若是则将同族物品聚集到同一容器。
-    // 放在大宗之后：白色羊毛等高产量单品应优先流入大宗箱而非家庭箱。
+    // 放在大宗和普通之后：确保专用分类优先，同族聚集作为兜底归类手段。
     const family = getFamily(typeId);
     const enabledFamilies = warehouse.settings.enabledFamilies ?? [];
     if (family && enabledFamilies.includes(family.id)) {
@@ -333,9 +327,7 @@ export class SorterEngine {
       if (remaining === undefined) return undefined;
     }
 
-    // 优先级 4：空的普通容器（自动创建分类）
-
-    // 优先级 4：杂项容器（兜底）
+    // ── 优先级 4：杂项（兜底）──────────────────────────────────
     remaining = this.tryContainers(remaining, model.miscContainerIds, warehouse, model, dimension, typeId, "misc");
     return remaining; // 返回 undefined 表示最后一个容器处理完了全部
   }
@@ -389,8 +381,17 @@ export class SorterEngine {
 
       const placed = beforeAmount - (remaining?.amount ?? 0);
       if (placed > 0) {
+        // 家族分拣日志追加容器纯度，方便调试验证纯度排序效果
+        let purityLog = "";
+        if (tag === "family") {
+          const purFamily = getFamily(typeId);
+          if (purFamily) {
+            const purity = getFamilyPurity(targetContainer!, new Set(purFamily.items));
+            purityLog = ` (纯度${(purity * 100).toFixed(0)}%)`;
+          }
+        }
         log.info(
-          `[${tag ?? "?"}] ${typeId} x${placed} → ${containerId} (角色=${stored.role}) @ (${loc.x},${loc.y},${loc.z})`
+          `[${tag ?? "?"}]${purityLog} ${typeId} x${placed} → ${containerId} (角色=${stored.role}) @ (${loc.x},${loc.y},${loc.z})`
         );
         // 记录索引，下回同类物品快速定位到此容器
         this.addToTypeIndex(model, typeId, containerId);
