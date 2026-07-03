@@ -29,6 +29,12 @@ Minecraft Bedrock Edition 智能仓库管理 Addon。基于 Script API 实现自
 - **容器概况** — 设置页顶部显示各角色容器数量
 - **容器详情** — 木锄点击箱子查看方块类型、槽位、物品数、种类、混乱度
 
+### 物品分类
+- **51 个家族** — 全部 1431 个可分类物品按用途/来源划入互斥家族
+- **分拣白名单** — 仓库设置中勾选需要自动分拣的家族，未勾选的不会移动
+- **友好的掉落物/敌对掉落物** — 严格按掉落来源区分
+- 附：完整分类列表见 [`docs/item-family-guide.md`](docs/item-family-guide.md)
+
 ### 其他
 - 所有命令无需作弊即可使用（管理命令需 op 标签）
 - 合箱/拆箱数据继承（角色/启用状态保留）
@@ -77,6 +83,15 @@ npx tsc
 
 编译产物输出到 `lib/` 目录，需手动部署到行为包的 `scripts/` 目录。
 
+## 维护工具
+
+| 工具 | 说明 |
+|------|------|
+| `tools/generateItemFamilies.mjs` | 重新生成物品家族分类（修改 `tools/generateItemFamilies.mjs` 中的 `ALL.*` 后需运行） |
+| `tools/annotateFamilies.mjs` | 为 `ItemFamilies.ts` 注入中文注释（从 `scripts/data/name-maps/` 查询译名） |
+
+修改流程：编辑生成器 → `node generateItemFamilies.mjs` → `node annotateFamilies.mjs` → `npx tsc`
+
 ---
 
 ## 技术栈
@@ -84,6 +99,7 @@ npx tsc
 - **语言**：TypeScript
 - **运行时**：Minecraft Bedrock Script API (`@minecraft/server` ^2.6.0)
 - **构建**：TypeScript 编译器
+- **文档**：`docs/` 目录包含架构文档、分类指南等
 
 ---
 

@@ -31,6 +31,9 @@ scripts/              TypeScript 源码
   main.ts             入口文件（初始化依赖、注册事件和命令）
   types.ts            集中式类型定义（接口、类型别名、常量）
   commands/           命令路由层（解析输入、校验权限、委托服务层）
+  data/               数据文件（物品家族分类、中文名映射）
+    ItemFamilies.ts   按 51 个家族分类的 1431 个物品（自动生成，勿手动修改）
+    name-maps/        物品/实体/效果/附魔中文名映射表
   interaction/        工具交互（木锄右键/方块事件处理）
   runtime/            运行时缓存层（内存索引、脏标记、惰性重建）
   sorting/            分拣引擎和调度器
@@ -38,6 +41,9 @@ scripts/              TypeScript 源码
   ui/                 玩家交互界面（ActionForm / ModalForm）
   util/               工具函数（日志、坐标、JSON、权限）
   warehouse/          核心业务逻辑（仓库 CRUD、容器扫描）
+tools/                维护工具
+  generateItemFamilies.mjs  物品家族生成器（修改分类后需运行）
+  annotateFamilies.mjs      中文注释注入器（运行注入中文名）
 ```
 
 ### 3. 架构分层
