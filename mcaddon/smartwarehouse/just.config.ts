@@ -71,7 +71,9 @@ interface Manifest {
 }
 
 function syncManifestVersion() {
-  const versionArr = pkgVersion.split(".").map(Number);
+  // pkgVersion 可能含 pre-release 后缀如 "0.0.34-beta"，manifest 只认 3 个整数
+  const baseVersion = pkgVersion.split(/[-+]/)[0]; // "0.0.34-beta" → "0.0.34"
+  const versionArr = baseVersion.split(".").map(Number);
 
   for (const dir of [`BP/${projectName}`, `RP/${projectName}`]) {
     const manifestPath = path.resolve(__dirname, dir, "manifest.json");
