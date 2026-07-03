@@ -8,6 +8,7 @@ import { formatOrganizeResult } from "../util/OrganizeFormatter";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { getFamilyPurity, getContainerFromStored } from "../sorting/ContainerInventory";
 import { getFamilyById } from "../data/ItemFamilies";
+import { formatContainerCapacityLine } from "./WarehouseStats";
 
 // ─── 容器详情辅助 ─────────────────────────────────────────────
 
@@ -156,14 +157,19 @@ export async function showContainerRoleMenu(
 
     const familyLine = formatFamilyPurityInfo(warehouse, container);
     const isHopper = details?.blockType === "hopper";
+    const capacityLine = details
+      ? formatContainerCapacityLine(details.usedSlots, details.totalSlots, details.totalItems, details.uniqueTypes)
+      : "";
 
     const form = new ActionFormData()
       .title("容器信息")
       .body(
         `§7仓库: ${warehouse.displayName}\n` +
         `${detailsLine}\n` +
+        `${capacityLine}\n` +
         `§7容器ID: ${containerId}\n` +
-        `§7状态: ${container.enabled ? "§a启用" : "§c禁用"}\n` +
+        `§7状态: ${container.enabled ? "§a启用" : "§c禁用"}` +
+        (container.capacityWarningEnabled ? "" : " §8预警关") + "\n" +
         `§7角色: ${roleLabel}${isHopper ? " §8(漏斗·自) " : ""}\n` +
         `§7描述: ${isHopper ? "漏斗自动采集物品流入分拣系统" : roleDesc}` +
         familyLine
@@ -183,14 +189,19 @@ export async function showContainerRoleMenu(
 
   // 检测是否为漏斗（漏斗自动锁定为 input 角色）
   const isHopper = details?.blockType === "hopper";
+  const capacityLine = details
+    ? formatContainerCapacityLine(details.usedSlots, details.totalSlots, details.totalItems, details.uniqueTypes)
+    : "";
 
   const form = new ModalFormData()
     .title("容器设置")
     .label(
       `§7仓库: ${warehouse.displayName}\n` +
       `${detailsLine}\n` +
+      `${capacityLine}\n` +
       `§7容器ID: ${containerId}\n` +
-      `§7状态: ${container.enabled ? "§a已启用" : "§c已禁用"}\n` +
+      `§7状态: ${container.enabled ? "§a已启用" : "§c已禁用"}` +
+      (container.capacityWarningEnabled ? "" : " §8预警关") + "\n" +
       `§7角色: §f${currentRoleLabel} — ${roleDesc}§r` +
       familyLine
     )
@@ -203,7 +214,8 @@ export async function showContainerRoleMenu(
     form.dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });
   }
 
-  form.toggle("§e立即整理（按物品 ID 排序合并）", { defaultValue: false });
+  form.toggle("§e容量预警", { defaultValue: container.capacityWarningEnabled })
+    .toggle("§e立即整理（按物品 ID 排序合并）", { defaultValue: false });
 
   const response = await form.show(player);
   if (response.canceled) return;
@@ -215,27 +227,28 @@ export async function showContainerRoleMenu(
   // Bedrock 不同版本对 ModalForm label 是否占用 formValues 索引行为不一致。
   // label 返回 null 但占用索引位置，通过 values.length 判断：
   //
-  // 非漏斗布局: [label(信息), toggle(启用), dropdown(角色), toggle(整理)]
-  //   label 不占位: length=3 → [启用, 角色, 整理]
-  //   label 占位:   length=4 → [null, 启用, 角色, 整理]
+  // 非漏斗布局: [label(信息), toggle(启用), dropdown(角色), toggle(容量预警), toggle(整理)]
+  //   label 不占位: length=4 → [启用, 角色, 容量预警, 整理]
+  //   label 占位:   length=5 → [null, 启用, 角色, 容量预警, 整理]
   //
-  // 漏斗布局: [label(信息), toggle(启用), label(提示), toggle(整理)]
-  //   label 不占位: length=2 → [启用, 整理]
-  //   label 占位(双label): length=4 → [null, 启用, null, 整理]
+  // 漏斗布局: [label(信息), toggle(启用), label(提示), toggle(容量预警), toggle(整理)]
+  //   label 不占位: length=3 → [启用, 容量预警, 整理]
+  //   2 label 占位: length=5 → [null, 启用, null, 容量预警, 整理]
   let newEnabled: boolean;
   let newRole: ContainerRole;
+  let newCapacityWarning: boolean;
   let shouldOrganize: boolean;
 
   if (isHopper) {
-    // 漏斗只有启用 + 整理两个字段，角色固定 input
-    newEnabled = values.length >= 4 ? (values[1] as boolean) : (values[0] as boolean);
+    newEnabled = values.length >= 5 ? (values[1] as boolean) : (values[0] as boolean);
     newRole = "input";
-    shouldOrganize = values.length >= 4 ? (values[3] as boolean) : (values[1] as boolean);
+    newCapacityWarning = values.length >= 5 ? (values[3] as boolean) : (values[1] as boolean);
+    shouldOrganize = values.length >= 5 ? (values[4] as boolean) : (values[2] as boolean);
   } else {
-    // 非漏斗有启用 + 角色 + 整理三个字段
-    newEnabled = values.length >= 4 ? (values[1] as boolean) : (values[0] as boolean);
-    newRole = ROLE_ORDER[values.length >= 4 ? (values[2] as number) : (values[1] as number)];
-    shouldOrganize = values.length >= 4 ? (values[3] as boolean) : (values[2] as boolean);
+    newEnabled = values.length >= 5 ? (values[1] as boolean) : (values[0] as boolean);
+    newRole = ROLE_ORDER[values.length >= 5 ? (values[2] as number) : (values[1] as number)];
+    newCapacityWarning = values.length >= 5 ? (values[3] as boolean) : (values[2] as boolean);
+    shouldOrganize = values.length >= 5 ? (values[4] as boolean) : (values[3] as boolean);
   }
 
   // ── 整理容器 ──
@@ -264,8 +277,12 @@ export async function showContainerRoleMenu(
 
   // ── 提交角色和状态变更 ──
   try {
-    service.setContainerRoleAndState(warehouse.id, containerId, newRole, newEnabled);
-    player.sendMessage(`§a容器已更新：${newEnabled ? "启用" : "禁用"}，角色=${ROLE_LABELS[newRole]}`);
+    service.setContainerRoleAndState(warehouse.id, containerId, newRole, newEnabled, newCapacityWarning);
+    player.sendMessage(
+      `§a容器已更新：${newEnabled ? "启用" : "禁用"}，` +
+      `角色=${ROLE_LABELS[newRole]}，` +
+      `容量预警=${newCapacityWarning ? "开" : "关"}`
+    );
 
     // 如果角色改为大宗，引导玩家手动放入物品来设定类型
     if (newRole === "bulk") {

@@ -18,8 +18,13 @@ import { MoveJournal } from "./MoveJournal";
 import { playSortEffect } from "./SortEffects";
 import { SlotOrganizer } from "./SlotOrganizer";
 import { getFamily, getFamilyById } from "../data/ItemFamilies";
+import { isContainerFull, refreshContainerStats } from "../ui/WarehouseStats";
+import { isNearAreaXZ } from "../util/Vector";
 
 const log = new Logger("SorterEngine");
+
+/** 容量预警冷却 tick 数（5 秒 = 100 tick，防止刷屏） */
+const CAPACITY_WARNING_COOLDOWN_TICKS = 100;
 
 /**
  * 分拣引擎 —— 将物品从输入容器分拣到对应的存储容器（普通 / 杂项）中。
@@ -45,6 +50,9 @@ const log = new Logger("SorterEngine");
  *   方块被破坏等）不会影响其他容器的分拣。
  */
 export class SorterEngine {
+  /** 容量预警冷却：容器 ID → 上次预警 tick */
+  private readonly warningCooldowns = new Map<string, number>();
+
   constructor(
     private readonly repository: WarehouseRepository,
     private readonly runtime: WarehouseRuntimeRegistry,
@@ -482,6 +490,19 @@ export class SorterEngine {
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         // 触发目标容器的混乱度检查，必要时自动整理
         this.organizer?.onDeposit(targetContainer, containerId, warehouse.settings.autoSortThreshold / 100);
+        // 立即重算并持久化该容器的存储统计，复用结果做容量预警
+        const stats = refreshContainerStats(warehouse, stored);
+        if (stats) {
+          this.checkAndWarnCapacity(warehouse, containerId, stored, stats);
+        }
+      } else if (placed === 0 && beforeAmount > 0 && isContainerFull(targetContainer)) {
+        // 物品无法放入（容器已满），尝试发送预警
+        this.warnCapacity(
+          warehouse,
+          containerId,
+          stored,
+          `§e${stored.role === "normal" ? "普通" : stored.role === "bulk" ? "大宗" : "杂项"}容器已满，物品将转移至其他容器`
+        );
       }
 
       if (remaining === undefined) return undefined; // 全部放完，提前退出
@@ -560,12 +581,79 @@ export class SorterEngine {
         log.info(`[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`);
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
+        // 立即重算并持久化该容器的存储统计，复用结果做容量预警
+        const bulkStats = refreshContainerStats(warehouse, stored);
+        if (bulkStats) {
+          this.checkAndWarnCapacity(warehouse, containerId, stored, bulkStats);
+        }
+      } else if (placed === 0 && beforeAmount > 0 && isContainerFull(target)) {
+        this.warnCapacity(
+          warehouse,
+          containerId,
+          stored,
+          `§e大宗容器已满，物品将转移至其他容器`
+        );
       }
 
       if (remaining === undefined) return undefined;
     }
 
     return remaining;
+  }
+
+  // ─── 容量预警 ──────────────────────────────────────────────────
+
+  /**
+   * 检查容器是否接近满仓，如果是且预警开关已开则发送预警消息。
+   *
+   * @param stats - refreshContainerStats 返回的已计算统计（避免二次扫描）
+   */
+  private checkAndWarnCapacity(
+    warehouse: WarehouseData,
+    containerId: string,
+    stored: import("../types").StoredContainer,
+    stats: import("../types").ContainerStats
+  ): void {
+    if (!warehouse.settings.capacityWarning) return;
+    if (!stored.capacityWarningEnabled) return;
+    if (!stats.isWarning) return;
+
+    const roleLabel = stored.role === "normal" ? "普通" : stored.role === "bulk" ? "大宗" : stored.role === "misc" ? "杂项" : "输入";
+    const pct = stats.totalSlots > 0 ? Math.round((stats.usedSlots / stats.totalSlots) * 100) : 0;
+    this.warnCapacity(
+      warehouse,
+      containerId,
+      stored,
+      `§e${roleLabel}容器 ${containerId.slice(-8)} §7容量告急 §f${stats.usedSlots}§7/§f${stats.totalSlots}§7(§c${pct}%§7)`
+    );
+  }
+
+  /**
+   * 向仓库附近的玩家发送预警消息。
+   */
+  private warnCapacity(
+    warehouse: WarehouseData,
+    containerId: string,
+    _stored: import("../types").StoredContainer,
+    message: string
+  ): void {
+    // 防刷：每个容器每 5 秒最多发一次预警
+    const lastTick = this.warningCooldowns.get(containerId) ?? 0;
+    if (system.currentTick - lastTick < CAPACITY_WARNING_COOLDOWN_TICKS) return;
+    this.warningCooldowns.set(containerId, system.currentTick);
+
+    try {
+      for (const player of world.getPlayers()) {
+        if (player.dimension.id !== warehouse.dimensionId) continue;
+        if (isNearAreaXZ({ x: player.location.x, z: player.location.z }, warehouse.area, 8)) {
+          try {
+            player.sendMessage(`§c[容量预警]§r ${message}`);
+          } catch { /* 忽略 */ }
+        }
+      }
+    } catch {
+      /* world.getPlayers 可能抛出异常 */
+    }
   }
 
   // ─── itemTypeIndex 索引辅助方法 ────────────────────────────────

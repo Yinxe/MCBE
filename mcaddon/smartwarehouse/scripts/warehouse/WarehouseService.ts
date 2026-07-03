@@ -18,6 +18,7 @@ import { makeContainerId } from "./ContainerId";
 import { compareLocationForPrimary } from "../util/Vector";
 import { BoundaryDisplay } from "./BoundaryDisplay";
 import { diffRescanContainers } from "./WarehouseRescanDiff";
+import { invalidateWarehouseStats } from "../ui/WarehouseStats";
 import type { WarehouseRescanDiff } from "./WarehouseRescanDiff";
 
 /**
@@ -243,6 +244,11 @@ export class WarehouseService {
    * @param id 要删除的仓库 ID
    */
   deleteWarehouse(id: WarehouseId): void {
+    // 清理统计缓存（内存 + DP），在 repository.delete 之前获取容器 ID
+    const warehouse = this.repository.load(id);
+    if (warehouse) {
+      invalidateWarehouseStats(id, Object.keys(warehouse.containers));
+    }
     this.repository.delete(id);
     this.markRuntimeDirty(id);
     this.notifyScheduler?.(id);
@@ -274,7 +280,8 @@ export class WarehouseService {
     id: WarehouseId,
     containerId: string,
     role: ContainerRole | null,
-    enabled: boolean | null
+    enabled: boolean | null,
+    capacityWarningEnabled?: boolean
   ): WarehouseData {
     const warehouse = this.requireWarehouse(id);
     const container = warehouse.containers[containerId];
@@ -287,6 +294,7 @@ export class WarehouseService {
           ...container,
           ...(role !== null && { role }),
           ...(enabled !== null && { enabled }),
+          ...(capacityWarningEnabled !== undefined && { capacityWarningEnabled }),
           updatedAt: Date.now(),
         },
       },
@@ -507,6 +515,7 @@ export class WarehouseService {
     const now = Date.now();
     let role = defaults.role;
     let enabled = defaults.enabled;
+    let capacityWarningEnabled = true;
     let discoveredAt = now;
     let result = containers;
 
@@ -518,6 +527,7 @@ export class WarehouseService {
       if (overlap) {
         role = ec.role;
         enabled = ec.enabled;
+        capacityWarningEnabled = ec.capacityWarningEnabled;
         discoveredAt = ec.discoveredAt;
         const { [eid]: _, ...rest } = result;
         result = rest;
@@ -535,6 +545,7 @@ export class WarehouseService {
         occupiedLocations: [...newOccupied].sort(compareLocationForPrimary),
         role,
         enabled,
+        capacityWarningEnabled,
         discoveredAt,
         updatedAt: now,
       },
@@ -579,6 +590,7 @@ export class WarehouseService {
           occupiedLocations: [...occupied].sort(compareLocationForPrimary),
           role: old.role,
           enabled: old.enabled,
+          capacityWarningEnabled: old.capacityWarningEnabled,
           discoveredAt: old.discoveredAt,
           updatedAt: Date.now(),
         },

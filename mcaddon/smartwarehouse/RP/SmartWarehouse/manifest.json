@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "SmartWarehouse v0.0.38",
+    "name": "SmartWarehouse v0.0.39",
     "description": "SmartWarehouse 资源包 — 智能仓库管理的视觉资源与纹理",
     "uuid": "7e985eb5-5e3d-41cc-89c4-653605d41009",
     "version": [
       0,
       0,
-      38
+      39
     ],
     "min_engine_version": [
       1,
@@ -23,7 +23,7 @@
       "version": [
         0,
         0,
-        38
+        39
       ]
     }
   ],
@@ -33,7 +33,7 @@
       "version": [
         0,
         0,
-        38
+        39
       ]
     }
   ],

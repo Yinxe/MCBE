@@ -124,6 +124,12 @@ export interface WarehouseSettings {
    * 当分拣引擎遇到属于这些族的物品时，优先路由到已有同类族物品的容器。
    */
   enabledFamilies: string[];
+  /**
+   * 是否启用容量预警（总开关）。
+   * 开启后，当分拣引擎向容量快满的容器放入物品时，或物品因容器满被降级时，
+   * 会向附近的玩家发送预警消息。
+   */
+  capacityWarning: boolean;
 }
 
 /**
@@ -189,10 +195,34 @@ export interface StoredContainer {
   role: ContainerRole;
   /** 容器是否启用（禁用容器不参与任何分拣操作，独立于角色） */
   enabled: boolean;
+  /** 独立容量预警开关（默认开，受仓库级总开关控制） */
+  capacityWarningEnabled: boolean;
   /** 容器首次被发现的游戏刻时间戳 */
   discoveredAt: number;
   /** 容器信息最后更新的游戏刻时间戳 */
   updatedAt: number;
+}
+
+/**
+ * 单个容器的运行时统计（用于容量概览展示，持久化到 Dynamic Property）。
+ */
+export interface ContainerStats {
+  /** 容器 ID */
+  containerId: ContainerId;
+  /** 方块类型（如 chest、barrel） */
+  blockType: string;
+  /** 容器角色 */
+  role: ContainerRole;
+  /** 总槽位数 */
+  totalSlots: number;
+  /** 已使用槽位数 */
+  usedSlots: number;
+  /** 物品总数量 */
+  totalItems: number;
+  /** 物品种类数 */
+  uniqueTypes: number;
+  /** 是否处于容量告急状态（已用槽位占比 >= 80%） */
+  isWarning: boolean;
 }
 
 /**

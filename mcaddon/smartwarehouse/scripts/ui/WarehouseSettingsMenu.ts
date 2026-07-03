@@ -6,6 +6,7 @@ import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseId, WarehouseSettings } from "../types";
 import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
 import type { WarehouseService } from "../warehouse/WarehouseService";
+import { getWarehouseStats, formatWarehouseStats, invalidateWarehouseStats } from "./WarehouseStats";
 import { showFamilyConfigMenu } from "./FamilyConfigMenu";
 
 /**
@@ -32,23 +33,24 @@ export async function showWarehouseSettingsMenu(
 
   const settings = warehouse.settings;
 
-  // ── 容器概况（从内存统计，不扫描容器） ─────────
-  const cList = Object.values(warehouse.containers);
-  const enabledFamilies = settings.enabledFamilies ?? [];
-  const familyText =
-    enabledFamilies.length > 0
-      ? `  §bFamily§f${enabledFamilies.length}`
-      : "";
-  const statsLine =
-    `§7容器 §f${cList.length}个  ` +
-    `§a普通${cList.filter((c) => c.role === "normal" && c.enabled).length} ` +
-    `§b大宗${cList.filter((c) => c.role === "bulk" && c.enabled).length} ` +
-    `§d杂项${cList.filter((c) => c.role === "misc" && c.enabled).length} ` +
-    `§6输入${cList.filter((c) => c.role === "input" && c.enabled).length}` +
-    (cList.filter((c) => !c.enabled).length > 0
-      ? `  §8禁用${cList.filter((c) => !c.enabled).length}`
-      : "") +
-    familyText;
+  // ── 仓库存储统计（扫描容器实际内容） ────────────
+  let statsLabel: string;
+  try {
+    const stats = getWarehouseStats(warehouse);
+    statsLabel = formatWarehouseStats(stats);
+  } catch {
+    // 扫描失败时回退到简单概览
+    const cList = Object.values(warehouse.containers);
+    statsLabel =
+      `§7容器 §f${cList.length}个  ` +
+      `§a普通${cList.filter((c) => c.role === "normal" && c.enabled).length} ` +
+      `§b大宗${cList.filter((c) => c.role === "bulk" && c.enabled).length} ` +
+      `§d杂项${cList.filter((c) => c.role === "misc" && c.enabled).length} ` +
+      `§6输入${cList.filter((c) => c.role === "input" && c.enabled).length}` +
+      (cList.filter((c) => !c.enabled).length > 0
+        ? `  §8禁用${cList.filter((c) => !c.enabled).length}`
+        : "");
+  }
 
   // ── 主设置表单 ──────────────────────────────────
   const roleLabels = ROLE_ORDER.map((r) => ROLE_LABELS[r]);
@@ -59,7 +61,7 @@ export async function showWarehouseSettingsMenu(
 
   const form = new ModalFormData()
     .title("仓库设置")
-    .label(statsLine)
+    .label(statsLabel)
     .textField("仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
     .dropdown("默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex) })
     .dropdown("新容器默认启用", ["是", "否"], { defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1 })
@@ -74,7 +76,9 @@ export async function showWarehouseSettingsMenu(
       0, 100,
       { defaultValue: settings.autoSortThreshold, valueStep: 20 },
     )
+    .toggle("§e容量预警", { defaultValue: settings.capacityWarning })
     .label("§8━━━ 操作 ━━━")
+    .toggle("§a刷新存储统计（重新扫描容器统计信息）", { defaultValue: false })
     .toggle("§b家庭成员（提交后打开）", { defaultValue: false })
     .toggle("§a重新扫描仓库（提交后执行）", { defaultValue: false })
     .toggle("§c删除此仓库（提交后需确认）", { defaultValue: false })
@@ -84,7 +88,7 @@ export async function showWarehouseSettingsMenu(
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 14) {
+  if (!values || values.length < 16) {
     player.sendMessage("§c表单数据异常，请重试");
     return;
   }
@@ -97,15 +101,17 @@ export async function showWarehouseSettingsMenu(
   const newWarehouseEnabled = values[6] as boolean;
   const newShowBoundary = values[7] as boolean;
   const newAutoSortThreshold = values[8] as number;
-  const shouldOpenFamilyConfig = values[10] as boolean;
-  const shouldRescan = values[11] as boolean;
-  const shouldDelete = values[12] as boolean;
-  const shouldResize = values[13] as boolean;
+  const newCapacityWarning = values[9] as boolean;
+  const shouldRefreshStats = values[11] as boolean;
+  const shouldOpenFamilyConfig = values[12] as boolean;
+  const shouldRescan = values[13] as boolean;
+  const shouldDelete = values[14] as boolean;
+  const shouldResize = values[15] as boolean;
 
   // 操作性开关互斥：只能选一个
-  const ops = [shouldOpenFamilyConfig, shouldRescan, shouldDelete, shouldResize].filter(Boolean).length;
+  const ops = [shouldRefreshStats, shouldOpenFamilyConfig, shouldRescan, shouldDelete, shouldResize].filter(Boolean).length;
   if (ops > 1) {
-    player.sendMessage("§c家庭成员、重新扫描、删除仓库、调整区域只能同时开启一个，请重新选择");
+    player.sendMessage("§c刷新统计、家庭成员、重新扫描、删除仓库、调整区域只能同时开启一个，请重新选择");
     return;
   }
 
@@ -142,6 +148,9 @@ export async function showWarehouseSettingsMenu(
     if (newAutoSortThreshold !== settings.autoSortThreshold) {
       settingsUpdate.autoSortThreshold = newAutoSortThreshold;
     }
+    if (newCapacityWarning !== settings.capacityWarning) {
+      settingsUpdate.capacityWarning = newCapacityWarning;
+    }
 
     if (Object.keys(settingsUpdate).length > 0) {
       service.updateSettings(warehouseId, settingsUpdate);
@@ -150,6 +159,13 @@ export async function showWarehouseSettingsMenu(
     player.sendMessage("§a仓库设置已更新");
   } catch (error) {
     player.sendMessage(`§c更新设置失败: ${error}`);
+    return;
+  }
+
+  // ── 刷新存储统计 ──────────────────────────────
+  if (shouldRefreshStats) {
+    invalidateWarehouseStats(warehouseId, Object.keys(warehouse.containers));
+    player.sendMessage("§a存储统计已刷新（下次打开设置页时将重新扫描容器）");
     return;
   }
 
