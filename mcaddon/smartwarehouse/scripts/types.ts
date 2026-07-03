@@ -6,6 +6,18 @@ import type { Vector3 } from "@minecraft/server";
 export type DimensionId = string;
 
 /**
+ * 物品家族类型定义。每种家族包含一组互斥的物品 ID。
+ */
+export interface ItemFamily {
+  /** 族 ID，用于持久化配置和索引 key */
+  id: string;
+  /** 中文显示名，用于 UI */
+  displayName: string;
+  /** 该族包含的所有物品 typeId */
+  items: readonly string[];
+}
+
+/**
  * 仓库唯一标识符
  */
 export type WarehouseId = string;

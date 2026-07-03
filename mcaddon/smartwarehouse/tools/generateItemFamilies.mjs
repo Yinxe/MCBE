@@ -53,7 +53,7 @@ ALL.terracotta = { id:"terracotta", displayName:"陶瓦", items:[...listColor("t
 ALL.glazed_terracotta = { id:"glazed_terracotta", displayName:"带釉陶瓦", items:[...listColor("glazed_terracotta"), "minecraft:silver_glazed_terracotta"] };
 ALL.shulker_box = { id:"shulker_box", displayName:"潜影盒", items:[...listColor("shulker_box"),"minecraft:undyed_shulker_box"] };
 ALL.candle = { id:"candle", displayName:"蜡烛", items:[...listColor("candle"),"minecraft:candle"] };
-ALL.dye = { id:"dye", displayName:"染料", items:[...listColor("dye"), "minecraft:lapis_lazuli"] };
+ALL.dye = { id:"dye", displayName:"染料", items:listColor("dye") };
 ALL.harness = { id:"harness", displayName:"挽具", items:listColor("harness") };
 ALL.bundle = { id:"bundle", displayName:"同捆包", items:[..."white,orange,magenta,light_blue,yellow,lime,pink,gray,light_gray,cyan,purple,blue,brown,green,red,black".split(",").map(c=>`minecraft:${c}_bundle`),"minecraft:bundle"] };
 ALL.bed = { id:"bed", displayName:"床", items:listColor("bed") };
@@ -65,7 +65,7 @@ for (const t of [...WOOD_TYPES,"crimson","warped"]) {
   if (t==="warped") { logItems.push("minecraft:warped_stem","minecraft:warped_hyphae","minecraft:stripped_warped_stem","minecraft:stripped_warped_hyphae"); continue; }
   logItems.push(`minecraft:${t}_log`,`minecraft:${t}_wood`,`minecraft:stripped_${t}_log`,`minecraft:stripped_${t}_wood`);
 }
-logItems.push("minecraft:bamboo_block","minecraft:stripped_bamboo_block","minecraft:creaking_heart","minecraft:mangrove_roots","minecraft:muddy_mangrove_roots");
+logItems.push("minecraft:bamboo_block","minecraft:stripped_bamboo_block","minecraft:creaking_heart","minecraft:mangrove_roots");
 ALL.logs = { id:"logs", displayName:"原木/菌柄", items:logItems };
 
 // === 木制品（不含原木/树叶/树苗） ===
@@ -78,29 +78,33 @@ for (const t of WOOD_TYPES) {
     `minecraft:${t}_sign`,`minecraft:${t}_hanging_sign`,`minecraft:${t}_button`,`minecraft:${t}_pressure_plate`,
     `minecraft:${t}_fence`);
 }
-woodItems.push("minecraft:fence_gate","minecraft:trapdoor","minecraft:wooden_door","minecraft:wooden_button","minecraft:wooden_pressure_plate","minecraft:oak_sign","minecraft:dark_oak_sign");
+woodItems.push("minecraft:fence_gate","minecraft:trapdoor","minecraft:wooden_door","minecraft:wooden_button","minecraft:wooden_pressure_plate");
 woodItems.push("minecraft:bamboo_planks","minecraft:bamboo_slab","minecraft:bamboo_stairs","minecraft:bamboo_door","minecraft:bamboo_trapdoor","minecraft:bamboo_fence","minecraft:bamboo_fence_gate","minecraft:bamboo_sign","minecraft:bamboo_hanging_sign","minecraft:bamboo_button","minecraft:bamboo_pressure_plate","minecraft:bamboo_mosaic","minecraft:bamboo_mosaic_slab","minecraft:bamboo_mosaic_stairs","minecraft:bamboo_raft","minecraft:bamboo_chest_raft","minecraft:pale_oak_boat","minecraft:pale_oak_chest_boat","minecraft:cherry_boat","minecraft:cherry_chest_boat","minecraft:stick");
 for (const t of ["crimson","warped"]) {
   woodItems.push(`minecraft:${t}_planks`,`minecraft:${t}_slab`,`minecraft:${t}_stairs`,
     `minecraft:${t}_door`,`minecraft:${t}_trapdoor`,`minecraft:${t}_fence`,`minecraft:${t}_fence_gate`,
     `minecraft:${t}_sign`,`minecraft:${t}_hanging_sign`,`minecraft:${t}_button`,`minecraft:${t}_pressure_plate`);
 }
+woodItems.push("minecraft:boat","minecraft:chest_boat","minecraft:petrified_oak_slab");
 ALL.wood_products = { id:"wood_products", displayName:"木制品", items:woodItems };
 
 // === 其他木制品 ===
 ALL.wood_misc = { id:"wood_misc", displayName:"人工合成物",
   items:["minecraft:bowl","minecraft:ladder","minecraft:chest","minecraft:barrel",
-    "minecraft:crafting_table","minecraft:cartography_table","minecraft:fletching_table","minecraft:smithing_table","minecraft:loom","minecraft:grindstone",
+    "minecraft:crafting_table","minecraft:enchanting_table","minecraft:cartography_table","minecraft:fletching_table","minecraft:smithing_table","minecraft:loom","minecraft:grindstone",
     "minecraft:lectern","minecraft:jukebox","minecraft:noteblock",
     "minecraft:scaffolding","minecraft:flower_pot","minecraft:armor_stand","minecraft:beehive","minecraft:bee_nest",
     "minecraft:bookshelf","minecraft:chiseled_bookshelf","minecraft:composter","minecraft:campfire",
-    "minecraft:torch","minecraft:redstone_torch",
+    "minecraft:torch",
     "minecraft:lantern",
     "minecraft:painting","minecraft:frame","minecraft:glow_frame",
     "minecraft:furnace","minecraft:blast_furnace","minecraft:smoker",
     "minecraft:stonecutter_block",
     "minecraft:obsidian","minecraft:crying_obsidian",
     "minecraft:smooth_stone_slab",
+    "minecraft:anvil","minecraft:chipped_anvil","minecraft:damaged_anvil",
+    "minecraft:bell","minecraft:bone_block",
+    "minecraft:honeycomb_block","minecraft:web",
   ] };
 
 // === 石材建筑 ===
@@ -147,6 +151,25 @@ ALL.stone_building = { id:"stone_building", displayName:"石材建筑",
     "minecraft:reinforced_deepslate",
   ] };
 
+// === 装饰性石材 ===
+ALL.decorative_stone = { id:"decorative_stone", displayName:"装饰性石材",
+  items:[
+    "minecraft:chain","minecraft:iron_bars",
+    "minecraft:ochre_froglight","minecraft:pearlescent_froglight","minecraft:verdant_froglight",
+    "minecraft:chiseled_quartz_block",
+    "minecraft:amethyst_block","minecraft:budding_amethyst",
+    "minecraft:sea_lantern",
+    "minecraft:small_amethyst_bud","minecraft:medium_amethyst_bud","minecraft:large_amethyst_bud","minecraft:amethyst_cluster",
+  ] };
+
+// === 石材核心（被虫蚀方块等） ===
+ALL.stone_core = { id:"stone_core", displayName:"石材核心",
+  items:[
+    "minecraft:infested_stone","minecraft:infested_cobblestone","minecraft:infested_stone_bricks",
+    "minecraft:infested_mossy_stone_bricks","minecraft:infested_cracked_stone_bricks",
+    "minecraft:infested_chiseled_stone_bricks","minecraft:infested_deepslate",
+  ] };
+
 // === 铜方块（不含铜锭/铜块/粗铜 — 这些在矿物族） ===
 const copperVariants = ["cut_copper","chiseled_copper","copper_bulb","copper_grate","cut_copper_slab","cut_copper_stairs"];
 const copperItems = [];
@@ -158,6 +181,13 @@ for (const pre of ["","exposed_","weathered_","oxidized_","waxed_","waxed_expose
   if (["exposed_","weathered_","oxidized_","waxed_","waxed_exposed_","waxed_weathered_","waxed_oxidized_"].includes(pre)) copperItems.push(`minecraft:${pre}copper_block`);
 }
 copperItems.push("minecraft:copper_block","minecraft:exposed_copper","minecraft:weathered_copper","minecraft:oxidized_copper","minecraft:waxed_copper","minecraft:waxed_exposed_copper","minecraft:waxed_weathered_copper","minecraft:waxed_oxidized_copper");
+// Copper doors and trapdoors
+copperItems.push(
+  "minecraft:copper_door","minecraft:exposed_copper_door","minecraft:weathered_copper_door","minecraft:oxidized_copper_door",
+  "minecraft:copper_trapdoor","minecraft:exposed_copper_trapdoor","minecraft:weathered_copper_trapdoor","minecraft:oxidized_copper_trapdoor",
+  "minecraft:waxed_copper_door","minecraft:waxed_exposed_copper_door","minecraft:waxed_weathered_copper_door","minecraft:waxed_oxidized_copper_door",
+  "minecraft:waxed_copper_trapdoor","minecraft:waxed_exposed_copper_trapdoor","minecraft:waxed_weathered_copper_trapdoor","minecraft:waxed_oxidized_copper_trapdoor",
+);
 ALL.copper_blocks = { id:"copper_blocks", displayName:"铜方块", items:[...new Set(copperItems)].sort() };
 
 // === 稀有矿物 ===
@@ -169,10 +199,12 @@ ALL.rare_ores = { id:"rare_ores", displayName:"稀有矿石",
 // === 普通金属/矿物 ===
 ALL.common_minerals = { id:"common_minerals", displayName:"普通金属矿物",
   items:["minecraft:iron_ingot","minecraft:iron_nugget","minecraft:iron_block","minecraft:gold_ingot","minecraft:gold_nugget","minecraft:gold_block",
-    "minecraft:coal","minecraft:coal_block","minecraft:lapis_block",
+    "minecraft:coal","minecraft:coal_block","minecraft:lapis_block","minecraft:lapis_lazuli",
     "minecraft:quartz","minecraft:raw_iron","minecraft:raw_iron_block","minecraft:raw_gold","minecraft:raw_gold_block",
     "minecraft:raw_copper","minecraft:raw_copper_block","minecraft:copper_ingot",
     "minecraft:amethyst_shard",
+    "minecraft:charcoal","minecraft:flint",
+    "minecraft:clay_ball","minecraft:brick",
   ] };
 ALL.common_ores = { id:"common_ores", displayName:"普通矿石",
   items:["minecraft:iron_ore","minecraft:deepslate_iron_ore","minecraft:gold_ore","minecraft:deepslate_gold_ore",
@@ -193,20 +225,29 @@ ALL.wearables = { id:"wearables", displayName:"可穿戴装备", items:wear };
 // === 武器 ===
 ALL.weapons = { id:"weapons", displayName:"武器",
   items:["minecraft:wooden_sword","minecraft:stone_sword","minecraft:iron_sword","minecraft:golden_sword","minecraft:diamond_sword","minecraft:netherite_sword",
-    "minecraft:bow","minecraft:crossbow","minecraft:trident","minecraft:mace","minecraft:arrow","minecraft:wind_charge"] };
+    "minecraft:bow","minecraft:crossbow","minecraft:trident","minecraft:mace",
+    "minecraft:wooden_pickaxe","minecraft:stone_pickaxe","minecraft:iron_pickaxe","minecraft:golden_pickaxe","minecraft:diamond_pickaxe","minecraft:netherite_pickaxe",
+    "minecraft:wooden_axe","minecraft:stone_axe","minecraft:iron_axe","minecraft:golden_axe","minecraft:diamond_axe","minecraft:netherite_axe",
+    "minecraft:wooden_shovel","minecraft:stone_shovel","minecraft:iron_shovel","minecraft:golden_shovel","minecraft:diamond_shovel","minecraft:netherite_shovel",
+  ] };
+
+// === 弹射物 ===
+ALL.projectiles = { id:"projectiles", displayName:"弹射物",
+  items:["minecraft:arrow","minecraft:snowball","minecraft:experience_bottle","minecraft:wind_charge"] };
 
 // === 工具 ===
 ALL.tools = { id:"tools", displayName:"工具",
-  items:["minecraft:wooden_pickaxe","minecraft:stone_pickaxe","minecraft:iron_pickaxe","minecraft:golden_pickaxe","minecraft:diamond_pickaxe","minecraft:netherite_pickaxe",
-    "minecraft:wooden_axe","minecraft:stone_axe","minecraft:iron_axe","minecraft:golden_axe","minecraft:diamond_axe","minecraft:netherite_axe",
-    "minecraft:wooden_shovel","minecraft:stone_shovel","minecraft:iron_shovel","minecraft:golden_shovel","minecraft:diamond_shovel","minecraft:netherite_shovel",
-    "minecraft:wooden_hoe","minecraft:stone_hoe","minecraft:iron_hoe","minecraft:golden_hoe","minecraft:diamond_hoe","minecraft:netherite_hoe",
+  items:["minecraft:wooden_hoe","minecraft:stone_hoe","minecraft:iron_hoe","minecraft:golden_hoe","minecraft:diamond_hoe","minecraft:netherite_hoe",
     "minecraft:shears","minecraft:fishing_rod","minecraft:flint_and_steel","minecraft:brush","minecraft:spyglass","minecraft:clock","minecraft:compass","minecraft:recovery_compass",
-    "minecraft:bowl","minecraft:bucket","minecraft:water_bucket","minecraft:lava_bucket","minecraft:milk_bucket","minecraft:powder_snow_bucket",
     "minecraft:minecart","minecraft:chest_minecart","minecraft:hopper_minecart","minecraft:tnt_minecart",
     "minecraft:carrot_on_a_stick","minecraft:warped_fungus_on_a_stick","minecraft:lead","minecraft:name_tag","minecraft:saddle",
     "minecraft:lodestone_compass",
   ] };
+
+// === 桶与桶装物 ===
+ALL.buckets = { id:"buckets", displayName:"桶",
+  items:["minecraft:bucket","minecraft:water_bucket","minecraft:lava_bucket","minecraft:milk_bucket","minecraft:powder_snow_bucket",
+    "minecraft:axolotl_bucket","minecraft:cod_bucket","minecraft:pufferfish_bucket","minecraft:salmon_bucket","minecraft:tadpole_bucket","minecraft:tropical_fish_bucket"] };
 
 // === 红石 ===
 ALL.redstone = { id:"redstone", displayName:"红石及原件",
@@ -218,8 +259,9 @@ ALL.redstone = { id:"redstone", displayName:"红石及原件",
     "minecraft:heavy_weighted_pressure_plate","minecraft:light_weighted_pressure_plate",
     "minecraft:iron_door","minecraft:iron_trapdoor",
     "minecraft:rail","minecraft:activator_rail","minecraft:detector_rail","minecraft:golden_rail",
-    "minecraft:sculk_sensor","minecraft:sculk_shrieker","minecraft:sculk_catalyst",
+    "minecraft:sculk_sensor",
     "minecraft:tnt",
+    "minecraft:honey_block",
   ] };
 
 // === 农作物与食物（不含植物/树苗/花） ===
@@ -229,7 +271,7 @@ ALL.crops_food = { id:"crops_food", displayName:"农作物与食物",
     "minecraft:melon_block","minecraft:melon_slice","minecraft:melon_seeds",
     "minecraft:pumpkin","minecraft:pumpkin_seeds","minecraft:carved_pumpkin","minecraft:lit_pumpkin","minecraft:pumpkin_pie",
     "minecraft:apple","minecraft:golden_apple","minecraft:enchanted_golden_apple",
-    "minecraft:chorus_fruit","minecraft:popped_chorus_fruit",
+    "minecraft:chorus_fruit",
     "minecraft:bread","minecraft:cookie","minecraft:cake","minecraft:mushroom_stew","minecraft:rabbit_stew","minecraft:beetroot_soup","minecraft:suspicious_stew",
     "minecraft:honey_bottle","minecraft:sweet_berries","minecraft:glow_berries",
     "minecraft:porkchop","minecraft:cooked_porkchop","minecraft:beef","minecraft:cooked_beef",
@@ -237,6 +279,8 @@ ALL.crops_food = { id:"crops_food", displayName:"农作物与食物",
     "minecraft:mutton","minecraft:cooked_mutton","minecraft:cod","minecraft:cooked_cod","minecraft:salmon","minecraft:cooked_salmon",
     "minecraft:pufferfish","minecraft:tropical_fish",
     "minecraft:dried_kelp","minecraft:kelp","minecraft:sugar_cane","minecraft:cocoa_beans",
+    "minecraft:hay_block","minecraft:dried_kelp_block",
+    "minecraft:bone_meal",
   ] };
 
 // === 植物与树苗 ===
@@ -263,7 +307,6 @@ ALL.flowers = { id:"flowers", displayName:"花",
     "minecraft:red_tulip","minecraft:orange_tulip","minecraft:white_tulip","minecraft:pink_tulip",
     "minecraft:oxeye_daisy","minecraft:cornflower","minecraft:lily_of_the_valley","minecraft:wither_rose",
     "minecraft:sunflower","minecraft:lilac","minecraft:rose_bush","minecraft:peony",
-    "minecraft:torchflower","minecraft:pitcher_plant",
   ] };
 
 // === 珊瑚 ===
@@ -277,12 +320,11 @@ ALL.coral = { id:"coral", displayName:"珊瑚",
 ALL.nether = { id:"nether", displayName:"地狱物品",
   items:["minecraft:netherrack","minecraft:crimson_nylium","minecraft:warped_nylium","minecraft:soul_sand","minecraft:soul_soil",
     "minecraft:glowstone","minecraft:glowstone_dust","minecraft:shroomlight",
-    "minecraft:nether_wart","minecraft:nether_wart_block","minecraft:warped_wart_block",
+    "minecraft:nether_wart_block","minecraft:warped_wart_block",
     "minecraft:magma","minecraft:respawn_anchor",
     "minecraft:nether_brick","minecraft:netherbrick","minecraft:nether_brick_fence","minecraft:nether_brick_stairs","minecraft:nether_brick_slab","minecraft:nether_brick_wall",
     "minecraft:red_nether_brick","minecraft:red_nether_brick_stairs","minecraft:red_nether_brick_slab","minecraft:red_nether_brick_wall",
     "minecraft:chiseled_nether_bricks","minecraft:cracked_nether_bricks",
-    "minecraft:soul_torch","minecraft:soul_lantern","minecraft:soul_campfire",
     "minecraft:weeping_vines","minecraft:twisting_vines","minecraft:nether_sprouts",
     "minecraft:warped_roots","minecraft:crimson_roots","minecraft:crimson_fungus","minecraft:warped_fungus",
     "minecraft:basalt","minecraft:polished_basalt","minecraft:smooth_basalt",
@@ -291,14 +333,13 @@ ALL.nether = { id:"nether", displayName:"地狱物品",
     "minecraft:polished_blackstone","minecraft:polished_blackstone_stairs","minecraft:polished_blackstone_slab","minecraft:polished_blackstone_wall",
     "minecraft:polished_blackstone_bricks","minecraft:polished_blackstone_brick_stairs","minecraft:polished_blackstone_brick_slab","minecraft:polished_blackstone_brick_wall",
     "minecraft:polished_blackstone_button","minecraft:polished_blackstone_pressure_plate",
-    "minecraft:warped_fungus_on_a_stick",
   ] };
 
 // === 末地物品 ===
 ALL.end = { id:"end", displayName:"末地物品",
   items:["minecraft:end_stone","minecraft:end_bricks","minecraft:end_brick_stairs","minecraft:end_stone_brick_slab","minecraft:end_stone_brick_wall",
-    "minecraft:end_portal_frame","minecraft:end_crystal","minecraft:end_rod","minecraft:ender_chest",
-    "minecraft:dragon_breath","minecraft:dragon_egg","minecraft:dragon_head",
+    "minecraft:end_portal_frame","minecraft:ender_chest",
+    "minecraft:dragon_head",
     "minecraft:ender_eye","minecraft:ender_pearl","minecraft:shulker_shell","minecraft:chorus_flower","minecraft:chorus_plant",
     "minecraft:popped_chorus_fruit",
   ] };
@@ -310,43 +351,53 @@ ALL.surface = { id:"surface", displayName:"地表方块",
     "minecraft:snow","minecraft:snow_layer","minecraft:ice","minecraft:packed_ice","minecraft:blue_ice",
     "minecraft:grass_path","minecraft:farmland","minecraft:suspicious_sand","minecraft:suspicious_gravel",
     "minecraft:frog_spawn",
+    "minecraft:frosted_ice",
   ] };
 
 // === 友好生物掉落物 ===
 ALL.friendly_drops = { id:"friendly_drops", displayName:"友好生物掉落",
-  items:["minecraft:feather","minecraft:leather","minecraft:rabbit_hide","minecraft:rabbit_foot","minecraft:egg","minecraft:turtle_egg","minecraft:sniffer_egg",
+  items:["minecraft:feather","minecraft:leather","minecraft:rabbit_hide",
+    "minecraft:egg","minecraft:turtle_egg","minecraft:sniffer_egg",
     "minecraft:turtle_scute","minecraft:armadillo_scute",
-    "minecraft:ink_sac","minecraft:glow_ink_sac","minecraft:honeycomb","minecraft:honeycomb_block","minecraft:honey_block",
-    "minecraft:string","minecraft:slime_ball","minecraft:clay_ball","minecraft:brick",
-    "minecraft:bone_meal","minecraft:sugar","minecraft:paper","minecraft:book","minecraft:writable_book","minecraft:enchanted_book",
-    "minecraft:filled_map","minecraft:empty_map",
-    "minecraft:nautilus_shell","minecraft:heart_of_the_sea","minecraft:echo_shard",
-    "minecraft:prismarine_shard","minecraft:prismarine_crystals","minecraft:sea_lantern",
-    "minecraft:sponge","minecraft:wet_sponge","minecraft:goat_horn","minecraft:disc_fragment_5",
-    "minecraft:small_amethyst_bud","minecraft:medium_amethyst_bud","minecraft:large_amethyst_bud","minecraft:amethyst_cluster",
-    "minecraft:glistering_melon_slice","minecraft:golden_carrot","minecraft:fire_charge",
-    "minecraft:firework_rocket","minecraft:firework_star",
+    "minecraft:ink_sac","minecraft:glow_ink_sac",
+    "minecraft:honeycomb","minecraft:goat_horn",
   ] };
 
 // === 敌对生物掉落物（不与末地/药水重叠） ===
 ALL.hostile_drops = { id:"hostile_drops", displayName:"敌对生物掉落",
-  items:["minecraft:rotten_flesh","minecraft:bone","minecraft:spider_eye","minecraft:gunpowder",
-    "minecraft:ghast_tear","minecraft:ender_pearl","minecraft:phantom_membrane",
-    "minecraft:shulker_shell","minecraft:totem_of_undying","minecraft:nether_star",
-    "minecraft:experience_bottle",
-    "minecraft:skeleton_skull","minecraft:wither_skeleton_skull","minecraft:zombie_head","minecraft:creeper_head","minecraft:player_head","minecraft:piglin_head",
-    "minecraft:breeze_rod","minecraft:heavy_core","minecraft:trial_key","minecraft:ominous_trial_key",
+  items:["minecraft:rotten_flesh","minecraft:bone","minecraft:phantom_membrane",
+    "minecraft:skeleton_skull","minecraft:wither_skeleton_skull",
+    "minecraft:zombie_head","minecraft:creeper_head","minecraft:player_head","minecraft:piglin_head",
+    "minecraft:breeze_rod",
+    "minecraft:string","minecraft:slime_ball",
+    "minecraft:prismarine_shard","minecraft:prismarine_crystals",
+    "minecraft:sponge","minecraft:wet_sponge",
   ] };
+
+// === 道具 ===
+ALL.accessories = { id:"accessories", displayName:"道具",
+  items:["minecraft:trial_key","minecraft:ominous_trial_key","minecraft:ominous_bottle",
+    "minecraft:fire_charge","minecraft:firework_rocket","minecraft:firework_star","minecraft:fireworks_rocket",
+    "minecraft:blue_egg","minecraft:brown_egg","minecraft:xp_bottle",
+  ] };
+
+// === 附魔 ===
+ALL.enchanted = { id:"enchanted", displayName:"附魔",
+  items:["minecraft:enchanted_book"] };
+
+// === 书与地图 ===
+ALL.books_maps = { id:"books_maps", displayName:"书与地图",
+  items:["minecraft:paper","minecraft:book","minecraft:writable_book","minecraft:filled_map","minecraft:empty_map"] };
 
 // === 药水与酿造 ===
 ALL.potions = { id:"potions", displayName:"药水与酿造",
-  items:["minecraft:potion","minecraft:splash_potion","minecraft:lingering_potion","minecraft:ominous_bottle",
+  items:["minecraft:potion","minecraft:splash_potion","minecraft:lingering_potion",
     "minecraft:glass_bottle","minecraft:brewing_stand","minecraft:cauldron",
     "minecraft:nether_wart","minecraft:blaze_powder","minecraft:blaze_rod","minecraft:magma_cream",
     "minecraft:fermented_spider_eye","minecraft:glistering_melon_slice","minecraft:golden_carrot",
     "minecraft:rabbit_foot","minecraft:ghast_tear","minecraft:dragon_breath",
-    "minecraft:spider_eye","minecraft:gunpowder","minecraft:redstone","minecraft:glowstone_dust",
-    "minecraft:sugar","minecraft:dried_kelp",
+    "minecraft:spider_eye","minecraft:gunpowder",
+    "minecraft:sugar",
   ] };
 
 // === 唱片 ===
@@ -357,6 +408,101 @@ ALL.music_disc = { id:"music_disc", displayName:"唱片",
     "minecraft:music_disc_pigstep","minecraft:music_disc_precipice","minecraft:music_disc_relic",
     "minecraft:music_disc_stal","minecraft:music_disc_strad","minecraft:music_disc_tears",
     "minecraft:music_disc_wait","minecraft:music_disc_ward","minecraft:music_disc_11","minecraft:music_disc_5",
+    "minecraft:disc_fragment_5",
+  ] };
+
+// === 宝藏 ===
+ALL.treasure = { id:"treasure", displayName:"宝藏",
+  items:["minecraft:beacon","minecraft:conduit","minecraft:dragon_egg",
+    "minecraft:end_crystal","minecraft:end_rod","minecraft:heart_of_the_sea","minecraft:heavy_core",
+    "minecraft:lodestone","minecraft:mob_spawner","minecraft:nether_star","minecraft:totem_of_undying",
+    "minecraft:trial_spawner","minecraft:vault",
+    "minecraft:nautilus_shell","minecraft:echo_shard",
+  ] };
+
+// === 古城方块 ===
+ALL.ancient_city = { id:"ancient_city", displayName:"古城方块",
+  items:["minecraft:sculk","minecraft:sculk_vein","minecraft:sculk_catalyst","minecraft:sculk_shrieker",
+    "minecraft:soul_torch","minecraft:soul_lantern","minecraft:soul_campfire",
+  ] };
+
+// === 刷怪蛋 ===
+ALL.spawn_eggs = { id:"spawn_eggs", displayName:"刷怪蛋",
+  items:[
+    "minecraft:allay_spawn_egg","minecraft:armadillo_spawn_egg","minecraft:axolotl_spawn_egg",
+    "minecraft:bat_spawn_egg","minecraft:bee_spawn_egg","minecraft:blaze_spawn_egg",
+    "minecraft:bogged_spawn_egg","minecraft:breeze_spawn_egg","minecraft:camel_spawn_egg",
+    "minecraft:cat_spawn_egg","minecraft:cave_spider_spawn_egg","minecraft:chicken_spawn_egg",
+    "minecraft:cod_spawn_egg","minecraft:cow_spawn_egg","minecraft:creaking_spawn_egg",
+    "minecraft:creeper_spawn_egg","minecraft:dolphin_spawn_egg","minecraft:donkey_spawn_egg",
+    "minecraft:drowned_spawn_egg","minecraft:elder_guardian_spawn_egg","minecraft:ender_dragon_spawn_egg",
+    "minecraft:enderman_spawn_egg","minecraft:endermite_spawn_egg","minecraft:evoker_spawn_egg",
+    "minecraft:fox_spawn_egg","minecraft:frog_spawn_egg","minecraft:ghast_spawn_egg",
+    "minecraft:glow_squid_spawn_egg","minecraft:goat_spawn_egg","minecraft:guardian_spawn_egg",
+    "minecraft:happy_ghast_spawn_egg","minecraft:hoglin_spawn_egg","minecraft:horse_spawn_egg",
+    "minecraft:husk_spawn_egg","minecraft:iron_golem_spawn_egg","minecraft:llama_spawn_egg",
+    "minecraft:magma_cube_spawn_egg","minecraft:mooshroom_spawn_egg","minecraft:mule_spawn_egg",
+    "minecraft:ocelot_spawn_egg","minecraft:panda_spawn_egg","minecraft:parrot_spawn_egg",
+    "minecraft:phantom_spawn_egg","minecraft:pig_spawn_egg","minecraft:piglin_brute_spawn_egg",
+    "minecraft:piglin_spawn_egg","minecraft:pillager_spawn_egg","minecraft:polar_bear_spawn_egg",
+    "minecraft:pufferfish_spawn_egg","minecraft:rabbit_spawn_egg","minecraft:ravager_spawn_egg",
+    "minecraft:salmon_spawn_egg","minecraft:sheep_spawn_egg","minecraft:shulker_spawn_egg",
+    "minecraft:silverfish_spawn_egg","minecraft:skeleton_horse_spawn_egg","minecraft:skeleton_spawn_egg",
+    "minecraft:slime_spawn_egg","minecraft:sniffer_spawn_egg","minecraft:snow_golem_spawn_egg",
+    "minecraft:spider_spawn_egg","minecraft:squid_spawn_egg","minecraft:stray_spawn_egg",
+    "minecraft:strider_spawn_egg","minecraft:tadpole_spawn_egg","minecraft:trader_llama_spawn_egg",
+    "minecraft:tropical_fish_spawn_egg","minecraft:turtle_spawn_egg","minecraft:vex_spawn_egg",
+    "minecraft:villager_spawn_egg","minecraft:vindicator_spawn_egg","minecraft:wandering_trader_spawn_egg",
+    "minecraft:warden_spawn_egg","minecraft:witch_spawn_egg","minecraft:wither_skeleton_spawn_egg",
+    "minecraft:wither_spawn_egg","minecraft:wolf_spawn_egg","minecraft:zoglin_spawn_egg",
+    "minecraft:zombie_horse_spawn_egg","minecraft:zombie_pigman_spawn_egg","minecraft:zombie_spawn_egg",
+    "minecraft:zombie_villager_spawn_egg",
+  ] };
+
+// === 锻造模板 ===
+ALL.smithing_templates = { id:"smithing_templates", displayName:"锻造模板",
+  items:["minecraft:bolt_armor_trim_smithing_template","minecraft:coast_armor_trim_smithing_template",
+    "minecraft:dune_armor_trim_smithing_template","minecraft:eye_armor_trim_smithing_template",
+    "minecraft:flow_armor_trim_smithing_template","minecraft:host_armor_trim_smithing_template",
+    "minecraft:netherite_upgrade_smithing_template","minecraft:raiser_armor_trim_smithing_template",
+    "minecraft:rib_armor_trim_smithing_template","minecraft:sentry_armor_trim_smithing_template",
+    "minecraft:shaper_armor_trim_smithing_template","minecraft:silence_armor_trim_smithing_template",
+    "minecraft:snout_armor_trim_smithing_template","minecraft:spire_armor_trim_smithing_template",
+    "minecraft:tide_armor_trim_smithing_template","minecraft:vex_armor_trim_smithing_template",
+    "minecraft:ward_armor_trim_smithing_template","minecraft:wayfinder_armor_trim_smithing_template",
+    "minecraft:wild_armor_trim_smithing_template",
+  ] };
+
+// === 陶片 ===
+ALL.pottery_sherds = { id:"pottery_sherds", displayName:"陶片",
+  items:["minecraft:angler_pottery_sherd","minecraft:archer_pottery_sherd","minecraft:arms_up_pottery_sherd",
+    "minecraft:blade_pottery_sherd","minecraft:brewer_pottery_sherd","minecraft:burn_pottery_sherd",
+    "minecraft:danger_pottery_sherd","minecraft:explorer_pottery_sherd","minecraft:flow_pottery_sherd",
+    "minecraft:friend_pottery_sherd","minecraft:guster_pottery_sherd","minecraft:heart_pottery_sherd",
+    "minecraft:heartbreak_pottery_sherd","minecraft:howl_pottery_sherd","minecraft:miner_pottery_sherd",
+    "minecraft:mourner_pottery_sherd","minecraft:plenty_pottery_sherd","minecraft:prize_pottery_sherd",
+    "minecraft:scrape_pottery_sherd","minecraft:sheaf_pottery_sherd","minecraft:shelter_pottery_sherd",
+    "minecraft:skull_pottery_sherd","minecraft:snort_pottery_sherd","minecraft:decorated_pot",
+  ] };
+
+// === 旗帜图案 ===
+ALL.banner_patterns = { id:"banner_patterns", displayName:"旗帜图案",
+  items:["minecraft:banner","minecraft:bordure_indented_banner_pattern","minecraft:creeper_banner_pattern",
+    "minecraft:field_masoned_banner_pattern","minecraft:flow_banner_pattern","minecraft:flower_banner_pattern",
+    "minecraft:globe_banner_pattern","minecraft:guster_banner_pattern","minecraft:mojang_banner_pattern",
+    "minecraft:piglin_banner_pattern","minecraft:skull_banner_pattern",
+  ] };
+
+// === 创造专属 ===
+ALL.creative_only = { id:"creative_only", displayName:"创造专属",
+  items:["minecraft:agent","minecraft:allow","minecraft:barrier","minecraft:bedrock",
+    "minecraft:border_block","minecraft:chain_command_block","minecraft:command_block","minecraft:deny",
+    "minecraft:jigsaw","minecraft:light_block_0","minecraft:light_block_1","minecraft:light_block_10",
+    "minecraft:light_block_11","minecraft:light_block_12","minecraft:light_block_13","minecraft:light_block_14",
+    "minecraft:light_block_15","minecraft:light_block_2","minecraft:light_block_3","minecraft:light_block_4",
+    "minecraft:light_block_5","minecraft:light_block_6","minecraft:light_block_7","minecraft:light_block_8",
+    "minecraft:light_block_9","minecraft:npc","minecraft:repeating_command_block","minecraft:command_block_minecart","minecraft:structure_block",
+    "minecraft:structure_void","minecraft:tripod_camera",
   ] };
 
 // ── 验证 ──────────────────────────────────────────────────

@@ -9,6 +9,9 @@ https://learn.microsoft.com/zh-cn/minecraft/creator/?view=minecraft-bedrock-stab
 https://wiki.bedrock.dev/
 涵盖：自定义物品、方块、实体、Molang、动画控制器、UI、粒子等。
 
+### 全wiki中文翻译表
+https://raw.githubusercontent.com/SkyEye-FAST/mcbe-chinese-patch/main/extracted/release/vanilla/zh_CN.json
+
 ---
 
 ## 代码风格与约定

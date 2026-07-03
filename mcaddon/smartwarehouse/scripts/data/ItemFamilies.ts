@@ -10,18 +10,7 @@
  * ============================================================================
  */
 
-// ─── 类型 ───────────────────────────────────────────────────────
-
-export interface ItemFamily {
-  /** 族 ID，用于持久化配置和索引 key */
-  id: string;
-  /** 中文显示名，用于 UI */
-  displayName: string;
-  /** 该族包含的所有物品 typeId */
-  items: readonly string[];
-}
-
-// ─── 家族定义 ─────────────────────────────────────────────────
+import type { ItemFamily } from "../types";
 
 const wool: ItemFamily = {
   id: "wool",
@@ -273,19 +262,13 @@ const dye: ItemFamily = {
     "minecraft:green_dye", // 绿色染料
     "minecraft:red_dye", // 红色染料
     "minecraft:black_dye", // 墨囊
-    "minecraft:lapis_lazuli", // 青金石
   ],
 };
 
-const animal_gear: ItemFamily = {
-  id: "animal_gear", // 马铠/鞍/挽具/胡萝卜钓竿/诡异菌钓竿/拴绳等骑乘与驾驭 
-  displayName: "骑乘与驾驭",
+const harness: ItemFamily = {
+  id: "harness",
+  displayName: "挽具",
   items: [
-    "minecraft:leather_horse_armor", // 皮革马铠
-    "minecraft:iron_horse_armor", // 铁马铠
-    "minecraft:golden_horse_armor", // Golden Horse Armor
-    "minecraft:diamond_horse_armor", // 钻石马铠
-    "minecraft:saddle", // 鞍
     "minecraft:white_harness", // 白色挽具
     "minecraft:orange_harness", // 橙色挽具
     "minecraft:magenta_harness", // 品红色挽具
@@ -302,9 +285,6 @@ const animal_gear: ItemFamily = {
     "minecraft:green_harness", // 绿色挽具
     "minecraft:red_harness", // 红色挽具
     "minecraft:black_harness", // 黑色挽具
-    "minecraft:carrot_on_a_stick", // 胡萝卜钓竿
-    "minecraft:warped_fungus_on_a_stick", // 诡异真菌钓竿
-    "minecraft:lead", // 拴绳
   ],
 };
 
@@ -407,7 +387,6 @@ const logs: ItemFamily = {
     "minecraft:stripped_bamboo_block", // 去皮竹块
     "minecraft:creaking_heart", // 嘎枝之心
     "minecraft:mangrove_roots", // 红树木根
-    "minecraft:muddy_mangrove_roots", // 沾泥的红树木根
   ],
 };
 
@@ -553,6 +532,7 @@ const wood_products: ItemFamily = {
     "minecraft:pale_oak_chest_boat", // 苍白橡树运输船
     "minecraft:cherry_boat", // 樱花木船
     "minecraft:cherry_chest_boat", // 樱花木运输船
+    "minecraft:stick", // 木棍
     "minecraft:crimson_planks", // 绯红木板
     "minecraft:crimson_slab", // 绯红木台阶
     "minecraft:crimson_stairs", // 绯红木楼梯
@@ -575,7 +555,9 @@ const wood_products: ItemFamily = {
     "minecraft:warped_hanging_sign", // 翘曲悬挂告示牌
     "minecraft:warped_button", // 诡异木按钮
     "minecraft:warped_pressure_plate", // 诡异木压力板
-    "minecraft:stick", // 木棍
+    "minecraft:boat", // 船
+    "minecraft:chest_boat", // 运输船
+    "minecraft:petrified_oak_slab", // Petrified Oak Slab
   ],
 };
 
@@ -583,10 +565,12 @@ const wood_misc: ItemFamily = {
   id: "wood_misc",
   displayName: "人工合成物",
   items: [
+    "minecraft:bowl", // 碗
     "minecraft:ladder", // 梯子
     "minecraft:chest", // 箱子
     "minecraft:barrel", // 木桶
     "minecraft:crafting_table", // 工作台
+    "minecraft:enchanting_table", // 附魔台
     "minecraft:cartography_table", // 制图台
     "minecraft:fletching_table", // 制箭台
     "minecraft:smithing_table", // 锻造台
@@ -616,12 +600,19 @@ const wood_misc: ItemFamily = {
     "minecraft:obsidian", // 黑曜石
     "minecraft:crying_obsidian", // 哭泣的黑曜石
     "minecraft:smooth_stone_slab", // Smooth Stone Slab
+    "minecraft:anvil", // 铁砧
+    "minecraft:chipped_anvil", // 开裂的铁砧
+    "minecraft:damaged_anvil", // 损坏的铁砧
+    "minecraft:bell", // 钟
+    "minecraft:bone_block", // 骨块
+    "minecraft:honeycomb_block", // 蜜脾块
+    "minecraft:web", // 蜘蛛网
   ],
 };
 
-const stone_core: ItemFamily = {
-  id: "stone_core", // 石头/圆石/石砖/安山岩/闪长岩/花岗岩 + 台阶/楼梯/墙/磨制变体 
-  displayName: "普通石材",
+const stone_building: ItemFamily = {
+  id: "stone_building",
+  displayName: "石材建筑",
   items: [
     "minecraft:stone", // 石头
     "minecraft:smooth_stone", // 平滑石
@@ -667,15 +658,6 @@ const stone_core: ItemFamily = {
     "minecraft:polished_granite", // 磨制花岗岩
     "minecraft:polished_granite_stairs", // 磨制花岗岩楼梯
     "minecraft:polished_granite_slab", // 磨制花岗岩台阶
-    "minecraft:stone_button", // 石头按钮
-    "minecraft:stone_pressure_plate", // 石质压力板
-  ],
-};
-
-const deep_rock: ItemFamily = {
-  id: "deep_rock", // 深板岩/凝灰岩/方解石/滴水石 + 抛���/砖/瓦 + 台阶/楼梯/墙 
-  displayName: "深层岩石",
-  items: [
     "minecraft:deepslate", // 深板岩
     "minecraft:cobbled_deepslate", // 深板岩圆石
     "minecraft:polished_deepslate", // 磨制深板岩
@@ -710,17 +692,6 @@ const deep_rock: ItemFamily = {
     "minecraft:tuff_brick_stairs", // 凝灰岩砖楼梯
     "minecraft:tuff_brick_slab", // 凝灰岩砖台阶
     "minecraft:tuff_brick_wall", // 凝灰岩砖墙
-    "minecraft:calcite", // 方解石
-    "minecraft:pointed_dripstone", // 滴水石锥
-    "minecraft:dripstone_block", // 滴水石块
-    "minecraft:reinforced_deepslate", // 强化深板岩
-  ],
-};
-
-const decorative_stone: ItemFamily = {
-  id: "decorative_stone", // 砂岩/石英/紫珀/海晶石/砖 + 台阶/楼梯/墙 
-  displayName: "装饰石材",
-  items: [
     "minecraft:sandstone", // 砂岩
     "minecraft:sandstone_stairs", // 砂岩楼梯
     "minecraft:sandstone_slab", // 砂岩台阶
@@ -779,6 +750,46 @@ const decorative_stone: ItemFamily = {
     "minecraft:resin_block", // 树脂块
     "minecraft:resin_brick", // 树脂砖
     "minecraft:resin_clump", // 树脂团
+    "minecraft:stone_button", // 石头按钮
+    "minecraft:stone_pressure_plate", // 石质压力板
+    "minecraft:calcite", // 方解石
+    "minecraft:pointed_dripstone", // 滴水石锥
+    "minecraft:dripstone_block", // 滴水石块
+    "minecraft:reinforced_deepslate", // 强化深板岩
+  ],
+};
+
+const decorative_stone: ItemFamily = {
+  id: "decorative_stone",
+  displayName: "装饰性石材",
+  items: [
+    "minecraft:chain", // 锁链
+    "minecraft:iron_bars", // 铁栏杆
+    "minecraft:ochre_froglight", // 赭黄蛙明灯
+    "minecraft:pearlescent_froglight", // 珠光蛙明灯
+    "minecraft:verdant_froglight", // 青翠蛙明灯
+    "minecraft:chiseled_quartz_block", // Chiseled Quartz Block
+    "minecraft:amethyst_block", // 紫水晶方块
+    "minecraft:budding_amethyst", // 紫水晶母岩
+    "minecraft:sea_lantern", // 海晶灯
+    "minecraft:small_amethyst_bud", // 小型紫晶芽
+    "minecraft:medium_amethyst_bud", // 中型紫晶芽
+    "minecraft:large_amethyst_bud", // 大型紫晶芽
+    "minecraft:amethyst_cluster", // 紫水晶簇
+  ],
+};
+
+const stone_core: ItemFamily = {
+  id: "stone_core",
+  displayName: "石材核心",
+  items: [
+    "minecraft:infested_stone", // 被虫蚀的石头
+    "minecraft:infested_cobblestone", // 被虫蚀的圆石
+    "minecraft:infested_stone_bricks", // 虫蚀石砖
+    "minecraft:infested_mossy_stone_bricks", // 被虫蚀的苔石砖
+    "minecraft:infested_cracked_stone_bricks", // 被虫蚀的裂纹石砖
+    "minecraft:infested_chiseled_stone_bricks", // 被虫蚀的錾制石砖
+    "minecraft:infested_deepslate", // 被虫蚀的虫蚀石砖
   ],
 };
 
@@ -787,8 +798,11 @@ const copper_blocks: ItemFamily = {
   displayName: "铜方块",
   items: [
     "minecraft:chiseled_copper", // 雕纹铜块
+    "minecraft:copper_block", // 铜方块
     "minecraft:copper_bulb", // 铜灯泡
+    "minecraft:copper_door", // 铜门
     "minecraft:copper_grate", // 铜格栅
+    "minecraft:copper_trapdoor", // 铜活板门
     "minecraft:cut_copper", // 切制铜块
     "minecraft:cut_copper_slab", // 切制铜块台阶
     "minecraft:cut_copper_stairs", // 切制铜楼梯
@@ -796,7 +810,9 @@ const copper_blocks: ItemFamily = {
     "minecraft:exposed_copper", // 外露的铜块
     "minecraft:exposed_copper_block",
     "minecraft:exposed_copper_bulb", // 外露铜灯泡
+    "minecraft:exposed_copper_door", // 外露铜门
     "minecraft:exposed_copper_grate", // 外露铜格栅
+    "minecraft:exposed_copper_trapdoor", // 外露铜活板门
     "minecraft:exposed_cut_copper", // 外露切制铜块
     "minecraft:exposed_cut_copper_slab", // 外露切制铜块台阶
     "minecraft:exposed_cut_copper_stairs", // 外露切制铜楼梯
@@ -804,7 +820,9 @@ const copper_blocks: ItemFamily = {
     "minecraft:oxidized_copper", // 氧化的铜块
     "minecraft:oxidized_copper_block",
     "minecraft:oxidized_copper_bulb", // 氧化铜灯泡
+    "minecraft:oxidized_copper_door", // 氧化铜门
     "minecraft:oxidized_copper_grate", // 氧化铜格栅
+    "minecraft:oxidized_copper_trapdoor", // 氧化铜活板门
     "minecraft:oxidized_cut_copper", // 氧化切制铜块
     "minecraft:oxidized_cut_copper_slab", // 氧化切制铜块台阶
     "minecraft:oxidized_cut_copper_stairs", // 氧化切制铜楼梯
@@ -812,7 +830,9 @@ const copper_blocks: ItemFamily = {
     "minecraft:waxed_copper", // 涂蜡铜方块
     "minecraft:waxed_copper_block",
     "minecraft:waxed_copper_bulb", // 涂蜡铜灯泡
+    "minecraft:waxed_copper_door", // 涂蜡铜门
     "minecraft:waxed_copper_grate", // 涂蜡铜格栅
+    "minecraft:waxed_copper_trapdoor", // 涂蜡铜活板门
     "minecraft:waxed_cut_copper", // 涂蜡切制铜块
     "minecraft:waxed_cut_copper_slab", // 涂蜡切制铜块台阶
     "minecraft:waxed_cut_copper_stairs", // 涂蜡切制铜楼梯
@@ -820,7 +840,9 @@ const copper_blocks: ItemFamily = {
     "minecraft:waxed_exposed_copper", // 外露的涂蜡铜块
     "minecraft:waxed_exposed_copper_block",
     "minecraft:waxed_exposed_copper_bulb", // 涂蜡外露铜灯泡
+    "minecraft:waxed_exposed_copper_door", // 涂蜡外露铜门
     "minecraft:waxed_exposed_copper_grate", // 涂蜡外露铜格栅
+    "minecraft:waxed_exposed_copper_trapdoor", // 外露的涂蜡铜活板门
     "minecraft:waxed_exposed_cut_copper", // 外露的涂蜡切制铜块
     "minecraft:waxed_exposed_cut_copper_slab", // 外露的涂蜡切制铜块台阶
     "minecraft:waxed_exposed_cut_copper_stairs", // 外露的涂蜡切制铜楼梯
@@ -828,7 +850,9 @@ const copper_blocks: ItemFamily = {
     "minecraft:waxed_oxidized_copper", // 氧化的涂蜡铜块
     "minecraft:waxed_oxidized_copper_block",
     "minecraft:waxed_oxidized_copper_bulb", // 氧化的涂蜡铜灯泡
+    "minecraft:waxed_oxidized_copper_door", // 涂蜡氧化铜门
     "minecraft:waxed_oxidized_copper_grate", // 涂蜡氧化铜格栅
+    "minecraft:waxed_oxidized_copper_trapdoor", // 涂蜡氧化铜活板门
     "minecraft:waxed_oxidized_cut_copper", // 氧化的涂蜡切制铜块
     "minecraft:waxed_oxidized_cut_copper_slab", // 氧化的涂蜡切制铜块台阶
     "minecraft:waxed_oxidized_cut_copper_stairs", // 氧化的涂蜡切制铜楼梯
@@ -836,7 +860,9 @@ const copper_blocks: ItemFamily = {
     "minecraft:waxed_weathered_copper", // 涂蜡风化铜块
     "minecraft:waxed_weathered_copper_block",
     "minecraft:waxed_weathered_copper_bulb", // 涂蜡风化铜灯泡
+    "minecraft:waxed_weathered_copper_door", // 涂蜡风化铜门
     "minecraft:waxed_weathered_copper_grate", // 涂蜡风化铜格栅
+    "minecraft:waxed_weathered_copper_trapdoor", // 涂蜡风化铜活板门
     "minecraft:waxed_weathered_cut_copper", // 涂蜡风化切制铜块
     "minecraft:waxed_weathered_cut_copper_slab", // 涂蜡风化切制铜块台阶
     "minecraft:waxed_weathered_cut_copper_stairs", // 涂蜡风化切制铜楼梯
@@ -844,7 +870,9 @@ const copper_blocks: ItemFamily = {
     "minecraft:weathered_copper", // 风化的铜块
     "minecraft:weathered_copper_block",
     "minecraft:weathered_copper_bulb", // 风化铜灯泡
+    "minecraft:weathered_copper_door", // 风化铜门
     "minecraft:weathered_copper_grate", // 风化铜格栅
+    "minecraft:weathered_copper_trapdoor", // 风化铜活板门
     "minecraft:weathered_cut_copper", // 风化切制铜块
     "minecraft:weathered_cut_copper_slab", // 风化切制铜块台阶
     "minecraft:weathered_cut_copper_stairs", // 风化切制铜楼梯
@@ -859,6 +887,7 @@ const rare_minerals: ItemFamily = {
     "minecraft:diamond_block", // 钻石块
     "minecraft:emerald", // 绿宝石
     "minecraft:emerald_block", // 绿宝石块
+    "minecraft:netherite_scrap", // 下界合金碎片
     "minecraft:netherite_ingot", // 下界合金锭
     "minecraft:netherite_block", // 下界合金块
   ],
@@ -889,6 +918,7 @@ const common_minerals: ItemFamily = {
     "minecraft:coal", // 煤炭
     "minecraft:coal_block", // 煤炭块
     "minecraft:lapis_block", // 青金石块
+    "minecraft:lapis_lazuli", // 青金石
     "minecraft:quartz", // 下界石英
     "minecraft:raw_iron", // 粗铁
     "minecraft:raw_iron_block", // 粗铁块
@@ -898,6 +928,10 @@ const common_minerals: ItemFamily = {
     "minecraft:raw_copper_block", // 粗铜块
     "minecraft:copper_ingot", // 铜锭
     "minecraft:amethyst_shard", // 紫水晶碎片
+    "minecraft:charcoal", // 木炭
+    "minecraft:flint", // 燧石
+    "minecraft:clay_ball", // 粘土球
+    "minecraft:brick", // 红砖
   ],
 };
 
@@ -955,6 +989,10 @@ const wearables: ItemFamily = {
     "minecraft:elytra", // 鞘翅
     "minecraft:wolf_armor", // 狼铠
     "minecraft:shield", // 盾牌
+    "minecraft:leather_horse_armor", // 皮革马铠
+    "minecraft:iron_horse_armor", // 铁马铠
+    "minecraft:golden_horse_armor", // Golden Horse Armor
+    "minecraft:diamond_horse_armor", // 钻石马铠
   ],
 };
 
@@ -972,15 +1010,6 @@ const weapons: ItemFamily = {
     "minecraft:crossbow", // 弩
     "minecraft:trident", // 三叉戟
     "minecraft:mace", // 重锤
-    "minecraft:arrow", // 箭
-    "minecraft:wind_charge", // 风弹
-  ],
-};
-
-const tools: ItemFamily = {
-  id: "tools",
-  displayName: "工具",
-  items: [
     "minecraft:wooden_pickaxe", // 木镐
     "minecraft:stone_pickaxe", // 石镐
     "minecraft:iron_pickaxe", // 铁镐
@@ -999,6 +1028,24 @@ const tools: ItemFamily = {
     "minecraft:golden_shovel", // 金锹
     "minecraft:diamond_shovel", // 钻石锹
     "minecraft:netherite_shovel", // 下界合金锹
+  ],
+};
+
+const projectiles: ItemFamily = {
+  id: "projectiles",
+  displayName: "弹射物",
+  items: [
+    "minecraft:arrow", // 箭
+    "minecraft:snowball", // 雪球
+    "minecraft:experience_bottle", // 附魔之瓶
+    "minecraft:wind_charge", // 风弹
+  ],
+};
+
+const tools: ItemFamily = {
+  id: "tools",
+  displayName: "工具",
+  items: [
     "minecraft:wooden_hoe", // 木锄
     "minecraft:stone_hoe", // 石锄
     "minecraft:iron_hoe", // 铁锄
@@ -1013,17 +1060,34 @@ const tools: ItemFamily = {
     "minecraft:clock", // 钟
     "minecraft:compass", // 指南针
     "minecraft:recovery_compass", // 追溯指针
+    "minecraft:minecart", // 矿车
+    "minecraft:chest_minecart", // 运输矿车
+    "minecraft:hopper_minecart", // 漏斗矿车
+    "minecraft:tnt_minecart", // TNT 矿车
+    "minecraft:carrot_on_a_stick", // 胡萝卜钓竿
+    "minecraft:warped_fungus_on_a_stick", // 诡异真菌钓竿
+    "minecraft:lead", // 拴绳
+    "minecraft:name_tag", // 命名牌
+    "minecraft:saddle", // 鞍
+    "minecraft:lodestone_compass", // Lodestone Compass
+  ],
+};
+
+const buckets: ItemFamily = {
+  id: "buckets",
+  displayName: "桶",
+  items: [
     "minecraft:bucket", // 桶
     "minecraft:water_bucket", // 水桶
     "minecraft:lava_bucket", // 熔岩桶
     "minecraft:milk_bucket", // 牛奶桶
     "minecraft:powder_snow_bucket", // 细雪桶
-    "minecraft:minecart", // 矿车
-    "minecraft:chest_minecart", // 运输矿车
-    "minecraft:hopper_minecart", // 漏斗矿车
-    "minecraft:tnt_minecart", // TNT 矿车
-    "minecraft:name_tag", // 命名牌
-    "minecraft:lodestone_compass", // Lodestone Compass
+    "minecraft:axolotl_bucket", // 美西螈桶
+    "minecraft:cod_bucket", // 桶装鳕鱼
+    "minecraft:pufferfish_bucket", // 桶装河豚
+    "minecraft:salmon_bucket", // 桶装鲑鱼
+    "minecraft:tadpole_bucket", // 蝌蚪桶
+    "minecraft:tropical_fish_bucket", // 桶装热带鱼
   ],
 };
 
@@ -1061,6 +1125,7 @@ const redstone: ItemFamily = {
     "minecraft:golden_rail", // 动力铁轨
     "minecraft:sculk_sensor", // 潜声感测器
     "minecraft:tnt", // TNT
+    "minecraft:honey_block", // 蜂蜜方块
   ],
 };
 
@@ -1114,9 +1179,13 @@ const crops_food: ItemFamily = {
     "minecraft:cooked_salmon", // 熟鲑鱼
     "minecraft:pufferfish", // 河豚
     "minecraft:tropical_fish", // 热带鱼
+    "minecraft:dried_kelp", // 干海带
     "minecraft:kelp", // 海带
     "minecraft:sugar_cane", // 甘蔗
     "minecraft:cocoa_beans", // 可可豆
+    "minecraft:hay_block", // 干草块
+    "minecraft:dried_kelp_block", // 干海带块
+    "minecraft:bone_meal", // 骨粉
   ],
 };
 
@@ -1145,9 +1214,12 @@ const plants: ItemFamily = {
     "minecraft:cactus_flower", // 仙人掌花
     "minecraft:bamboo", // 竹子
     "minecraft:seagrass", // 海草
+    "minecraft:glow_lichen", // 发光地衣
     "minecraft:azalea", // 杜鹃花
     "minecraft:flowering_azalea", // 盛开的杜鹃花
+    "minecraft:pitcher_plant", // 猪笼草
     "minecraft:pitcher_pod", // 猪笼草荚果
+    "minecraft:torchflower", // 火把花
     "minecraft:torchflower_seeds", // 火把花种子
     "minecraft:pink_petals", // 粉红色花瓣
     "minecraft:leaf_litter", // 落叶堆
@@ -1208,8 +1280,6 @@ const flowers: ItemFamily = {
     "minecraft:lilac", // 丁香
     "minecraft:rose_bush", // 玫瑰丛
     "minecraft:peony", // 牡丹
-    "minecraft:torchflower", // 火把花
-    "minecraft:pitcher_plant", // 猪笼草
   ],
 };
 
@@ -1258,7 +1328,9 @@ const nether: ItemFamily = {
     "minecraft:crimson_nylium", // 绯红菌岩
     "minecraft:warped_nylium", // 诡异菌岩
     "minecraft:soul_sand", // 灵魂沙
+    "minecraft:soul_soil", // 灵魂土
     "minecraft:glowstone", // 荧石
+    "minecraft:glowstone_dust", // 荧石粉
     "minecraft:shroomlight", // 菌光体
     "minecraft:nether_wart_block", // 下界疣方块
     "minecraft:warped_wart_block", // 诡异疣方块
@@ -1315,14 +1387,14 @@ const end: ItemFamily = {
     "minecraft:end_stone_brick_slab", // 末地石砖台阶
     "minecraft:end_stone_brick_wall", // End Stone Brick Wall
     "minecraft:end_portal_frame", // 末地传送门框架
-    "minecraft:end_crystal", // 末地水晶
-    "minecraft:end_rod", // 末地烛
     "minecraft:ender_chest", // 末影箱
-    "minecraft:dragon_egg", // 龙蛋
     "minecraft:dragon_head", // 龙首
     "minecraft:ender_eye", // 末影之眼
+    "minecraft:ender_pearl", // 末影珍珠
+    "minecraft:shulker_shell", // 潜影壳
     "minecraft:chorus_flower", // 紫颂花
     "minecraft:chorus_plant", // 紫颂植株
+    "minecraft:popped_chorus_fruit", // 爆裂紫颂果
   ],
 };
 
@@ -1342,6 +1414,7 @@ const surface: ItemFamily = {
     "minecraft:clay", // 黏土
     "minecraft:mud", // 泥巴
     "minecraft:packed_mud", // 填充泥浆
+    "minecraft:muddy_mangrove_roots", // 沾泥的红树木根
     "minecraft:snow", // 雪块
     "minecraft:snow_layer", // 雪
     "minecraft:ice", // 冰
@@ -1352,6 +1425,7 @@ const surface: ItemFamily = {
     "minecraft:suspicious_sand", // 可疑的沙子
     "minecraft:suspicious_gravel", // 可疑砂砾
     "minecraft:frog_spawn", // 青蛙卵
+    "minecraft:frosted_ice", // 冰霜
   ],
 };
 
@@ -1370,36 +1444,7 @@ const friendly_drops: ItemFamily = {
     "minecraft:ink_sac", // 墨囊
     "minecraft:glow_ink_sac", // 荧光墨囊
     "minecraft:honeycomb", // 蜜脾
-    "minecraft:honeycomb_block", // 蜜脾块
-    "minecraft:honey_block", // 蜂蜜方块
-    "minecraft:string", // 线
-    "minecraft:slime_ball", // 黏液球
-    "minecraft:clay_ball", // 粘土球
-    "minecraft:brick", // 红砖
-    "minecraft:bone_meal", // 骨粉
-    "minecraft:paper", // 纸
-    "minecraft:book", // 书
-    "minecraft:writable_book", // 书与笔
-    "minecraft:enchanted_book", // 附魔书
-    "minecraft:filled_map", // Filled Map
-    "minecraft:empty_map", // 地图
-    "minecraft:nautilus_shell", // 鹦鹉螺壳
-    "minecraft:heart_of_the_sea", // 海洋之心
-    "minecraft:echo_shard", // 回响碎片
-    "minecraft:prismarine_shard", // 海晶碎片
-    "minecraft:prismarine_crystals", // 海晶砂粒
-    "minecraft:sea_lantern", // 海晶灯
-    "minecraft:sponge", // 海绵
-    "minecraft:wet_sponge", // 湿海绵
     "minecraft:goat_horn", // 山羊角
-    "minecraft:disc_fragment_5", // 唱片残片
-    "minecraft:small_amethyst_bud", // 小型紫晶芽
-    "minecraft:medium_amethyst_bud", // 中型紫晶芽
-    "minecraft:large_amethyst_bud", // 大型紫晶芽
-    "minecraft:amethyst_cluster", // 紫水晶簇
-    "minecraft:fire_charge", // 火焰弹
-    "minecraft:firework_rocket", // 烟花
-    "minecraft:firework_star", // 烟火之星
   ],
 };
 
@@ -1410,9 +1455,6 @@ const hostile_drops: ItemFamily = {
     "minecraft:rotten_flesh", // 腐肉
     "minecraft:bone", // 骨头
     "minecraft:phantom_membrane", // 幻翼膜
-    "minecraft:totem_of_undying", // 不死图腾
-    "minecraft:nether_star", // 下界之星
-    "minecraft:experience_bottle", // 附魔之瓶
     "minecraft:skeleton_skull", // 骷髅头颅
     "minecraft:wither_skeleton_skull", // 凋灵骷髅头颅
     "minecraft:zombie_head", // 僵尸的头
@@ -1420,9 +1462,49 @@ const hostile_drops: ItemFamily = {
     "minecraft:player_head", // 玩家头颅
     "minecraft:piglin_head", // 猪灵头颅
     "minecraft:breeze_rod", // 旋风棒
-    "minecraft:heavy_core", // 沉重核心
+    "minecraft:string", // 线
+    "minecraft:slime_ball", // 黏液球
+    "minecraft:prismarine_shard", // 海晶碎片
+    "minecraft:prismarine_crystals", // 海晶砂粒
+    "minecraft:sponge", // 海绵
+    "minecraft:wet_sponge", // 湿海绵
+  ],
+};
+
+const accessories: ItemFamily = {
+  id: "accessories",
+  displayName: "道具",
+  items: [
     "minecraft:trial_key", // 试炼钥匙
     "minecraft:ominous_trial_key", // 不祥试炼钥匙
+    "minecraft:ominous_bottle", // 不祥之瓶
+    "minecraft:fire_charge", // 火焰弹
+    "minecraft:firework_rocket", // 烟花
+    "minecraft:firework_star", // 烟火之星
+    "minecraft:fireworks_rocket", // 焰火火箭
+    "minecraft:blue_egg", // 蓝色蛋
+    "minecraft:brown_egg", // 棕色蛋
+    "minecraft:xp_bottle", // 附魔之瓶
+  ],
+};
+
+const enchanted: ItemFamily = {
+  id: "enchanted",
+  displayName: "附魔",
+  items: [
+    "minecraft:enchanted_book", // 附魔书
+  ],
+};
+
+const books_maps: ItemFamily = {
+  id: "books_maps",
+  displayName: "书与地图",
+  items: [
+    "minecraft:paper", // 纸
+    "minecraft:book", // 书
+    "minecraft:writable_book", // 书与笔
+    "minecraft:filled_map", // Filled Map
+    "minecraft:empty_map", // 地图
   ],
 };
 
@@ -1433,7 +1515,6 @@ const potions: ItemFamily = {
     "minecraft:potion", // Potion
     "minecraft:splash_potion", // 药水
     "minecraft:lingering_potion", // 滞留药水
-    "minecraft:ominous_bottle", // 不祥之瓶
     "minecraft:glass_bottle", // 玻璃瓶
     "minecraft:brewing_stand", // 酿造台
     "minecraft:cauldron", // 炼药锅
@@ -1442,8 +1523,14 @@ const potions: ItemFamily = {
     "minecraft:blaze_rod", // 烈焰棒
     "minecraft:magma_cream", // 岩浆膏
     "minecraft:fermented_spider_eye", // 发酵蛛眼
+    "minecraft:glistering_melon_slice", // 闪烁的西瓜片
+    "minecraft:golden_carrot", // 金胡萝卜
+    "minecraft:rabbit_foot", // 兔子脚
+    "minecraft:ghast_tear", // 恶魂之泪
+    "minecraft:dragon_breath", // 龙息
+    "minecraft:spider_eye", // 蜘蛛眼
+    "minecraft:gunpowder", // 火药
     "minecraft:sugar", // 糖
-    "minecraft:dried_kelp", // 干海带
   ],
 };
 
@@ -1471,21 +1558,245 @@ const music_disc: ItemFamily = {
     "minecraft:music_disc_ward", // C418 - ward
     "minecraft:music_disc_11", // C418 - 11
     "minecraft:music_disc_5", // 塞缪尔·阿伯格 - 5
+    "minecraft:disc_fragment_5", // 唱片残片
+  ],
+};
+
+const treasure: ItemFamily = {
+  id: "treasure",
+  displayName: "宝藏",
+  items: [
+    "minecraft:beacon", // 信标
+    "minecraft:conduit", // 潮涌核心
+    "minecraft:dragon_egg", // 龙蛋
+    "minecraft:end_crystal", // 末地水晶
+    "minecraft:end_rod", // 末地烛
+    "minecraft:heart_of_the_sea", // 海洋之心
+    "minecraft:heavy_core", // 沉重核心
+    "minecraft:lodestone", // 磁石
+    "minecraft:mob_spawner", // 刷怪笼
+    "minecraft:nether_star", // 下界之星
+    "minecraft:totem_of_undying", // 不死图腾
+    "minecraft:trial_spawner", // 试炼刷怪笼
+    "minecraft:vault", // 宝库
+    "minecraft:nautilus_shell", // 鹦鹉螺壳
+    "minecraft:echo_shard", // 回响碎片
   ],
 };
 
 const ancient_city: ItemFamily = {
-  id: "ancient_city", // 古城方块（幽匿/灵魂灯笼/尖啸体/催发体）
+  id: "ancient_city",
   displayName: "古城方块",
   items: [
-    "minecraft:sculk", // 幽匿块
+    "minecraft:sculk", // 潜声
     "minecraft:sculk_vein", // 幽匿脉络
     "minecraft:sculk_catalyst", // 幽匿催发体
     "minecraft:sculk_shrieker", // 幽匿尖啸体
-    "minecraft:soul_soil", // 灵魂土
     "minecraft:soul_torch", // 灵魂火把
-    "minecraft:soul_lantern", // 灵魂灯笼
+    "minecraft:soul_lantern", // 灵魂灯
     "minecraft:soul_campfire", // 灵魂营火
+  ],
+};
+
+const spawn_eggs: ItemFamily = {
+  id: "spawn_eggs",
+  displayName: "刷怪蛋",
+  items: [
+    "minecraft:allay_spawn_egg", // 悦灵刷怪蛋
+    "minecraft:armadillo_spawn_egg", // 犰狳刷怪蛋
+    "minecraft:axolotl_spawn_egg", // 美西螈刷怪蛋
+    "minecraft:bat_spawn_egg", // 蝙蝠刷怪蛋
+    "minecraft:bee_spawn_egg", // 蜜蜂刷怪蛋
+    "minecraft:blaze_spawn_egg", // 烈焰刷怪蛋
+    "minecraft:bogged_spawn_egg", // 沼骸刷怪蛋
+    "minecraft:breeze_spawn_egg", // 旋风人刷怪蛋
+    "minecraft:camel_spawn_egg", // 骆驼刷怪蛋
+    "minecraft:cat_spawn_egg", // 猫刷怪蛋
+    "minecraft:cave_spider_spawn_egg", // 洞穴蜘蛛刷怪蛋
+    "minecraft:chicken_spawn_egg", // 鸡刷怪蛋
+    "minecraft:cod_spawn_egg", // 鳕鱼刷怪蛋
+    "minecraft:cow_spawn_egg", // 牛刷怪蛋
+    "minecraft:creaking_spawn_egg", // 嘎枝刷怪蛋
+    "minecraft:creeper_spawn_egg", // 苦力怕刷怪蛋
+    "minecraft:dolphin_spawn_egg", // 海豚刷怪蛋
+    "minecraft:donkey_spawn_egg", // 驴刷怪蛋
+    "minecraft:drowned_spawn_egg", // 溺尸刷怪蛋
+    "minecraft:elder_guardian_spawn_egg", // 远古守卫者刷怪蛋
+    "minecraft:ender_dragon_spawn_egg", // 末影龙刷怪蛋
+    "minecraft:enderman_spawn_egg", // 末影人刷怪蛋
+    "minecraft:endermite_spawn_egg", // 末影螨刷怪蛋
+    "minecraft:evoker_spawn_egg", // 唤魔者刷怪蛋
+    "minecraft:fox_spawn_egg", // 狐狸刷怪蛋
+    "minecraft:frog_spawn_egg", // 青蛙刷怪蛋
+    "minecraft:ghast_spawn_egg", // 恶魂刷怪蛋
+    "minecraft:glow_squid_spawn_egg", // 发光鱿鱼刷怪蛋
+    "minecraft:goat_spawn_egg", // 山羊刷怪蛋
+    "minecraft:guardian_spawn_egg", // 守卫者刷怪蛋
+    "minecraft:happy_ghast_spawn_egg", // 善念恶魂刷怪蛋
+    "minecraft:hoglin_spawn_egg", // 疣猪兽刷怪蛋
+    "minecraft:horse_spawn_egg", // 马刷怪蛋
+    "minecraft:husk_spawn_egg", // 尸傀刷怪蛋
+    "minecraft:iron_golem_spawn_egg", // Iron Golem Spawn Egg
+    "minecraft:llama_spawn_egg", // 羊驼刷怪蛋
+    "minecraft:magma_cube_spawn_egg", // 岩浆怪刷怪蛋
+    "minecraft:mooshroom_spawn_egg", // 哞菇刷怪蛋
+    "minecraft:mule_spawn_egg", // 骡子刷怪蛋
+    "minecraft:ocelot_spawn_egg", // 豹猫刷怪蛋
+    "minecraft:panda_spawn_egg", // 熊猫刷怪蛋
+    "minecraft:parrot_spawn_egg", // 鹦鹉刷怪蛋
+    "minecraft:phantom_spawn_egg", // 幻翼刷怪蛋
+    "minecraft:pig_spawn_egg", // 猪刷怪蛋
+    "minecraft:piglin_brute_spawn_egg", // 猪灵蛮兵刷怪蛋
+    "minecraft:piglin_spawn_egg", // 猪灵刷怪蛋
+    "minecraft:pillager_spawn_egg", // 掠夺者刷怪蛋
+    "minecraft:polar_bear_spawn_egg", // 北极熊刷怪蛋
+    "minecraft:pufferfish_spawn_egg", // 河豚刷怪蛋
+    "minecraft:rabbit_spawn_egg", // 兔子刷怪蛋
+    "minecraft:ravager_spawn_egg", // 劫掠兽刷怪蛋
+    "minecraft:salmon_spawn_egg", // 鲑鱼刷怪蛋
+    "minecraft:sheep_spawn_egg", // 羊刷怪蛋
+    "minecraft:shulker_spawn_egg", // 潜影贝刷怪蛋
+    "minecraft:silverfish_spawn_egg", // 蠹虫刷怪蛋
+    "minecraft:skeleton_horse_spawn_egg", // 骷髅马刷怪蛋
+    "minecraft:skeleton_spawn_egg", // 骷髅刷怪蛋
+    "minecraft:slime_spawn_egg", // 史莱姆刷怪蛋
+    "minecraft:sniffer_spawn_egg", // 嗅探兽刷怪蛋
+    "minecraft:snow_golem_spawn_egg", // Snow Golem Spawn Egg
+    "minecraft:spider_spawn_egg", // 蜘蛛刷怪蛋
+    "minecraft:squid_spawn_egg", // 鱿鱼刷怪蛋
+    "minecraft:stray_spawn_egg", // 流浪者刷怪蛋
+    "minecraft:strider_spawn_egg", // 炽足兽刷怪蛋
+    "minecraft:tadpole_spawn_egg", // 蝌蚪刷怪蛋
+    "minecraft:trader_llama_spawn_egg", // 行商羊驼刷怪蛋
+    "minecraft:tropical_fish_spawn_egg", // 热带鱼刷怪蛋
+    "minecraft:turtle_spawn_egg", // 海龟刷怪蛋
+    "minecraft:vex_spawn_egg", // 猥傀刷怪蛋
+    "minecraft:villager_spawn_egg", // 村民刷怪蛋
+    "minecraft:vindicator_spawn_egg", // 卫道士刷怪蛋
+    "minecraft:wandering_trader_spawn_egg", // 流浪商人刷怪蛋
+    "minecraft:warden_spawn_egg", // 循声守卫刷怪蛋
+    "minecraft:witch_spawn_egg", // 女巫刷怪蛋
+    "minecraft:wither_skeleton_spawn_egg", // 凋灵骷髅刷怪蛋
+    "minecraft:wither_spawn_egg", // 凋灵刷怪蛋
+    "minecraft:wolf_spawn_egg", // 狼刷怪蛋
+    "minecraft:zoglin_spawn_egg", // 僵尸疣猪兽刷怪蛋
+    "minecraft:zombie_horse_spawn_egg", // 僵尸马刷怪蛋
+    "minecraft:zombie_pigman_spawn_egg", // 僵尸猪灵刷怪蛋
+    "minecraft:zombie_spawn_egg", // 僵尸刷怪蛋
+    "minecraft:zombie_villager_spawn_egg", // 僵尸村民刷怪蛋
+  ],
+};
+
+const smithing_templates: ItemFamily = {
+  id: "smithing_templates",
+  displayName: "锻造模板",
+  items: [
+    "minecraft:bolt_armor_trim_smithing_template", // 镶铆盔甲纹饰
+    "minecraft:coast_armor_trim_smithing_template", // 海岸盔甲纹饰
+    "minecraft:dune_armor_trim_smithing_template", // 沙丘盔甲纹饰
+    "minecraft:eye_armor_trim_smithing_template", // 眼眸盔甲纹饰
+    "minecraft:flow_armor_trim_smithing_template", // 涡流盔甲纹饰
+    "minecraft:host_armor_trim_smithing_template", // 雇主盔甲纹饰
+    "minecraft:netherite_upgrade_smithing_template", // 下界合金升级
+    "minecraft:raiser_armor_trim_smithing_template", // 牧民盔甲纹饰
+    "minecraft:rib_armor_trim_smithing_template", // 肋骨盔甲纹饰
+    "minecraft:sentry_armor_trim_smithing_template", // 哨兵盔甲纹饰
+    "minecraft:shaper_armor_trim_smithing_template", // 塑造盔甲纹饰
+    "minecraft:silence_armor_trim_smithing_template", // 幽静盔甲纹饰
+    "minecraft:snout_armor_trim_smithing_template", // 猪鼻盔甲纹饰
+    "minecraft:spire_armor_trim_smithing_template", // 尖塔盔甲纹饰
+    "minecraft:tide_armor_trim_smithing_template", // 潮汐盔甲纹饰
+    "minecraft:vex_armor_trim_smithing_template", // 恼鬼盔甲纹饰
+    "minecraft:ward_armor_trim_smithing_template", // 监守盔甲纹饰
+    "minecraft:wayfinder_armor_trim_smithing_template", // 向导盔甲纹饰
+    "minecraft:wild_armor_trim_smithing_template", // 荒野盔甲纹饰
+  ],
+};
+
+const pottery_sherds: ItemFamily = {
+  id: "pottery_sherds",
+  displayName: "陶片",
+  items: [
+    "minecraft:angler_pottery_sherd", // 垂钓纹样陶片
+    "minecraft:archer_pottery_sherd", // 弓箭纹样陶片
+    "minecraft:arms_up_pottery_sherd", // 举臂纹样陶片
+    "minecraft:blade_pottery_sherd", // 利刃纹样陶片
+    "minecraft:brewer_pottery_sherd", // 佳酿纹样陶片
+    "minecraft:burn_pottery_sherd", // 烈焰纹样陶片
+    "minecraft:danger_pottery_sherd", // 危机纹样陶片
+    "minecraft:explorer_pottery_sherd", // 探险纹样陶片
+    "minecraft:flow_pottery_sherd", // 涡流纹样陶片
+    "minecraft:friend_pottery_sherd", // 挚友纹样陶片
+    "minecraft:guster_pottery_sherd", // 旋风纹样陶片
+    "minecraft:heart_pottery_sherd", // 爱心纹样陶片
+    "minecraft:heartbreak_pottery_sherd", // 心碎纹样陶片
+    "minecraft:howl_pottery_sherd", // 狼嚎纹样陶片
+    "minecraft:miner_pottery_sherd", // 采矿纹样陶片
+    "minecraft:mourner_pottery_sherd", // 哀悼纹样陶片
+    "minecraft:plenty_pottery_sherd", // 富饶纹样陶片
+    "minecraft:prize_pottery_sherd", // 珍宝纹样陶片
+    "minecraft:scrape_pottery_sherd", // 刮削纹样陶片
+    "minecraft:sheaf_pottery_sherd", // 麦捆纹样陶片
+    "minecraft:shelter_pottery_sherd", // 树荫纹样陶片
+    "minecraft:skull_pottery_sherd", // 头颅纹样陶片
+    "minecraft:snort_pottery_sherd", // 嗅探纹样陶片
+    "minecraft:decorated_pot", // 装饰罐
+  ],
+};
+
+const banner_patterns: ItemFamily = {
+  id: "banner_patterns",
+  displayName: "旗帜图案",
+  items: [
+    "minecraft:banner", // 灾厄旗帜
+    "minecraft:bordure_indented_banner_pattern", // 波纹边旗帜图案
+    "minecraft:creeper_banner_pattern", // 苦力怕头像旗帜图案
+    "minecraft:field_masoned_banner_pattern", // 砖纹旗帜图案
+    "minecraft:flow_banner_pattern", // 涡流旗帜图案
+    "minecraft:flower_banner_pattern", // 花朵图案旗帜图案
+    "minecraft:globe_banner_pattern", // 地球旗帜图案
+    "minecraft:guster_banner_pattern", // 旋风旗帜图案
+    "minecraft:mojang_banner_pattern", // Mojang 徽标旗帜图案
+    "minecraft:piglin_banner_pattern", // 猪鼻旗帜图案
+    "minecraft:skull_banner_pattern", // 头颅头像旗帜图案
+  ],
+};
+
+const creative_only: ItemFamily = {
+  id: "creative_only",
+  displayName: "创造专属",
+  items: [
+    "minecraft:agent", // Agent
+    "minecraft:allow", // 允许方块
+    "minecraft:barrier", // 屏障
+    "minecraft:bedrock", // 基岩
+    "minecraft:border_block", // 边界方块
+    "minecraft:chain_command_block", // 连锁型命令方块
+    "minecraft:command_block", // 命令方块
+    "minecraft:deny", // 拒绝方块
+    "minecraft:jigsaw", // 拼图方块
+    "minecraft:light_block_0", // Light Block 0
+    "minecraft:light_block_1", // Light Block 1
+    "minecraft:light_block_10", // Light Block 10
+    "minecraft:light_block_11", // Light Block 11
+    "minecraft:light_block_12", // Light Block 12
+    "minecraft:light_block_13", // Light Block 13
+    "minecraft:light_block_14", // Light Block 14
+    "minecraft:light_block_15", // Light Block 15
+    "minecraft:light_block_2", // Light Block 2
+    "minecraft:light_block_3", // Light Block 3
+    "minecraft:light_block_4", // Light Block 4
+    "minecraft:light_block_5", // Light Block 5
+    "minecraft:light_block_6", // Light Block 6
+    "minecraft:light_block_7", // Light Block 7
+    "minecraft:light_block_8", // Light Block 8
+    "minecraft:light_block_9", // Light Block 9
+    "minecraft:npc", // NPC
+    "minecraft:repeating_command_block", // 循环型命令方块
+    "minecraft:command_block_minecart", // 命令方块矿车
+    "minecraft:structure_block", // 结构方块
+    "minecraft:structure_void", // 结构空位
+    "minecraft:tripod_camera", // 三脚架摄像机
   ],
 };
 
@@ -1500,15 +1811,15 @@ export const ALL_FAMILIES: readonly ItemFamily[] = [
   shulker_box,
   candle,
   dye,
-  animal_gear,
+  harness,
   bundle,
   bed,
   logs,
   wood_products,
   wood_misc,
-  stone_core,
-  deep_rock,
+  stone_building,
   decorative_stone,
+  stone_core,
   copper_blocks,
   rare_minerals,
   rare_ores,
@@ -1516,7 +1827,9 @@ export const ALL_FAMILIES: readonly ItemFamily[] = [
   common_ores,
   wearables,
   weapons,
+  projectiles,
   tools,
+  buckets,
   redstone,
   crops_food,
   plants,
@@ -1527,8 +1840,18 @@ export const ALL_FAMILIES: readonly ItemFamily[] = [
   surface,
   friendly_drops,
   hostile_drops,
+  accessories,
+  enchanted,
+  books_maps,
   potions,
   music_disc,
+  treasure,
+  ancient_city,
+  spawn_eggs,
+  smithing_templates,
+  pottery_sherds,
+  banner_patterns,
+  creative_only,
 ];
 
 /** typeId → familyId 逆向索引 */
