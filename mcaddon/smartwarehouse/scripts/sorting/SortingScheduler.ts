@@ -165,7 +165,7 @@ export class SortingScheduler {
   }
 
   /**
-   * 激活仓库：创建 runInterval + 写入活跃表。
+   * 激活仓库：创建 runInterval + 通知附近玩家。
    */
   private activate(id: WarehouseId, speed: number): void {
     // 确保没有重复的 handle
@@ -181,15 +181,49 @@ export class SortingScheduler {
 
     this.handles.set(id, handle);
     log.info(`仓库 ${id} 已惰性激活（间隔=${speed} tick）`);
+
+    // 通知附近玩家
+    const warehouse = this.repository.load(id);
+    if (warehouse) {
+      this.messageNearbyPlayers(
+        warehouse.dimensionId, warehouse.area,
+        `§a仓库 §e${warehouse.displayName}§a 已激活，开始分拣物品`
+      );
+    }
   }
 
   /**
-   * 停用仓库：停止 interval + 释放运行时模型 + 清理活跃记录。
+   * 停用仓库：停止 interval + 释放运行时模型 + 通知附近玩家。
    */
   private deactivate(id: WarehouseId): void {
+    // 停用前先获取仓库信息用于通知
+    const warehouse = this.repository.load(id);
+    const displayName = warehouse?.displayName ?? id;
+
     this.stopOne(id);
     this.lastActiveTick.delete(id);
     this.engine.releaseRuntime(id);
+
+    if (warehouse) {
+      this.messageNearbyPlayers(
+        warehouse.dimensionId, warehouse.area,
+        `§7仓库 §e${displayName}§7 已休眠（附近无玩家）`
+      );
+    }
+  }
+
+  /**
+   * 向仓库区域附近的玩家发送消息。
+   */
+  private messageNearbyPlayers(dimensionId: string, area: WarehouseArea, message: string): void {
+    for (const player of world.getPlayers()) {
+      if (player.dimension.id !== dimensionId) continue;
+      if (isNearAreaXZ({ x: player.location.x, z: player.location.z }, area, SortingScheduler.PROXIMITY_MARGIN)) {
+        try {
+          player.sendMessage(message);
+        } catch { /* 玩家离线，静默忽略 */ }
+      }
+    }
   }
 
   // ─── 单仓库操作 ─────────────────────────────────────────────

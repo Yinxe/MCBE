@@ -189,8 +189,6 @@ export interface StoredContainer {
   role: ContainerRole;
   /** 容器是否启用（禁用容器不参与任何分拣操作，独立于角色） */
   enabled: boolean;
-  /** 大宗容器配置的目标物品类型 ID（仅 role="bulk" 时有效），空箱时仅接受配置类型的物品进入 */
-  bulkTypeId?: string;
   /** 容器首次被发现的游戏刻时间戳 */
   discoveredAt: number;
   /** 容器信息最后更新的游戏刻时间戳 */

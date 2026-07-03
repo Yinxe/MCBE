@@ -289,8 +289,7 @@ export class SorterEngine {
     // ── 优先级 1：单物品（大宗）────────────────────────────────
     // 大宗容器专收单一类型高产量物品，匹配规则：
     //   - 非空箱：匹配箱内已有物品种类
-    //   - 空箱：仅当玩家已通过 UI 配置了 bulkTypeId 且与当前物品类型匹配时才接受
-    // 玩家必须主动配置大宗箱的目标物品类型，空箱不再自动接受任意物品。
+    //   - 空箱：不接收物品，玩家需手动放入第一件物品来设定种类
     //
     // 注意：大宗 > 普通。专用大宗箱应优先拦截高产量单品（如白色羊毛），
     // 避免被多物品普通箱截胡，剩余的散品再 fallthrough 给后续优先级处理。
@@ -304,9 +303,7 @@ export class SorterEngine {
       if (!stored) return false;
       const target = getContainerFromStored(dimension, stored);
       if (!target) return false;
-      if (isContainerEmpty(target)) {
-        return stored.bulkTypeId !== undefined && stored.bulkTypeId === typeId;
-      }
+      if (isContainerEmpty(target)) return false; // 空箱需玩家手动放入第一件物品
       return getBulkChestFirstType(target) === typeId;
     });
     remaining = this.tryBulkContainers(remaining, bulkMatches, warehouse, model, dimension, typeId);

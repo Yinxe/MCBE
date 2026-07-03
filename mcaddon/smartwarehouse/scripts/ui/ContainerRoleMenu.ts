@@ -1,7 +1,6 @@
 import { world, type Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import type { ContainerId, ContainerRole, WarehouseId } from "../types";
-import type { StoredContainer, WarehouseData } from "../types";
+import type { ContainerId, ContainerRole, StoredContainer, WarehouseData } from "../types";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_ORDER } from "../types";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import { SlotOrganizer } from "../sorting/SlotOrganizer";
@@ -9,7 +8,6 @@ import { formatOrganizeResult } from "../util/OrganizeFormatter";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { getFamilyPurity, getContainerFromStored } from "../sorting/ContainerInventory";
 import { getFamilyById } from "../data/ItemFamilies";
-import { getChineseName } from "../data/ItemNameMap";
 
 // ─── 容器详情辅助 ─────────────────────────────────────────────
 
@@ -124,102 +122,6 @@ function formatFamilyPurityInfo(warehouse: WarehouseData, container: StoredConta
     return `\n§8┊ §7家族分布 ${parts.join(" §8│ ")}${suffix}§r`;
   } catch {
     return "";
-  }
-}
-
-// ─── 大宗物品类型配置 ──────────────────────────────────────────
-
-/**
- * 显示大宗物品类型配置菜单（ActionForm）。
- *
- * 在容器角色设为 "bulk" 后，引导玩家配置大宗箱的目标物品类型。
- * 空大宗箱在未配置目标类型时不接受任何物品。
- */
-async function showBulkTypeConfig(
-  player: Player,
-  warehouseId: WarehouseId,
-  containerId: ContainerId,
-  service: WarehouseService
-): Promise<void> {
-  // 重新加载最新容器数据
-  const warehouse = service.requireWarehouse(warehouseId);
-  const container = warehouse.containers[containerId];
-  if (!container) return;
-
-  const currentTypeId = container.bulkTypeId;
-  const currentName = currentTypeId ? getChineseName(currentTypeId) : undefined;
-
-  const form = new ActionFormData()
-    .title("大宗物品设置")
-    .body(
-      `§7大宗箱需要配置目标物品类型才能工作。\n\n` +
-      `§7当前配置: ${currentTypeId ? `§a${currentName}§7 (§f${currentTypeId}§7)` : "§c未配置"}\n\n` +
-      `§7配置后，大宗箱只会接收指定类型的物品。`
-    )
-    .button("§a设置物品类型")
-    .button("关闭");
-
-  if (currentTypeId) {
-    form.button("§c清除配置");
-  }
-
-  const response = await form.show(player);
-  if (response.canceled) return;
-
-  const selection = response.selection;
-  if (selection === 0) {
-    // 设置物品类型
-    await showBulkTypeInput(player, warehouseId, containerId, service, currentTypeId);
-  } else if (currentTypeId && selection === 2) {
-    // 清除配置
-    try {
-      service.setContainerBulkType(warehouseId, containerId, null);
-      player.sendMessage("§a大宗物品类型已清除");
-    } catch (error) {
-      player.sendMessage(`§c清除失败: ${error}`);
-    }
-  }
-}
-
-/**
- * 大宗物品类型文本输入 ModalForm。
- */
-async function showBulkTypeInput(
-  player: Player,
-  warehouseId: WarehouseId,
-  containerId: ContainerId,
-  service: WarehouseService,
-  currentTypeId?: string
-): Promise<void> {
-  const form = new ModalFormData()
-    .title("配置大宗物品类型")
-    .label(
-      `§7请输入物品类型 ID（如 §fminecraft:white_wool§7）。\n` +
-      `§7配置后大宗箱只接收该类型的物品。`
-    )
-    .textField("物品 ID", "例: minecraft:white_wool", { defaultValue: currentTypeId ?? "" });
-
-  const response = await form.show(player);
-  if (response.canceled) return;
-
-  const values = response.formValues;
-  if (!values || values.length < 1) return;
-
-  // 兼容 label 占索引
-  const offset = values.length >= 2 ? 1 : 0;
-  const typeId = (values[0 + offset] as string ?? "").trim();
-
-  if (!typeId) {
-    player.sendMessage("§c物品 ID 不能为空");
-    return;
-  }
-
-  try {
-    service.setContainerBulkType(warehouseId, containerId, typeId);
-    const name = getChineseName(typeId);
-    player.sendMessage(`§a大宗物品类型已设置为 ${name}§a (§f${typeId}§a)`);
-  } catch (error) {
-    player.sendMessage(`§c设置失败: ${error}`);
   }
 }
 
@@ -365,9 +267,9 @@ export async function showContainerRoleMenu(
     service.setContainerRoleAndState(warehouse.id, containerId, newRole, newEnabled);
     player.sendMessage(`§a容器已更新：${newEnabled ? "启用" : "禁用"}，角色=${ROLE_LABELS[newRole]}`);
 
-    // 如果角色改为大宗，引导玩家配置目标物品类型
+    // 如果角色改为大宗，引导玩家手动放入物品来设定类型
     if (newRole === "bulk") {
-      await showBulkTypeConfig(player, warehouse.id, containerId, service);
+      player.sendMessage("§e将需要大宗存储的物品放入此容器，分拣系统会自动识别并路由同类物品至此。");
     }
   } catch (error) {
     player.sendMessage(`§c操作失败: ${error}`);
