@@ -31,6 +31,8 @@ jobs:
         run: npm ci
 
       - name: Build & Package
+        env:
+          PROJECT_NAME: SmartWarehouse
         run: |
           VER="${{ inputs.version || github.ref_name }}"
           VER="${VER#v}"
