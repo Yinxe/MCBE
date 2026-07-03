@@ -40,25 +40,36 @@ export function areaVolume(area: WarehouseArea): number {
 }
 
 /**
- * 判断坐标点是否在仓库区域的 XZ 平面扩展范围内。
- * 常用于玩家接近检测：将仓库区域各轴向外扩展 margin 格后做轴对齐矩形判断。
+ * 判断玩家是否在仓库区域的圆形范围内。
  *
- * @param point  - 待检查的点（仅使用 x, z，接受玩家浮点坐标）
+ * 以仓库水平中心为圆心，以区域外接圆半径（半对角线）+ 余量（margin）
+ * 作为检测半径，确保各方向检测距离一致。
+ *
+ * 相对于 AABB 矩形的优势：
+ * - 各方向检测距离相等，玩家从角落逼近不会被过早/过晚检测
+ * - 与玩家的直觉一致（"距离仓库多远"）
+ *
+ * @param point  - 玩家位置（仅 x, z 坐标）
  * @param area   - 仓库区域
- * @param margin - 向外扩展的格数
- * @returns 是否在扩展区域内
+ * @param margin - 额外余量（格数）
+ * @returns 玩家是否在圆形检测范围内
  */
 export function isNearAreaXZ(
   point: { x: number; z: number },
   area: WarehouseArea,
   margin: number
 ): boolean {
-  return (
-    point.x >= area.min.x - margin &&
-    point.x <= area.max.x + margin &&
-    point.z >= area.min.z - margin &&
-    point.z <= area.max.z + margin
-  );
+  // 仓库水平中心
+  const cx = (area.min.x + area.max.x) / 2;
+  const cz = (area.min.z + area.max.z) / 2;
+  // 半对角线长度（外接圆半径）
+  const hw = (area.max.x - area.min.x) / 2;
+  const hz = (area.max.z - area.min.z) / 2;
+  const radius = Math.sqrt(hw * hw + hz * hz) + margin;
+  // 玩家到中心距离
+  const dx = point.x - cx;
+  const dz = point.z - cz;
+  return dx * dx + dz * dz <= radius * radius;
 }
 
 /**
