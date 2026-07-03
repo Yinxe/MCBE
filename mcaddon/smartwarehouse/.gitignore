@@ -5,3 +5,5 @@ temp/
 .env
 *.log
 .vscode/
+.codegraph/
+.slim/deepwork/
