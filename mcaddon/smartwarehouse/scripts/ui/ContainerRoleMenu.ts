@@ -310,12 +310,31 @@ export async function showContainerRoleMenu(
   if (!values || values.length < 2) return;
 
   // ── 解析表单值 ──
-  // 非漏斗: [toggle(启用), dropdown(角色), toggle(整理)] = 3 个值
-  // 漏斗:   [toggle(启用),                toggle(整理)] = 2 个值（角色固定为 input）
-  // label 不占用 formValues 索引
-  const newEnabled = values[0] as boolean;
-  const newRole: ContainerRole = isHopper ? "input" : ROLE_ORDER[values[1] as number];
-  const shouldOrganize = values[isHopper ? 1 : 2] as boolean;
+  // Bedrock 不同版本对 ModalForm label 是否占用 formValues 索引行为不一致。
+  // label 返回 null 但占用索引位置，通过 values.length 判断：
+  //
+  // 非漏斗布局: [label(信息), toggle(启用), dropdown(角色), toggle(整理)]
+  //   label 不占位: length=3 → [启用, 角色, 整理]
+  //   label 占位:   length=4 → [null, 启用, 角色, 整理]
+  //
+  // 漏斗布局: [label(信息), toggle(启用), label(提示), toggle(整理)]
+  //   label 不占位: length=2 → [启用, 整理]
+  //   label 占位(双label): length=4 → [null, 启用, null, 整理]
+  let newEnabled: boolean;
+  let newRole: ContainerRole;
+  let shouldOrganize: boolean;
+
+  if (isHopper) {
+    // 漏斗只有启用 + 整理两个字段，角色固定 input
+    newEnabled = values.length >= 4 ? (values[1] as boolean) : (values[0] as boolean);
+    newRole = "input";
+    shouldOrganize = values.length >= 4 ? (values[3] as boolean) : (values[1] as boolean);
+  } else {
+    // 非漏斗有启用 + 角色 + 整理三个字段
+    newEnabled = values.length >= 4 ? (values[1] as boolean) : (values[0] as boolean);
+    newRole = ROLE_ORDER[values.length >= 4 ? (values[2] as number) : (values[1] as number)];
+    shouldOrganize = values.length >= 4 ? (values[3] as boolean) : (values[2] as boolean);
+  }
 
   // ── 整理容器 ──
   if (shouldOrganize) {
