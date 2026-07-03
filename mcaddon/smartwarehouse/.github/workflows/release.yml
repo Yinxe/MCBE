@@ -38,7 +38,8 @@ jobs:
           echo "VERSION=$VER" >> $GITHUB_ENV
 
           # 更新 package.json 版本以同步 manifest 及输出文件名
-          npm version "$VER" --no-git-tag-version
+          # 使用 npm pkg set 而非 npm version，避免 semver 递增检查及 git tag 依赖
+          npm pkg set version="$VER"
 
           # 一键构建打包：clean → build (版本同步+tsc+bundle) → mcaddon
           npm run mcaddon
