@@ -13,7 +13,7 @@
  */
 
 import { world, system, type Player } from "@minecraft/server";
-import { ModalFormData } from "@minecraft/server-ui";
+import { ModalFormBuilder } from "./FormHelper";
 import type { BlockLocation, WarehouseData } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { ModConfigStore } from "../storage/ModConfigStore";
@@ -64,26 +64,21 @@ export async function showSearchUI(player: Player, repository: WarehouseReposito
     .sort((a, b) => a.distance - b.distance);
 
   // ── 2. 构建 ModalForm ──
-  const form = new ModalFormData()
+  const form = new ModalFormBuilder()
     .title("容器搜索")
-    .label("§7输入物品名称搜索仓库中的容器\n支持输入物品 ID（minecraft:xxx）、英文名或中文名模糊搜索")
-    .textField("§a搜索关键字", "输入物品名称…", { defaultValue: "" })
+    .label("info", "§7输入物品名称搜索仓库中的容器\n支持输入物品 ID（minecraft:xxx）、英文名或中文名模糊搜索")
+    .textField("query", "§a搜索关键字", "输入物品名称…", { defaultValue: "" })
     .dropdown(
+      "warehouse",
       "§a选择仓库",
       sortedWarehouses.map((sw) => `${sw.warehouse.displayName} §7(距离 ${Math.round(sw.distance)} 格)`),
       { defaultValueIndex: 0 }
     );
 
-  const response = await form.show(player);
-  if (response.canceled) return;
-
-  // label() 在旧版 API 中不占用 formValues 索引（数组长度为 2），
-  // 在新版 API 中会占用（长度 3，label 值恒为 undefined）。
-  // 兼容两种行为：检测数组长度自动偏移。
-  const rawValues = response.formValues as (string | number)[];
-  const offset = rawValues.length >= 3 ? 1 : 0;
-  const query = rawValues[offset] as string;
-  const warehouseIndex = rawValues[offset + 1] as number;
+  const vals = await form.show(player);
+  if (!vals) return;
+  const query = vals.query as string;
+  const warehouseIndex = vals.warehouse as number;
 
   if (!query || query.trim().length === 0) {
     player.sendMessage("§c请输入搜索关键字");

@@ -1,5 +1,4 @@
 import { world, type Player } from "@minecraft/server";
-import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import type { ContainerId, ContainerRole, StoredContainer, WarehouseData } from "../types";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_ORDER } from "../types";
 import { canManageWarehouse } from "../util/PlayerAuth";
@@ -9,6 +8,7 @@ import type { WarehouseService } from "../warehouse/WarehouseService";
 import { getFamilyPurity, getContainerFromStored } from "../sorting/ContainerInventory";
 import { getFamilyById } from "../data/ItemFamilies";
 import { formatContainerCapacityLine } from "./WarehouseStats";
+import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
 
 // ─── 容器详情辅助 ─────────────────────────────────────────────
 
@@ -161,7 +161,7 @@ export async function showContainerRoleMenu(
       ? formatContainerCapacityLine(details.usedSlots, details.totalSlots, details.totalItems, details.uniqueTypes)
       : "";
 
-    const form = new ActionFormData()
+    const result = await new ActionFormBuilder()
       .title("容器信息")
       .body(
         `§7仓库: ${warehouse.displayName}\n` +
@@ -174,9 +174,10 @@ export async function showContainerRoleMenu(
         `§7描述: ${isHopper ? "漏斗自动采集物品流入分拣系统" : roleDesc}` +
         familyLine
       )
-      .button("关闭");
-    await form.show(player);
-    return;
+      .button("close", "关闭")
+      .show(player);
+
+    return; // 只读，无操作
   }
 
   // ── 管理员玩家：ModalForm 统一设置 ──
@@ -193,9 +194,10 @@ export async function showContainerRoleMenu(
     ? formatContainerCapacityLine(details.usedSlots, details.totalSlots, details.totalItems, details.uniqueTypes)
     : "";
 
-  const form = new ModalFormData()
+  const form = new ModalFormBuilder()
     .title("容器设置")
     .label(
+      "info",
       `§7仓库: ${warehouse.displayName}\n` +
       `${detailsLine}\n` +
       `${capacityLine}\n` +
@@ -205,51 +207,25 @@ export async function showContainerRoleMenu(
       `§7角色: §f${currentRoleLabel} — ${roleDesc}§r` +
       familyLine
     )
-    .toggle("启用容器", { defaultValue: container.enabled });
+    .toggle("enabled", "启用容器", { defaultValue: container.enabled });
 
   if (isHopper) {
     // 漏斗锁定为 input 角色，不显示角色下拉
-    form.label("§8§o此容器是漏斗，只能作为输入容器使用。");
+    form.label("hopperHint", "§8§o此容器是漏斗，只能作为输入容器使用。");
   } else {
-    form.dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });
+    form.dropdown("role", "容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });
   }
 
-  form.toggle("§e容量预警", { defaultValue: container.capacityWarningEnabled })
-    .toggle("§e立即整理（按物品 ID 排序合并）", { defaultValue: false });
+  form.toggle("capacityWarning", "§e容量预警", { defaultValue: container.capacityWarningEnabled })
+    .toggle("organize", "§e立即整理（按物品 ID 排序合并）");
 
-  const response = await form.show(player);
-  if (response.canceled) return;
+  const vals = await form.show(player);
+  if (!vals) return;
 
-  const values = response.formValues;
-  if (!values || values.length < 2) return;
-
-  // ── 解析表单值 ──
-  // Bedrock 不同版本对 ModalForm label 是否占用 formValues 索引行为不一致。
-  // label 返回 null 但占用索引位置，通过 values.length 判断：
-  //
-  // 非漏斗布局: [label(信息), toggle(启用), dropdown(角色), toggle(容量预警), toggle(整理)]
-  //   label 不占位: length=4 → [启用, 角色, 容量预警, 整理]
-  //   label 占位:   length=5 → [null, 启用, 角色, 容量预警, 整理]
-  //
-  // 漏斗布局: [label(信息), toggle(启用), label(提示), toggle(容量预警), toggle(整理)]
-  //   label 不占位: length=3 → [启用, 容量预警, 整理]
-  //   2 label 占位: length=5 → [null, 启用, null, 容量预警, 整理]
-  let newEnabled: boolean;
-  let newRole: ContainerRole;
-  let newCapacityWarning: boolean;
-  let shouldOrganize: boolean;
-
-  if (isHopper) {
-    newEnabled = values.length >= 5 ? (values[1] as boolean) : (values[0] as boolean);
-    newRole = "input";
-    newCapacityWarning = values.length >= 5 ? (values[3] as boolean) : (values[1] as boolean);
-    shouldOrganize = values.length >= 5 ? (values[4] as boolean) : (values[2] as boolean);
-  } else {
-    newEnabled = values.length >= 5 ? (values[1] as boolean) : (values[0] as boolean);
-    newRole = ROLE_ORDER[values.length >= 5 ? (values[2] as number) : (values[1] as number)];
-    newCapacityWarning = values.length >= 5 ? (values[3] as boolean) : (values[2] as boolean);
-    shouldOrganize = values.length >= 5 ? (values[4] as boolean) : (values[3] as boolean);
-  }
+  const newEnabled = vals.enabled as boolean;
+  const newRole: ContainerRole = isHopper ? "input" : ROLE_ORDER[vals.role as number] ?? container.role;
+  const newCapacityWarning = vals.capacityWarning as boolean;
+  const shouldOrganize = vals.organize as boolean;
 
   // ── 整理容器 ──
   if (shouldOrganize) {

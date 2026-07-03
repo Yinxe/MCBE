@@ -1,5 +1,5 @@
 import type { Player } from "@minecraft/server";
-import { ModalFormData } from "@minecraft/server-ui";
+import { ModalFormBuilder } from "./FormHelper";
 import { ROLE_LABELS, ROLE_ORDER } from "../types";
 import { setSession } from "../interaction/SelectionSessionStore";
 
@@ -15,29 +15,17 @@ export async function showWarehouseCreateForm(player: Player): Promise<void> {
   // 按 ROLE_ORDER 顺序生成角色下拉标签列表
   const roleLabels = ROLE_ORDER.map((r) => ROLE_LABELS[r]);
 
-  const form = new ModalFormData()
+  const form = new ModalFormBuilder()
     .title("创建仓库")
-    .textField("仓库名称", "输入仓库名称...")
-    .dropdown("默认容器角色", roleLabels, { defaultValueIndex: 2 })  // 默认其他仓位(misc, ROLE_ORDER[2])
-    .dropdown("新容器默认启用", ["是", "否"], { defaultValueIndex: 0 });
+    .textField("name", "仓库名称", "输入仓库名称...")
+    .dropdown("role", "默认容器角色", roleLabels, { defaultValueIndex: 2 })  // 默认其他仓位(misc, ROLE_ORDER[2])
+    .dropdown("enabled", "新容器默认启用", ["是", "否"], { defaultValueIndex: 0 });
 
-  const response = await form.show(player);
-  if (response.canceled) return;
-
-  const values = response.formValues;
-  if (!values || values.length < 3) {
-    player.sendMessage("§c表单数据异常，请重试");
-    return;
-  }
-
-  const warehouseName = values[0] as string;
-  const roleIndex = values[1] as number;
-  const enabledIndex = values[2] as number;
-
-  if (typeof warehouseName !== "string" || typeof roleIndex !== "number" || typeof enabledIndex !== "number") {
-    player.sendMessage("§c表单数据格式错误，请重试");
-    return;
-  }
+  const vals = await form.show(player);
+  if (!vals) return;
+  const warehouseName = vals.name as string;
+  const roleIndex = vals.role as number;
+  const enabledIndex = vals.enabled as number;
 
   if (!warehouseName || warehouseName.trim() === "") {
     player.sendMessage("§c仓库名称不能为空");

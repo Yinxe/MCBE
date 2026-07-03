@@ -1,5 +1,5 @@
 import { type Player } from "@minecraft/server";
-import { ActionFormData } from "@minecraft/server-ui";
+import { ActionFormBuilder } from "./FormHelper";
 import { showWarehouseCreateForm } from "./WarehouseCreateFlow";
 import { showWarehouseManageMenu } from "./WarehouseManageMenu";
 import { showSearchUI } from "./SearchUI";
@@ -26,27 +26,27 @@ export async function showMainMenu(
 ): Promise<void> {
   const isAdmin = canManageWarehouse(player);
 
-  const form = new ActionFormData()
+  const form = new ActionFormBuilder()
     .title("SmartWarehouse")
     .body("选择一个操作")
-    .button("创建仓库")
-    .button("管理仓库")
-    .button("容器搜索");
+    .button("create", "创建仓库")
+    .button("manage", "管理仓库")
+    .button("search", "容器搜索");
 
   if (isAdmin) {
-    form.button("§e⚙ 配置");
+    form.button("config", "§e⚙ 配置");
   }
 
-  const response = await form.show(player);
-  if (response.canceled) return;
+  const result = await form.show(player);
+  if (!result) return;
 
-  if (response.selection === 0) {
+  if (result.name === "create") {
     await showWarehouseCreateForm(player);
-  } else if (response.selection === 1) {
+  } else if (result.name === "manage") {
     await showWarehouseManageMenu(player, repository, service);
-  } else if (response.selection === 2) {
+  } else if (result.name === "search") {
     await showSearchUI(player, repository, configStore);
-  } else if (isAdmin && response.selection === 3) {
+  } else if (result.name === "config") {
     await showConfigUI(player, configStore);
   }
 }

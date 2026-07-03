@@ -12,7 +12,7 @@
  */
 
 import { type Player } from "@minecraft/server";
-import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
+import { ModalFormBuilder } from "./FormHelper";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import type { WarehouseId } from "../types";
@@ -46,38 +46,30 @@ export async function showFamilyConfigMenu(
   const totalCount = ALL_FAMILIES.length;
 
   // ── 构建族配置 ModalForm ──
-  const form = new ModalFormData()
+  const form = new ModalFormBuilder()
     .title("家庭成员")
     .label(
+      "info",
       `§7启用 Family 分类后，同一分类的物品（如各色羊毛）会自动聚集到同一个容器中。\n` +
       `§7当前已启用 §f${enabledCount}§7/§f${totalCount} §7个分类`
     );
 
-  // 为每个族添加一个下拉开关
-  const familyToggleIndices: number[] = []; // 记录每个族的索引，用于后续读取
-  let toggleIndex = 0;
+  // 为每个族添加一个命名开关
   for (const family of ALL_FAMILIES) {
     const isEnabled = enabledFamilies.includes(family.id);
-    form.toggle(`§6${family.displayName} §7(${family.items.length}种)`, {
+    form.toggle(family.id, `§6${family.displayName} §7(${family.items.length}种)`, {
       defaultValue: isEnabled,
     });
-    familyToggleIndices.push(toggleIndex);
-    toggleIndex++;
   }
 
-  const response = await form.show(player);
-  if (response.canceled) return;
-
-  const values = response.formValues as (boolean | undefined)[] | undefined;
-  if (!values) return;
+  const vals = await form.show(player);
+  if (!vals) return;
 
   // 读取每个族的开关状态，构建新的 enabledFamilies 列表
-  // 索引 0 为 label，toggle 从索引 1 开始
   const newEnabledFamilies: string[] = [];
-  for (let i = 0; i < ALL_FAMILIES.length; i++) {
-    const toggleValue = values[i + 1];
-    if (toggleValue === true) {
-      newEnabledFamilies.push(ALL_FAMILIES[i].id);
+  for (const family of ALL_FAMILIES) {
+    if (vals[family.id] === true) {
+      newEnabledFamilies.push(family.id);
     }
   }
 

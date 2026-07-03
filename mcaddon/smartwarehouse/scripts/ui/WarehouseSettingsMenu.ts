@@ -1,6 +1,5 @@
 import type { Player } from "@minecraft/server";
 import { system } from "@minecraft/server";
-import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { clearSession, setSession } from "../interaction/SelectionSessionStore";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseId, WarehouseSettings } from "../types";
@@ -8,11 +7,12 @@ import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { getWarehouseStats, formatWarehouseStats, invalidateWarehouseStats } from "./WarehouseStats";
 import { showFamilyConfigMenu } from "./FamilyConfigMenu";
+import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
 
 /**
  * 显示仓库设置表单。
  * 通过 ModalForm 提供仓库名称、默认角色、启用状态、处理速度等设置项。
- * 底部操作：家庭成员、重新扫描、删除仓库、调整区域（互斥）。
+ * 底部操作：刷新统计、家庭成员、重新扫描、删除仓库、调整区域（互斥）。
  *
  * @param player     - 操作的玩家
  * @param warehouseId - 要设置的仓库 ID
@@ -59,54 +59,49 @@ export async function showWarehouseSettingsMenu(
   const speedValues = Object.keys(SPEED_LABELS).map(Number) as Array<keyof typeof SPEED_LABELS>;
   const defaultSpeedIndex = speedValues.indexOf(settings.processingSpeed as keyof typeof SPEED_LABELS);
 
-  const form = new ModalFormData()
+  const form = new ModalFormBuilder()
     .title("仓库设置")
-    .label(statsLabel)
-    .textField("仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
-    .dropdown("默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex) })
-    .dropdown("新容器默认启用", ["是", "否"], { defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1 })
-    .dropdown("处理速度", speedLabels, { defaultValueIndex: Math.max(0, defaultSpeedIndex) })
-    .toggle("自动创建分类", { defaultValue: settings.autoCreateCategories })
-    .toggle("启用仓库", { defaultValue: settings.enabled })
-    .toggle("显示边界光幕", { defaultValue: settings.showBoundary })
+    .label("info", statsLabel)
+    .textField("name", "仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
+    .dropdown("defaultRole", "默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex) })
+    .dropdown("defaultEnabled", "新容器默认启用", ["是", "否"], { defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1 })
+    .dropdown("speed", "处理速度", speedLabels, { defaultValueIndex: Math.max(0, defaultSpeedIndex) })
+    .toggle("autoCreate", "自动创建分类", { defaultValue: settings.autoCreateCategories })
+    .toggle("warehouseEnabled", "启用仓库", { defaultValue: settings.enabled })
+    .toggle("showBoundary", "显示边界光幕", { defaultValue: settings.showBoundary })
     .slider(
+      "autoSortThreshold",
       "§7自动整理混乱度阈值\n" +
       "§7混乱度高于阈值时触发整理  §a40%§7推荐\n" +
       "§c0每次整理  §a20敏感  §a40适中  §e60宽松  §c100永不\n",
       0, 100,
       { defaultValue: settings.autoSortThreshold, valueStep: 20 },
     )
-    .toggle("§e容量预警", { defaultValue: settings.capacityWarning })
-    .label("§8━━━ 操作 ━━━")
-    .toggle("§a刷新存储统计（重新扫描容器统计信息）", { defaultValue: false })
-    .toggle("§b家庭成员（提交后打开）", { defaultValue: false })
-    .toggle("§a重新扫描仓库（提交后执行）", { defaultValue: false })
-    .toggle("§c删除此仓库（提交后需确认）", { defaultValue: false })
-    .toggle("§e调整此仓库区域（提交后需选择新区域）", { defaultValue: false });
+    .toggle("capacityWarning", "§e容量预警", { defaultValue: settings.capacityWarning })
+    .label("opSep", "§8━━━ 操作 ━━━")
+    .toggle("refreshStats", "§a刷新存储统计（重新扫描容器统计信息）")
+    .toggle("familyConfig", "§b家庭成员（提交后打开）")
+    .toggle("rescan", "§a重新扫描仓库（提交后执行）")
+    .toggle("delete", "§c删除此仓库（提交后需确认）")
+    .toggle("resize", "§e调整此仓库区域（提交后需选择新区域）");
 
-  const response = await form.show(player);
-  if (response.canceled) return;
+  const vals = await form.show(player);
+  if (!vals) return;
 
-  const values = response.formValues;
-  if (!values || values.length < 16) {
-    player.sendMessage("§c表单数据异常，请重试");
-    return;
-  }
-
-  const newName = values[1] as string;
-  const newRoleIndex = values[2] as number;
-  const newEnabledIndex = values[3] as number;
-  const newSpeedIndex = values[4] as number;
-  const newAutoCreate = values[5] as boolean;
-  const newWarehouseEnabled = values[6] as boolean;
-  const newShowBoundary = values[7] as boolean;
-  const newAutoSortThreshold = values[8] as number;
-  const newCapacityWarning = values[9] as boolean;
-  const shouldRefreshStats = values[11] as boolean;
-  const shouldOpenFamilyConfig = values[12] as boolean;
-  const shouldRescan = values[13] as boolean;
-  const shouldDelete = values[14] as boolean;
-  const shouldResize = values[15] as boolean;
+  const newName = vals.name as string;
+  const newRoleIndex = vals.defaultRole as number;
+  const newEnabledIndex = vals.defaultEnabled as number;
+  const newSpeedIndex = vals.speed as number;
+  const newAutoCreate = vals.autoCreate as boolean;
+  const newWarehouseEnabled = vals.warehouseEnabled as boolean;
+  const newShowBoundary = vals.showBoundary as boolean;
+  const newAutoSortThreshold = vals.autoSortThreshold as number;
+  const newCapacityWarning = vals.capacityWarning as boolean;
+  const shouldRefreshStats = vals.refreshStats as boolean;
+  const shouldOpenFamilyConfig = vals.familyConfig as boolean;
+  const shouldRescan = vals.rescan as boolean;
+  const shouldDelete = vals.delete as boolean;
+  const shouldResize = vals.resize as boolean;
 
   // 操作性开关互斥：只能选一个
   const ops = [shouldRefreshStats, shouldOpenFamilyConfig, shouldRescan, shouldDelete, shouldResize].filter(Boolean).length;
@@ -222,16 +217,16 @@ async function showDeleteWarehouseConfirm(
   displayName: string,
   service: WarehouseService
 ): Promise<void> {
-  const form = new ActionFormData()
+  const result = await new ActionFormBuilder()
     .title("删除仓库")
     .body(`确定要删除仓库 "${displayName}" 吗？\n\n此操作不可撤销，所有容器数据将被清除。`)
-    .button("§c确认删除")
-    .button("取消");
+    .button("confirm", "§c确认删除")
+    .button("cancel", "取消")
+    .show(player);
 
-  const response = await form.show(player);
-  if (response.canceled || response.selection === undefined) return;
+  if (!result) return;
 
-  if (response.selection === 0) {
+  if (result.name === "confirm") {
     try {
       service.deleteWarehouse(warehouseId);
       player.sendMessage(`§a仓库 "${displayName}" 已删除`);

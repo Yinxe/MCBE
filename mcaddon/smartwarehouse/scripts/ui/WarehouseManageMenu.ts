@@ -1,5 +1,5 @@
 import type { Player } from "@minecraft/server";
-import { ActionFormData } from "@minecraft/server-ui";
+import { ActionFormBuilder } from "./FormHelper";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
@@ -20,26 +20,27 @@ export async function showWarehouseManageMenu(
   const warehouses = repository.loadAll();
 
   if (warehouses.length === 0) {
-    const form = new ActionFormData()
+    const form = new ActionFormBuilder()
       .title("管理仓库")
       .body("当前没有已创建的仓库。")
-      .button("返回");
-    await form.show(player);
+      .button("back", "返回");
+    const result = await form.show(player);
+    if (result?.name === "back") return;
     return;
   }
 
-  const form = new ActionFormData()
+  const form = new ActionFormBuilder()
     .title("管理仓库")
     .body("选择一个仓库进行设置");
 
   for (const warehouse of warehouses) {
-    form.button(warehouse.displayName);
+    form.button(warehouse.id, warehouse.displayName);
   }
 
-  const response = await form.show(player);
-  if (response.canceled || response.selection === undefined) return;
+  const result = await form.show(player);
+  if (!result) return;
 
-  const selectedWarehouse = warehouses[response.selection];
+  const selectedWarehouse = warehouses.find(w => w.id === result.name);
   if (!selectedWarehouse) return;
 
   await showWarehouseSettingsMenu(player, selectedWarehouse.id, repository, service);

@@ -11,7 +11,7 @@
  */
 
 import { type Player } from "@minecraft/server";
-import { ModalFormData } from "@minecraft/server-ui";
+import { ModalFormBuilder } from "./FormHelper";
 import type { ModConfigStore } from "../storage/ModConfigStore";
 import { TOKEN_OPTIONS } from "../storage/ModConfigStore";
 import { canManageWarehouse } from "../util/PlayerAuth";
@@ -37,23 +37,19 @@ export async function showConfigUI(player: Player, configStore: ModConfigStore):
     (opt) => opt.itemId === currentTokenId
   );
 
-  const form = new ModalFormData()
+  const form = new ModalFormBuilder()
     .title("SmartWarehouse 配置")
-    .label("§7配置模组的全局信物物品\n手持信物可替代木锄触发仓库交互和边界显示")
+    .label("info", "§7配置模组的全局信物物品\n手持信物可替代木锄触发仓库交互和边界显示")
     .dropdown(
+      "token",
       "§a选择信物",
       TOKEN_OPTIONS.map((opt) => opt.label),
       { defaultValueIndex: defaultIndex >= 0 ? defaultIndex : 0 }
     );
 
-  const response = await form.show(player);
-  if (response.canceled) return;
-
-  const rawValues = response.formValues as (string | number)[];
-  // label 在一行时，新版 API 占用索引 0（恒为 undefined），旧版不占用
-  // 一个 label + 一个 dropdown 共两个控件，数组长度可能为 1 或 2
-  const offset = rawValues.length >= 2 ? 1 : 0;
-  const selectedIndex = rawValues[offset] as number;
+  const vals = await form.show(player);
+  if (!vals) return;
+  const selectedIndex = vals.token as number;
 
   const selected = TOKEN_OPTIONS[selectedIndex];
   if (!selected) return;
