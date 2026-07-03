@@ -56,14 +56,17 @@ jobs:
         run: |
           IS_PRERELEASE=""
           if echo "${GITHUB_REF_NAME}" | grep -qiE 'beta|alpha|rc'; then IS_PRERELEASE="--prerelease"; fi
-          gh release create "${GITHUB_REF_NAME}" \
-            "dist/packages/SmartWarehouse-v${VERSION}.mcaddon" \
-            --title "${GITHUB_REF_NAME}" \
-            --notes "自动构建发布" \
-            ${IS_PRERELEASE} \
-            --target "${GITHUB_SHA}" 2>/dev/null || \
-          gh release upload "${GITHUB_REF_NAME}" \
-            "dist/packages/SmartWarehouse-v${VERSION}.mcaddon" --clobber
+          # 先检查 release 是否存在，存在则上传覆盖，否则创建
+          if gh release view "${GITHUB_REF_NAME}" &>/dev/null; then
+            gh release upload "${GITHUB_REF_NAME}" \
+              "dist/packages/SmartWarehouse-v${VERSION}.mcaddon" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              "dist/packages/SmartWarehouse-v${VERSION}.mcaddon" \
+              --title "${GITHUB_REF_NAME}" \
+              --notes "自动构建发布" \
+              ${IS_PRERELEASE}
+          fi
 
       - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch'
