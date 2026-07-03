@@ -8,11 +8,13 @@ import {
   containerHasType,
   isContainerEmpty,
   tryMoveStackIntoContainer,
+  tryMoveStackIntoContainerWithJournal,
   isShulkerBoxItem,
   getBulkChestFirstType,
   tryFillShulkerBoxes,
   getFamilyPurity,
 } from "./ContainerInventory";
+import { MoveJournal } from "./MoveJournal";
 import { playSortEffect } from "./SortEffects";
 import { SlotOrganizer } from "./SlotOrganizer";
 import { getFamily, getFamilyById } from "../data/ItemFamilies";
@@ -126,10 +128,7 @@ export class SorterEngine {
   private checkAreaLoaded(warehouse: WarehouseData, model: WarehouseRuntimeModel): void {
     // 缓存有效期 40 tick ≈ 2 秒，避免每 tick 重复采样
     const RECHECK_INTERVAL = 40;
-    if (
-      model.areaLoaded !== undefined &&
-      system.currentTick - model.areaLoadedCheckedTick < RECHECK_INTERVAL
-    ) {
+    if (model.areaLoaded !== undefined && system.currentTick - model.areaLoadedCheckedTick < RECHECK_INTERVAL) {
       return; // 缓存仍有效
     }
 
@@ -197,6 +196,7 @@ export class SorterEngine {
     model: WarehouseRuntimeModel,
     containerId: ContainerId
   ): void {
+    const journal = new MoveJournal();
     try {
       const stored = warehouse.containers[containerId];
       if (!stored) {
@@ -227,7 +227,7 @@ export class SorterEngine {
       const originalAmount = stack.amount;
       log.info(`槽 ${slot}：${stack.typeId} x${originalAmount}`);
 
-      const remaining = this.moveStackIntoWarehouse(stack, warehouse, model, dimension);
+      const remaining = this.moveStackIntoWarehouse(stack, warehouse, model, dimension, journal);
 
       if (remaining === undefined) {
         // 整堆全部成功放置 → 清空输入槽位
@@ -235,7 +235,16 @@ export class SorterEngine {
           container.setItem(slot);
           log.info(`槽 ${slot} 已清空（全部 ${originalAmount} 个已放置）`);
         } catch (setError) {
-          log.error(`致命错误：槽 ${slot} 清空失败，物品已在目标容器但输入槽未清空: ${setError}`);
+          log.error(`致命错误：槽 ${slot} 清空失败，尝试回滚: ${setError}`);
+          const rollResult = journal.rollback();
+          if (rollResult.ok) {
+            this.runtime.markDirty(warehouse.id);
+            log.info(`回滚成功，已撤销本次分拣对目标容器的写入`);
+          } else {
+            warehouse.settings.enabled = false;
+            this.repository.saveMetaOnly(warehouse);
+            log.error(`仓库 ${warehouse.id} 已因分拣回滚失败而停用: ${rollResult.error}`);
+          }
         }
       } else if (remaining.amount < originalAmount) {
         // 部分放置成功 → 余量写回槽位
@@ -243,7 +252,16 @@ export class SorterEngine {
           container.setItem(slot, remaining);
           log.info(`槽 ${slot} 部分放置：${remaining.amount}/${originalAmount} 返回`);
         } catch (setError) {
-          log.error(`致命错误：槽 ${slot} 回写失败，剩余 ${remaining.amount} 个物品已丢失: ${setError}`);
+          log.error(`致命错误：槽 ${slot} 回写失败，尝试回滚: ${setError}`);
+          const rollResult = journal.rollback();
+          if (rollResult.ok) {
+            this.runtime.markDirty(warehouse.id);
+            log.info(`回滚成功，已撤销本次分拣对目标容器的写入`);
+          } else {
+            warehouse.settings.enabled = false;
+            this.repository.saveMetaOnly(warehouse);
+            log.error(`仓库 ${warehouse.id} 已因分拣回滚失败而停用: ${rollResult.error}`);
+          }
         }
       } else {
         log.info(`槽 ${slot} 无法分类（${originalAmount} 个未变动）`);
@@ -253,6 +271,16 @@ export class SorterEngine {
       model.inputSlotCursors.set(containerId, (slot + 1) % container.size);
     } catch (error) {
       log.error(`处理输入容器 ${containerId} 时出错: ${error}`);
+      // 尝试回滚已记录的目标容器
+      const rollResult = journal.rollback();
+      if (rollResult.ok) {
+        this.runtime.markDirty(warehouse.id);
+        log.info(`回滚成功，已撤销本次分拣对目标容器的写入`);
+      } else {
+        warehouse.settings.enabled = false;
+        this.repository.saveMetaOnly(warehouse);
+        log.error(`仓库 ${warehouse.id} 已因回滚失败而停用: ${rollResult.error}`);
+      }
     }
   }
 
@@ -281,7 +309,8 @@ export class SorterEngine {
     stack: ItemStack,
     warehouse: WarehouseData,
     model: WarehouseRuntimeModel,
-    dimension: Dimension
+    dimension: Dimension,
+    journal: MoveJournal
   ): ItemStack | undefined {
     const typeId = stack.typeId;
     let remaining: ItemStack | undefined = stack;
@@ -306,14 +335,23 @@ export class SorterEngine {
       if (isContainerEmpty(target)) return false; // 空箱需玩家手动放入第一件物品
       return getBulkChestFirstType(target) === typeId;
     });
-    remaining = this.tryBulkContainers(remaining, bulkMatches, warehouse, model, dimension, typeId);
+    remaining = this.tryBulkContainers(remaining, bulkMatches, warehouse, model, dimension, typeId, journal);
     if (remaining === undefined) return undefined;
 
     // ── 优先级 2：多物品（普通）────────────────────────────────
     // 已有同类物品的普通容器，用于多物品混合分类。
     // 放在大宗之后：大宗拦截高产量单品后，剩余散品走普通分类。
     const existingTypeContainers = this.findExistingTypeContainers(warehouse, model, typeId, dimension);
-    remaining = this.tryContainers(remaining, existingTypeContainers, warehouse, model, dimension, typeId, "match");
+    remaining = this.tryContainers(
+      remaining,
+      existingTypeContainers,
+      warehouse,
+      model,
+      dimension,
+      typeId,
+      journal,
+      "match"
+    );
     if (remaining === undefined) return undefined;
 
     // ── 优先级 3：家庭同族 ──────────────────────────────────────
@@ -323,7 +361,16 @@ export class SorterEngine {
     const enabledFamilies = warehouse.settings.enabledFamilies ?? [];
     if (family && enabledFamilies.includes(family.id)) {
       const familyContainers = this.findExistingFamilyContainers(warehouse, model, family.id, dimension);
-      remaining = this.tryContainers(remaining, familyContainers, warehouse, model, dimension, typeId, "family");
+      remaining = this.tryContainers(
+        remaining,
+        familyContainers,
+        warehouse,
+        model,
+        dimension,
+        typeId,
+        journal,
+        "family"
+      );
       if (remaining === undefined) return undefined;
     }
 
@@ -334,13 +381,31 @@ export class SorterEngine {
     if (warehouse.settings.autoCreateCategories) {
       const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
       if (freeNormal) {
-        remaining = this.tryContainers(remaining, [freeNormal], warehouse, model, dimension, typeId, "autocreate");
+        remaining = this.tryContainers(
+          remaining,
+          [freeNormal],
+          warehouse,
+          model,
+          dimension,
+          typeId,
+          journal,
+          "autocreate"
+        );
         if (remaining === undefined) return undefined;
       }
     }
 
     // ── 优先级 5：杂项（兜底）──────────────────────────────────
-    remaining = this.tryContainers(remaining, model.miscContainerIds, warehouse, model, dimension, typeId, "misc");
+    remaining = this.tryContainers(
+      remaining,
+      model.miscContainerIds,
+      warehouse,
+      model,
+      dimension,
+      typeId,
+      journal,
+      "misc"
+    );
     return remaining; // 返回 undefined 表示最后一个容器处理完了全部
   }
 
@@ -371,6 +436,7 @@ export class SorterEngine {
     model: WarehouseRuntimeModel,
     dimension: Dimension,
     typeId: string,
+    journal: MoveJournal,
     tag?: string
   ): ItemStack | undefined {
     if (!stack) return undefined;
@@ -389,7 +455,7 @@ export class SorterEngine {
       }
 
       const beforeAmount = remaining.amount;
-      remaining = tryMoveStackIntoContainer(remaining, targetContainer);
+      remaining = tryMoveStackIntoContainerWithJournal(remaining, targetContainer, journal, containerId);
 
       const placed = beforeAmount - (remaining?.amount ?? 0);
       if (placed > 0) {
@@ -454,6 +520,7 @@ export class SorterEngine {
     model: WarehouseRuntimeModel,
     dimension: Dimension,
     typeId: string,
+    journal: MoveJournal
   ): ItemStack | undefined {
     if (!stack) return undefined;
 
@@ -474,6 +541,9 @@ export class SorterEngine {
 
       const beforeAmount = remaining.amount;
 
+      // 在写入前记录目标容器快照
+      journal.snapshotTarget(containerId, target);
+
       // 第 1 步：优先填入箱内已有的潜影盒
       remaining = tryFillShulkerBoxes(target, remaining);
       if (remaining === undefined) {
@@ -487,9 +557,7 @@ export class SorterEngine {
 
       const placed = beforeAmount - (remaining?.amount ?? 0);
       if (placed > 0) {
-        log.info(
-          `[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`
-        );
+        log.info(`[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`);
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
       }
@@ -554,7 +622,10 @@ export class SorterEngine {
     const { valid, stale } = this.validateIndexCandidates(
       hasIndexEntry,
       hasIndexEntry ? model.itemTypeIndex.get(typeId)! : model.normalContainerIds,
-      warehouse, model, typeId, dimension
+      warehouse,
+      model,
+      typeId,
+      dimension
     );
 
     // ── 阶段 2：惰性清除脏索引 ───────────────────────────────
@@ -636,11 +707,7 @@ export class SorterEngine {
    * 从索引中惰性清除脏条目。
    * 如果某类型下所有容器都脏了，删除整个条目。
    */
-  private cleanStaleIndexEntries(
-    model: WarehouseRuntimeModel,
-    typeId: string,
-    stale: Set<ContainerId>
-  ): void {
+  private cleanStaleIndexEntries(model: WarehouseRuntimeModel, typeId: string, stale: Set<ContainerId>): void {
     const candidates = model.itemTypeIndex.get(typeId);
     if (!candidates) return;
 
@@ -831,7 +898,10 @@ export class SorterEngine {
       const containerId = containerIds[i];
       // 优先从缓存获取容器（避免索引扫描阶段已获取的容器被重复拉取）
       const container = containerCache.get(containerId);
-      if (!container) { scored.push({ id: containerId, purity: 0, index: i }); continue; }
+      if (!container) {
+        scored.push({ id: containerId, purity: 0, index: i });
+        continue;
+      }
       const purity = getFamilyPurity(container, memberSet);
       if (purity > 0) hasPositivePurity = true;
       scored.push({ id: containerId, purity, index: i });

@@ -1,6 +1,7 @@
 import { system, ItemStack, type Container } from "@minecraft/server";
 import type { ContainerId } from "../types";
 import { Logger } from "../util/Logger";
+import { restoreContainerSnapshot, snapshotContainer } from "./ContainerSnapshot";
 
 const log = new Logger("SlotOrganizer");
 
@@ -149,8 +150,8 @@ export class SlotOrganizer {
       const m = this.calculateMessiness(container);
       log.info(
         `onDeposit ${containerId}: messiness=${(m.total * 100).toFixed(0)}% ` +
-        `(order=${(m.order * 100).toFixed(0)}% stack=${(m.stack * 100).toFixed(0)}%) ` +
-        `threshold=${(threshold * 100).toFixed(0)}%`
+          `(order=${(m.order * 100).toFixed(0)}% stack=${(m.stack * 100).toFixed(0)}%) ` +
+          `threshold=${(threshold * 100).toFixed(0)}%`
       );
 
       if (m.total <= threshold) {
@@ -366,7 +367,9 @@ export class SlotOrganizer {
           e.total += stack.amount;
           current.set(stack.typeId, e);
         }
-      } catch { /* 跳过读取失败的槽位 */ }
+      } catch {
+        /* 跳过读取失败的槽位 */
+      }
     }
 
     for (const item of sortedItems) {
@@ -374,7 +377,10 @@ export class SlotOrganizer {
       if (!entry) {
         return this.makeError(
           `校验失败：容器缺少 ${item.typeId}（物品可能已被移动）`,
-          rawItems, sortedItems, endSlot - startSlot, occupiedSlots.size
+          rawItems,
+          sortedItems,
+          endSlot - startSlot,
+          occupiedSlots.size
         );
       }
       entry.total -= item.amount;
@@ -384,16 +390,23 @@ export class SlotOrganizer {
       if (entry.total !== 0) {
         log.error(
           `校验失败: ${typeId} total=${entry.total} | ` +
-          `sortedItems: ${sortedItems.filter(i => i.typeId === typeId).map(i => `x${i.amount}`).join(",")}`
+            `sortedItems: ${sortedItems
+              .filter((i) => i.typeId === typeId)
+              .map((i) => `x${i.amount}`)
+              .join(",")}`
         );
         return this.makeError(
           `校验失败：${typeId} 数量不匹配(total=${entry.total})`,
-          rawItems, sortedItems, endSlot - startSlot, occupiedSlots.size
+          rawItems,
+          sortedItems,
+          endSlot - startSlot,
+          occupiedSlots.size
         );
       }
     }
 
-    // ── 写入 ──
+    // ── 写入前快照（用于写入失败时回滚）──
+    const beforeWrite = snapshotContainer(container, startSlot, endSlot);
     let writeErrors = 0;
     let slot = startSlot;
 
@@ -410,12 +423,32 @@ export class SlotOrganizer {
       } catch (e) {
         log.error(`槽位 ${slot} 写入失败: ${e}`);
         writeErrors++;
+        break; // 写入失败立即中断，最小化中间状态
       }
     }
 
+    // ── 写入失败时回滚快照（在清理旧槽位之前执行，确保数据一致性）──
+    if (writeErrors > 0) {
+      const restored = restoreContainerSnapshot(container, beforeWrite);
+      return this.makeError(
+        restored.ok
+          ? `${writeErrors} 个槽位写入失败，已回滚整理`
+          : `${writeErrors} 个槽位写入失败，且回滚失败: ${restored.error}`,
+        rawItems,
+        sortedItems,
+        endSlot - startSlot,
+        occupiedSlots.size
+      );
+    }
+
+    // ── 清理旧槽位（仅全部写入成功后才执行）──
     for (const os of occupiedSlots) {
       if (os >= slot) {
-        try { container.setItem(os, undefined); } catch { /* 忽略 */ }
+        try {
+          container.setItem(os, undefined);
+        } catch {
+          /* 忽略 */
+        }
       }
     }
 
@@ -425,14 +458,17 @@ export class SlotOrganizer {
     const afterTypes = new Set(sortedItems.map((i) => i.typeId)).size;
 
     return {
-      success: writeErrors === 0,
+      success: true,
       movedStacks: beforeStacks - afterStacks,
-      beforeStacks, afterStacks, beforeTypes, afterTypes,
+      beforeStacks,
+      afterStacks,
+      beforeTypes,
+      afterTypes,
       perType: buildPerType(sortedItems),
       totalSlots: endSlot - startSlot,
       usedSlots: occupiedSlots.size,
       usagePercent: endSlot > startSlot ? Math.round((occupiedSlots.size / (endSlot - startSlot)) * 100) : 0,
-      error: writeErrors > 0 ? `${writeErrors} 个槽位写入失败` : undefined,
+      error: undefined,
       messiness: analysis.messiness,
     };
   }
@@ -449,16 +485,23 @@ export class SlotOrganizer {
   // ─── 内部辅助 ────────────────────────────────────────────────
 
   private makeError(
-    msg: string, raw: ItemStack[], sorted: ItemStack[],
-    totalSlots: number, usedSlots: number
+    msg: string,
+    raw: ItemStack[],
+    sorted: ItemStack[],
+    totalSlots: number,
+    usedSlots: number
   ): OrganizeResult {
     return {
-      success: false, movedStacks: 0, error: msg,
-      beforeStacks: raw.length, afterStacks: sorted.length,
+      success: false,
+      movedStacks: 0,
+      error: msg,
+      beforeStacks: raw.length,
+      afterStacks: sorted.length,
       beforeTypes: new Set(raw.map((i) => i.typeId)).size,
       afterTypes: new Set(sorted.map((i) => i.typeId)).size,
       perType: buildPerType(raw),
-      totalSlots, usedSlots,
+      totalSlots,
+      usedSlots,
       usagePercent: totalSlots > 0 ? Math.round((usedSlots / totalSlots) * 100) : 0,
     };
   }

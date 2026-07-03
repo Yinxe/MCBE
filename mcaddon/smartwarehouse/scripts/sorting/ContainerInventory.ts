@@ -2,6 +2,7 @@ import type { BlockInventoryComponent, Dimension, ItemInventoryComponent } from 
 import { Container, ItemStack } from "@minecraft/server";
 import type { StoredContainer } from "../types";
 import { SHULKER_BOX_IDS } from "../warehouse/ContainerTypes";
+import type { MoveJournal } from "./MoveJournal";
 
 /**
  * 安全地从持久化存储的容器信息中获取 Minecraft 方块容器对象（`Container`）。
@@ -126,6 +127,25 @@ export function tryMoveStackIntoContainer(stack: ItemStack, target: Container): 
     // 返回原始物品堆，防止调用方误认为全部放完而清空输入槽
     return stack;
   }
+}
+
+/**
+ * 在写入前记录目标容器快照，然后尝试放入物品堆。
+ *
+ * @param stack - 待放入的物品堆
+ * @param target - 目标容器
+ * @param journal - 当前分拣事务的日志
+ * @param containerId - 目标容器 ID（用于日志追踪）
+ * @returns 未能放入的剩余物品堆
+ */
+export function tryMoveStackIntoContainerWithJournal(
+  stack: ItemStack,
+  target: Container,
+  journal: MoveJournal,
+  containerId: string
+): ItemStack | undefined {
+  journal.snapshotTarget(containerId, target);
+  return tryMoveStackIntoContainer(stack, target);
 }
 
 /**
@@ -272,14 +292,17 @@ export function tryFillShulkerBoxes(outerContainer: Container, stack: ItemStack)
 
       if (!invComp?.container) {
         // API 不可用：打印所有可用组件供诊断，说明根因
-        const available = slotStack.getComponents().map((c) => c.typeId).join(", ");
+        const available = slotStack
+          .getComponents()
+          .map((c) => c.typeId)
+          .join(", ");
         console.warn(
           `[SmartWarehouse] 潜影盒 ${slotStack.typeId} 没有 inventory 组件，` +
-          `可用组件: [${available}]。` +
-          `根因：原版潜影盒使用旧 NBT 系统（BlockEntityTag），` +
-          `Script API 的 ItemInventoryComponent 仅对 ` +
-          `minecraft:storage_item 组件生效，潜影盒尚未迁移至此体系。` +
-          `降级：跳过潜影盒填充，物品转为放入空槽位。`
+            `可用组件: [${available}]。` +
+            `根因：原版潜影盒使用旧 NBT 系统（BlockEntityTag），` +
+            `Script API 的 ItemInventoryComponent 仅对 ` +
+            `minecraft:storage_item 组件生效，潜影盒尚未迁移至此体系。` +
+            `降级：跳过潜影盒填充，物品转为放入空槽位。`
         );
         // 跳过所有潜影盒（无需再试，一次警告就够了）
         return remaining;

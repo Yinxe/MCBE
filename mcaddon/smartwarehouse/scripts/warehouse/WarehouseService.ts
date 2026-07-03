@@ -17,6 +17,8 @@ import { hasInventory, isHopperType, isSupportedContainerType } from "./Containe
 import { makeContainerId } from "./ContainerId";
 import { compareLocationForPrimary } from "../util/Vector";
 import { BoundaryDisplay } from "./BoundaryDisplay";
+import { diffRescanContainers } from "./WarehouseRescanDiff";
+import type { WarehouseRescanDiff } from "./WarehouseRescanDiff";
 
 /**
  * 单次扫描操作允许的最大方块体积上限。
@@ -117,7 +119,11 @@ export class WarehouseService {
       dimensionId,
       area,
       ownerId,
-      settings: { ...DEFAULT_WAREHOUSE_SETTINGS, defaultNewContainerRole: defaultRole, defaultNewContainerEnabled: defaultEnabled },
+      settings: {
+        ...DEFAULT_WAREHOUSE_SETTINGS,
+        defaultNewContainerRole: defaultRole,
+        defaultNewContainerEnabled: defaultEnabled,
+      },
       containerShardCount: 0,
       containerCount: Object.keys(containers).length,
       containerShardGeneration: 0,
@@ -156,6 +162,32 @@ export class WarehouseService {
     this.repository.save(updated);
     this.markRuntimeDirty(id);
     return updated;
+  }
+
+  /**
+   * 预览重新扫描的结果，返回与当前记录的差异而不实际修改数据。
+   *
+   * 可用于命令或 UI 在真正执行扫描前向玩家展示变更概要：
+   * - added：新发现的容器
+   * - removed：已消失的容器
+   * - changed：角色、启用状态或位置发生变化的容器
+   * - unchanged：完全一致的容器
+   *
+   * @param id 仓库 ID
+   * @returns 差异摘要
+   * @throws 如果仓库不存在
+   */
+  previewRescanWarehouse(id: WarehouseId): WarehouseRescanDiff {
+    const warehouse = this.requireWarehouse(id);
+    const dimension = world.getDimension(warehouse.dimensionId);
+    const scanned = this.scanner.scan(
+      dimension,
+      warehouse.area,
+      warehouse.settings.defaultNewContainerRole,
+      warehouse.settings.defaultNewContainerEnabled,
+      warehouse.containers
+    );
+    return diffRescanContainers(warehouse.containers, scanned);
   }
 
   /**
@@ -408,9 +440,7 @@ export class WarehouseService {
       if (other.id === excludeId) continue;
       if (other.dimensionId !== dimensionId) continue;
       if (areasTooClose(area, other.area, MIN_WAREHOUSE_SPACING)) {
-        throw new Error(
-          `仓库 "${other.displayName}" 距离过近（最小间距 ${MIN_WAREHOUSE_SPACING} 格），请选择其他区域`
-        );
+        throw new Error(`仓库 "${other.displayName}" 距离过近（最小间距 ${MIN_WAREHOUSE_SPACING} 格），请选择其他区域`);
       }
     }
   }
@@ -470,7 +500,7 @@ export class WarehouseService {
     containers: Record<ContainerId, StoredContainer>,
     newOccupied: BlockLocation[],
     dimId: string,
-    defaults: { role: ContainerRole; enabled: boolean },
+    defaults: { role: ContainerRole; enabled: boolean }
   ): Record<ContainerId, StoredContainer> {
     const newPrimary = [...newOccupied].sort(compareLocationForPrimary)[0];
     const newId = makeContainerId(dimId, newPrimary);
@@ -482,8 +512,8 @@ export class WarehouseService {
 
     // 移除与新容器坐标重叠的旧容器
     for (const [eid, ec] of Object.entries(containers)) {
-      const overlap = ec.occupiedLocations.some(el =>
-        newOccupied.some(nl => nl.x === el.x && nl.y === el.y && nl.z === el.z)
+      const overlap = ec.occupiedLocations.some((el) =>
+        newOccupied.some((nl) => nl.x === el.x && nl.y === el.y && nl.z === el.z)
       );
       if (overlap) {
         role = ec.role;
@@ -499,10 +529,14 @@ export class WarehouseService {
     return {
       ...deduped,
       [newId]: {
-        id: newId, dimensionId: dimId,
+        id: newId,
+        dimensionId: dimId,
         primaryLocation: newPrimary,
         occupiedLocations: [...newOccupied].sort(compareLocationForPrimary),
-        role, enabled, discoveredAt, updatedAt: now,
+        role,
+        enabled,
+        discoveredAt,
+        updatedAt: now,
       },
     };
   }
@@ -515,14 +549,14 @@ export class WarehouseService {
   private splitContainer(
     containers: Record<ContainerId, StoredContainer>,
     containerId: ContainerId,
-    destroyedLoc: BlockLocation,
+    destroyedLoc: BlockLocation
   ): Record<ContainerId, StoredContainer> | undefined {
     const old = containers[containerId];
     if (!old || old.occupiedLocations.length !== 2) return undefined;
 
     // 找剩下那一半的坐标
     const remainingLoc = old.occupiedLocations.find(
-      l => l.x !== destroyedLoc.x || l.y !== destroyedLoc.y || l.z !== destroyedLoc.z
+      (l) => l.x !== destroyedLoc.x || l.y !== destroyedLoc.y || l.z !== destroyedLoc.z
     );
     if (!remainingLoc) return undefined;
 
@@ -539,11 +573,14 @@ export class WarehouseService {
       return {
         ...rest,
         [newId]: {
-          id: newId, dimensionId: old.dimensionId,
+          id: newId,
+          dimensionId: old.dimensionId,
           primaryLocation: primary,
           occupiedLocations: [...occupied].sort(compareLocationForPrimary),
-          role: old.role, enabled: old.enabled,
-          discoveredAt: old.discoveredAt, updatedAt: Date.now(),
+          role: old.role,
+          enabled: old.enabled,
+          discoveredAt: old.discoveredAt,
+          updatedAt: Date.now(),
         },
       };
     } catch {
@@ -569,11 +606,10 @@ export class WarehouseService {
     // 漏斗自动强制为 input 角色，不可作为存储容器
     const role = isHopperType(block.typeId) ? "input" : warehouse.settings.defaultNewContainerRole;
 
-    const newContainers = this.mergeContainer(
-      warehouse.containers, occupied,
-      warehouse.dimensionId,
-      { role, enabled: warehouse.settings.defaultNewContainerEnabled },
-    );
+    const newContainers = this.mergeContainer(warehouse.containers, occupied, warehouse.dimensionId, {
+      role,
+      enabled: warehouse.settings.defaultNewContainerEnabled,
+    });
 
     // 校验容器数量上限
     this.assertContainerCount(newContainers);
@@ -587,9 +623,11 @@ export class WarehouseService {
         isMerge
           ? `§a箱子已合并为大箱子，容器信息已更新（${block.typeId.replace("minecraft:", "")}）`
           : `§a容器已添加至仓库 "${warehouse.displayName}"` +
-            `（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[role]}）`
+              `（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[role]}）`
       );
-    } catch { /* 忽略 */ }
+    } catch {
+      /* 忽略 */
+    }
   }
 
   /**
@@ -604,7 +642,7 @@ export class WarehouseService {
     const warehouse = this.requireWarehouse(warehouseId);
 
     const entry = Object.entries(warehouse.containers).find(([, c]) =>
-      c.occupiedLocations.some(l => l.x === location.x && l.y === location.y && l.z === location.z)
+      c.occupiedLocations.some((l) => l.x === location.x && l.y === location.y && l.z === location.z)
     );
     if (!entry) return;
     const [containerId] = entry;
@@ -614,7 +652,11 @@ export class WarehouseService {
     if (split) {
       this.repository.patchContainers(warehouseId, split);
       this.markRuntimeDirty(warehouseId);
-      try { player.sendMessage(`§e大箱子 ${containerId} 已降级为单箱`); } catch { /* 忽略 */ }
+      try {
+        player.sendMessage(`§e大箱子 ${containerId} 已降级为单箱`);
+      } catch {
+        /* 忽略 */
+      }
       return;
     }
 
@@ -623,6 +665,10 @@ export class WarehouseService {
     this.repository.patchContainers(warehouseId, rest);
     this.markRuntimeDirty(warehouseId);
 
-    try { player.sendMessage(`§e容器已从仓库 "${warehouse.displayName}" 移除（${containerId}）`); } catch { /* 忽略 */ }
+    try {
+      player.sendMessage(`§e容器已从仓库 "${warehouse.displayName}" 移除（${containerId}）`);
+    } catch {
+      /* 忽略 */
+    }
   }
 }

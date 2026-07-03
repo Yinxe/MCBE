@@ -162,9 +162,9 @@ function regionCommand(name: string, description: string): CustomCommand {
   return {
     ...commandBase(name, description),
     mandatoryParameters: [
-      { name: "name", type: CustomCommandParamType.String },    // 仓库名称
-      { name: "pos1", type: CustomCommandParamType.Location },  // 第一组坐标（支持 ~ ^ 相对坐标）
-      { name: "pos2", type: CustomCommandParamType.Location },  // 第二组坐标（支持 ~ ^ 相对坐标）
+      { name: "name", type: CustomCommandParamType.String }, // 仓库名称
+      { name: "pos1", type: CustomCommandParamType.Location }, // 第一组坐标（支持 ~ ^ 相对坐标）
+      { name: "pos2", type: CustomCommandParamType.Location }, // 第二组坐标（支持 ~ ^ 相对坐标）
     ],
   };
 }
@@ -204,7 +204,7 @@ export class CommandRouter {
   constructor(
     private readonly service: WarehouseService,
     private readonly repository: WarehouseRepository,
-    private readonly configStore: ModConfigStore,
+    private readonly configStore: ModConfigStore
   ) {}
 
   /**
@@ -231,16 +231,14 @@ export class CommandRouter {
       // 参数：仓库名称 + 两组坐标（共 3 个参数），坐标支持 ~ ^ 相对标记
       event.customCommandRegistry.registerCommand(
         regionCommand("sw:create", "创建 SmartWarehouse 仓库"),
-        (origin, name: string, pos1: Vector3, pos2: Vector3) =>
-          this.handleCreate(origin, name, pos1, pos2)
+        (origin, name: string, pos1: Vector3, pos2: Vector3) => this.handleCreate(origin, name, pos1, pos2)
       );
 
       // sw:resize —— 调整已有仓库的覆盖区域
       // 参数：仓库名称 + 两组坐标（共 3 个参数），坐标支持 ~ ^ 相对标记
       event.customCommandRegistry.registerCommand(
         regionCommand("sw:resize", "调整 SmartWarehouse 仓库区域"),
-        (origin, name: string, pos1: Vector3, pos2: Vector3) =>
-          this.handleResize(origin, name, pos1, pos2)
+        (origin, name: string, pos1: Vector3, pos2: Vector3) => this.handleResize(origin, name, pos1, pos2)
       );
 
       // sw:rescan —— 重新扫描指定仓库区域内的所有容器
@@ -257,23 +255,30 @@ export class CommandRouter {
         (origin, name: string) => this.handleDelete(origin, name)
       );
 
+      // sw:rescan_preview —— 预览重新扫描结果而不实际修改数据
+      // 参数：仅仓库名称（1 个）
+      event.customCommandRegistry.registerCommand(
+        namedCommand("sw:rescan_preview", "预览 SmartWarehouse 仓库容器变更"),
+        (origin, name: string) => this.handleRescanPreview(origin, name)
+      );
+
       // sw:organize —— 整理玩家背包（快捷栏除外）
       // 无需参数，所有玩家可用
       event.customCommandRegistry.registerCommand(
-        { ...commandBase("sw:organize", "整理玩家背包物品"),
-          mandatoryParameters: [] },
+        { ...commandBase("sw:organize", "整理玩家背包物品"), mandatoryParameters: [] },
         (origin) => this.handleOrganize(origin)
       );
 
       // sw:menu —— 打开 SmartWarehouse 主菜单
       // 无需参数，所有玩家可用（不依赖信物）
       event.customCommandRegistry.registerCommand(
-        { ...commandBase("sw:menu", "打开 SmartWarehouse 主菜单"),
-          mandatoryParameters: [] },
+        { ...commandBase("sw:menu", "打开 SmartWarehouse 主菜单"), mandatoryParameters: [] },
         (origin) => this.handleMenu(origin)
       );
 
-      log.info("Custom commands registered (sw:create/sw:resize/sw:rescan/sw:delete/sw:organize/sw:menu)");
+      log.info(
+        "Custom commands registered (sw:create/sw:resize/sw:rescan/sw:rescan_preview/sw:delete/sw:organize/sw:menu)"
+      );
     });
   }
 
@@ -293,12 +298,7 @@ export class CommandRouter {
    * @param x1-z2  仓库区域对角线两点坐标
    * @returns 命令执行结果（同步返回提交状态，异步执行实际创建）
    */
-  private handleCreate(
-    origin: CustomCommandOrigin,
-    name: string,
-    pos1: Vector3,
-    pos2: Vector3
-  ): CustomCommandResult {
+  private handleCreate(origin: CustomCommandOrigin, name: string, pos1: Vector3, pos2: Vector3): CustomCommandResult {
     // 步骤 1：验证玩家身份与权限
     const player = parseCommandPlayer(origin);
     if (typeof player === "string") return failure(player);
@@ -315,7 +315,15 @@ export class CommandRouter {
     // 步骤 4：通过 system.runTimeout() 异步执行仓库创建
     system.runTimeout(() => {
       try {
-        const warehouse = this.service.createWarehouse(normalized.id, dimensionId, pointA, pointB, "misc", true, player.id);
+        const warehouse = this.service.createWarehouse(
+          normalized.id,
+          dimensionId,
+          pointA,
+          pointB,
+          "misc",
+          true,
+          player.id
+        );
         trySendMessage(
           player,
           `§a仓库 "${warehouse.displayName}" 创建成功！共发现 ${Object.keys(warehouse.containers).length} 个容器`
@@ -342,12 +350,7 @@ export class CommandRouter {
    * @param pos2   新的区域第二组坐标
    * @returns 命令执行结果
    */
-  private handleResize(
-    origin: CustomCommandOrigin,
-    name: string,
-    pos1: Vector3,
-    pos2: Vector3
-  ): CustomCommandResult {
+  private handleResize(origin: CustomCommandOrigin, name: string, pos1: Vector3, pos2: Vector3): CustomCommandResult {
     // 验证玩家身份与权限
     const player = parseCommandPlayer(origin);
     if (typeof player === "string") return failure(player);
@@ -411,6 +414,39 @@ export class CommandRouter {
   }
 
   /**
+   * 处理 sw:rescan_preview 命令 —— 预览重新扫描结果而不实际修改数据。
+   *
+   * 调用 WarehouseService.previewRescanWarehouse() 执行扫描但不持久化，
+   * 向玩家展示新增、移除、变化、未变的容器数量，帮助玩家在真正执行
+   * 重扫前了解影响范围。
+   *
+   * @param origin 命令发起者上下文
+   * @param name   仓库名称
+   * @returns 命令执行结果
+   */
+  private handleRescanPreview(origin: CustomCommandOrigin, name: string): CustomCommandResult {
+    const player = parseCommandPlayer(origin);
+    if (typeof player === "string") return failure(player);
+
+    const parsed = parseWarehouseId(name);
+    if (!parsed.ok) return failure(parsed.message);
+
+    system.runTimeout(() => {
+      try {
+        const diff = this.service.previewRescanWarehouse(parsed.id);
+        trySendMessage(
+          player,
+          `§7[预览] 仓库 "${parsed.id}" 重扫变更：新增 §a${diff.added.length}§7，移除 §c${diff.removed.length}§7，变化 §e${diff.changed.length}§7，未变 §f${diff.unchanged.length}`
+        );
+      } catch (error) {
+        trySendMessage(player, `§c预览失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+
+    return success(`已提交预览请求: ${name}`);
+  }
+
+  /**
    * 处理 sw:delete 命令 —— 删除指定仓库及其所有数据
    *
    * 注意：该操作不可逆。删除后仓库的所有容器索引数据将被永久移除。
@@ -454,8 +490,7 @@ export class CommandRouter {
 
     system.runTimeout(() => {
       try {
-        const invComp = player.getComponent("inventory") as
-          EntityInventoryComponent | undefined;
+        const invComp = player.getComponent("inventory") as EntityInventoryComponent | undefined;
         if (!invComp?.container) {
           trySendMessage(player, "§c无法获取背包容器");
           return;
@@ -471,9 +506,11 @@ export class CommandRouter {
 
         // 打印混乱度评分
         const m = analysis.messiness;
-        trySendMessage(player,
+        trySendMessage(
+          player,
           `§7混乱度: §f${(m.total * 100).toFixed(0)}% ` +
-          `§7(顺序 §e${(m.order * 100).toFixed(0)}% §7堆叠 §e${(m.stack * 100).toFixed(0)}%)`);
+            `§7(顺序 §e${(m.order * 100).toFixed(0)}% §7堆叠 §e${(m.stack * 100).toFixed(0)}%)`
+        );
 
         if (m.total < 0.05) {
           trySendMessage(player, `§e背包已经很整齐了，无需整理`);

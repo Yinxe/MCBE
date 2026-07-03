@@ -1,24 +1,14 @@
 import type { Block, Dimension } from "@minecraft/server";
-import { ItemStack } from "@minecraft/server";
 import type { BlockLocation, ContainerId, ContainerRole, StoredContainer, WarehouseArea } from "../types";
 import { compareLocationForPrimary } from "../util/Vector";
 import { makeContainerId } from "./ContainerId";
 import { hasInventory, isChestType, isHopperType, isSupportedContainerType } from "./ContainerTypes";
+import { probeDoubleChestSafely } from "./SafeProbe";
+
+/** 单个箱子的最大槽位数（非双箱）。双箱的槽位数为 54，超过此值即为双箱。 */
+const SINGLE_CHEST_SIZE = 27;
 
 /**
- * 用于检查双箱相邻关系的四个水平方向偏移量。
- * 包括：东（+x）、西（-x）、南（+z）、北（-z）。
- * 箱子只能水平合并，不检查 y 轴方向。
- */
-const NEIGHBOR_OFFSETS: BlockLocation[] = [
-  { x: 1, y: 0, z: 0 },
-  { x: -1, y: 0, z: 0 },
-  { x: 0, y: 0, z: 1 },
-  { x: 0, y: 0, z: -1 },
-];
-
-/**
- * 安全地尝试获取指定位置的方块对象。
  * 如果该位置所在的区块未加载、超出世界边界或发生其他错误，
  * 函数会捕获异常并返回 `undefined`，而不会中断扫描流程。
  *
@@ -117,63 +107,6 @@ export class ContainerScanner {
   }
 
   /**
-   * 唯一物品探针的 ID，用于大箱子检测。
-   */
-  private static readonly PROBE_ID = "minecraft:structure_void";
-
-  /**
-   * 大箱子判定门槛：单箱 27 格，双箱 54 格，超过 27 即为大箱子。
-   */
-  private static readonly DOUBLE_CHEST_MIN_SIZE = 28;
-
-  /**
-   * 对大箱子执行探针检测，找出另一半的坐标。
-   * 仅在 container.size > 27 时调用。
-   * setItem 在受限执行上下文中会抛异常，捕获后返回 undefined。
-   */
-  private probeDoubleChest(
-    dimension: Dimension,
-    location: BlockLocation,
-    block: Block
-  ): BlockLocation | undefined {
-    const container = block.getComponent("inventory")?.container;
-    if (!container) return undefined;
-
-    const probeSlot = container.size - 1;
-    const probe = new ItemStack(ContainerScanner.PROBE_ID, 1);
-    let original: import("@minecraft/server").ItemStack | undefined;
-
-    // 放探针（受限上下文此处会抛异常 → 返回 undefined）
-    try {
-      original = container.getItem(probeSlot);
-      container.setItem(probeSlot, probe);
-    } catch {
-      return undefined;
-    }
-
-    // 检查邻居
-    let found: BlockLocation | undefined;
-    try {
-      for (const offset of NEIGHBOR_OFFSETS) {
-        const nl: BlockLocation = { x: location.x + offset.x, y: location.y + offset.y, z: location.z + offset.z };
-        const neighbor = tryGetBlock(dimension, nl);
-        if (!neighbor || neighbor.typeId !== block.typeId || !hasInventory(neighbor)) continue;
-        try {
-          const nc = neighbor.getComponent("inventory")?.container;
-          if (nc && nc.getItem(probeSlot)?.typeId === ContainerScanner.PROBE_ID) {
-            found = nl;
-            break;
-          }
-        } catch { /* 跳过 */ }
-      }
-    } finally {
-      // 恢复探针槽
-      try { container.setItem(probeSlot, original); } catch { /* 忽略 */ }
-    }
-    return found;
-  }
-
-  /**
    * 解析一个容器实际占用的所有方块位置集合。
    *
    * - 非箱子类型：返回当前位置。
@@ -190,14 +123,18 @@ export class ContainerScanner {
 
     // 读取 Container（不触 setItem）
     let container: import("@minecraft/server").Container | undefined;
-    try { container = block.getComponent("inventory")?.container; } catch { return [location]; }
+    try {
+      container = block.getComponent("inventory")?.container;
+    } catch {
+      return [location];
+    }
     if (!container) return [location];
 
-    // 单箱 → 直接返回
-    if (container.size < ContainerScanner.DOUBLE_CHEST_MIN_SIZE) return [location];
+    // 单箱（≤ SINGLE_CHEST_SIZE 格）→ 直接返回
+    if (container.size <= SINGLE_CHEST_SIZE) return [location];
 
-    // 大箱子 → 探针法
-    const neighbor = this.probeDoubleChest(dimension, location, block);
+    // 大箱子 → 安全探针法
+    const neighbor = probeDoubleChestSafely(dimension, location, block);
     if (neighbor) return [location, neighbor];
     return [location];
   }
