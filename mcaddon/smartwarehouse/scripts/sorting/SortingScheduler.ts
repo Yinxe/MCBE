@@ -273,12 +273,21 @@ export class SortingScheduler {
 
   /**
    * 停用所有仓库（保留监控）。
+   * 通知各仓库附近玩家调度已停止。
    */
   stopAll(): void {
-    for (const [id, handle] of this.handles) {
+    this.handles.forEach((handle, id) => {
       system.clearRun(handle);
+      // 停用前加载仓库信息用于通知附近玩家
+      const warehouse = this.repository.load(id);
+      if (warehouse) {
+        this.messageNearbyPlayers(
+          warehouse.dimensionId, warehouse.area,
+          `§7仓库 §e${warehouse.displayName}§7 调度已停止`
+        );
+      }
       this.engine.releaseRuntime(id);
-    }
+    });
     this.handles.clear();
     this.lastActiveTick.clear();
     log.info("已停止所有仓库调度");
