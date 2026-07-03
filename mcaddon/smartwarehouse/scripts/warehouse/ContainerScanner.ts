@@ -3,7 +3,7 @@ import { ItemStack } from "@minecraft/server";
 import type { BlockLocation, ContainerId, ContainerRole, StoredContainer, WarehouseArea } from "../types";
 import { compareLocationForPrimary } from "../util/Vector";
 import { makeContainerId } from "./ContainerId";
-import { hasInventory, isChestType, isSupportedContainerType } from "./ContainerTypes";
+import { hasInventory, isChestType, isHopperType, isSupportedContainerType } from "./ContainerTypes";
 
 /**
  * 用于检查双箱相邻关系的四个水平方向偏移量。
@@ -96,13 +96,15 @@ export class ContainerScanner {
           if (found[id]) continue;
 
           // 优先保留已有记录的角色和发现时间，否则使用默认值
+          // 漏斗自动强制为 input 角色，不可作为存储容器
           const previous = existing[id];
+          const forcedRole: ContainerRole = isHopperType(block.typeId) ? "input" : (previous?.role ?? defaultRole);
           found[id] = {
             id,
             dimensionId,
             primaryLocation: primary,
             occupiedLocations: occupied.sort(compareLocationForPrimary),
-            role: previous?.role ?? defaultRole,
+            role: forcedRole,
             enabled: previous?.enabled ?? defaultEnabled,
             discoveredAt: previous?.discoveredAt ?? now,
             updatedAt: now,

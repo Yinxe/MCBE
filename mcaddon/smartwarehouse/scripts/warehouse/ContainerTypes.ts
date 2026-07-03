@@ -39,15 +39,26 @@ export function isChestType(typeId: string): boolean {
 }
 
 /**
+ * 判断给定的方块类型 ID 是否为漏斗。
+ * 漏斗是特殊的输入容器，自动分配 "input" 角色且不可改为存储角色。
+ *
+ * @param typeId 方块类型 ID
+ * @returns 如果是漏斗，返回 true
+ */
+export function isHopperType(typeId: string): boolean {
+  return typeId === "minecraft:hopper";
+}
+
+/**
  * 判断给定方块类型 ID 是否为智能仓库支持的容器类型。
- * 当前支持的容器类型包括：箱子、陷阱箱、桶以及所有颜色的潜影盒。
+ * 当前支持的容器类型包括：箱子、陷阱箱、桶、漏斗以及所有颜色的潜影盒。
  * 该函数是扫描过滤的第一步，不符合的方块会直接被跳过。
  *
  * @param typeId 方块类型 ID
  * @returns 如果是支持的容器类型，返回 true
  */
 export function isSupportedContainerType(typeId: string): boolean {
-  const result = isChestType(typeId) || typeId === "minecraft:barrel" || SHULKER_BOX_IDS.has(typeId);
+  const result = isChestType(typeId) || isHopperType(typeId) || typeId === "minecraft:barrel" || SHULKER_BOX_IDS.has(typeId);
   // 调试：打印潜影盒类方块是否被识别为容器（需要时取消注释）
   // if (typeId.includes("shulker")) {
   //   console.warn(`[SmartWarehouse] 潜影盒检测: typeId=${typeId}, isContainer=${result}`);

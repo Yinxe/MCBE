@@ -1,6 +1,6 @@
 import { world, type Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import type { ContainerId, WarehouseId } from "../types";
+import type { ContainerId, ContainerRole, WarehouseId } from "../types";
 import type { StoredContainer, WarehouseData } from "../types";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_ORDER } from "../types";
 import { canManageWarehouse } from "../util/PlayerAuth";
@@ -253,6 +253,7 @@ export async function showContainerRoleMenu(
     const roleDesc = ROLE_DESCRIPTIONS[container.role];
 
     const familyLine = formatFamilyPurityInfo(warehouse, container);
+    const isHopper = details?.blockType === "hopper";
 
     const form = new ActionFormData()
       .title("容器信息")
@@ -261,8 +262,8 @@ export async function showContainerRoleMenu(
         `${detailsLine}\n` +
         `§7容器ID: ${containerId}\n` +
         `§7状态: ${container.enabled ? "§a启用" : "§c禁用"}\n` +
-        `§7角色: ${roleLabel}\n` +
-        `§7描述: ${roleDesc}` +
+        `§7角色: ${roleLabel}${isHopper ? " §8(漏斗·自) " : ""}\n` +
+        `§7描述: ${isHopper ? "漏斗自动采集物品流入分拣系统" : roleDesc}` +
         familyLine
       )
       .button("关闭");
@@ -278,6 +279,9 @@ export async function showContainerRoleMenu(
 
   const familyLine = formatFamilyPurityInfo(warehouse, container);
 
+  // 检测是否为漏斗（漏斗自动锁定为 input 角色）
+  const isHopper = details?.blockType === "hopper";
+
   const form = new ModalFormData()
     .title("容器设置")
     .label(
@@ -288,21 +292,30 @@ export async function showContainerRoleMenu(
       `§7角色: §f${currentRoleLabel} — ${roleDesc}§r` +
       familyLine
     )
-    .toggle("启用容器", { defaultValue: container.enabled })
-    .dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 })
-    .toggle("§e立即整理（按物品 ID 排序合并）", { defaultValue: false });
+    .toggle("启用容器", { defaultValue: container.enabled });
+
+  if (isHopper) {
+    // 漏斗锁定为 input 角色，不显示角色下拉
+    form.label("§8§o此容器是漏斗，只能作为输入容器使用。");
+  } else {
+    form.dropdown("容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });
+  }
+
+  form.toggle("§e立即整理（按物品 ID 排序合并）", { defaultValue: false });
 
   const response = await form.show(player);
   if (response.canceled) return;
 
   const values = response.formValues;
-  if (!values || values.length < 3) return;
+  if (!values || values.length < 2) return;
 
-  // 兼容 label 占索引 (3字段+label=4, 3字段无label=3)
-  const offset = values.length >= 4 ? 1 : 0;
-  const newEnabled = values[0 + offset] as boolean;
-  const newRoleIndex = values[1 + offset] as number;
-  const shouldOrganize = values[2 + offset] as boolean;
+  // ── 解析表单值 ──
+  // 非漏斗: [toggle(启用), dropdown(角色), toggle(整理)] = 3 个值
+  // 漏斗:   [toggle(启用),                toggle(整理)] = 2 个值（角色固定为 input）
+  // label 不占用 formValues 索引
+  const newEnabled = values[0] as boolean;
+  const newRole: ContainerRole = isHopper ? "input" : ROLE_ORDER[values[1] as number];
+  const shouldOrganize = values[isHopper ? 1 : 2] as boolean;
 
   // ── 整理容器 ──
   if (shouldOrganize) {
@@ -330,7 +343,6 @@ export async function showContainerRoleMenu(
 
   // ── 提交角色和状态变更 ──
   try {
-    const newRole = ROLE_ORDER[newRoleIndex];
     service.setContainerRoleAndState(warehouse.id, containerId, newRole, newEnabled);
     player.sendMessage(`§a容器已更新：${newEnabled ? "启用" : "禁用"}，角色=${ROLE_LABELS[newRole]}`);
 

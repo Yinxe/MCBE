@@ -13,7 +13,7 @@ import { toBlockLocation, ROLE_LABELS } from "../types";
 import { DEFAULT_WAREHOUSE_SETTINGS, normalizeWarehouseId, WarehouseRepository } from "../storage/WarehouseRepository";
 import { areaVolume, areasTooClose, isInsideArea, normalizeArea } from "../util/Vector";
 import { ContainerScanner } from "./ContainerScanner";
-import { hasInventory, isSupportedContainerType } from "./ContainerTypes";
+import { hasInventory, isHopperType, isSupportedContainerType } from "./ContainerTypes";
 import { makeContainerId } from "./ContainerId";
 import { compareLocationForPrimary } from "../util/Vector";
 import { BoundaryDisplay } from "./BoundaryDisplay";
@@ -601,10 +601,13 @@ export class WarehouseService {
     const dim = world.getDimension(warehouse.dimensionId);
     const occupied = this.scanner.getOccupiedLocations(dim, location, block);
 
+    // 漏斗自动强制为 input 角色，不可作为存储容器
+    const role = isHopperType(block.typeId) ? "input" : warehouse.settings.defaultNewContainerRole;
+
     const newContainers = this.mergeContainer(
       warehouse.containers, occupied,
       warehouse.dimensionId,
-      { role: warehouse.settings.defaultNewContainerRole, enabled: warehouse.settings.defaultNewContainerEnabled },
+      { role, enabled: warehouse.settings.defaultNewContainerEnabled },
     );
 
     // 校验容器数量上限
@@ -619,7 +622,7 @@ export class WarehouseService {
         isMerge
           ? `§a箱子已合并为大箱子，容器信息已更新（${block.typeId.replace("minecraft:", "")}）`
           : `§a容器已添加至仓库 "${warehouse.displayName}"` +
-            `（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[warehouse.settings.defaultNewContainerRole]}）`
+            `（${block.typeId.replace("minecraft:", "")}，角色：${ROLE_LABELS[role]}）`
       );
     } catch { /* 忽略 */ }
   }
