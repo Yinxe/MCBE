@@ -26,15 +26,11 @@ const log = new Logger("SorterEngine");
  *
  * 按照以下优先级依次尝试放置物品：
  *
- * 1. **已有同类物品的普通容器**（优先利用运行时 `itemTypeIndex` 索引实现快速查找，
- *    索引会在发现脏数据时惰性修正）。
- * 2. **大宗容器**（盒箱混存——优先填满箱内潜影盒，再填充空槽位，以第一个物品确定种类）。
- *    放大宗前放家庭前：高产量单品（如白色羊毛）应优先路由到专用大宗箱，
- *    而不是与少量彩色羊毛一起混入家庭箱。
- * 3. **同族物品的普通容器**（仅当该物品所属的族在 `enabledFamilies` 中启用时生效，
- *    将同一族的物品聚集到同一个容器中）。
- * 4. **空的普通容器**（仅在 `autoCreateCategories` 开启时启用，用于自动创建新分类）。
- * 5. **杂项容器**（兜底，任何物品最终都能放入杂项容器）。
+ * 1. **大宗容器**（单物品——专收单一类型高产量物品，盒箱混存。空箱需玩家配置 bulkTypeId）
+ * 2. **已有同类物品的普通容器**（多物品——优先利用运行时 `itemTypeIndex` 索引快速查找）
+ * 3. **同族物品的普通容器**（家庭同族——仅当物品所属族在 `enabledFamilies` 中启用时生效）
+ * 4. **空的普通容器**（自动创建分类——仅在 `autoCreateCategories` 开启时启用）
+ * 5. **杂项容器**（兜底，任何物品最终都能放入杂项容器）
  *
  * ### 设计要点
  *
@@ -258,12 +254,11 @@ export class SorterEngine {
    * 按优先级尝试将物品堆放入仓库中的目标容器。
    *
    * 优先级顺序：
-   * 1. **已有同类物品的普通容器** —— 通过 `findExistingTypeContainers` 查找，
-   *    利用运行时索引加速。
-   * 2. **大宗容器** —— 高产量单品优先路由到专用大宗箱。
-   * 3. **同族物品的普通容器** —— 同一家族（如各色羊毛）聚集到同一容器。
-   * 4. **空的普通容器** —— 当 `autoCreateCategories` 开启时启用，用于自动创建新分类。
-   * 5. **杂项容器** —— 兜底方案，任何物品最终都能放入杂项容器。
+   * 1. **大宗容器**（单物品）—— 高产量单品优先路由到专用大宗箱。
+   * 2. **已有同类物品的普通容器**（多物品）—— 利用运行时索引加速。
+   * 3. **同族物品的普通容器**（家庭同族）—— 同一家族聚集到同一容器。
+   * 4. **空的普通容器**（自动创建分类）—— 当 `autoCreateCategories` 开启时启用。
+   * 5. **杂项容器**（兜底）—— 任何物品最终都能放入杂项容器。
    *
    * 每一优先级都会调用 `tryContainers` 遍历候选容器列表并尝试放入。
    * 一旦整堆全部放完（返回 undefined），立即返回，不再尝试后续优先级。
@@ -327,7 +322,19 @@ export class SorterEngine {
       if (remaining === undefined) return undefined;
     }
 
-    // ── 优先级 4：杂项（兜底）──────────────────────────────────
+    // ── 优先级 4：自动创建分类 ────────────────────────────────
+    // 当开启 autoCreateCategories 时，找一个空的 normal 容器
+    // 作为新物品类型的专用分类箱。
+    // 放在杂项之前：优先为物品建立专有分类，避免散落入杂项。
+    if (warehouse.settings.autoCreateCategories) {
+      const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
+      if (freeNormal) {
+        remaining = this.tryContainers(remaining, [freeNormal], warehouse, model, dimension, typeId, "autocreate");
+        if (remaining === undefined) return undefined;
+      }
+    }
+
+    // ── 优先级 5：杂项（兜底）──────────────────────────────────
     remaining = this.tryContainers(remaining, model.miscContainerIds, warehouse, model, dimension, typeId, "misc");
     return remaining; // 返回 undefined 表示最后一个容器处理完了全部
   }
@@ -535,17 +542,60 @@ export class SorterEngine {
     typeId: string,
     dimension: Dimension
   ): ContainerId[] {
-    // 判断是否有现成的索引记录
     const hasIndexEntry = model.itemTypeIndex.has(typeId);
-    // 有索引走快速路径（候选集较小），否则全量扫描所有普通容器
-    const candidates = hasIndexEntry ? model.itemTypeIndex.get(typeId)! : model.normalContainerIds;
 
+    // ── 阶段 1：校验候选容器 ─────────────────────────────────
+    // 有索引时走快速路径（候选集小），无索引时全量扫描所有 normal 容器
+    const { valid, stale } = this.validateIndexCandidates(
+      hasIndexEntry,
+      hasIndexEntry ? model.itemTypeIndex.get(typeId)! : model.normalContainerIds,
+      warehouse, model, typeId, dimension
+    );
+
+    // ── 阶段 2：惰性清除脏索引 ───────────────────────────────
+    if (hasIndexEntry && stale.size > 0) {
+      this.cleanStaleIndexEntries(model, typeId, stale);
+    }
+
+    // ── 阶段 3：索引全脏后的零延迟回退 ────────────────────────
+    // 场景：玩家把圆石从 normal 箱 A 移到 normal 箱 B。
+    //       索引指向 A（{"cobblestone":["A"]}），但 A 已无圆石。
+    //       阶段 1 会清空索引条目，valid 为空。
+    //       此时物品会错误地落入杂项箱。
+    // 修复：立即全量扫描，零回合延迟。
+    if (hasIndexEntry && stale.size > 0 && valid.length === 0) {
+      this.fullScanNormalContainers(warehouse, model, typeId, dimension, valid);
+    }
+
+    // ── 阶段 4：学习新发现的容器到索引 ───────────────────────
+    // 回退路径下的扫描结果写入索引，下次同类物品走快速路径
+    if (!hasIndexEntry && valid.length > 0) {
+      model.itemTypeIndex.set(typeId, [...valid]);
+    }
+
+    return valid;
+  }
+
+  /**
+   * 校验候选容器列表中哪些仍然有效，哪些已过时。
+   *
+   * @param hasIndexEntry - 是否有索引记录（决定脏标记行为）
+   * @param candidates    - 候选容器 ID 列表
+   * @returns 有效列表和脏数据集合
+   */
+  private validateIndexCandidates(
+    hasIndexEntry: boolean,
+    candidates: ContainerId[],
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    typeId: string,
+    dimension: Dimension
+  ): { valid: ContainerId[]; stale: Set<ContainerId> } {
     const valid: ContainerId[] = [];
     const stale = new Set<ContainerId>();
 
     for (const containerId of candidates) {
       const stored = warehouse.containers[containerId];
-      // 容器记录不存在或角色不再是 "normal" → 只有在索引路径下才标记为脏
       if (!stored || stored.role !== "normal" || !stored.enabled) {
         if (hasIndexEntry) stale.add(containerId);
         continue;
@@ -553,8 +603,8 @@ export class SorterEngine {
 
       const container = getContainerFromStored(dimension, stored);
       if (!container) {
-        // 容器方块暂时不可达（区块未加载）—— 如果是索引路径则保留在索引中，
-        // 但本次不将该容器纳入有效列表（避免因暂时不可达而错误清理索引）。
+        // 容器不可达（区块未加载）→ 索引路径下保留在索引但本次跳过，
+        // 避免因暂时不可达而错误清理索引
         if (hasIndexEntry) valid.push(containerId);
         continue;
       }
@@ -562,56 +612,61 @@ export class SorterEngine {
       if (containerHasType(container, typeId)) {
         valid.push(containerId);
       } else if (hasIndexEntry) {
-        // 容器可达但不包含该类物品 → 索引已过时，标记为脏
         stale.add(containerId);
       }
-      // 回退路径下的候选容器即使不匹配也不标记为脏
-      // （因为它们本来就不在索引中，不存在"脏"的概念）
+      // 回退路径（无索引）的候选即使不匹配也不标记脏
+      // 因为它们本来就不在索引中
     }
 
-    // 惰性清除索引中的脏条目
-    if (hasIndexEntry && stale.size > 0) {
-      const updated = candidates.filter((id) => !stale.has(id));
-      if (updated.length > 0) {
-        model.itemTypeIndex.set(typeId, updated);
-      } else {
-        // 该类型的所有容器都脏了，删除整个条目
-        model.itemTypeIndex.delete(typeId);
+    return { valid, stale };
+  }
+
+  /**
+   * 从索引中惰性清除脏条目。
+   * 如果某类型下所有容器都脏了，删除整个条目。
+   */
+  private cleanStaleIndexEntries(
+    model: WarehouseRuntimeModel,
+    typeId: string,
+    stale: Set<ContainerId>
+  ): void {
+    const candidates = model.itemTypeIndex.get(typeId);
+    if (!candidates) return;
+
+    const updated = candidates.filter((id) => !stale.has(id));
+    if (updated.length > 0) {
+      model.itemTypeIndex.set(typeId, updated);
+    } else {
+      model.itemTypeIndex.delete(typeId);
+    }
+  }
+
+  /**
+   * 全量扫描所有 normal 容器，查找包含指定物品类型的容器。
+   * 跳过已在 candidates 中检查过的容器。
+   */
+  private fullScanNormalContainers(
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    typeId: string,
+    dimension: Dimension,
+    result: ContainerId[]
+  ): void {
+    for (const containerId of model.normalContainerIds) {
+      if (result.includes(containerId)) continue;
+      const stored = warehouse.containers[containerId];
+      if (!stored || stored.role !== "normal" || !stored.enabled) continue;
+      const container = getContainerFromStored(dimension, stored);
+      if (!container) continue;
+      if (containerHasType(container, typeId)) {
+        result.push(containerId);
       }
     }
 
-    // ── 关键修复：索引全部过期后的全量回退扫描 ──────────────
-    // 场景：玩家把圆石从 normal 箱 A 移到 normal 箱 B。
-    //       索引指向 A（{"cobblestone":["A"]}），但 A 已无圆石。
-    //       上述逻辑会删除索引条目，然后返回空列表。
-    //       此时物品会错误地落入杂项箱。
-    //
-    // 修复：索引被清空后，立即全量扫描所有 normal 容器，
-    //       找出物品实际所在的箱子，从而做到**零回合延迟**。
-    if (hasIndexEntry && stale.size > 0 && valid.length === 0) {
-      for (const containerId of model.normalContainerIds) {
-        // 跳过已在候选列表（已检查过）的容器
-        if (candidates.includes(containerId)) continue;
-        const stored = warehouse.containers[containerId];
-        if (!stored || stored.role !== "normal" || !stored.enabled) continue;
-        const container = getContainerFromStored(dimension, stored);
-        if (!container) continue;
-        if (containerHasType(container, typeId)) {
-          valid.push(containerId);
-        }
-      }
-      // 将新发现的结果写回索引，下次走快速路径
-      if (valid.length > 0) {
-        model.itemTypeIndex.set(typeId, [...valid]);
-      }
+    // 将新发现的结果写回索引，下次走快速路径
+    if (result.length > 0) {
+      model.itemTypeIndex.set(typeId, [...result]);
     }
-
-    // 回退路径下发现的新容器写回索引，下次同类物品分拣走快速路径
-    if (!hasIndexEntry && valid.length > 0) {
-      model.itemTypeIndex.set(typeId, [...valid]);
-    }
-
-    return valid;
   }
 
   /**
@@ -799,6 +854,29 @@ export class SorterEngine {
   }
 
   // ─── 工具方法 ──────────────────────────────────────────────────
+
+  /**
+   * 查找一个空的 normal 容器，用于自动创建新分类。
+   *
+   * 遍历 normal 容器列表，返回第一个完全空的容器 ID。
+   * 如果所有 normal 容器都已有物品，则放弃自动创建（本次走杂项）。
+   */
+  private findEmptyNormalContainer(
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    dimension: Dimension
+  ): ContainerId | undefined {
+    for (const containerId of model.normalContainerIds) {
+      const stored = warehouse.containers[containerId];
+      if (!stored || !stored.enabled) continue;
+      const target = getContainerFromStored(dimension, stored);
+      if (!target) continue;
+      if (isContainerEmpty(target)) return containerId;
+    }
+    return undefined;
+  }
+
+  /**
 
   /**
    * 安全获取维度对象，避免因维度 ID 无效而抛出异常。

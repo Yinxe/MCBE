@@ -312,7 +312,7 @@ export class WarehouseService {
       ...warehouse,
       settings: { ...warehouse.settings, ...settings },
     };
-    this.repository.save(updated);
+    this.repository.saveMetaOnly(updated);
     this.markRuntimeDirty(id);
     this.notifyScheduler?.(id);
 
@@ -341,7 +341,7 @@ export class WarehouseService {
       ...warehouse,
       displayName: newName.trim(),
     };
-    this.repository.save(updated);
+    this.repository.saveMetaOnly(updated);
     this.markRuntimeDirty(id);
     return updated;
   }

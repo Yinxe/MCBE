@@ -134,6 +134,28 @@ export class WarehouseRepository {
   }
 
   /**
+   * 仅更新仓库元数据（不涉及容器变更）。
+   *
+   * 用于 updateSettings / renameWarehouse 等只改 metadata 的场景，
+   * 避免全量 save() 重写所有容器分片的开销。
+   *
+   * @param data 仓库完整数据（只取其 meta 字段，containers 被忽略）
+   */
+  saveMetaOnly(data: WarehouseData): void {
+    const existingMeta = this.store.getJson<WarehouseMeta | undefined>(metaKey(data.id), undefined);
+    if (!existingMeta) return;
+
+    const meta: WarehouseMeta = {
+      ...existingMeta,
+      displayName: data.displayName,
+      area: data.area,
+      ownerId: data.ownerId,
+      settings: data.settings,
+    };
+    this.store.setJson(metaKey(data.id), meta);
+  }
+
+  /**
    * 将仓库数据完整持久化（覆盖写入）。
    *
    * **崩溃安全设计：**
