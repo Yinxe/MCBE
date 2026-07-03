@@ -609,6 +609,12 @@ export class SorterEngine {
         continue;
       }
 
+      // 空箱短路：容器全空则不可能包含目标物品，无需逐槽扫描
+      if (isContainerEmpty(container)) {
+        if (hasIndexEntry) stale.add(containerId);
+        continue;
+      }
+
       if (containerHasType(container, typeId)) {
         valid.push(containerId);
       } else if (hasIndexEntry) {
@@ -658,6 +664,8 @@ export class SorterEngine {
       if (!stored || stored.role !== "normal" || !stored.enabled) continue;
       const container = getContainerFromStored(dimension, stored);
       if (!container) continue;
+      // 空箱短路：容器全空则不可能包含目标物品
+      if (isContainerEmpty(container)) continue;
       if (containerHasType(container, typeId)) {
         result.push(containerId);
       }
