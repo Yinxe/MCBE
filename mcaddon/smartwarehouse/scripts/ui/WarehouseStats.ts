@@ -302,7 +302,8 @@ export function formatWarehouseStats(stats: WarehouseStats): string {
     );
   }
 
-  const lines = [`§7仓库 : ${stats.displayName}`, tbl.render(4)];
+  // margin=0 缩小列宽，gaps=[1,1,3] 增加 STORAGE 列前间距
+  const lines = [`§7仓库 : ${stats.displayName}`, tbl.render(0, [1, 1, 3])];
   if (stats.enabledFamiliesCount > 0) lines.push(` §bFamily:${stats.enabledFamiliesCount}`);
   return lines.join("\n");
 }

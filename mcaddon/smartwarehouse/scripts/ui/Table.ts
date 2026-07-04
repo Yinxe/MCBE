@@ -28,18 +28,9 @@ export class Cell {
     readonly align: Align = "left"
   ) {}
 
-  /** § 颜色码在 MC ModalForm 中占用 2 个字符位置 */
+  /** 视觉长度：§ 颜色码不占位（MC 中不可见），只计可见字符 */
   static visualLen(s: string): number {
-    let len = 0;
-    for (let i = 0; i < s.length; i++) {
-      if (s[i] === "§" && i + 1 < s.length) {
-        len += 2; // § + 字母
-        i++; // 跳过颜色字母
-      } else {
-        len += 1;
-      }
-    }
-    return len;
+    return s.replace(/§[0-9a-fklmnor]/g, "").length;
   }
 
   static left(c: string | number): Cell {
@@ -80,8 +71,12 @@ export class Table {
     return this;
   }
 
-  /** 渲染为多行文本 */
-  render(margin = 2): string {
+  /**
+   * 渲染为多行文本。
+   * @param margin 每列左右边距
+   * @param gaps   列间额外间隙（长度 = cols - 1），如 [1, 3] 表示第 0-1 列间 1 空格，第 1-2 列间 3 空格
+   */
+  render(margin = 2, gaps?: number[]): string {
     if (this.rows.length === 0) return "";
 
     // 计算每列最大视觉宽度 + 边距
@@ -92,6 +87,8 @@ export class Table {
       }
     }
 
+    const defaultGap = 1;
+
     return this.rows
       .map((row) =>
         row
@@ -99,17 +96,21 @@ export class Table {
             const w = colW[c];
             const v = Cell.visualLen(cell.content);
             const pad = w - v;
-            if (cell.align === "left") {
-              return cell.content + " ".repeat(pad);
-            } else if (cell.align === "right") {
-              return " ".repeat(pad) + cell.content;
-            } else {
-              const l = Math.floor(pad / 2);
-              const r = Math.ceil(pad / 2);
-              return " ".repeat(l) + cell.content + " ".repeat(r);
-            }
+            const padded =
+              cell.align === "left"
+                ? cell.content + " ".repeat(pad)
+                : cell.align === "right"
+                  ? " ".repeat(pad) + cell.content
+                  : (() => {
+                      const l = Math.floor(pad / 2);
+                      const r = Math.ceil(pad / 2);
+                      return " ".repeat(l) + cell.content + " ".repeat(r);
+                    })();
+            // 列间间隙（最后一列不加）
+            const gap = c < this.cols - 1 ? (gaps?.[c] ?? defaultGap) : 0;
+            return padded + " ".repeat(gap);
           })
-          .join(" ")
+          .join("")
       )
       .join("\n");
   }

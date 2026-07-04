@@ -50,6 +50,9 @@ export class SortingScheduler {
   /** 玩家位置缓存（维度ID → 位置列表），每 tick 刷新 */
   private playerCache = new Map<string, { x: number; z: number }[]>();
 
+  /** 仓库的最后在场玩家 ID（用于停用时通知，即使玩家已传走） */
+  private readonly lastVisitor = new Map<WarehouseId, string>();
+
   constructor(
     private readonly repository: WarehouseRepository,
     private readonly engine: SorterEngine
@@ -137,6 +140,14 @@ export class SortingScheduler {
 
       const nearPlayer = this.hasNearbyPlayer(w.dimensionId, w.area);
 
+      // 记录最后一个在场的玩家（用于停用时通知，即使传走也能收到）
+      if (nearPlayer) {
+        const visitor = world.getPlayers().find(
+          (p) => p.dimension.id === w.dimensionId && isNearAreaXZ({ x: p.location.x, z: p.location.z }, w.area, SortingScheduler.PROXIMITY_MARGIN)
+        );
+        if (visitor) this.lastVisitor.set(w.id, visitor.id);
+      }
+
       if (nearPlayer) {
         // 有玩家附近 → 记录活跃时间，必要时惰性激活
         this.lastActiveTick.set(w.id, now);
@@ -182,13 +193,15 @@ export class SortingScheduler {
     this.handles.set(id, handle);
     log.info(`仓库 ${id} 已惰性激活（间隔=${speed} tick）`);
 
-    // 通知附近玩家
-    const warehouse = this.repository.load(id);
-    if (warehouse) {
-      this.messageNearbyPlayers(
-        warehouse.dimensionId, warehouse.area,
-        `§a仓库 §e${warehouse.displayName}§a 已激活，开始分拣物品`
-      );
+    // 通知范围内所有玩家
+    const w = this.repository.load(id);
+    if (w) {
+      for (const p of world.getPlayers()) {
+        if (p.dimension.id !== w.dimensionId) continue;
+        if (isNearAreaXZ({ x: p.location.x, z: p.location.z }, w.area, SortingScheduler.PROXIMITY_MARGIN)) {
+          try { p.sendMessage(`§a仓库 §e${w.displayName}§a 已激活，开始分拣`); } catch { /* 忽略 */ }
+        }
+      }
     }
   }
 
@@ -204,25 +217,23 @@ export class SortingScheduler {
     this.lastActiveTick.delete(id);
     this.engine.releaseRuntime(id);
 
-    if (warehouse) {
-      this.messageNearbyPlayers(
-        warehouse.dimensionId, warehouse.area,
-        `§7仓库 §e${displayName}§7 已休眠（附近无玩家）`
-      );
-    }
+    // 通知最后一个在场的玩家（即使已离开也能收到），然后清除记录
+    this.messageLastVisitor(id, `§7仓库 §e${displayName}§7 已休眠（附近无玩家）`);
+    this.lastVisitor.delete(id);
   }
 
   /**
-   * 向仓库区域附近的玩家发送消息。
+   * 向最后一个在场的玩家发送消息（忽略维度/距离，玩家可能已传送离开）。
    */
-  private messageNearbyPlayers(dimensionId: string, area: WarehouseArea, message: string): void {
+  private messageLastVisitor(warehouseId: WarehouseId, message: string): void {
+    const visitorId = this.lastVisitor.get(warehouseId);
+    if (!visitorId) return;
     for (const player of world.getPlayers()) {
-      if (player.dimension.id !== dimensionId) continue;
-      if (isNearAreaXZ({ x: player.location.x, z: player.location.z }, area, SortingScheduler.PROXIMITY_MARGIN)) {
-        try {
-          player.sendMessage(message);
-        } catch { /* 玩家离线，静默忽略 */ }
-      }
+      if (player.id !== visitorId) continue;
+      try {
+        player.sendMessage(message);
+      } catch { /* 玩家离线，静默忽略 */ }
+      break;
     }
   }
 
@@ -278,18 +289,13 @@ export class SortingScheduler {
   stopAll(): void {
     this.handles.forEach((handle, id) => {
       system.clearRun(handle);
-      // 停用前加载仓库信息用于通知附近玩家
-      const warehouse = this.repository.load(id);
-      if (warehouse) {
-        this.messageNearbyPlayers(
-          warehouse.dimensionId, warehouse.area,
-          `§7仓库 §e${warehouse.displayName}§7 调度已停止`
-        );
-      }
+      const w = this.repository.load(id);
+      this.messageLastVisitor(id, `§7仓库 §e${w?.displayName ?? id}§7 调度已停止`);
       this.engine.releaseRuntime(id);
     });
     this.handles.clear();
     this.lastActiveTick.clear();
+    this.lastVisitor.clear();
     log.info("已停止所有仓库调度");
   }
 }
