@@ -93,6 +93,9 @@ function playEffect(
   molang.setFloat("color_g", color.g);
   molang.setFloat("color_b", color.b);
 
+  // 跳过未加载区块
+  try { dimension.getBlock(pos); } catch { return; }
+
   const center = {
     x: pos.x + 0.5,
     y: pos.y + 0.455,
@@ -151,6 +154,8 @@ export function playSearchEffect(
     molang.setFloat("color_b", 0.98);
 
     for (const loc of locations) {
+      // 跳过未加载区块（区块未加载时 getBlock 抛出异常）
+      try { dimension.getBlock(loc); } catch { continue; }
       dimension.spawnParticle("smartwarehouse:sort", {
         x: loc.x + 0.5,
         y: loc.y + 0.455,

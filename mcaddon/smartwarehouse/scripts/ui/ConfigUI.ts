@@ -5,15 +5,16 @@
  *
  * 职责：
  * 1. 提供信物配选择界面（下拉选择框）
- * 2. 仅管理员可访问
- * 3. 配置通过 ModConfigStore 持久化到 DynamicProperty
+ * 2. 配置仓库最大体积和单仓库最大容器数
+ * 3. 仅管理员可访问
+ * 4. 配置通过 ModConfigStore 持久化到 DynamicProperty
  * ============================================================================
  */
 
 import { type Player } from "@minecraft/server";
 import { ModalFormBuilder } from "./FormHelper";
 import type { ModConfigStore } from "../storage/ModConfigStore";
-import { TOKEN_OPTIONS } from "../storage/ModConfigStore";
+import { TOKEN_OPTIONS, VOLUME_OPTIONS, CONTAINER_OPTIONS } from "../storage/ModConfigStore";
 import { canManageWarehouse } from "../util/PlayerAuth";
 
 /**
@@ -23,42 +24,48 @@ import { canManageWarehouse } from "../util/PlayerAuth";
  * @param configStore - 模组配置仓储
  */
 export async function showConfigUI(player: Player, configStore: ModConfigStore): Promise<void> {
-  // 权限检查：仅管理员
   if (!canManageWarehouse(player)) {
     player.sendMessage("§c你没有权限修改模组配置（需要 op）");
     return;
   }
 
-  const current = configStore.load();
-  const currentTokenId = current.tokenItemId;
+  const config = configStore.load();
+  const tokenIdx = TOKEN_OPTIONS.findIndex((o) => o.itemId === config.tokenItemId);
+  const volIdx = VOLUME_OPTIONS.findIndex((o) => o.value === config.maxWarehouseVolume);
+  const conIdx = CONTAINER_OPTIONS.findIndex((o) => o.value === config.maxContainers);
 
-  // 找出当前信物在选项列表中的索引
-  const defaultIndex = TOKEN_OPTIONS.findIndex(
-    (opt) => opt.itemId === currentTokenId
-  );
-
-  const form = new ModalFormBuilder()
+  const vals = await new ModalFormBuilder()
     .title("SmartWarehouse 配置")
-    .label("info", "§7配置模组的全局信物物品\n手持信物可替代木锄触发仓库交互和边界显示")
-    .dropdown(
-      "token",
-      "§a选择信物",
-      TOKEN_OPTIONS.map((opt) => opt.label),
-      { defaultValueIndex: defaultIndex >= 0 ? defaultIndex : 0 }
-    );
+    .label("info", "§7配置模组的全局设置")
+    .dropdown("token", "§a选择信物", TOKEN_OPTIONS.map((o) => o.label), { defaultValueIndex: Math.max(0, tokenIdx) })
+    .dropdown("volume", "§a仓库最大体积", VOLUME_OPTIONS.map((o) => o.label), { defaultValueIndex: Math.max(0, volIdx) })
+    .dropdown("containers", "§a单仓库最大容器数", CONTAINER_OPTIONS.map((o) => o.label), { defaultValueIndex: Math.max(0, conIdx) })
+    .show(player);
 
-  const vals = await form.show(player);
   if (!vals) return;
-  const selectedIndex = vals.token as number;
 
-  const selected = TOKEN_OPTIONS[selectedIndex];
-  if (!selected) return;
+  const tIdx = vals.token as number;
+  const vIdx = vals.volume as number;
+  const cIdx = vals.containers as number;
 
-  configStore.setTokenId(selected.itemId);
+  const selToken = TOKEN_OPTIONS[tIdx];
+  const selVol = VOLUME_OPTIONS[vIdx];
+  const selCon = CONTAINER_OPTIONS[cIdx];
 
-  if (selected.itemId === null) {
-    player.sendMessage("§a已关闭信物，手持任何物品均不触发仓库交互");
-  } else {
-    player.sendMessage(`§a信物已设置为 ${selected.label}§a，手持该物品即可触发仓库交互`);
+  if (selVol && selCon) {
+    configStore.save({
+      tokenItemId: selToken?.itemId ?? null,
+      maxWarehouseVolume: selVol.value,
+      maxContainers: selCon.value,
+    });
   }
+
+  if (selToken?.itemId === null) {
+    player.sendMessage("§a已关闭信物，手持任何物品均不触发仓库交互");
+  } else if (selToken) {
+    player.sendMessage(`§a信物已设置为 ${selToken.label}§a，手持该物品即可触发仓库交互`);
+  }
+  player.sendMessage(
+    `§7仓库最大体积: ${selVol?.label ?? "32×32×16"}，最大容器数: ${selCon?.label ?? "200"}`
+  );
 }

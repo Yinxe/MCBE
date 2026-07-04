@@ -40,6 +40,7 @@ const boundaryDisplay = new BoundaryDisplay(configStore);
 // 第五个参数为边界显示实例：showBoundary 开关变化时自动启停粒子渲染。
 const service = new WarehouseService(
   repository,
+  configStore,
   undefined,
   (id) => runtime.markDirty(id),
   (id) => scheduler.refreshOne(id),

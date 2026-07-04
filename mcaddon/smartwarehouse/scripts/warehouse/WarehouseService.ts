@@ -20,21 +20,7 @@ import { BoundaryDisplay } from "./BoundaryDisplay";
 import { diffRescanContainers } from "./WarehouseRescanDiff";
 import { invalidateWarehouseStats } from "../ui/WarehouseStats";
 import type { WarehouseRescanDiff } from "./WarehouseRescanDiff";
-
-/**
- * 单次扫描操作允许的最大方块体积上限。
- *
- * 32768 = 32×32×32（即单仓库最大边长 32 格）。
- * 该限制确保同步全区域扫描在已加载区块范围内的单个 tick 内完成。
- * 超出此体积可能导致服务端卡顿或被看门狗（watchdog）终止。
- */
-const MAX_SCAN_VOLUME = 32_768;
-
-/**
- * 单个仓库允许容纳的最大容器数量上限。
- * 超过此数量的容器会被拒绝注册，防止数据膨胀。
- */
-const MAX_CONTAINERS = 512;
+import type { ModConfigStore } from "../storage/ModConfigStore";
 
 /**
  * 仓库之间的最小间距（方块数）。
@@ -67,6 +53,7 @@ export class WarehouseService {
    */
   constructor(
     private readonly repository: WarehouseRepository,
+    private readonly configStore: ModConfigStore,
     private readonly scanner = new ContainerScanner(),
     private readonly markRuntimeDirty: (warehouseId: WarehouseId) => void = () => undefined,
     private readonly notifyScheduler?: (warehouseId: WarehouseId) => void,
@@ -407,7 +394,8 @@ export class WarehouseService {
    */
   private assertScanVolume(area: WarehouseArea): void {
     const volume = areaVolume(area);
-    if (volume > MAX_SCAN_VOLUME) throw new Error(`仓库区域过大：${volume} > ${MAX_SCAN_VOLUME}`);
+    const maxVol = this.configStore.getMaxVolume();
+    if (volume > maxVol) throw new Error(`仓库区域过大：${volume} > ${maxVol}`);
   }
 
   /**
@@ -433,7 +421,8 @@ export class WarehouseService {
    */
   private assertContainerCount(containers: Record<ContainerId, StoredContainer>): void {
     const count = Object.keys(containers).length;
-    if (count > MAX_CONTAINERS) throw new Error(`仓库容器过多：${count} > ${MAX_CONTAINERS}`);
+    const maxC = this.configStore.getMaxContainers();
+    if (count > maxC) throw new Error(`仓库容器过多：${count} > ${maxC}`);
   }
 
   /**

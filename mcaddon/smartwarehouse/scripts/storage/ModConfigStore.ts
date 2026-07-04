@@ -51,12 +51,34 @@ export const TOKEN_OPTIONS: { label: string; itemId: string | null }[] = [
   { label: `§f${labelFromMap("minecraft:arrow")}`, itemId: "minecraft:arrow" },
 ];
 
+// ─── 选项常量 ──────────────────────────────────────────────────
+
+/** 仓库最大体积选项列表（用于 UI 下拉框） */
+export const VOLUME_OPTIONS: { label: string; value: number }[] = [
+  { label: "16×16×16 (4,096 方块)", value: 16 * 16 * 16 },
+  { label: "24×24×16 (9,216 方块)", value: 24 * 24 * 16 },
+  { label: "32×32×16 (16,384 方块) 推荐", value: 32 * 32 * 16 },
+  { label: "48×48×16 (36,864 方块)", value: 48 * 48 * 16 },
+];
+
+/** 单仓库最大容器数选项列表（用于 UI 下拉框） */
+export const CONTAINER_OPTIONS: { label: string; value: number }[] = [
+  { label: "50 个容器", value: 50 },
+  { label: "100 个容器", value: 100 },
+  { label: "200 个容器 推荐", value: 200 },
+  { label: "512 个容器", value: 512 },
+];
+
 // ─── 类型 ───────────────────────────────────────────────────────
 
 /** 模组配置数据结构 */
 export interface ModConfig {
   /** 信物物品 ID，null 表示关闭 */
   tokenItemId: string | null;
+  /** 单个仓库最大体积上限 */
+  maxWarehouseVolume: number;
+  /** 单个仓库最大容器数上限 */
+  maxContainers: number;
 }
 
 /** 信物选项（用于 UI 下拉框） */
@@ -87,10 +109,9 @@ export class ModConfigStore {
       try {
         const parsed = JSON.parse(raw) as Partial<ModConfig>;
         this.cached = {
-          tokenItemId:
-            parsed.tokenItemId === undefined
-              ? DEFAULT_TOKEN
-              : parsed.tokenItemId,
+          tokenItemId: parsed.tokenItemId ?? DEFAULT_TOKEN,
+          maxWarehouseVolume: parsed.maxWarehouseVolume ?? 16384,
+          maxContainers: parsed.maxContainers ?? 200,
         };
         return this.cached;
       } catch {
@@ -98,7 +119,7 @@ export class ModConfigStore {
       }
     }
 
-    this.cached = { tokenItemId: DEFAULT_TOKEN };
+    this.cached = { tokenItemId: DEFAULT_TOKEN, maxWarehouseVolume: 16384, maxContainers: 200 };
     return this.cached;
   }
 
@@ -125,7 +146,8 @@ export class ModConfigStore {
    * @param itemId - 物品 ID，传 null 关闭信物
    */
   setTokenId(itemId: string | null): void {
-    this.save({ tokenItemId: itemId });
+    const config = this.load();
+    this.save({ ...config, tokenItemId: itemId });
   }
 
   /**
@@ -139,6 +161,12 @@ export class ModConfigStore {
     if (tokenId === null) return false; // 信物关闭，永不匹配
     return heldTypeId === tokenId;
   }
+
+  /** 获取仓库最大扫描体积 */
+  getMaxVolume(): number { return this.load().maxWarehouseVolume; }
+
+  /** 获取单仓库最大容器数 */
+  getMaxContainers(): number { return this.load().maxContainers; }
 
   /**
    * 使缓存失效，下次读取时从 DynamicProperty 重新加载。
