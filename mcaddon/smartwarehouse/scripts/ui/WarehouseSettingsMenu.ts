@@ -10,9 +10,25 @@ import { showFamilyConfigMenu } from "./FamilyConfigMenu";
 import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
 
 /**
+ * 显示通用操作确认对话框。
+ * @returns true 表示用户点击了确认
+ */
+async function showConfirm(player: Player, title: string, body: string, confirmLabel: string): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    new ActionFormBuilder()
+      .title(title)
+      .body(body)
+      .button(confirmLabel, () => resolve(true))
+      .button("取消", () => resolve(false))
+      .show(player)
+      .then(() => resolve(false)); // 取消/关闭也返回 false
+  });
+}
+
+/**
  * 显示仓库设置表单。
  * 通过 ModalForm 提供仓库名称、默认角色、启用状态、处理速度等设置项。
- * 底部操作：刷新统计、家庭成员、重新扫描、删除仓库、调整区域（互斥）。
+ * 底部操作区：刷新容器、修复仓库、删除仓库、刷新统计、家庭成员、调整区域。
  *
  * @param player     - 操作的玩家
  * @param warehouseId - 要设置的仓库 ID
@@ -39,7 +55,6 @@ export async function showWarehouseSettingsMenu(
     const stats = getWarehouseStats(warehouse);
     statsLabel = formatWarehouseStats(stats);
   } catch {
-    // 扫描失败时回退到简单概览
     const cList = Object.values(warehouse.containers);
     statsLabel =
       `§7容器 §f${cList.length}个  ` +
@@ -79,10 +94,11 @@ export async function showWarehouseSettingsMenu(
     )
     .toggle("capacityWarning", "§e容量预警", { defaultValue: settings.capacityWarning })
     .label("opSep", "§8━━━ 操作 ━━━")
+    .toggle("rescan", "§a刷新容器（重新扫描仓库容器列表）")
+    .toggle("repair", "§6修复仓库（检查并修复仓库数据完整性）")
+    .toggle("delete", "§c删除此仓库（不可撤销）")
     .toggle("refreshStats", "§a刷新存储统计（重新扫描容器统计信息）")
     .toggle("familyConfig", "§b家庭成员（提交后打开）")
-    .toggle("rescan", "§a重新扫描仓库（提交后执行）")
-    .toggle("delete", "§c删除此仓库（提交后需确认）")
     .toggle("resize", "§e调整此仓库区域（提交后需选择新区域）");
 
   const vals = await form.show(player);
@@ -97,26 +113,27 @@ export async function showWarehouseSettingsMenu(
   const newShowBoundary = vals.showBoundary as boolean;
   const newAutoSortThreshold = vals.autoSortThreshold as number;
   const newCapacityWarning = vals.capacityWarning as boolean;
+  const shouldRescan = vals.rescan as boolean;
+  const shouldRepair = vals.repair as boolean;
+  const shouldDelete = vals.delete as boolean;
   const shouldRefreshStats = vals.refreshStats as boolean;
   const shouldOpenFamilyConfig = vals.familyConfig as boolean;
-  const shouldRescan = vals.rescan as boolean;
-  const shouldDelete = vals.delete as boolean;
   const shouldResize = vals.resize as boolean;
 
   // 操作性开关互斥：只能选一个
-  const ops = [shouldRefreshStats, shouldOpenFamilyConfig, shouldRescan, shouldDelete, shouldResize].filter(Boolean).length;
+  const actionOps = [shouldRescan, shouldRepair, shouldDelete, shouldRefreshStats, shouldOpenFamilyConfig, shouldResize];
+  const ops = actionOps.filter(Boolean).length;
   if (ops > 1) {
-    player.sendMessage("§c刷新统计、家庭成员、重新扫描、删除仓库、调整区域只能同时开启一个，请重新选择");
+    player.sendMessage("§c操作项只能同时开启一个，请重新选择");
     return;
   }
 
+  // 先保存设置变更（所有操作之前）
   try {
-    // 1. 名称变更
     if (newName && newName.trim() !== "" && newName.trim() !== warehouse.displayName) {
       service.renameWarehouse(warehouseId, newName.trim());
     }
 
-    // 2. 收集设置变更
     const selectedRole = ROLE_ORDER[newRoleIndex];
     const selectedSpeed = speedValues[newSpeedIndex] as WarehouseSettings["processingSpeed"];
     const settingsUpdate: Partial<WarehouseSettings> = {};
@@ -157,8 +174,58 @@ export async function showWarehouseSettingsMenu(
     return;
   }
 
-  // ── 刷新存储统计 ──────────────────────────────
+  // ── 刷新容器（确认后执行） ──────────────────────
+  if (shouldRescan) {
+    if (!await showConfirm(player, "刷新容器",
+      `确定要刷新仓库 "${warehouse.displayName}" 的容器列表吗？\n\n` +
+      `将重新扫描仓库区域内所有方块，更新容器列表。\n` +
+      `现有角色和启用状态将保留。`,
+      "§a确认刷新")) return;
+    system.runTimeout(() => {
+      try {
+        const result = service.rescanWarehouse(warehouseId);
+        player.sendMessage(`§a容器刷新完成！共发现 ${Object.keys(result.containers).length} 个容器`);
+      } catch (error) {
+        player.sendMessage(`§c容器刷新失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+    return;
+  }
+
+  // ── 修复仓库（确认后执行） ──────────────────────
+  if (shouldRepair) {
+    if (!await showConfirm(player, "修复仓库",
+      `确定要修复仓库 "${warehouse.displayName}" 吗？\n\n` +
+      `将执行以下修复步骤：\n` +
+      `1. 重新扫描所有容器方块\n` +
+      `2. 重建运行时索引\n` +
+      `3. 重置存储统计缓存\n` +
+      `4. 检查数据完整性`,
+      "§e确认修复")) return;
+    system.runTimeout(() => {
+      try {
+        invalidateWarehouseStats(warehouseId, Object.keys(warehouse.containers));
+        const result = service.rescanWarehouse(warehouseId);
+        player.sendMessage(`§a仓库修复完成！共发现 ${Object.keys(result.containers).length} 个容器，统计已重置`);
+      } catch (error) {
+        player.sendMessage(`§c仓库修复失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+    return;
+  }
+
+  // ── 删除仓库（确认后执行） ──────────────────────
+  if (shouldDelete) {
+    await showDeleteWarehouseConfirm(player, warehouseId, warehouse.displayName, service);
+    return;
+  }
+
+  // ── 刷新存储统计（确认后执行） ──────────────────
   if (shouldRefreshStats) {
+    if (!await showConfirm(player, "刷新统计",
+      `确定要刷新仓库 "${warehouse.displayName}" 的存储统计吗？\n\n` +
+      `将清除统计缓存并重新扫描所有容器，统计最新的存储容量信息。`,
+      "§a确认刷新")) return;
     invalidateWarehouseStats(warehouseId, Object.keys(warehouse.containers));
     player.sendMessage("§a存储统计已刷新（下次打开设置页时将重新扫描容器）");
     return;
@@ -167,27 +234,6 @@ export async function showWarehouseSettingsMenu(
   // ── 家庭成员配置（开关开启时弹出子菜单） ──
   if (shouldOpenFamilyConfig) {
     await showFamilyConfigMenu(player, warehouseId, repository, service);
-    return;
-  }
-
-  // ── 重新扫描仓库 ──────────────────────────────
-  if (shouldRescan) {
-    system.runTimeout(() => {
-      try {
-        const result = service.rescanWarehouse(warehouseId);
-        player.sendMessage(
-          `§a仓库重新扫描完成！共发现 ${Object.keys(result.containers).length} 个容器`
-        );
-      } catch (error) {
-        player.sendMessage(`§c重新扫描失败: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    });
-    return;
-  }
-
-  // ── 删除仓库（仅在开关开启时弹出确认） ──────────
-  if (shouldDelete) {
-    await showDeleteWarehouseConfirm(player, warehouseId, warehouse.displayName, service);
     return;
   }
 
@@ -204,12 +250,6 @@ export async function showWarehouseSettingsMenu(
 
 /**
  * 显示删除仓库的确认表单。
- * 需要通过一个独立的 ActionForm 二次确认才能删除。
- *
- * @param player        - 操作的玩家
- * @param warehouseId   - 要删除的仓库 ID
- * @param displayName   - 仓库显示名称
- * @param service       - 仓库服务实例
  */
 async function showDeleteWarehouseConfirm(
   player: Player,
@@ -217,21 +257,17 @@ async function showDeleteWarehouseConfirm(
   displayName: string,
   service: WarehouseService
 ): Promise<void> {
-  const result = await new ActionFormBuilder()
+  await new ActionFormBuilder()
     .title("删除仓库")
     .body(`确定要删除仓库 "${displayName}" 吗？\n\n此操作不可撤销，所有容器数据将被清除。`)
-    .button("confirm", "§c确认删除")
-    .button("cancel", "取消")
+    .button("§c确认删除", () => {
+      try {
+        service.deleteWarehouse(warehouseId);
+        player.sendMessage(`§a仓库 "${displayName}" 已删除`);
+      } catch (error) {
+        player.sendMessage(`§c删除仓库失败: ${error}`);
+      }
+    })
+    .button("取消")
     .show(player);
-
-  if (!result) return;
-
-  if (result.name === "confirm") {
-    try {
-      service.deleteWarehouse(warehouseId);
-      player.sendMessage(`§a仓库 "${displayName}" 已删除`);
-    } catch (error) {
-      player.sendMessage(`§c删除仓库失败: ${error}`);
-    }
-  }
 }

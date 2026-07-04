@@ -7,7 +7,8 @@ import { formatOrganizeResult } from "../util/OrganizeFormatter";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { getFamilyPurity, getContainerFromStored } from "../sorting/ContainerInventory";
 import { getFamilyById } from "../data/ItemFamilies";
-import { formatContainerCapacityLine } from "./WarehouseStats";
+import { formatContainerCapacityLine, setContainerStats, CAPACITY_WARNING_THRESHOLD } from "./WarehouseStats";
+import type { ContainerStats } from "../types";
 import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
 
 // ─── 容器详情辅助 ─────────────────────────────────────────────
@@ -65,22 +66,37 @@ function getContainerDetails(warehouse: WarehouseData, container: StoredContaine
 /**
  * 格式化容器详情文本行（含混乱度）。
  */
-function formatDetailsLine(details: ContainerDetails | undefined): string {
-  if (!details) return "§8容器不可达";
-  const usage = `${details.usedSlots}/${details.totalSlots}`;
-  let line = `§7${details.blockType}  §f${usage} §7Slots  §f${details.totalItems} §7Items  §f${details.uniqueTypes} §7Types`;
+/**
+ * 格式化容器概要信息。
+ * 返回多行文本：类型行 + 容量行 + 混乱度行。
+ */
+function formatContainerSummary(details: ContainerDetails | undefined): string {
+  if (!details) return "§8类型: §7容器不可达";
+  const lines: string[] = [];
+
+  // 类型
+  lines.push(`§7类型: §f${details.blockType}`);
+
+  // 容量（由 formatContainerCapacityLine 生成）
+  // 该函数调用在外部
+
+  // 混乱度
   if (details.messiness) {
     const m = details.messiness;
-    line += `\n§7混乱度 §f${(m.total * 100).toFixed(0)}% §7(顺序§e${(m.order * 100).toFixed(0)}§7 堆叠§e${(m.stack * 100).toFixed(0)}§7)`;
+    lines.push(
+      `§7混乱度: §f${(m.total * 100).toFixed(0)}%§7[sort:§e${(m.order * 100).toFixed(0)}%§7 , stack:§e${(m.stack * 100).toFixed(0)}%§7]`
+    );
   }
-  return line;
+
+  return lines.join("\n");
 }
 
 /**
  * 构建该容器中已启用的家族纯度排行文本。
  *
- * 只显示纯度 > 0（容器中有该家族物品）的家族，按纯度降序排列。
- * 返回空字符串表示无匹配。
+ * 多行格式，每行一个家族：
+ *   家族:   #1食物[60%]
+ *           #2武器[30%]
  */
 function formatFamilyPurityInfo(warehouse: WarehouseData, container: StoredContainer): string {
   try {
@@ -91,7 +107,7 @@ function formatFamilyPurityInfo(warehouse: WarehouseData, container: StoredConta
     const mcContainer = getContainerFromStored(dimension, container);
     if (!mcContainer) return "";
 
-    // 一次性扫描容器，收集所有物品种类（避免对每个家族独立全槽扫描）
+    // 一次性扫描容器，收集所有物品种类
     const allTypes = new Set<string>();
     for (let slot = 0; slot < mcContainer.size; slot++) {
       const item = mcContainer.getItem(slot);
@@ -116,11 +132,18 @@ function formatFamilyPurityInfo(warehouse: WarehouseData, container: StoredConta
 
     entries.sort((a, b) => b.purity - a.purity);
 
-    // 取前三名，防止排行太长挤占表单空间
-    const top = entries.slice(0, 3);
-    const parts = top.map((e, i) => `§e#${i + 1}§f${e.name} §a${(e.purity * 100).toFixed(0)}%`);
-    const suffix = entries.length > 3 ? ` §8+${entries.length - 3}` : "";
-    return `\n§8┊ §7家族分布 ${parts.join(" §8│ ")}${suffix}§r`;
+    // 取所有家族（不限制数量）
+    const familyLines: string[] = [];
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const pct = (e.purity * 100).toFixed(0);
+      if (i === 0) {
+        familyLines.push(`§7家族: §e#${i + 1}§f${e.name}§7[§a${pct}%§7]`);
+      } else {
+        familyLines.push(`       §e#${i + 1}§f${e.name}§7[§a${pct}%§7]`);
+      }
+    }
+    return "\n" + familyLines.join("\n");
   } catch {
     return "";
   }
@@ -148,69 +171,72 @@ export async function showContainerRoleMenu(
 ): Promise<void> {
   const isManager = canManageWarehouse(player);
   const details = getContainerDetails(warehouse, container);
-  const detailsLine = formatDetailsLine(details);
+
+  // 将现场扫描结果写入统计缓存 + DP，使仓库级统计直接复用
+  if (details) {
+    const stats: ContainerStats = {
+      containerId,
+      blockType: details.blockType,
+      role: container.role,
+      totalSlots: details.totalSlots,
+      usedSlots: details.usedSlots,
+      totalItems: details.totalItems,
+      uniqueTypes: details.uniqueTypes,
+      isWarning: details.totalSlots > 0 && details.usedSlots / details.totalSlots >= CAPACITY_WARNING_THRESHOLD,
+    };
+    setContainerStats(warehouse.id, containerId, stats);
+  }
+
+  // ── 构建容器信息文本（共用布局） ──
+  const roleLabel = ROLE_LABELS[container.role];
+  const roleDesc = ROLE_DESCRIPTIONS[container.role];
+  const isHopper = details?.blockType === "hopper";
+  const capacityLine = details
+    ? formatContainerCapacityLine(details.usedSlots, details.totalSlots, details.totalItems, details.uniqueTypes)
+    : "";
+  const familyLine = formatFamilyPurityInfo(warehouse, container);
+  const messinessLine = details?.messiness
+    ? `混乱度: §f${(details.messiness.total * 100).toFixed(0)}%§7[sort:§e${(details.messiness.order * 100).toFixed(0)}%§7 , stack:§e${(details.messiness.stack * 100).toFixed(0)}%§7]`
+    : "";
+
+  // 共用信息块（仓库/类型/容量/混乱度/容器ID/状态/角色）
+  const infoHeader = (statusColor: string, statusText: string) =>
+    `§7仓库:   §f${warehouse.displayName}\n` +
+    `§7类型:   §f${details?.blockType ?? "未知"}\n` +
+    `${capacityLine ? `§7${capacityLine}\n` : ""}` +
+    `${messinessLine ? `§7${messinessLine}\n` : ""}` +
+    `§7容器ID: §f${containerId}\n` +
+    `§7状态:   ${statusColor}${statusText}§r` +
+    (container.capacityWarningEnabled ? "" : " §8预警关") + "\n" +
+    `§7角色:   §f${roleLabel}${isHopper ? " §8(漏斗)" : ""} — ${isHopper ? "漏斗自动采集物品流入分拣系统" : roleDesc}§r` +
+    familyLine;
 
   if (!isManager) {
     // ── 非管理员玩家：只读查看容器信息 ──
-    const roleLabel = ROLE_LABELS[container.role];
-    const roleDesc = ROLE_DESCRIPTIONS[container.role];
-
-    const familyLine = formatFamilyPurityInfo(warehouse, container);
-    const isHopper = details?.blockType === "hopper";
-    const capacityLine = details
-      ? formatContainerCapacityLine(details.usedSlots, details.totalSlots, details.totalItems, details.uniqueTypes)
-      : "";
-
-    const result = await new ActionFormBuilder()
+    await new ActionFormBuilder()
       .title("容器信息")
-      .body(
-        `§7仓库: ${warehouse.displayName}\n` +
-        `${detailsLine}\n` +
-        `${capacityLine}\n` +
-        `§7容器ID: ${containerId}\n` +
-        `§7状态: ${container.enabled ? "§a启用" : "§c禁用"}` +
-        (container.capacityWarningEnabled ? "" : " §8预警关") + "\n" +
-        `§7角色: ${roleLabel}${isHopper ? " §8(漏斗·自) " : ""}\n` +
-        `§7描述: ${isHopper ? "漏斗自动采集物品流入分拣系统" : roleDesc}` +
-        familyLine
-      )
-      .button("close", "关闭")
+      .body(infoHeader(
+        container.enabled ? "§a" : "§c",
+        container.enabled ? "已启用" : "已禁用"
+      ))
+      .button("关闭") // no callback, just closes
       .show(player);
-
-    return; // 只读，无操作
+    return;
   }
 
   // ── 管理员玩家：ModalForm 统一设置 ──
   const currentRoleIndex = ROLE_ORDER.indexOf(container.role);
   const roleOptions = ROLE_ORDER.map((r) => `${ROLE_LABELS[r]} — ${ROLE_DESCRIPTIONS[r]}`);
-  const currentRoleLabel = ROLE_LABELS[container.role];
-  const roleDesc = ROLE_DESCRIPTIONS[container.role];
-
-  const familyLine = formatFamilyPurityInfo(warehouse, container);
-
-  // 检测是否为漏斗（漏斗自动锁定为 input 角色）
-  const isHopper = details?.blockType === "hopper";
-  const capacityLine = details
-    ? formatContainerCapacityLine(details.usedSlots, details.totalSlots, details.totalItems, details.uniqueTypes)
-    : "";
 
   const form = new ModalFormBuilder()
     .title("容器设置")
-    .label(
-      "info",
-      `§7仓库: ${warehouse.displayName}\n` +
-      `${detailsLine}\n` +
-      `${capacityLine}\n` +
-      `§7容器ID: ${containerId}\n` +
-      `§7状态: ${container.enabled ? "§a已启用" : "§c已禁用"}` +
-      (container.capacityWarningEnabled ? "" : " §8预警关") + "\n" +
-      `§7角色: §f${currentRoleLabel} — ${roleDesc}§r` +
-      familyLine
-    )
+    .label("info", infoHeader(
+      container.enabled ? "§a" : "§c",
+      container.enabled ? "已启用" : "已禁用"
+    ))
     .toggle("enabled", "启用容器", { defaultValue: container.enabled });
 
   if (isHopper) {
-    // 漏斗锁定为 input 角色，不显示角色下拉
     form.label("hopperHint", "§8§o此容器是漏斗，只能作为输入容器使用。");
   } else {
     form.dropdown("role", "容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });

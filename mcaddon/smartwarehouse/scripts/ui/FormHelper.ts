@@ -159,56 +159,53 @@ export class ModalFormBuilder {
 
 /** ActionForm 按钮描述 */
 interface ActionButton {
-  /** 按钮唯一标识名 */
-  name: string;
-  /** 按钮显示文本 */
   label: string;
+  callback?: () => void | Promise<void>;
 }
 
 /**
  * ActionForm 构建器。
  *
- * 按钮通过命名方法添加，show() 返回按钮名而非 selection 索引。
+ * 每个按钮直接绑定回调函数，show() 自动执行：
+ *
+ *   await new ActionFormBuilder()
+ *     .title("菜单")
+ *     .button("创建仓库", () => showWarehouseCreateForm(player))
+ *     .button("管理仓库", () => showWarehouseManageMenu(player, ...))
+ *     .show(player);
+ *
+ * 不需要回调的按钮（如纯关闭）可不传回调。
  */
 export class ActionFormBuilder {
   private form = new ActionFormData();
   private buttons: ActionButton[] = [];
 
-  /** 设置表单标题 */
   title(text: string): this {
     this.form.title(text);
     return this;
   }
 
-  /** 设置表单正文 */
   body(text: string): this {
     this.form.body(text);
     return this;
   }
 
-  /** 添加按钮 */
-  button(name: string, label: string): this {
+  /** 添加按钮，可选回调函数（支持 async）。 */
+  button(label: string, callback?: () => void | Promise<void>): this {
     this.form.button(label);
-    this.buttons.push({ name, label });
+    this.buttons.push({ label, callback });
     return this;
   }
 
   /**
-   * 显示表单并返回按钮选择结果。
-   * @returns { name: 按钮名, selection: 原始索引 }，取消时返回 null
+   * 显示表单，用户点击按钮后自动执行对应的回调（如有）。
+   * 取消或点击无回调的按钮则静默返回。
    */
-  async show(
-    player: Player
-  ): Promise<{ name: string; selection: number } | null> {
+  async show(player: Player): Promise<void> {
     const response = await this.form.show(player);
-    if (response.canceled || response.selection === undefined) return null;
+    if (response.canceled || response.selection === undefined) return;
     const btn = this.buttons[response.selection];
-    if (!btn) return null;
-    return { name: btn.name, selection: response.selection };
-  }
-
-  /** 获取按钮列表（用于动态查找等场景） */
-  getButtonList(): readonly ActionButton[] {
-    return this.buttons;
+    if (!btn?.callback) return;
+    await btn.callback();
   }
 }

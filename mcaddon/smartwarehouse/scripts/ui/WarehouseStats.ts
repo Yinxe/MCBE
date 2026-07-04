@@ -3,6 +3,7 @@ import type { BlockLocation, ContainerId, ContainerRole, ContainerStats, StoredC
 import { ROLE_LABELS } from "../types";
 import { getContainerFromStored } from "../sorting/ContainerInventory";
 import { WarehouseStatsStore } from "../storage/WarehouseStatsStore";
+import { Table, Cell } from "./Table";
 
 // ─── 持久化层 ──────────────────────────────────────────────────
 
@@ -30,6 +31,24 @@ export const CAPACITY_WARNING_THRESHOLD = 0.9;
 
 /** 每个仓库 → { containerId → 统计 } 的缓存 */
 const containerCache = new Map<WarehouseId, Map<ContainerId, ContainerStats>>();
+
+/**
+ * 直接将容器统计写入缓存 + DP。
+ * 用于容器设置页等已有现场扫描数据的场景，避免重复扫描。
+ */
+export function setContainerStats(
+  warehouseId: WarehouseId,
+  containerId: ContainerId,
+  stats: ContainerStats
+): void {
+  let whCache = containerCache.get(warehouseId);
+  if (!whCache) {
+    whCache = new Map();
+    containerCache.set(warehouseId, whCache);
+  }
+  whCache.set(containerId, stats);
+  statsStore.saveContainerStats(warehouseId, containerId, stats);
+}
 
 /**
  * 标记整个仓库的统计缓存失效（清空内存缓存 + DP）。
@@ -236,65 +255,62 @@ export function getWarehouseStats(warehouse: WarehouseData): WarehouseStats {
 /**
  * 将仓库统计格式化为表格式文本（用于 ModalForm label）。
  *
- * 第一行：容器概览 + Family 计数
- * 表头：  Type  Percent  Items  ItemTypes
- * 数据行：Storage/每种角色
+ *   仓库 : my_base                        ← 第一行中文定字体
+ *   <>           TYPES  ITEMS    STORAGE
+ *   Container(8) 52     4250223  135/384(0.35)  ⚠
+ *   Bulk(1)      1      3000     10/54(0.19)
+ *   Normal(5)    12     1200     80/216(0.37)
+ *   Misc(1)      8      50       45/114(0.39)   ⚠
+ *   Input(10)    0      0        0/20(0.00)
+ *   Family:54
  */
 export function formatWarehouseStats(stats: WarehouseStats): string {
-  const lines: string[] = [];
+  const uc = (p: number) => p >= 100 ? "§c" : p >= 80 ? "§e" : p >= 50 ? "§6" : "§a";
+  const warnThreshold = CAPACITY_WARNING_THRESHOLD * 100;
+  const tbl = new Table();
 
-  // ── 第一行：容器概览（恢复 Container xx Family xx） ──
-  const containerCounts = Object.entries(stats.byRole)
-    .map(([role, rs]) => {
-      const color = role === "normal" ? "§a" : role === "bulk" ? "§b" : role === "misc" ? "§d" : "§6";
-      return `${color}${ROLE_LABELS[role as ContainerRole]}${rs.containerCount}`;
-    })
-    .join(" ");
-  const familyPart = stats.enabledFamiliesCount > 0
-    ? `  §bFamily§f${stats.enabledFamiliesCount}`
-    : "";
-  lines.push(`§7Container §f${stats.containerCount}§7  ${containerCounts}${familyPart}`);
+  // 表头
+  tbl.header(Cell.left("<>"), Cell.right("TYPES"), Cell.right("ITEMS"), Cell.left("STORAGE"));
 
-  // ── 表头 ──
-  lines.push(`§7Type      §7Percent        §7Items  §7ItemTypes`);
+  // 汇总
+  const totPct = stats.totalSlots > 0 ? Math.round((stats.usedSlots / stats.totalSlots) * 100) : 0;
+  const totRatio = `(${(totPct / 100).toFixed(2)})`;
+  const totWarn = stats.totalSlots > 0 && totPct >= warnThreshold ? ` §e⚠` : "";
+  tbl.row(
+    `§eContainer(${stats.containerCount})`,
+    Cell.right(String(stats.uniqueTypes)),
+    Cell.right(String(stats.totalItems)),
+    Cell.left(`§e${stats.usedSlots}§7/§e${stats.totalSlots}§7${uc(totPct)}${totRatio}§7${totWarn}`)
+  );
 
-  // ── 汇总行（Storage） ──
-  lines.push(formatTableRow(
-    "§eStorage",
-    `${stats.usedSlots}/${stats.totalSlots}(${getUsageColor(stats.usagePercent)}${stats.usagePercent}%§r)`,
-    stats.totalItems,
-    stats.uniqueTypes,
-    false
-  ));
-
-  // ── 各角色行 ──
-  const roleOrder: ContainerRole[] = ["normal", "bulk", "misc", "input"];
-  for (const role of roleOrder) {
-    const rs = stats.byRole[role];
+  // 各角色
+  const defs: { r: ContainerRole; c: string; l: string }[] = [
+    { r: "bulk", c: "§b", l: "Bulk" }, { r: "normal", c: "§a", l: "Normal" },
+    { r: "misc", c: "§d", l: "Misc" }, { r: "input", c: "§6", l: "Input" },
+  ];
+  for (const { r, c, l } of defs) {
+    const rs = stats.byRole[r];
     if (!rs) continue;
-    const color = role === "normal" ? "§a" : role === "bulk" ? "§b" : role === "misc" ? "§d" : "§6";
-    const roleLabel = role === "normal" ? "Normal" : role === "bulk" ? "Bulk" : role === "misc" ? "Misc" : "Input";
-    const usage = rs.totalSlots > 0 ? Math.round((rs.usedSlots / rs.totalSlots) * 100) : 0;
-    const percentStr = `${rs.usedSlots}/${rs.totalSlots}(${getUsageColor(usage)}${usage}%§r)`;
-    const suffix = rs.hasWarning ? `  ${usage >= 100 ? "§c" : "§e"}⚠` : "";
-    lines.push(formatTableRow(`${color}${roleLabel}`, percentStr, rs.totalItems, rs.uniqueTypes, false) + suffix);
+    const p = rs.totalSlots > 0 ? Math.round((rs.usedSlots / rs.totalSlots) * 100) : 0;
+    const ratio = `(${(p / 100).toFixed(2)})`;
+    const warn = rs.totalSlots > 0 && p >= warnThreshold ? ` ${c}⚠` : "";
+    tbl.row(
+      `${c}${l}(${rs.containerCount})`,
+      Cell.right(String(rs.uniqueTypes)),
+      Cell.right(String(rs.totalItems)),
+      Cell.left(`${c}${rs.usedSlots}§7/${c}${rs.totalSlots}§7${uc(p)}${ratio}§7${warn}`)
+    );
   }
 
+  const lines = [`§7仓库 : ${stats.displayName}`, tbl.render(4)];
+  if (stats.enabledFamiliesCount > 0) lines.push(` §bFamily:${stats.enabledFamiliesCount}`);
   return lines.join("\n");
-}
-
-/** 格式化单行表格数据 */
-function formatTableRow(label: string, percent: string, items: number, types: number, _isWarning: boolean): string {
-  const labelPadded = label.padEnd(11);
-  const percentPadded = percent.padEnd(16);
-  const itemsStr = formatNumber(items).padStart(6);
-  const typesStr = formatNumber(types).padStart(8);
-  return `${labelPadded}${percentPadded}${itemsStr}${typesStr}`;
 }
 
 /**
  * 格式化容器容量信息（单行，用于容器设置页 label）。
- * 格式：容量 5/27(19%)  物品128件  种类3种
+ * 格式：容量: 29/54[30%]  1856 items  27 types
+ * 容量 ≥ 阈值时附加 ⚠ 符号。
  */
 export function formatContainerCapacityLine(
   usedSlots: number,
@@ -304,7 +320,8 @@ export function formatContainerCapacityLine(
 ): string {
   const usage = totalSlots > 0 ? Math.round((usedSlots / totalSlots) * 100) : 0;
   const usageColor = getUsageColor(usage);
-  return `§7容量 §f${usedSlots}§7/§f${totalSlots}§7(${usageColor}${usage}%§7)  §7物品§f${formatNumber(totalItems)}§7件  §7种类§f${uniqueTypes}§7种`;
+  const warn = usage >= CAPACITY_WARNING_THRESHOLD * 100 ? ` ${usageColor}⚠` : "";
+  return `§7容量: §f${usedSlots}§7/§f${totalSlots}§7[${usageColor}${usage}%§7]  §f${formatNumber(totalItems)}§7 items  §f${uniqueTypes}§7 types${warn}`;
 }
 
 // ─── 辅助函数 ────────────────────────────────────────────────────

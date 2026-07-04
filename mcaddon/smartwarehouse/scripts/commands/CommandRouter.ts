@@ -21,6 +21,7 @@
  */
 
 import {
+  world,
   CommandPermissionLevel,
   CustomCommandParamType,
   CustomCommandStatus,
@@ -42,6 +43,8 @@ import { canManageWarehouse } from "../util/PlayerAuth";
 import { Logger } from "../util/Logger";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showMainMenu } from "../ui/MainMenu";
+import { SearchService, formatSearchResult } from "../warehouse/SearchService";
+import { isNearAreaXZ } from "../util/Vector";
 
 /** CommandRouter 专用的日志记录器实例，用于输出调试和运行信息 */
 const log = new Logger("CommandRouter");
@@ -276,8 +279,15 @@ export class CommandRouter {
         (origin) => this.handleMenu(origin)
       );
 
+      // sw:search —— 在附近且属于该玩家的仓库中搜索物品
+      // 参数：搜索关键字
+      event.customCommandRegistry.registerCommand(
+        namedCommand("sw:search", "在附近仓库搜索物品"),
+        (origin, query: string) => this.handleSearch(origin, query)
+      );
+
       log.info(
-        "Custom commands registered (sw:create/sw:resize/sw:rescan/sw:rescan_preview/sw:delete/sw:organize/sw:menu)"
+        "Custom commands registered (sw:create/sw:resize/sw:rescan/sw:rescan_preview/sw:delete/sw:organize/sw:menu/sw:search)"
       );
     });
   }
@@ -552,4 +562,59 @@ export class CommandRouter {
 
     return success("已打开 SmartWarehouse 主菜单");
   }
+
+  /**
+   * 处理 sw:search 命令 —— 在附近且属于该玩家的仓库中搜索物品。
+   */
+  private handleSearch(origin: CustomCommandOrigin, query: string): CustomCommandResult {
+    const player = parseCommandPlayer(origin);
+    if (typeof player === "string") return failure(player);
+
+    // 查找附近且属于该玩家的仓库
+    const warehouses = this.repository.loadAll();
+    const isAdmin = canManageWarehouse(player);
+    const nearbyOwned = warehouses.filter((w) => {
+      if (w.dimensionId !== player.dimension.id) return false;
+      if (w.ownerId !== player.id && !isAdmin) return false;
+      if (!isNearAreaXZ({ x: player.location.x, z: player.location.z }, w.area, 8)) return false;
+      return true;
+    });
+
+    if (nearbyOwned.length === 0) {
+      return failure("附近没有找到属于你的仓库");
+    }
+
+    // 取最近的仓库
+    nearbyOwned.sort((a, b) => {
+      const da = distToCenter(player, a.area);
+      const db = distToCenter(player, b.area);
+      return da - db;
+    });
+    const target = nearbyOwned[0];
+
+    system.runTimeout(() => {
+      try {
+        const dimension = world.getDimension(target.dimensionId);
+        const searchService = new SearchService();
+        const result = searchService.search(target, query, dimension);
+        const lines = formatSearchResult(result);
+        for (const line of lines) {
+          trySendMessage(player, line);
+        }
+      } catch (error) {
+        trySendMessage(player, `§c搜索失败: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+
+    return success(`正在仓库 "${target.displayName}" 中搜索: ${query}`);
+  }
+}
+
+/** 计算玩家到区域中心的 XZ 平面距离 */
+function distToCenter(player: Player, area: import("../types").WarehouseArea): number {
+  const cx = (area.min.x + area.max.x) / 2;
+  const cz = (area.min.z + area.max.z) / 2;
+  const dx = player.location.x - cx;
+  const dz = player.location.z - cz;
+  return Math.sqrt(dx * dx + dz * dz);
 }

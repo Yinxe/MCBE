@@ -62,9 +62,9 @@ export type ContainerRole = "normal" | "misc" | "bulk" | "input";
 
 /** 容器角色对应的中文描述文本 */
 export const ROLE_DESCRIPTIONS: Record<ContainerRole, string> = {
-  normal: "适合多物品分类归纳进入同一个箱子",
-  misc: "用于存储无法归类的物品",
-  bulk: "适合存储单一类型数量较大的物品和潜影盒",
+  normal: "多物品分类",
+  misc: "存储无法归类的物品",
+  bulk: "单物品分类",
   input: "物品从此流入自动分拣系统",
 };
 

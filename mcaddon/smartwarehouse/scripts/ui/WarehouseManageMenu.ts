@@ -23,9 +23,8 @@ export async function showWarehouseManageMenu(
     const form = new ActionFormBuilder()
       .title("管理仓库")
       .body("当前没有已创建的仓库。")
-      .button("back", "返回");
-    const result = await form.show(player);
-    if (result?.name === "back") return;
+      .button("返回");
+    await form.show(player);
     return;
   }
 
@@ -34,14 +33,8 @@ export async function showWarehouseManageMenu(
     .body("选择一个仓库进行设置");
 
   for (const warehouse of warehouses) {
-    form.button(warehouse.id, warehouse.displayName);
+    form.button(warehouse.displayName, () => showWarehouseSettingsMenu(player, warehouse.id, repository, service));
   }
 
-  const result = await form.show(player);
-  if (!result) return;
-
-  const selectedWarehouse = warehouses.find(w => w.id === result.name);
-  if (!selectedWarehouse) return;
-
-  await showWarehouseSettingsMenu(player, selectedWarehouse.id, repository, service);
+  await form.show(player);
 }

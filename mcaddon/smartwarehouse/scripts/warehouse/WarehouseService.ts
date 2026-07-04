@@ -150,6 +150,8 @@ export class WarehouseService {
    */
   rescanWarehouse(id: WarehouseId): WarehouseData {
     const warehouse = this.requireWarehouse(id);
+    // 重扫前记录旧容器 ID，用于清理已移除容器的统计 DP
+    const oldContainerIds = Object.keys(warehouse.containers);
     const dimension = world.getDimension(warehouse.dimensionId);
     const containers = this.scanner.scan(
       dimension,
@@ -162,6 +164,8 @@ export class WarehouseService {
     const updated = { ...warehouse, containers };
     this.repository.save(updated);
     this.markRuntimeDirty(id);
+    // 清空统计缓存并删除旧容器的 DP 条目，下次访问时全量重建
+    invalidateWarehouseStats(id, oldContainerIds);
     return updated;
   }
 
@@ -628,6 +632,8 @@ export class WarehouseService {
 
     this.repository.patchContainers(warehouseId, newContainers);
     this.markRuntimeDirty(warehouseId);
+    // 容器变更 → 清空统计缓存，下次读取时重新计算
+    invalidateWarehouseStats(warehouseId);
 
     const isMerge = occupied.length > 1;
     try {
@@ -664,6 +670,8 @@ export class WarehouseService {
     if (split) {
       this.repository.patchContainers(warehouseId, split);
       this.markRuntimeDirty(warehouseId);
+      // 拆箱：原容器 ID 失效，清空统计缓存
+      invalidateWarehouseStats(warehouseId);
       try {
         player.sendMessage(`§e大箱子 ${containerId} 已降级为单箱`);
       } catch {
@@ -676,6 +684,8 @@ export class WarehouseService {
     const { [containerId]: _, ...rest } = warehouse.containers;
     this.repository.patchContainers(warehouseId, rest);
     this.markRuntimeDirty(warehouseId);
+    // 容器移除 → 清空统计缓存 + 删除对应容器的 DP 条目
+    invalidateWarehouseStats(warehouseId, [containerId]);
 
     try {
       player.sendMessage(`§e容器已从仓库 "${warehouse.displayName}" 移除（${containerId}）`);
