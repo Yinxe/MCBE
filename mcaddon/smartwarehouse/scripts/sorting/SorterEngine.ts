@@ -132,6 +132,14 @@ export class SorterEngine {
     this.runtime.delete(warehouseId);
   }
 
+  /**
+   * 获取或构建仓库的运行时模型（用于调度器预检输入容器是否存在）。
+   * 首次调用时会从持久化存储加载，后续使用缓存。
+   */
+  getRuntimeModel(warehouseId: WarehouseId): WarehouseRuntimeModel | undefined {
+    return this.runtime.getOrBuild(warehouseId);
+  }
+
   // ─── 输入容器处理 ───────────────────────────────────────────────
 
   /**

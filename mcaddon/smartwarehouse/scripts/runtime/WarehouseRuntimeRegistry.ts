@@ -50,6 +50,19 @@ export class WarehouseRuntimeRegistry {
   }
 
   /**
+   * 仅从缓存获取运行时模型（不触发重建）。
+   * 用于调度器预检等只需读取已有状态的场景。
+   *
+   * @param id 仓库 ID
+   * @returns 运行时模型，如果缓存中不存在则返回 undefined
+   */
+  get(id: WarehouseId): WarehouseRuntimeModel | undefined {
+    const existing = this.models.get(id);
+    if (existing && !existing.dirty) return existing;
+    return undefined;
+  }
+
+  /**
    * 将指定仓库的运行时模型标记为脏（dirty）。
    * 标记后，下次调用 `getOrBuild()` 时会从持久化存储重新加载。
    * 适用于仓库数据（如容器列表、配置）发生变更后的缓存失效通知。

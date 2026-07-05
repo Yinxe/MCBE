@@ -133,10 +133,15 @@ export class SortingScheduler {
         const visitor = this.proximity.findVisitor(w.dimensionId, w.area, SortingScheduler.PROXIMITY_MARGIN);
         if (visitor) this.lastVisitor.set(w.id, visitor);
 
-        // 记录活跃时间，必要时惰性激活
+        // 记录活跃时间
         this.lastActiveTick.set(w.id, now);
+
+        // 只在有输入容器时才激活（否则无需创建 interval——processWarehouse 只会立即返回）
         if (!this.handles.has(w.id)) {
-          if (!this.repository.load(w.id)) continue; // 防御性验证仓库仍存在
+          if (!this.repository.load(w.id)) continue;
+          // 快速预检：没有输入容器的仓库不启动 interval
+          const model = this.engine.getRuntimeModel(w.id);
+          if (!model || model.inputContainerIds.length === 0) continue;
           this.activate(w.id, w.settings.processingSpeed);
         }
       } else if (this.handles.has(w.id)) {
