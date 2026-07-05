@@ -1,18 +1,10 @@
 import { Dimension, ItemStack, Container } from "@minecraft/server";
-import type {
-  WarehouseData,
-  WarehouseId,
-  WarehouseRuntimeModel,
-  ContainerId,
-  StoredContainer,
-  ContainerStats,
-} from "../types";
+import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, ContainerId, StoredContainer } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { WarehouseRuntimeRegistry } from "../runtime/WarehouseRuntimeRegistry";
 import { Logger } from "../util/Logger";
 import {
   getContainerFromStored,
-  containerHasType,
   isContainerEmpty,
   tryMoveStackIntoContainer,
   tryMoveStackIntoContainerWithJournal,
@@ -25,10 +17,8 @@ import { MoveJournal } from "./MoveJournal";
 import { playSortEffect } from "./SortEffects";
 import { SlotOrganizer } from "../organize/SlotOrganizer";
 import { getFamily } from "../data/ItemFamilies";
-import { isContainerFull, refreshContainerStats } from "../ui/WarehouseStats";
-import { isNearAreaXZ } from "../util/Vector";
+import { refreshContainerStats } from "../ui/WarehouseStats";
 import { checkWarehouseAreaLoaded, getDimensionSafe } from "../warehouse/AreaCheck";
-import { CapacityWarningService } from "./CapacityWarningService";
 import {
   findExistingTypeContainers,
   findExistingFamilyContainers,
@@ -65,8 +55,6 @@ const log = new Logger("SorterEngine");
  *   方块被破坏等）不会影响其他容器的分拣。
  */
 export class SorterEngine {
-  private readonly capacityWarning = new CapacityWarningService();
-
   constructor(
     private readonly repository: WarehouseRepository,
     private readonly runtime: WarehouseRuntimeRegistry,
@@ -278,115 +266,104 @@ export class SorterEngine {
     journal: MoveJournal
   ): ItemStack | undefined {
     const typeId = stack.typeId;
+    const delegate = (r: ItemStack | undefined, ids: ContainerId[], tag: string) =>
+      this.tryContainers(r, ids, warehouse, model, dimension, typeId, journal, tag);
     let remaining: ItemStack | undefined = stack;
 
-    // ── 优先级 1：单物品（大宗）────────────────────────────────
-    // 大宗容器专收单一类型高产量物品，匹配规则：
-    //   - 非空箱：匹配箱内已有物品种类
-    //   - 空箱：不接收物品，玩家需手动放入第一件物品来设定种类
-    //
-    // 注意：大宗 > 普通。专用大宗箱应优先拦截高产量单品（如白色羊毛），
-    // 避免被多物品普通箱截胡，剩余的散品再 fallthrough 给后续优先级处理。
-    //
-    // 设计笔记：大宗箱不走 itemTypeIndex 而是每次都全量扫描
-    // `model.bulkContainerIds`。原因是 bulk 数量极少（典型场景 1-5），
-    // 硬扫成本远低于索引维护（脏数据检测、惰性清除、回退扫描的复杂度）。
-    // 索引在 normal 箱数量大（几十上百）时有巨大收益，在 bulk 箱上收益为负。
-    const bulkMatches = model.bulkContainerIds.filter((id) => {
+    // ── 优先级 1：大宗 ─────────────────────────────────────
+    // 专收单一类型高产量物品。每次全量扫描（bulk 数量极少 ~1-5）。
+    remaining = this.tryBulkContainers(
+      remaining,
+      this.findMatchingBulk(typeId, warehouse, model, dimension),
+      warehouse,
+      model,
+      dimension,
+      typeId,
+      journal
+    );
+    if (!remaining) return;
+
+    // ── 优先级 2：同类物品 ────────────────────────────────
+    // 利用 itemTypeIndex 快速定位已有同类物品的普通容器。
+    const indexedTypeContainers = findExistingTypeContainers(warehouse, model, typeId, dimension);
+    remaining = delegate(remaining, indexedTypeContainers, "match");
+    if (!remaining) return;
+
+    // ── 优先级 2b：未索引容器兜底扫描 ──────────────────────
+    // 索引指向的容器都满了时，全量扫描查找用户手动放物的未索引容器。
+    remaining = this.scanUnindexedContainers(
+      remaining,
+      typeId,
+      indexedTypeContainers,
+      warehouse,
+      model,
+      dimension,
+      delegate
+    );
+    if (!remaining) return;
+
+    // ── 优先级 3：同族物品 ───────────────────────────────
+    // 物品属于已启用的同族分类时，聚集到同一容器。
+    const family = getFamily(typeId);
+    if (family && (warehouse.settings.enabledFamilies ?? []).includes(family.id)) {
+      const familyContainers = findExistingFamilyContainers(warehouse, model, family.id, dimension);
+      remaining = delegate(remaining, familyContainers, "family");
+      if (!remaining) return;
+    }
+
+    // ── 优先级 4：自动创建分类 ───────────────────────────
+    // 找一个空 normal 箱为新物品建立专有分类。
+    if (warehouse.settings.autoCreateCategories) {
+      const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
+      if (freeNormal) {
+        remaining = delegate(remaining, [freeNormal], "autocreate");
+        if (!remaining) return;
+      }
+    }
+
+    // ── 优先级 5：杂项（兜底）─────────────────────────────
+    return delegate(remaining, model.miscContainerIds, "misc");
+  }
+
+  /**
+   * 查找匹配当前物品类型的大宗容器。
+   * 全量扫描 bulkContainerIds（数量极少 ~1-5，走索引无收益）。
+   */
+  private findMatchingBulk(
+    typeId: string,
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    dimension: Dimension
+  ): ContainerId[] {
+    return model.bulkContainerIds.filter((id) => {
       const stored = warehouse.containers[id];
       if (!stored) return false;
       const target = getContainerFromStored(dimension, stored);
       if (!target) return false;
-      if (isContainerEmpty(target)) return false; // 空箱需玩家手动放入第一件物品
+      if (isContainerEmpty(target)) return false;
       return getBulkChestFirstType(target) === typeId;
     });
-    remaining = this.tryBulkContainers(remaining, bulkMatches, warehouse, model, dimension, typeId, journal);
-    if (remaining === undefined) return undefined;
+  }
 
-    // ── 优先级 2：多物品（普通）────────────────────────────────
-    // 已有同类物品的普通容器，用于多物品混合分类。
-    // 放在大宗之后：大宗拦截高产量单品后，剩余散品走普通分类。
-    const existingTypeContainers = findExistingTypeContainers(warehouse, model, typeId, dimension);
-    remaining = this.tryContainers(
-      remaining,
-      existingTypeContainers,
-      warehouse,
-      model,
-      dimension,
-      typeId,
-      journal,
-      "match"
-    );
-    if (remaining === undefined) return undefined;
-
-    // ── 优先级 2b：兜底全量扫描 ──────────────────────────────
-    // 当索引指向的容器全部满了（均无法放入），但可能有用户手动放物的
-    // 未索引容器可以接收物品时，触发一次全量扫描。
-    // 仅在存在索引记录的情况下触发（否则 findExistingTypeContainers
-    // 走的就是回退路径，已经扫过所有 normal 容器了）。
-    if (remaining && model.itemTypeIndex.has(typeId)) {
-      const freshValid: ContainerId[] = [];
-      fullScanNormalContainers(warehouse, model, typeId, dimension, freshValid);
-      const unindexed = freshValid.filter((id) => !existingTypeContainers.includes(id));
-      if (unindexed.length > 0) {
-        remaining = this.tryContainers(remaining, unindexed, warehouse, model, dimension, typeId, journal, "match");
-        if (remaining === undefined) return undefined;
-      }
-    }
-
-    // ── 优先级 3：家庭同族 ──────────────────────────────────────
-    // 检查物品是否属于已启用的同族分类，若是则将同族物品聚集到同一容器。
-    // 放在大宗和普通之后：确保专用分类优先，同族聚集作为兜底归类手段。
-    const family = getFamily(typeId);
-    const enabledFamilies = warehouse.settings.enabledFamilies ?? [];
-    if (family && enabledFamilies.includes(family.id)) {
-      const familyContainers = findExistingFamilyContainers(warehouse, model, family.id, dimension);
-      remaining = this.tryContainers(
-        remaining,
-        familyContainers,
-        warehouse,
-        model,
-        dimension,
-        typeId,
-        journal,
-        "family"
-      );
-      if (remaining === undefined) return undefined;
-    }
-
-    // ── 优先级 4：自动创建分类 ────────────────────────────────
-    // 当开启 autoCreateCategories 时，找一个空的 normal 容器
-    // 作为新物品类型的专用分类箱。
-    // 放在杂项之前：优先为物品建立专有分类，避免散落入杂项。
-    if (warehouse.settings.autoCreateCategories) {
-      const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
-      if (freeNormal) {
-        remaining = this.tryContainers(
-          remaining,
-          [freeNormal],
-          warehouse,
-          model,
-          dimension,
-          typeId,
-          journal,
-          "autocreate"
-        );
-        if (remaining === undefined) return undefined;
-      }
-    }
-
-    // ── 优先级 5：杂项（兜底）──────────────────────────────────
-    remaining = this.tryContainers(
-      remaining,
-      model.miscContainerIds,
-      warehouse,
-      model,
-      dimension,
-      typeId,
-      journal,
-      "misc"
-    );
-    return remaining; // 返回 undefined 表示最后一个容器处理完了全部
+  /**
+   * 索引容器全满时触发兜底全量扫描，查找用户手动放物的未索引容器。
+   * 仅在已有索引记录时触发（否则 findExistingTypeContainers 已扫过）。
+   */
+  private scanUnindexedContainers(
+    remaining: ItemStack | undefined,
+    typeId: string,
+    indexedContainerIds: ContainerId[],
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    dimension: Dimension,
+    delegate: (r: ItemStack | undefined, ids: ContainerId[], tag: string) => ItemStack | undefined
+  ): ItemStack | undefined {
+    if (!remaining || !model.itemTypeIndex.has(typeId)) return remaining;
+    const freshValid: ContainerId[] = [];
+    fullScanNormalContainers(warehouse, model, typeId, dimension, freshValid);
+    const unindexed = freshValid.filter((id) => !indexedContainerIds.includes(id));
+    if (unindexed.length === 0) return remaining;
+    return delegate(remaining, unindexed, "match");
   }
 
   /**
@@ -462,18 +439,8 @@ export class SorterEngine {
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         // 触发目标容器的混乱度检查，必要时自动整理
         this.organizer?.onDeposit(targetContainer, containerId, warehouse.settings.autoSortThreshold / 100);
-        // 立即重算并持久化该容器的存储统计，复用结果做容量预警
-        const stats = refreshContainerStats(warehouse, stored);
-        if (stats) {
-          this.capacityWarning.checkAndWarn(warehouse, containerId, stored, stats);
-        }
-      } else if (placed === 0 && beforeAmount > 0 && isContainerFull(targetContainer)) {
-        // 物品无法放入（容器已满），尝试发送预警
-        this.capacityWarning.warn(
-          warehouse,
-          containerId,
-          `§e${stored.role === "normal" ? "普通" : stored.role === "bulk" ? "大宗" : "杂项"}容器已满，物品将转移至其他容器`
-        );
+        // 刷新统计
+        refreshContainerStats(warehouse, stored);
       }
 
       if (remaining === undefined) return undefined; // 全部放完，提前退出
@@ -552,13 +519,7 @@ export class SorterEngine {
         log.info(`[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`);
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
-        // 立即重算并持久化该容器的存储统计，复用结果做容量预警
-        const bulkStats = refreshContainerStats(warehouse, stored);
-        if (bulkStats) {
-          this.capacityWarning.checkAndWarn(warehouse, containerId, stored, bulkStats);
-        }
-      } else if (placed === 0 && beforeAmount > 0 && isContainerFull(target)) {
-        this.capacityWarning.warn(warehouse, containerId, `§e大宗容器已满，物品将转移至其他容器`);
+        refreshContainerStats(warehouse, stored);
       }
 
       if (remaining === undefined) return undefined;
