@@ -29,10 +29,10 @@ const CHEST_OFF_H = -0.475;
 
 /** 角色 → RGB 颜色映射 */
 const ROLE_COLORS: Record<ContainerRole, { r: number; g: number; b: number }> = {
-  normal: { r: 0.37, g: 0.80, b: 0.37 },  // 浅绿
-  misc:   { r: 1.00, g: 0.41, b: 0.71 },  // 粉红
-  bulk:   { r: 0.53, g: 0.81, b: 0.92 },  // 天蓝
-  input:  { r: 1.00, g: 0.84, b: 0.00 },  // 金色
+  normal: { r: 0.37, g: 0.8, b: 0.37 }, // 浅绿
+  misc: { r: 1.0, g: 0.41, b: 0.71 }, // 粉红
+  bulk: { r: 0.53, g: 0.81, b: 0.92 }, // 天蓝
+  input: { r: 1.0, g: 0.84, b: 0.0 }, // 金色
 };
 
 /**
@@ -80,7 +80,9 @@ function playEffect(
   try {
     const block = dimension.getBlock(pos);
     if (block) blockTypeId = block.typeId;
-  } catch { /* 默认使用箱子尺寸 */ }
+  } catch {
+    /* 默认使用箱子尺寸 */
+  }
 
   const { size, off_h } = getParticleParams(blockTypeId);
   const molang = new MolangVariableMap();
@@ -94,7 +96,11 @@ function playEffect(
   molang.setFloat("color_b", color.b);
 
   // 跳过未加载区块
-  try { dimension.getBlock(pos); } catch { return; }
+  try {
+    dimension.getBlock(pos);
+  } catch {
+    return;
+  }
 
   const center = {
     x: pos.x + 0.5,
@@ -114,11 +120,7 @@ function playEffect(
  * @param occupiedLocations  容器占用的所有方块位置
  * @param role  容器角色
  */
-export function playSortEffect(
-  dimension: Dimension,
-  occupiedLocations: BlockLocation[],
-  role: ContainerRole
-): void {
+export function playSortEffect(dimension: Dimension, occupiedLocations: BlockLocation[], role: ContainerRole): void {
   try {
     for (const loc of occupiedLocations) {
       playEffect(dimension, loc, role, "smartwarehouse:sort", "random.orb", 0.65, 0.35);
@@ -135,10 +137,7 @@ export function playSortEffect(
  * @param dimension - 容器所在维度
  * @param locations - 要标记的方块坐标列表
  */
-export function playSearchEffect(
-  dimension: Dimension,
-  locations: BlockLocation[]
-): void {
+export function playSearchEffect(dimension: Dimension, locations: BlockLocation[]): void {
   try {
     // 紫色：R=0.76 G=0.35 B=0.98
     const size = FULL_BLOCK_SIZE;
@@ -155,12 +154,20 @@ export function playSearchEffect(
 
     for (const loc of locations) {
       // 跳过未加载区块（区块未加载时 getBlock 抛出异常）
-      try { dimension.getBlock(loc); } catch { continue; }
-      dimension.spawnParticle("smartwarehouse:sort", {
-        x: loc.x + 0.5,
-        y: loc.y + 0.455,
-        z: loc.z + 0.5,
-      }, molang);
+      try {
+        dimension.getBlock(loc);
+      } catch {
+        continue;
+      }
+      dimension.spawnParticle(
+        "smartwarehouse:sort",
+        {
+          x: loc.x + 0.5,
+          y: loc.y + 0.455,
+          z: loc.z + 0.5,
+        },
+        molang
+      );
     }
   } catch (error) {
     log.error(`播放搜索标记效果失败: ${error}`);
@@ -175,11 +182,7 @@ export function playSearchEffect(
  * @param occupiedLocations  容器占用的所有方块位置
  * @param role  容器角色
  */
-export function playDepositEffect(
-  dimension: Dimension,
-  occupiedLocations: BlockLocation[],
-  role: ContainerRole
-): void {
+export function playDepositEffect(dimension: Dimension, occupiedLocations: BlockLocation[], role: ContainerRole): void {
   try {
     for (const loc of occupiedLocations) {
       playEffect(dimension, loc, role, "smartwarehouse:deposit", "random.pop", 0.8, 0.3);

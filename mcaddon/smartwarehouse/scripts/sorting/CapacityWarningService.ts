@@ -25,12 +25,7 @@ export class CapacityWarningService {
    *
    * @param stats - refreshContainerStats 返回的已计算统计（避免二次扫描）
    */
-  checkAndWarn(
-    warehouse: WarehouseData,
-    containerId: string,
-    stored: StoredContainer,
-    stats: ContainerStats
-  ): void {
+  checkAndWarn(warehouse: WarehouseData, containerId: string, stored: StoredContainer, stats: ContainerStats): void {
     if (!warehouse.settings.capacityWarning) return;
     if (!stored.capacityWarningEnabled) return;
     if (!stats.isWarning) return;
@@ -48,11 +43,7 @@ export class CapacityWarningService {
    * 向仓库附近的玩家发送通用预警消息（如"容器已满，物品将转移"）。
    * 带冷却防刷。
    */
-  warn(
-    warehouse: WarehouseData,
-    containerId: string,
-    message: string
-  ): void {
+  warn(warehouse: WarehouseData, containerId: string, message: string): void {
     // 防刷：每个容器每 5 秒最多发一次预警
     const lastTick = this.cooldowns.get(containerId) ?? 0;
     if (system.currentTick - lastTick < CAPACITY_WARNING_COOLDOWN_TICKS) return;
@@ -64,7 +55,9 @@ export class CapacityWarningService {
         if (isNearAreaXZ({ x: player.location.x, z: player.location.z }, warehouse.area, 8)) {
           try {
             player.sendMessage(`§c[容量预警]§r ${message}`);
-          } catch { /* 玩家可能断线 */ }
+          } catch {
+            /* 玩家可能断线 */
+          }
         }
       }
     } catch {

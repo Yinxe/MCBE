@@ -129,12 +129,7 @@ export class BoundaryDisplay {
    * @param dimensionId  维度
    * @param requireHoe   是否要求附近玩家手持信物才绘制（持久边界=true，临时边界=false）
    */
-  private drawEdges(
-    warehouseId: WarehouseId,
-    area: WarehouseArea,
-    dimensionId: DimensionId,
-    requireHoe = true
-  ): void {
+  private drawEdges(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId, requireHoe = true): void {
     try {
       const dimension = world.getDimension(dimensionId);
       const { min, max } = area;
@@ -146,15 +141,18 @@ export class BoundaryDisplay {
         if (!testBlock) return;
         // 访问 permutation 确认区块真正加载
         const _ = testBlock.permutation;
-      } catch { return; }
+      } catch {
+        return;
+      }
 
       // ── 玩家接近检查（每 20 tick 刷新缓存） ──
       const now = system.currentTick;
       if (now - this.playerCacheUpdatedAt > BoundaryDisplay.PLAYER_CACHE_TICK) {
         this.playerCacheUpdatedAt = now;
-        this.playerCache = world.getPlayers()
-          .filter(p => p.dimension.id === dimensionId)
-          .map(p => ({
+        this.playerCache = world
+          .getPlayers()
+          .filter((p) => p.dimension.id === dimensionId)
+          .map((p) => ({
             x: p.location.x,
             z: p.location.z,
             hasToken: this.configStore.isToken(
@@ -164,19 +162,17 @@ export class BoundaryDisplay {
       }
       if (this.playerCache.length > 0) {
         const margin = BoundaryDisplay.PROXIMITY_MARGIN;
-        const valid = this.playerCache.some((p) =>
-          isNearAreaXZ(p, area, margin) && (!requireHoe || p.hasToken)
-        );
+        const valid = this.playerCache.some((p) => isNearAreaXZ(p, area, margin) && (!requireHoe || p.hasToken));
         if (!valid) return;
       }
 
       // 8 个顶点（max+1 以确保线框包围整个区域，而非缩在里面）
       const corners = [
-        { x: min.x, y: min.y, z: min.z },         // 0: 前下左
-        { x: max.x + 1, y: min.y, z: min.z },     // 1: 前下右
+        { x: min.x, y: min.y, z: min.z }, // 0: 前下左
+        { x: max.x + 1, y: min.y, z: min.z }, // 1: 前下右
         { x: max.x + 1, y: min.y, z: max.z + 1 }, // 2: 后下右
-        { x: min.x, y: min.y, z: max.z + 1 },     // 3: 后下左
-        { x: min.x, y: max.y + 1, z: min.z },     // 4: 前上左
+        { x: min.x, y: min.y, z: max.z + 1 }, // 3: 后下左
+        { x: min.x, y: max.y + 1, z: min.z }, // 4: 前上左
         { x: max.x + 1, y: max.y + 1, z: min.z }, // 5: 前上右
         { x: max.x + 1, y: max.y + 1, z: max.z + 1 }, // 6: 后上右
         { x: min.x, y: max.y + 1, z: max.z + 1 }, // 7: 后上左
@@ -185,17 +181,25 @@ export class BoundaryDisplay {
       // 12 条棱（顶点索引对）
       const edges: [number, number][] = [
         // 底面 4 条
-        [0, 1], [1, 2], [2, 3], [3, 0],
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 0],
         // 顶面 4 条
-        [4, 5], [5, 6], [6, 7], [7, 4],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+        [7, 4],
         // 竖直 4 条
-        [0, 4], [1, 5], [2, 6], [3, 7],
+        [0, 4],
+        [1, 5],
+        [2, 6],
+        [3, 7],
       ];
 
       for (const [a, b] of edges) {
         this.drawLine(dimension, corners[a], corners[b], step);
       }
-
     } catch (error) {
       log.error(`仓库 ${warehouseId} 边界显示失败: ${error}`);
     }

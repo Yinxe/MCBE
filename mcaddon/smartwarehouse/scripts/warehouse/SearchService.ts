@@ -141,9 +141,7 @@ export class SearchService {
 
     for (const container of result.containers) {
       // 推送容器所占用的所有格子，而不是仅主位置
-      const allPositions = container.occupiedLocations.length > 0
-        ? container.occupiedLocations
-        : [container.location];
+      const allPositions = container.occupiedLocations.length > 0 ? container.occupiedLocations : [container.location];
 
       for (const pos of allPositions) {
         const key = `${pos.x}|${pos.y}|${pos.z}`;
@@ -241,16 +239,12 @@ export function formatSearchResult(result: WarehouseSearchResult): string[] {
   // 每个容器
   for (const container of result.containers) {
     const pos = container.location;
-    const itemsStr = container.items
-      .map((item) => `§a${item.displayName}§7×${item.totalCount}`)
-      .join("  ");
+    const itemsStr = container.items.map((item) => `§a${item.displayName}§7×${item.totalCount}`).join("  ");
     lines.push(`  §7[${pos.x},${pos.y},${pos.z}] ${itemsStr}`);
   }
 
   // 汇总
-  lines.push(
-    `§7共找到 §a${result.itemTypeCount}§7 种物品，位于 §a${result.containerCount}§7 个容器`
-  );
+  lines.push(`§7共找到 §a${result.itemTypeCount}§7 种物品，位于 §a${result.containerCount}§7 个容器`);
 
   return lines;
 }

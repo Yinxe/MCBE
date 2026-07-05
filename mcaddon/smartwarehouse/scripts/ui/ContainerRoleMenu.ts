@@ -19,7 +19,7 @@ interface ContainerDetails {
   usedSlots: number;
   totalItems: number;
   uniqueTypes: number;
-  messiness?: { total: number; order: number; stack: number; };
+  messiness?: { total: number; order: number; stack: number };
 }
 
 /**
@@ -50,7 +50,9 @@ function getContainerDetails(warehouse: WarehouseData, container: StoredContaine
           totalItems += stack.amount;
           uniqueTypesSet.add(stack.typeId);
         }
-      } catch { /* 跳过 */ }
+      } catch {
+        /* 跳过 */
+      }
     }
 
     // 计算混乱度
@@ -207,7 +209,8 @@ export async function showContainerRoleMenu(
     `${messinessLine ? `§7${messinessLine}\n` : ""}` +
     `§7容器ID: §f${containerId}\n` +
     `§7状态:   ${statusColor}${statusText}§r` +
-    (container.capacityWarningEnabled ? "" : " §8预警关") + "\n" +
+    (container.capacityWarningEnabled ? "" : " §8预警关") +
+    "\n" +
     `§7角色:   §f${roleLabel}${isHopper ? " §8(漏斗)" : ""} — ${isHopper ? "漏斗自动采集物品流入分拣系统" : roleDesc}§r` +
     familyLine;
 
@@ -215,10 +218,7 @@ export async function showContainerRoleMenu(
     // ── 非管理员玩家：只读查看容器信息 ──
     await new ActionFormBuilder()
       .title("容器信息")
-      .body(infoHeader(
-        container.enabled ? "§a" : "§c",
-        container.enabled ? "已启用" : "已禁用"
-      ))
+      .body(infoHeader(container.enabled ? "§a" : "§c", container.enabled ? "已启用" : "已禁用"))
       .button("关闭") // no callback, just closes
       .show(player);
     return;
@@ -230,10 +230,7 @@ export async function showContainerRoleMenu(
 
   const form = new ModalFormBuilder()
     .title("容器设置")
-    .label("info", infoHeader(
-      container.enabled ? "§a" : "§c",
-      container.enabled ? "已启用" : "已禁用"
-    ))
+    .label("info", infoHeader(container.enabled ? "§a" : "§c", container.enabled ? "已启用" : "已禁用"))
     .toggle("enabled", "启用容器", { defaultValue: container.enabled });
 
   if (isHopper) {
@@ -242,14 +239,15 @@ export async function showContainerRoleMenu(
     form.dropdown("role", "容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });
   }
 
-  form.toggle("capacityWarning", "§e容量预警", { defaultValue: container.capacityWarningEnabled })
+  form
+    .toggle("capacityWarning", "§e容量预警", { defaultValue: container.capacityWarningEnabled })
     .toggle("organize", "§e立即整理（按物品 ID 排序合并）");
 
   const vals = await form.show(player);
   if (!vals) return;
 
   const newEnabled = vals.enabled as boolean;
-  const newRole: ContainerRole = isHopper ? "input" : ROLE_ORDER[vals.role as number] ?? container.role;
+  const newRole: ContainerRole = isHopper ? "input" : (ROLE_ORDER[vals.role as number] ?? container.role);
   const newCapacityWarning = vals.capacityWarning as boolean;
   const shouldOrganize = vals.organize as boolean;
 
@@ -282,8 +280,8 @@ export async function showContainerRoleMenu(
     service.setContainerRoleAndState(warehouse.id, containerId, newRole, newEnabled, newCapacityWarning);
     player.sendMessage(
       `§a容器已更新：${newEnabled ? "启用" : "禁用"}，` +
-      `角色=${ROLE_LABELS[newRole]}，` +
-      `容量预警=${newCapacityWarning ? "开" : "关"}`
+        `角色=${ROLE_LABELS[newRole]}，` +
+        `容量预警=${newCapacityWarning ? "开" : "关"}`
     );
 
     // 如果角色改为大宗，引导玩家手动放入物品来设定类型

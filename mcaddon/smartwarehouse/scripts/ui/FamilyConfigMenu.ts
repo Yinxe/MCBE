@@ -51,7 +51,7 @@ export async function showFamilyConfigMenu(
     .label(
       "info",
       `§7启用 Family 分类后，同一分类的物品（如各色羊毛）会自动聚集到同一个容器中。\n` +
-      `§7当前已启用 §f${enabledCount}§7/§f${totalCount} §7个分类`
+        `§7当前已启用 §f${enabledCount}§7/§f${totalCount} §7个分类`
     );
 
   // 为每个族添加一个命名开关
@@ -77,9 +77,7 @@ export async function showFamilyConfigMenu(
   if (arraysDiffer(enabledFamilies, newEnabledFamilies)) {
     try {
       service.updateSettings(warehouseId, { enabledFamilies: newEnabledFamilies });
-      player.sendMessage(
-        `§a家庭成员配置已更新，已启用 §f${newEnabledFamilies.length}§a/§f${totalCount} §a个分类`
-      );
+      player.sendMessage(`§a家庭成员配置已更新，已启用 §f${newEnabledFamilies.length}§a/§f${totalCount} §a个分类`);
     } catch (error) {
       player.sendMessage(`§c保存失败: ${error}`);
     }

@@ -54,10 +54,7 @@ export class WarehouseStatsStore {
    * @param containerIds - 该仓库所有容器的 ID 列表
    * @returns containerId → ContainerStats 的映射
    */
-  loadAllContainerStats(
-    warehouseId: WarehouseId,
-    containerIds: ContainerId[]
-  ): Map<ContainerId, ContainerStats> {
+  loadAllContainerStats(warehouseId: WarehouseId, containerIds: ContainerId[]): Map<ContainerId, ContainerStats> {
     const result = new Map<ContainerId, ContainerStats>();
     for (const cid of containerIds) {
       const stat = this.loadContainerStats(warehouseId, cid);

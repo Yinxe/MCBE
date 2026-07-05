@@ -62,24 +62,14 @@ export class ModalFormBuilder {
   }
 
   /** 添加文本输入框 */
-  textField(
-    name: string,
-    label: string,
-    placeholder?: string,
-    opts?: { defaultValue?: string }
-  ): this {
+  textField(name: string, label: string, placeholder?: string, opts?: { defaultValue?: string }): this {
     this.form.textField(label, placeholder ?? "", opts);
     this.fields.push({ type: "textField", name });
     return this;
   }
 
   /** 添加下拉选择框 */
-  dropdown(
-    name: string,
-    label: string,
-    options: string[],
-    opts?: { defaultValueIndex?: number }
-  ): this {
+  dropdown(name: string, label: string, options: string[], opts?: { defaultValueIndex?: number }): this {
     this.form.dropdown(label, options, opts);
     this.fields.push({ type: "dropdown", name });
     return this;

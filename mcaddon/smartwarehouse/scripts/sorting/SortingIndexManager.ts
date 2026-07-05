@@ -29,12 +29,8 @@ export function findExistingTypeContainers(
   const hasIndexEntry = model.itemTypeIndex.has(typeId);
 
   // ── 阶段 1：校验候选容器 ─────────────────────────────────
-  const candidates = hasIndexEntry
-    ? model.itemTypeIndex.get(typeId)!
-    : model.normalContainerIds;
-  const { valid, stale } = validateTypeIndexCandidates(
-    hasIndexEntry, candidates, warehouse, model, typeId, dimension
-  );
+  const candidates = hasIndexEntry ? model.itemTypeIndex.get(typeId)! : model.normalContainerIds;
+  const { valid, stale } = validateTypeIndexCandidates(hasIndexEntry, candidates, warehouse, model, typeId, dimension);
 
   // ── 阶段 2：惰性清除脏索引 ───────────────────────────────
   if (hasIndexEntry && stale.size > 0) {
@@ -106,9 +102,7 @@ function validateTypeIndexCandidates(
  * 从索引中惰性清除脏条目。
  * 如果某类型下所有容器都脏了，删除整个条目。
  */
-function cleanStaleTypeIndexEntries(
-  model: WarehouseRuntimeModel, typeId: string, stale: Set<ContainerId>
-): void {
+function cleanStaleTypeIndexEntries(model: WarehouseRuntimeModel, typeId: string, stale: Set<ContainerId>): void {
   const candidates = model.itemTypeIndex.get(typeId);
   if (!candidates) return;
 
@@ -151,9 +145,7 @@ function fullScanNormalContainers(
 /**
  * 将容器 ID 记录到运行时物品类型索引中，避免重复添加。
  */
-export function addToTypeIndex(
-  model: WarehouseRuntimeModel, typeId: string, containerId: ContainerId
-): void {
+export function addToTypeIndex(model: WarehouseRuntimeModel, typeId: string, containerId: ContainerId): void {
   const existing = model.itemTypeIndex.get(typeId);
   if (existing) {
     if (!existing.includes(containerId)) {
@@ -290,9 +282,7 @@ function sortByFamilyPurity(
 /**
  * 将容器 ID 记录到运行时同族分类索引中。
  */
-export function addToFamilyIndex(
-  model: WarehouseRuntimeModel, familyId: string, containerId: ContainerId
-): void {
+export function addToFamilyIndex(model: WarehouseRuntimeModel, familyId: string, containerId: ContainerId): void {
   const existing = model.familyTypeIndex.get(familyId);
   if (existing) {
     if (!existing.includes(containerId)) {

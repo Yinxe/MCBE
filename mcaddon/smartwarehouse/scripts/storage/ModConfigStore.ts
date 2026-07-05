@@ -163,10 +163,14 @@ export class ModConfigStore {
   }
 
   /** 获取仓库最大扫描体积 */
-  getMaxVolume(): number { return this.load().maxWarehouseVolume; }
+  getMaxVolume(): number {
+    return this.load().maxWarehouseVolume;
+  }
 
   /** 获取单仓库最大容器数 */
-  getMaxContainers(): number { return this.load().maxContainers; }
+  getMaxContainers(): number {
+    return this.load().maxContainers;
+  }
 
   /**
    * 使缓存失效，下次读取时从 DynamicProperty 重新加载。

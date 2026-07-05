@@ -20,17 +20,12 @@ export async function showWarehouseManageMenu(
   const warehouses = repository.loadAll();
 
   if (warehouses.length === 0) {
-    const form = new ActionFormBuilder()
-      .title("管理仓库")
-      .body("当前没有已创建的仓库。")
-      .button("返回");
+    const form = new ActionFormBuilder().title("管理仓库").body("当前没有已创建的仓库。").button("返回");
     await form.show(player);
     return;
   }
 
-  const form = new ActionFormBuilder()
-    .title("管理仓库")
-    .body("选择一个仓库进行设置");
+  const form = new ActionFormBuilder().title("管理仓库").body("选择一个仓库进行设置");
 
   for (const warehouse of warehouses) {
     form.button(warehouse.displayName, () => showWarehouseSettingsMenu(player, warehouse.id, repository, service));

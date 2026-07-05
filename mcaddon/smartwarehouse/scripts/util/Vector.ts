@@ -54,11 +54,7 @@ export function areaVolume(area: WarehouseArea): number {
  * @param margin - 额外余量（格数）
  * @returns 玩家是否在圆形检测范围内
  */
-export function isNearAreaXZ(
-  point: { x: number; z: number },
-  area: WarehouseArea,
-  margin: number
-): boolean {
+export function isNearAreaXZ(point: { x: number; z: number }, area: WarehouseArea, margin: number): boolean {
   // 仓库水平中心
   const cx = (area.min.x + area.max.x) / 2;
   const cz = (area.min.z + area.max.z) / 2;
@@ -82,10 +78,7 @@ export function isNearAreaXZ(
  * @param area      仓库区域
  * @returns 玩家到区域中心在水平面上的距离
  */
-export function distanceToAreaCenterXZ(
-  playerPos: { x: number; z: number },
-  area: WarehouseArea
-): number {
+export function distanceToAreaCenterXZ(playerPos: { x: number; z: number }, area: WarehouseArea): number {
   const cx = (area.min.x + area.max.x) / 2;
   const cz = (area.min.z + area.max.z) / 2;
   const dx = playerPos.x - cx;

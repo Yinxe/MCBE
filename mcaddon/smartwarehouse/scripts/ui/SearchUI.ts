@@ -44,11 +44,13 @@ const activeMarkerHandles = new Map<string, number>();
  * @param repository  - 仓库持久化仓储
  * @param configStore - 模组配置仓储
  */
-export async function showSearchUI(player: Player, repository: WarehouseRepository, configStore: ModConfigStore): Promise<void> {
+export async function showSearchUI(
+  player: Player,
+  repository: WarehouseRepository,
+  configStore: ModConfigStore
+): Promise<void> {
   // ── 1. 加载仓库数据，找出最近仓库 ──
-  const warehouses = repository
-    .loadAll()
-    .filter((w) => w.dimensionId === player.dimension.id);
+  const warehouses = repository.loadAll().filter((w) => w.dimensionId === player.dimension.id);
 
   if (warehouses.length === 0) {
     player.sendMessage("§c当前维度下没有可搜索的仓库");
@@ -98,7 +100,12 @@ export async function showSearchUI(player: Player, repository: WarehouseReposito
 /**
  * 执行搜索并展示结果。
  */
-async function performSearch(player: Player, warehouse: WarehouseData, query: string, configStore: ModConfigStore): Promise<void> {
+async function performSearch(
+  player: Player,
+  warehouse: WarehouseData,
+  query: string,
+  configStore: ModConfigStore
+): Promise<void> {
   const service = new SearchService();
   const dimension = world.getDimension(warehouse.dimensionId);
 
@@ -153,15 +160,20 @@ async function performSearch(player: Player, warehouse: WarehouseData, query: st
  * @param locations   - 要标记的方块坐标列表
  * @param configStore - 模组配置仓储（用于获取当前信物 ID）
  */
-function startMarkerParticles(player: Player, dimensionId: string, locations: BlockLocation[], configStore: ModConfigStore): void {
+function startMarkerParticles(
+  player: Player,
+  dimensionId: string,
+  locations: BlockLocation[],
+  configStore: ModConfigStore
+): void {
   // 清理同一玩家的旧标记会话
   const oldHandle = activeMarkerHandles.get(player.id);
   if (oldHandle !== undefined) {
     system.clearRun(oldHandle);
   }
 
-  let elapsed = 0;          // 松锄后经过的 tick
-  let graceElapsed = 0;     // 宽限期内经过的 tick
+  let elapsed = 0; // 松锄后经过的 tick
+  let graceElapsed = 0; // 宽限期内经过的 tick
   let phase: "active" | "grace" | "done" = "active";
   let graceNotified = false;
 
@@ -216,7 +228,9 @@ function startMarkerParticles(player: Player, dimensionId: string, locations: Bl
         graceNotified = true;
         try {
           player.sendMessage("§e标记即将在 3 秒后消失，手持信物可继续标记");
-        } catch { /* 忽略 */ }
+        } catch {
+          /* 忽略 */
+        }
       }
 
       graceElapsed += PARTICLE_INTERVAL;
@@ -235,7 +249,9 @@ function startMarkerParticles(player: Player, dimensionId: string, locations: Bl
     activeMarkerHandles.delete(player.id);
     try {
       player.sendMessage("§7容器标记已结束");
-    } catch { /* 忽略 */ }
+    } catch {
+      /* 忽略 */
+    }
   }
 }
 

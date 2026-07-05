@@ -1,5 +1,12 @@
 import { Dimension, ItemStack, Container } from "@minecraft/server";
-import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, ContainerId, StoredContainer, ContainerStats } from "../types";
+import type {
+  WarehouseData,
+  WarehouseId,
+  WarehouseRuntimeModel,
+  ContainerId,
+  StoredContainer,
+  ContainerStats,
+} from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { WarehouseRuntimeRegistry } from "../runtime/WarehouseRuntimeRegistry";
 import { Logger } from "../util/Logger";
@@ -123,7 +130,6 @@ export class SorterEngine {
   releaseRuntime(warehouseId: WarehouseId): void {
     this.runtime.delete(warehouseId);
   }
-
 
   // ─── 输入容器处理 ───────────────────────────────────────────────
 
@@ -528,11 +534,7 @@ export class SorterEngine {
           this.capacityWarning.checkAndWarn(warehouse, containerId, stored, bulkStats);
         }
       } else if (placed === 0 && beforeAmount > 0 && isContainerFull(target)) {
-        this.capacityWarning.warn(
-          warehouse,
-          containerId,
-          `§e大宗容器已满，物品将转移至其他容器`
-        );
+        this.capacityWarning.warn(warehouse, containerId, `§e大宗容器已满，物品将转移至其他容器`);
       }
 
       if (remaining === undefined) return undefined;
@@ -540,7 +542,6 @@ export class SorterEngine {
 
     return remaining;
   }
-
 
   // ─── itemTypeIndex 索引辅助方法 ────────────────────────────────
 
@@ -611,5 +612,4 @@ export class SorterEngine {
     }
     return (startSlot + 1) % container.size; // 全空，简单前进
   }
-
 }

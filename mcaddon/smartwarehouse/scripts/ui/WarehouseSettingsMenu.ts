@@ -62,9 +62,7 @@ export async function showWarehouseSettingsMenu(
       `§b大宗${cList.filter((c) => c.role === "bulk" && c.enabled).length} ` +
       `§d杂项${cList.filter((c) => c.role === "misc" && c.enabled).length} ` +
       `§6输入${cList.filter((c) => c.role === "input" && c.enabled).length}` +
-      (cList.filter((c) => !c.enabled).length > 0
-        ? `  §8禁用${cList.filter((c) => !c.enabled).length}`
-        : "");
+      (cList.filter((c) => !c.enabled).length > 0 ? `  §8禁用${cList.filter((c) => !c.enabled).length}` : "");
   }
 
   // ── 主设置表单 ──────────────────────────────────
@@ -79,7 +77,9 @@ export async function showWarehouseSettingsMenu(
     .label("info", statsLabel)
     .textField("name", "仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
     .dropdown("defaultRole", "默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex) })
-    .dropdown("defaultEnabled", "新容器默认启用", ["是", "否"], { defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1 })
+    .dropdown("defaultEnabled", "新容器默认启用", ["是", "否"], {
+      defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1,
+    })
     .dropdown("speed", "处理速度", speedLabels, { defaultValueIndex: Math.max(0, defaultSpeedIndex) })
     .toggle("autoCreate", "自动创建分类", { defaultValue: settings.autoCreateCategories })
     .toggle("warehouseEnabled", "启用仓库", { defaultValue: settings.enabled })
@@ -87,10 +87,11 @@ export async function showWarehouseSettingsMenu(
     .slider(
       "autoSortThreshold",
       "§7自动整理混乱度阈值\n" +
-      "§7混乱度高于阈值时触发整理  §a40%§7推荐\n" +
-      "§c0每次整理  §a20敏感  §a40适中  §e60宽松  §c100永不\n§b混乱度:§4",
-      0, 100,
-      { defaultValue: settings.autoSortThreshold, valueStep: 20 },
+        "§7混乱度高于阈值时触发整理  §a40%§7推荐\n" +
+        "§c0每次整理  §a20敏感  §a40适中  §e60宽松  §c100永不\n§b混乱度:§4",
+      0,
+      100,
+      { defaultValue: settings.autoSortThreshold, valueStep: 20 }
     )
     .toggle("capacityWarning", "§e容量预警", { defaultValue: settings.capacityWarning })
     .label("opSep", "§8━━━ 操作 ━━━")
@@ -121,7 +122,14 @@ export async function showWarehouseSettingsMenu(
   const shouldResize = vals.resize as boolean;
 
   // 操作性开关互斥：只能选一个
-  const actionOps = [shouldRescan, shouldRepair, shouldDelete, shouldRefreshStats, shouldOpenFamilyConfig, shouldResize];
+  const actionOps = [
+    shouldRescan,
+    shouldRepair,
+    shouldDelete,
+    shouldRefreshStats,
+    shouldOpenFamilyConfig,
+    shouldResize,
+  ];
   const ops = actionOps.filter(Boolean).length;
   if (ops > 1) {
     player.sendMessage("§c操作项只能同时开启一个，请重新选择");
@@ -176,11 +184,17 @@ export async function showWarehouseSettingsMenu(
 
   // ── 刷新容器（确认后执行） ──────────────────────
   if (shouldRescan) {
-    if (!await showConfirm(player, "刷新容器",
-      `确定要刷新仓库 "${warehouse.displayName}" 的容器列表吗？\n\n` +
-      `将重新扫描仓库区域内所有方块，更新容器列表。\n` +
-      `现有角色和启用状态将保留。`,
-      "§a确认刷新")) return;
+    if (
+      !(await showConfirm(
+        player,
+        "刷新容器",
+        `确定要刷新仓库 "${warehouse.displayName}" 的容器列表吗？\n\n` +
+          `将重新扫描仓库区域内所有方块，更新容器列表。\n` +
+          `现有角色和启用状态将保留。`,
+        "§a确认刷新"
+      ))
+    )
+      return;
     system.runTimeout(() => {
       try {
         const result = service.rescanWarehouse(warehouseId);
@@ -194,14 +208,20 @@ export async function showWarehouseSettingsMenu(
 
   // ── 修复仓库（确认后执行） ──────────────────────
   if (shouldRepair) {
-    if (!await showConfirm(player, "修复仓库",
-      `确定要修复仓库 "${warehouse.displayName}" 吗？\n\n` +
-      `将执行以下修复步骤：\n` +
-      `1. 重新扫描所有容器方块\n` +
-      `2. 重建运行时索引\n` +
-      `3. 重置存储统计缓存\n` +
-      `4. 检查数据完整性`,
-      "§e确认修复")) return;
+    if (
+      !(await showConfirm(
+        player,
+        "修复仓库",
+        `确定要修复仓库 "${warehouse.displayName}" 吗？\n\n` +
+          `将执行以下修复步骤：\n` +
+          `1. 重新扫描所有容器方块\n` +
+          `2. 重建运行时索引\n` +
+          `3. 重置存储统计缓存\n` +
+          `4. 检查数据完整性`,
+        "§e确认修复"
+      ))
+    )
+      return;
     system.runTimeout(() => {
       try {
         invalidateWarehouseStats(warehouseId, Object.keys(warehouse.containers));
@@ -222,10 +242,16 @@ export async function showWarehouseSettingsMenu(
 
   // ── 刷新存储统计（确认后执行） ──────────────────
   if (shouldRefreshStats) {
-    if (!await showConfirm(player, "刷新统计",
-      `确定要刷新仓库 "${warehouse.displayName}" 的存储统计吗？\n\n` +
-      `将清除统计缓存并重新扫描所有容器，统计最新的存储容量信息。`,
-      "§a确认刷新")) return;
+    if (
+      !(await showConfirm(
+        player,
+        "刷新统计",
+        `确定要刷新仓库 "${warehouse.displayName}" 的存储统计吗？\n\n` +
+          `将清除统计缓存并重新扫描所有容器，统计最新的存储容量信息。`,
+        "§a确认刷新"
+      ))
+    )
+      return;
     invalidateWarehouseStats(warehouseId, Object.keys(warehouse.containers));
     player.sendMessage("§a存储统计已刷新（下次打开设置页时将重新扫描容器）");
     return;

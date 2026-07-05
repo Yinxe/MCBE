@@ -17,7 +17,7 @@ export function formatOrganizeResult(result: OrganizeResult, containerName: stri
     const m = result.messiness;
     lines.push(
       `§7混乱度: §f${(m.total * 100).toFixed(0)}% ` +
-      `§7(顺序 §e${(m.order * 100).toFixed(0)}% §7堆叠 §e${(m.stack * 100).toFixed(0)}%)`
+        `§7(顺序 §e${(m.order * 100).toFixed(0)}% §7堆叠 §e${(m.stack * 100).toFixed(0)}%)`
     );
   }
 
@@ -32,16 +32,13 @@ export function formatOrganizeResult(result: OrganizeResult, containerName: stri
   }
 
   lines.push(`§a${containerName} 整理完成`);
-  lines.push(
-    `§7堆叠: §f${result.beforeStacks} → ${result.afterStacks} §7(合并 §e${result.movedStacks} §7组)`
-  );
+  lines.push(`§7堆叠: §f${result.beforeStacks} → ${result.afterStacks} §7(合并 §e${result.movedStacks} §7组)`);
   lines.push(
     `§7种类: §f${result.beforeTypes} §7种  §7容量: §f${result.usedSlots}/${result.totalSlots} §7(${result.usagePercent}%)`
   );
 
   // 按总量排序打印每种物品（最多 8 种）
-  const sorted = Object.entries(result.perType)
-    .sort(([, a], [, b]) => b.total - a.total);
+  const sorted = Object.entries(result.perType).sort(([, a], [, b]) => b.total - a.total);
   for (const [typeId, stat] of sorted.slice(0, 8)) {
     const shortName = typeId.includes(":") ? typeId.split(":")[1] : typeId;
     lines.push(`  §7${shortName}: §f${stat.stacks}堆 §f${stat.total}个`);

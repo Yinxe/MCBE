@@ -58,7 +58,8 @@ export function isHopperType(typeId: string): boolean {
  * @returns 如果是支持的容器类型，返回 true
  */
 export function isSupportedContainerType(typeId: string): boolean {
-  const result = isChestType(typeId) || isHopperType(typeId) || typeId === "minecraft:barrel" || SHULKER_BOX_IDS.has(typeId);
+  const result =
+    isChestType(typeId) || isHopperType(typeId) || typeId === "minecraft:barrel" || SHULKER_BOX_IDS.has(typeId);
   // 调试：打印潜影盒类方块是否被识别为容器（需要时取消注释）
   // if (typeId.includes("shulker")) {
   //   console.warn(`[SmartWarehouse] 潜影盒检测: typeId=${typeId}, isContainer=${result}`);

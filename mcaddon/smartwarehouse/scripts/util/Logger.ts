@@ -2,7 +2,7 @@ import { world, PlayerPermissionLevel } from "@minecraft/server";
 
 /**
  * 日志工具类，提供统一的日志输出能力。
- * 使用 console.warn 而非 console.info，是因为在 Minecraft Bedrock 
+ * 使用 console.warn 而非 console.info，是因为在 Minecraft Bedrock
  * Content Log 中，warn 级别的日志更稳定可靠，不会被日志级别过滤忽略。
  */
 export class Logger {

@@ -42,7 +42,11 @@ const recentUseOn = new Map<string, number>();
  * @param service     - 仓库服务实例，提供仓库查询、创建、修改等核心操作。
  * @param configStore - 模组配置仓储（用于获取信物 ID）
  */
-export function registerToolInteraction(repository: WarehouseRepository, service: WarehouseService, configStore: ModConfigStore): void {
+export function registerToolInteraction(
+  repository: WarehouseRepository,
+  service: WarehouseService,
+  configStore: ModConfigStore
+): void {
   // ── 方块交互事件（玩家手持信物点击方块） ──────────────────
   // 在事件触发前（beforeEvents）拦截，可以取消默认行为（如打开箱子界面）。
   // 不潜行 → 现有行为（容器角色菜单 / 仓库创建选点）
@@ -147,7 +151,9 @@ function handleContainerClick(
         player.sendMessage("§a已触发仓库重扫，容器数据将在下次扫描后更新");
         return;
       }
-    } catch { /* 静默 */ }
+    } catch {
+      /* 静默 */
+    }
     player.sendMessage("§c无法找到容器信息（数据可能已过期，可尝试 /sw:rescan 修复）");
     return;
   }

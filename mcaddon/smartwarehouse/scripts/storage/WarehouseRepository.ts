@@ -135,10 +135,7 @@ export class WarehouseRepository {
     // 容器字段迁移：用 spread 补齐旧容器缺失的 capacityWarningEnabled
     const migratedContainers: Record<ContainerId, StoredContainer> = {};
     for (const [key, c] of Object.entries(containers)) {
-      migratedContainers[key] =
-        c.capacityWarningEnabled === undefined
-          ? { ...c, capacityWarningEnabled: true }
-          : c;
+      migratedContainers[key] = c.capacityWarningEnabled === undefined ? { ...c, capacityWarningEnabled: true } : c;
     }
 
     return { ...meta, settings, containers: migratedContainers };
@@ -280,9 +277,7 @@ export class WarehouseRepository {
         this.delete(data.id);
       } catch (deleteError) {
         // 回滚本身也可能失败，此时记录错误但继续抛出原始异常
-        console.error(
-          `[SmartWarehouse] 创建仓库 ${data.id} 失败后回滚也失败: ${deleteError}`
-        );
+        console.error(`[SmartWarehouse] 创建仓库 ${data.id} 失败后回滚也失败: ${deleteError}`);
       }
       throw error; // 始终抛出原始异常
     }

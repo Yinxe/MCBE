@@ -1,5 +1,13 @@
 import { world, type Container } from "@minecraft/server";
-import type { BlockLocation, ContainerId, ContainerRole, ContainerStats, StoredContainer, WarehouseData, WarehouseId } from "../types";
+import type {
+  BlockLocation,
+  ContainerId,
+  ContainerRole,
+  ContainerStats,
+  StoredContainer,
+  WarehouseData,
+  WarehouseId,
+} from "../types";
 import { ROLE_LABELS } from "../types";
 import { getContainerFromStored } from "../sorting/ContainerInventory";
 import { WarehouseStatsStore } from "../storage/WarehouseStatsStore";
@@ -36,11 +44,7 @@ const containerCache = new Map<WarehouseId, Map<ContainerId, ContainerStats>>();
  * 直接将容器统计写入缓存 + DP。
  * 用于容器设置页等已有现场扫描数据的场景，避免重复扫描。
  */
-export function setContainerStats(
-  warehouseId: WarehouseId,
-  containerId: ContainerId,
-  stats: ContainerStats
-): void {
+export function setContainerStats(warehouseId: WarehouseId, containerId: ContainerId, stats: ContainerStats): void {
   let whCache = containerCache.get(warehouseId);
   if (!whCache) {
     whCache = new Map();
@@ -65,10 +69,7 @@ export function invalidateWarehouseStats(warehouseId: WarehouseId, containerIds?
  * 获取单个容器的缓存统计。
  * 优先读内存缓存，未命中则尝试从 DP 加载，都无则计算并持久化。
  */
-function getOrComputeContainerStats(
-  warehouse: WarehouseData,
-  stored: StoredContainer
-): ContainerStats | undefined {
+function getOrComputeContainerStats(warehouse: WarehouseData, stored: StoredContainer): ContainerStats | undefined {
   // 优先读内存缓存
   const cached = containerCache.get(warehouse.id)?.get(stored.id);
   if (cached) return cached;
@@ -106,10 +107,7 @@ function getOrComputeContainerStats(
  * 由 SorterEngine 在每次成功写入容器后调用，确保 stats 紧跟上实际数据，
  * 避免删除 DP 与重算之间的窗口期。
  */
-export function refreshContainerStats(
-  warehouse: WarehouseData,
-  stored: StoredContainer
-): ContainerStats | undefined {
+export function refreshContainerStats(warehouse: WarehouseData, stored: StoredContainer): ContainerStats | undefined {
   const fresh = computeContainerStats(warehouse.dimensionId, stored);
   if (!fresh) return undefined;
 
@@ -152,10 +150,7 @@ export interface WarehouseStats {
 
 // ─── 计算函数 ───────────────────────────────────────────────────
 
-function computeContainerStats(
-  dimensionId: string,
-  container: StoredContainer
-): ContainerStats | undefined {
+function computeContainerStats(dimensionId: string, container: StoredContainer): ContainerStats | undefined {
   try {
     const dimension = world.getDimension(dimensionId);
     const mcContainer = getContainerFromStored(dimension, container);
@@ -174,7 +169,9 @@ function computeContainerStats(
           totalItems += stack.amount;
           uniqueTypesSet.add(stack.typeId);
         }
-      } catch { /* 跳过 */ }
+      } catch {
+        /* 跳过 */
+      }
     }
 
     const blockType = getBlockTypeLabel(dimension, container.primaryLocation);
@@ -222,8 +219,12 @@ export function getWarehouseStats(warehouse: WarehouseData): WarehouseStats {
     if (stats.isWarning) hasWarning = true;
 
     const existing = byRole[stats.role] ?? {
-      containerCount: 0, totalSlots: 0, usedSlots: 0,
-      totalItems: 0, uniqueTypes: 0, hasWarning: false,
+      containerCount: 0,
+      totalSlots: 0,
+      usedSlots: 0,
+      totalItems: 0,
+      uniqueTypes: 0,
+      hasWarning: false,
     };
     existing.containerCount++;
     existing.totalSlots += stats.totalSlots;
@@ -265,7 +266,7 @@ export function getWarehouseStats(warehouse: WarehouseData): WarehouseStats {
  *   Family:54
  */
 export function formatWarehouseStats(stats: WarehouseStats): string {
-  const uc = (p: number) => p >= 100 ? "§c" : p >= 80 ? "§e" : p >= 50 ? "§6" : "§a";
+  const uc = (p: number) => (p >= 100 ? "§c" : p >= 80 ? "§e" : p >= 50 ? "§6" : "§a");
   const warnThreshold = CAPACITY_WARNING_THRESHOLD * 100;
   const tbl = new Table();
 
@@ -285,8 +286,10 @@ export function formatWarehouseStats(stats: WarehouseStats): string {
 
   // 各角色
   const defs: { r: ContainerRole; c: string; l: string }[] = [
-    { r: "bulk", c: "§b", l: "Bulk" }, { r: "normal", c: "§a", l: "Normal" },
-    { r: "misc", c: "§d", l: "Misc" }, { r: "input", c: "§6", l: "Input" },
+    { r: "bulk", c: "§b", l: "Bulk" },
+    { r: "normal", c: "§a", l: "Normal" },
+    { r: "misc", c: "§d", l: "Misc" },
+    { r: "input", c: "§6", l: "Input" },
   ];
   for (const { r, c, l } of defs) {
     const rs = stats.byRole[r];
@@ -335,7 +338,9 @@ export function isContainerNearFull(container: Container): boolean {
   for (let slot = 0; slot < container.size; slot++) {
     try {
       if (container.getItem(slot)) usedSlots++;
-    } catch { /* 跳过 */ }
+    } catch {
+      /* 跳过 */
+    }
   }
   return container.size > 0 && usedSlots / container.size >= CAPACITY_WARNING_THRESHOLD;
 }
@@ -351,7 +356,9 @@ function getBlockTypeLabel(dimension: import("@minecraft/server").Dimension, loc
   try {
     const block = dimension.getBlock(location);
     if (block) return block.typeId.replace("minecraft:", "");
-  } catch { /* 默认 */ }
+  } catch {
+    /* 默认 */
+  }
   return "unknown";
 }
 

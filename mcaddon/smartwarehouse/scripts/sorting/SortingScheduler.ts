@@ -126,15 +126,11 @@ export class SortingScheduler {
         continue;
       }
 
-      const nearPlayer = this.proximity.hasPlayerNearby(
-        w.dimensionId, w.area, SortingScheduler.PROXIMITY_MARGIN
-      );
+      const nearPlayer = this.proximity.hasPlayerNearby(w.dimensionId, w.area, SortingScheduler.PROXIMITY_MARGIN);
 
       if (nearPlayer) {
         // 记录最后一个在场的玩家
-        const visitor = this.proximity.findVisitor(
-          w.dimensionId, w.area, SortingScheduler.PROXIMITY_MARGIN
-        );
+        const visitor = this.proximity.findVisitor(w.dimensionId, w.area, SortingScheduler.PROXIMITY_MARGIN);
         if (visitor) this.lastVisitor.set(w.id, visitor);
 
         // 记录活跃时间，必要时惰性激活
@@ -152,7 +148,6 @@ export class SortingScheduler {
       }
     }
   }
-
 
   /**
    * 激活仓库：创建 runInterval + 通知附近玩家。
@@ -178,7 +173,11 @@ export class SortingScheduler {
       for (const p of world.getPlayers()) {
         if (p.dimension.id !== w.dimensionId) continue;
         if (isNearAreaXZ({ x: p.location.x, z: p.location.z }, w.area, SortingScheduler.PROXIMITY_MARGIN)) {
-          try { p.sendMessage(`§a仓库 §e${w.displayName}§a 已激活，开始分拣`); } catch { /* 忽略 */ }
+          try {
+            p.sendMessage(`§a仓库 §e${w.displayName}§a 已激活，开始分拣`);
+          } catch {
+            /* 忽略 */
+          }
         }
       }
     }
@@ -211,7 +210,9 @@ export class SortingScheduler {
       if (player.id !== visitorId) continue;
       try {
         player.sendMessage(message);
-      } catch { /* 玩家离线，静默忽略 */ }
+      } catch {
+        /* 玩家离线，静默忽略 */
+      }
       break;
     }
   }
