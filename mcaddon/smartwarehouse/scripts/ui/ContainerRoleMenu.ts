@@ -9,6 +9,7 @@ import { getFamilyPurity, getContainerFromStored } from "../sorting/ContainerInv
 import { getFamilyById } from "../data/ItemFamilies";
 import { formatContainerCapacityLine, setContainerStats, CAPACITY_WARNING_THRESHOLD } from "./WarehouseStats";
 import type { ContainerStats } from "../types";
+import { scanContainerSlots } from "../util/ContainerScan";
 import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
 
 // ─── 容器详情辅助 ─────────────────────────────────────────────
@@ -37,29 +38,20 @@ function getContainerDetails(warehouse: WarehouseData, container: StoredContaine
     if (!mcContainer) return undefined;
 
     const blockType = block.typeId.replace("minecraft:", "");
-    const totalSlots = mcContainer.size;
-    let usedSlots = 0;
-    let totalItems = 0;
-    const uniqueTypesSet = new Set<string>();
 
-    for (let slot = 0; slot < totalSlots; slot++) {
-      try {
-        const stack = mcContainer.getItem(slot);
-        if (stack) {
-          usedSlots++;
-          totalItems += stack.amount;
-          uniqueTypesSet.add(stack.typeId);
-        }
-      } catch {
-        /* 跳过 */
-      }
-    }
-
-    // 计算混乱度
+    // 一次扫描，同时用于统计和混乱度分析
+    const scan = scanContainerSlots(mcContainer);
     const org = new SlotOrganizer();
-    const messiness = org.calculateMessiness(mcContainer);
+    const messiness = org.calculateMessinessFromScan(scan);
 
-    return { blockType, totalSlots, usedSlots, totalItems, uniqueTypes: uniqueTypesSet.size, messiness };
+    return {
+      blockType,
+      totalSlots: scan.totalSlots,
+      usedSlots: scan.usedSlots,
+      totalItems: scan.totalItems,
+      uniqueTypes: scan.uniqueTypes,
+      messiness,
+    };
   } catch {
     return undefined;
   }

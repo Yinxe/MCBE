@@ -2,6 +2,7 @@ import { system, ItemStack, type Container } from "@minecraft/server";
 import type { ContainerId } from "../types";
 import { Logger } from "../util/Logger";
 import { restoreContainerSnapshot, snapshotContainer } from "../sorting/ContainerSnapshot";
+import { scanContainerSlots, type SlotScanResult } from "../util/ContainerScan";
 
 const log = new Logger("SlotOrganizer");
 
@@ -204,31 +205,21 @@ export class SlotOrganizer {
    *   - 得分 = suboptimalStacks / nonEmptySlots × 0.3
    */
   calculateMessiness(container: Container, options?: Partial<OrganizeOptions>): MessinessScore {
-    const opts: OrganizeOptions = { ...DEFAULT_OPTIONS, ...options };
-    const endSlot = Math.min(opts.endSlot, container.size);
-    const startSlot = Math.max(0, opts.startSlot);
+    const scan = scanContainerSlots(container, {
+      startSlot: options?.startSlot,
+      endSlot: options?.endSlot ?? container.size,
+      lockedSlots: options?.lockedSlots,
+    });
+    return this.calculateMessinessFromScan(scan);
+  }
 
-    // 读取物品
-    const items: ItemStack[] = [];
-    const slotTypes: (string | undefined)[] = [];
-    let lastNonEmptySlot = -1;
-
-    for (let slot = startSlot; slot < endSlot; slot++) {
-      if (opts.lockedSlots?.has(slot)) continue;
-      try {
-        const stack = container.getItem(slot);
-        slotTypes.push(stack?.typeId);
-        if (stack) {
-          items.push(stack);
-          lastNonEmptySlot = slot;
-        }
-      } catch {
-        slotTypes.push(undefined);
-      }
-    }
-
+  /**
+   * 基于已扫描的槽位数据计算混乱度（无需再次遍历容器）。
+   * 适用于已调用 scanContainerSlots 的场景，避免重复遍历。
+   */
+  calculateMessinessFromScan(scan: SlotScanResult): MessinessScore {
+    const { items, effectiveSlots } = scan;
     const nonEmptySlots = items.length;
-    const effectiveSlots = lastNonEmptySlot - startSlot + 1;
 
     if (nonEmptySlots <= 1) {
       return { total: 0, order: 0, stack: 0, effectiveSlots, disorderSlots: 0, nonEmptySlots, suboptimalStacks: 0 };

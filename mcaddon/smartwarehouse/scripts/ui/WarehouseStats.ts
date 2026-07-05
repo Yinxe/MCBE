@@ -9,6 +9,7 @@ import type {
   WarehouseId,
 } from "../types";
 import { ROLE_LABELS } from "../types";
+import { scanContainerSlots } from "../util/ContainerScan";
 import { getContainerFromStored } from "../sorting/ContainerInventory";
 import { WarehouseStatsStore } from "../storage/WarehouseStatsStore";
 import { Table, Cell } from "./Table";
@@ -156,35 +157,18 @@ function computeContainerStats(dimensionId: string, container: StoredContainer):
     const mcContainer = getContainerFromStored(dimension, container);
     if (!mcContainer) return undefined;
 
-    const totalSlots = mcContainer.size;
-    let usedSlots = 0;
-    let totalItems = 0;
-    const uniqueTypesSet = new Set<string>();
-
-    for (let slot = 0; slot < totalSlots; slot++) {
-      try {
-        const stack = mcContainer.getItem(slot);
-        if (stack) {
-          usedSlots++;
-          totalItems += stack.amount;
-          uniqueTypesSet.add(stack.typeId);
-        }
-      } catch {
-        /* 跳过 */
-      }
-    }
-
+    const scan = scanContainerSlots(mcContainer);
     const blockType = getBlockTypeLabel(dimension, container.primaryLocation);
-    const usage = totalSlots > 0 ? usedSlots / totalSlots : 0;
+    const usage = scan.totalSlots > 0 ? scan.usedSlots / scan.totalSlots : 0;
 
     return {
       containerId: container.id,
       blockType,
       role: container.role,
-      totalSlots,
-      usedSlots,
-      totalItems,
-      uniqueTypes: uniqueTypesSet.size,
+      totalSlots: scan.totalSlots,
+      usedSlots: scan.usedSlots,
+      totalItems: scan.totalItems,
+      uniqueTypes: scan.uniqueTypes,
       isWarning: usage >= CAPACITY_WARNING_THRESHOLD,
     };
   } catch {
