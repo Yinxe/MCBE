@@ -48,12 +48,12 @@ const mcaddonTaskOptions: ZipTaskParameters = {
 };
 
 // ── Version sync ────────────────────────────────────────────────
-  uuid?: string;
 interface ManifestModule {
   version: number[];
   [key: string]: unknown;
 }
-
+interface ManifestDependency {
+  uuid?: string;
   module_name?: string;
   version: number[];
   [key: string]: unknown;
