@@ -65,11 +65,7 @@ export function findFirstNonEmptySlot(container: Container): number {
  * @returns 如果容器中至少有一个物品的 typeId 匹配，则返回 true
  */
 export function containerHasType(container: Container, typeId: string): boolean {
-  for (let slot = 0; slot < container.size; slot++) {
-    const slotObj = container.getSlot(slot);
-    if (slotObj.hasItem() && slotObj.typeId === typeId) return true;
-  }
-  return false;
+  return container.contains(new ItemStack(typeId, 1));
 }
 
 /**
