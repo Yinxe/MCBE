@@ -182,12 +182,3 @@ export function playSearchEffect(dimension: Dimension, locations: BlockLocation[
  * @param occupiedLocations  容器占用的所有方块位置
  * @param role  容器角色
  */
-export function playDepositEffect(dimension: Dimension, occupiedLocations: BlockLocation[], role: ContainerRole): void {
-  try {
-    for (const loc of occupiedLocations) {
-      playEffect(dimension, loc, role, "smartwarehouse:deposit", "random.pop", 0.8, 0.3);
-    }
-  } catch (error) {
-    log.error(`播放存入效果失败: ${error}`);
-  }
-}

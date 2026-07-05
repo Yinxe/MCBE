@@ -412,7 +412,7 @@ export class SorterEngine {
    * 从指定槽位开始查找下一个非空槽位。
    * 绕回遍历所有槽位，如果全空则返回 0（没找到也无妨，下次还会触发空槽检测）。
    */
-  private findNextNonEmptySlot(container: import("@minecraft/server").Container, startSlot: number): number {
+  private findNextNonEmptySlot(container: Container, startSlot: number): number {
     for (let i = 1; i < container.size; i++) {
       const checkSlot = (startSlot + i) % container.size;
       const item = container.getItem(checkSlot);

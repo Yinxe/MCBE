@@ -20,7 +20,7 @@ import { formatOrganizeResult } from "../organize/OrganizeFormatter";
 const DEBOUNCE_MS = 250;
 
 /** 日志记录器，用于输出工具交互模块的运行日志。 */
-const logger = new Logger("ToolInteraction");
+const log = new Logger("ToolInteraction");
 
 /**
  * 玩家最近一次右键点击方块的时刻（时间戳），防抖用。
@@ -95,7 +95,7 @@ export function registerToolInteraction(
     // 视线无容器 → 弹出主菜单
     system.runTimeout(() => {
       showMainMenu(player, repository, service, configStore).catch((error) => {
-        logger.error(`MainMenu error for ${player.name}: ${error}`);
+        log.error(`MainMenu error for ${player.name}: ${error}`);
       });
     }, 1);
   });
@@ -164,7 +164,7 @@ function handleContainerClick(
   // 某些 UI 操作在受限执行上下文中可能被禁止。
   system.run(() => {
     showContainerRoleMenu(player, warehouse, containerId, container, service).catch((error) => {
-      logger.error(`ContainerRoleMenu error for ${player.name}: ${error}`);
+      log.error(`ContainerRoleMenu error for ${player.name}: ${error}`);
     });
   });
 }
@@ -271,7 +271,7 @@ function triggerQuickOrganize(player: Player, block: import("@minecraft/server")
           player.sendMessage(line);
         }
       } catch (error) {
-        logger.error(`容器整理失败: ${error}`);
+        log.error(`容器整理失败: ${error}`);
         player.sendMessage("§c容器整理失败");
       }
     });
@@ -291,7 +291,7 @@ function triggerQuickOrganize(player: Player, block: import("@minecraft/server")
           player.sendMessage(line);
         }
       } catch (error) {
-        logger.error(`背包整理失败: ${error}`);
+        log.error(`背包整理失败: ${error}`);
         player.sendMessage("§c背包整理失败");
       }
     });

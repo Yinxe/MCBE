@@ -73,34 +73,3 @@ export function scanContainerSlots(
     totalItems,
   };
 }
-
-/**
- * 从扫描结果计算容器容量统计。
- * 可直接使用 scanContainerSlots 的返回值，无需二次遍历。
- */
-export function statsFromScan(
-  scan: SlotScanResult,
-  blockType: string,
-  containerId: string,
-  role: string
-): {
-  blockType: string;
-  containerId: string;
-  role: string;
-  usedSlots: number;
-  totalSlots: number;
-  totalItems: number;
-  uniqueTypes: number;
-  isWarning: boolean;
-} {
-  return {
-    blockType,
-    containerId,
-    role,
-    usedSlots: scan.usedSlots,
-    totalSlots: scan.totalSlots,
-    totalItems: scan.totalItems,
-    uniqueTypes: scan.uniqueTypes,
-    isWarning: scan.totalSlots > 0 && scan.usedSlots / scan.totalSlots >= 0.9,
-  };
-}
