@@ -1,5 +1,4 @@
 import { world, system, type Player } from "@minecraft/server";
-import { ModuleController } from "../util/ModuleController";
 import type { BlockLocation } from "../types";
 import { toBlockLocation } from "../types";
 import { Logger } from "../util/Logger";
@@ -53,8 +52,6 @@ export function registerToolInteraction(
   // 不潜行 → 现有行为（容器角色菜单 / 仓库创建选点）
   // 潜行   → 快速整理（容器整理 / 背包整理）
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
-    if (ModuleController.intercept(event.player)) return;
-    if (ModuleController.intercept(event.player)) return;
     const player = event.player;
     const itemStack = event.itemStack;
     if (!itemStack || !configStore.isToken(itemStack.typeId)) return;

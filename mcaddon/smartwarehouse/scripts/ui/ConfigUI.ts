@@ -18,17 +18,15 @@ export async function showConfigUI(player: Player, configStore: ModConfigStore):
 
   // 总开关始终可见（即使模组关闭也能打开）
   const isOn = ModuleController.isEnabled();
-  form.button(isOn ? "§c紧急关闭模组" : "§a重新开启模组", () => {
+  form.button(isOn ? "§c暂停分拣" : "§a恢复分拣", () => {
     ModuleController.setEnabled(!isOn);
-    player.sendMessage(isOn ? "§c模组已关闭" : "§a模组已开启");
+    player.sendMessage(isOn ? "§c分拣系统已暂停" : "§a分拣系统已恢复");
   });
 
   await form.show(player);
 }
 
 async function showModalConfig(player: Player, configStore: ModConfigStore): Promise<void> {
-  if (ModuleController.intercept(player)) return;
-
   const config = configStore.load();
   const tokenIdx = TOKEN_OPTIONS.findIndex((o) => o.itemId === config.tokenItemId);
   const volIdx = VOLUME_OPTIONS.findIndex((o) => o.value === config.maxWarehouseVolume);
