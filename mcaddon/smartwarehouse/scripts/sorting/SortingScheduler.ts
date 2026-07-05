@@ -263,8 +263,15 @@ export class SortingScheduler {
     // 如果正在活跃，用新速度重启
     if (this.handles.has(id)) {
       this.activate(id, warehouse.settings.processingSpeed);
+      return;
     }
-    // 如果不活跃，lifecycleTick 下次会以新速度激活
+
+    // 不活跃但可能有了新的输入容器：构建模型检查，满足则立即激活
+    const model = this.engine.getRuntimeModel(id);
+    if (model && model.inputContainerIds.length > 0) {
+      this.activate(id, warehouse.settings.processingSpeed);
+    }
+    // 仍无输入容器：等 lifecycleTick 下次巡检
   }
 
   /**
