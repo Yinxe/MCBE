@@ -7,6 +7,8 @@ import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showFamilyConfigMenu } from "./FamilyConfigMenu";
 import { ActionFormBuilder, ModalFormBuilder } from "./FormHelper";
+import { isWarehouseOwner } from "../util/PlayerAuth";
+import type { ModConfigStore } from "../storage/ModConfigStore";
 import { formatWarehouseStats, getWarehouseStats, invalidateWarehouseStats } from "./WarehouseStats";
 
 /**
@@ -39,11 +41,17 @@ export async function showWarehouseSettingsMenu(
   player: Player,
   warehouseId: WarehouseId,
   repository: WarehouseRepository,
-  service: WarehouseService
+  service: WarehouseService,
+  configStore?: ModConfigStore
 ): Promise<void> {
   const warehouse = repository.load(warehouseId);
   if (!warehouse) {
     player.sendMessage("§c仓库不存在");
+    return;
+  }
+
+  if (!isWarehouseOwner(player, warehouse.ownerId)) {
+    player.sendMessage("§c你不是该仓库的所有者，无法修改设置");
     return;
   }
 
@@ -65,12 +73,19 @@ export async function showWarehouseSettingsMenu(
       (cList.filter((c) => !c.enabled).length > 0 ? `  §8禁用${cList.filter((c) => !c.enabled).length}` : "");
   }
 
+  // ── 处理速度列表（受全局限制过滤） ────────────
+  const allSpeeds = [4, 8, 16, 20, 30, 40] as const;
+  const globalLimit = configStore?.getGlobalSpeedLimit() ?? null;
+  const availableSpeeds = globalLimit === null ? allSpeeds : allSpeeds.filter((s) => s >= globalLimit);
+  const speedLabels = availableSpeeds.map((s) => SPEED_LABELS[s as keyof typeof SPEED_LABELS] ?? `${s} tick`);
+  const currentSpeed = settings.processingSpeed;
+  const clampedSpeed =
+    globalLimit !== null ? (Math.max(currentSpeed, globalLimit) as typeof currentSpeed) : currentSpeed;
+  const defaultSpeedIndex = Math.max(0, availableSpeeds.indexOf(clampedSpeed as any));
+
   // ── 主设置表单 ──────────────────────────────────
   const roleLabels = ROLE_ORDER.map((r) => ROLE_LABELS[r]);
   const defaultRoleIndex = ROLE_ORDER.indexOf(settings.defaultNewContainerRole);
-  const speedLabels = Object.values(SPEED_LABELS);
-  const speedValues = Object.keys(SPEED_LABELS).map(Number) as Array<keyof typeof SPEED_LABELS>;
-  const defaultSpeedIndex = speedValues.indexOf(settings.processingSpeed as keyof typeof SPEED_LABELS);
 
   const form = new ModalFormBuilder()
     .title("仓库设置")
@@ -143,7 +158,7 @@ export async function showWarehouseSettingsMenu(
     }
 
     const selectedRole = ROLE_ORDER[newRoleIndex];
-    const selectedSpeed = speedValues[newSpeedIndex] as WarehouseSettings["processingSpeed"];
+    const selectedSpeed = availableSpeeds[newSpeedIndex] as WarehouseSettings["processingSpeed"];
     const settingsUpdate: Partial<WarehouseSettings> = {};
 
     if (selectedRole && selectedRole !== settings.defaultNewContainerRole) {

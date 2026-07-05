@@ -83,7 +83,7 @@ export const ROLE_ORDER: ContainerRole[] = ["input", "normal", "misc", "bulk"];
  * 仓库处理速度选项，单位为游戏刻（tick）。
  * 值越小处理越频繁，但服务器负载越高。
  */
-export type ProcessingSpeed = 4 | 8 | 16 | 20;
+export type ProcessingSpeed = 4 | 8 | 16 | 20 | 30 | 40;
 
 /** 处理速度对应的中文标签 */
 export const SPEED_LABELS: Record<ProcessingSpeed, string> = {
@@ -91,10 +91,12 @@ export const SPEED_LABELS: Record<ProcessingSpeed, string> = {
   8: "快速（8 tick）",
   16: "标准（16 tick）",
   20: "慢速（20 tick）",
+  30: "更慢（30 tick）",
+  40: "最慢（40 tick）",
 };
 
 /** 默认处理速度 */
-export const DEFAULT_PROCESSING_SPEED: ProcessingSpeed = 8;
+export const DEFAULT_PROCESSING_SPEED: ProcessingSpeed = 20;
 
 /**
  * 仓库附近检测范围（格）。
@@ -333,7 +335,6 @@ export interface WarehouseRuntimeModel {
    * - `undefined`：尚未检查
    */
   areaLoaded: boolean | undefined;
-
 }
 
 /**

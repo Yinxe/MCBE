@@ -1,7 +1,7 @@
 import { world, type Player } from "@minecraft/server";
 import type { ContainerId, ContainerRole, StoredContainer, WarehouseData } from "../types";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_ORDER } from "../types";
-import { canManageWarehouse } from "../util/PlayerAuth";
+import { canManageWarehouse, isWarehouseOwner } from "../util/PlayerAuth";
 import { SlotOrganizer } from "../organize/SlotOrganizer";
 import { formatOrganizeResult } from "../organize/OrganizeFormatter";
 import type { WarehouseService } from "../warehouse/WarehouseService";
@@ -163,7 +163,7 @@ export async function showContainerRoleMenu(
   container: StoredContainer,
   service: WarehouseService
 ): Promise<void> {
-  const isManager = canManageWarehouse(player);
+  const isManager = canManageWarehouse(player) || isWarehouseOwner(player, warehouse.ownerId);
   const details = getContainerDetails(warehouse, container);
 
   // 将现场扫描结果写入统计缓存 + DP，使仓库级统计直接复用

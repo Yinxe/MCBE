@@ -12,10 +12,13 @@ import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
  * @param repository - 仓库数据持久化仓储
  * @param service    - 仓库服务实例
  */
+import type { ModConfigStore } from "../storage/ModConfigStore";
+
 export async function showWarehouseManageMenu(
   player: Player,
   repository: WarehouseRepository,
-  service: WarehouseService
+  service: WarehouseService,
+  configStore?: ModConfigStore
 ): Promise<void> {
   const warehouses = repository.loadAll();
 
@@ -28,7 +31,9 @@ export async function showWarehouseManageMenu(
   const form = new ActionFormBuilder().title("管理仓库").body("选择一个仓库进行设置");
 
   for (const warehouse of warehouses) {
-    form.button(warehouse.displayName, () => showWarehouseSettingsMenu(player, warehouse.id, repository, service));
+    form.button(warehouse.displayName, () =>
+      showWarehouseSettingsMenu(player, warehouse.id, repository, service, configStore)
+    );
   }
 
   await form.show(player);

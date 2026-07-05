@@ -3,13 +3,14 @@ import type {
   BlockLocation,
   ContainerId,
   ContainerRole,
+  ProcessingSpeed,
   StoredContainer,
   WarehouseArea,
   WarehouseData,
   WarehouseId,
   WarehouseSettings,
 } from "../types";
-import { toBlockLocation, ROLE_LABELS } from "../types";
+import { toBlockLocation, DEFAULT_PROCESSING_SPEED, ROLE_LABELS } from "../types";
 import { DEFAULT_WAREHOUSE_SETTINGS, normalizeWarehouseId, WarehouseRepository } from "../storage/WarehouseRepository";
 import { areaVolume, areasTooClose, isInsideArea, normalizeArea } from "../util/Vector";
 import { ContainerScanner } from "./ContainerScanner";
@@ -90,11 +91,18 @@ export class WarehouseService {
     ownerId: string = ""
   ): WarehouseData {
     const id = normalizeWarehouseId(name);
-    if (this.repository.exists(id)) throw new Error(`仓库 ${id} 已存在`);
+    if (this.repository.exists(id)) throw new Error(`仓库名称 "${name}" 已被使用`);
+    // 检查玩家仓库数量上限
+    if (ownerId) {
+      const count = this.repository.loadAll().filter((w) => w.ownerId === ownerId).length;
+      const max = this.configStore.getMaxWarehousesPerPlayer();
+      if (count >= max) {
+        throw new Error(`每个玩家最多创建 ${max} 个仓库，你已创建 ${count} 个`);
+      }
+    }
     const area = normalizeArea(pointA, pointB);
     this.assertScanVolume(area);
     this.assertEdgeLength(area);
-    // 检查新仓库与所有已有仓库是否间距不足
     this.assertWarehouseSpacing(area, dimensionId, undefined);
     const dimension = world.getDimension(dimensionId);
     const containers = this.scanner.scan(dimension, area, defaultRole, defaultEnabled);
@@ -111,6 +119,8 @@ export class WarehouseService {
         ...DEFAULT_WAREHOUSE_SETTINGS,
         defaultNewContainerRole: defaultRole,
         defaultNewContainerEnabled: defaultEnabled,
+        // 初始处理速度受全局限制约束
+        processingSpeed: this.configStore.clampSpeed(DEFAULT_PROCESSING_SPEED) as ProcessingSpeed,
       },
       containerShardCount: 0,
       containerCount: Object.keys(containers).length,
@@ -304,9 +314,14 @@ export class WarehouseService {
    */
   updateSettings(id: WarehouseId, settings: Partial<WarehouseSettings>): WarehouseData {
     const warehouse = this.requireWarehouse(id);
+    // 处理速度受全局限制约束
+    const merged: Partial<WarehouseSettings> = { ...settings };
+    if (merged.processingSpeed !== undefined) {
+      merged.processingSpeed = this.configStore.clampSpeed(merged.processingSpeed) as ProcessingSpeed;
+    }
     const updated: WarehouseData = {
       ...warehouse,
-      settings: { ...warehouse.settings, ...settings },
+      settings: { ...warehouse.settings, ...merged },
     };
     this.repository.saveMetaOnly(updated);
     this.markRuntimeDirty(id);

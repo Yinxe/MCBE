@@ -64,9 +64,20 @@ export const VOLUME_OPTIONS: { label: string; value: number }[] = [
 /** 单仓库最大容器数选项列表（用于 UI 下拉框） */
 export const CONTAINER_OPTIONS: { label: string; value: number }[] = [
   { label: "50 个容器", value: 50 },
-  { label: "100 个容器", value: 100 },
-  { label: "200 个容器 推荐", value: 200 },
+  { label: "100 个容器 推荐", value: 100 },
+  { label: "200 个容器", value: 200 },
   { label: "512 个容器", value: 512 },
+];
+
+/** 全局处理速度限制选项 */
+export const GLOBAL_SPEED_OPTIONS: { label: string; value: number | null }[] = [
+  { label: "不限制（玩家自定）", value: null },
+  { label: "最快 4 tick", value: 4 },
+  { label: "最快 8 tick", value: 8 },
+  { label: "最快 16 tick", value: 16 },
+  { label: "最快 20 tick", value: 20 },
+  { label: "最快 30 tick", value: 30 },
+  { label: "最快 40 tick", value: 40 },
 ];
 
 // ─── 类型 ───────────────────────────────────────────────────────
@@ -79,6 +90,13 @@ export interface ModConfig {
   maxWarehouseVolume: number;
   /** 单个仓库最大容器数上限 */
   maxContainers: number;
+  /** 每个玩家最多创建的仓库数（1-5） */
+  maxWarehousesPerPlayer: number;
+  /**
+   * 全局处理速度最快限制（tick）。
+   * null = 不限制；数值 = 玩家可选的最快速度
+   */
+  globalSpeedLimit: number | null;
 }
 
 /** 信物选项（用于 UI 下拉框） */
@@ -111,7 +129,9 @@ export class ModConfigStore {
         this.cached = {
           tokenItemId: parsed.tokenItemId ?? DEFAULT_TOKEN,
           maxWarehouseVolume: parsed.maxWarehouseVolume ?? 16384,
-          maxContainers: parsed.maxContainers ?? 200,
+          maxContainers: parsed.maxContainers ?? 100,
+          maxWarehousesPerPlayer: parsed.maxWarehousesPerPlayer ?? 1,
+          globalSpeedLimit: parsed.globalSpeedLimit ?? null,
         };
         return this.cached;
       } catch {
@@ -119,7 +139,13 @@ export class ModConfigStore {
       }
     }
 
-    this.cached = { tokenItemId: DEFAULT_TOKEN, maxWarehouseVolume: 16384, maxContainers: 200 };
+    this.cached = {
+      tokenItemId: DEFAULT_TOKEN,
+      maxWarehouseVolume: 16384,
+      maxContainers: 100,
+      maxWarehousesPerPlayer: 1,
+      globalSpeedLimit: null,
+    };
     return this.cached;
   }
 
@@ -170,6 +196,31 @@ export class ModConfigStore {
   /** 获取单仓库最大容器数 */
   getMaxContainers(): number {
     return this.load().maxContainers;
+  }
+
+  /** 获取每个玩家最大仓库数 */
+  getMaxWarehousesPerPlayer(): number {
+    return this.load().maxWarehousesPerPlayer;
+  }
+
+  /** 获取全局处理速度限制（null = 不限制） */
+  getGlobalSpeedLimit(): number | null {
+    return this.load().globalSpeedLimit;
+  }
+
+  /** 根据全局限制调整处理速度 */
+  clampSpeed(speed: number): number {
+    const limit = this.getGlobalSpeedLimit();
+    if (limit === null) return speed;
+    return Math.max(speed, limit);
+  }
+
+  /** 全局限制下的可选速度列表 */
+  getAvailableSpeeds(): number[] {
+    const limit = this.getGlobalSpeedLimit();
+    const all: number[] = [4, 8, 16, 20, 30, 40];
+    if (limit === null) return all;
+    return all.filter((s) => s >= limit);
   }
 
   /**

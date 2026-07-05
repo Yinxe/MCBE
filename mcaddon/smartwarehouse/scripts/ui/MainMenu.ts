@@ -51,10 +51,10 @@ export async function showMainMenu(
       );
 
       if (nearbyOwned.length > 0) {
-        await showWarehouseSettingsMenu(player, nearbyOwned[0].id, repository, service);
+        await showWarehouseSettingsMenu(player, nearbyOwned[0].id, repository, service, configStore);
       } else {
         player.sendMessage("§7附近没有找到属于你的仓库，显示所有仓库列表");
-        await showWarehouseManageMenu(player, repository, service);
+        await showWarehouseManageMenu(player, repository, service, configStore);
       }
     })
     .button("仓库列表", () => showWarehouseManageMenu(player, repository, service))
