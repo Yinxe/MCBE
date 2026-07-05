@@ -3,6 +3,7 @@ import type { ContainerId } from "../types";
 import { Logger } from "../util/Logger";
 import { restoreContainerSnapshot, snapshotContainer } from "../sorting/ContainerSnapshot";
 import { scanContainerSlots, type SlotScanResult } from "../util/ContainerScan";
+import { OrganizeHooks } from "../util/OrganizeHooks";
 
 const log = new Logger("SlotOrganizer");
 
@@ -168,7 +169,7 @@ export class SlotOrganizer {
       try {
         log.info(`onDeposit ${containerId}: organizing...`);
         const analysis = this.analyze(container);
-        const result = this.apply(container, analysis);
+        const result = this.apply(container, analysis, { source: "onDeposit", containerId });
         if (result.success) {
           log.info(`onDeposit ${containerId}: organize done, moved ${result.movedStacks} stacks`);
         } else {
@@ -342,7 +343,11 @@ export class SlotOrganizer {
    *
    * @returns 整理结果
    */
-  apply(container: Container, analysis: ContainerAnalysis): OrganizeResult {
+  apply(
+    container: Container,
+    analysis: ContainerAnalysis,
+    hookMeta?: { source: string; containerId?: string }
+  ): OrganizeResult {
     const { sortedItems, occupiedSlots, startSlot, endSlot, rawItems } = analysis;
 
     // ── 校验：以当前容器实际内容为准 ──
@@ -448,7 +453,7 @@ export class SlotOrganizer {
     const beforeTypes = new Set(rawItems.map((i) => i.typeId)).size;
     const afterTypes = new Set(sortedItems.map((i) => i.typeId)).size;
 
-    return {
+    const result: OrganizeResult = {
       success: true,
       movedStacks: beforeStacks - afterStacks,
       beforeStacks,
@@ -462,6 +467,9 @@ export class SlotOrganizer {
       error: undefined,
       messiness: analysis.messiness,
     };
+
+    OrganizeHooks.run({ container, result, source: hookMeta?.source ?? "apply", containerId: hookMeta?.containerId });
+    return result;
   }
 
   // ═══════════════════════════════════════════════════════════════

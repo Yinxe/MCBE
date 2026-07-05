@@ -1,14 +1,16 @@
 import { system } from "@minecraft/server";
 import { CommandRouter } from "./commands/CommandRouter";
 import { registerToolInteraction } from "./interaction/ToolInteractionController";
-import { WarehouseRuntimeRegistry } from "./runtime/WarehouseRuntimeRegistry";
 import { SlotOrganizer } from "./organize/SlotOrganizer";
+import { WarehouseRuntimeRegistry } from "./runtime/WarehouseRuntimeRegistry";
 import { SorterEngine } from "./sorting/SorterEngine";
 import { SortingScheduler } from "./sorting/SortingScheduler";
-import { WarehouseRepository } from "./storage/WarehouseRepository";
 import { ModConfigStore } from "./storage/ModConfigStore";
-import { WarehouseService } from "./warehouse/WarehouseService";
+import { WarehouseRepository } from "./storage/WarehouseRepository";
+import { OrganizeHookContext, OrganizeHooks } from "./util/OrganizeHooks";
+import { SortHookContext, SortHooks } from "./util/SortHooks";
 import { BoundaryDisplay } from "./warehouse/BoundaryDisplay";
+import { WarehouseService } from "./warehouse/WarehouseService";
 
 // ═══════════════════════════════════════════════════════════════════
 // Phase 1: 无状态基础设施（不依赖其他 SmartWarehouse 模块）
@@ -59,7 +61,7 @@ commandRouter.register();
 // Phase 4: 延迟启动（dynamicProperty 需要世界完全加载后才能访问）
 // ═══════════════════════════════════════════════════════════════════
 
-system.run(() => {
+system.runTimeout(() => {
   // 启动分拣调度器的生命周期监控
   scheduler.start();
 
@@ -69,6 +71,16 @@ system.run(() => {
       boundaryDisplay.start(w.id, w.area, w.dimensionId);
     }
   }
-});
+}, 20 * 5);
+SortHooks.register((ctx: SortHookContext) => {
+/**
+ * 注册分拣物品数据流Hook
+ */
+})
+OrganizeHooks.register((ctx: OrganizeHookContext) => {
+/**
+ *注册容器整理物品数据流Hook
+ */
+})
 
 console.warn("[SmartWarehouse] 加载完成");
