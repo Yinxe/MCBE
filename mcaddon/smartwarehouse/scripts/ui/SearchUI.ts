@@ -170,7 +170,7 @@ async function performSearch(
  * @param locations   - 要标记的方块坐标列表
  * @param configStore - 模组配置仓储（用于获取当前信物 ID）
  */
-function startMarkerParticles(
+export function startMarkerParticles(
   player: Player,
   dimensionId: string,
   locations: BlockLocation[],

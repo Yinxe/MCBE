@@ -44,6 +44,7 @@ import { Logger } from "../util/Logger";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showMainMenu } from "../ui/MainMenu";
 import { SearchService, formatSearchResult } from "../warehouse/SearchService";
+import { startMarkerParticles } from "../ui/SearchUI";
 import { filterNearbyOwnedWarehouses } from "../util/Vector";
 
 /** CommandRouter 专用的日志记录器实例，用于输出调试和运行信息 */
@@ -596,6 +597,18 @@ export class CommandRouter {
         const lines = formatSearchResult(result);
         for (const line of lines) {
           trySendMessage(player, line);
+        }
+        // 播放搜索标记粒子
+        if (result.containerCount > 0) {
+          const markerLocs = searchService.getMarkerLocations(result);
+          if (markerLocs.length > 0) {
+            const blLocs = markerLocs.map((l) => ({
+              x: Math.floor(l.x),
+              y: Math.floor(l.y),
+              z: Math.floor(l.z),
+            }));
+            startMarkerParticles(player, target.dimensionId, blLocs, this.configStore);
+          }
         }
       } catch (error) {
         trySendMessage(player, `§c搜索失败: ${error instanceof Error ? error.message : String(error)}`);
