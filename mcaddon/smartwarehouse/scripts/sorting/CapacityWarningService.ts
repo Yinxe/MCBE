@@ -1,6 +1,7 @@
 import { world, system } from "@minecraft/server";
 import type { ContainerRole, ContainerStats, StoredContainer, WarehouseData } from "../types";
 import { ROLE_LABELS } from "../types";
+import { getChineseName } from "../data/ItemNameMap";
 import { isNearAreaXZ } from "../util/Vector";
 
 /** 冷却 tick 数（5 秒 = 100 tick） */
@@ -42,17 +43,19 @@ export class CapacityWarningService {
   }
 
   /** 红色：候选容器全满，物品降级 */
-  warnDowngrade(warehouse: WarehouseData, from: ContainerRole, to: ContainerRole): void {
+  warnDowngrade(warehouse: WarehouseData, from: ContainerRole, to: ContainerRole, typeId: string): void {
     if (!warehouse.settings.capacityWarning) return;
     if (!this.canSend(`downgrade:${warehouse.id}`)) return;
-    this.sendMessage(warehouse, `§c${ROLE_LABELS[from]}已满，物品降级至${ROLE_LABELS[to]}`);
+    const itemName = getChineseName(typeId);
+    this.sendMessage(warehouse, `§c${ROLE_LABELS[from]}已满，${itemName} §7(${typeId})§c 降级至${ROLE_LABELS[to]}`);
   }
 
   /** 深红：全仓满 */
-  warnWarehouseFull(warehouse: WarehouseData): void {
+  warnWarehouseFull(warehouse: WarehouseData, typeId: string): void {
     if (!warehouse.settings.capacityWarning) return;
     if (!this.canSend(`full:${warehouse.id}`)) return;
-    this.sendMessage(warehouse, `§4仓库 ${warehouse.displayName} 已满，物品无法分拣`);
+    const itemName = getChineseName(typeId);
+    this.sendMessage(warehouse, `§4仓库 ${warehouse.displayName} 已满，${itemName} §7(${typeId})§4 无法分拣`);
   }
 
   private sendMessage(warehouse: WarehouseData, message: string): void {

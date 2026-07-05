@@ -233,22 +233,38 @@ export class SorterEngine {
     const sourceAmount = source.getItem(sourceSlot)?.amount ?? 0;
 
     // ── 优先级 1~5：统一使用 transferItem ────────────────
+    // lastActiveRole 追踪最后成功放置物品的角色，用于精准的降级预警
+    let lastActiveRole: import("../types").ContainerRole | null = null;
+
     const bulkMatches = this.findMatchingBulk(typeId, warehouse, model, dimension);
-    if (this.tryTransfer(source, sourceSlot, bulkMatches, warehouse, model, dimension, typeId, journal, "bulk")) return;
+    {
+      const before = source.getItem(sourceSlot)?.amount ?? 0;
+      if (this.tryTransfer(source, sourceSlot, bulkMatches, warehouse, model, dimension, typeId, journal, "bulk")) return;
+      if ((source.getItem(sourceSlot)?.amount ?? 0) < before) lastActiveRole = "bulk";
+    }
 
     const indexedTypeContainers = findExistingTypeContainers(warehouse, model, typeId, dimension);
-    if (
-      this.tryTransfer(source, sourceSlot, indexedTypeContainers, warehouse, model, dimension, typeId, journal, "match")
-    )
-      return;
+    {
+      const before = source.getItem(sourceSlot)?.amount ?? 0;
+      if (
+        this.tryTransfer(source, sourceSlot, indexedTypeContainers, warehouse, model, dimension, typeId, journal, "match")
+      )
+        return;
+      if ((source.getItem(sourceSlot)?.amount ?? 0) < before) lastActiveRole = "normal";
+    }
 
-    if (
-      this.tryTransferUnindexed(source, sourceSlot, typeId, indexedTypeContainers, warehouse, model, dimension, journal)
-    )
-      return;
+    {
+      const before = source.getItem(sourceSlot)?.amount ?? 0;
+      if (
+        this.tryTransferUnindexed(source, sourceSlot, typeId, indexedTypeContainers, warehouse, model, dimension, journal)
+      )
+        return;
+      if ((source.getItem(sourceSlot)?.amount ?? 0) < before) lastActiveRole = "normal";
+    }
 
     const family = getFamily(typeId);
     if (family && (warehouse.settings.enabledFamilies ?? []).includes(family.id)) {
+      const before = source.getItem(sourceSlot)?.amount ?? 0;
       if (
         this.tryTransfer(
           source,
@@ -263,12 +279,15 @@ export class SorterEngine {
         )
       )
         return;
+      if ((source.getItem(sourceSlot)?.amount ?? 0) < before) lastActiveRole = "normal";
     }
 
     if (warehouse.settings.autoCreateCategories) {
+      const before = source.getItem(sourceSlot)?.amount ?? 0;
       const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
       if (freeNormal)
         this.tryTransfer(source, sourceSlot, [freeNormal], warehouse, model, dimension, typeId, journal, "autocreate");
+      if ((source.getItem(sourceSlot)?.amount ?? 0) < before) lastActiveRole = "normal";
     }
 
     this.tryTransfer(source, sourceSlot, model.miscContainerIds, warehouse, model, dimension, typeId, journal, "misc");
@@ -279,10 +298,10 @@ export class SorterEngine {
     const placed = sourceAmount - afterAmount;
     if (placed > 0) {
       // 有物品被放置但仍有剩余 → 候选容器全满，降级发生
-      this.capacityWarning.warnDowngrade(warehouse, "normal", "misc");
+      this.capacityWarning.warnDowngrade(warehouse, lastActiveRole ?? "normal", "misc", typeId);
     } else if (afterAmount >= sourceAmount) {
       // 所有优先级都没有放进去任何物品 → 全仓满
-      this.capacityWarning.warnWarehouseFull(warehouse);
+      this.capacityWarning.warnWarehouseFull(warehouse, typeId);
     }
   }
 
