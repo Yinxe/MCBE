@@ -1248,7 +1248,6 @@ const plants: ItemFamily = {
     "minecraft:dark_oak_leaves", // 深色橡树叶
     "minecraft:dark_oak_sapling", // 深色橡树苗
     "minecraft:mangrove_leaves", // 红树木树叶
-    "minecraft:mangrove_sapling",
     "minecraft:cherry_leaves", // 樱花树叶
     "minecraft:cherry_sapling", // 樱花树苗
     "minecraft:pale_oak_leaves", // 苍白橡木树叶

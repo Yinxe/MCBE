@@ -183,6 +183,9 @@ export class SorterEngine {
     } catch (error) {
       log.error(`处理输入容器 ${containerId} 时出错: ${error}`);
       this.rollbackJournal(journal, warehouse);
+      // 异常时推进游标防止无限重试（第153行自动处理越界回绕）
+      const cur = model.inputSlotCursors.get(containerId) ?? 0;
+      model.inputSlotCursors.set(containerId, cur + 1);
     }
   }
 
