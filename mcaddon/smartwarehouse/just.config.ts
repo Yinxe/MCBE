@@ -48,12 +48,12 @@ const mcaddonTaskOptions: ZipTaskParameters = {
 };
 
 // ── Version sync ────────────────────────────────────────────────
+  uuid?: string;
 interface ManifestModule {
   version: number[];
   [key: string]: unknown;
 }
-interface ManifestDependency {
-  uuid?: string;
+
   module_name?: string;
   version: number[];
   [key: string]: unknown;
@@ -112,13 +112,27 @@ task("lint", coreLint(["scripts/**/*.ts"], argv().fix));
 task("typescript", tscTask());
 task("bundle", bundleTask(bundleTaskOptions));
 
+
+/** 从 package.json 生成 scripts/version.ts */
+task("generate-version", () => {
+  const buildTime = new Date().toISOString();
+  const content = [
+    "// 此文件由 just.config.ts 在构建时自动生成\n",
+    `export const VERSION = "${pkgVersion}";`,
+    `export const BUILD_TIME = "${buildTime}";`,
+    `export const PROJECT_URL = "https://github.com/YinxSmartHouse/SmartWarehouse";`,
+  ].join("\n");
+  writeFileSync(path.resolve(__dirname, "scripts/version.ts"), content + "\n");
+  console.log(`  ✓ scripts/version.ts → v${pkgVersion} (${buildTime})`);
+});
+
 task("update-version", () => {
   console.log(`Syncing manifest versions to ${pkgVersion} …`);
   syncManifestVersion();
   console.log("Done.");
 });
 
-task("build", series("update-version", "typescript", "bundle"));
+task("build", series("generate-version", "update-version", "typescript", "bundle"));
 task("clean-local", cleanTask(DEFAULT_CLEAN_DIRECTORIES));
 task("clean-collateral", cleanCollateralTask(STANDARD_CLEAN_PATHS));
 task("clean", parallel("clean-local", "clean-collateral"));
