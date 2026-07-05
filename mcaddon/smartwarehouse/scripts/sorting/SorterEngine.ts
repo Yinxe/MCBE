@@ -1,8 +1,9 @@
-import { Dimension, Container } from "@minecraft/server";
+import { Dimension, Container, ItemStack } from "@minecraft/server";
 import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, ContainerId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { WarehouseRuntimeRegistry } from "../runtime/WarehouseRuntimeRegistry";
 import { Logger } from "../util/Logger";
+import { SortHooks } from "../util/SortHooks";
 import { getContainerFromStored, isContainerEmpty, getBulkChestFirstType, getFamilyPurity } from "./ContainerInventory";
 import { MoveJournal } from "./MoveJournal";
 import { playSortEffect } from "./SortEffects";
@@ -336,6 +337,15 @@ export class SorterEngine {
         const stats = refreshContainerStats(warehouse, stored);
         if (stats) this.capacityWarning.checkContainer(warehouse, containerId, stored, stats);
 
+        SortHooks.run({
+          stack: source.getItem(sourceSlot) ?? new ItemStack(typeId, placed),
+          placed,
+          remaining: afterAmount > 0 ? (source.getItem(sourceSlot) ?? undefined) : undefined,
+          targetContainerId: containerId,
+          targetContainer: target,
+          warehouse,
+          tag,
+        });
         if (afterAmount === 0) return true;
       }
     }

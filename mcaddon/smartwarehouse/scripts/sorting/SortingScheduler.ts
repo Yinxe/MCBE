@@ -1,4 +1,5 @@
 import { world, system } from "@minecraft/server";
+import { ModuleController } from "../util/ModuleController";
 import type { WarehouseId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { SorterEngine } from "./SorterEngine";
@@ -103,6 +104,11 @@ export class SortingScheduler {
    */
   private lifecycleTick(): void {
     // 刷新玩家位置缓存（仅在需求时调用一次 world.getPlayers）
+    if (!ModuleController.isEnabled()) {
+      // 模组关闭 → 全部停用
+      for (const id of [...this.handles.keys()]) this.deactivate(id);
+      return;
+    }
     this.proximity.refresh();
 
     // 无玩家在线 → 全部停用

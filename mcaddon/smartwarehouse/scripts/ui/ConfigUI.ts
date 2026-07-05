@@ -1,32 +1,33 @@
-/**
- * ============================================================================
- * ConfigUI —— 模组全局配置界面
- * ============================================================================
- *
- * 职责：
- * 1. 提供信物配选择界面（下拉选择框）
- * 2. 配置仓库最大体积和单仓库最大容器数
- * 3. 配置各玩家最大仓库数
- * 4. 配置全局处理速度最快限制
- * 5. 仅管理员可访问
- * ============================================================================
- */
-
-import { type Player } from "@minecraft/server";
-import { ModalFormBuilder } from "./FormHelper";
+import { type Player, world } from "@minecraft/server";
+import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
 import type { ModConfig, ModConfigStore } from "../storage/ModConfigStore";
 import { TOKEN_OPTIONS, VOLUME_OPTIONS, CONTAINER_OPTIONS, GLOBAL_SPEED_OPTIONS } from "../storage/ModConfigStore";
-import { canManageWarehouse } from "../util/PlayerAuth";
+import { ModuleController } from "../util/ModuleController";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
+import { ROLE_LABELS, ROLE_ORDER } from "../types";
 
 /**
- * 显示模组全局配置界面。
+ * 显示模组管理员面板（配置 + 总开关 + 全服统计）。
  */
 export async function showConfigUI(player: Player, configStore: ModConfigStore): Promise<void> {
-  if (!canManageWarehouse(player)) {
-    player.sendMessage("§c你没有权限修改模组配置（需要 op）");
-    return;
-  }
+  const form = new ActionFormBuilder()
+    .title("§eSmartWarehouse 管理")
+    .body("§7选择操作")
+    .button("模组配置", () => showModalConfig(player, configStore))
+    .button("全服统计", () => showServerStats(player));
+
+  // 总开关始终可见（即使模组关闭也能打开）
+  const isOn = ModuleController.isEnabled();
+  form.button(isOn ? "§c紧急关闭模组" : "§a重新开启模组", () => {
+    ModuleController.setEnabled(!isOn);
+    player.sendMessage(isOn ? "§c模组已关闭" : "§a模组已开启");
+  });
+
+  await form.show(player);
+}
+
+async function showModalConfig(player: Player, configStore: ModConfigStore): Promise<void> {
+  if (ModuleController.intercept(player)) return;
 
   const config = configStore.load();
   const tokenIdx = TOKEN_OPTIONS.findIndex((o) => o.itemId === config.tokenItemId);
@@ -82,10 +83,8 @@ export async function showConfigUI(player: Player, configStore: ModConfigStore):
     globalSpeedLimit: GLOBAL_SPEED_OPTIONS[vals.speedLimit as number]?.value ?? null,
   };
 
-  // 如果全局速度限制变化，对所有仓库强制实施
-  const oldLimit = config.globalSpeedLimit;
   const newLimit = newConfig.globalSpeedLimit;
-  if (oldLimit !== newLimit && newLimit !== null) {
+  if (config.globalSpeedLimit !== newLimit && newLimit !== null) {
     const repo = new WarehouseRepository();
     for (const w of repo.loadAll()) {
       if (w.settings.processingSpeed < newLimit) {
@@ -93,14 +92,53 @@ export async function showConfigUI(player: Player, configStore: ModConfigStore):
         repo.saveMetaOnly(w);
       }
     }
-    player.sendMessage(`§7已调整所有仓库的处理速度以符合新限制`);
+    player.sendMessage("§7已调整所有仓库的处理速度以符合新限制");
   }
 
   configStore.save(newConfig);
-
   const tokenLabel = TOKEN_OPTIONS.find((o) => o.itemId === newConfig.tokenItemId);
   player.sendMessage(
-    `§a配置已保存。信物: §e${tokenLabel?.label ?? "无"}§a，` +
-      `每玩家最多 §f${newConfig.maxWarehousesPerPlayer}§a 个仓库`
+    `§a配置已保存。信物: §e${tokenLabel?.label ?? "无"}§a` +
+      `，每玩家最多 §f${newConfig.maxWarehousesPerPlayer}§a 个仓库`
   );
+}
+
+/** 全服统计面板 */
+async function showServerStats(player: Player): Promise<void> {
+  const repo = new WarehouseRepository();
+  const all = repo.loadAll();
+
+  // 按玩家聚合
+  const perPlayer = new Map<string, { warehouses: number; containers: number }>();
+  for (const w of all) {
+    const owner = w.ownerId || "未知";
+    const entry = perPlayer.get(owner) ?? { warehouses: 0, containers: 0 };
+    entry.warehouses++;
+    entry.containers += Object.keys(w.containers).length;
+    perPlayer.set(owner, entry);
+  }
+
+  const totalWH = all.length;
+  const totalContainers = all.reduce((s, w) => s + Object.keys(w.containers).length, 0);
+
+  const lines: string[] = [
+    `§e=== SmartWarehouse 全服统计 ===`,
+    `§7仓库总数: §f${totalWH}`,
+    `§7容器总数: §f${totalContainers}`,
+    `§7活跃玩家数: §f${perPlayer.size}`,
+    ``,
+    `§e玩家排名（按仓库数）:`,
+  ];
+
+  const sorted = [...perPlayer.entries()]
+    .map(([id, d]) => ({ id: id.slice(-8), ...d }))
+    .sort((a, b) => b.warehouses - a.warehouses);
+
+  for (const p of sorted) {
+    lines.push(`  §7${p.id}: §f${p.warehouses}§7仓 §f${p.containers}§7箱`);
+  }
+
+  for (const line of lines) {
+    player.sendMessage(line);
+  }
 }

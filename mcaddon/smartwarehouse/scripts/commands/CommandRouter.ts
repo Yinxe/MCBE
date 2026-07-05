@@ -46,6 +46,7 @@ import { showMainMenu } from "../ui/MainMenu";
 import { SearchService, formatSearchResult } from "../warehouse/SearchService";
 import { startMarkerParticles } from "../ui/SearchUI";
 import { filterNearbyOwnedWarehouses } from "../util/Vector";
+import { ModuleController } from "../util/ModuleController";
 
 /** CommandRouter 专用的日志记录器实例，用于输出调试和运行信息 */
 const log = new Logger("CommandRouter");
@@ -62,7 +63,6 @@ function success(message: string): CustomCommandResult {
 /**
  * 构造一个"失败"的自定义命令结果
  * @param message 失败提示消息
- * @returns 状态为 Failure 的命令结果对象
  */
 function failure(message: string): CustomCommandResult {
   return { status: CustomCommandStatus.Failure, message };
@@ -496,8 +496,12 @@ export class CommandRouter {
    * 使用 SlotOrganizer 对玩家背包 9~35 号槽位进行排序+堆叠合并。
    */
   private handleOrganize(origin: CustomCommandOrigin): CustomCommandResult {
+    const modErr = ModuleController.checkEnabled();
+    if (modErr) return failure(modErr);
     const player = parseAnyPlayer(origin);
     if (typeof player === "string") return failure(player);
+    if (modErr) return failure(modErr);
+    if (modErr) return failure(modErr);
 
     system.runTimeout(() => {
       try {
@@ -552,8 +556,11 @@ export class CommandRouter {
    * 所有玩家可用，不依赖信物。
    */
   private handleMenu(origin: CustomCommandOrigin): CustomCommandResult {
+    const modErr = ModuleController.checkEnabled();
+    if (modErr) return failure(modErr);
     const player = parseAnyPlayer(origin);
     if (typeof player === "string") return failure(player);
+    if (modErr) return failure(modErr);
 
     system.runTimeout(() => {
       showMainMenu(player, this.repository, this.service, this.configStore).catch((error) => {
