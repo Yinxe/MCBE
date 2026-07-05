@@ -66,8 +66,8 @@ export function findFirstNonEmptySlot(container: Container): number {
  */
 export function containerHasType(container: Container, typeId: string): boolean {
   for (let slot = 0; slot < container.size; slot++) {
-    const item = container.getItem(slot);
-    if (item && item.typeId === typeId) return true;
+    const slotObj = container.getSlot(slot);
+    if (slotObj.hasItem() && slotObj.typeId === typeId) return true;
   }
   return false;
 }

@@ -1,5 +1,5 @@
 import { Dimension, ItemStack, Container } from "@minecraft/server";
-import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, ContainerId, StoredContainer } from "../types";
+import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, ContainerId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { WarehouseRuntimeRegistry } from "../runtime/WarehouseRuntimeRegistry";
 import { Logger } from "../util/Logger";
@@ -7,7 +7,6 @@ import {
   getContainerFromStored,
   isContainerEmpty,
   tryMoveStackIntoContainer,
-  tryMoveStackIntoContainerWithJournal,
   isShulkerBoxItem,
   getBulkChestFirstType,
   tryFillShulkerBoxes,
@@ -30,7 +29,6 @@ import {
 const log = new Logger("SorterEngine");
 
 /** 容量预警冷却 tick 数（5 秒 = 100 tick，防止刷屏） */
-
 /**
  * 分拣引擎 —— 将物品从输入容器分拣到对应的存储容器（普通 / 杂项）中。
  *
@@ -136,14 +134,6 @@ export class SorterEngine {
    * 遍历容器中所有槽位，逐个尝试分拣。无法分类的物品**留在原地**，
    * 不会阻塞后续槽位的处理，且下个 tick 会再次尝试。
    *
-   * 步骤（每个槽位）：
-   * 1. 获取该槽位的物品堆。
-   * 2. 调用 `moveStackIntoWarehouse` 尝试放入仓库中的存储容器。
-   * 3. 根据返回值更新槽位：
-   *    - `undefined`：整堆全部放完 → 清空槽位。
-   *    - 剩余量 < 原来量 → 部分放入，余量写回槽位。
-   *    - 剩余量 == 原来量 → 无法分类，保持不动，继续下一槽。
-   *
    * **容错设计**：整个方法被 try-catch 包裹，确保单个容器异常不会瓦解调度循环。
    */
   private processInputContainer(
@@ -165,8 +155,6 @@ export class SorterEngine {
       const container = getContainerFromStored(dimension, stored);
       if (!container) return;
 
-      const loc = stored.primaryLocation;
-
       // ── 槽位游标：取当前格 ──
       let slot = model.inputSlotCursors.get(containerId) ?? 0;
       if (slot >= container.size) slot = 0;
@@ -180,28 +168,19 @@ export class SorterEngine {
       }
 
       const originalAmount = stack.amount;
-      log.info(`槽 ${slot}：${stack.typeId} x${originalAmount}`);
+      const typeId = stack.typeId;
+      log.info(`槽 ${slot}：${typeId} x${originalAmount}`);
 
-      const remaining = this.moveStackIntoWarehouse(stack, warehouse, model, dimension, journal);
+      // 记录源槽位快照（用于回滚），然后直接通过 transferItem 分拣
+      journal.snapshotSource(containerId, container, slot);
+      this.sortFromContainer(container, slot, typeId, warehouse, model, dimension, journal);
 
-      if (remaining === undefined) {
-        // 整堆全部成功放置 → 清空输入槽位
-        try {
-          container.setItem(slot);
-          log.info(`槽 ${slot} 已清空（全部 ${originalAmount} 个已放置）`);
-        } catch (setError) {
-          log.error(`致命错误：槽 ${slot} 清空失败，尝试回滚: ${setError}`);
-          this.rollbackJournal(journal, warehouse);
-        }
-      } else if (remaining.amount < originalAmount) {
-        // 部分放置成功 → 余量写回槽位
-        try {
-          container.setItem(slot, remaining);
-          log.info(`槽 ${slot} 部分放置：${remaining.amount}/${originalAmount} 返回`);
-        } catch (setError) {
-          log.error(`致命错误：槽 ${slot} 回写失败，尝试回滚: ${setError}`);
-          this.rollbackJournal(journal, warehouse);
-        }
+      // sortFromContainer 返回后，源槽位即"剩余量"
+      const afterStack = container.getItem(slot);
+      if (!afterStack) {
+        log.info(`槽 ${slot} 已清空（全部 ${originalAmount} 个已放置）`);
+      } else if (afterStack.amount < originalAmount) {
+        log.info(`槽 ${slot} 部分放置：${afterStack.amount}/${originalAmount} 返回`);
       } else {
         log.info(`槽 ${slot} 无法分类（${originalAmount} 个未变动）`);
       }
@@ -240,114 +219,152 @@ export class SorterEngine {
   // ─── 目标选择与转移 ─────────────────────────────────────────────
 
   /**
-   * 按优先级尝试将物品堆放入仓库中的目标容器。
+   * 从源容器槽位直接向存储容器转移物品（使用 transferItem）。
    *
-   * 优先级顺序：
-   * 1. **大宗容器**（单物品）—— 高产量单品优先路由到专用大宗箱。
-   * 2. **已有同类物品的普通容器**（多物品）—— 利用运行时索引加速。
-   * 3. **同族物品的普通容器**（家庭同族）—— 同一家族聚集到同一容器。
-   * 4. **空的普通容器**（自动创建分类）—— 当 `autoCreateCategories` 开启时启用。
-   * 5. **杂项容器**（兜底）—— 任何物品最终都能放入杂项容器。
-   *
-   * 每一优先级都会调用 `tryContainers` 遍历候选容器列表并尝试放入。
-   * 一旦整堆全部放完（返回 undefined），立即返回，不再尝试后续优先级。
-   *
-   * @param stack - 待放置的物品堆
-   * @param warehouse - 仓库数据
-   * @param model - 运行态模型（包含索引、容器分类列表等）
-   * @param dimension - 物品所在的维度
-   * @returns 未能放入的剩余物品堆，全部放完则返回 undefined
+   * 与 moveStackIntoWarehouse 的区别：
+   * - 使用 Container.transferItem() 直接移动方块间物品，避免 getItem 副本开销
+   * - 源槽位状态即"剩余量"，无需额外变量追踪
    */
-  private moveStackIntoWarehouse(
-    stack: ItemStack,
+  private sortFromContainer(
+    source: Container,
+    sourceSlot: number,
+    typeId: string,
     warehouse: WarehouseData,
     model: WarehouseRuntimeModel,
     dimension: Dimension,
     journal: MoveJournal
-  ): ItemStack | undefined {
-    const typeId = stack.typeId;
-    let remaining: ItemStack | undefined = stack;
-
+  ): void {
     // ── 优先级 1：大宗 ─────────────────────────────────────
-    // 专收单一类型高产量物品。每次全量扫描（bulk 数量极少 ~1-5）。
-    remaining = this.tryBulkContainers(
-      remaining,
-      this.findMatchingBulk(typeId, warehouse, model, dimension),
-      warehouse,
-      model,
-      dimension,
-      typeId,
-      journal
-    );
-    if (!remaining) return;
-
-    // ── 优先级 2：同类物品 ────────────────────────────────
-    // 利用 itemTypeIndex 快速定位已有同类物品的普通容器。
-    const indexedTypeContainers = findExistingTypeContainers(warehouse, model, typeId, dimension);
-    remaining = this.tryContainers(
-      remaining,
-      indexedTypeContainers,
-      warehouse,
-      model,
-      dimension,
-      typeId,
-      journal,
-      "match"
-    );
-    if (!remaining) return;
-
-    // ── 优先级 2b：未索引容器兜底扫描 ──────────────────────
-    // 索引指向的容器都满了时，全量扫描查找用户手动放物的未索引容器。
-    remaining = this.scanUnindexedContainers(
-      remaining,
-      typeId,
-      indexedTypeContainers,
-      warehouse,
-      model,
-      dimension,
-      journal
-    );
-    if (!remaining) return;
-
-    // ── 优先级 3：同族物品 ───────────────────────────────
-    // 物品属于已启用的同族分类时，聚集到同一容器。
-    const family = getFamily(typeId);
-    if (family && (warehouse.settings.enabledFamilies ?? []).includes(family.id)) {
-      const familyContainers = findExistingFamilyContainers(warehouse, model, family.id, dimension);
-      remaining = this.tryContainers(
-        remaining,
-        familyContainers,
+    // 大宗容器需要 ItemStack（潜影盒填充），走旧路径
+    const initialStack = source.getItem(sourceSlot);
+    if (initialStack) {
+      const remaining = this.tryBulkContainers(
+        initialStack,
+        this.findMatchingBulk(typeId, warehouse, model, dimension),
         warehouse,
         model,
         dimension,
         typeId,
-        journal,
-        "family"
+        journal
       );
-      if (!remaining) return;
-    }
-
-    // ── 优先级 4：自动创建分类 ───────────────────────────
-    // 找一个空 normal 箱为新物品建立专有分类。
-    if (warehouse.settings.autoCreateCategories) {
-      const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
-      if (freeNormal) {
-        remaining = this.tryContainers(
-          remaining,
-          [freeNormal],
-          warehouse,
-          model,
-          dimension,
-          typeId,
-          journal,
-          "autocreate"
-        );
-        if (!remaining) return;
+      if (!remaining) {
+        source.setItem(sourceSlot); // 全部放入大宗
+        return;
+      }
+      if (remaining.amount < initialStack.amount) {
+        source.setItem(sourceSlot, remaining); // 部分放入大宗，余量回写
       }
     }
 
-    // ── 优先级 5：杂项（兜底）─────────────────────────────
-    return this.tryContainers(remaining, model.miscContainerIds, warehouse, model, dimension, typeId, journal, "misc");
+    // ── 优先级 2~5：使用 transferItem 直接转移 ──────────
+    const indexedTypeContainers = findExistingTypeContainers(warehouse, model, typeId, dimension);
+    if (
+      this.tryTransfer(source, sourceSlot, indexedTypeContainers, warehouse, model, dimension, typeId, journal, "match")
+    )
+      return;
+
+    if (
+      this.tryTransferUnindexed(source, sourceSlot, typeId, indexedTypeContainers, warehouse, model, dimension, journal)
+    )
+      return;
+
+    const family = getFamily(typeId);
+    if (family && (warehouse.settings.enabledFamilies ?? []).includes(family.id)) {
+      const familyContainers = findExistingFamilyContainers(warehouse, model, family.id, dimension);
+      if (
+        this.tryTransfer(source, sourceSlot, familyContainers, warehouse, model, dimension, typeId, journal, "family")
+      )
+        return;
+    }
+
+    if (warehouse.settings.autoCreateCategories) {
+      const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
+      if (freeNormal) {
+        this.tryTransfer(source, sourceSlot, [freeNormal], warehouse, model, dimension, typeId, journal, "autocreate");
+      }
+    }
+
+    this.tryTransfer(source, sourceSlot, model.miscContainerIds, warehouse, model, dimension, typeId, journal, "misc");
+  }
+
+  /**
+   * 尝试将源容器槽位中的物品 transferItem 到候选容器列表。
+   * 每次 transferItem 成功后将候选容器加入索引并播放效果。
+   *
+   * @returns true = 源槽位已清空（全部放完）
+   */
+  private tryTransfer(
+    source: Container,
+    sourceSlot: number,
+    containerIds: ContainerId[],
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    dimension: Dimension,
+    typeId: string,
+    journal: MoveJournal,
+    tag: string
+  ): boolean {
+    for (const containerId of containerIds) {
+      const beforeAmount = source.getItem(sourceSlot)?.amount ?? 0;
+      if (beforeAmount === 0) return true;
+
+      const stored = warehouse.containers[containerId];
+      if (!stored) continue;
+      const target = getContainerFromStored(dimension, stored);
+      if (!target) continue;
+
+      journal.snapshotTarget(containerId, target);
+      source.transferItem(sourceSlot, target);
+
+      const afterAmount = source.getItem(sourceSlot)?.amount ?? 0;
+      const placed = beforeAmount - afterAmount;
+
+      if (placed > 0) {
+        let purityLog = "";
+        if (tag === "family") {
+          const purFamily = getFamily(typeId);
+          if (purFamily) {
+            const purity = getFamilyPurity(target, new Set(purFamily.items));
+            purityLog = ` (纯度${(purity * 100).toFixed(0)}%)`;
+          }
+        }
+        log.info(
+          `[${tag}]${purityLog} ${typeId} x${placed} → ${containerId} @ (${stored.primaryLocation.x},${stored.primaryLocation.y},${stored.primaryLocation.z})`
+        );
+        addToTypeIndex(model, typeId, containerId);
+        const placedFamily = getFamily(typeId);
+        if (placedFamily && (warehouse.settings.enabledFamilies ?? []).includes(placedFamily.id)) {
+          addToFamilyIndex(model, placedFamily.id, containerId);
+        }
+        playSortEffect(dimension, stored.occupiedLocations, stored.role);
+        this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
+        refreshContainerStats(warehouse, stored);
+
+        if (afterAmount === 0) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 索引容器全满时兜底全量扫描，通过 transferItem 尝试放入未索引容器。
+   */
+  private tryTransferUnindexed(
+    source: Container,
+    sourceSlot: number,
+    typeId: string,
+    indexedContainerIds: ContainerId[],
+    warehouse: WarehouseData,
+    model: WarehouseRuntimeModel,
+    dimension: Dimension,
+    journal: MoveJournal
+  ): boolean {
+    if (!model.itemTypeIndex.has(typeId)) return false;
+    const freshValid: ContainerId[] = [];
+    fullScanNormalContainers(warehouse, model, typeId, dimension, freshValid);
+    const unindexed = freshValid.filter((id) => !indexedContainerIds.includes(id));
+    if (unindexed.length === 0) return false;
+    return this.tryTransfer(source, sourceSlot, unindexed, warehouse, model, dimension, typeId, journal, "match");
   }
 
   /**
@@ -371,120 +388,6 @@ export class SorterEngine {
   }
 
   /**
-   * 索引容器全满时触发兜底全量扫描，查找用户手动放物的未索引容器。
-   * 仅在已有索引记录时触发（否则 findExistingTypeContainers 已扫过）。
-   */
-  private scanUnindexedContainers(
-    remaining: ItemStack | undefined,
-    typeId: string,
-    indexedContainerIds: ContainerId[],
-    warehouse: WarehouseData,
-    model: WarehouseRuntimeModel,
-    dimension: Dimension,
-    journal: MoveJournal
-  ): ItemStack | undefined {
-    if (!remaining || !model.itemTypeIndex.has(typeId)) return remaining;
-    const freshValid: ContainerId[] = [];
-    fullScanNormalContainers(warehouse, model, typeId, dimension, freshValid);
-    const unindexed = freshValid.filter((id) => !indexedContainerIds.includes(id));
-    if (unindexed.length === 0) return remaining;
-    return this.tryContainers(remaining, unindexed, warehouse, model, dimension, typeId, journal, "match");
-  }
-
-  /**
-   * 遍历候选容器列表，尝试将剩余物品堆放入每个容器。
-   *
-   * 对每个容器：
-   * - 获取其 `StoredContainer` 信息，跳过数据缺失的容器。
-   * - 通过 `getContainerFromStored` 获取方块容器对象，若不可达则跳过并记录日志。
-   * - 调用 `tryMoveStackIntoContainer` 尝试将物品放入容器。
-   * - 若有物品成功放入（`placed > 0`），则将容器 ID 更新到 `itemTypeIndex` 索引中，
-   *   以便未来同类物品的分拣能快速定位到该容器。
-   * - 如果剩余物品全部放完（`remaining === undefined`），提前终止遍历。
-   *
-   * @param stack - 当前待放置的物品堆（undefined 表示已放完）
-   * @param containerIds - 候选容器 ID 列表
-   * @param warehouse - 仓库数据
-   * @param model - 运行态模型
-   * @param dimension - 维度
-   * @param typeId - 物品类型 ID
-   * @param tag - 日志标签，用于区分不同优先级（match / autocreate / misc）
-   * @returns 剩余的物品堆，全部放完则返回 undefined
-   */
-  private tryContainers(
-    stack: ItemStack | undefined,
-    containerIds: ContainerId[],
-    warehouse: WarehouseData,
-    model: WarehouseRuntimeModel,
-    dimension: Dimension,
-    typeId: string,
-    journal: MoveJournal,
-    tag?: string
-  ): ItemStack | undefined {
-    if (!stack) return undefined;
-
-    let remaining: ItemStack | undefined = stack;
-
-    for (const containerId of containerIds) {
-      const stored = warehouse.containers[containerId];
-      if (!stored) continue;
-      const loc = stored.primaryLocation;
-
-      const targetContainer = getContainerFromStored(dimension, stored);
-      if (!targetContainer) {
-        log.info(`[${tag ?? "?"}] ${containerId} @ (${loc.x},${loc.y},${loc.z}) — 容器不可达，跳过`);
-        continue;
-      }
-
-      const beforeAmount = remaining.amount;
-      remaining = tryMoveStackIntoContainerWithJournal(remaining, targetContainer, journal, containerId);
-
-      const placed = beforeAmount - (remaining?.amount ?? 0);
-      if (placed > 0) {
-        // 家族分拣日志追加容器纯度，方便调试验证纯度排序效果
-        let purityLog = "";
-        if (tag === "family") {
-          const purFamily = getFamily(typeId);
-          if (purFamily) {
-            const purity = getFamilyPurity(targetContainer!, new Set(purFamily.items));
-            purityLog = ` (纯度${(purity * 100).toFixed(0)}%)`;
-          }
-        }
-        log.info(
-          `[${tag ?? "?"}]${purityLog} ${typeId} x${placed} → ${containerId} (角色=${stored.role}) @ (${loc.x},${loc.y},${loc.z})`
-        );
-        // 记录索引，下回同类物品快速定位到此容器
-        addToTypeIndex(model, typeId, containerId);
-        // 如果物品属于某个启用的同族分类，同步更新 familyTypeIndex
-        const placedFamily = getFamily(typeId);
-        if (placedFamily && (warehouse.settings.enabledFamilies ?? []).includes(placedFamily.id)) {
-          addToFamilyIndex(model, placedFamily.id, containerId);
-        }
-        // 播放分拣动画（粒子 + 音效）
-        playSortEffect(dimension, stored.occupiedLocations, stored.role);
-        // 触发目标容器的混乱度检查，必要时自动整理
-        this.organizer?.onDeposit(targetContainer, containerId, warehouse.settings.autoSortThreshold / 100);
-        // 刷新统计
-        refreshContainerStats(warehouse, stored);
-      }
-
-      if (remaining === undefined) return undefined; // 全部放完，提前退出
-    }
-
-    return remaining;
-  }
-
-  /**
-   * 尝试将物品放入大宗容器中。
-   *
-   * 大宗容器的插入逻辑与普通容器不同：
-   * 1. **优先填满箱内已有的潜影盒** —— 遍历容器槽位，对每个潜影盒调用
-   *    `tryFillShulkerBoxes`，将物品放入盒内。
-   * 2. **再填充空槽位** —— 调用 `tryMoveStackIntoContainer` 放入散装空间。
-   *
-   * 此类容器专用于单一物品类型，混合存储潜影盒与散装物品。
-   *
-   * 设计笔记：本方法不走 `itemTypeIndex` 也不向索引写入。原因是：
    * - `findExistingTypeContainers` 在 :508 行以 `role !== "normal"` 过滤了 bulk。
    * - bulk 容器数量极少（~1-5），每次全量扫描的成本远低于索引自愈的复杂度。
    * - 索引是 normal 箱在数量大时的优化手段，对 bulk 箱收益为负。
