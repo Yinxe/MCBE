@@ -266,8 +266,6 @@ export class SorterEngine {
     journal: MoveJournal
   ): ItemStack | undefined {
     const typeId = stack.typeId;
-    const delegate = (r: ItemStack | undefined, ids: ContainerId[], tag: string) =>
-      this.tryContainers(r, ids, warehouse, model, dimension, typeId, journal, tag);
     let remaining: ItemStack | undefined = stack;
 
     // ── 优先级 1：大宗 ─────────────────────────────────────
@@ -286,7 +284,16 @@ export class SorterEngine {
     // ── 优先级 2：同类物品 ────────────────────────────────
     // 利用 itemTypeIndex 快速定位已有同类物品的普通容器。
     const indexedTypeContainers = findExistingTypeContainers(warehouse, model, typeId, dimension);
-    remaining = delegate(remaining, indexedTypeContainers, "match");
+    remaining = this.tryContainers(
+      remaining,
+      indexedTypeContainers,
+      warehouse,
+      model,
+      dimension,
+      typeId,
+      journal,
+      "match"
+    );
     if (!remaining) return;
 
     // ── 优先级 2b：未索引容器兜底扫描 ──────────────────────
@@ -298,7 +305,7 @@ export class SorterEngine {
       warehouse,
       model,
       dimension,
-      delegate
+      journal
     );
     if (!remaining) return;
 
@@ -307,7 +314,16 @@ export class SorterEngine {
     const family = getFamily(typeId);
     if (family && (warehouse.settings.enabledFamilies ?? []).includes(family.id)) {
       const familyContainers = findExistingFamilyContainers(warehouse, model, family.id, dimension);
-      remaining = delegate(remaining, familyContainers, "family");
+      remaining = this.tryContainers(
+        remaining,
+        familyContainers,
+        warehouse,
+        model,
+        dimension,
+        typeId,
+        journal,
+        "family"
+      );
       if (!remaining) return;
     }
 
@@ -316,13 +332,22 @@ export class SorterEngine {
     if (warehouse.settings.autoCreateCategories) {
       const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
       if (freeNormal) {
-        remaining = delegate(remaining, [freeNormal], "autocreate");
+        remaining = this.tryContainers(
+          remaining,
+          [freeNormal],
+          warehouse,
+          model,
+          dimension,
+          typeId,
+          journal,
+          "autocreate"
+        );
         if (!remaining) return;
       }
     }
 
     // ── 优先级 5：杂项（兜底）─────────────────────────────
-    return delegate(remaining, model.miscContainerIds, "misc");
+    return this.tryContainers(remaining, model.miscContainerIds, warehouse, model, dimension, typeId, journal, "misc");
   }
 
   /**
@@ -356,14 +381,14 @@ export class SorterEngine {
     warehouse: WarehouseData,
     model: WarehouseRuntimeModel,
     dimension: Dimension,
-    delegate: (r: ItemStack | undefined, ids: ContainerId[], tag: string) => ItemStack | undefined
+    journal: MoveJournal
   ): ItemStack | undefined {
     if (!remaining || !model.itemTypeIndex.has(typeId)) return remaining;
     const freshValid: ContainerId[] = [];
     fullScanNormalContainers(warehouse, model, typeId, dimension, freshValid);
     const unindexed = freshValid.filter((id) => !indexedContainerIds.includes(id));
     if (unindexed.length === 0) return remaining;
-    return delegate(remaining, unindexed, "match");
+    return this.tryContainers(remaining, unindexed, warehouse, model, dimension, typeId, journal, "match");
   }
 
   /**
