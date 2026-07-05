@@ -117,8 +117,10 @@ function cleanStaleTypeIndexEntries(model: WarehouseRuntimeModel, typeId: string
 /**
  * 全量扫描所有 normal 容器，查找包含指定物品类型的容器。
  * 结果写入 valid 数组和索引。
+ *
+ * 导出供 SorterEngine 在索引容器全满时触发兜底全量扫描。
  */
-function fullScanNormalContainers(
+export function fullScanNormalContainers(
   warehouse: WarehouseData,
   model: WarehouseRuntimeModel,
   typeId: string,

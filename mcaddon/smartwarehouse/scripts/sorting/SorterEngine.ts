@@ -32,6 +32,7 @@ import { CapacityWarningService } from "./CapacityWarningService";
 import {
   findExistingTypeContainers,
   findExistingFamilyContainers,
+  fullScanNormalContainers,
   addToTypeIndex,
   addToFamilyIndex,
 } from "./SortingIndexManager";
@@ -309,6 +310,21 @@ export class SorterEngine {
       "match"
     );
     if (remaining === undefined) return undefined;
+
+    // ── 优先级 2b：兜底全量扫描 ──────────────────────────────
+    // 当索引指向的容器全部满了（均无法放入），但可能有用户手动放物的
+    // 未索引容器可以接收物品时，触发一次全量扫描。
+    // 仅在存在索引记录的情况下触发（否则 findExistingTypeContainers
+    // 走的就是回退路径，已经扫过所有 normal 容器了）。
+    if (remaining && model.itemTypeIndex.has(typeId)) {
+      const freshValid: ContainerId[] = [];
+      fullScanNormalContainers(warehouse, model, typeId, dimension, freshValid);
+      const unindexed = freshValid.filter((id) => !existingTypeContainers.includes(id));
+      if (unindexed.length > 0) {
+        remaining = this.tryContainers(remaining, unindexed, warehouse, model, dimension, typeId, journal, "match");
+        if (remaining === undefined) return undefined;
+      }
+    }
 
     // ── 优先级 3：家庭同族 ──────────────────────────────────────
     // 检查物品是否属于已启用的同族分类，若是则将同族物品聚集到同一容器。
