@@ -8,7 +8,7 @@ import { SortingScheduler } from "./sorting/SortingScheduler";
 import { ModConfigStore } from "./storage/ModConfigStore";
 import { WarehouseRepository } from "./storage/WarehouseRepository";
 import { BootLogger } from "./util/BootLogger";
-import { VERSION, PROJECT_URL } from "./version";
+import { PROJECT_URL, VERSION } from "./version";
 import { BoundaryDisplay } from "./warehouse/BoundaryDisplay";
 import { WarehouseService } from "./warehouse/WarehouseService";
 
@@ -78,5 +78,7 @@ system.runTimeout(() => {
   }
 
   boot.phase("调度与渲染已启动");
-  boot.done();
 }, 20 * 5);
+system.runTimeout(() => {
+    boot.done();
+},20*10)
