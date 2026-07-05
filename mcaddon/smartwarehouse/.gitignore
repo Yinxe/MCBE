@@ -7,3 +7,4 @@ temp/
 .vscode/
 .codegraph/
 .slim/deepwork/
+.claude/

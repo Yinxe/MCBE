@@ -33,9 +33,9 @@ import {
 } from "@minecraft/server";
 import type { Vector3, EntityInventoryComponent } from "@minecraft/server";
 import type { ContainerId, WarehouseId } from "../types";
-import { ROLE_LABELS, ROLE_ORDER } from "../types";
-import { SlotOrganizer } from "../sorting/SlotOrganizer";
-import { formatOrganizeResult } from "../util/OrganizeFormatter";
+import { ROLE_LABELS, ROLE_ORDER, WAREHOUSE_NEARBY_MARGIN } from "../types";
+import { SlotOrganizer } from "../organize/SlotOrganizer";
+import { formatOrganizeResult } from "../organize/OrganizeFormatter";
 import { normalizeWarehouseId } from "../storage/WarehouseRepository";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { ModConfigStore } from "../storage/ModConfigStore";
@@ -44,7 +44,7 @@ import { Logger } from "../util/Logger";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showMainMenu } from "../ui/MainMenu";
 import { SearchService, formatSearchResult } from "../warehouse/SearchService";
-import { isNearAreaXZ } from "../util/Vector";
+import { filterNearbyOwnedWarehouses } from "../util/Vector";
 
 /** CommandRouter 专用的日志记录器实例，用于输出调试和运行信息 */
 const log = new Logger("CommandRouter");
@@ -573,23 +573,19 @@ export class CommandRouter {
     // 查找附近且属于该玩家的仓库
     const warehouses = this.repository.loadAll();
     const isAdmin = canManageWarehouse(player);
-    const nearbyOwned = warehouses.filter((w) => {
-      if (w.dimensionId !== player.dimension.id) return false;
-      if (w.ownerId !== player.id && !isAdmin) return false;
-      if (!isNearAreaXZ({ x: player.location.x, z: player.location.z }, w.area, 8)) return false;
-      return true;
-    });
+    const nearbyOwned = filterNearbyOwnedWarehouses(
+      warehouses,
+      player.dimension.id,
+      { x: player.location.x, z: player.location.z },
+      WAREHOUSE_NEARBY_MARGIN,
+      player.id,
+      isAdmin
+    );
 
     if (nearbyOwned.length === 0) {
       return failure("附近没有找到属于你的仓库");
     }
 
-    // 取最近的仓库
-    nearbyOwned.sort((a, b) => {
-      const da = distToCenter(player, a.area);
-      const db = distToCenter(player, b.area);
-      return da - db;
-    });
     const target = nearbyOwned[0];
 
     system.runTimeout(() => {
@@ -608,13 +604,4 @@ export class CommandRouter {
 
     return success(`正在仓库 "${target.displayName}" 中搜索: ${query}`);
   }
-}
-
-/** 计算玩家到区域中心的 XZ 平面距离 */
-function distToCenter(player: Player, area: import("../types").WarehouseArea): number {
-  const cx = (area.min.x + area.max.x) / 2;
-  const cz = (area.min.z + area.max.z) / 2;
-  const dx = player.location.x - cx;
-  const dz = player.location.z - cz;
-  return Math.sqrt(dx * dx + dz * dz);
 }

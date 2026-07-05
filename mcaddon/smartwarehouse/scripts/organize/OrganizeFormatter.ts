@@ -1,4 +1,4 @@
-import type { OrganizeResult } from "../sorting/SlotOrganizer";
+import type { OrganizeResult } from "./SlotOrganizer";
 
 /**
  * 将整理结果格式化为玩家可读的消息行列表。

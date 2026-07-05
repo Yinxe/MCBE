@@ -28,19 +28,40 @@ https://raw.githubusercontent.com/SkyEye-FAST/mcbe-chinese-patch/main/extracted/
 BP/                   行为包（manifest.json + scripts 编译产物）
 RP/                   资源包
 scripts/              TypeScript 源码
-  main.ts             入口文件（初始化依赖、注册事件和命令）
+  main.ts             入口文件（初始化依赖、注册事件和命令，分 4 个 Phase）
   types.ts            集中式类型定义（接口、类型别名、常量）
   commands/           命令路由层（解析输入、校验权限、委托服务层）
   data/               数据文件（物品家族分类、中文名映射）
     ItemFamilies.ts   按 51 个家族分类的 1431 个物品（自动生成，勿手动修改）
     name-maps/        物品/实体/效果/附魔中文名映射表
   interaction/        工具交互（木锄右键/方块事件处理）
+  organize/           容器整理（混乱度评分、排序合并、自动整理）
+    SlotOrganizer.ts      容器整理器（三段式 API：analyze → apply → organize）
+    OrganizeFormatter.ts  整理结果格式化（输出给玩家）
   runtime/            运行时缓存层（内存索引、脏标记、惰性重建）
-  sorting/            分拣引擎和调度器
+  sorting/            自动分拣系统（物品路由：输入→存储容器）
+    SorterEngine.ts          分拣引擎（5 级优先级路由）
+    SortingScheduler.ts      分拣调度器（惰性生命周期管理 + PlayerProximityTracker）
+    SortingIndexManager.ts   物品索引管理（itemTypeIndex / familyTypeIndex 自愈）
+    CapacityWarningService.ts 容量预警（满仓检测 + 防刷消息）
+    PlayerProximityTracker.ts 玩家邻近检测（缓存在线玩家位置）
+    ContainerInventory.ts     容器物品操作工具（get/put/check）
+    ContainerSnapshot.ts      容器快照（用于回滚）
+    MoveJournal.ts            分拣事务日志（记录+回滚目标容器变更）
+    SortEffects.ts            分拣特效（粒子+音效）
   storage/            持久化层（Minecraft Dynamic Property 读写）
   ui/                 玩家交互界面（ActionForm / ModalForm）
   util/               工具函数（日志、坐标、JSON、权限）
   warehouse/          核心业务逻辑（仓库 CRUD、容器扫描）
+    WarehouseService.ts     仓库服务（创建、删除、调整、重扫）
+    ContainerScanner.ts     容器扫描器（遍历区域、识别双箱）
+    AreaCheck.ts            区块加载检测（分拣前的预检）
+    ContainerTypes.ts       容器类型判断
+    ContainerId.ts          容器 ID 生成
+    SafeProbe.ts            双箱安全探针
+    WarehouseRescanDiff.ts  重扫差异比较
+    SearchService.ts        仓库物品搜索
+    BoundaryDisplay.ts      边界粒子光幕
 tools/                维护工具
   generateItemFamilies.mjs  物品家族生成器（修改分类后需运行）
   annotateFamilies.mjs      中文注释注入器（运行注入中文名）
@@ -59,8 +80,19 @@ WarehouseRepository   ContainerScanner  ← 数据层 + 扫描
   Minecraft Dynamic Properties
 
 WarehouseRuntimeRegistry ← 运行时缓存（内存索引 + 惰性重建）
-SortingScheduler → SorterEngine ← 分拣子系统
+         ↓
+SortingScheduler → SorterEngine ← 自动分拣子系统
+         ↓
+  sorting/             物品路由（输入→存储容器）
+    SortingIndexManager     索引自愈管理
+    CapacityWarningService  容量预警
+    PlayerProximityTracker  玩家邻近检测
+
+  organize/            容器整理（跨层工具，被 sorting/ + commands/ 共用）
+    SlotOrganizer           分析→排序→合并三段式 API
 ```
+
+**单向依赖规则**：sorting → organize（路由过程可触发整理），但 organize 不依赖 sorting。
 
 ### 4. 命名规范
 
@@ -249,16 +281,32 @@ type ParseResult = { ok: true; id: WarehouseId } | { ok: false; message: string 
 
 ### 13. Minecraft 特有模式
 
-**事件驱动初始化**（main.ts）：
+**事件驱动初始化**（main.ts）—— 分为 4 个 Phase：
 ```typescript
-// 每次脚本重载时执行一次，一次性初始化所有子系统
+// Phase 1: 无状态基础设施
+const configStore = new ModConfigStore();
 const repository = new WarehouseRepository();
 const runtime = new WarehouseRuntimeRegistry(repository);
-const service = new WarehouseService(repository, undefined, (id) => runtime.markDirty(id));
+const organizer = new SlotOrganizer();
+
+// Phase 2: 有状态业务逻辑
+const engine = new SorterEngine(repository, runtime, organizer);
+const scheduler = new SortingScheduler(repository, engine);
+const boundaryDisplay = new BoundaryDisplay(configStore);
+const notifyDirty = (id: string) => runtime.markDirty(id);
+const notifyScheduler = (id: string) => scheduler.refreshOne(id);
+const service = new WarehouseService(
+  repository, configStore, undefined,
+  notifyDirty, notifyScheduler, boundaryDisplay
+);
+
+// Phase 3: 注册事件和命令
 service.registerBlockMaintenance();
 registerToolInteraction(service);
 commandRouter.register();
-scheduler.start();
+
+// Phase 4: 延迟启动（dynamicProperty 需世界完全加载）
+system.run(() => { scheduler.start(); ... });
 ```
 
 **命令注册**（CommandRouter）：

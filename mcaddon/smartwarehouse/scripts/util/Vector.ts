@@ -1,4 +1,4 @@
-import type { BlockLocation, WarehouseArea } from "../types";
+import type { BlockLocation, WarehouseArea, WarehouseData } from "../types";
 
 /**
  * 生成坐标位置键，用于在 Map 中快速索引和查找容器。
@@ -73,6 +73,27 @@ export function isNearAreaXZ(
 }
 
 /**
+ * 计算玩家到仓库区域中心的 XZ 平面距离（欧几里得距离）。
+ *
+ * 用于"最近的仓库"排序，确保玩家在不同方向上的距离感知一致。
+ * 已在 CommandRouter 和 MainMenu 中替换重复的 distToCenter / distToArea。
+ *
+ * @param playerPos 玩家位置（只需要 x, z 坐标）
+ * @param area      仓库区域
+ * @returns 玩家到区域中心在水平面上的距离
+ */
+export function distanceToAreaCenterXZ(
+  playerPos: { x: number; z: number },
+  area: WarehouseArea
+): number {
+  const cx = (area.min.x + area.max.x) / 2;
+  const cz = (area.min.z + area.max.z) / 2;
+  const dx = playerPos.x - cx;
+  const dz = playerPos.z - cz;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+/**
  * 判断给定坐标是否位于仓库区域内部（包含边界）。
  * 各分量均在 [min, max] 闭区间内即视为在区域内。
  *
@@ -126,4 +147,38 @@ export function areasTooClose(a: WarehouseArea, b: WarehouseArea, spacing: numbe
     a.min.z - spacing <= b.max.z &&
     a.max.z + spacing >= b.min.z
   );
+}
+
+/**
+ * 从仓库列表中筛选出玩家附近且属于该玩家的仓库，并按距离升序排列。
+ *
+ * 过滤条件（同时满足）：
+ *   1. 维度与玩家一致
+ *   2. 玩家是该仓库的所有者（或 isAdmin 为 true）
+ *   3. 玩家在仓库区域的 margin 格内
+ *
+ * @param warehouses - 候选仓库列表
+ * @param dimensionId - 玩家所在维度
+ * @param playerPos   - 玩家位置（仅 x, z）
+ * @param margin      - 距离容差（格）
+ * @param ownerId     - 玩家的 ID（用于所有权判断）
+ * @param isAdmin     - 管理员可以管理所有仓库
+ * @returns 按距离升序排列的仓库列表
+ */
+export function filterNearbyOwnedWarehouses(
+  warehouses: WarehouseData[],
+  dimensionId: string,
+  playerPos: { x: number; z: number },
+  margin: number,
+  ownerId: string,
+  isAdmin: boolean
+): WarehouseData[] {
+  return warehouses
+    .filter((w) => {
+      if (w.dimensionId !== dimensionId) return false;
+      if (w.ownerId !== ownerId && !isAdmin) return false;
+      if (!isNearAreaXZ(playerPos, w.area, margin)) return false;
+      return true;
+    })
+    .sort((a, b) => distanceToAreaCenterXZ(playerPos, a.area) - distanceToAreaCenterXZ(playerPos, b.area));
 }

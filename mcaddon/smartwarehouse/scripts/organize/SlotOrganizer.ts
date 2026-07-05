@@ -1,7 +1,7 @@
 import { system, ItemStack, type Container } from "@minecraft/server";
 import type { ContainerId } from "../types";
 import { Logger } from "../util/Logger";
-import { restoreContainerSnapshot, snapshotContainer } from "./ContainerSnapshot";
+import { restoreContainerSnapshot, snapshotContainer } from "../sorting/ContainerSnapshot";
 
 const log = new Logger("SlotOrganizer");
 

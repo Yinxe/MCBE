@@ -9,8 +9,8 @@ import type { ModConfigStore } from "../storage/ModConfigStore";
 import { getSession, setSession, clearSession, clearSessionById } from "./SelectionSessionStore";
 import { showMainMenu } from "../ui/MainMenu";
 import { showContainerRoleMenu } from "../ui/ContainerRoleMenu";
-import { SlotOrganizer } from "../sorting/SlotOrganizer";
-import { formatOrganizeResult } from "../util/OrganizeFormatter";
+import { SlotOrganizer } from "../organize/SlotOrganizer";
+import { formatOrganizeResult } from "../organize/OrganizeFormatter";
 
 /**
  * 防抖时间窗口（毫秒）。

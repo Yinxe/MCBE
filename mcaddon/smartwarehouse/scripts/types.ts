@@ -97,6 +97,13 @@ export const SPEED_LABELS: Record<ProcessingSpeed, string> = {
 export const DEFAULT_PROCESSING_SPEED: ProcessingSpeed = 8;
 
 /**
+ * 仓库附近检测范围（格）。
+ * 用于判断玩家是否在仓库附近：包括主菜单"就近管理"、搜索命令的附近筛选、
+ * 以及分拣调度器的玩家接近激活检测。
+ */
+export const WAREHOUSE_NEARBY_MARGIN = 8;
+
+/**
  * 仓库全局设置，控制仓库的行为开关和默认配置
  */
 export interface WarehouseSettings {

@@ -9,10 +9,8 @@ import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import type { ModConfigStore } from "../storage/ModConfigStore";
 import { canManageWarehouse } from "../util/PlayerAuth";
-import { isNearAreaXZ } from "../util/Vector";
-
-/** 附近仓库检测范围（格） */
-const NEARBY_MARGIN = 8;
+import { filterNearbyOwnedWarehouses } from "../util/Vector";
+import { WAREHOUSE_NEARBY_MARGIN } from "../types";
 
 /**
  * 显示 SmartWarehouse 系统的主菜单界面。
@@ -43,19 +41,16 @@ export async function showMainMenu(
     .button("容器搜索", () => showSearchUI(player, repository, configStore))
     .button("管理仓库", async () => {
       const warehouses = repository.loadAll();
-      const nearbyOwned = warehouses.filter((w) => {
-        if (w.dimensionId !== player.dimension.id) return false;
-        if (w.ownerId !== player.id && !isAdmin) return false;
-        if (!isNearAreaXZ({ x: player.location.x, z: player.location.z }, w.area, NEARBY_MARGIN)) return false;
-        return true;
-      });
+      const nearbyOwned = filterNearbyOwnedWarehouses(
+        warehouses,
+        player.dimension.id,
+        { x: player.location.x, z: player.location.z },
+        WAREHOUSE_NEARBY_MARGIN,
+        player.id,
+        isAdmin
+      );
 
       if (nearbyOwned.length > 0) {
-        nearbyOwned.sort((a, b) => {
-          const da = distToArea(player, a.area);
-          const db = distToArea(player, b.area);
-          return da - db;
-        });
         await showWarehouseSettingsMenu(player, nearbyOwned[0].id, repository, service);
       } else {
         player.sendMessage("§7附近没有找到属于你的仓库，显示所有仓库列表");
@@ -70,15 +65,4 @@ export async function showMainMenu(
   }
 
   await form.show(player);
-}
-
-/**
- * 计算玩家到仓库区域中心的 XZ 平面距离。
- */
-function distToArea(player: Player, area: import("../types").WarehouseArea): number {
-  const cx = (area.min.x + area.max.x) / 2;
-  const cz = (area.min.z + area.max.z) / 2;
-  const dx = player.location.x - cx;
-  const dz = player.location.z - cz;
-  return Math.sqrt(dx * dx + dz * dz);
 }

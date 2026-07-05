@@ -1,8 +1,9 @@
 import { world, system } from "@minecraft/server";
-import type { WarehouseArea, WarehouseId } from "../types";
+import type { WarehouseId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { SorterEngine } from "./SorterEngine";
 import { Logger } from "../util/Logger";
+import { PlayerProximityTracker } from "./PlayerProximityTracker";
 import { isNearAreaXZ } from "../util/Vector";
 
 const log = new Logger("SortingScheduler");
@@ -39,19 +40,16 @@ export class SortingScheduler {
   private static readonly LIFECYCLE_INTERVAL = 20;
   /** 玩家离开后停用仓库的延迟 tick 数（40 tick ≈ 2 秒），防止频繁启停 */
   private static readonly DEACTIVATE_DELAY = 40;
-
   /** 活跃仓库 ID → system.runInterval 句柄 */
   private readonly handles = new Map<WarehouseId, number>();
   /** 仓库 ID → 最近一次有玩家附近的 tick */
   private readonly lastActiveTick = new Map<WarehouseId, number>();
   /** 生命周期监控 interval 句柄 */
   private monitorHandle: number | undefined;
-
-  /** 玩家位置缓存（维度ID → 位置列表），每 tick 刷新 */
-  private playerCache = new Map<string, { x: number; z: number }[]>();
-
   /** 仓库的最后在场玩家 ID（用于停用时通知，即使玩家已传走） */
   private readonly lastVisitor = new Map<WarehouseId, string>();
+  /** 玩家位置缓存与临近检测 */
+  private readonly proximity = new PlayerProximityTracker();
 
   constructor(
     private readonly repository: WarehouseRepository,
@@ -106,28 +104,18 @@ export class SortingScheduler {
    * 3. 有玩家 → 遍历仓库，按需激活/停用
    */
   private lifecycleTick(): void {
-    // ── 刷新玩家位置缓存 ──
-    this.playerCache.clear();
-    for (const player of world.getPlayers()) {
-      const dim = player.dimension.id;
-      const pos = player.location;
-      let list = this.playerCache.get(dim);
-      if (!list) {
-        list = [];
-        this.playerCache.set(dim, list);
-      }
-      list.push({ x: pos.x, z: pos.z });
-    }
+    // 刷新玩家位置缓存（仅在需求时调用一次 world.getPlayers）
+    this.proximity.refresh();
 
     // 无玩家在线 → 全部停用
-    if (this.playerCache.size === 0) {
+    if (this.proximity.isEmpty) {
       for (const id of [...this.handles.keys()]) {
         this.deactivate(id);
       }
       return;
     }
 
-    // ── 遍历仓库，管理生命周期 ──
+    // ── 遍历仓库，逐仓决定：激活 / 保持 / 停用 ──
     const warehouses = this.repository.loadAll();
     const now = system.currentTick;
 
@@ -138,26 +126,25 @@ export class SortingScheduler {
         continue;
       }
 
-      const nearPlayer = this.hasNearbyPlayer(w.dimensionId, w.area);
+      const nearPlayer = this.proximity.hasPlayerNearby(
+        w.dimensionId, w.area, SortingScheduler.PROXIMITY_MARGIN
+      );
 
-      // 记录最后一个在场的玩家（用于停用时通知，即使传走也能收到）
       if (nearPlayer) {
-        const visitor = world.getPlayers().find(
-          (p) => p.dimension.id === w.dimensionId && isNearAreaXZ({ x: p.location.x, z: p.location.z }, w.area, SortingScheduler.PROXIMITY_MARGIN)
+        // 记录最后一个在场的玩家
+        const visitor = this.proximity.findVisitor(
+          w.dimensionId, w.area, SortingScheduler.PROXIMITY_MARGIN
         );
-        if (visitor) this.lastVisitor.set(w.id, visitor.id);
-      }
+        if (visitor) this.lastVisitor.set(w.id, visitor);
 
-      if (nearPlayer) {
-        // 有玩家附近 → 记录活跃时间，必要时惰性激活
+        // 记录活跃时间，必要时惰性激活
         this.lastActiveTick.set(w.id, now);
         if (!this.handles.has(w.id)) {
-          // 快照可能已过期，防御性验证仓库仍存在（防止删除→重新激活僵尸 interval）
-          if (!this.repository.load(w.id)) continue;
+          if (!this.repository.load(w.id)) continue; // 防御性验证仓库仍存在
           this.activate(w.id, w.settings.processingSpeed);
         }
       } else if (this.handles.has(w.id)) {
-        // 无玩家附近 → 检查是否超过停用延迟
+        // 无玩家附近 → 检查是否超过停用延迟（防频繁启停）
         const lastActive = this.lastActiveTick.get(w.id);
         if (lastActive !== undefined && now - lastActive > SortingScheduler.DEACTIVATE_DELAY) {
           this.deactivate(w.id);
@@ -166,14 +153,6 @@ export class SortingScheduler {
     }
   }
 
-  /**
-   * 检查指定区域在当前玩家缓存中是否有玩家在附近。
-   */
-  private hasNearbyPlayer(dimensionId: string, area: WarehouseArea): boolean {
-    const players = this.playerCache.get(dimensionId);
-    if (!players) return false;
-    return players.some((p) => isNearAreaXZ(p, area, SortingScheduler.PROXIMITY_MARGIN));
-  }
 
   /**
    * 激活仓库：创建 runInterval + 通知附近玩家。

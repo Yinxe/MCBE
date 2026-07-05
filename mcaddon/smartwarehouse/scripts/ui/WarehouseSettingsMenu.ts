@@ -5,9 +5,9 @@ import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseId, WarehouseSettings } from "../types";
 import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
 import type { WarehouseService } from "../warehouse/WarehouseService";
-import { getWarehouseStats, formatWarehouseStats, invalidateWarehouseStats } from "./WarehouseStats";
 import { showFamilyConfigMenu } from "./FamilyConfigMenu";
-import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
+import { ActionFormBuilder, ModalFormBuilder } from "./FormHelper";
+import { formatWarehouseStats, getWarehouseStats, invalidateWarehouseStats } from "./WarehouseStats";
 
 /**
  * 显示通用操作确认对话框。
@@ -88,7 +88,7 @@ export async function showWarehouseSettingsMenu(
       "autoSortThreshold",
       "§7自动整理混乱度阈值\n" +
       "§7混乱度高于阈值时触发整理  §a40%§7推荐\n" +
-      "§c0每次整理  §a20敏感  §a40适中  §e60宽松  §c100永不\n",
+      "§c0每次整理  §a20敏感  §a40适中  §e60宽松  §c100永不\n§b混乱度:§4",
       0, 100,
       { defaultValue: settings.autoSortThreshold, valueStep: 20 },
     )
