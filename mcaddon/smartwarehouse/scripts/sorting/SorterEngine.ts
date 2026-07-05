@@ -1,17 +1,9 @@
-import { Dimension, ItemStack, Container } from "@minecraft/server";
+import { Dimension, Container } from "@minecraft/server";
 import type { WarehouseData, WarehouseId, WarehouseRuntimeModel, ContainerId } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import { WarehouseRuntimeRegistry } from "../runtime/WarehouseRuntimeRegistry";
 import { Logger } from "../util/Logger";
-import {
-  getContainerFromStored,
-  isContainerEmpty,
-  tryMoveStackIntoContainer,
-  isShulkerBoxItem,
-  getBulkChestFirstType,
-  tryFillShulkerBoxes,
-  getFamilyPurity,
-} from "./ContainerInventory";
+import { getContainerFromStored, isContainerEmpty, getBulkChestFirstType, getFamilyPurity } from "./ContainerInventory";
 import { MoveJournal } from "./MoveJournal";
 import { playSortEffect } from "./SortEffects";
 import { SlotOrganizer } from "../organize/SlotOrganizer";
@@ -31,7 +23,6 @@ const log = new Logger("SorterEngine");
 /** 容量预警冷却 tick 数（5 秒 = 100 tick，防止刷屏） */
 /**
  * 分拣引擎 —— 将物品从输入容器分拣到对应的存储容器（普通 / 杂项）中。
- *
  * ### 分拣优先级（每个物品堆）
  *
  * 按照以下优先级依次尝试放置物品：
@@ -234,29 +225,12 @@ export class SorterEngine {
     dimension: Dimension,
     journal: MoveJournal
   ): void {
-    // ── 优先级 1：大宗 ─────────────────────────────────────
-    // 大宗容器需要 ItemStack（潜影盒填充），走旧路径
-    const initialStack = source.getItem(sourceSlot);
-    if (initialStack) {
-      const remaining = this.tryBulkContainers(
-        initialStack,
-        this.findMatchingBulk(typeId, warehouse, model, dimension),
-        warehouse,
-        model,
-        dimension,
-        typeId,
-        journal
-      );
-      if (!remaining) {
-        source.setItem(sourceSlot); // 全部放入大宗
-        return;
-      }
-      if (remaining.amount < initialStack.amount) {
-        source.setItem(sourceSlot, remaining); // 部分放入大宗，余量回写
-      }
-    }
+    // ── 优先级 1~5：统一使用 transferItem ────────────────
+    // 注意：大宗容器不走 itemTypeIndex，走 findMatchingBulk
+    // 全量匹配（bulk 数量极少 ~1-5，无需索引维护）。
+    const bulkMatches = this.findMatchingBulk(typeId, warehouse, model, dimension);
+    if (this.tryTransfer(source, sourceSlot, bulkMatches, warehouse, model, dimension, typeId, journal, "bulk")) return;
 
-    // ── 优先级 2~5：使用 transferItem 直接转移 ──────────
     const indexedTypeContainers = findExistingTypeContainers(warehouse, model, typeId, dimension);
     if (
       this.tryTransfer(source, sourceSlot, indexedTypeContainers, warehouse, model, dimension, typeId, journal, "match")
@@ -390,71 +364,6 @@ export class SorterEngine {
   /**
    * - `findExistingTypeContainers` 在 :508 行以 `role !== "normal"` 过滤了 bulk。
    * - bulk 容器数量极少（~1-5），每次全量扫描的成本远低于索引自愈的复杂度。
-   * - 索引是 normal 箱在数量大时的优化手段，对 bulk 箱收益为负。
-   *
-   * @param stack - 当前待放置的物品堆
-   * @param containerIds - 候选大宗容器 ID 列表
-   * @param warehouse - 仓库数据
-   * @param model - 运行态模型
-   * @param dimension - 维度
-   * @param typeId - 物品类型 ID
-   * @returns 剩余的物品堆，全部放完则返回 undefined
-   */
-  private tryBulkContainers(
-    stack: ItemStack | undefined,
-    containerIds: ContainerId[],
-    warehouse: WarehouseData,
-    model: WarehouseRuntimeModel,
-    dimension: Dimension,
-    typeId: string,
-    journal: MoveJournal
-  ): ItemStack | undefined {
-    if (!stack) return undefined;
-
-    let remaining: ItemStack | undefined = stack;
-
-    for (const containerId of containerIds) {
-      if (remaining === undefined) return undefined;
-
-      const stored = warehouse.containers[containerId];
-      if (!stored) continue;
-      const loc = stored.primaryLocation;
-
-      const target = getContainerFromStored(dimension, stored);
-      if (!target) {
-        log.info(`[bulk] ${containerId} @ (${loc.x},${loc.y},${loc.z}) — 容器不可达，跳过`);
-        continue;
-      }
-
-      const beforeAmount = remaining.amount;
-
-      // 在写入前记录目标容器快照
-      journal.snapshotTarget(containerId, target);
-
-      // 第 1 步：优先填入箱内已有的潜影盒
-      remaining = tryFillShulkerBoxes(target, remaining);
-      if (remaining === undefined) {
-        playSortEffect(dimension, stored.occupiedLocations, stored.role);
-        this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
-        return undefined;
-      }
-
-      // 第 2 步：剩余物品填入空槽位（散装）
-      remaining = tryMoveStackIntoContainer(remaining, target);
-
-      const placed = beforeAmount - (remaining?.amount ?? 0);
-      if (placed > 0) {
-        log.info(`[bulk] ${typeId} x${placed} → ${containerId} @ (${loc.x},${loc.y},${loc.z})`);
-        playSortEffect(dimension, stored.occupiedLocations, stored.role);
-        this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
-        refreshContainerStats(warehouse, stored);
-      }
-
-      if (remaining === undefined) return undefined;
-    }
-
-    return remaining;
-  }
 
   // ─── itemTypeIndex 索引辅助方法 ────────────────────────────────
 
