@@ -106,14 +106,28 @@ async function showServerStats(player: Player): Promise<void> {
   const repo = new WarehouseRepository();
   const all = repo.loadAll();
 
+  // 构建玩家 ID→名称映射（在线玩家）
+  const nameMap = new Map<string, string>();
+  try {
+    for (const p of world.getPlayers()) {
+      nameMap.set(p.id, p.name);
+    }
+  } catch {
+    /* 忽略 */
+  }
+
   // 按玩家聚合
-  const perPlayer = new Map<string, { warehouses: number; containers: number }>();
+  const perPlayer = new Map<string, { name: string; warehouses: number; containers: number }>();
   for (const w of all) {
-    const owner = w.ownerId || "未知";
-    const entry = perPlayer.get(owner) ?? { warehouses: 0, containers: 0 };
+    const ownerId = w.ownerId || "";
+    if (!ownerId) continue;
+    const displayName = nameMap.get(ownerId) ?? ownerId.slice(-8);
+    const entry = perPlayer.get(ownerId) ?? { name: displayName, warehouses: 0, containers: 0 };
+    // 如果玩家在线，始终使用最新名字
+    if (nameMap.has(ownerId)) entry.name = displayName;
     entry.warehouses++;
     entry.containers += Object.keys(w.containers).length;
-    perPlayer.set(owner, entry);
+    perPlayer.set(ownerId, entry);
   }
 
   const totalWH = all.length;
@@ -123,17 +137,15 @@ async function showServerStats(player: Player): Promise<void> {
     `§e=== SmartWarehouse 全服统计 ===`,
     `§7仓库总数: §f${totalWH}`,
     `§7容器总数: §f${totalContainers}`,
-    `§7活跃玩家数: §f${perPlayer.size}`,
+    `§7玩家数: §f${perPlayer.size}`,
     ``,
     `§e玩家排名（按仓库数）:`,
   ];
 
-  const sorted = [...perPlayer.entries()]
-    .map(([id, d]) => ({ id: id.slice(-8), ...d }))
-    .sort((a, b) => b.warehouses - a.warehouses);
+  const sorted = [...perPlayer.values()].sort((a, b) => b.warehouses - a.warehouses);
 
   for (const p of sorted) {
-    lines.push(`  §7${p.id}: §f${p.warehouses}§7仓 §f${p.containers}§7箱`);
+    lines.push(`  §7${p.name}: §f${p.warehouses}§7仓 §f${p.containers}§7箱`);
   }
 
   for (const line of lines) {
