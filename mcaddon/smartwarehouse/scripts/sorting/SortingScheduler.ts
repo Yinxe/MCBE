@@ -39,11 +39,10 @@ export class SortingScheduler {
   /** 生命周期监控间隔（20 tick ≈ 1 秒） */
   private static readonly LIFECYCLE_INTERVAL = 20;
   /** 玩家离开后停用仓库的延迟 tick 数（40 tick ≈ 2 秒），防止频繁启停 */
-  private static readonly DEACTIVATE_DELAY = 40;
+
   /** 活跃仓库 ID → system.runInterval 句柄 */
   private readonly handles = new Map<WarehouseId, number>();
   /** 仓库 ID → 最近一次有玩家附近的 tick */
-  private readonly lastActiveTick = new Map<WarehouseId, number>();
   /** 生命周期监控 interval 句柄 */
   private monitorHandle: number | undefined;
   /** 仓库的最后在场玩家 ID（用于停用时通知，即使玩家已传走） */
@@ -84,7 +83,6 @@ export class SortingScheduler {
       system.clearRun(this.monitorHandle);
       this.monitorHandle = undefined;
     }
-    this.lastActiveTick.clear();
     log.info("仓库生命周期监控已停止");
   }
 
@@ -117,12 +115,10 @@ export class SortingScheduler {
 
     // ── 遍历仓库，逐仓决定：激活 / 保持 / 停用 ──
     const warehouses = this.repository.loadAll();
-    const now = system.currentTick;
 
     for (const w of warehouses) {
       if (!w.settings.enabled) {
         this.deactivate(w.id);
-        this.lastActiveTick.delete(w.id);
         continue;
       }
 
@@ -133,23 +129,16 @@ export class SortingScheduler {
         const visitor = this.proximity.findVisitor(w.dimensionId, w.area, SortingScheduler.PROXIMITY_MARGIN);
         if (visitor) this.lastVisitor.set(w.id, visitor);
 
-        // 记录活跃时间
-        this.lastActiveTick.set(w.id, now);
-
-        // 只在有输入容器时才激活（否则无需创建 interval——processWarehouse 只会立即返回）
+        // 只在有输入容器时才激活（否则无需创建 interval，processWarehouse 会立即返回）
         if (!this.handles.has(w.id)) {
           if (!this.repository.load(w.id)) continue;
-          // 快速预检：没有输入容器的仓库不启动 interval
           const model = this.engine.getRuntimeModel(w.id);
           if (!model || model.inputContainerIds.length === 0) continue;
           this.activate(w.id, w.settings.processingSpeed);
         }
       } else if (this.handles.has(w.id)) {
-        // 无玩家附近 → 检查是否超过停用延迟（防频繁启停）
-        const lastActive = this.lastActiveTick.get(w.id);
-        if (lastActive !== undefined && now - lastActive > SortingScheduler.DEACTIVATE_DELAY) {
-          this.deactivate(w.id);
-        }
+        // 无玩家附近 → 立即停用
+        this.deactivate(w.id);
       }
     }
   }
@@ -197,7 +186,6 @@ export class SortingScheduler {
     const displayName = warehouse?.displayName ?? id;
 
     this.stopOne(id);
-    this.lastActiveTick.delete(id);
     this.engine.releaseRuntime(id);
 
     // 通知最后一个在场的玩家（即使已离开也能收到），然后清除记录
@@ -286,7 +274,6 @@ export class SortingScheduler {
       this.engine.releaseRuntime(id);
     });
     this.handles.clear();
-    this.lastActiveTick.clear();
     this.lastVisitor.clear();
     log.info("已停止所有仓库调度");
   }
