@@ -10,6 +10,7 @@ import { SlotOrganizer } from "../organize/SlotOrganizer";
 import { getFamily } from "../data/ItemFamilies";
 import { refreshContainerStats } from "../ui/WarehouseStats";
 import { checkWarehouseAreaLoaded, getDimensionSafe } from "../warehouse/AreaCheck";
+import { CapacityWarningService } from "./CapacityWarningService";
 import {
   findExistingTypeContainers,
   findExistingFamilyContainers,
@@ -19,8 +20,6 @@ import {
 } from "./SortingIndexManager";
 
 const log = new Logger("SorterEngine");
-
-/** 容量预警冷却 tick 数（5 秒 = 100 tick，防止刷屏） */
 /**
  * 分拣引擎 —— 将物品从输入容器分拣到对应的存储容器（普通 / 杂项）中。
  * ### 分拣优先级（每个物品堆）
@@ -44,6 +43,8 @@ const log = new Logger("SorterEngine");
  *   方块被破坏等）不会影响其他容器的分拣。
  */
 export class SorterEngine {
+  private readonly capacityWarning = new CapacityWarningService();
+
   constructor(
     private readonly repository: WarehouseRepository,
     private readonly runtime: WarehouseRuntimeRegistry,
@@ -225,9 +226,9 @@ export class SorterEngine {
     dimension: Dimension,
     journal: MoveJournal
   ): void {
+    const sourceAmount = source.getItem(sourceSlot)?.amount ?? 0;
+
     // ── 优先级 1~5：统一使用 transferItem ────────────────
-    // 注意：大宗容器不走 itemTypeIndex，走 findMatchingBulk
-    // 全量匹配（bulk 数量极少 ~1-5，无需索引维护）。
     const bulkMatches = this.findMatchingBulk(typeId, warehouse, model, dimension);
     if (this.tryTransfer(source, sourceSlot, bulkMatches, warehouse, model, dimension, typeId, journal, "bulk")) return;
 
@@ -244,21 +245,41 @@ export class SorterEngine {
 
     const family = getFamily(typeId);
     if (family && (warehouse.settings.enabledFamilies ?? []).includes(family.id)) {
-      const familyContainers = findExistingFamilyContainers(warehouse, model, family.id, dimension);
       if (
-        this.tryTransfer(source, sourceSlot, familyContainers, warehouse, model, dimension, typeId, journal, "family")
+        this.tryTransfer(
+          source,
+          sourceSlot,
+          findExistingFamilyContainers(warehouse, model, family.id, dimension),
+          warehouse,
+          model,
+          dimension,
+          typeId,
+          journal,
+          "family"
+        )
       )
         return;
     }
 
     if (warehouse.settings.autoCreateCategories) {
       const freeNormal = this.findEmptyNormalContainer(warehouse, model, dimension);
-      if (freeNormal) {
+      if (freeNormal)
         this.tryTransfer(source, sourceSlot, [freeNormal], warehouse, model, dimension, typeId, journal, "autocreate");
-      }
     }
 
     this.tryTransfer(source, sourceSlot, model.miscContainerIds, warehouse, model, dimension, typeId, journal, "misc");
+
+    // ── 降级/全满预警 ────────────────────────────────────
+    // 代码走到此处说明至少有一个优先级没处理完余量
+    const afterAmount = source.getItem(sourceSlot)?.amount ?? 0;
+    const placed = sourceAmount - afterAmount;
+    if (placed > 0) {
+      // 有物品被放置但仍有剩余 → 候选容器全满，降级发生
+      this.capacityWarning.warnDowngrade(warehouse, "normal", "misc");
+    } else if (afterAmount >= sourceAmount) {
+      // 所有优先级都没有放进去任何物品 → 全仓满
+      this.capacityWarning.warnWarehouseFull(warehouse);
+    }
   }
 
   /**
@@ -312,7 +333,8 @@ export class SorterEngine {
         }
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
-        refreshContainerStats(warehouse, stored);
+        const stats = refreshContainerStats(warehouse, stored);
+        if (stats) this.capacityWarning.checkContainer(warehouse, containerId, stored, stats);
 
         if (afterAmount === 0) return true;
       }
@@ -361,52 +383,6 @@ export class SorterEngine {
     });
   }
 
-  /**
-   * - `findExistingTypeContainers` 在 :508 行以 `role !== "normal"` 过滤了 bulk。
-   * - bulk 容器数量极少（~1-5），每次全量扫描的成本远低于索引自愈的复杂度。
-
-  // ─── itemTypeIndex 索引辅助方法 ────────────────────────────────
-
-  /**
-   * 查找当前仓库中已包含指定物品类型的普通容器。
-   *
-   * **核心设计 —— 索引自愈机制（Index Self-Healing）：**
-   *
-   * 为了提高分拣效率，运行态维护了一个 `itemTypeIndex` 字典，
-   * 键为物品类型 ID，值为包含该物品的普通容器 ID 列表。
-   *
-   * 但由于容器内的物品可能被玩家取走、容器被破坏或替换，
-   * 索引可能变得"脏"（stale）。本方法采用**惰性校验 + 自动修复**策略：
-   *
-   * ┌─ 快速路径（有索引记录）─────────────────────────────────────┐
-   * │ 1. 从 `itemTypeIndex` 取出候选容器列表。                       │
-   * │ 2. 对每个候选容器校验：                                      │
-   * │    - 容器数据仍存在且角色仍为 "normal" → 继续。              │
-   * │    - 容器方块可访问且确实包含该类型 → 加入有效列表。         │
-   * │    - 容器方块可访问但不包含该类型 → 标记为脏数据。           │
-   * │    - 容器方块不可达（区块未加载）→ 保留在索引但本次跳过。    │
-   * │ 3. 若有脏数据，从索引中清除，若某类型下所有容器都被清空      │
-   * │    则删除该索引条目。                                        │
-   * └──────────────────────────────────────────────────────────────┘
-   *
-   * ┌─ 回退路径（无索引记录）─────────────────────────────────────┐
-   * │ 1. 全量扫描 `model.normalContainerIds` 中的所有容器。        │
-   * │ 2. 找出实际包含该物品类型的容器。                            │
-   * │ 3. 将结果写回 `itemTypeIndex`，后续同类物品走快速路径。      │
-   * └──────────────────────────────────────────────────────────────┘
-   *
-   * 这种设计的好处：
-   * - 索引无需在物品变化时实时同步，避免了复杂的事件监听。
-   * - 脏数据最多影响一次查询性能（这次多校验几个无效容器），不会导致错误。
-
-  // ─── 工具方法 ──────────────────────────────────────────────────
-
-  /**
-   * 查找一个空的 normal 容器，用于自动创建新分类。
-   *
-   * 遍历 normal 容器列表，返回第一个完全空的容器 ID。
-   * 如果所有 normal 容器都已有物品，则放弃自动创建（本次走杂项）。
-   */
   private findEmptyNormalContainer(
     warehouse: WarehouseData,
     model: WarehouseRuntimeModel,
