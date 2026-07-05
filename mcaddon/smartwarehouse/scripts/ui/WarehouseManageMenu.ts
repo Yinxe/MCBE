@@ -3,15 +3,7 @@ import { ActionFormBuilder } from "./FormHelper";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
-
-/**
- * 显示仓库管理菜单。
- * 列出所有已注册的仓库，玩家点击后进入对应仓库的设置界面。
- *
- * @param player     - 操作的玩家
- * @param repository - 仓库数据持久化仓储
- * @param service    - 仓库服务实例
- */
+import { canManageWarehouse } from "../util/PlayerAuth";
 import type { ModConfigStore } from "../storage/ModConfigStore";
 
 export async function showWarehouseManageMenu(
@@ -20,7 +12,8 @@ export async function showWarehouseManageMenu(
   service: WarehouseService,
   configStore?: ModConfigStore
 ): Promise<void> {
-  const warehouses = repository.loadAll();
+  const isAdmin = canManageWarehouse(player);
+  let warehouses = repository.loadAll();
 
   if (warehouses.length === 0) {
     const form = new ActionFormBuilder().title("管理仓库").body("当前没有已创建的仓库。").button("返回");
@@ -28,12 +21,27 @@ export async function showWarehouseManageMenu(
     return;
   }
 
-  const form = new ActionFormBuilder().title("管理仓库").body("选择一个仓库进行设置");
+  // 非 OP 只看自己的仓库；OP 看全部
+  if (!isAdmin) {
+    warehouses = warehouses.filter((w) => w.ownerId === player.id);
+    if (warehouses.length === 0) {
+      player.sendMessage("§7你还没有创建任何仓库");
+      return;
+    }
+  }
+
+  // 按名称排序
+  warehouses.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  const title = isAdmin ? "§e全服仓库列表 §7(管理员)" : "§a我的仓库";
+  const form = new ActionFormBuilder().title("管理仓库").body(title);
 
   for (const warehouse of warehouses) {
-    form.button(warehouse.displayName, () =>
-      showWarehouseSettingsMenu(player, warehouse.id, repository, service, configStore)
-    );
+    const label =
+      isAdmin && warehouse.ownerId !== player.id
+        ? `${warehouse.displayName} §7(§f${warehouse.ownerId.slice(-8)}§7)`
+        : warehouse.displayName;
+    form.button(label, () => showWarehouseSettingsMenu(player, warehouse.id, repository, service, configStore));
   }
 
   await form.show(player);

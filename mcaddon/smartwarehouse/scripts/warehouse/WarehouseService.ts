@@ -632,7 +632,16 @@ export class WarehouseService {
     });
 
     // 校验容器数量上限
-    this.assertContainerCount(newContainers);
+    try {
+      this.assertContainerCount(newContainers);
+    } catch {
+      try {
+        player.sendMessage(`§c仓库容器已达上限（${this.configStore.getMaxContainers()} 个），该容器未加入仓库`);
+      } catch {
+        /* 忽略 */
+      }
+      return;
+    }
 
     this.repository.patchContainers(warehouseId, newContainers);
     this.markRuntimeDirty(warehouseId);

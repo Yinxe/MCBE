@@ -57,7 +57,7 @@ export async function showMainMenu(
         await showWarehouseManageMenu(player, repository, service, configStore);
       }
     })
-    .button("仓库列表", () => showWarehouseManageMenu(player, repository, service))
+    .button("仓库列表", () => showWarehouseManageMenu(player, repository, service, configStore))
     .button("创建仓库", () => showWarehouseCreateForm(player));
 
   if (isAdmin) {

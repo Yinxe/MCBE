@@ -20,13 +20,14 @@ import type { ModConfigStore } from "../storage/ModConfigStore";
 import { SearchService, formatSearchResult } from "../warehouse/SearchService";
 import { playSearchEffect } from "../sorting/SortEffects";
 import { Logger } from "../util/Logger";
+import { canManageWarehouse } from "../util/PlayerAuth";
 
 const log = new Logger("SearchUI");
 
 /** 粒子刷新间隔（tick） */
 const PARTICLE_INTERVAL = 20;
 /** 默认标记持续时间（tick）：10 秒 */
-const DEFAULT_DURATION = 10 * 20;
+const DEFAULT_DURATION = 15 * 20;
 /** 超时后宽限期（tick）：3 秒后彻底消失 */
 const GRACE_DURATION = 3 * 20;
 
@@ -50,8 +51,17 @@ export async function showSearchUI(
   configStore: ModConfigStore
 ): Promise<void> {
   // ── 1. 加载仓库数据，找出最近仓库 ──
-  const warehouses = repository.loadAll().filter((w) => w.dimensionId === player.dimension.id);
+  const isAdmin = canManageWarehouse(player);
+  let warehouses = repository.loadAll().filter((w) => w.dimensionId === player.dimension.id);
 
+  // 非 OP 只看自己的仓库
+  if (!isAdmin) {
+    warehouses = warehouses.filter((w) => w.ownerId === player.id);
+    if (warehouses.length === 0) {
+      player.sendMessage("§7你没有可搜索的仓库");
+      return;
+    }
+  }
   if (warehouses.length === 0) {
     player.sendMessage("§c当前维度下没有可搜索的仓库");
     return;
