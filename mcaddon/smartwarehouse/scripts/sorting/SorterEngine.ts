@@ -234,12 +234,14 @@ export class SorterEngine {
 
     // ── 优先级 1~5：统一使用 transferItem ────────────────
     // bulkFull 标记大宗有容器但一件都没放进 → 降级来源为大宗仓位
+    // bulkOverflow 标记大宗有容器但未放完 → 大宗→普通降级预警
     const bulkMatches = this.findMatchingBulk(typeId, warehouse, model, dimension);
+    const bulkHadContainers = bulkMatches.length > 0;
     let bulkFull = false;
     {
       const before = source.getItem(sourceSlot)?.amount ?? 0;
       if (this.tryTransfer(source, sourceSlot, bulkMatches, warehouse, model, dimension, typeId, journal, "bulk")) return;
-      if (before > 0 && (source.getItem(sourceSlot)?.amount ?? 0) >= before && bulkMatches.length > 0) {
+      if (before > 0 && (source.getItem(sourceSlot)?.amount ?? 0) >= before && bulkHadContainers) {
         bulkFull = true;
       }
     }
@@ -247,13 +249,17 @@ export class SorterEngine {
     const indexedTypeContainers = findExistingTypeContainers(warehouse, model, typeId, dimension);
     if (
       this.tryTransfer(source, sourceSlot, indexedTypeContainers, warehouse, model, dimension, typeId, journal, "match")
-    )
+    ) {
+      if (bulkHadContainers) this.capacityWarning.warnDowngrade(warehouse, "bulk", "normal", typeId);
       return;
+    }
 
     if (
       this.tryTransferUnindexed(source, sourceSlot, typeId, indexedTypeContainers, warehouse, model, dimension, journal)
-    )
+    ) {
+      if (bulkHadContainers) this.capacityWarning.warnDowngrade(warehouse, "bulk", "normal", typeId);
       return;
+    }
 
     const family = getFamily(typeId);
     if (family && (warehouse.settings.enabledFamilies ?? []).includes(family.id)) {
@@ -269,8 +275,10 @@ export class SorterEngine {
           journal,
           "family"
         )
-      )
+      ) {
+        if (bulkHadContainers) this.capacityWarning.warnDowngrade(warehouse, "bulk", "normal", typeId);
         return;
+      }
     }
 
     if (warehouse.settings.autoCreateCategories) {
@@ -282,11 +290,10 @@ export class SorterEngine {
     this.tryTransfer(source, sourceSlot, model.miscContainerIds, warehouse, model, dimension, typeId, journal, "misc");
 
     // ── 降级/全满预警 ────────────────────────────────────
-    // 代码走到此处说明至少有一个优先级没处理完余量
     const afterAmount = source.getItem(sourceSlot)?.amount ?? 0;
     const placed = sourceAmount - afterAmount;
-    if (placed > 0) {
-      // 有物品被放置但仍有剩余 → 候选容器全满，降级发生
+    if (afterAmount > 0 && placed > 0) {
+      // 有部分物品被放置但仍有剩余 → 候选容器全满，降级发生
       // 原则：大宗有容器却一件都放不下 → 大宗仓位满；否则大宗要么有部分放入要么无大宗容器 → 普通仓位满
       this.capacityWarning.warnDowngrade(warehouse, bulkFull ? "bulk" : "normal", "misc", typeId);
     } else if (afterAmount >= sourceAmount) {
@@ -347,7 +354,7 @@ export class SorterEngine {
         playSortEffect(dimension, stored.occupiedLocations, stored.role);
         this.organizer?.onDeposit(target, containerId, warehouse.settings.autoSortThreshold / 100);
         const stats = refreshContainerStats(warehouse, stored);
-        if (stats) this.capacityWarning.checkContainer(warehouse, containerId, stored, stats);
+        if (stats) this.capacityWarning.checkContainer(warehouse, containerId, stored, stats, typeId);
 
         SortHooks.run({
           stack: source.getItem(sourceSlot) ?? new ItemStack(typeId, placed),

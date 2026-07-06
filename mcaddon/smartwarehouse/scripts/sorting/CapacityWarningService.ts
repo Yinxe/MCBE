@@ -28,7 +28,7 @@ export class CapacityWarningService {
   }
 
   /** 黄色：单箱阈值预警 */
-  checkContainer(warehouse: WarehouseData, containerId: string, stored: StoredContainer, stats: ContainerStats): void {
+  checkContainer(warehouse: WarehouseData, containerId: string, stored: StoredContainer, stats: ContainerStats, typeId: string): void {
     if (!warehouse.settings.capacityWarning) return;
     if (!stored.capacityWarningEnabled) return;
     if (!stats.isWarning) return;
@@ -36,9 +36,10 @@ export class CapacityWarningService {
     if (!this.canSend(containerId)) return;
     const roleLabel = ROLE_LABELS[stored.role];
     const pct = stats.totalSlots > 0 ? Math.round((stats.usedSlots / stats.totalSlots) * 100) : 0;
+    const itemName = getChineseName(typeId);
     this.sendMessage(
       warehouse,
-      `§e${roleLabel} ${containerId.slice(-8)} §7容量 §f${stats.usedSlots}§7/§f${stats.totalSlots}§7(§e${pct}%§7)`
+      `§e${roleLabel} ${containerId.slice(-8)} §7容量 §f${stats.usedSlots}§7/§f${stats.totalSlots}§7(§e${pct}%§7)§r — ${itemName} §7(${typeId})`
     );
   }
 
