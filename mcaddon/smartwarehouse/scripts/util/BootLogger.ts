@@ -46,8 +46,11 @@ export class BootLogger {
    */
   done(): void {
     console.warn(`[SmartWarehouse] ${this.meta.version} 加载完成`);
-    this.lines.unshift(`§a[SmartWarehouse] §f${this.meta.version}`);
-    this.lines.unshift(`§a[SmartWarehouse] §f${this.meta.projectUrl}`);
+    this.lines.unshift(`
+§a[SmartWarehouse] 构建时间:§f${this.meta.buildTime}
+§a[SmartWarehouse] 版本号:§f${this.meta.version}
+§a[SmartWarehouse] 项目地址:§f${this.meta.projectUrl}
+        `);
     try {
       for (const line of this.lines) {
         world.sendMessage(line);

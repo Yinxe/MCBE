@@ -292,8 +292,8 @@ export class SorterEngine {
     // ── 降级/全满预警 ────────────────────────────────────
     const afterAmount = source.getItem(sourceSlot)?.amount ?? 0;
     const placed = sourceAmount - afterAmount;
-    if (afterAmount > 0 && placed > 0) {
-      // 有部分物品被放置但仍有剩余 → 候选容器全满，降级发生
+    if (placed > 0) {
+      // 有物品被放置但仍有剩余 → 候选容器全满，降级发生
       // 原则：大宗有容器却一件都放不下 → 大宗仓位满；否则大宗要么有部分放入要么无大宗容器 → 普通仓位满
       this.capacityWarning.warnDowngrade(warehouse, bulkFull ? "bulk" : "normal", "misc", typeId);
     } else if (afterAmount >= sourceAmount) {
