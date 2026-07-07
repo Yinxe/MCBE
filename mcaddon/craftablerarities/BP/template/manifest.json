@@ -1,0 +1,71 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "mcbe-addon-template v0.0.1",
+    "description": "mcbe-addon-template 行为包 — Minecraft Bedrock Add-on 通用模板",
+    "uuid": "a0caf0b6-00c2-4c5b-984e-a1009fa87d97",
+    "version": [
+      0,
+      0,
+      1
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Behavior",
+      "version": [
+        0,
+        0,
+        1
+      ],
+      "uuid": "c01c95e5-f53a-4a45-806b-12c570654d65",
+      "type": "data"
+    },
+    {
+      "description": "Script resources",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "d889f169-709a-4657-a912-69bd6861b67c",
+      "version": [
+        0,
+        0,
+        1
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "b920664e-fc9f-4a14-9fb2-c6e9e2871e5b",
+      "version": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": [
+        2,
+        6,
+        0
+      ]
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": [
+        2,
+        0,
+        0
+      ]
+    }
+  ],
+  "metadata": {
+    "product_type": "addon"
+  }
+}

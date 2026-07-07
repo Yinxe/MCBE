@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "minecraft: deploy"
+      ]
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "label": "npm: build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "type": "npm",
+      "script": "lint",
+      "label": "npm: lint",
+      "group": "build"
+    },
+    {
+      "type": "npm",
+      "script": "mcaddon",
+      "label": "npm: package (.mcaddon)",
+      "group": "build"
+    }
+  ]
+}

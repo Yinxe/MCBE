@@ -1,0 +1,8 @@
+.codegraph/
+dist/
+lib/
+*.log
+node_modules/
+.slim/deepwork/
+temp/
+*.pid

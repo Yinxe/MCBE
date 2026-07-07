@@ -1,0 +1,33 @@
+{
+  "name": "template",
+  "version": "0.0.1",
+  "productName": "Minecraft Add-On Starter Project",
+  "description": "基于 mct create CLI 的 Minecraft Bedrock Add-on 通用模板",
+  "private": true,
+  "devDependencies": {
+    "@minecraft/core-build-tasks": "5.5.0",
+    "eslint-plugin-minecraft-linting": "2.0.2",
+    "source-map": "0.7.4",
+    "ts-node": "10.9.1",
+    "typescript": "5.0.2"
+  },
+  "scripts": {
+    "lint": "just-scripts lint",
+    "build": "just-scripts build",
+    "clean": "just-scripts clean",
+    "local-deploy": "just-scripts local-deploy",
+    "mcaddon": "just-scripts mcaddon",
+    "enablemcloopback": "CheckNetIsolation.exe LoopbackExempt -a -p=S-1-15-2-1958404141-86561845-1752920682-3514627264-368642714-62675701-733520436",
+    "enablemcpreviewloopback": "CheckNetIsolation.exe LoopbackExempt -a -p=S-1-15-2-424268864-5579737-879501358-346833251-474568803-887069379-4040235476",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version",
+    "version:set": "npm version",
+    "release": "npm run mcaddon"
+  },
+  "dependencies": {
+    "@minecraft/math": "2.2.7",
+    "@minecraft/server": "^2.6.0",
+    "@minecraft/server-ui": "^2.0.0"
+  }
+}
