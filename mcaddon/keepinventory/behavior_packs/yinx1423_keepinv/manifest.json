@@ -1,17 +1,17 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Keep Inventory Add-on",
-    "description": "死亡不掉落 · 无需开启作弊 · 保留成就 · Keep inventory on death without cheats — achievements friendly",
+    "name": "Keep Inventory Add-on 2.0.0",
+    "description": "死亡不掉落 · 无需开启作弊 · 保留成就 · 极限复活",
     "uuid": "67f9c4dd-b4c8-4639-86d1-563884335058",
     "version": [
-      1,
+      2,
       0,
       0
     ],
     "min_engine_version": [
       1,
-      26,
+      21,
       0
     ]
   },

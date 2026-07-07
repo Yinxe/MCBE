@@ -1,8 +1,8 @@
 {
   "name": "keepInventory",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "productName": "Keep Inventory Add-on",
-  "description": "Keep items on death without cheats — achievements friendly behavior pack.",
+  "description": "死亡不掉洛+极限复活",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
