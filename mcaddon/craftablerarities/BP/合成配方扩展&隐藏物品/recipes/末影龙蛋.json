@@ -1,0 +1,35 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/ender_dragon_spawn_egg"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "EBE",
+      "BCB",
+      "EBE"
+    ],
+    "key": {
+      "E": {
+        "item": "minecraft:end_crystal"
+      },
+      "B": {
+        "item": "minecraft:bedrock"
+      },
+      "C": {
+        "item": "minecraft:skull",
+        "data": 5
+      }
+    },
+    "unlock": [
+      {
+        "item": "minecraft:end_crystal"
+      }
+    ],
+    "result": {
+      "item": "minecraft:ender_dragon_spawn_egg",
+      "count": 1
+    }
+  }
+}

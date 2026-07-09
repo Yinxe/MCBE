@@ -1,0 +1,31 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/powder_snow"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "PSP",
+      "SSS",
+      "PSP"
+    ],
+    "key": {
+      "P": {
+        "item": "minecraft:packed_ice"
+      },
+      "S": {
+        "item": "minecraft:snow_block"
+      }
+    },
+    "unlock": [
+      {
+        "item": "minecraft:snow_block"
+      }
+    ],
+    "result": {
+      "item": "minecraft:powder_snow",
+      "count": 8
+    }
+  }
+}

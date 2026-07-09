@@ -36,10 +36,10 @@ node tools/init-project.mjs your-new-addon-name
   node tools/init-project  ← 重命名项目（仅首次）
      │
      ▼
-  编辑 BP/craftablerarities/recipes/*.json  ← 添加/修改合成配方
+  编辑 BP/合成配方扩展&隐藏物品/recipes/*.json  ← 添加/修改合成配方
      │
      ▼
-  npm run mcaddon          ← 构建（版本同步 → 打包 .mcaddon）
+  npm run pack               ← 构建（版本同步 → 打包 .mcpack）
 ```
 
 ### 官方 API 文档（微软）

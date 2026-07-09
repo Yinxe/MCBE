@@ -1,8 +1,8 @@
 {
   "name": "craftablerarities",
-  "version": "0.0.2",
+  "version": "1.0.0",
   "productName": "CraftableRarities",
-  "description": "稀有物品可合成 Add-on — 合成各种稀有、不可再生的物品！",
+  "description": "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块！",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
@@ -13,12 +13,12 @@
   "scripts": {
     "build": "just-scripts build",
     "clean": "just-scripts clean",
+    "pack": "just-scripts pack",
     "local-deploy": "just-scripts local-deploy",
-    "mcaddon": "just-scripts mcaddon",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version",
     "version:set": "npm version",
-    "release": "npm run mcaddon"
+    "release": "npm run pack"
   }
 }
