@@ -1,5 +1,5 @@
 {
-  "format_version": "1.20.10",
+  "format_version": "1.12",
   "minecraft:recipe_shaped": {
     "description": {
       "identifier": "craftablerarities/powder_snow"
@@ -12,20 +12,15 @@
     ],
     "key": {
       "P": {
-        "item": "minecraft:packed_ice"
+        "item": "packed_ice"
       },
       "S": {
-        "item": "minecraft:snow_block"
+        "item": "snow"
       }
     },
-    "unlock": [
-      {
-        "item": "minecraft:snow_block"
-      }
-    ],
     "result": {
-      "item": "minecraft:powder_snow",
-      "count": 8
+      "item": "powder_snow",
+      "count": 4
     }
   }
 }

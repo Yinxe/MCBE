@@ -1,5 +1,5 @@
 {
-  "format_version": "1.20.10",
+  "format_version": "1.12",
   "minecraft:recipe_shaped": {
     "description": {
       "identifier": "craftablerarities/sculk_catalyst"
@@ -12,22 +12,17 @@
     ],
     "key": {
       "A": {
-        "item": "minecraft:sculk"
+        "item": "sculk"
       },
       "B": {
-        "item": "minecraft:bone_block"
+        "item": "bone_block"
       },
       "C": {
-        "item": "minecraft:soul_soil"
+        "item": "soul_soil"
       }
     },
-    "unlock": [
-      {
-        "item": "minecraft:sculk"
-      }
-    ],
     "result": {
-      "item": "minecraft:sculk_catalyst",
+      "item": "sculk_catalyst",
       "count": 1
     }
   }
