@@ -39,7 +39,7 @@ task("pack", series("clean", "build", () => {
   const outFile = `${projectName}-v${pkgVersion}.mcpack`;
   const bpDir = path.resolve(__dirname, `BP/${projectName}`);
 
-  execSync(`(cd "${path.dirname(bpDir)}" && zip -r "${path.resolve(outDir, outFile)}" "${projectName}/")`, { stdio: "inherit" });
+  execSync(`(cd "${bpDir}" && zip -r "${path.resolve(outDir, outFile)}" .)`, { stdio: "inherit" });
 
   const size = existsSync(path.resolve(outDir, outFile)) ? readFileSync(path.resolve(outDir, outFile)).length : 0;
   console.log(`\n  ✓ ${outFile} 创建成功 (${(size / 1024).toFixed(1)} KB)`);
