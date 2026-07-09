@@ -60,17 +60,29 @@ export function findFirstNonEmptySlot(container: Container): number {
  * 但实际扫描时已找不到该类物品，则该索引条目被标记为"脏"（stale），
  * 后续会被惰性清除。
  *
+ * **设计**：采用两级降级策略 ——
+ * 1. 优先使用原生 `Container.contains()`，对无 NBT 差异的普通物品准确且高效
+ * 2. `contains()` 返回 false 时，降级为逐槽位比对 typeId（解决耐久/附魔等 NBT 差异导致的误判）
+ *
  * @param container - 要检查的容器对象
  * @param typeId - 物品类型 ID（如 "minecraft:diamond"）
  * @returns 如果容器中至少有一个物品的 typeId 匹配，则返回 true
  */
 export function containerHasType(container: Container, typeId: string): boolean {
   try {
-    return container.contains(new ItemStack(typeId, 1));
+    // 快速路径：利用原生 API，对无 NBT 差异的物品（石头、泥土等）准确且高效
+    if (container.contains(new ItemStack(typeId, 1))) return true;
   } catch {
     // 未知物品 ID（如 Bedrock 不存在的 Java 版 ID），当作"不包含"
     return false;
   }
+  // 降级路径：contains() 返回 false，但可能是耐久/附魔等 NBT 差异导致的误判，
+  // 改用逐槽位比对 typeId
+  for (let slot = 0; slot < container.size; slot++) {
+    const item = container.getItem(slot);
+    if (item && item.typeId === typeId) return true;
+  }
+  return false;
 }
 
 /**
