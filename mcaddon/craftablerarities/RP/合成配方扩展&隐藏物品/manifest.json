@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "craftablerarities v1.0.0",
+    "name": "craftablerarities v1.0.1",
     "description": "CraftableRarities 资源包 — 稀有物品可合成，泥土变钻石！",
     "uuid": "903e7890-2353-447c-aa54-37977937702d",
     "version": [
       1,
       0,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -23,7 +23,7 @@
       "version": [
         1,
         0,
-        0
+        1
       ]
     }
   ],
@@ -33,7 +33,7 @@
       "version": [
         1,
         0,
-        0
+        1
       ]
     }
   ],

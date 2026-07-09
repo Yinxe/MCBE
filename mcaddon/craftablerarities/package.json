@@ -1,6 +1,6 @@
 {
   "name": "craftablerarities",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "productName": "CraftableRarities",
   "description": "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块！",
   "private": true,
