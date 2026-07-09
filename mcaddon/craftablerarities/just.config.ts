@@ -36,10 +36,10 @@ task("pack", series("clean", "build", () => {
   const outDir = path.resolve(__dirname, "dist/packages");
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
 
-  const outFile = `${projectName}-v${pkgVersion}.mcpack`;
+  const outFile = `CraftableRarities-v${pkgVersion}.mcpack`;
   const bpDir = path.resolve(__dirname, `BP/${projectName}`);
 
-  execSync(`(cd "${bpDir}" && zip -r "${path.resolve(outDir, outFile)}" .)`, { stdio: "inherit" });
+  execSync(`(cd "${bpDir}" && zip -X -r "${path.resolve(outDir, outFile)}" .)`, { stdio: "inherit" });
 
   const size = existsSync(path.resolve(outDir, outFile)) ? readFileSync(path.resolve(outDir, outFile)).length : 0;
   console.log(`\n  ✓ ${outFile} 创建成功 (${(size / 1024).toFixed(1)} KB)`);
