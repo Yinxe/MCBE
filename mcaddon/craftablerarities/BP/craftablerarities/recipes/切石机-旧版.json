@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/stonecutter_1"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "ABA",
+      "AAA"
+    ],
+    "key": {
+      "A": {
+        "item": "cobblestone"
+      },
+      "B": {
+        "item": "stonecutter_block"
+      }
+    },
+    "result": {
+      "item": "stonecutter",
+      "count": 1
+    }
+  }
+}

@@ -6,8 +6,7 @@
  *
  * 在构建时自动执行：
  *   1. 读取 package.json 的 version 字段
- *   2. 生成 scripts/version.ts（VERSION, BUILD_TIME, PROJECT_URL）
- *   3. 同步版本到 BP/<project>/manifest.json 和 RP/<project>/manifest.json
+ *   2. 同步版本到 BP/<project>/manifest.json 和 RP/<project>/manifest.json
  *
  * 用法:  node tools/sync-version.mjs
  * 依赖:  .env 文件需正确配置 PROJECT_NAME
@@ -37,19 +36,6 @@ if (!projectName) {
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
 const pkgVersion = pkg.version;
 const pkgName = pkg.name;
-
-// ── 生成 scripts/version.ts ─────────────────────────────────────
-function generateVersionFile() {
-  const buildTime = new Date().toISOString();
-  const content = [
-    "// 此文件由 tools/sync-version.mjs 在构建时自动生成\n",
-    `export const VERSION = "${pkgVersion}";`,
-    `export const BUILD_TIME = "${buildTime}";`,
-    `export const PROJECT_URL = "";`,
-  ].join("\n");
-  writeFileSync(resolve(ROOT, "scripts/version.ts"), content + "\n");
-  console.log(`  ✓ scripts/version.ts → v${pkgVersion} (${buildTime})`);
-}
 
 // ── 同步 manifest.json ──────────────────────────────────────────
 function syncManifestVersion() {
@@ -96,6 +82,5 @@ function syncManifestVersion() {
 
 // ── 执行 ────────────────────────────────────────────────────────
 console.log(`Syncing version ${pkgVersion} …`);
-generateVersionFile();
 syncManifestVersion();
 console.log("Done.");

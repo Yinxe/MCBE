@@ -1,0 +1,29 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/spore_blossom_1"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      " A",
+      " B ",
+      "B B"
+    ],
+    "key": {
+      "A": {
+        "item": "moss_block"
+      },
+      "B": {
+        "item": "double_plant",
+        "data": 5
+      }
+    },
+    "result": {
+      "item": "spore_blossom",
+      "count": 1
+    }
+  }
+}

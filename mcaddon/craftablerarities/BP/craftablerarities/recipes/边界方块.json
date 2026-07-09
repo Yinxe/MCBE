@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/border_block"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ABA",
+      "ABA",
+      "ABA"
+    ],
+    "key": {
+      "A": {
+        "item": "bedrock"
+      },
+      "B": {
+        "item": "red_dye"
+      }
+    },
+    "result": {
+      "item": "border_block",
+      "count": 3
+    }
+  }
+}

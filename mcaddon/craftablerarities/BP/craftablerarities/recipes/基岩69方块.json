@@ -1,0 +1,31 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/client_request_placeholder_block"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ABB",
+      "ACB",
+      "AAB"
+    ],
+    "key": {
+      "A": {
+        "item": "bedrock"
+      },
+      "B": {
+        "item": "redstone"
+      },
+      "C": {
+        "item": "moss_block"
+      }
+    },
+    "result": {
+      "item": "client_request_placeholder_block",
+      "count": 1
+    }
+  }
+}

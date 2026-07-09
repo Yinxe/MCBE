@@ -1,0 +1,43 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "craftablerarities v0.0.2",
+    "description": "CraftableRarities 资源包 — 稀有物品可合成，泥土变钻石！",
+    "uuid": "903e7890-2353-447c-aa54-37977937702d",
+    "version": [
+      0,
+      0,
+      2
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Add-on Pack Resources",
+      "type": "resources",
+      "uuid": "c9b58e2f-9b61-4ee1-8516-fa5b467c7415",
+      "version": [
+        0,
+        0,
+        2
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "1ef0a780-b729-45c7-9f49-fc2271d467a5",
+      "version": [
+        0,
+        0,
+        2
+      ]
+    }
+  ],
+  "metadata": {
+    "product_type": "addon"
+  }
+}

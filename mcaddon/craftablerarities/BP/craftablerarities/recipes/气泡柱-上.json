@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/bubble_column"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "A",
+      "B"
+    ],
+    "key": {
+      "A": {
+        "item": "water"
+      },
+      "B": {
+        "item": "soul_sand"
+      }
+    },
+    "result": {
+      "item": "bubble_column",
+      "data": 1,
+      "count": 1
+    }
+  }
+}

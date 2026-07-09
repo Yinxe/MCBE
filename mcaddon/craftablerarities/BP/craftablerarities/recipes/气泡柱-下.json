@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/bubble_column_1"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "A",
+      "B"
+    ],
+    "key": {
+      "A": {
+        "item": "water"
+      },
+      "B": {
+        "item": "magma"
+      }
+    },
+    "result": {
+      "item": "bubble_column",
+      "data": 0,
+      "count": 1
+    }
+  }
+}

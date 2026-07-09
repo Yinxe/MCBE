@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/end_portal"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "ABA",
+      "AAA"
+    ],
+    "key": {
+      "A": {
+        "item": "end_portal_frame"
+      },
+      "B": {
+        "item": "ender_eye"
+      }
+    },
+    "result": {
+      "item": "end_portal",
+      "count": 1
+    }
+  }
+}

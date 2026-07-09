@@ -1,0 +1,29 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/wither_spawn_egg_1"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "BBB",
+      " B "
+    ],
+    "key": {
+      "A": {
+        "item": "skull",
+        "data": 1
+      },
+      "B": {
+        "item": "soul_soil"
+      }
+    },
+    "result": {
+      "item": "wither_spawn_egg",
+      "count": 1
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/sponge"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ABA",
+      "BCB",
+      "ABA"
+    ],
+    "key": {
+      "A": {
+        "item": "yellow_wool",
+        "data": 4
+      },
+      "B": {
+        "item": "hay_block"
+      },
+      "C": {
+        "item": "slime_ball"
+      }
+    },
+    "result": {
+      "item": "sponge",
+      "count": 4
+    }
+  }
+}

@@ -48,7 +48,7 @@ jobs:
 
       - name: Build & Package
         env:
-          PROJECT_NAME: ${{ vars.PROJECT_NAME || 'my-addon' }}
+          PROJECT_NAME: 'craftablerarities'
         run: |
           VER="${{ steps.version.outputs.version }}"
           echo "Building version: $VER"
@@ -56,7 +56,7 @@ jobs:
           # 更新 package.json 版本以同步 manifest 及输出文件名
           npm pkg set version="$VER"
 
-          # 一键构建打包
+          # 构建打包
           npm run mcaddon
 
           echo "Package created:"
@@ -88,5 +88,5 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: my-addon-${{ steps.version.outputs.version }}
+          name: craftablerarities-${{ steps.version.outputs.version }}
           path: dist/packages/*.mcaddon

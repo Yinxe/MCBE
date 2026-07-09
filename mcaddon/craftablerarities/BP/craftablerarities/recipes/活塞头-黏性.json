@@ -1,0 +1,26 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/sticky_piston_arm_collision"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AB"
+    ],
+    "key": {
+      "A": {
+        "item": "sticky_piston"
+      },
+      "B": {
+        "item": "redstone"
+      }
+    },
+    "result": {
+      "item": "piston_arm_collision",
+      "count": 1
+    }
+  }
+}

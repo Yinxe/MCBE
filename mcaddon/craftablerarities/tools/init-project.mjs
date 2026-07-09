@@ -159,7 +159,6 @@ async function main() {
   // ── 6. 生成 UUID 并更新 manifest.json ─────────────────────────
   const bpHeaderUuid = randomUUID();
   const bpDataUuid = randomUUID();
-  const bpScriptUuid = randomUUID();
   const rpHeaderUuid = randomUUID();
 
   const bpManifestPath = resolve(ROOT, "BP", newName, "manifest.json");
@@ -168,7 +167,7 @@ async function main() {
   if (existsSync(bpManifestPath)) {
     updateManifestUUIDs(bpManifestPath, {
       header: bpHeaderUuid,
-      modules: [bpDataUuid, bpScriptUuid],
+      modules: [bpDataUuid],
       dependencies: [rpHeaderUuid], // RP UUID
     });
     console.log(`  ✓ BP/${newName}/manifest.json UUID 已刷新`);

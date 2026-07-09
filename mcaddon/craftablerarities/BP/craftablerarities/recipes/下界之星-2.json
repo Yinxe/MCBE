@@ -1,0 +1,32 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/nether_star_1"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "BBB",
+      "CBC"
+    ],
+    "key": {
+      "A": {
+        "item": "skull",
+        "data": 1
+      },
+      "B": {
+        "item": "soul_soil"
+      },
+      "C": {
+        "item": "TNT"
+      }
+    },
+    "result": {
+      "item": "nether_star",
+      "count": 1
+    }
+  }
+}

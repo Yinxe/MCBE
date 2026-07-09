@@ -1,0 +1,31 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/dispenser_1"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      " AB",
+      "ACB",
+      " AB"
+    ],
+    "key": {
+      "A": {
+        "item": "stick"
+      },
+      "B": {
+        "item": "string"
+      },
+      "C": {
+        "item": "dropper"
+      }
+    },
+    "result": {
+      "item": "dispenser",
+      "count": 1
+    }
+  }
+}

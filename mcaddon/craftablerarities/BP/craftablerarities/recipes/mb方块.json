@@ -1,0 +1,31 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/moving_block"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "ABA",
+      "ACA"
+    ],
+    "key": {
+      "A": {
+        "item": "redstone"
+      },
+      "B": {
+        "item": "piston"
+      },
+      "C": {
+        "item": "sticky_piston"
+      }
+    },
+    "result": {
+      "item": "moving_block",
+      "count": 1
+    }
+  }
+}

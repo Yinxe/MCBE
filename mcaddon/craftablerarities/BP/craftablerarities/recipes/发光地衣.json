@@ -1,0 +1,26 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/glow_lichen"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AB"
+    ],
+    "key": {
+      "A": {
+        "item": "glow_berries"
+      },
+      "B": {
+        "item": "vine"
+      }
+    },
+    "result": {
+      "item": "glow_lichen",
+      "count": 1
+    }
+  }
+}
