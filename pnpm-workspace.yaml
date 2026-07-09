@@ -1,0 +1,10 @@
+# pnpm workspace configuration
+# See: https://pnpm.io/workspaces
+
+packages:
+  # all packages in subdirectories of packages/
+  - "packages/*"
+  # all packages in subdirectories of apps/
+  - "apps/*"
+  # exclude test directories
+  - "!**/test/**"
