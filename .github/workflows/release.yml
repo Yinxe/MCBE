@@ -124,6 +124,8 @@ jobs:
 
           # 先以 ASCII 名上传（避免中文编码问题），再通过 API 重命名
           ASCII_NAME="$(echo "$ASSET_NAME" | sed 's/[^a-zA-Z0-9._-]/_/g')"
+          echo "ASSET_NAME=[$ASSET_NAME]"
+          echo "ASCII_NAME=[$ASCII_NAME]"
           RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id')
           RESP=$(curl -sS -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -131,7 +133,10 @@ jobs:
             "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$ASCII_NAME" \
             --data-binary "@$FILE")
           ASSET_ID=$(echo "$RESP" | jq -r '.id')
-          gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$ASSET_ID" -f name="$ASSET_NAME" > /dev/null
+          echo "Uploaded asset:$ASSET_ID"
+          PATCH_RESP=$(gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$ASSET_ID" \
+            --input <(echo "{\"name\":\"$ASSET_NAME\"}"))
+          echo "Rename result:$(echo "$PATCH_RESP" | jq -c '{name: .name, id: .id}')"
 
       - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch' && steps.artifact.outputs.path != ''
