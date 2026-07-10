@@ -14,7 +14,7 @@
   "scripts": {
     "build": "just-scripts build",
     "clean": "just-scripts clean",
-    "pack": "just-scripts pack",
+    "mcaddon": "just-scripts mcaddon",
     "local-deploy": "just-scripts local-deploy",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",

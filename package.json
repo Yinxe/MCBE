@@ -26,7 +26,7 @@
 
     "pack:mock-player": "pnpm --filter mock-player run mcaddon",
     "pack:keepinventory": "pnpm --filter keepInventory run mcaddon",
-    "pack:craftablerarities": "pnpm --filter craftablerarities run pack",
+    "pack:craftablerarities": "pnpm --filter craftablerarities run mcaddon",
     "pack:smartwarehouse": "pnpm --filter SmartWarehouse run mcaddon",
 
     "sync-version": "node packages/toolkit/bin/sync-version.js"
