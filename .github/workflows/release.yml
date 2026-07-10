@@ -104,39 +104,28 @@ jobs:
           FILE="${{ steps.artifact.outputs.path }}"
           CN="${{ steps.pkg.outputs.cn }}"
           VERSION="${{ steps.parse.outputs.version }}"
-          TYPE="${{ steps.pkg.outputs.artifactType }}"
+          PKG="${{ steps.parse.outputs.pkg }}"
           IS_PR=""; echo "$VERSION" | grep -qiE 'beta|alpha|rc|pre' && IS_PR="--prerelease"
 
-          # 构造文件名中的中文部分
-          ASSET_NAME="${CN}-v${VERSION}"
-          if [ "$TYPE" = "addon" ]; then
-            ASSET_NAME="${ASSET_NAME}.mcaddon"
-          elif echo "$FILE" | grep -q '_bp\.mcpack$'; then
-            ASSET_NAME="${ASSET_NAME}_bp.mcpack"
+          # 复制到 ASCII 文件名（避免 gh CLI 对中文路径的处理问题）
+          if echo "$FILE" | grep -q '_bp\.mcpack$'; then
+            ASCII_NAME="${PKG}-v${VERSION}_bp.mcpack"
+          elif echo "$FILE" | grep -q '\.mcaddon$'; then
+            ASCII_NAME="${PKG}-v${VERSION}.mcaddon"
           else
-            ASSET_NAME="${ASSET_NAME}.mcpack"
+            ASCII_NAME="${PKG}-v${VERSION}.mcpack"
+          fi
+          cp "$FILE" "/tmp/$ASCII_NAME"
+
+          # 创建 release 并上传
+          if gh release view "$TAG" &>/dev/null; then
+            gh release upload "$TAG" "/tmp/$ASCII_NAME" --clobber
+          else
+            gh release create "$TAG" "/tmp/$ASCII_NAME" --title "$CN $VERSION" --notes "自动构建发布" ${IS_PR}
           fi
 
-          # 创建 release（如不存在）
-          if ! gh release view "$TAG" &>/dev/null; then
-            gh release create "$TAG" --title "$CN $VERSION" --notes "自动构建发布" ${IS_PR}
-          fi
-
-          # 先以 ASCII 名上传（避免中文编码问题），再通过 API 重命名
-          ASCII_NAME="$(echo "$ASSET_NAME" | sed 's/[^a-zA-Z0-9._-]/_/g')"
-          echo "ASSET_NAME=[$ASSET_NAME]"
-          echo "ASCII_NAME=[$ASCII_NAME]"
-          RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id')
-          RESP=$(curl -sS -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Content-Type: application/octet-stream" \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$ASCII_NAME" \
-            --data-binary "@$FILE")
-          ASSET_ID=$(echo "$RESP" | jq -r '.id')
-          echo "Uploaded asset:$ASSET_ID"
-          PATCH_RESP=$(gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$ASSET_ID" \
-            --input <(echo "{\"name\":\"$ASSET_NAME\"}"))
-          echo "Rename result:$(echo "$PATCH_RESP" | jq -c '{name: .name, id: .id}')"
+          # 备份到 Actions 构建产物（原始中文名）
+          rm "/tmp/$ASCII_NAME"
 
       - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch' && steps.artifact.outputs.path != ''
