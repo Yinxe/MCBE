@@ -82,7 +82,7 @@ jobs:
       - name: Locate artifact
         id: artifact
         run: |
-          ARTIFACT=$(find mcaddon -path "*/dist/packages/*" \( -name "*.mcaddon" -o -name "*.mcpack" \) ! -name "*_bp.mcpack" ! -name "*_rp.mcpack" 2>/dev/null | head -1)
+          ARTIFACT=$(find mcaddon -path "*/dist/packages/*" \( -name "*.mcaddon" -o -name "*.mcpack" \) ! -name "*_bp*.mcpack" ! -name "*_rp*.mcpack" 2>/dev/null | head -1)
           echo "path=$ARTIFACT"
           echo "path=$ARTIFACT" >> $GITHUB_OUTPUT
 
