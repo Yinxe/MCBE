@@ -11,10 +11,12 @@ import {
 } from "@minecraft/core-build-tasks";
 import { argv, parallel, series, task, tscTask } from "just-scripts";
 import path from "path";
+import { renameSync } from "fs";
 import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
 const pkg = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8"));
 const CHINESE_NAME = pkg.productName;
+const PROJECT_NAME = pkg.mcbe.bpDir;
 
 // ── Version sync ──
 task("sync-version", () => {
@@ -32,10 +34,10 @@ const pkgVersion = pkg.version;
 const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
   "@minecraft/server", "@minecraft/server-ui", "@minecraft/server-gametest",
 ]);
-const copyTaskOptions = copyOptions(__dirname, "MockPlayer");
+const copyTaskOptions = copyOptions(__dirname, PROJECT_NAME, { hasRp: false });
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
-  outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}.mcaddon`,
+  outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}_bp.mcpack`,
 };
 
 task("lint", coreLint(["scripts/**/*.ts"], argv().fix));
@@ -55,4 +57,11 @@ task(
   )
 );
 task("createMcaddonFile", mcaddonTask(mcaddonTaskOptions));
-task("mcaddon", series("clean-local", "build", "createMcaddonFile"));
+
+task("renameOutput", () => {
+  const src = path.resolve(__dirname, `./dist/packages/${CHINESE_NAME}-v${pkgVersion}_bp.mcpack`);
+  const dst = path.resolve(__dirname, `./dist/packages/${CHINESE_NAME}-v${pkgVersion}.mcpack`);
+  renameSync(src, dst);
+});
+
+task("mcaddon", series("clean-local", "build", "createMcaddonFile", "renameOutput"));
