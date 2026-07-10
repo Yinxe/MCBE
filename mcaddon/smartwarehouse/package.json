@@ -1,8 +1,8 @@
 {
   "name": "SmartWarehouse",
   "version": "0.0.55",
-  "productName": "Minecraft Add-On Starter Project",
-  "description": "SmartWarehouse — customize this description in manifest.json or via the editor.",
+  "productName": "\u667a\u80fd\u4ed3\u5e93",
+  "description": "SmartWarehouse \u2014 customize this description in manifest.json or via the editor.",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
@@ -28,5 +28,8 @@
     "@minecraft/math": "2.2.7",
     "@minecraft/server": "^2.6.0",
     "@minecraft/server-ui": "^2.0.0"
+  },
+  "mcbe": {
+    "bpDir": "SmartWarehouse"
   }
 }

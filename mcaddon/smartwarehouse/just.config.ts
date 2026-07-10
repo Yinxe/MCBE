@@ -15,9 +15,9 @@ import path from "path";
 import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
 // ── Project metadata ────────────────────────────────────────────
-const CHINESE_NAME = "智能仓库";
-const PROJECT_NAME = "SmartWarehouse";
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
+const CHINESE_NAME = pkg.productName;
+const PROJECT_NAME = pkg.mcbe.bpDir;
 const pkgVersion = pkg.version;
 
 // ── Bundle ──────────────────────────────────────────────────────

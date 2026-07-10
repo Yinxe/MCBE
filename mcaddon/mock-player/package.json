@@ -1,8 +1,8 @@
 {
   "name": "mock-player",
   "version": "1.0.6",
-  "productName": "Minecraft Add-On Starter Project",
-  "description": "MockPlayer — customize this description in manifest.json or via the editor.",
+  "productName": "\u6a21\u62df\u73a9\u5bb6",
+  "description": "MockPlayer \u2014 customize this description in manifest.json or via the editor.",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
@@ -29,5 +29,8 @@
     "@minecraft/server-gametest": "1.0.0-beta.1.26.0-stable",
     "@minecraft/server-ui": "2.0.0",
     "@minecraft/vanilla-data": "1.26.20"
+  },
+  "mcbe": {
+    "bpDir": "MockPlayer"
   }
 }

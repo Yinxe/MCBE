@@ -14,9 +14,10 @@ import path from "path";
 import { renameSync } from "fs";
 import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
-const CHINESE_NAME = "死亡不掉落";
-const PROJECT_NAME = "yinx1423_keepinv";
-const pkgVersion = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
+const pkg = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8"));
+const CHINESE_NAME = pkg.productName;
+const PROJECT_NAME = pkg.mcbe.bpDir;
+const pkgVersion = pkg.version;
 
 // ── Version sync ──
 task("sync-version", () => {

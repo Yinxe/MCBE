@@ -5,9 +5,9 @@ import path from "path";
 import { syncManifestVersion } from "@yinxe/toolkit";
 
 // ── Project metadata ────────────────────────────────────────────
-const CHINESE_NAME = "合成配方扩展";
-const PROJECT_NAME = "合成配方扩展&隐藏物品";
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
+const CHINESE_NAME = pkg.productName;
+const PROJECT_NAME = pkg.mcbe.bpDir;
 const pkgVersion = pkg.version;
 
 // ── Tasks ───────────────────────────────────────────────────

@@ -13,7 +13,8 @@ import { argv, parallel, series, task, tscTask } from "just-scripts";
 import path from "path";
 import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
-const CHINESE_NAME = "模拟玩家";
+const pkg = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8"));
+const CHINESE_NAME = pkg.productName;
 
 // ── Version sync ──
 task("sync-version", () => {
@@ -26,7 +27,7 @@ task("sync-version", () => {
 });
 
 // ── Build ──
-const pkgVersion = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
+const pkgVersion = pkg.version;
 
 const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
   "@minecraft/server", "@minecraft/server-ui", "@minecraft/server-gametest",

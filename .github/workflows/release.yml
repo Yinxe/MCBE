@@ -18,83 +18,70 @@ on:
 permissions:
   contents: write
 
-env:
-  # 模组配置映射表
-  # 各模组: 中文名, pnpm filter 名, 打包脚本
-  MOD_MOCK_PLAYER: '{"cn":"模拟玩家","filter":"mock-player","pack":"mcaddon","hasBuild":"true"}'
-  MOD_KEEPINVENTORY: '{"cn":"死亡不掉落","filter":"keepInventory","pack":"mcaddon","hasBuild":"true"}'
-  MOD_CRAFTABLERARITIES: '{"cn":"合成配方扩展","filter":"craftablerarities","pack":"mcaddon","hasBuild":"false"}'
-  MOD_SMARTWAREHOUSE: '{"cn":"智能仓库","filter":"SmartWarehouse","pack":"mcaddon","hasBuild":"true"}'
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
 
-      - name: Parse input
+      - name: Parse tag / input
         id: parse
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             TAG="${{ github.ref_name }}"
-            PACKAGE="${TAG%%@*}"
+            PKG="${TAG%%@*}"
             VER="${TAG#*@}"
           else
-            PACKAGE="${{ inputs.mod }}"
+            PKG="${{ inputs.mod }}"
             VER="${{ inputs.version }}"
           fi
-          echo "package=$PACKAGE" >> $GITHUB_OUTPUT
+          echo "pkg=$PKG" >> $GITHUB_OUTPUT
           echo "version=$VER" >> $GITHUB_OUTPUT
 
-      - name: Lookup mod config
-        id: config
+      - name: Resolve mod directory
+        id: resolve
         run: |
-          PKG="${{ steps.parse.outputs.package }}"
+          PKG="${{ steps.parse.outputs.pkg }}"
           case "$PKG" in
-            mock-player)        KEY=MOD_MOCK_PLAYER ;;
-            keepInventory|keepinventory) KEY=MOD_KEEPINVENTORY ;;
-            craftablerarities)  KEY=MOD_CRAFTABLERARITIES ;;
-            SmartWarehouse|smartwarehouse) KEY=MOD_SMARTWAREHOUSE ;;
+            mock-player)        DIR=mock-player;             FILTER=mock-player ;;
+            keepInventory|keepinventory) DIR=keepinventory;   FILTER=keepInventory ;;
+            craftablerarities)  DIR=craftablerarities;        FILTER=craftablerarities ;;
+            SmartWarehouse|smartwarehouse) DIR=smartwarehouse; FILTER=SmartWarehouse ;;
             *) echo "::error::Unknown package: $PKG"; exit 1 ;;
           esac
-          CFG="${{ env[KEY] }}"
-          CN=$(echo "$CFG" | jq -r '.cn')
-          FILTER=$(echo "$CFG" | jq -r '.filter')
-          PACK_SCRIPT=$(echo "$CFG" | jq -r '.pack')
-          HAS_BUILD=$(echo "$CFG" | jq -r '.hasBuild')
-          echo "cn=$CN" >> $GITHUB_OUTPUT
+          echo "dir=$DIR" >> $GITHUB_OUTPUT
           echo "filter=$FILTER" >> $GITHUB_OUTPUT
-          echo "pack=$PACK_SCRIPT" >> $GITHUB_OUTPUT
+
+      - name: Read package.json
+        id: pkg
+        run: |
+          DIR="${{ steps.resolve.outputs.dir }}"
+          CN=$(jq -r '.productName' "mcaddon/$DIR/package.json")
+          HAS_BUILD=$(jq 'has("build")' "mcaddon/$DIR/package.json")
+          echo "cn=$CN" >> $GITHUB_OUTPUT
           echo "hasBuild=$HAS_BUILD" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Set version
-        run: pnpm --filter "${{ steps.config.outputs.filter }}" pkg set version="${{ steps.parse.outputs.version }}"
+        run: pnpm --filter "${{ steps.resolve.outputs.filter }}" pkg set version="${{ steps.parse.outputs.version }}"
 
       - name: Build
-        if: steps.config.outputs.hasBuild == 'true'
-        run: pnpm --filter "${{ steps.config.outputs.filter }}" run build
+        if: steps.pkg.outputs.hasBuild == 'true'
+        run: pnpm --filter "${{ steps.resolve.outputs.filter }}" run build
 
       - name: Pack
-        run: pnpm --filter "${{ steps.config.outputs.filter }}" run "${{ steps.config.outputs.pack }}"
+        run: pnpm --filter "${{ steps.resolve.outputs.filter }}" run mcaddon
 
       - name: Locate artifact
         id: artifact
         run: |
-          CN="${{ steps.config.outputs.cn }}"
-          VER="${{ steps.parse.outputs.version }}"
-          # Find the .mcaddon or .mcpack in packages/dist (exclude intermediate _bp _rp files)
           ARTIFACT=$(find mcaddon -path "*/dist/packages/*" \( -name "*.mcaddon" -o -name "*.mcpack" \) ! -name "*_bp.mcpack" ! -name "*_rp.mcpack" 2>/dev/null | head -1)
           echo "path=$ARTIFACT"
           echo "path=$ARTIFACT" >> $GITHUB_OUTPUT
@@ -106,19 +93,16 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           FILE="${{ steps.artifact.outputs.path }}"
-          IS_PRERELEASE=""
-          if echo "${{ steps.parse.outputs.version }}" | grep -qiE 'beta|alpha|rc|pre'; then
-            IS_PRERELEASE="--prerelease"
-          fi
+          IS_PR=""; echo "${{ steps.parse.outputs.version }}" | grep -qiE 'beta|alpha|rc|pre' && IS_PR="--prerelease"
           if gh release view "$TAG" &>/dev/null; then
             gh release upload "$TAG" "$FILE" --clobber
           else
-            gh release create "$TAG" "$FILE" --title "${{ steps.config.outputs.cn }} ${{ steps.parse.outputs.version }}" --notes "自动构建发布" ${IS_PRERELEASE}
+            gh release create "$TAG" "$FILE" --title "${{ steps.pkg.outputs.cn }} ${{ steps.parse.outputs.version }}" --notes "自动构建发布" ${IS_PR}
           fi
 
       - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch' && steps.artifact.outputs.path != ''
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.config.outputs.cn }}-${{ steps.parse.outputs.version }}
+          name: ${{ steps.pkg.outputs.cn }}-${{ steps.parse.outputs.version }}
           path: ${{ steps.artifact.outputs.path }}
