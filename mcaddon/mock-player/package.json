@@ -1,6 +1,6 @@
 {
   "name": "mock-player",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "productName": "模拟玩家",
   "description": "MockPlayer — 创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
   "private": true,
