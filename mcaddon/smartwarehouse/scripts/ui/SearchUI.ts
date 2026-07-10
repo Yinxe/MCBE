@@ -79,7 +79,7 @@ export async function showSearchUI(
   const form = new ModalFormBuilder()
     .title("容器搜索")
     .label("info", "§7输入物品名称搜索仓库中的容器\n支持输入物品 ID（minecraft:xxx）、英文名或中文名模糊搜索")
-    .textField("query", "§a搜索关键字", "输入物品名称…", { defaultValue: "" })
+    .textFieldWithPlaceholder("query", "§a搜索关键字", "输入物品名称…", { defaultValue: "" })
     .dropdown(
       "warehouse",
       "§a选择仓库",

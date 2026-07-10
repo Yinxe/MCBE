@@ -1,6 +1,7 @@
 // ─── /mp:data <name> — 查看模拟玩家完整数据 ────────────
 
-import { Player, world, system, EntityInventoryComponent, EntityEquippableComponent, EquipmentSlot, CustomCommandParamType, CommandPermissionLevel, CustomCommandStatus } from "@minecraft/server";
+import { Player, world, EntityInventoryComponent, EntityEquippableComponent, EquipmentSlot, CustomCommandParamType, CommandPermissionLevel } from "@minecraft/server";
+import { defineCommand } from "@yinxe/toolkit/command";
 
 import { BotRecord } from "../features/types";
 import { getTagDef } from "../features/tags";
@@ -109,37 +110,23 @@ export function sendData(player: Player, record: BotRecord): void {
 }
 
 export function registerDataCommand(registry: any): void {
-  registry.registerCommand(
-    {
-      name: "mp:data",
-      description: "查看模拟玩家的完整数据",
-      cheatsRequired: false,
-      permissionLevel: CommandPermissionLevel.Any,
-      optionalParameters: [{ name: "name", type: CustomCommandParamType.String }],
-    },
-    (origin: any, ...args: any[]) => {
-      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
-      const player = origin.sourceEntity as Player;
-
-      const nameInput = args[0] as string | undefined;
-      if (!nameInput) {
-        player.sendMessage("§c用法: /mp:data <假人名>");
-        return { status: CustomCommandStatus.Failure, message: "缺少参数" };
-      }
-
-      const record = botRegistry.get(nameInput);
-      if (!record) {
-        player.sendMessage(`§c未找到模拟玩家 §e${nameInput}§c`);
-        return { status: CustomCommandStatus.Failure, message: "未找到" };
-      }
-
-      // ⚠️ 命令回调运行在 restricted-execution mode
-      // serializeItemStack 中的 getCanDestroy/getCanPlaceOn 受限
-      // 用 system.run 切换到主 tick 执行
-      system.run(() => {
-        sendData(player, record);
-      });
-      return { status: CustomCommandStatus.Success, message: "ok" };
-    },
-  );
+  defineCommand(registry, {
+    name: "mp:data",
+    description: "查看模拟玩家的完整数据",
+    cheatsRequired: false,
+    permissionLevel: CommandPermissionLevel.Any,
+    optionalParameters: [{ name: "name", type: CustomCommandParamType.String }],
+  }, ({ player, params }) => {
+    const nameInput = params.name as string | undefined;
+    if (!nameInput) {
+      player.sendMessage("§c用法: /mp:data <假人名>");
+      return;
+    }
+    const record = botRegistry.get(nameInput);
+    if (!record) {
+      player.sendMessage(`§c未找到模拟玩家 §e${nameInput}§c`);
+      return;
+    }
+    sendData(player, record);
+  });
 }

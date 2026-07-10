@@ -1,5 +1,6 @@
 // ─── /mp:list — 列出模拟玩家 ──────────────────────────
 
+import { defineCommand } from "@yinxe/toolkit/command";
 import {
   system,
   world,
@@ -49,37 +50,28 @@ function buildListMessage(records: BotRecord[], filterOnline?: boolean, filterDe
 }
 
 export function registerListCommand(registry: any): void {
-  registry.registerCommand(
-    {
-      name: "mp:list",
-      description: "列出所有已创建的假人（可按在线/死亡筛选）",
-      cheatsRequired: false,
-      permissionLevel: CommandPermissionLevel.Any,
-      optionalParameters: [
-        { name: "online", type: CustomCommandParamType.Boolean },
-        { name: "death", type: CustomCommandParamType.Boolean },
-      ],
-    },
-    (origin: any, ...args: any[]) => {
-      if (!origin.sourceEntity) return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
-      const player = origin.sourceEntity as Player;
-      const filterOnline = args[0] as boolean | undefined;
-      const filterDeath = args[1] as boolean | undefined;
+  defineCommand(registry, {
+    name: "mp:list",
+    description: "列出所有已创建的假人（可按在线/死亡筛选）",
+    cheatsRequired: false,
+    permissionLevel: CommandPermissionLevel.Any,
+    optionalParameters: [
+      { name: "online", type: CustomCommandParamType.Boolean },
+      { name: "death", type: CustomCommandParamType.Boolean },
+    ],
+  }, ({ player, params }) => {
+    const filterOnline = params.online as boolean | undefined;
+    const filterDeath = params.death as boolean | undefined;
 
-      system.run(() => {
-        // 刷新在线假人的最新位置
-        for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
-          const record = botRegistry.get(bot.name);
-          if (record && record.lastPoint) {
-            record.lastPoint.location = bot.location;
-            record.lastPoint.dimension = bot.dimension.id;
-            record.lastPoint.rotation = bot.getRotation();
-          }
-        }
-        player.sendMessage(buildListMessage(Array.from(botRegistry.values()), filterOnline, filterDeath));
-      });
-
-      return { status: CustomCommandStatus.Success, message: "§a正在查询假人列表..." };
+    // 刷新在线假人的最新位置
+    for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
+      const record = botRegistry.get(bot.name);
+      if (record && record.lastPoint) {
+        record.lastPoint.location = bot.location;
+        record.lastPoint.dimension = bot.dimension.id;
+        record.lastPoint.rotation = bot.getRotation();
+      }
     }
-  );
+    player.sendMessage(buildListMessage(Array.from(botRegistry.values()), filterOnline, filterDeath));
+  });
 }

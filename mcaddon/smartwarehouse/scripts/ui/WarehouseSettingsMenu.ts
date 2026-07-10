@@ -90,7 +90,7 @@ export async function showWarehouseSettingsMenu(
   const form = new ModalFormBuilder()
     .title("仓库设置")
     .label("info", statsLabel)
-    .textField("name", "仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
+    .textFieldWithPlaceholder("name", "仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
     .dropdown("defaultRole", "默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex) })
     .dropdown("defaultEnabled", "新容器默认启用", ["是", "否"], {
       defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1,
