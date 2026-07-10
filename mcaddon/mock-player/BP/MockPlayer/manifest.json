@@ -1,0 +1,64 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "MockPlayer-v1.0.6",
+    "description": "模拟玩家",
+    "uuid": "49df180b-e16a-4740-9edd-c655127fcd22",
+    "version": [
+      1,
+      0,
+      6
+    ],
+    "min_engine_version": [
+      1,
+      26,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Behavior",
+      "version": [
+        1,
+        0,
+        6
+      ],
+      "uuid": "256118ca-af02-43d2-a0f1-da5b460474d6",
+      "type": "data"
+    },
+    {
+      "description": "Script resources",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "cda1f72a-5834-4494-af4c-871df2e22e0a",
+      "version": [
+        1,
+        0,
+        6
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": [
+        2,
+        6,
+        0
+      ]
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": [
+        2,
+        0,
+        0
+      ]
+    },
+    {
+      "module_name": "@minecraft/server-gametest",
+      "version": "1.0.0-beta"
+    }
+  ]
+}
