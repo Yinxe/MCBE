@@ -3,9 +3,9 @@
 import { Player, system } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit/ui";
 
-import { BOT_TAG, TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/tags";
-import { botRegistry } from "../features/persistence";
-import { setTags } from "../features/operations";
+import { BOT_TAG, TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
+import { botRegistry } from "../features/core/persistence";
+import { setTags } from "../features/setTags";
 import { showMainMenu } from "./menu";
 
 // ─── 标签管理 ─────────────────────────────────────────

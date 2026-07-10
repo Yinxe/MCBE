@@ -1,7 +1,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { botRegistry } from "../features/persistence";
-import { deleteBot } from "../features/operations";
+import { botRegistry } from "../features/core/persistence";
+import { deleteBot } from "../features/deleteBot";
 export function registerDeleteCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:delete", description: "删除指定假人",

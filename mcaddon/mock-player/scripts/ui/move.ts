@@ -3,9 +3,10 @@
 import { Player, system } from "@minecraft/server";
 import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit/ui";
 
-import { botRegistry } from "../features/persistence";
-import { moveBot, deleteBot } from "../features/operations";
-import { parseCoordinateInput } from "../features/utils";
+import { botRegistry } from "../features/core/persistence";
+import { moveBot } from "../features/move";
+import { deleteBot } from "../features/deleteBot";
+import { parseCoordinateInput } from "../features/core/utils";
 
 // ─── 移动至坐标 ───────────────────────────────────────
 

@@ -11,14 +11,14 @@
 //   - respawn() 必须在 entityDie 中调用，离开事件后实体 ID 就无效了
 //   - 死亡后 world.getPlayers({ tags }) 不再返回该假人
 
-import { world, Player, EntityDieAfterEvent } from "@minecraft/server";
+import { world, EntityDieAfterEvent } from "@minecraft/server";
 import { SimulatedPlayer, LookDuration } from "@minecraft/server-gametest";
 
-import { PositionState } from "../features/types";
-import { BOT_TAG, TAG_RESPAWN } from "../features/tags";
-import { formatPos, formatDimensionId } from "../features/utils";
-import { botRegistry, saveBotRecord } from "../features/persistence";
-import { saveBotFullState } from "../features/operations";
+import { PositionState } from "../features/core/types";
+import { BOT_TAG, TAG_RESPAWN } from "../features/core/tags";
+import { formatPos, formatDimensionId } from "../features/core/utils";
+import { botRegistry, saveBotRecord } from "../features/core/persistence";
+import { saveBotFullState } from "../features/saveState";
 
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;

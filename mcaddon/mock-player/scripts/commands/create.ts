@@ -1,10 +1,10 @@
 import { world, Vector3 } from "@minecraft/server";
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../features/tags";
-import { getPlayerLookTarget } from "../features/utils";
-import { generateBotName } from "../features/persistence";
-import { createBot } from "../features/operations";
+import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../features/core/tags";
+import { getPlayerLookTarget } from "../features/core/utils";
+import { generateBotName } from "../features/core/persistence";
+import { createBot } from "../features/createBot";
 
 export function registerCreateCommand(registry: any): void {
   defineCommand(registry, {

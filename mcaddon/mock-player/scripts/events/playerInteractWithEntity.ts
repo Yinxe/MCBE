@@ -8,10 +8,10 @@
 //   beforeEvents 回调运行在 restricted-execution mode
 //   不能直接调用 form.show()，需要用 system.run() 延迟执行
 
-import { world, system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/server";
+import { system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/server";
 
-import { TAG_BOT } from "../features/tags";
-import { showOperationPanel } from "../ui/menu";
+import { TAG_BOT } from "../features/core/tags";
+import { showBotPanel } from "../ui/bot";
 import { showTagManagement } from "../ui/tags";
 
 export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBeforeEvent): void {
@@ -29,7 +29,7 @@ export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBefore
     if (player.isSneaking) {
       showTagManagement(player, (target as Player).name);
     } else {
-      showOperationPanel(player, (target as Player).name);
+      showBotPanel(player, (target as Player).name);
     }
   });
 }

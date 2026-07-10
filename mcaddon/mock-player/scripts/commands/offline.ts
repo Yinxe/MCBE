@@ -1,7 +1,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { botRegistry } from "../features/persistence";
-import { offlineBot } from "../features/operations";
+import { botRegistry } from "../features/core/persistence";
+import { offlineBot } from "../features/offlineBot";
 export function registerOfflineCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:offline", description: "将假人下线，保留所有状态记录",

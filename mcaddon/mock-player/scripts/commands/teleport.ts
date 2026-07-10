@@ -1,7 +1,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { botRegistry } from "../features/persistence";
-import { tpPlayerToBot, tpBotToPlayer } from "../features/operations";
+import { botRegistry } from "../features/core/persistence";
+import { tpPlayerToBot, tpBotToPlayer } from "../features/teleport";
 export function registerTpCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:tp", description: "传送到假人身边",

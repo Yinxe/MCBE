@@ -1,7 +1,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { botRegistry } from "../features/persistence";
-import { reclaimBot } from "../features/operations";
+import { botRegistry } from "../features/core/persistence";
+import { reclaimBot } from "../features/reclaim";
 export function registerReclaimCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:reclaim", description: "回收假人全部背包装备和经验到玩家",

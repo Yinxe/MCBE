@@ -3,10 +3,11 @@
 import { Player, system } from "@minecraft/server";
 import { ModalFormBuilder } from "@yinxe/toolkit/ui";
 
-import { BOT_TAG, getTagDef } from "../features/tags";
-import { formatPos, formatDimensionId } from "../features/utils";
-import { botRegistry } from "../features/persistence";
-import { onlineBot, offlineBot } from "../features/operations";
+import { BOT_TAG, getTagDef } from "../features/core/tags";
+import { formatPos, formatDimensionId } from "../features/core/utils";
+import { botRegistry } from "../features/core/persistence";
+import { onlineBot } from "../features/onlineBot";
+import { offlineBot } from "../features/offlineBot";
 
 function getStatusIcon(death: boolean, online: boolean): string {
   if (death) return "§4[死亡]";
@@ -14,7 +15,7 @@ function getStatusIcon(death: boolean, online: boolean): string {
   return "§7[离线]";
 }
 
-function getPosSummary(record: import("../features/types").BotRecord): string {
+function getPosSummary(record: import("../features/core/types").BotRecord): string {
   if (record.lastPoint) {
     return `${formatPos(record.lastPoint.location)} §8${formatDimensionId(record.lastPoint.dimension)}`;
   }

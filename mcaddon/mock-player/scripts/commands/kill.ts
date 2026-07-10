@@ -1,7 +1,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { botRegistry } from "../features/persistence";
-import { killBot } from "../features/operations";
+import { botRegistry } from "../features/core/persistence";
+import { killBot } from "../features/killBot";
 export function registerKillCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:kill", description: "杀死一个在线的假人",

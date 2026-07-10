@@ -10,8 +10,8 @@
 
 import { world, PlayerSpawnAfterEvent } from "@minecraft/server";
 
-import { BOT_TAG } from "../features/tags";
-import { botRegistry, saveBotRecord } from "../features/persistence";
+import { BOT_TAG } from "../features/core/tags";
+import { botRegistry, saveBotRecord } from "../features/core/persistence";
 
 export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   // 首次生成不处理（由 playerJoin 负责恢复）

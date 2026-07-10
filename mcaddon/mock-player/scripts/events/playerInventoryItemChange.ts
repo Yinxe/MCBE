@@ -12,9 +12,9 @@
 
 import { PlayerInventoryItemChangeAfterEvent } from "@minecraft/server";
 
-import { isBotRestored, saveBotSlot } from "../features/persistence";
-import { BOT_TAG } from "../features/tags";
-import { serializeItemStack } from "../features/utils";
+import { isBotRestored, saveBotSlot } from "../features/core/persistence";
+import { BOT_TAG } from "../features/core/tags";
+import { serializeItemStack } from "../features/core/utils";
 
 export function onPlayerInventoryItemChange(event: PlayerInventoryItemChangeAfterEvent): void {
   const { player, slot, itemStack } = event;

@@ -3,10 +3,10 @@
 import { Player, world, EntityInventoryComponent, EntityEquippableComponent, EquipmentSlot, CustomCommandParamType, CommandPermissionLevel } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
 
-import { BotRecord } from "../features/types";
-import { getTagDef } from "../features/tags";
-import { formatPos, formatDimensionId, serializeItemStack, getTotalXpForLevels } from "../features/utils";
-import { botRegistry, loadBotInventory } from "../features/persistence";
+import { BotRecord } from "../features/core/types";
+import { getTagDef } from "../features/core/tags";
+import { formatPos, formatDimensionId, serializeItemStack, getTotalXpForLevels } from "../features/core/utils";
+import { botRegistry, loadBotInventory } from "../features/core/persistence";
 
 export function sendData(player: Player, record: BotRecord): void {
   const lines: string[] = [];

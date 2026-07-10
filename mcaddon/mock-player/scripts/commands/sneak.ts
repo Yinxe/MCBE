@@ -2,8 +2,8 @@
 
 import { Player, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { botRegistry } from "../features/persistence";
-import { setSneaking } from "../features/operations";
+import { botRegistry } from "../features/core/persistence";
+import { setSneaking } from "../features/sneak";
 
 export function registerSneakCommand(registry: any): void {
   defineCommand(registry, {

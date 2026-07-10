@@ -1,7 +1,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { botRegistry, loadBotRecord } from "../features/persistence";
-import { onlineBot } from "../features/operations";
+import { botRegistry, loadBotRecord } from "../features/core/persistence";
+import { onlineBot } from "../features/onlineBot";
 export function registerOnlineCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:online", description: "将一个已创建的假人上线并恢复所有状态",

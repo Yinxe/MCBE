@@ -12,8 +12,8 @@ import { world, system } from "@minecraft/server";
 
 import { registerAllCommands } from "./commands/index";
 import { registerAllEvents } from "./events/index";
-import { botRegistry, saveBotRecord, loadAllBotRecords } from "./features/persistence";
-import { startTagBehaviors } from "./features/behavior";
+import { botRegistry, saveBotRecord, loadAllBotRecords } from "./features/core/persistence";
+import { startTagBehaviors } from "./features/core/behavior";
 
 // ─── 命令注册（early-execution mode） ─────────────────────
 // customCommandRegistry 不在 world 上，而是在 StartupEvent 上

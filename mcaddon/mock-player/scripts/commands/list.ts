@@ -9,10 +9,10 @@ import {
   CommandPermissionLevel,
   CustomCommandParamType,
 } from "@minecraft/server";
-import { BotRecord, PositionState } from "../features/types";
-import { BOT_TAG, TAG_IDLE, getTagDef } from "../features/tags";
-import { formatPos, formatDimensionId } from "../features/utils";
-import { botRegistry } from "../features/persistence";
+import { BotRecord, PositionState } from "../features/core/types";
+import { BOT_TAG, TAG_IDLE, getTagDef } from "../features/core/tags";
+import { formatPos, formatDimensionId } from "../features/core/utils";
+import { botRegistry } from "../features/core/persistence";
 
 /** 格式化点位状态（仅列表显示用） */
 function formatState(state: PositionState): string {

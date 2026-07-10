@@ -1,7 +1,7 @@
 import { world, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { BOT_TAG, EXCLUSIVE_SET, getTagDef, resolveTag, buildTagListMessage, syncEntityTags } from "../features/tags";
-import { botRegistry, saveBotRecord } from "../features/persistence";
+import { BOT_TAG, EXCLUSIVE_SET, getTagDef, resolveTag, buildTagListMessage, syncEntityTags } from "../features/core/tags";
+import { botRegistry, saveBotRecord } from "../features/core/persistence";
 
 /** /mp:tags — 列出所有可用标签（无需玩家身份，保持原生） */
 export function registerTagsCommand(registry: any): void {

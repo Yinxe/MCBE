@@ -1,9 +1,8 @@
 import { world, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { TAG_RESPAWN, TAG_BOT } from "../features/tags";
-import { botRegistry, saveBotRecord } from "../features/persistence";
-import { getPlayerLookTarget } from "../features/utils";
-import { syncEntityTags } from "../features/tags";
+import { TAG_RESPAWN, TAG_BOT, syncEntityTags } from "../features/core/tags";
+import { botRegistry, saveBotRecord } from "../features/core/persistence";
+import { getPlayerLookTarget } from "../features/core/utils";
 export function registerRespawnCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:respawn", description: "切换假人的自动重生标签",

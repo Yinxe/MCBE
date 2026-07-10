@@ -9,9 +9,9 @@
 
 import { world, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEquippableComponent } from "@minecraft/server";
 
-import { BOT_TAG } from "../features/tags";
-import { botRegistry, saveBotRecord, loadBotInventory, loadBotEquipment, markBotRestored } from "../features/persistence";
-import { deserializeContainer, deserializeEquipment, getTotalXpForLevels } from "../features/utils";
+import { BOT_TAG } from "../features/core/tags";
+import { botRegistry, saveBotRecord, loadBotInventory, loadBotEquipment, markBotRestored } from "../features/core/persistence";
+import { deserializeContainer, deserializeEquipment, getTotalXpForLevels } from "../features/core/utils";
 
 export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   const record = botRegistry.get(event.playerName);

@@ -3,11 +3,11 @@
 import { Player, system, world, Vector3 } from "@minecraft/server";
 import { ModalFormBuilder } from "@yinxe/toolkit/ui";
 
-import { PositionState } from "../features/types";
-import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../features/tags";
-import { getPlayerLookTarget, parseCoordinateInput } from "../features/utils";
-import { generateBotName } from "../features/persistence";
-import { createBot, CreateBotOptions } from "../features/operations";
+import { PositionState } from "../features/core/types";
+import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../features/core/tags";
+import { getPlayerLookTarget, parseCoordinateInput } from "../features/core/utils";
+import { generateBotName } from "../features/core/persistence";
+import { createBot } from "../features/createBot";
 
 export function showCreateForm(player: Player): void {
   const dimOptions = ["跟随玩家", "主世界 (overworld)", "下界 (nether)", "末地 (the_end)"];

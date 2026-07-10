@@ -2,9 +2,9 @@
 
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { TAG_CONTROL } from "../features/tags";
-import { botRegistry } from "../features/persistence";
-import { toggleControl } from "../features/operations";
+import { TAG_CONTROL } from "../features/core/tags";
+import { botRegistry } from "../features/core/persistence";
+import { toggleControl } from "../features/control";
 
 export function registerControlCommand(registry: any): void {
   defineCommand(registry, {

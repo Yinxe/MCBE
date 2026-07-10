@@ -1,7 +1,7 @@
 import { Vector3, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { botRegistry } from "../features/persistence";
-import { moveBot } from "../features/operations";
+import { botRegistry } from "../features/core/persistence";
+import { moveBot } from "../features/move";
 export function registerMoveCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:move", description: "让模拟玩家自动寻路到指定坐标",

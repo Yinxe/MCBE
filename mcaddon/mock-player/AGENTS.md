@@ -24,16 +24,36 @@ just-scripts clean              # 清理
 ```
 scripts/
 ├── main.ts          # 入口：命令注册、持久化恢复、事件监听
-├── commands/        # 每条命令独立文件
+├── commands/        # 每条命令独立文件（index.ts 统一注册）
+├── events/          # 每个事件独立文件（index.ts 统一订阅）
 ├── features/
-│   ├── types.ts     # BotRecord / PositionState / TagDef 等核心类型
-│   ├── operations.ts# 所有核心业务逻辑
-│   ├── events.ts    # entityDie / playerSpawn / playerJoin / playerLeave
-│   ├── behavior.ts  # 标签行为引擎（轮询）
-│   ├── persistence.ts# 动态属性持久化
-│   ├── tags.ts      # 标签定义/解析/同步
-│   └── utils.ts     # 坐标转换、格式化
-└── ui/              # ModalFormData UI
+│   ├── core/        # 基础设施
+│   │   ├── types.ts     类型定义
+│   │   ├── tags.ts      标签系统定义/解析/同步
+│   │   ├── persistence.ts 动态属性持久化
+│   │   ├── utils.ts     坐标/背包/序列化 工具
+│   │   ├── behavior.ts  标签行为引擎（轮询）
+│   │   └── spawn.ts     假人生成公共尾部逻辑
+│   ├── createBot.ts     创建
+│   ├── onlineBot.ts     上线
+│   ├── offlineBot.ts    下线
+│   ├── deleteBot.ts     删除
+│   ├── killBot.ts       杀死
+│   ├── teleport.ts      TPA/TPHERE
+│   ├── move.ts          导航移动
+│   ├── control.ts       控制模式
+│   ├── sneak.ts         潜行
+│   ├── reclaim.ts       回收物品/经验
+│   ├── equip.ts         装备互换/卸甲/穿甲
+│   ├── saveState.ts     全量状态保存
+│   └── setTags.ts       标签更新
+└── ui/
+    ├── menu.ts       # 主菜单（创建/列表/在线管理/标签速查）
+    ├── bot.ts        # 统一假人操作面板（单菜单，无二级导航）
+    ├── create.ts     # 创建表单
+    ├── move.ts       # 移动表单 + 删除确认
+    ├── online.ts     # 在线管理
+    └── tags.ts       # 标签管理 + 标签速查
 ```
 
 ---
