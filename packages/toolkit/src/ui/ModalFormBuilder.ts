@@ -1,23 +1,32 @@
 // ─── ModalFormBuilder ─────────────────────────────────────────────
-// 对 @minecraft/server-ui ModalFormData 的命名访问封装。
-// 屏蔽 label 在不同 Bedrock 版本中的索引行为差异，支持字段名取值。
+// 对 @minecraft/server-ui ModalFormData 的全功能封装。
+//
+// 支持所有原生组件配置项：
+// - tooltip 悬浮提示（感叹号图标）
+// - placeholder / defaultValue / valueStep / defaultValueIndex
+// - header 标题区、divider 分隔线、submitButton 提交按钮
+// - label 的 RawMessage 格式（translate + with 本地化）
+//
+// 保留命名访问特性：屏蔽 label 跨版本索引差异，按钮名取值。
 //
 // 用法：
-//   const form = new ModalFormBuilder()
+//   const vals = await new ModalFormBuilder()
 //     .title("设置")
-//     .toggle("enabled", "启用", { defaultValue: true })
-//     .textField("name", "名称", { defaultValue: "张三" })
-//     .build();
-//   const vals = await form.show(player);
-//   if (!vals) return;           // 取消
-//   dosomething(vals.enabled);   // 命名访问，无需维护索引
+//     .toggle("enabled", "启用", { defaultValue: true, tooltip: "开启后生效" })
+//     .textField("name", "名称", { placeholder: "输入名字", tooltip: "仅支持中文" })
+//     .dropdown("mode", "模式", ["简单", "高级"], { defaultValueIndex: 1 })
+//     .slider("volume", "音量", 0, 100, { defaultValue: 50, valueStep: 5, tooltip: "调节音量" })
+//     .divider()
+//     .submitButton("确定")
+//     .show(player);
+//   if (vals) console.log(vals.enabled, vals.name, vals.mode);
 
-import { type Player } from "@minecraft/server";
-import { ModalFormData } from "@minecraft/server-ui";
+import { type Player, type RawMessage } from "@minecraft/server";
+import { ModalFormData, type ModalFormDataDropdownOptions, type ModalFormDataSliderOptions, type ModalFormDataTextFieldOptions, type ModalFormDataToggleOptions } from "@minecraft/server-ui";
 
-// ─── 类型 ───────────────────────────────────────────────────────
+// ─── 字段类型 ───────────────────────────────────────────────────
 
-type FieldType = "label" | "textField" | "dropdown" | "toggle" | "slider";
+type FieldType = "header" | "label" | "divider" | "textField" | "dropdown" | "toggle" | "slider";
 
 interface FormField {
   type: FieldType;
@@ -26,6 +35,10 @@ interface FormField {
 
 export type ModalFormValues = Record<string, string | number | boolean | undefined>;
 
+// ─── 选项类型（直接透传原生接口） ─────────────────────────────
+
+export { type ModalFormDataDropdownOptions, type ModalFormDataSliderOptions, type ModalFormDataTextFieldOptions, type ModalFormDataToggleOptions };
+
 // ─── 构建器 ─────────────────────────────────────────────────────
 
 export class ModalFormBuilder {
@@ -33,43 +46,71 @@ export class ModalFormBuilder {
   private fields: FormField[] = [];
 
   /** 设置表单标题 */
-  title(text: string): this {
+  title(text: RawMessage | string): this {
     this.form.title(text);
     return this;
   }
 
+  /** 添加表单头部（标题区） */
+  header(text: RawMessage | string): this {
+    this.form.header(text);
+    this.fields.push({ type: "header", name: "_header" });
+    return this;
+  }
+
+  /** 添加分隔线 */
+  divider(): this {
+    this.form.divider();
+    this.fields.push({ type: "divider", name: "_divider" });
+    return this;
+  }
+
   /** 添加只读文本标签 */
-  label(_name: string, text: string): this {
+  label(_name: string, text: RawMessage | string): this {
     this.form.label(text);
     this.fields.push({ type: "label", name: _name });
     return this;
   }
 
   /** 添加文本输入框 */
-  textField(name: string, label: string, placeholder?: string, opts?: { defaultValue?: string }): this {
-    this.form.textField(label, placeholder ?? "", opts ?? {});
+  textField(name: string, label: RawMessage | string, opts?: ModalFormDataTextFieldOptions): this {
+    const { defaultValue, tooltip, ...rest } = opts ?? {};
+    this.form.textField(label, "", { defaultValue, tooltip, ...rest });
+    this.fields.push({ type: "textField", name });
+    return this;
+  }
+
+  /** 添加带占位符的文本输入框 */
+  textFieldWithPlaceholder(name: string, label: RawMessage | string, placeholder: RawMessage | string, opts?: Omit<ModalFormDataTextFieldOptions, "placeholder">): this {
+    this.form.textField(label, placeholder, opts ?? {});
     this.fields.push({ type: "textField", name });
     return this;
   }
 
   /** 添加下拉选择框 */
-  dropdown(name: string, label: string, options: string[], opts?: { defaultValueIndex?: number }): this {
-    this.form.dropdown(label, options, opts ?? {});
+  dropdown(name: string, label: RawMessage | string, items: (RawMessage | string)[], opts?: ModalFormDataDropdownOptions): this {
+    this.form.dropdown(label, items, opts ?? {});
     this.fields.push({ type: "dropdown", name });
     return this;
   }
 
   /** 添加开关 */
-  toggle(name: string, label: string, opts?: { defaultValue?: boolean }): this {
+  toggle(name: string, label: RawMessage | string, opts?: ModalFormDataToggleOptions): this {
     this.form.toggle(label, opts ?? {});
     this.fields.push({ type: "toggle", name });
     return this;
   }
 
   /** 添加滑动条 */
-  slider(name: string, label: string, min: number, max: number, opts?: { defaultValue?: number; valueStep?: number }): this {
-    this.form.slider(label, min, max, opts ?? {});
+  slider(name: string, label: RawMessage | string, min: number, max: number, valueStep?: number, opts?: Omit<ModalFormDataSliderOptions, "valueStep">): this {
+    this.form.slider(label, min, max, valueStep, opts ?? {});
     this.fields.push({ type: "slider", name });
+    return this;
+  }
+
+  /** 设置提交按钮文本 */
+  submitButton(text: RawMessage | string): this {
+    this.form.submitButton(text);
     return this;
   }
 
@@ -90,7 +131,11 @@ export class ModalFormBuilder {
   }
 
   /** 快速显示：一行完成构建 + 展示 */
-  static async showQuick(player: Player, title: string, build: (f: ModalFormBuilder) => void): Promise<ModalFormValues | null> {
+  static async showQuick(
+    player: Player,
+    title: string,
+    build: (f: ModalFormBuilder) => void
+  ): Promise<ModalFormValues | null> {
     const builder = new ModalFormBuilder();
     builder.title(title);
     build(builder);
@@ -101,25 +146,30 @@ export class ModalFormBuilder {
 
   /**
    * 解析 formValues 为命名字典。
-   *
-   * label 在不同版本中行为：
-   * - 新版：label 占用 formValues 索引，值为 null
-   * - 旧版：label 不占用索引
-   * 自动通过比较数组长度判断。
+   * 自动判断 label 是否占用索引（取决于 Bedrock 版本）。
    */
   private parse(values: (string | number | boolean | undefined)[]): ModalFormValues {
     const result: ModalFormValues = {};
+    const valueTypes: FieldType[] = ["textField", "dropdown", "toggle", "slider"];
+    const valueFields = this.fields.filter((f) => valueTypes.includes(f.type));
+    const valueCount = valueFields.length;
     const labelsOccupy = values.length === this.fields.length;
 
-    for (let i = 0; i < this.fields.length; i++) {
-      const field = this.fields[i];
-      if (field.type === "label") continue;
-      if (labelsOccupy) {
-        result[field.name] = values[i];
-      } else {
-        // label 不占位时，非 label 字段顺序排列
-        const fieldCount = this.fields.slice(0, i + 1).filter((f) => f.type !== "label").length;
-        result[field.name] = values[fieldCount - 1];
+    if (labelsOccupy) {
+      for (let i = 0; i < this.fields.length; i++) {
+        const f = this.fields[i];
+        if (valueTypes.includes(f.type)) {
+          result[f.name] = values[i];
+        }
+      }
+    } else {
+      // label/header/divider 不占索引时，仅值字段顺序排列
+      let vi = 0;
+      for (const f of this.fields) {
+        if (valueTypes.includes(f.type)) {
+          result[f.name] = values[vi];
+          vi++;
+        }
       }
     }
 
