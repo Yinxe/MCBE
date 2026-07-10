@@ -70,7 +70,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Set version
-        run: pnpm --filter "${{ steps.resolve.outputs.filter }}" pkg set version="${{ steps.parse.outputs.version }}"
+        run: cd mcaddon/${{ steps.resolve.outputs.dir }} && npm pkg set version="${{ steps.parse.outputs.version }}"
 
       - name: Build
         if: steps.pkg.outputs.hasBuild == 'true'
