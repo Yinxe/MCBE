@@ -8,8 +8,12 @@ import { moveBot } from "../features/move";
 import { deleteBot } from "../features/deleteBot";
 import { parseCoordinateInput } from "../features/core/utils";
 
-// ─── 移动至坐标 ───────────────────────────────────────
-
+/**
+ * 移动至坐标表单
+ *
+ * @deprecated 已从假人操作面板移除，仅在命令 /mp:move 中可用。
+ *   菜单中不再暴露此入口，保留代码以兼容外部调用。
+ */
 export function showMoveForm(player: Player, botName: string): void {
   ModalFormBuilder.showQuick(player, "§l移动至坐标", (f) => {
     f.textField("coord", "目标坐标（留空则移动到你位置）", { defaultValue: "" });

@@ -33,7 +33,12 @@ export function swapMainhandWithBot(player: Player, bot: Player): boolean {
   return true;
 }
 
-/** 与假人互换副手物品 */
+/**
+ * 与假人互换副手物品
+ *
+ * @deprecated 合并至 swapEquipmentWithBot——后者已通过 SWAP_SLOTS 包含 Offhand。
+ *   功能代码保留以兼容外部命令调用（/mp:tag 等），但新菜单不再暴露此按钮。
+ */
 export function swapOffhandWithBot(player: Player, bot: Player): boolean {
   const both = getBothEquip(player, bot);
   if (!both) return false;
@@ -53,7 +58,12 @@ export function swapEquipmentWithBot(player: Player, bot: Player): boolean {
 
 // ─── 一键卸甲 ──────────────────────────────────────────
 
-/** 一键卸甲：卸下假人主手 + 副手 + 全部装备，回收至玩家背包 */
+/**
+ * 一键卸甲：卸下假人主手 + 副手 + 全部装备，回收至玩家背包
+ *
+ * @deprecated 不再在菜单中暴露。如需卸甲，使用回收资源（reclaimBot）统一回收。
+ *   功能代码保留以兼容外部调用。
+ */
 export function unequipBotAll(player: Player, bot: Player): boolean {
   const bEquip = bot.getComponent("minecraft:equippable") as any;
   const pInv = player.getComponent("minecraft:inventory") as any;

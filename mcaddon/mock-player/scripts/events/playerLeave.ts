@@ -16,7 +16,20 @@ import { botRegistry, saveBotRecord, removeBotRestored } from "../features/core/
 import { saveBotFullState } from "../features/saveState";
 
 export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
-  const record = botRegistry.get(event.playerName);
+  let record = botRegistry.get(event.playerName);
+
+  // ── 容错：通过 entityId 反查（改名后 Player.name 只读不匹配 registry key） ──
+  // 正常改名路径要求离线，此分支兜底防止数据泄露
+  if (!record) {
+    for (const r of botRegistry.values()) {
+      if (r.entityId === event.playerId) {
+        console.warn(`[MockPlayer] playerLeave 反查命中 ${r.name}（playerName=${event.playerName}）`);
+        record = r;
+        break;
+      }
+    }
+  }
+
   if (!record) return;
   console.warn(`[MockPlayer] 事件 playerLeave ${event.playerName}`);
 
