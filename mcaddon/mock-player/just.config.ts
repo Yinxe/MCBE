@@ -16,12 +16,14 @@ import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit"
 
 setupEnvironment(path.resolve(__dirname, ".env"));
 
+const CHINESE_NAME = "模拟玩家";
+
 // ── Version sync ──
 task("sync-version", () => {
   syncManifestVersion(__dirname, {
-    formatName: (_, v) => `MockPlayer-v${v}`,
+    formatName: () => CHINESE_NAME,
     onManifest: (m) => {
-      m.header.description = "模拟玩家";
+      m.header.description = "创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化";
     },
   });
 });
@@ -35,7 +37,7 @@ const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
 const copyTaskOptions = copyOptions(__dirname, "MockPlayer");
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
-  outputFile: `./dist/packages/MockPlayer-v${pkgVersion}.mcaddon`,
+  outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}.mcaddon`,
 };
 
 task("lint", coreLint(["scripts/**/*.ts"], argv().fix));

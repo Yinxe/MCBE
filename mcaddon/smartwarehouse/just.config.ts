@@ -19,10 +19,10 @@ import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit"
 setupEnvironment(path.resolve(__dirname, ".env"));
 
 // ── Project metadata ────────────────────────────────────────────
+const CHINESE_NAME = "智能仓库";
 const projectName = getOrThrowFromProcess("PROJECT_NAME");
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
 const pkgVersion = pkg.version;
-const pkgName = pkg.name;
 
 // ── Bundle ──────────────────────────────────────────────────────
 const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
@@ -31,7 +31,7 @@ const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
 const copyTaskOptions = copyOptions(__dirname, projectName);
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
-  outputFile: `./dist/packages/${pkgName}-v${pkgVersion}.mcaddon`,
+  outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}.mcaddon`,
 };
 
 // ── Tasks ───────────────────────────────────────────────────────
@@ -55,8 +55,10 @@ task("generate-version", () => {
 task("update-version", () => {
   console.log(`Syncing manifest versions to ${pkgVersion} …`);
   syncManifestVersion(__dirname, {
-    formatName: (name, v) =>
-      name.replace(/\s+v?\d+\.\d+\.\d+([-+][\w.]+)?$/, "") + ` v${v}`,
+    formatName: () => CHINESE_NAME,
+    onManifest: (m) => {
+      m.header.description = `智能仓库管理 — 自动分拣、容器整理、仓库统计、容量预警 v${pkgVersion}`;
+    },
   });
   console.log("Done.");
 });

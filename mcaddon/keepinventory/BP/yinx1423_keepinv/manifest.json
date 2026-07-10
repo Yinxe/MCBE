@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Keep Inventory Add-on 2.0.0",
-    "description": "死亡不掉落 · 无需开启作弊 · 保留成就 · 极限复活",
+    "name": "死亡不掉落",
+    "description": "死亡不掉落·无需开启作弊·保留成就·极限复活",
     "uuid": "67f9c4dd-b4c8-4639-86d1-563884335058",
     "version": [
       2,
@@ -19,7 +19,7 @@
     {
       "description": "Behavior",
       "version": [
-        1,
+        2,
         0,
         0
       ],
@@ -32,9 +32,9 @@
       "type": "script",
       "uuid": "72b4f896-ab29-4773-87e7-6e8eb4d2342f",
       "version": [
+        2,
         0,
-        0,
-        1
+        0
       ],
       "entry": "scripts/main.js"
     }

@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "header": {
-    "name": "SmartWarehouse v0.0.55",
-    "description": "SmartWarehouse 行为包 — 智能仓库管理，自动分拣、容器整理、仓库统计",
+    "name": "智能仓库",
+    "description": "智能仓库管理 — 自动分拣、容器整理、仓库统计、容量预警 v0.0.55",
     "uuid": "449a7a85-99e0-4c33-8b69-07356daa8a34",
     "version": [
       0,

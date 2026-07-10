@@ -14,25 +14,38 @@ import {
 } from "@minecraft/core-build-tasks";
 import path from "path";
 import { renameSync } from "fs";
-import { bundleOptions, copyOptions } from "@yinxe/toolkit";
+import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
 setupEnvironment(path.resolve(__dirname, ".env"));
 
+const CHINESE_NAME = "死亡不掉落";
 const projectName = getOrThrowFromProcess("PROJECT_NAME");
+const pkgVersion = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
 
+// ── Version sync ──
+task("sync-version", () => {
+  syncManifestVersion(__dirname, {
+    formatName: () => CHINESE_NAME,
+    onManifest: (m) => {
+      m.header.description = "死亡不掉落·无需开启作弊·保留成就·极限复活";
+    },
+  });
+});
+
+// ── Build ──
 const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
   "@minecraft/server",
 ]);
 const copyTaskOptions = copyOptions(__dirname, projectName, { hasRp: false });
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
-  outputFile: `./dist/packages/KeepInventory.mcpack`,
+  outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}_bp.mcpack`,
 };
 
 task("lint", coreLint(["scripts/**/*.ts"], argv().fix));
 task("typescript", tscTask());
 task("bundle", bundleTask(bundleTaskOptions));
-task("build", series("typescript", "bundle"));
+task("build", series("sync-version", "typescript", "bundle"));
 task("clean-local", cleanTask(DEFAULT_CLEAN_DIRECTORIES));
 task("clean-collateral", cleanCollateralTask(STANDARD_CLEAN_PATHS));
 task("clean", parallel("clean-local", "clean-collateral"));
@@ -47,10 +60,10 @@ task(
 );
 task("createMcaddonFile", mcaddonTask(mcaddonTaskOptions));
 
-task("renameBpPack", () => {
-  const src = path.resolve(__dirname, "./dist/packages/KeepInventory_bp.mcpack");
-  const dst = path.resolve(__dirname, "./dist/packages/KeepInventory.mcpack");
+task("renameOutput", () => {
+  const src = path.resolve(__dirname, `./dist/packages/${CHINESE_NAME}-v${pkgVersion}_bp.mcpack`);
+  const dst = path.resolve(__dirname, `./dist/packages/${CHINESE_NAME}-v${pkgVersion}.mcpack`);
   renameSync(src, dst);
 });
 
-task("mcaddon", series("clean-local", "build", "createMcaddonFile", "renameBpPack"));
+task("mcaddon", series("clean-local", "build", "createMcaddonFile", "renameOutput"));

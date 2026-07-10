@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "header": {
-    "name": "MockPlayer-v1.0.6",
-    "description": "模拟玩家",
+    "name": "模拟玩家",
+    "description": "创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
     "uuid": "fa6a1d4b-86ed-46a7-94bb-95362965bbb6",
     "version": [
       1,
