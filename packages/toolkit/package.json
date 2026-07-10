@@ -13,6 +13,10 @@
     "./ui": {
       "types": "./src/ui/index.ts",
       "default": "./src/ui/index.ts"
+    },
+    "./command": {
+      "types": "./src/command/index.ts",
+      "default": "./src/command/index.ts"
     }
   },
   "peerDependencies": {
