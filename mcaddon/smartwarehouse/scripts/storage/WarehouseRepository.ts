@@ -138,6 +138,18 @@ export class WarehouseRepository {
       migratedContainers[key] = c.capacityWarningEnabled === undefined ? { ...c, capacityWarningEnabled: true } : c;
     }
 
+    // ── 数据迁移：修复丢失或无效的 dimensionId ────────────────────
+    // 旧版本仓库可能因 saveMetaOnly 未显式持久化 dimensionId 导致该字段丢失，
+    // 或存储为 "undefined" 字面字符串。尝试从容器数据中恢复。
+    // 所有容器的 dimensionId 指向同一维度。
+    const containerDimId = Object.values(containers).find((c) => c.dimensionId)?.dimensionId;
+    if ((!meta.dimensionId || meta.dimensionId === "undefined" || meta.dimensionId === "null") && containerDimId) {
+      meta.dimensionId = containerDimId;
+      // 回写修复后的 meta，避免每次加载都走迁移路径
+      this.store.setJson(metaKey(id), meta);
+      console.warn(`[SmartWarehouse] 仓库 ${id} 的 dimensionId 已从容器数据恢复为 "${meta.dimensionId}"`);
+    }
+
     return { ...meta, settings, containers: migratedContainers };
   }
 
@@ -155,6 +167,7 @@ export class WarehouseRepository {
 
     const meta: WarehouseMeta = {
       ...existingMeta,
+      dimensionId: data.dimensionId,
       displayName: data.displayName,
       area: data.area,
       ownerId: data.ownerId,

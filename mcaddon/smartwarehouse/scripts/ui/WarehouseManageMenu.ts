@@ -5,6 +5,7 @@ import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import type { ModConfigStore } from "../storage/ModConfigStore";
+import { formatDimensionName, formatAreaSize } from "../types";
 
 export async function showWarehouseManageMenu(
   player: Player,
@@ -37,10 +38,11 @@ export async function showWarehouseManageMenu(
   const form = new ActionFormBuilder().title("管理仓库").body(title);
 
   for (const warehouse of warehouses) {
-    const label =
-      isAdmin && warehouse.ownerId !== player.id
-        ? `${warehouse.displayName} §7(§f${warehouse.ownerId.slice(-8)}§7)`
-        : warehouse.displayName;
+    const dimLabel = warehouse.dimensionId ? formatDimensionName(warehouse.dimensionId) : "§7未知";
+    const areaLabel = formatAreaSize(warehouse.area);
+    const ownerLabel =
+      isAdmin && warehouse.ownerId !== player.id ? ` §7(§f${warehouse.ownerId.slice(-8)}§7)` : "";
+    const label = `${warehouse.displayName}${ownerLabel} §7${dimLabel} ${areaLabel}`;
     form.button(label, () => showWarehouseSettingsMenu(player, warehouse.id, repository, service, configStore));
   }
 

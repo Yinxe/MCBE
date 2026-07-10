@@ -5,10 +5,11 @@ import type {
   ContainerRole,
   ContainerStats,
   StoredContainer,
+  WarehouseArea,
   WarehouseData,
   WarehouseId,
 } from "../types";
-import { ROLE_LABELS } from "../types";
+import { ROLE_LABELS, formatDimensionName, formatAreaSize } from "../types";
 import { scanContainerSlots } from "../util/ContainerScan";
 import { getContainerFromStored } from "../sorting/ContainerInventory";
 import { WarehouseStatsStore } from "../storage/WarehouseStatsStore";
@@ -249,7 +250,11 @@ export function getWarehouseStats(warehouse: WarehouseData): WarehouseStats {
  *   Input(10)    0      0        0/20(0.00)
  *   Family:54
  */
-export function formatWarehouseStats(stats: WarehouseStats): string {
+export function formatWarehouseStats(
+  stats: WarehouseStats,
+  dimensionId?: string,
+  area?: WarehouseArea
+): string {
   const uc = (p: number) => (p >= 100 ? "§c" : p >= 80 ? "§e" : p >= 50 ? "§6" : "§a");
   const warnThreshold = CAPACITY_WARNING_THRESHOLD * 100;
   const tbl = new Table();
@@ -290,7 +295,22 @@ export function formatWarehouseStats(stats: WarehouseStats): string {
   }
 
   // margin=0 缩小列宽，gaps=[1,1,3] 增加 STORAGE 列前间距
-  const lines = [`§7仓库 : ${stats.displayName}`, tbl.render(0, [1, 1, 3])];
+  const lines: string[] = [`§7仓库 : ${stats.displayName}`];
+
+  // 位置信息（维度 + 区域坐标 + 占地）
+  if (dimensionId && area) {
+    const areaSize = formatAreaSize(area);
+    lines.push(
+      `§7位置: §f${formatDimensionName(dimensionId)}  ` +
+        `§7[§f${area.min.x}, ${area.min.y}, ${area.min.z}§7] → ` +
+        `§7[§f${area.max.x}, ${area.max.y}, ${area.max.z}§7]` +
+        `  §7${areaSize}`
+    );
+  } else if (dimensionId) {
+    lines.push(`§7位置: §f${formatDimensionName(dimensionId)}`);
+  }
+
+  lines.push(tbl.render(0, [1, 1, 3]));
   if (stats.enabledFamiliesCount > 0) lines.push(` §bFamily:${stats.enabledFamiliesCount}`);
   return lines.join("\n");
 }

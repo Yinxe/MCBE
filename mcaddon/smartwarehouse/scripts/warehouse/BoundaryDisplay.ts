@@ -45,7 +45,7 @@ export class BoundaryDisplay {
   start(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId): void {
     this.stop(warehouseId);
 
-    this.drawEdges(warehouseId, area, dimensionId);
+    if (!this.drawEdges(warehouseId, area, dimensionId)) return;
 
     const handle = system.runInterval(() => {
       this.drawEdges(warehouseId, area, dimensionId);
@@ -66,7 +66,7 @@ export class BoundaryDisplay {
     this.stop(warehouseId);
 
     // 临时边界不需要信物，作为创建/调整后的视觉确认反馈
-    this.drawEdges(warehouseId, area, dimensionId, false);
+    if (!this.drawEdges(warehouseId, area, dimensionId, false)) return;
 
     const handle = system.runInterval(() => {
       this.drawEdges(warehouseId, area, dimensionId, false);
@@ -124,13 +124,20 @@ export class BoundaryDisplay {
   /**
    * 绘制仓库边界粒子线框。
    *
+   * @returns true 表示维度有效且尝试绘制（可能因玩家不在附近而跳过），
+   *          false 表示维度信息无效，调用方不应设置定期重试。
+   *
    * @param warehouseId  仓库 ID
    * @param area         仓库区域
    * @param dimensionId  维度
    * @param requireHoe   是否要求附近玩家手持信物才绘制（持久边界=true，临时边界=false）
    */
-  private drawEdges(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId, requireHoe = true): void {
+  private drawEdges(warehouseId: WarehouseId, area: WarehouseArea, dimensionId: DimensionId, requireHoe = true): boolean {
     try {
+      if (!dimensionId || typeof dimensionId !== "string") {
+        log.error(`仓库 ${warehouseId} 维度信息缺失（${dimensionId}），无法显示边界`);
+        return false;
+      }
       const dimension = world.getDimension(dimensionId);
       const { min, max } = area;
       const step = BoundaryDisplay.STEP;
@@ -138,11 +145,11 @@ export class BoundaryDisplay {
       // ── 区块加载检查 ──
       try {
         const testBlock = dimension.getBlock({ x: min.x, y: min.y, z: min.z });
-        if (!testBlock) return;
+        if (!testBlock) return true;
         // 访问 permutation 确认区块真正加载
         const _ = testBlock.permutation;
       } catch {
-        return;
+        return true;
       }
 
       // ── 玩家接近检查（每 20 tick 刷新缓存） ──
@@ -151,7 +158,7 @@ export class BoundaryDisplay {
         this.playerCacheUpdatedAt = now;
         this.playerCache = world
           .getPlayers()
-          .filter((p) => p.dimension.id === dimensionId)
+          .filter((p): p is Player => !!p && !!p.dimension && p.dimension.id === dimensionId)
           .map((p) => ({
             x: p.location.x,
             z: p.location.z,
@@ -163,7 +170,7 @@ export class BoundaryDisplay {
       if (this.playerCache.length > 0) {
         const margin = BoundaryDisplay.PROXIMITY_MARGIN;
         const valid = this.playerCache.some((p) => isNearAreaXZ(p, area, margin) && (!requireHoe || p.hasToken));
-        if (!valid) return;
+        if (!valid) return true;
       }
 
       // 8 个顶点（max+1 以确保线框包围整个区域，而非缩在里面）
@@ -200,8 +207,10 @@ export class BoundaryDisplay {
       for (const [a, b] of edges) {
         this.drawLine(dimension, corners[a], corners[b], step);
       }
+      return true;
     } catch (error) {
       log.error(`仓库 ${warehouseId} 边界显示失败: ${error}`);
+      return false;
     }
   }
 

@@ -373,3 +373,39 @@ export type SelectionSession =
 export function toBlockLocation(vector: Vector3): BlockLocation {
   return { x: Math.floor(vector.x), y: Math.floor(vector.y), z: Math.floor(vector.z) };
 }
+
+/** 维度 ID → 中文名映射 */
+export const DIMENSION_NAMES: Record<string, string> = {
+  "minecraft:overworld": "主世界",
+  "minecraft:nether": "下界",
+  "minecraft:the_end": "末地",
+};
+
+/**
+ * 将维度 ID 转换为可读的中文名称（带原始 ID 后缀）。
+ * 未知维度回退显示原始 ID。
+ *
+ * @param dimensionId 维度 ID，如 "minecraft:overworld"
+ * @returns 可读的维度名，如 "主世界 (overworld)"
+ */
+export function formatDimensionName(dimensionId: string): string {
+  if (!dimensionId) return "未知";
+  const name = DIMENSION_NAMES[dimensionId];
+  // 显示中文名 + (英文后缀) 或直接显示原始 ID
+  const suffix = dimensionId.replace("minecraft:", "");
+  return name ? `${name} (${suffix})` : suffix;
+}
+
+/**
+ * 格式化仓库区域信息，生成可读的尺寸描述。
+ *
+ * @param area 仓库区域
+ * @returns 区域描述，如 "11×11×11=1331格"
+ */
+export function formatAreaSize(area: WarehouseArea): string {
+  const dx = area.max.x - area.min.x + 1;
+  const dy = area.max.y - area.min.y + 1;
+  const dz = area.max.z - area.min.z + 1;
+  const volume = dx * dy * dz;
+  return `${dx}×${dy}×${dz}=${volume}格`;
+}

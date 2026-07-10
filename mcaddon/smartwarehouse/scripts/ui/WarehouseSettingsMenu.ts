@@ -61,7 +61,7 @@ export async function showWarehouseSettingsMenu(
   let statsLabel: string;
   try {
     const stats = getWarehouseStats(warehouse);
-    statsLabel = formatWarehouseStats(stats);
+    statsLabel = formatWarehouseStats(stats, warehouse.dimensionId, warehouse.area);
   } catch {
     const cList = Object.values(warehouse.containers);
     statsLabel =

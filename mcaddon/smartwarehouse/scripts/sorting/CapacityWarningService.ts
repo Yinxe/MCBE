@@ -62,7 +62,7 @@ export class CapacityWarningService {
   private sendMessage(warehouse: WarehouseData, message: string): void {
     try {
       for (const player of world.getPlayers()) {
-        if (player.dimension.id !== warehouse.dimensionId) continue;
+        if (!player || !player.dimension || player.dimension.id !== warehouse.dimensionId) continue;
         if (isNearAreaXZ({ x: player.location.x, z: player.location.z }, warehouse.area, 8)) {
           try {
             player.sendMessage(`§l[预警]§r ${message}`);

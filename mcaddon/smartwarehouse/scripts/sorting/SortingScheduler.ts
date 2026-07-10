@@ -171,7 +171,7 @@ export class SortingScheduler {
     const w = this.repository.load(id);
     if (w) {
       for (const p of world.getPlayers()) {
-        if (p.dimension.id !== w.dimensionId) continue;
+        if (!p || !p.dimension || p.dimension.id !== w.dimensionId) continue;
         if (isNearAreaXZ({ x: p.location.x, z: p.location.z }, w.area, SortingScheduler.PROXIMITY_MARGIN)) {
           try {
             p.sendMessage(`§a仓库 §e${w.displayName}§a 已激活，开始分拣`);
