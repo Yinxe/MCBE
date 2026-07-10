@@ -16,6 +16,7 @@ import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit"
 
 const pkg = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8"));
 const CHINESE_NAME = pkg.productName;
+const PACKAGE_NAME = pkg.name;
 const PROJECT_NAME = pkg.mcbe.bpDir;
 const pkgVersion = pkg.version;
 
@@ -36,7 +37,7 @@ const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
 const copyTaskOptions = copyOptions(__dirname, PROJECT_NAME, { hasRp: false });
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
-  outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}_bp.mcpack`,
+  outputFile: `./dist/packages/${PACKAGE_NAME}-v${pkgVersion}_bp.mcpack`,
 };
 
 task("lint", coreLint(["scripts/**/*.ts"], argv().fix));
@@ -58,8 +59,8 @@ task(
 task("createMcaddonFile", mcaddonTask(mcaddonTaskOptions));
 
 task("renameOutput", () => {
-  const src = path.resolve(__dirname, `./dist/packages/${CHINESE_NAME}-v${pkgVersion}_bp.mcpack`);
-  const dst = path.resolve(__dirname, `./dist/packages/${CHINESE_NAME}-v${pkgVersion}.mcpack`);
+  const src = path.resolve(__dirname, `./dist/packages/${PACKAGE_NAME}-v${pkgVersion}_bp.mcpack`);
+  const dst = path.resolve(__dirname, `./dist/packages/${PACKAGE_NAME}-v${pkgVersion}.mcpack`);
   renameSync(src, dst);
 });
 

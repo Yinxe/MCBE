@@ -7,6 +7,7 @@ import { syncManifestVersion } from "@yinxe/toolkit";
 // ── Project metadata ────────────────────────────────────────────
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
 const CHINESE_NAME = pkg.productName;
+const PACKAGE_NAME = pkg.name;
 const PROJECT_NAME = pkg.mcbe.bpDir;
 const pkgVersion = pkg.version;
 
@@ -33,7 +34,7 @@ task("mcaddon", series("clean", "build", () => {
   const outDir = path.resolve(__dirname, "dist/packages");
   mkdirSync(outDir, { recursive: true });
 
-  const outFile = `${CHINESE_NAME}-v${pkgVersion}.mcpack`;
+  const outFile = `${PACKAGE_NAME}-v${pkgVersion}.mcpack`;
   const bpDir = path.resolve(__dirname, `BP/${PROJECT_NAME}`);
   execSync(`(cd "${bpDir}" && zip -X -r "${path.resolve(outDir, outFile)}" .)`, { stdio: "inherit" });
 

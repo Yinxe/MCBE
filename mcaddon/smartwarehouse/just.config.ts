@@ -17,6 +17,7 @@ import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit"
 // ── Project metadata ────────────────────────────────────────────
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
 const CHINESE_NAME = pkg.productName;
+const PACKAGE_NAME = pkg.name;
 const PROJECT_NAME = pkg.mcbe.bpDir;
 const pkgVersion = pkg.version;
 
@@ -27,7 +28,7 @@ const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
 const copyTaskOptions = copyOptions(__dirname, PROJECT_NAME);
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
-  outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}.mcaddon`,
+  outputFile: `./dist/packages/${PACKAGE_NAME}-v${pkgVersion}.mcaddon`,
 };
 
 // ── Tasks ───────────────────────────────────────────────────────
