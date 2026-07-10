@@ -22,7 +22,7 @@ const pkgVersion = pkg.version;
 // ── Version sync ──
 task("sync-version", () => {
   syncManifestVersion(__dirname, {
-    formatName: () => CHINESE_NAME,
+    formatName: (_, v) => `${CHINESE_NAME} v${v}`,
     onManifest: (m) => {
       m.header.description = "死亡不掉落·无需开启作弊·保留成就·极限复活";
     },

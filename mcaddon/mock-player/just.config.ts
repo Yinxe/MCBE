@@ -19,7 +19,7 @@ const CHINESE_NAME = pkg.productName;
 // ── Version sync ──
 task("sync-version", () => {
   syncManifestVersion(__dirname, {
-    formatName: () => CHINESE_NAME,
+    formatName: (_, v) => `${CHINESE_NAME} v${v}`,
     onManifest: (m) => {
       m.header.description = "创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化";
     },

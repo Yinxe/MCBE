@@ -1,7 +1,7 @@
 {
   "format_version": 2,
   "header": {
-    "name": "模拟玩家",
+    "name": "模拟玩家 v1.0.7",
     "description": "创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
     "uuid": "49df180b-e16a-4740-9edd-c655127fcd22",
     "version": [

@@ -13,7 +13,7 @@ const pkgVersion = pkg.version;
 // ── Tasks ───────────────────────────────────────────────────
 task("sync-version", () => {
   syncManifestVersion(__dirname, {
-    formatName: () => `§l§e《${CHINESE_NAME}》`,
+    formatName: (_, v) => `§l§e《${CHINESE_NAME}》 v${v}`,
     onManifest: (m) => {
       m.header.description = "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块！";
     },

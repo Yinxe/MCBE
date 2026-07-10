@@ -51,7 +51,7 @@ task("generate-version", () => {
 task("update-version", () => {
   console.log(`Syncing manifest versions to ${pkgVersion} …`);
   syncManifestVersion(__dirname, {
-    formatName: () => CHINESE_NAME,
+    formatName: (_, v) => `${CHINESE_NAME} v${v}`,
     onManifest: (m) => {
       m.header.description = `智能仓库管理 - 自动分拣、容器整理、仓库统计、容量预警 v${pkgVersion}`;
     },
