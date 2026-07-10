@@ -23,6 +23,6 @@
     "release": "npm run pack"
   },
   "mcbe": {
-    "bpDir": "\u5408\u6210\u914d\u65b9\u6269\u5c55&\u9690\u85cf\u7269\u54c1"
+    "bpDir": "CraftableRarities"
   }
 }

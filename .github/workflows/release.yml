@@ -49,9 +49,9 @@ jobs:
           PKG="${{ steps.parse.outputs.pkg }}"
           case "$PKG" in
             mock-player)        DIR=mock-player;             FILTER=mock-player ;;
-            keepInventory|keepinventory) DIR=keepinventory;   FILTER=keepInventory ;;
+            keepinventory) DIR=keepinventory;   FILTER=keepinventory ;;
             craftablerarities)  DIR=craftablerarities;        FILTER=craftablerarities ;;
-            SmartWarehouse|smartwarehouse) DIR=smartwarehouse; FILTER=SmartWarehouse ;;
+            smartwarehouse) DIR=smartwarehouse; FILTER=smartwarehouse ;;
             *) echo "::error::Unknown package: $PKG"; exit 1 ;;
           esac
           echo "dir=$DIR" >> $GITHUB_OUTPUT

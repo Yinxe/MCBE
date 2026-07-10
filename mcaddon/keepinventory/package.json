@@ -1,5 +1,5 @@
 {
-  "name": "keepInventory",
+  "name": "keepinventory",
   "version": "2.0.0",
   "productName": "\u6b7b\u4ea1\u4e0d\u6389\u843d",
   "description": "\u6b7b\u4ea1\u4e0d\u6389\u6d1b+\u6781\u9650\u590d\u6d3b",
@@ -27,6 +27,6 @@
     "@minecraft/server": "2.0.0"
   },
   "mcbe": {
-    "bpDir": "yinx1423_keepinv"
+    "bpDir": "KeepInventory"
   }
 }

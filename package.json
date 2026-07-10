@@ -21,13 +21,13 @@
 
     "build": "pnpm -r run build",
     "build:mock-player": "pnpm --filter mock-player run build",
-    "build:keepinventory": "pnpm --filter keepInventory run build",
-    "build:smartwarehouse": "pnpm --filter SmartWarehouse run build",
+    "build:keepinventory": "pnpm --filter keepinventory run build",
+    "build:smartwarehouse": "pnpm --filter smartwarehouse run build",
 
     "pack:mock-player": "pnpm --filter mock-player run mcaddon",
-    "pack:keepinventory": "pnpm --filter keepInventory run mcaddon",
+    "pack:keepinventory": "pnpm --filter keepinventory run mcaddon",
     "pack:craftablerarities": "pnpm --filter craftablerarities run mcaddon",
-    "pack:smartwarehouse": "pnpm --filter SmartWarehouse run mcaddon",
+    "pack:smartwarehouse": "pnpm --filter smartwarehouse run mcaddon",
 
     "sync-version": "node packages/toolkit/bin/sync-version.mjs"
   }
