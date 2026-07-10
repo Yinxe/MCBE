@@ -63,8 +63,10 @@ jobs:
           DIR="${{ steps.resolve.outputs.dir }}"
           CN=$(jq -r '.productName' "mcaddon/$DIR/package.json")
           HAS_BUILD=$(jq 'has("build")' "mcaddon/$DIR/package.json")
+          ARTIFACT_TYPE=$(jq -r '.mcbe.releaseArtifact // "addon"' "mcaddon/$DIR/package.json")
           echo "cn=$CN" >> $GITHUB_OUTPUT
           echo "hasBuild=$HAS_BUILD" >> $GITHUB_OUTPUT
+          echo "artifactType=$ARTIFACT_TYPE" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -82,16 +84,24 @@ jobs:
       - name: Locate artifact
         id: artifact
         run: |
-          ARTIFACT=$(find mcaddon -path "*/dist/packages/*" \( -name "*.mcaddon" -o -name "*.mcpack" \) ! -name "*_bp*.mcpack" ! -name "*_rp*.mcpack" 2>/dev/null | head -1)
+          DIR="mcaddon/${{ steps.resolve.outputs.dir }}"
+          TYPE="${{ steps.pkg.outputs.artifactType }}"
+          case "$TYPE" in
+            bp)    PATTERN="*_bp.mcpack"  ;;
+            pack)  PATTERN="*.mcpack"     ;;
+            addon) PATTERN="*.mcaddon"    ;;
+            *)     PATTERN="*.mcaddon"    ;;
+          esac
+          ARTIFACT=$(find "$DIR/dist/packages" -name "$PATTERN" ! -name "*_bp_bp*" ! -name "*_rp*" -type f 2>/dev/null | head -1)
           echo "path=$ARTIFACT"
           echo "path=$ARTIFACT" >> $GITHUB_OUTPUT
 
       - name: Upload to release
-        if: github.event_name == 'push' && steps.artifact.outputs.path != ''
+        if: steps.artifact.outputs.path != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ steps.parse.outputs.pkg }}@${{ steps.parse.outputs.version }}"
           FILE="${{ steps.artifact.outputs.path }}"
           IS_PR=""; echo "${{ steps.parse.outputs.version }}" | grep -qiE 'beta|alpha|rc|pre' && IS_PR="--prerelease"
           if gh release view "$TAG" &>/dev/null; then

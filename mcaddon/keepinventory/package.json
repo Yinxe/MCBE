@@ -27,6 +27,7 @@
     "@minecraft/server": "2.0.0"
   },
   "mcbe": {
-    "bpDir": "KeepInventory"
+    "bpDir": "KeepInventory",
+    "releaseArtifact": "pack"
   }
 }

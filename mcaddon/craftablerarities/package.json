@@ -23,6 +23,7 @@
     "release": "npm run pack"
   },
   "mcbe": {
-    "bpDir": "CraftableRarities"
+    "bpDir": "CraftableRarities",
+    "releaseArtifact": "pack"
   }
 }

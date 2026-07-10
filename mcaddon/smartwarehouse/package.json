@@ -30,6 +30,7 @@
     "@minecraft/server-ui": "^2.0.0"
   },
   "mcbe": {
-    "bpDir": "SmartWarehouse"
+    "bpDir": "SmartWarehouse",
+    "releaseArtifact": "addon"
   }
 }

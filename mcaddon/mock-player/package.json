@@ -29,6 +29,7 @@
     "@minecraft/vanilla-data": "1.26.20"
   },
   "mcbe": {
-    "bpDir": "MockPlayer"
+    "bpDir": "MockPlayer",
+    "releaseArtifact": "bp"
   }
 }
