@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "MCBE Addon — Monorepo",
+  "packageManager": "pnpm@11.1.3",
   "keywords": [],
   "author": "Yinx",
   "license": "ISC",
