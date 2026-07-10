@@ -99,16 +99,17 @@ jobs:
         if: steps.artifact.outputs.path != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LC_ALL: C.UTF-8
         run: |
           TAG="${{ steps.parse.outputs.pkg }}@${{ steps.parse.outputs.version }}"
           FILE="${{ steps.artifact.outputs.path }}"
-          IS_PR=""; echo "${{ steps.parse.outputs.version }}" | grep -qiE 'beta|alpha|rc|pre' && IS_PR="--prerelease"
-          if gh release view "$TAG" &>/dev/null; then
-            gh release upload "$TAG" "$FILE" --clobber
-          else
-            gh release create "$TAG" "$FILE" --title "${{ steps.pkg.outputs.cn }} ${{ steps.parse.outputs.version }}" --notes "自动构建发布" ${IS_PR}
+          CN="${{ steps.pkg.outputs.cn }}"
+          VERSION="${{ steps.parse.outputs.version }}"
+          IS_PR=""; echo "$VERSION" | grep -qiE 'beta|alpha|rc|pre' && IS_PR="--prerelease"
+          # 先创建 release（不带文件），再显式上传指定文件名
+          if ! gh release view "$TAG" &>/dev/null; then
+            gh release create "$TAG" --title "$CN $VERSION" --notes "自动构建发布" ${IS_PR}
           fi
+          gh release upload "$TAG" "$FILE" --clobber --name "$(basename "$FILE")"
 
       - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch' && steps.artifact.outputs.path != ''
