@@ -1,0 +1,11 @@
+.claude/
+.codegraph/
+dist/
+.env
+lib/
+*.log
+node_modules/
+.slim/deepwork/
+temp/
+.vscode/
+*.pid

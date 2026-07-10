@@ -1,0 +1,71 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "SmartWarehouse v0.0.55",
+    "description": "SmartWarehouse 行为包 — 智能仓库管理，自动分拣、容器整理、仓库统计",
+    "uuid": "449a7a85-99e0-4c33-8b69-07356daa8a34",
+    "version": [
+      0,
+      0,
+      55
+    ],
+    "min_engine_version": [
+      1,
+      26,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Behavior",
+      "version": [
+        0,
+        0,
+        55
+      ],
+      "uuid": "dbfd2bf9-86c3-4886-bfb5-a41c52dcf7ab",
+      "type": "data"
+    },
+    {
+      "description": "Script resources",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "f23d3980-7ca3-4d75-a98c-24d38767b449",
+      "version": [
+        0,
+        0,
+        55
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "7e985eb5-5e3d-41cc-89c4-653605d41009",
+      "version": [
+        0,
+        0,
+        55
+      ]
+    },
+    {
+      "module_name": "@minecraft/server",
+      "version": [
+        2,
+        6,
+        0
+      ]
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": [
+        2,
+        0,
+        0
+      ]
+    }
+  ],
+  "metadata": {
+    "product_type": "addon"
+  }
+}
