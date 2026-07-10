@@ -1,4 +1,0 @@
-{
-  "main": "../src/ui/index.ts",
-  "types": "../src/ui/index.ts"
-}

@@ -1,17 +1,20 @@
-const path = require("path");
-const fs = require("fs");
+import * as fs from "fs";
+import * as path from "path";
+
+export interface SyncManifestOptions {
+  formatName?: (name: string, version: string) => string;
+  onManifest?: (manifest: any, dir: string, versionArr: number[]) => void;
+}
 
 /**
  * Sync package.json version to all BP/<proj>/manifest.json and RP/<proj>/manifest.json.
  *
- * @param {string} projectDir - Project root directory
- * @param {object} [opts]
- * @param {(name: string, version: string) => string} [opts.formatName]
- * @param {(manifest: any, dir: string, versionArr: number[]) => void} [opts.onManifest]
+ * @param projectDir - Project root directory
+ * @param opts - Optional formatName/onManifest callbacks
  */
-function syncManifestVersion(projectDir, opts = {}) {
+export function syncManifestVersion(projectDir: string, opts: SyncManifestOptions = {}): void {
   const pkg = JSON.parse(fs.readFileSync(path.resolve(projectDir, "package.json"), "utf8"));
-  const version = pkg.version;
+  const version: string = pkg.version;
   const baseVersion = version.split(/[-+]/)[0];
   const versionArr = baseVersion.split(".").map(Number);
   const formatName = opts.formatName;
@@ -32,12 +35,12 @@ function syncManifestVersion(projectDir, opts = {}) {
         manifest.header.name = formatName(manifest.header.name, version);
       }
       if (manifest.modules) {
-        manifest.modules = manifest.modules.map((m) =>
+        manifest.modules = manifest.modules.map((m: any) =>
           Array.isArray(m.version) ? { ...m, version: versionArr } : m
         );
       }
       if (manifest.dependencies) {
-        manifest.dependencies = manifest.dependencies.map((d) =>
+        manifest.dependencies = manifest.dependencies.map((d: any) =>
           d.uuid && Array.isArray(d.version) ? { ...d, version: versionArr } : d
         );
       }
@@ -50,5 +53,3 @@ function syncManifestVersion(projectDir, opts = {}) {
     }
   }
 }
-
-module.exports = { syncManifestVersion };

@@ -101,9 +101,9 @@ export class ModalFormBuilder {
     return this;
   }
 
-  /** 添加滑动条 */
-  slider(name: string, label: RawMessage | string, min: number, max: number, valueStep?: number, opts?: Omit<ModalFormDataSliderOptions, "valueStep">): this {
-    this.form.slider(label, min, max, valueStep, opts ?? {});
+  /** 添加滑动条（valueStep 和 tooltip 都在 opts 中） */
+  slider(name: string, label: RawMessage | string, min: number, max: number, opts?: ModalFormDataSliderOptions): this {
+    this.form.slider(label, min, max, opts ?? {});
     this.fields.push({ type: "slider", name });
     return this;
   }
