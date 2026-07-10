@@ -1,32 +1,22 @@
 // ─── MessageFormBuilder ──────────────────────────────────────────
 // 对 @minecraft/server-ui MessageFormData 的封装。
 // 双按钮对话框：是/否、确定/取消，或自定义语义。
-//
-// 用法：
-//   const result = await new MessageFormBuilder()
-//     .title("确认删除")
-//     .body("确定要删除吗？")
-//     .confirmButton("是", () => onDelete())
-//     .cancelButton("否")
-//     .show(player);
+// 回调始终在 system.run() 中执行。
 
 import { type Player } from "@minecraft/server";
 import { MessageFormData } from "@minecraft/server-ui";
-
-// ─── 构建器 ─────────────────────────────────────────────────────
+import { runSafeAsync } from "./runSafe";
 
 export class MessageFormBuilder {
   private form = new MessageFormData();
   private confirmCallback?: () => void | Promise<void>;
   private cancelCallback?: () => void | Promise<void>;
 
-  /** 设置对话框标题 */
   title(text: string): this {
     this.form.title(text);
     return this;
   }
 
-  /** 设置对话框正文 */
   body(text: string): this {
     this.form.body(text);
     return this;
@@ -56,11 +46,11 @@ export class MessageFormBuilder {
       if (response.canceled) return false;
 
       if (response.selection === 0 && this.confirmCallback) {
-        await this.confirmCallback();
+        await runSafeAsync(this.confirmCallback);
         return true;
       }
       if (response.selection === 1 && this.cancelCallback) {
-        await this.cancelCallback();
+        await runSafeAsync(this.cancelCallback);
         return false;
       }
       return response.selection === 0;
