@@ -1,8 +1,8 @@
 {
   "name": "smartwarehouse",
   "version": "0.0.55",
-  "productName": "\u667a\u80fd\u4ed3\u5e93",
-  "description": "SmartWarehouse \u2014 customize this description in manifest.json or via the editor.",
+  "productName": "智能仓库",
+  "description": "智能仓库管理 — 自动分拣、容器整理、仓库统计、容量预警",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",

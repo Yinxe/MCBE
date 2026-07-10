@@ -1,8 +1,8 @@
 {
   "name": "craftablerarities",
   "version": "1.0.1",
-  "productName": "\u5408\u6210\u914d\u65b9\u6269\u5c55",
-  "description": "\u5408\u6210\u5404\u79cd\u7a00\u6709\u3001\u4e0d\u53ef\u518d\u751f\u7269\u54c1\uff0c\u521b\u9020\u6a21\u5f0f\u5feb\u901f\u83b7\u53d6\u9690\u85cf\u65b9\u5757\uff01",
+  "productName": "合成配方扩展",
+  "description": "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块！",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",

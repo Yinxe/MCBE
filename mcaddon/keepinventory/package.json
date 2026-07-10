@@ -1,8 +1,8 @@
 {
   "name": "keepinventory",
   "version": "2.0.0",
-  "productName": "\u6b7b\u4ea1\u4e0d\u6389\u843d",
-  "description": "\u6b7b\u4ea1\u4e0d\u6389\u6d1b+\u6781\u9650\u590d\u6d3b",
+  "productName": "死亡不掉落",
+  "description": "死亡不掉落·无需开启作弊·保留成就·极限复活",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",

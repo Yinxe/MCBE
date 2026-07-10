@@ -1,8 +1,8 @@
 {
   "name": "mock-player",
   "version": "1.0.6",
-  "productName": "\u6a21\u62df\u73a9\u5bb6",
-  "description": "MockPlayer \u2014 customize this description in manifest.json or via the editor.",
+  "productName": "模拟玩家",
+  "description": "MockPlayer — 创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
