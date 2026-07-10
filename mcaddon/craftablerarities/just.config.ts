@@ -3,6 +3,7 @@ import { execSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { series, task } from "just-scripts";
 import path from "path";
+import { syncManifestVersion } from "@yinxe/toolkit";
 
 setupEnvironment(path.resolve(__dirname, ".env"));
 
@@ -10,14 +11,13 @@ setupEnvironment(path.resolve(__dirname, ".env"));
 const projectName = getOrThrowFromProcess("PROJECT_NAME");
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
 const pkgVersion = pkg.version;
-const pkgName = pkg.name;
 
 // ── Clean paths ─────────────────────────────────────────────────
 const CLEAN_DIRS = ["lib", "dist", "temp"];
 
 // ── Tasks ───────────────────────────────────────────────────────
 task("sync-version", () => {
-  execSync("node tools/sync-version.mjs", { cwd: __dirname, stdio: "inherit" });
+  syncManifestVersion(__dirname);
 });
 
 task("build", series("sync-version"));

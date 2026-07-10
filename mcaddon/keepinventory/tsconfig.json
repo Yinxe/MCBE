@@ -1,6 +1,7 @@
 { 
-    "compilerOptions":{ 
+    "compilerOptions":{
        "target":"es6",
+       "lib": ["es2017"],
        "moduleResolution":"Node",
        "module": "ES2020",
        "declaration":false,
@@ -18,13 +19,13 @@
        "noImplicitUseStrict":false,
        "outDir":"lib",
        "rootDir": ".",
-       "baseUrl":"behavior_packs/",
+       "baseUrl":"BP/",
        "listFiles":false,
         "noEmit":true,
         "noEmitHelpers":true,
        "skipLibCheck": true
     },
-    "include":[ 
+    "include":[
        "scripts/**/*"
     ],
     "exclude": ["lib", "dist", "node_modules"],

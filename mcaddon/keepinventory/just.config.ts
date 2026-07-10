@@ -1,7 +1,5 @@
 import { argv, parallel, series, task, tscTask } from "just-scripts";
 import {
-  BundleTaskParameters,
-  CopyTaskParameters,
   bundleTask,
   cleanTask,
   cleanCollateralTask,
@@ -9,7 +7,6 @@ import {
   coreLint,
   mcaddonTask,
   setupEnvironment,
-  ZipTaskParameters,
   STANDARD_CLEAN_PATHS,
   DEFAULT_CLEAN_DIRECTORIES,
   getOrThrowFromProcess,
@@ -17,24 +14,21 @@ import {
 } from "@minecraft/core-build-tasks";
 import path from "path";
 import { renameSync } from "fs";
+import { bundleOptions, copyOptions } from "@yinxe/toolkit";
+
 setupEnvironment(path.resolve(__dirname, ".env"));
+
 const projectName = getOrThrowFromProcess("PROJECT_NAME");
-const bundleTaskOptions: BundleTaskParameters = {
-  entryPoint: path.join(__dirname, "./scripts/main.ts"),
-  external: ["@minecraft/server"],
-  outfile: path.resolve(__dirname, "./dist/scripts/main.js"),
-  minifyWhitespace: false,
-  sourcemap: true,
-  outputSourcemapPath: path.resolve(__dirname, "./dist/debug"),
-};
-const copyTaskOptions: CopyTaskParameters = {
-  copyToBehaviorPacks: [`./behavior_packs/${projectName}`],
-  copyToScripts: ["./dist/scripts"],
-};
-const mcaddonTaskOptions: ZipTaskParameters = {
+
+const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
+  "@minecraft/server",
+]);
+const copyTaskOptions = copyOptions(__dirname, projectName, { hasRp: false });
+const mcaddonTaskOptions = {
   ...copyTaskOptions,
   outputFile: `./dist/packages/KeepInventory.mcpack`,
 };
+
 task("lint", coreLint(["scripts/**/*.ts"], argv().fix));
 task("typescript", tscTask());
 task("bundle", bundleTask(bundleTaskOptions));
@@ -47,13 +41,12 @@ task("package", series("clean-collateral", "copyArtifacts"));
 task(
   "local-deploy",
   watchTask(
-    ["scripts/**/*.ts", "behavior_packs/**/*.{json,lang,tga,ogg,png}"],
+    ["scripts/**/*.ts", "BP/**/*.{json,lang,tga,ogg,png}"],
     series("clean-local", "build", "package")
   )
 );
 task("createMcaddonFile", mcaddonTask(mcaddonTaskOptions));
 
-// Rename the proper BP .mcpack to final output (discard the wrapper)
 task("renameBpPack", () => {
   const src = path.resolve(__dirname, "./dist/packages/KeepInventory_bp.mcpack");
   const dst = path.resolve(__dirname, "./dist/packages/KeepInventory.mcpack");

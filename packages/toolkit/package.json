@@ -1,0 +1,7 @@
+{
+  "name": "@yinxe/toolkit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared build toolkit for MCBE addon monorepo",
+  "main": "src/index.js"
+}

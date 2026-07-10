@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Sample Add-on Pack",
-    "description": "Sample Add-on Resource Pack",
+    "name": "MockPlayer-v1.0.6",
+    "description": "模拟玩家",
     "uuid": "fa6a1d4b-86ed-46a7-94bb-95362965bbb6",
     "version": [
       1,
@@ -33,7 +33,7 @@
       "version": [
         1,
         0,
-        0
+        6
       ]
     }
   ]

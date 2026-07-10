@@ -1,66 +1,39 @@
 import {
     bundleTask,
-    BundleTaskParameters,
     cleanCollateralTask,
     cleanTask,
     copyTask,
-    CopyTaskParameters,
     coreLint,
     DEFAULT_CLEAN_DIRECTORIES,
-    getOrThrowFromProcess,
     mcaddonTask,
     setupEnvironment,
     STANDARD_CLEAN_PATHS,
     watchTask,
-    ZipTaskParameters,
 } from "@minecraft/core-build-tasks";
-import fs from "fs";
 import { argv, parallel, series, task, tscTask } from "just-scripts";
 import path from "path";
+import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
 setupEnvironment(path.resolve(__dirname, ".env"));
 
-// Sync version from package.json to BP/RP manifests
+// ── Version sync ──
 task("sync-version", () => {
-  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8"));
-  const version = pkg.version.split(".").map(Number);
-
-  // BP manifest
-  const bpPath = path.join(__dirname, "BP/MockPlayer/manifest.json");
-  const bp = JSON.parse(fs.readFileSync(bpPath, "utf8"));
-  bp.header.name = `MockPlayer-v${pkg.version}`;
-  bp.header.description = "模拟玩家";
-  bp.header.version = version;
-  bp.modules = bp.modules.map((m: any) => ({ ...m, version }));
-  fs.writeFileSync(bpPath, JSON.stringify(bp, null, 2) + "\n");
-
-  // RP manifest
-  const rpPath = path.join(__dirname, "RP/MockPlayer/manifest.json");
-  const rp = JSON.parse(fs.readFileSync(rpPath, "utf8"));
-  rp.header.version = version;
-  rp.modules = rp.modules.map((m: any) => ({ ...m, version }));
-  fs.writeFileSync(rpPath, JSON.stringify(rp, null, 2) + "\n");
+  syncManifestVersion(__dirname, {
+    formatName: (_, v) => `MockPlayer-v${v}`,
+    onManifest: (m) => {
+      m.header.description = "模拟玩家";
+    },
+  });
 });
 
-const projectName = getOrThrowFromProcess("PROJECT_NAME");
-const pkgVersion: string = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
+// ── Build ──
+const pkgVersion = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
 
-const bundleTaskOptions: BundleTaskParameters = {
-  entryPoint: path.join(__dirname, "./scripts/main.ts"),
-  external: ["@minecraft/server", "@minecraft/server-ui", "@minecraft/server-gametest"],
-  outfile: path.resolve(__dirname, "./dist/scripts/main.js"),
-  minifyWhitespace: false,
-  sourcemap: true,
-  outputSourcemapPath: path.resolve(__dirname, "./dist/debug"),
-};
-
-const copyTaskOptions: CopyTaskParameters = {
-  copyToBehaviorPacks: ["./BP/MockPlayer"],
-  copyToScripts: ["./dist/scripts"],
-  copyToResourcePacks: ["./RP/MockPlayer"],
-};
-
-const mcaddonTaskOptions: ZipTaskParameters = {
+const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
+  "@minecraft/server", "@minecraft/server-ui", "@minecraft/server-gametest",
+]);
+const copyTaskOptions = copyOptions(__dirname, "MockPlayer");
+const mcaddonTaskOptions = {
   ...copyTaskOptions,
   outputFile: `./dist/packages/MockPlayer-v${pkgVersion}.mcaddon`,
 };
@@ -74,7 +47,6 @@ task("clean-collateral", cleanCollateralTask(STANDARD_CLEAN_PATHS));
 task("clean", parallel("clean-local", "clean-collateral"));
 task("copyArtifacts", copyTask(copyTaskOptions));
 task("package", series("clean-collateral", "copyArtifacts"));
-
 task(
   "local-deploy",
   watchTask(
@@ -82,6 +54,5 @@ task(
     series("clean-local", "build", "package")
   )
 );
-
 task("createMcaddonFile", mcaddonTask(mcaddonTaskOptions));
 task("mcaddon", series("clean-local", "build", "createMcaddonFile"));

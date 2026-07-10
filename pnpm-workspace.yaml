@@ -6,5 +6,9 @@ packages:
   - "packages/*"
   # all packages in subdirectories of apps/
   - "apps/*"
+  # addon projects (Minecraft behavior/resource packs)
+  - "mcaddon/*"
   # exclude test directories
   - "!**/test/**"
+allowBuilds:
+  esbuild: true
