@@ -99,6 +99,7 @@ jobs:
         if: steps.artifact.outputs.path != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LC_ALL: C.UTF-8
         run: |
           TAG="${{ steps.parse.outputs.pkg }}@${{ steps.parse.outputs.version }}"
           FILE="${{ steps.artifact.outputs.path }}"
