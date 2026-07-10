@@ -107,7 +107,7 @@ jobs:
           TYPE="${{ steps.pkg.outputs.artifactType }}"
           IS_PR=""; echo "$VERSION" | grep -qiE 'beta|alpha|rc|pre' && IS_PR="--prerelease"
 
-          # 构造文件名（避免 gh CLI 对中文路径的处理问题）
+          # 构造文件名中的中文部分
           ASSET_NAME="${CN}-v${VERSION}"
           if [ "$TYPE" = "addon" ]; then
             ASSET_NAME="${ASSET_NAME}.mcaddon"
@@ -122,14 +122,16 @@ jobs:
             gh release create "$TAG" --title "$CN $VERSION" --notes "自动构建发布" ${IS_PR}
           fi
 
-          # 调用 API 上传，显式指定文件名（含中文）
+          # 先以 ASCII 名上传（避免中文编码问题），再通过 API 重命名
+          ASCII_NAME="$(echo "$ASSET_NAME" | sed 's/[^a-zA-Z0-9._-]/_/g')"
           RELEASE_ID=$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.id')
-          ASSET_ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$ASSET_NAME")
-          curl -sS -X POST \
+          RESP=$(curl -sS -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Content-Type: application/octet-stream" \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$ASSET_ENCODED" \
-            --data-binary "@$FILE"
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$ASCII_NAME" \
+            --data-binary "@$FILE")
+          ASSET_ID=$(echo "$RESP" | jq -r '.id')
+          gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$ASSET_ID" -f name="$ASSET_NAME" > /dev/null
 
       - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch' && steps.artifact.outputs.path != ''
