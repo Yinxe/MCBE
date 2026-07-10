@@ -1,0 +1,18 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "craftablerarities/flowing_water"
+    },
+    "tags": ["crafting_table"],
+    "ingredients": [
+      {
+        "item": "blue_ice"
+      }
+    ],
+    "result": {
+      "item": "flowing_water",
+      "count": 1
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/camera"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      " A",
+      " B ",
+      "B B"
+    ],
+    "key": {
+      "A": {
+        "item": "barrier"
+      },
+      "B": {
+        "item": "stick"
+      }
+    },
+    "result": {
+      "item": "camera",
+      "count": 1
+    }
+  }
+}

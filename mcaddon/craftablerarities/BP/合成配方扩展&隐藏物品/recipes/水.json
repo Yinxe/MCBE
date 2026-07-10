@@ -1,0 +1,22 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/water_ice"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "AA",
+      "AA"
+    ],
+    "key": {
+      "A": {
+        "item": "ice"
+      }
+    },
+    "result": {
+      "item": "water",
+      "count": 4
+    }
+  }
+}

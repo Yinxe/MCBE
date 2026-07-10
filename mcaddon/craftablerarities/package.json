@@ -1,0 +1,24 @@
+{
+  "name": "craftablerarities",
+  "version": "1.0.1",
+  "productName": "CraftableRarities",
+  "description": "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块！",
+  "private": true,
+  "devDependencies": {
+    "@minecraft/core-build-tasks": "5.5.0",
+    "just-scripts": "^2.1.5",
+    "ts-node": "10.9.1",
+    "typescript": "5.0.2"
+  },
+  "scripts": {
+    "build": "just-scripts build",
+    "clean": "just-scripts clean",
+    "pack": "just-scripts pack",
+    "local-deploy": "just-scripts local-deploy",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version",
+    "version:set": "npm version",
+    "release": "npm run pack"
+  }
+}

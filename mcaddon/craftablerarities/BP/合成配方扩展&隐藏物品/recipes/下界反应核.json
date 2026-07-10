@@ -1,0 +1,31 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/netherreactor"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ABA",
+      "BCB",
+      "ABA"
+    ],
+    "key": {
+      "A": {
+        "item": "iron_ingot"
+      },
+      "B": {
+        "item": "diamond"
+      },
+      "C": {
+        "item": "gold_block"
+      }
+    },
+    "result": {
+      "item": "netherreactor",
+      "count": 1
+    }
+  }
+}

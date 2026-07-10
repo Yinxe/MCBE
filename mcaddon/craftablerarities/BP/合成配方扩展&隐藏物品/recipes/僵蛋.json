@@ -1,0 +1,29 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/zombie_spawn_egg"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "ABA",
+      "AAA"
+    ],
+    "key": {
+      "A": {
+        "item": "egg"
+      },
+      "B": {
+        "item": "skull",
+        "data": 2
+      }
+    },
+    "result": {
+      "item": "zombie_spawn_egg",
+      "count": 1
+    }
+  }
+}

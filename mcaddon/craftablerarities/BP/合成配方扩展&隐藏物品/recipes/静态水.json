@@ -1,0 +1,18 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "craftablerarities/water"
+    },
+    "tags": ["crafting_table"],
+    "ingredients": [
+      {
+        "item": "packed_ice"
+      }
+    ],
+    "result": {
+      "item": "water",
+      "count": 1
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/monster_egg-3"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "ABA",
+      "AAA"
+    ],
+    "key": {
+      "A": {
+        "item": "stonebrick",
+        "data": 1
+      },
+      "B": {
+        "item": "egg"
+      }
+    },
+    "result": {
+      "item": "monster_egg",
+      "data": 3,
+      "count": 1
+    }
+  }
+}

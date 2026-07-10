@@ -1,0 +1,26 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/coral_block-4"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AA",
+      "AA"
+    ],
+    "key": {
+      "A": {
+        "item": "coral",
+        "data": 4
+      }
+    },
+    "result": {
+      "item": "coral_block",
+      "data": 4,
+      "count": 1
+    }
+  }
+}

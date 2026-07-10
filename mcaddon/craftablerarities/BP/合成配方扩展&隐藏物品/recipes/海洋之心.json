@@ -1,0 +1,31 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/heart_of_the_sea"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ABA",
+      "BCB",
+      "ABA"
+    ],
+    "key": {
+      "A": {
+        "item": "prismarine_shard"
+      },
+      "B": {
+        "item": "prismarine_crystals"
+      },
+      "C": {
+        "item": "sea_lantern"
+      }
+    },
+    "result": {
+      "item": "heart_of_the_sea",
+      "count": 1
+    }
+  }
+}

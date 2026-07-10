@@ -1,0 +1,29 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/sculk_catalyst"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "ABA",
+      "BCB",
+      "ABA"
+    ],
+    "key": {
+      "A": {
+        "item": "sculk"
+      },
+      "B": {
+        "item": "bone_block"
+      },
+      "C": {
+        "item": "soul_soil"
+      }
+    },
+    "result": {
+      "item": "sculk_catalyst",
+      "count": 1
+    }
+  }
+}

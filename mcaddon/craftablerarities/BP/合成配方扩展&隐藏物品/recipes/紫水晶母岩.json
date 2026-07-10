@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/budding_amethyst"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ABA",
+      "BAB",
+      "ABA"
+    ],
+    "key": {
+      "A": {
+        "item": "amethyst_block"
+      },
+      "B": {
+        "item": "amethyst_shard"
+      }
+    },
+    "result": {
+      "item": "budding_amethyst",
+      "count": 4
+    }
+  }
+}

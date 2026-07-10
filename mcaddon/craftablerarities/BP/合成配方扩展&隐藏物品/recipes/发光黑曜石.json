@@ -1,0 +1,31 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/glowingobsidian"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ABA",
+      "BCB",
+      "ABA"
+    ],
+    "key": {
+      "A": {
+        "item": "obsidian"
+      },
+      "B": {
+        "item": "nether_wart_block"
+      },
+      "C": {
+        "item": "blaze_powder"
+      }
+    },
+    "result": {
+      "item": "glowingobsidian",
+      "count": 8
+    }
+  }
+}

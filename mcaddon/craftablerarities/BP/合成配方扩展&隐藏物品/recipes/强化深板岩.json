@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/reinforced_deepslate"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ABA",
+      "BBB",
+      "ABA"
+    ],
+    "key": {
+      "A": {
+        "item": "sculk_catalyst"
+      },
+      "B": {
+        "item": "deepslate"
+      }
+    },
+    "result": {
+      "item": "reinforced_deepslate",
+      "count": 1
+    }
+  }
+}

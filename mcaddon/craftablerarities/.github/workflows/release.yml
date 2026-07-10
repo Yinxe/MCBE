@@ -1,0 +1,84 @@
+name: Build & Release .mcpack
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "[0-9]*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号 (如 0.1.0-beta)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Extract version
+        id: version
+        run: |
+          RAW="${{ inputs.version || github.ref_name }}"
+          CLEAN="$(echo "$RAW" | sed 's/^[^0-9]*//')"
+          if [ -z "$CLEAN" ]; then
+            echo "✗ 无法从输入 '$RAW' 提取版本号"
+            exit 1
+          fi
+          echo "version=$CLEAN" >> $GITHUB_OUTPUT
+          echo "提取版本号: $RAW → $CLEAN"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & Package (.mcpack)
+        env:
+          PROJECT_NAME: '合成配方扩展&隐藏物品'
+        run: |
+          VER="${{ steps.version.outputs.version }}"
+          echo "Building version: $VER"
+          npm pkg set version="$VER"
+          npm run pack
+          echo "Package created:"
+          ls -lh dist/packages/
+
+      - name: Upload to release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PACKAGE_FILE=$(ls dist/packages/*.mcpack | head -1)
+          RELEASE_TAG="${{ github.ref_name }}"
+          IS_PRERELEASE=""
+          if echo "${{ steps.version.outputs.version }}" | grep -qiE 'beta|alpha|rc|pre'; then
+            IS_PRERELEASE="--prerelease"
+          fi
+
+          if gh release view "$RELEASE_TAG" &>/dev/null; then
+            gh release upload "$RELEASE_TAG" "$PACKAGE_FILE" --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              "$PACKAGE_FILE" \
+              --title "$RELEASE_TAG" \
+              --notes "自动构建发布" \
+              ${IS_PRERELEASE}
+          fi
+
+      - name: Upload as artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: 合成配方扩展-隐藏物品-${{ steps.version.outputs.version }}
+          path: dist/packages/*.mcpack

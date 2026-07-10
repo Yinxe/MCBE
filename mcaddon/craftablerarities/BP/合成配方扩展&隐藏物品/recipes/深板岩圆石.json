@@ -1,0 +1,24 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/cobbled_deepslate_1"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AA",
+      "AA"
+    ],
+    "key": {
+      "A": {
+        "item": "cobblestone"
+      }
+    },
+    "result": {
+      "item": "cobbled_deepslate",
+      "count": 4
+    }
+  }
+}

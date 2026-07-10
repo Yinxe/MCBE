@@ -1,0 +1,26 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities/powder_snow"
+    },
+    "tags": ["crafting_table"],
+    "pattern": [
+      "PSP",
+      "SSS",
+      "PSP"
+    ],
+    "key": {
+      "P": {
+        "item": "packed_ice"
+      },
+      "S": {
+        "item": "snow"
+      }
+    },
+    "result": {
+      "item": "powder_snow",
+      "count": 4
+    }
+  }
+}
