@@ -23,6 +23,7 @@ export class PlayerProximityTracker {
   refresh(): void {
     this.cache.clear();
     for (const player of world.getPlayers()) {
+      if (!player || !player.dimension) continue;
       const dim = player.dimension.id;
       let list = this.cache.get(dim);
       if (!list) {
