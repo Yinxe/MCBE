@@ -7,7 +7,7 @@ const fs = require("fs");
  * @param {string} projectDir - Project root directory
  * @param {object} [opts]
  * @param {(name: string, version: string) => string} [opts.formatName]
- * @param {(manifest: object, dir: string, versionArr: number[]) => void} [opts.onManifest]
+ * @param {(manifest: any, dir: string, versionArr: number[]) => void} [opts.onManifest]
  */
 function syncManifestVersion(projectDir, opts = {}) {
   const pkg = JSON.parse(fs.readFileSync(path.resolve(projectDir, "package.json"), "utf8"));
