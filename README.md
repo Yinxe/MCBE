@@ -43,14 +43,17 @@ mc/
 # 安装依赖
 pnpm install
 
-# 构建单个模组
-pnpm run build:mock-player
-pnpm run build:craftablerarities    # 打包 .mcpack
+# 构建（TypeScript 编译 + esbuild 打包）
+pnpm run build                   # 全部
+pnpm run build:mock-player       # 单个
 pnpm run build:keepinventory
 pnpm run build:smartwarehouse
 
-# 构建全部
-pnpm run build
+# 打包（BP/RP → .mcpack / .mcaddon）
+pnpm run pack:mock-player
+pnpm run pack:keepinventory
+pnpm run pack:craftablerarities
+pnpm run pack:smartwarehouse
 
 # 清理
 pnpm run clean

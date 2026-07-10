@@ -16,13 +16,19 @@
   "type": "module",
   "scripts": {
     "clean": "pnpm -r run clean",
-    "build": "pnpm -r run build",
-    "build:mock-player": "pnpm --filter mock-player run build",
-    "build:craftablerarities": "pnpm --filter craftablerarities run pack",
-    "build:keepinventory": "pnpm --filter keepInventory run build",
-    "build:smartwarehouse": "pnpm --filter SmartWarehouse run build",
     "lint": "pnpm -r run lint",
     "format": "prettier --write .",
+
+    "build": "pnpm -r run build",
+    "build:mock-player": "pnpm --filter mock-player run build",
+    "build:keepinventory": "pnpm --filter keepInventory run build",
+    "build:smartwarehouse": "pnpm --filter SmartWarehouse run build",
+
+    "pack:mock-player": "pnpm --filter mock-player run mcaddon",
+    "pack:keepinventory": "pnpm --filter keepInventory run mcaddon",
+    "pack:craftablerarities": "pnpm --filter craftablerarities run pack",
+    "pack:smartwarehouse": "pnpm --filter SmartWarehouse run mcaddon",
+
     "sync-version": "node packages/toolkit/bin/sync-version.js"
   }
 }
