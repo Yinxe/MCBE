@@ -1,5 +1,5 @@
 import { type Player } from "@minecraft/server";
-import { ActionFormBuilder } from "./FormHelper";
+import { ActionFormBuilder } from "@yinxe/toolkit/ui";
 import { showWarehouseCreateForm } from "./WarehouseCreateFlow";
 import { showWarehouseManageMenu } from "./WarehouseManageMenu";
 import { showSearchUI } from "./SearchUI";

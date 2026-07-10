@@ -1,5 +1,5 @@
 import { type Player, world } from "@minecraft/server";
-import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
+import { ModalFormBuilder, ActionFormBuilder } from "@yinxe/toolkit/ui";
 import type { ModConfig, ModConfigStore } from "../storage/ModConfigStore";
 import { TOKEN_OPTIONS, VOLUME_OPTIONS, CONTAINER_OPTIONS, GLOBAL_SPEED_OPTIONS } from "../storage/ModConfigStore";
 import { ModuleController } from "../util/ModuleController";

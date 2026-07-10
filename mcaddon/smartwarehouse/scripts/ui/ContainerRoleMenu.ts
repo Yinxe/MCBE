@@ -10,7 +10,7 @@ import { getFamilyById } from "../data/ItemFamilies";
 import { formatContainerCapacityLine, setContainerStats, CAPACITY_WARNING_THRESHOLD } from "./WarehouseStats";
 import type { ContainerStats } from "../types";
 import { scanContainerSlots } from "../util/ContainerScan";
-import { ModalFormBuilder, ActionFormBuilder } from "./FormHelper";
+import { ModalFormBuilder, ActionFormBuilder } from "@yinxe/toolkit/ui";
 
 // ─── 容器详情辅助 ─────────────────────────────────────────────
 

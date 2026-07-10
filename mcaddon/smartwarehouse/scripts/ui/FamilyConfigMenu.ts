@@ -12,7 +12,7 @@
  */
 
 import { type Player } from "@minecraft/server";
-import { ModalFormBuilder } from "./FormHelper";
+import { ModalFormBuilder } from "@yinxe/toolkit/ui";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import type { WarehouseId } from "../types";

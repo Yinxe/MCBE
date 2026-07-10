@@ -1,5 +1,5 @@
 import type { Player } from "@minecraft/server";
-import { ModalFormBuilder } from "./FormHelper";
+import { ModalFormBuilder } from "@yinxe/toolkit/ui";
 import { ROLE_LABELS, ROLE_ORDER } from "../types";
 import { setSession } from "../interaction/SelectionSessionStore";
 

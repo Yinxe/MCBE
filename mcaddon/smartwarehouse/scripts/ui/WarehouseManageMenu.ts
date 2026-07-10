@@ -1,5 +1,5 @@
 import type { Player } from "@minecraft/server";
-import { ActionFormBuilder } from "./FormHelper";
+import { ActionFormBuilder } from "@yinxe/toolkit/ui";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";

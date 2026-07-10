@@ -13,7 +13,7 @@
  */
 
 import { world, system, type Player } from "@minecraft/server";
-import { ModalFormBuilder } from "./FormHelper";
+import { ModalFormBuilder } from "@yinxe/toolkit/ui";
 import type { BlockLocation, WarehouseData } from "../types";
 import { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { ModConfigStore } from "../storage/ModConfigStore";
