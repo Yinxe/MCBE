@@ -87,10 +87,9 @@ jobs:
           DIR="mcaddon/${{ steps.resolve.outputs.dir }}"
           TYPE="${{ steps.pkg.outputs.artifactType }}"
           case "$TYPE" in
-            bp)    PATTERN="*_bp.mcpack"  ;;
-            pack)  PATTERN="*.mcpack"     ;;
-            addon) PATTERN="*.mcaddon"    ;;
-            *)     PATTERN="*.mcaddon"    ;;
+            pack)  PATTERN="*.mcpack"  ;;
+            addon) PATTERN="*.mcaddon" ;;
+            *)     PATTERN="*.mcaddon" ;;
           esac
           ARTIFACT=$(find "$DIR/dist/packages" -name "$PATTERN" ! -name "*_bp_bp*" ! -name "*_rp*" -type f 2>/dev/null | head -1)
           echo "path=$ARTIFACT"

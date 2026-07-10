@@ -30,6 +30,6 @@
   },
   "mcbe": {
     "bpDir": "MockPlayer",
-    "releaseArtifact": "bp"
+    "releaseArtifact": "pack"
   }
 }
