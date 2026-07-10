@@ -1,352 +1,96 @@
-## 参考文档
+# SmartWarehouse — 智能仓库
 
-### 官方 API 文档（微软）
-https://learn.microsoft.com/zh-cn/minecraft/creator/?view=minecraft-bedrock-stable
-重点章节：
-- Script API（@minecraft/server）
+Minecraft Bedrock 智能仓库管理 Add-On，自动分拣、容器整理、仓库统计。
 
-### 社区 WIKI 教程
-https://wiki.bedrock.dev/
-涵盖：自定义物品、方块、实体、Molang、动画控制器、UI、粒子等。
-
-### 全wiki中文翻译表
-https://raw.githubusercontent.com/SkyEye-FAST/mcbe-chinese-patch/main/extracted/release/vanilla/zh_CN.json
+> 通用代码规范请参考根目录 `CLAUDE.md`。
 
 ---
 
-## 代码风格与约定
+## 架构
 
-### 1. 技术栈
-- **语言**: TypeScript (ES6 target, strict 模式)
-- **运行时**: Minecraft Bedrock Script API (`@minecraft/server` ^2.6.0)
-- **构建**: `just-scripts` + TypeScript 编译器
-- **格式化工**具: Prettier (配置见 `.prettierrc.json`)
-- **ESLint**: `eslint-plugin-minecraft-linting`
-
-### 2. 项目结构
 ```
-BP/                   行为包（manifest.json + scripts 编译产物）
-RP/                   资源包
-scripts/              TypeScript 源码
-  main.ts             入口文件（初始化依赖、注册事件和命令，分 4 个 Phase）
-  types.ts            集中式类型定义（接口、类型别名、常量）
-  commands/           命令路由层（解析输入、校验权限、委托服务层）
-  data/               数据文件（物品家族分类、中文名映射）
-    ItemFamilies.ts   按 51 个家族分类的 1431 个物品（自动生成，勿手动修改）
-    name-maps/        物品/实体/效果/附魔中文名映射表
-  interaction/        工具交互（木锄右键/方块事件处理）
-  organize/           容器整理（混乱度评分、排序合并、自动整理）
-    SlotOrganizer.ts      容器整理器（三段式 API：analyze → apply → organize）
-    OrganizeFormatter.ts  整理结果格式化（输出给玩家）
-  runtime/            运行时缓存层（内存索引、脏标记、惰性重建）
-  sorting/            自动分拣系统（物品路由：输入→存储容器）
-    SorterEngine.ts          分拣引擎（5 级优先级路由）
-    SortingScheduler.ts      分拣调度器（惰性生命周期管理 + PlayerProximityTracker）
-    SortingIndexManager.ts   物品索引管理（itemTypeIndex / familyTypeIndex 自愈）
-    CapacityWarningService.ts 容量预警（满仓检测 + 防刷消息）
-    PlayerProximityTracker.ts 玩家邻近检测（缓存在线玩家位置）
-    ContainerInventory.ts     容器物品操作工具（get/put/check）
-    ContainerSnapshot.ts      容器快照（用于回滚）
-    MoveJournal.ts            分拣事务日志（记录+回滚目标容器变更）
-    SortEffects.ts            分拣特效（粒子+音效）
-  storage/            持久化层（Minecraft Dynamic Property 读写）
-  ui/                 玩家交互界面（ActionForm / ModalForm）
-  util/               工具函数（日志、坐标、JSON、权限）
-  warehouse/          核心业务逻辑（仓库 CRUD、容器扫描）
-    WarehouseService.ts     仓库服务（创建、删除、调整、重扫）
-    ContainerScanner.ts     容器扫描器（遍历区域、识别双箱）
-    AreaCheck.ts            区块加载检测（分拣前的预检）
-    ContainerTypes.ts       容器类型判断
-    ContainerId.ts          容器 ID 生成
-    SafeProbe.ts            双箱安全探针
-    WarehouseRescanDiff.ts  重扫差异比较
-    SearchService.ts        仓库物品搜索
-    BoundaryDisplay.ts      边界粒子光幕
-tools/                维护工具
-  generateItemFamilies.mjs  物品家族生成器（修改分类后需运行）
-  annotateFamilies.mjs      中文注释注入器（运行注入中文名）
+scripts/
+├── main.ts              # 入口
+├── commands/
+│   └── CommandRouter.ts # 命令路由（sw:create, sw:list 等）
+├── data/
+│   ├── ItemFamilies.ts  # 51 个家族 / 1431 物品（自动生成）
+│   └── name-maps/       # 中文名映射（物品/实体/效果/附魔）
+├── interaction/
+│   └── ToolInteractionController.ts  # 木锄交互
+├── organize/
+│   └── SlotOrganizer.ts # 容器整理器（三段式 API：analyze → apply → organize）
+├── runtime/
+│   └── WarehouseRuntimeRegistry.ts    # 运行时缓存（脏标记 + 惰性重建）
+├── sorting/
+│   ├── SorterEngine.ts           # 分拣引擎（5 级优先级路由）
+│   ├── SortingScheduler.ts       # 分拣调度器（惰性生命周期 + 邻近检测）
+│   ├── SortingIndexManager.ts    # 物品索引（itemTypeIndex / familyTypeIndex）
+│   ├── CapacityWarningService.ts # 三级容量预警（黄/红/深红）
+│   ├── ContainerInventory.ts     # 容器物品操作
+│   ├── ContainerSnapshot.ts      # 容器快照（用于回滚）
+│   ├── MoveJournal.ts            # 分拣事务日志
+│   └── SortEffects.ts            # 分拣粒子/音效
+├── storage/
+│   ├── DynamicPropertyStore.ts   # Dynamic Property 读写
+│   ├── WarehouseRepository.ts    # 仓库数据仓储
+│   ├── WarehouseStatsStore.ts    # 容量统计持久化
+│   └── ModConfigStore.ts         # 模组配置
+├── ui/                   # ActionForm/ModalForm UI
+├── util/                 # 工具函数
+└── warehouse/            # 核心业务
+    ├── WarehouseService.ts     # 仓库 CRUD
+    ├── ContainerScanner.ts     # 容器扫描
+    ├── SearchService.ts        # 物品搜索
+    ├── BoundaryDisplay.ts      # 边界粒子光幕
+    └── SafeProbe.ts            # 双箱安全探针
 ```
 
-### 3. 架构分层
-```
-UI/ToolInteraction/CommandRouter  ← 输入层（事件驱动）
-        ↓
-  WarehouseService                 ← 业务层（核心逻辑）
-       ↙        ↘
-WarehouseRepository   ContainerScanner  ← 数据层 + 扫描
-       ↓
-  DynamicPropertyStore              ← 持久化
-       ↓
-  Minecraft Dynamic Properties
+---
 
-WarehouseRuntimeRegistry ← 运行时缓存（内存索引 + 惰性重建）
-         ↓
-SortingScheduler → SorterEngine ← 自动分拣子系统
-         ↓
-  sorting/             物品路由（输入→存储容器）
-    SortingIndexManager     索引自愈管理
-    CapacityWarningService  容量预警
-    PlayerProximityTracker  玩家邻近检测
+## 分拣路由（5 级优先级）
 
-  organize/            容器整理（跨层工具，被 sorting/ + commands/ 共用）
-    SlotOrganizer           分析→排序→合并三段式 API
-```
+1. **大宗** — 已有同类物品的大宗仓位优先
+2. **普通** — 已有同类物品的普通仓位
+3. **大宗** — 空大宗仓位（需设置 bulkTypeId）
+4. **普通** — 空普通仓位
+5. **杂项** — 兜底
 
-**单向依赖规则**：sorting → organize（路由过程可触发整理），但 organize 不依赖 sorting。
+---
 
-### 4. 命名规范
+## 关键约定
 
-| 类别 | 风格 | 示例 |
-|------|------|------|
-| 类 | PascalCase | `WarehouseService`, `CommandRouter`, `SorterEngine` |
-| 接口 | PascalCase | `WarehouseData`, `StoredContainer`, `WarehouseMeta` |
-| 类型别名 | PascalCase | `WarehouseId`, `ContainerRole`, `BlockLocation` |
-| 文件 | PascalCase | `WarehouseService.ts`, `ContainerScanner.ts`, `Logger.ts` |
-| 导出函数 | camelCase | `createWarehouse()`, `isInsideArea()`, `locationKey()` |
-| 私有方法 | camelCase | `handleCreate()`, `assertScanVolume()`, `checkAreaLoaded()` |
-| 常量（模块级） | UPPER_SNAKE_CASE | `MAX_SCAN_VOLUME`, `CONTAINERS_PER_SHARD`, `DEBOUNCE_MS` |
-| 固定值常量 | PascalCase | `ROLE_LABELS`, `ROLE_ORDER`, `SPEED_LABELS` |
-| 类型化 ID | `XxxId` 后缀 | `WarehouseId`, `ContainerId`, `DimensionId` |
-| 坐标键 | `locationKey()` 工厂 | `"dimensionId\|x\|y\|z"` 格式 |
+### 命令
+- 前缀 `sw:`（如 `/sw:create`, `/sw:list`, `/sw:search`）
+- 部分命令无需作弊权限
 
-**特例：**
-- `main.ts` — 入口文件，保持小写
-- `types.ts` — 集中类型定义，保持小写
+### 容量预警
+- 三级：黄色（80%+）、红色（90%+）、深红（95%+）
+- 支持降级动态追踪、防刷消息抑制
 
-### 5. 导入规范
-```typescript
-// 1. 外部依赖
-import { world, system } from "@minecraft/server";
-// 2. 仅类型导入时使用 type 关键字
-import type { Vector3 } from "@minecraft/server";
-// 3. 内部模块（相对路径）
-import { normalizeWarehouseId } from "../storage/WarehouseRepository";
-import { Logger } from "../util/Logger";
-import type { WarehouseService } from "../warehouse/WarehouseService";
-// 4. 同类导入可混合
-import { system, type Dimension } from "@minecraft/server";
-import { world, type Player, type CustomCommand } from "@minecraft/server";
+### 仓库生命周期
+- 玩家接近 16 格内激活分拣
+- 玩家离开后自动停用
+
+---
+
+## 维护工具
+
+```bash
+# 重新生成物品家族分类（修改 data/ 后运行）
+node tools/generateItemFamilies.mjs
+
+# 注入中文注释到分类文件
+node tools/annotateFamilies.mjs
 ```
 
-### 6. 代码文档规范
-- **JSDoc 使用中文**描述，遵循 `/** */` 格式
-- **每个导出函数/类**必须有 JSDoc
-- JSDoc 结构：
-  ```
-  /**
-   * 简短的一句话描述。
-   *
-   * 详细说明（多段时用空行分隔）。
-   *
-   * @param paramName - 参数描述（使用 - 分隔）
-   * @returns 返回值描述
-   * @throws 异常条件描述（仅在会抛异常时写）
-   */
-  ```
-- **复杂算法**：使用 JSDoc 的多段落 + 列表/表格描述设计思路
-- **模块头注释**（可选）：用于大文件的总结性模块说明
-  ```
-  /**
-   * ============================================================================
-   * ClassName —— 简短职责说明
-   * ============================================================================
-   *
-   * 职责概述：
-   * 1. 职责一
-   * 2. 职责二
-   * ============================================================================
-   */
-  ```
+---
 
-### 7. 代码分段注释
-使用 `// ──` 系列进行视觉分段，形成清晰的层次结构：
-```
-// ── 生命周期管理 ───────────────────────────────────────────────
-// ─── 公开入口 ───────────────────────────────────────────────────
-// ─── 私有方法 ──────────────────────────────────────────────────
-// ─── 工具方法 ──────────────────────────────────────────────────
-```
-ASCII 分隔线长度一致，末尾对齐到列 120（与 prettier printWidth 一致）。
+## 依赖
 
-### 8. 错误处理模式
-```typescript
-// 模式 1: 返回错误消息（轻量校验，如命令解析）
-function parseCommandPlayer(origin): Player | string {
-  if (!(entity instanceof Player)) return "该命令只能由玩家执行";
-  return entity;
-}
-
-// 模式 2: 抛出异常（业务逻辑层）
-function createWarehouse(...): WarehouseData {
-  if (this.repository.exists(id)) throw new Error(`仓库 ${id} 已存在`);
-}
-
-// 模式 3: 安全执行 + 返回 undefined（可能失败的 IO 操作）
-function getDimensionSafe(dimensionId): Dimension | undefined {
-  try { return world.getDimension(dimensionId); } catch { return undefined; }
-}
-
-// 模式 4: 安全发送消息（玩家可能已断线）
-function trySendMessage(player: Player, message: string): void {
-  try { player.sendMessage(message); } catch { /* 静默忽略 */ }
-}
-
-// 模式 5: 事件处理器内的 try-catch（防止单个事件崩溃影响全局）
-world.afterEvents.playerPlaceBlock.subscribe((event) => {
-  try { /* ... */ } catch (e) {
-    console.warn("[SmartWarehouse] playerPlaceBlock 事件处理器错误:", e);
-  }
-});
-```
-
-### 9. 依赖注入模式
-```typescript
-// 类使用构造函数注入，可选依赖用默认参数（方便测试时注入 mock）
-export class WarehouseService {
-  constructor(
-    private readonly repository: WarehouseRepository,
-    private readonly scanner = new ContainerScanner(),     // 可注入，默认实现
-    private readonly markRuntimeDirty: (id: WarehouseId) => void = () => undefined
-  ) {}
-}
-
-export class SortingScheduler {
-  constructor(
-    private readonly repository: WarehouseRepository,
-    private readonly engine: SorterEngine,
-    readonly maxWarehousesPerRun: number = 4  // 默认值，调用方按需修改
-  ) {}
-}
-```
-
-### 10. 类型定义模式
-```typescript
-// 集中式类型定义（types.ts）：所有业务类型放在一个文件中
-export type WarehouseId = string;
-export type ContainerId = string;
-export type DimensionId = string;
-
-// Union type（带中文 JSDoc 描述每个分支的用途）
-export type ContainerRole = "normal" | "misc" | "bulk" | "input";
-
-// 带中文字段的 Record 常量（用于 UI 展示）
-export const ROLE_LABELS: Record<ContainerRole, string> = {
-  normal: "普通",
-  misc: "杂项",
-  bulk: "批量",
-  input: "输入",
-};
-
-// 有限字面量 union
-export type ProcessingSpeed = 4 | 8 | 16 | 20;
-
-// 接口继承
-export interface WarehouseData extends WarehouseMeta {
-  containers: Record<ContainerId, StoredContainer>;
-}
-
-// 受歧视联合（discriminated union）用于状态机
-export type SelectionSession =
-  | { type: "createWarehouse"; warehouseName: string; pointA?: BlockLocation }
-  | { type: "resizeWarehouse"; warehouseId: WarehouseId; pointA?: BlockLocation };
-
-// 返回类型联合（解析结果的 ok/error 模式）
-type ParseResult = { ok: true; id: WarehouseId } | { ok: false; message: string };
-```
-
-### 11. Prettier 配置（.prettierrc.json）
-```json
-{
-  "trailingComma": "es5",
-  "tabWidth": 2,
-  "semi": true,
-  "singleQuote": false,
-  "bracketSpacing": true,
-  "arrowParens": "always",
-  "printWidth": 120,
-  "endOfLine": "auto"
-}
-```
-
-### 12. tsconfig 关键设置
-- `target: "es6"` — 输出 ES6 兼容代码
-- `module: "ES2020"` — ES 模块格式
-- `moduleResolution: "Node"`
-- `strict: true` — 全开严格模式
-- `noImplicitAny: true` — 禁止隐式 any
-- `experimentalDecorators: true` + `emitDecoratorMetadata: true` — 支持装饰器
-- `rootDir: "."`, `baseUrl: "BP/"` — 源码根目录和编译基路径
-- `outDir: "lib"` — 编译输出
-- 只编译 `scripts/**/*`
-
-### 13. Minecraft 特有模式
-
-**事件驱动初始化**（main.ts）—— 分为 4 个 Phase：
-```typescript
-// Phase 1: 无状态基础设施
-const configStore = new ModConfigStore();
-const repository = new WarehouseRepository();
-const runtime = new WarehouseRuntimeRegistry(repository);
-const organizer = new SlotOrganizer();
-
-// Phase 2: 有状态业务逻辑
-const engine = new SorterEngine(repository, runtime, organizer);
-const scheduler = new SortingScheduler(repository, engine);
-const boundaryDisplay = new BoundaryDisplay(configStore);
-const notifyDirty = (id: string) => runtime.markDirty(id);
-const notifyScheduler = (id: string) => scheduler.refreshOne(id);
-const service = new WarehouseService(
-  repository, configStore, undefined,
-  notifyDirty, notifyScheduler, boundaryDisplay
-);
-
-// Phase 3: 注册事件和命令
-service.registerBlockMaintenance();
-registerToolInteraction(service);
-commandRouter.register();
-
-// Phase 4: 延迟启动（dynamicProperty 需世界完全加载）
-system.run(() => { scheduler.start(); ... });
-```
-
-**命令注册**（CommandRouter）：
-```typescript
-// 在 system.beforeEvents.startup 中注册自定义命令
-system.beforeEvents.startup.subscribe((event) => {
-  event.customCommandRegistry.registerCommand(
-    regionCommand("sw:create", "描述"),
-    (origin, name, x1, y1, z1, x2, y2, z2) => this.handleCreate(...)
-  );
-});
-```
-
-**UI 交互**（ActionForm / ModalForm）：
-```typescript
-// UI 使用 @minecraft/server-ui 的 ActionFormData / ModalFormData
-const form = new ActionFormData()
-  .title("标题")
-  .body("内容")
-  .button("按钮");
-const response = await form.show(player);
-```
-
-**区块安全访问**：
-```typescript
-// 任何方块/容器访问都必须用 try-catch 保护
-function tryGetBlock(dimension: Dimension, location: BlockLocation): Block | undefined {
-  try { return dimension.getBlock(location); } catch { return undefined; }
-}
-```
-
-### 14. 通用编码习惯
-
-- **`private readonly`** 构造参数简写：`constructor(private readonly dep: Type)`
-- **Map 类型**显式声明泛型：`new Map<string, ContainerId[]>()`
-- **Record 类型**用于对象字典：`Record<ContainerId, StoredContainer>`
-- **`.filter(Boolean)`** 风格使用类型守卫：`.filter((w): w is WarehouseData => Boolean(w))`
-- **异步 UI**：UI 相关方法用 `async` / `await`（ActionForm.show 返回 Promise）
-- **同步业务逻辑**：WarehouseService 的方法同步执行（Minecraft Script API 在同一 tick 内同步）
-- **幂等方法**：`start()` / `stop()` 等生命周期方法必须是幂等的
-- **错误消息语言**：面向玩家的错误消息使用中文；调试日志使用英文
-- **日志格式**：`[前缀] 消息`，通过 `Logger` 类统一输出，底层使用 `console.warn`
-- **常量就近定义**：模块级常量定义在使用位置附近（非集中式 constants 文件）
+| 包 | 版本 |
+|---|------|
+| @minecraft/server | ^2.6.0 |
+| @minecraft/server-ui | ^2.0.0 |
+| @minecraft/math | 2.2.7 |
+| @minecraft/core-build-tasks | 5.5.0 |
