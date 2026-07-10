@@ -53,7 +53,7 @@ task("update-version", () => {
   syncManifestVersion(__dirname, {
     formatName: () => CHINESE_NAME,
     onManifest: (m) => {
-      m.header.description = `智能仓库管理 — 自动分拣、容器整理、仓库统计、容量预警 v${pkgVersion}`;
+      m.header.description = `智能仓库管理 - 自动分拣、容器整理、仓库统计、容量预警 v${pkgVersion}`;
     },
   });
   console.log("Done.");
