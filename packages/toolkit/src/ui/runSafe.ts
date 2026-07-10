@@ -7,7 +7,7 @@ export function runSafeAsync(fn: () => void | Promise<void>): Promise<void> {
       try {
         const ret = fn();
         if (ret instanceof Promise) {
-          ret.then(() => resolve()).catch(reject);
+          ret.then(resolve).catch(reject);
         } else {
           resolve();
         }

@@ -31,9 +31,8 @@
 //     return { status: CustomCommandStatus.Success, message: "列表" };
 //   });
 
-import { system } from "@minecraft/server";
+import { system, Player } from "@minecraft/server";
 import type {
-  Player,
   CustomCommand,
   CustomCommandOrigin,
   CustomCommandResult,
@@ -79,11 +78,12 @@ export function defineCommand<T extends Record<string, unknown> = Record<string,
   ];
 
   registry.registerCommand(config, (origin: CustomCommandOrigin, ...args: unknown[]) => {
-    if (!origin.sourceEntity || !((origin.sourceEntity as any)?.sendMessage)) {
+    const entity = origin.sourceEntity ?? origin.initiator;
+    if (!(entity instanceof Player)) {
       return { status: 1, message: "该命令只能由玩家执行" };
     }
 
-    const player = origin.sourceEntity as Player;
+    const player = entity;
     const params: Record<string, unknown> = {};
     for (let i = 0; i < args.length; i++) {
       if (allParams[i]) {
