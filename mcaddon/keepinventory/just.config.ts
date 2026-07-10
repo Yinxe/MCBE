@@ -6,20 +6,16 @@ import {
   copyTask,
   coreLint,
   mcaddonTask,
-  setupEnvironment,
   STANDARD_CLEAN_PATHS,
   DEFAULT_CLEAN_DIRECTORIES,
-  getOrThrowFromProcess,
   watchTask,
 } from "@minecraft/core-build-tasks";
 import path from "path";
 import { renameSync } from "fs";
 import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
-setupEnvironment(path.resolve(__dirname, ".env"));
-
 const CHINESE_NAME = "死亡不掉落";
-const projectName = getOrThrowFromProcess("PROJECT_NAME");
+const PROJECT_NAME = "yinx1423_keepinv";
 const pkgVersion = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
 
 // ── Version sync ──
@@ -36,7 +32,7 @@ task("sync-version", () => {
 const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
   "@minecraft/server",
 ]);
-const copyTaskOptions = copyOptions(__dirname, projectName, { hasRp: false });
+const copyTaskOptions = copyOptions(__dirname, PROJECT_NAME, { hasRp: false });
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
   outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}_bp.mcpack`,

@@ -6,15 +6,12 @@ import {
     coreLint,
     DEFAULT_CLEAN_DIRECTORIES,
     mcaddonTask,
-    setupEnvironment,
     STANDARD_CLEAN_PATHS,
     watchTask,
 } from "@minecraft/core-build-tasks";
 import { argv, parallel, series, task, tscTask } from "just-scripts";
 import path from "path";
 import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
-
-setupEnvironment(path.resolve(__dirname, ".env"));
 
 const CHINESE_NAME = "模拟玩家";
 

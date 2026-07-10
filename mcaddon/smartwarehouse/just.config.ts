@@ -7,20 +7,16 @@ import {
   copyTask,
   coreLint,
   mcaddonTask,
-  setupEnvironment,
   STANDARD_CLEAN_PATHS,
   DEFAULT_CLEAN_DIRECTORIES,
-  getOrThrowFromProcess,
   watchTask,
 } from "@minecraft/core-build-tasks";
 import path from "path";
 import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
-setupEnvironment(path.resolve(__dirname, ".env"));
-
 // ── Project metadata ────────────────────────────────────────────
 const CHINESE_NAME = "智能仓库";
-const projectName = getOrThrowFromProcess("PROJECT_NAME");
+const PROJECT_NAME = "SmartWarehouse";
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
 const pkgVersion = pkg.version;
 
@@ -28,7 +24,7 @@ const pkgVersion = pkg.version;
 const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
   "@minecraft/server", "@minecraft/server-ui",
 ]);
-const copyTaskOptions = copyOptions(__dirname, projectName);
+const copyTaskOptions = copyOptions(__dirname, PROJECT_NAME);
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
   outputFile: `./dist/packages/${CHINESE_NAME}-v${pkgVersion}.mcaddon`,

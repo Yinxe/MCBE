@@ -1,15 +1,12 @@
-import { getOrThrowFromProcess, setupEnvironment } from "@minecraft/core-build-tasks";
 import { execSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
 import { series, task } from "just-scripts";
 import path from "path";
 import { syncManifestVersion } from "@yinxe/toolkit";
 
-setupEnvironment(path.resolve(__dirname, ".env"));
-
 // ── Project metadata ────────────────────────────────────────────
 const CHINESE_NAME = "合成配方扩展";
-const projectName = getOrThrowFromProcess("PROJECT_NAME");
+const PROJECT_NAME = "合成配方扩展&隐藏物品";
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));
 const pkgVersion = pkg.version;
 
@@ -37,7 +34,7 @@ task("mcaddon", series("clean", "build", () => {
   mkdirSync(outDir, { recursive: true });
 
   const outFile = `${CHINESE_NAME}-v${pkgVersion}.mcpack`;
-  const bpDir = path.resolve(__dirname, `BP/${projectName}`);
+  const bpDir = path.resolve(__dirname, `BP/${PROJECT_NAME}`);
   execSync(`(cd "${bpDir}" && zip -X -r "${path.resolve(outDir, outFile)}" .)`, { stdio: "inherit" });
 
   const size = existsSync(path.resolve(outDir, outFile))
