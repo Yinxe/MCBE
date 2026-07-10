@@ -17,6 +17,10 @@
     "./command": {
       "types": "./src/command/index.ts",
       "default": "./src/command/index.ts"
+    },
+    "./player": {
+      "types": "./src/player.ts",
+      "default": "./src/player.ts"
     }
   },
   "peerDependencies": {
