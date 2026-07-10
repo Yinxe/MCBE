@@ -1,5 +1,5 @@
 import { system } from "@minecraft/server";
-import { CommandRouter } from "./commands/CommandRouter";
+import { registerAllCommands } from "./commands";
 import { registerToolInteraction } from "./interaction/ToolInteractionController";
 import { SlotOrganizer } from "./organize/SlotOrganizer";
 import { WarehouseRuntimeRegistry } from "./runtime/WarehouseRuntimeRegistry";
@@ -56,9 +56,8 @@ service.registerBlockMaintenance();
 // 手持信物右键交互 → 选区/菜单
 registerToolInteraction(repository, service, configStore);
 
-// 自定义命令 sw:create / sw:resize / sw:rescan / sw:delete 等
-const commandRouter = new CommandRouter(service, repository, configStore);
-commandRouter.register();
+// 自定义命令
+system.beforeEvents.startup.subscribe((event) => registerAllCommands(event, service, repository, configStore));
 
 boot.phase("事件与命令已注册");
 
