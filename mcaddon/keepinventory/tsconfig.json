@@ -2,7 +2,7 @@
     "compilerOptions":{
        "target":"es6",
        "lib": ["es2017"],
-       "moduleResolution":"Node",
+       "moduleResolution":"bundler",
        "module": "ES2020",
        "declaration":false,
        "noLib":false,

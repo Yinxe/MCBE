@@ -1,7 +1,7 @@
 // ─── 移动表单 + 删除确认 ──────────────────────────────
 
 import { Player, system } from "@minecraft/server";
-import { ModalFormData, MessageFormData } from "@minecraft/server-ui";
+import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit/ui";
 
 import { botRegistry } from "../features/persistence";
 import { moveBot, deleteBot } from "../features/operations";
@@ -10,14 +10,11 @@ import { parseCoordinateInput } from "../features/utils";
 // ─── 移动至坐标 ───────────────────────────────────────
 
 export function showMoveForm(player: Player, botName: string): void {
-  const form = new ModalFormData()
-    .title("§l移动至坐标")
-    .textField("目标坐标（留空则移动到你位置）", "x y z", { defaultValue: "" });
-
-  form.show(player).then((response) => {
-    if (response.canceled || !response.formValues) return;
-
-    const coordInput = response.formValues[0] as string;
+  ModalFormBuilder.showQuick(player, "§l移动至坐标", (f) => {
+    f.textField("coord", "目标坐标（留空则移动到你位置）", { defaultValue: "" });
+  }).then((vals) => {
+    if (!vals) return;
+    const coordInput = vals.coord as string;
     const targetPos = parseCoordinateInput(coordInput) ?? player.location;
 
     const record = botRegistry.get(botName);
@@ -50,29 +47,24 @@ export function showMoveForm(player: Player, botName: string): void {
 // ─── 删除确认 ─────────────────────────────────────────
 
 export function confirmDelete(player: Player, botName: string): void {
-  const form = new MessageFormData()
-    .title("§l确认删除")
-    .body(`§7确定要删除模拟玩家 §e${botName}§7 吗？\n\n§6背包、装备和经验将被回收。\n§c此操作不可撤销！`)
-    .button1("§c确认删除")
-    .button2("§7取消");
-
-  form.show(player).then((response) => {
-    if (response.canceled) return;
-    if (response.selection !== 0) return;
-
-    const record = botRegistry.get(botName);
-    if (!record) {
-      player.sendMessage(`§c模拟玩家 §e${botName}§c 不存在`);
-      return;
-    }
-
-    system.run(() => {
-      try {
-        deleteBot(record, player);
-        player.sendMessage(`§a已删除模拟玩家 §e${botName}，物品和经验已回收`);
-      } catch (e: any) {
-        player.sendMessage(`§c删除失败: ${e.message}`);
+  MessageFormBuilder.confirm(
+    player,
+    "§l确认删除",
+    `§7确定要删除模拟玩家 §e${botName}§7 吗？\n\n§6背包、装备和经验将被回收。\n§c此操作不可撤销！`,
+    () => {
+      const record = botRegistry.get(botName);
+      if (!record) {
+        player.sendMessage(`§c模拟玩家 §e${botName}§c 不存在`);
+        return;
       }
-    });
-  });
+      system.run(() => {
+        try {
+          deleteBot(record, player);
+          player.sendMessage(`§a已删除模拟玩家 §e${botName}，物品和经验已回收`);
+        } catch (e: any) {
+          player.sendMessage(`§c删除失败: ${e.message}`);
+        }
+      });
+    }
+  );
 }

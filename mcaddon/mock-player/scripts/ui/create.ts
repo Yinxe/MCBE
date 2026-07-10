@@ -1,7 +1,7 @@
 // ─── 创建模拟玩家表单 ───────────────────────────────────
 
 import { Player, system, world, Vector3 } from "@minecraft/server";
-import { ModalFormData } from "@minecraft/server-ui";
+import { ModalFormBuilder } from "@yinxe/toolkit/ui";
 
 import { PositionState } from "../features/types";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../features/tags";
@@ -12,27 +12,19 @@ import { createBot, CreateBotOptions } from "../features/operations";
 export function showCreateForm(player: Player): void {
   const dimOptions = ["跟随玩家", "主世界 (overworld)", "下界 (nether)", "末地 (the_end)"];
 
-  const form = new ModalFormData()
-    .title("§l创建模拟玩家")
-    .textField("名称（留空自动生成）", "例如 sim001", { defaultValue: "" })
-    .textField("坐标（留空使用玩家位置）", "x y z", { defaultValue: "" })
-    .dropdown("维度", dimOptions, { defaultValueIndex: 0 })
-    .toggle("§7复刻玩家体态（同步潜行/朝向）", { defaultValue: true })
-    .toggle("§7自动重生", { defaultValue: true })
-    .toggle("§7空闲状态", { defaultValue: true });
-
-  form.show(player).then((response) => {
-    if (response.canceled || !response.formValues) return;
-
-    const nameInput = response.formValues[0] as string;
-    const coordInput = response.formValues[1] as string;
-    const dimIndex = response.formValues[2] as number;
-    const copyPosture = response.formValues[3] as boolean;
-    const enableRespawn = response.formValues[4] as boolean;
-    const enableIdle = response.formValues[5] as boolean;
-
-    const botName = nameInput.trim() || generateBotName();
-    const parsedCoord = parseCoordinateInput(coordInput);
+  ModalFormBuilder.showQuick(player, "§l创建模拟玩家", (f) => {
+    f.textField("name", "名称（留空自动生成）", { defaultValue: "" })
+     .textField("coord", "坐标（留空使用玩家位置）", { defaultValue: "" })
+     .dropdown("dim", "维度", dimOptions, { defaultValueIndex: 0 })
+     .toggle("copyPosture", "§7复刻玩家体态（同步潜行/朝向）", { defaultValue: true })
+     .toggle("respawn", "§7自动重生", { defaultValue: true })
+     .toggle("idle", "§7空闲状态", { defaultValue: true });
+  }).then((vals) => {
+    if (!vals) return;
+    const botName = (vals.name as string).trim() || generateBotName();
+    const parsedCoord = parseCoordinateInput(vals.coord as string);
+    const dimIndex = vals.dim as number;
+    const copyPosture = vals.copyPosture as boolean;
 
     let targetDim = player.dimension;
     if (dimIndex === 1) targetDim = world.getDimension("overworld");
@@ -41,8 +33,8 @@ export function showCreateForm(player: Player): void {
 
     const pos: Vector3 = parsedCoord ?? player.location;
     const initTags: string[] = [TAG_BOT.value];
-    if (enableRespawn) initTags.push(TAG_RESPAWN.value);
-    if (enableIdle) initTags.push(TAG_IDLE.value);
+    if (vals.respawn) initTags.push(TAG_RESPAWN.value);
+    if (vals.idle) initTags.push(TAG_IDLE.value);
 
     const playerRot = player.getRotation();
     const lookTarget = getPlayerLookTarget(player);
