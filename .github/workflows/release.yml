@@ -1,9 +1,11 @@
 name: Build & Release
 
 on:
+  # 同时支持 push:tags 和 create:tags，确保老 commit 上的 tag 也能触发
   push:
     tags:
       - "*@*"
+  create:
   workflow_dispatch:
     inputs:
       mod:
@@ -20,6 +22,10 @@ permissions:
 
 jobs:
   build:
+    # create 事件只响应 tag（过滤掉 branch create）
+    if: |
+      github.event_name != 'create' ||
+      (startsWith(github.ref, 'refs/tags/') && contains(github.ref, '@'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +38,7 @@ jobs:
       - name: Parse tag / input
         id: parse
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "create" ]; then
             TAG="${{ github.ref_name }}"
             PKG="${TAG%%@*}"
             VER="${TAG#*@}"
