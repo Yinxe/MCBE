@@ -37,6 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 11.1.3
@@ -133,6 +135,24 @@ jobs:
 
           echo "path=$ARTIFACT" | tee -a "$GITHUB_OUTPUT"
 
+      # ── 生成 Release Notes ──────────────────────────────
+      - name: Generate release notes
+        id: notes
+        run: |
+          PKG="${{ steps.parse.outputs.pkg }}"
+          TAG="${{ steps.parse.outputs.pkg }}@${{ steps.parse.outputs.version }}"
+          PREV_TAG=$(git tag -l "${PKG}@*" --sort=-v:refname | head -2 | tail -1)
+          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$TAG" ]; then
+            NOTES=$(git log --oneline --format="* %s" "${PREV_TAG}..${TAG}" 2>/dev/null || true)
+          fi
+          if [ -z "${NOTES:-}" ]; then
+            NOTES="🎉 ${{ steps.config.outputs.packName }} ${{ steps.parse.outputs.version }} 首次发布"
+          fi
+          NOTES="${NOTES//'%'/'%25'}"
+          NOTES="${NOTES//$'\n'/'%0A'}"
+          NOTES="${NOTES//$'\r'/'%0D'}"
+          echo "notes=$NOTES" | tee -a "$GITHUB_OUTPUT"
+
       # ── 上传到 GitHub Release ───────────────────────────────
       - name: Upload to release
         if: steps.artifact.outputs.path != ''
@@ -152,7 +172,7 @@ jobs:
           else
             gh release create "$TAG" "/tmp/$(basename "$FILE")" \
               --title "$CN $VERSION" \
-              --notes "自动构建发布" \
+              --notes "${{ steps.notes.outputs.notes }}" \
               ${IS_PR}
           fi
 
