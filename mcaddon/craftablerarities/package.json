@@ -1,7 +1,6 @@
 {
   "name": "craftablerarities",
   "version": "1.0.1",
-  "productName": "合成配方扩展",
   "description": "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块！",
   "private": true,
   "devDependencies": {
@@ -14,16 +13,16 @@
   "scripts": {
     "build": "just-scripts build",
     "clean": "just-scripts clean",
-    "mcaddon": "just-scripts mcaddon",
+    "pack": "just-scripts mcaddon",
     "local-deploy": "just-scripts local-deploy",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version",
     "version:set": "npm version",
-    "release": "npm run pack"
+    "release": "pnpm run pack"
   },
   "mcbe": {
-    "bpDir": "CraftableRarities",
-    "releaseArtifact": "pack"
+    "packName": "合成配方扩展",
+    "bp": "BP/CraftableRarities"
   }
 }

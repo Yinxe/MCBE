@@ -1,8 +1,7 @@
 {
   "name": "mock-player",
   "version": "1.0.9",
-  "productName": "模拟玩家",
-  "description": "MockPlayer — 创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
+  "description": "创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
@@ -19,7 +18,7 @@
     "build": "just-scripts build",
     "clean": "just-scripts clean",
     "local-deploy": "just-scripts local-deploy",
-    "mcaddon": "just-scripts mcaddon"
+    "pack": "just-scripts mcaddon"
   },
   "dependencies": {
     "@minecraft/math": "2.2.7",
@@ -29,7 +28,7 @@
     "@minecraft/vanilla-data": "1.26.20"
   },
   "mcbe": {
-    "bpDir": "MockPlayer",
-    "releaseArtifact": "pack"
+    "packName": "模拟玩家",
+    "bp": "BP/MockPlayer"
   }
 }

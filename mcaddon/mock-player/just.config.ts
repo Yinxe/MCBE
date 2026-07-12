@@ -15,9 +15,9 @@ import { renameSync } from "fs";
 import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
 
 const pkg = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8"));
-const CHINESE_NAME = pkg.productName;
+const CHINESE_NAME = pkg.mcbe.packName;
 const PACKAGE_NAME = pkg.name;
-const PROJECT_NAME = pkg.mcbe.bpDir;
+const PROJECT_NAME = path.basename(pkg.mcbe.bp);
 
 // ── Version sync ──
 task("sync-version", () => {

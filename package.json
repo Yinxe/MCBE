@@ -26,10 +26,10 @@
     "build:smartwarehouse": "pnpm --filter smartwarehouse run build",
     "build:antibundledup": "pnpm --filter antibundledup run build",
 
-    "pack:mock-player": "pnpm --filter mock-player run mcaddon",
-    "pack:keepinventory": "pnpm --filter keepinventory run mcaddon",
-    "pack:craftablerarities": "pnpm --filter craftablerarities run mcaddon",
-    "pack:smartwarehouse": "pnpm --filter smartwarehouse run mcaddon",
+    "pack:mock-player": "pnpm --filter mock-player run pack",
+    "pack:keepinventory": "pnpm --filter keepinventory run pack",
+    "pack:craftablerarities": "pnpm --filter craftablerarities run pack",
+    "pack:smartwarehouse": "pnpm --filter smartwarehouse run pack",
     "pack:antibundledup": "pnpm --filter antibundledup run pack",
 
     "sync-version": "node packages/toolkit/bin/sync-version.mjs"

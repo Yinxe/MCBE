@@ -1,7 +1,6 @@
 {
   "name": "smartwarehouse",
   "version": "0.0.59",
-  "productName": "智能仓库",
   "description": "智能仓库管理 — 自动分拣、容器整理、仓库统计、容量预警",
   "private": true,
   "devDependencies": {
@@ -19,7 +18,7 @@
     "build": "just-scripts build",
     "clean": "just-scripts clean",
     "local-deploy": "just-scripts local-deploy",
-    "mcaddon": "just-scripts mcaddon",
+    "pack": "just-scripts mcaddon",
     "enablemcloopback": "CheckNetIsolation.exe LoopbackExempt -a -p=S-1-15-2-1958404141-86561845-1752920682-3514627264-368642714-62675701-733520436",
     "enablemcpreviewloopback": "CheckNetIsolation.exe LoopbackExempt -a -p=S-1-15-2-424268864-5579737-879501358-346833251-474568803-887069379-4040235476",
     "test:safety": "node tests/run-safety-tests.mjs"
@@ -30,7 +29,8 @@
     "@minecraft/server-ui": "^2.0.0"
   },
   "mcbe": {
-    "bpDir": "SmartWarehouse",
-    "releaseArtifact": "addon"
+    "packName": "智能仓库",
+    "bp": "BP/SmartWarehouse",
+    "rp": "RP/SmartWarehouse"
   }
 }

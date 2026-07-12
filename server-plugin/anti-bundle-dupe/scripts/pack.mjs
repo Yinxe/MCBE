@@ -2,18 +2,19 @@
 /**
  * Pack anti-bundle-dupe BP into .mcpack
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync } from "fs";
 import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import { execSync } from "child_process";
 
-const projectDir = resolve(import.meta.dirname, "..");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectDir = resolve(__dirname, "..");
 const pkg = JSON.parse(readFileSync(resolve(projectDir, "package.json"), "utf8"));
 
 const pkgVersion = pkg.version;
-const productName = pkg.productName;
-const bpDir = resolve(projectDir, "BP", pkg.mcbe.bpDir);
+const bpDir = resolve(projectDir, pkg.mcbe.bp);
 const distDir = resolve(projectDir, "dist", "packages");
-const outputFile = resolve(distDir, `${productName}-v${pkgVersion}.mcpack`);
+const outputFile = resolve(distDir, `${pkg.name}-v${pkgVersion}.mcpack`);
 
 // 版本同步
 execSync("pnpm run build", { cwd: projectDir, stdio: "inherit" });

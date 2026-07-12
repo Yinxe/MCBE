@@ -1,7 +1,7 @@
 {
   "format_version": 2,
   "header": {
-    "name": "反收纳袋刷物",
+    "name": "反收纳袋刷物 v1.0.0",
     "description": "将收纳袋全部改为可食用食物，防止利用收纳袋刷物",
     "uuid": "3ccbdcca-6e0b-5d1a-bf90-aaa7e29bcb19",
     "version": [

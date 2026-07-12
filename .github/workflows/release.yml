@@ -1,7 +1,16 @@
+# Build & Release — 自动构建发布
+#
+# 触发方式:
+#   git tag <name>@<version>   → 构建并发布 Release
+#   workflow_dispatch          → 手动指定模组名和版本号
+#
+# 模组注册: 无需修改本文件，只需在:
+#   mcaddon/<name>/package.json  或  server-plugin/<name>/package.json
+# 中按规范配置 mcbe 字段即可自动注册。
+
 name: Build & Release
 
 on:
-  # 同时支持 push:tags 和 create:tags，确保老 commit 上的 tag 也能触发
   push:
     tags:
       - "*@*"
@@ -9,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       mod:
-        description: "模组名 (如 mock-player, smartwarehouse)"
+        description: "包名 (如 mock-player, antibundledup)"
         required: true
         type: string
       version:
@@ -22,7 +31,6 @@ permissions:
 
 jobs:
   build:
-    # create 事件只响应 tag（过滤掉 branch create）
     if: |
       github.event_name != 'create' ||
       (startsWith(github.ref, 'refs/tags/') && contains(github.ref, '@'))
@@ -37,6 +45,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # ── 解析 tag → 包名 + 版本号 ────────────────────────────
       - name: Parse tag / input
         id: parse
         run: |
@@ -48,61 +57,83 @@ jobs:
             PKG="${{ inputs.mod }}"
             VER="${{ inputs.version }}"
           fi
-          echo "pkg=$PKG" >> $GITHUB_OUTPUT
-          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "pkg=$PKG" | tee -a "$GITHUB_OUTPUT"
+          echo "version=$VER" | tee -a "$GITHUB_OUTPUT"
 
-      - name: Resolve mod directory
+      # ── 动态解析项目目录（mcaddon/ 或 server-plugin/） ─────
+      - name: Resolve project directory
         id: resolve
         run: |
           PKG="${{ steps.parse.outputs.pkg }}"
-          case "$PKG" in
-            mock-player)        DIR=mock-player;             FILTER=mock-player ;;
-            keepinventory) DIR=keepinventory;   FILTER=keepinventory ;;
-            craftablerarities)  DIR=craftablerarities;        FILTER=craftablerarities ;;
-            smartwarehouse) DIR=smartwarehouse; FILTER=smartwarehouse ;;
-            *) echo "::error::Unknown package: $PKG"; exit 1 ;;
-          esac
-          echo "dir=$DIR" >> $GITHUB_OUTPUT
-          echo "filter=$FILTER" >> $GITHUB_OUTPUT
+          found=false
+          for base in mcaddon server-plugin; do
+            if [ -f "$base/$PKG/package.json" ]; then
+              echo "dir=$base/$PKG" | tee -a "$GITHUB_OUTPUT"
+              found=true
+              break
+            fi
+          done
+          if [ "$found" != "true" ]; then
+            echo "::error::Project '$PKG' not found in mcaddon/ or server-plugin/"
+            exit 1
+          fi
 
-      - name: Read package.json
-        id: pkg
+      # ── 读取 mcbe 配置 ──────────────────────────────────────
+      - name: Read mcbe config
+        id: config
         run: |
           DIR="${{ steps.resolve.outputs.dir }}"
-          CN=$(jq -r '.productName' "mcaddon/$DIR/package.json")
-          HAS_BUILD=$(jq 'has("build")' "mcaddon/$DIR/package.json")
-          ARTIFACT_TYPE=$(jq -r '.mcbe.releaseArtifact // "addon"' "mcaddon/$DIR/package.json")
-          echo "cn=$CN" >> $GITHUB_OUTPUT
-          echo "hasBuild=$HAS_BUILD" >> $GITHUB_OUTPUT
-          echo "artifactType=$ARTIFACT_TYPE" >> $GITHUB_OUTPUT
+          HAS_BUILD=$(jq 'has("scripts") and (.scripts | has("build"))' "$DIR/package.json")
+          HAS_RP=$(jq '.mcbe | has("rp")' "$DIR/package.json")
+          PACK_NAME=$(jq -r '.mcbe.packName // .name' "$DIR/package.json")
 
+          if [ "$HAS_RP" = "true" ]; then
+            ARTIFACT_EXT="mcaddon"
+          else
+            ARTIFACT_EXT="mcpack"
+          fi
+
+          echo "hasBuild=$HAS_BUILD" | tee -a "$GITHUB_OUTPUT"
+          echo "packName=$PACK_NAME" | tee -a "$GITHUB_OUTPUT"
+          echo "artifactExt=$ARTIFACT_EXT" | tee -a "$GITHUB_OUTPUT"
+
+      # ── 安装依赖 ────────────────────────────────────────────
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ── 设置版本号 ──────────────────────────────────────────
       - name: Set version
-        run: cd mcaddon/${{ steps.resolve.outputs.dir }} && npm pkg set version="${{ steps.parse.outputs.version }}"
+        run: |
+          DIR="${{ steps.resolve.outputs.dir }}"
+          cd "$DIR" && npm pkg set version="${{ steps.parse.outputs.version }}"
 
+      # ── 构建（有 build 脚本才执行） ────────────────────────
       - name: Build
-        if: steps.pkg.outputs.hasBuild == 'true'
-        run: pnpm --filter "${{ steps.resolve.outputs.filter }}" run build
+        if: steps.config.outputs.hasBuild == 'true'
+        run: pnpm --filter "${{ steps.parse.outputs.pkg }}" run build
 
+      # ── 打包 ────────────────────────────────────────────────
       - name: Pack
-        run: pnpm --filter "${{ steps.resolve.outputs.filter }}" run mcaddon
+        run: pnpm --filter "${{ steps.parse.outputs.pkg }}" run pack
 
+      # ── 查找产物 ────────────────────────────────────────────
       - name: Locate artifact
         id: artifact
         run: |
-          DIR="mcaddon/${{ steps.resolve.outputs.dir }}"
-          TYPE="${{ steps.pkg.outputs.artifactType }}"
-          case "$TYPE" in
-            pack)  PATTERN="*.mcpack"  ;;
-            addon) PATTERN="*.mcaddon" ;;
-            *)     PATTERN="*.mcaddon" ;;
-          esac
-          ARTIFACT=$(find "$DIR/dist/packages" -name "$PATTERN" ! -name "*_bp_bp*" ! -name "*_rp*" -type f 2>/dev/null | head -1)
-          echo "path=$ARTIFACT"
-          echo "path=$ARTIFACT" >> $GITHUB_OUTPUT
+          DIR="${{ steps.resolve.outputs.dir }}"
+          EXT="${{ steps.config.outputs.artifactExt }}"
+          PKG="${{ steps.parse.outputs.pkg }}"
+          VER="${{ steps.parse.outputs.version }}"
+          ARTIFACT=$(find "$DIR/dist/packages" -name "${PKG}-v${VER}.${EXT}" -type f 2>/dev/null | head -1)
 
+          if [ -z "$ARTIFACT" ]; then
+            # 兜底：找不到标准命名的文件时模糊搜索
+            ARTIFACT=$(find "$DIR/dist/packages" -name "*.${EXT}" ! -name "*_bp*" ! -name "*_rp*" -type f 2>/dev/null | head -1)
+          fi
+
+          echo "path=$ARTIFACT" | tee -a "$GITHUB_OUTPUT"
+
+      # ── 上传到 GitHub Release ───────────────────────────────
       - name: Upload to release
         if: steps.artifact.outputs.path != ''
         env:
@@ -110,34 +141,25 @@ jobs:
         run: |
           TAG="${{ steps.parse.outputs.pkg }}@${{ steps.parse.outputs.version }}"
           FILE="${{ steps.artifact.outputs.path }}"
-          CN="${{ steps.pkg.outputs.cn }}"
+          CN="${{ steps.config.outputs.packName }}"
           VERSION="${{ steps.parse.outputs.version }}"
-          PKG="${{ steps.parse.outputs.pkg }}"
           IS_PR=""; echo "$VERSION" | grep -qiE 'beta|alpha|rc|pre' && IS_PR="--prerelease"
 
-          # 复制到 ASCII 文件名（避免 gh CLI 对中文路径的处理问题）
-          if echo "$FILE" | grep -q '_bp\.mcpack$'; then
-            ASCII_NAME="${PKG}-v${VERSION}_bp.mcpack"
-          elif echo "$FILE" | grep -q '\.mcaddon$'; then
-            ASCII_NAME="${PKG}-v${VERSION}.mcaddon"
-          else
-            ASCII_NAME="${PKG}-v${VERSION}.mcpack"
-          fi
-          cp "$FILE" "/tmp/$ASCII_NAME"
+          cp "$FILE" "/tmp/$(basename "$FILE")"
 
-          # 创建 release 并上传
           if gh release view "$TAG" &>/dev/null; then
-            gh release upload "$TAG" "/tmp/$ASCII_NAME" --clobber
+            gh release upload "$TAG" "/tmp/$(basename "$FILE")" --clobber
           else
-            gh release create "$TAG" "/tmp/$ASCII_NAME" --title "$CN $VERSION" --notes "自动构建发布" ${IS_PR}
+            gh release create "$TAG" "/tmp/$(basename "$FILE")" \
+              --title "$CN $VERSION" \
+              --notes "自动构建发布" \
+              ${IS_PR}
           fi
 
-          # 备份到 Actions 构建产物（原始中文名）
-          rm "/tmp/$ASCII_NAME"
-
+      # ── workflow_dispatch 额外上传到 Actions 构建产物 ──────
       - name: Upload as artifact
         if: github.event_name == 'workflow_dispatch' && steps.artifact.outputs.path != ''
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.pkg.outputs.cn }}-${{ steps.parse.outputs.version }}
+          name: ${{ steps.config.outputs.packName }}-${{ steps.parse.outputs.version }}
           path: ${{ steps.artifact.outputs.path }}
