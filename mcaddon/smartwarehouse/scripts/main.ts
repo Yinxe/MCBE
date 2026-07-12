@@ -1,5 +1,6 @@
 import { system } from "@minecraft/server";
 import { registerAllCommands } from "./commands";
+import { registerChatCommands } from "./commands/chatCommands";
 import { registerToolInteraction } from "./interaction/ToolInteractionController";
 import { SlotOrganizer } from "./organize/SlotOrganizer";
 import { WarehouseRuntimeRegistry } from "./runtime/WarehouseRuntimeRegistry";
@@ -60,6 +61,9 @@ registerToolInteraction(repository, service, configStore);
 system.beforeEvents.startup.subscribe((event) => registerAllCommands(event, service, repository, configStore));
 
 boot.phase("事件与命令已注册");
+
+// Chat 命令回退（低版本 MC 无 customCommandRegistry 时的备选入口）
+registerChatCommands(repository, service, configStore);
 
 // ═══════════════════════════════════════════════════════════════════
 // Phase 4: 延迟启动（dynamicProperty 需要世界完全加载后才能访问）
