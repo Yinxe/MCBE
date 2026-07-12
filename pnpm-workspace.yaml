@@ -8,6 +8,8 @@ packages:
   - "apps/*"
   # addon projects (Minecraft behavior/resource packs)
   - "mcaddon/*"
+  # server plugins
+  - "server-plugin/*"
   # exclude test directories
   - "!**/test/**"
 allowBuilds:
