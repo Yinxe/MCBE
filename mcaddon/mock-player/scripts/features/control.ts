@@ -7,45 +7,35 @@ import { BotRecord } from "./core/types";
 import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, BOT_TAG, syncEntityTags } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
 import { getPlayerLookTarget } from "./core/utils";
+import { setTags } from "./setTags";
 
 export function toggleControl(record: BotRecord, player: Player): void {
   const hasControl = record.tags.includes(TAG_CONTROL.value);
+  let newTags: string[];
 
   if (hasControl) {
-    // 关闭控制
-    record.tags = record.tags.filter((t) => t !== TAG_CONTROL.value);
-    record.controllerId = undefined;
-
-    const hasExclusive = record.tags.some((t) => EXCLUSIVE_SET.has(t));
+    // 关闭控制：只移除 control，保留其他标签
+    newTags = record.tags.filter((t) => t !== TAG_CONTROL.value);
+    // 确保至少有一个互斥标签兜底
+    const hasExclusive = newTags.some((t) => EXCLUSIVE_SET.has(t));
     if (!hasExclusive) {
-      record.tags.push(TAG_IDLE.value);
+      newTags.push(TAG_IDLE.value);
     }
+    setTags(record, newTags);
   } else {
-    // 开启控制
-    record.tags = record.tags.filter((t) => !EXCLUSIVE_SET.has(t));
-    if (!record.tags.includes(TAG_CONTROL.value)) {
-      record.tags.push(TAG_CONTROL.value);
+    // 开启控制：移除所有互斥标签，设置 control
+    newTags = record.tags.filter((t) => !EXCLUSIVE_SET.has(t));
+    if (!newTags.includes(TAG_CONTROL.value)) {
+      newTags.push(TAG_CONTROL.value);
     }
-    record.controllerId = player.id;
+    setTags(record, newTags, player);
 
     // 立即同步一次体态
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
-      syncEntityTags(entity, record.tags);
       const lookTarget = getPlayerLookTarget(player);
       (entity as SimulatedPlayer).teleport(player.location, { rotation: player.getRotation() });
       (entity as SimulatedPlayer).lookAtLocation(lookTarget, LookDuration.Continuous);
     }
   }
-
-  // 同步标签到实体
-  if (record.online) {
-    const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-    if (entity && entity.hasTag(BOT_TAG)) {
-      syncEntityTags(entity, record.tags);
-    }
-  }
-
-  botRegistry.set(record.name, record);
-  saveBotRecord(record);
 }

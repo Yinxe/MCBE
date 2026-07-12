@@ -10,7 +10,7 @@
 
 import { world, PlayerSpawnAfterEvent } from "@minecraft/server";
 
-import { BOT_TAG } from "../features/core/tags";
+import { BOT_TAG, syncEntityTags } from "../features/core/tags";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
 
 export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
@@ -23,6 +23,11 @@ export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   console.warn(`[MockPlayer] 事件 playerSpawn(重生) ${record.name}`);
   record.death = false;
   record.online = true;
+
+  // 重生后实体可能重建，更新 entityId 并恢复标签
+  record.entityId = player.id;
+  syncEntityTags(player, record.tags);
+
   saveBotRecord(record);
   world.sendMessage(`§7[§a假人§7] §b${record.name} 重生了`);
 }

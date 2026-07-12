@@ -1,7 +1,8 @@
 import { world, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { TAG_RESPAWN, TAG_BOT, syncEntityTags } from "../features/core/tags";
+import { TAG_RESPAWN, TAG_BOT } from "../features/core/tags";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
+import { setTags } from "../features/setTags";
 import { getPlayerLookTarget } from "../features/core/utils";
 export function registerRespawnCommand(registry: any): void {
   defineCommand(registry, {
@@ -14,10 +15,13 @@ export function registerRespawnCommand(registry: any): void {
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
     const has = record.tags.includes(TAG_RESPAWN.value);
-    if (has) { record.tags = record.tags.filter(t => t !== TAG_RESPAWN.value); player.sendMessage(`§e假人 §e${record.name}§e 已关闭自动重生`); }
-    else { record.tags.push(TAG_RESPAWN.value); player.sendMessage(`§a假人 §e${record.name}§a 已开启自动重生`); }
-    if (record.online) { const e = record.entityId ? world.getEntity(record.entityId) : undefined; if (e) syncEntityTags(e, record.tags); }
-    botRegistry.set(record.name, record); saveBotRecord(record);
+    const newTags = has
+      ? record.tags.filter(t => t !== TAG_RESPAWN.value)
+      : [...record.tags, TAG_RESPAWN.value];
+    setTags(record, newTags);
+    player.sendMessage(has
+      ? `§e假人 §e${record.name}§e 已关闭自动重生`
+      : `§a假人 §e${record.name}§a 已开启自动重生`);
   });
 }
 

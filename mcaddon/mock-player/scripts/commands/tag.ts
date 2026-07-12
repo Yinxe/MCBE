@@ -1,7 +1,8 @@
-import { world, CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import { CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
-import { BOT_TAG, EXCLUSIVE_SET, getTagDef, resolveTag, buildTagListMessage, syncEntityTags } from "../features/core/tags";
-import { botRegistry, saveBotRecord } from "../features/core/persistence";
+import { BOT_TAG, EXCLUSIVE_SET, getTagDef, resolveTag, buildTagListMessage } from "../features/core/tags";
+import { botRegistry } from "../features/core/persistence";
+import { setTags } from "../features/setTags";
 
 /** /mp:tags — 列出所有可用标签（无需玩家身份，保持原生） */
 export function registerTagsCommand(registry: any): void {
@@ -47,10 +48,10 @@ export function registerTagCommand(registry: any): void {
     // ── add ──
     if (action === "add") {
       if (record.tags.includes(tagDef.value)) { player.sendMessage(`§e假人 §e${targetName}§e 已有标签 §e${tagDef.label}`); return; }
-      if (EXCLUSIVE_SET.has(tagDef.value)) record.tags = record.tags.filter(t => !EXCLUSIVE_SET.has(t));
-      record.tags.push(tagDef.value);
-      if (record.online) { const e = record.entityId ? world.getEntity(record.entityId) : undefined; if (e) syncEntityTags(e, record.tags); }
-      botRegistry.set(record.name, record); saveBotRecord(record);
+      const newTags = EXCLUSIVE_SET.has(tagDef.value)
+        ? [...record.tags.filter(t => !EXCLUSIVE_SET.has(t)), tagDef.value]
+        : [...record.tags, tagDef.value];
+      setTags(record, newTags);
       player.sendMessage(`§a已为假人 §e${targetName}§a 添加标签 §e${tagDef.label}`);
       return;
     }
@@ -58,9 +59,7 @@ export function registerTagCommand(registry: any): void {
     // ── remove ──
     if (action === "remove") {
       if (!record.tags.includes(tagDef.value)) { player.sendMessage(`§e假人 §e${targetName}§e 没有标签 §e${tagDef.label}`); return; }
-      record.tags = record.tags.filter(t => t !== tagDef.value);
-      if (record.online) { const e = record.entityId ? world.getEntity(record.entityId) : undefined; if (e) syncEntityTags(e, record.tags); }
-      botRegistry.set(record.name, record); saveBotRecord(record);
+      setTags(record, record.tags.filter(t => t !== tagDef.value));
       player.sendMessage(`§a已为假人 §e${targetName}§a 移除标签 §e${tagDef.label}`);
       return;
     }

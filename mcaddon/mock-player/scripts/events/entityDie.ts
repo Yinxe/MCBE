@@ -15,7 +15,7 @@ import { world, EntityDieAfterEvent } from "@minecraft/server";
 import { SimulatedPlayer, LookDuration } from "@minecraft/server-gametest";
 
 import { PositionState } from "../features/core/types";
-import { BOT_TAG, TAG_RESPAWN } from "../features/core/tags";
+import { BOT_TAG, TAG_RESPAWN, syncEntityTags } from "../features/core/tags";
 import { formatPos, formatDimensionId } from "../features/core/utils";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
 import { saveBotFullState } from "../features/saveState";
@@ -58,7 +58,11 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
       bot.isSneaking = record.isSneaking;
       bot.lookAtLocation(record.respawnPoint.lookTarget, LookDuration.Continuous);
 
-      // 复活后清空死亡状态
+      // 复活后更新 entityId 并恢复标签（死亡可能导致实体重建，标签丢失）
+      record.entityId = bot.id;
+      syncEntityTags(bot, record.tags);
+
+      // 清空死亡状态
       record.death = false;
       record.deathPoint = null;
       record.lastPoint = { ...record.respawnPoint };

@@ -2,6 +2,9 @@
 // 按标签驱动假人的自动行为，每个行为独立 runInterval 轮询
 // 同时承载位置/经验/装备的周期持久化（100tick ≈ 5秒）
 // 因为装备栏没有对应的事件，只能轮询兜底
+//
+// 互斥标签：autoMine / autoPlace / autoAttack / control / idle
+// 各行为通过实体标签查询筛选，确保互斥生效
 
 import { EntityEquippableComponent, Player, system, world } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
@@ -11,11 +14,10 @@ import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE,
 import { captureExperience, getPlayerLookTarget, serializeEquipment } from "./utils";
 
 // ─── 启动引擎 ──────────────────────────────────────────
-// world.getPlayers({ tags }) 的 tags 是 AND 逻辑
-// [BOT_TAG, 行为标签] 直接筛出有该行为标签的假人，无需在循环内做 tags.includes
+// 每个 runInterval 独立轮询，通过实体标签筛选确保互斥
 
 export function startTagBehaviors(): void {
-  // ─── 自动挖掘 ── 每 8 tick ───────────────────────────
+  // ─── 自动挖掘 ── 每 6 tick ───────────────────────────
   system.runInterval(() => {
     const bots = world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_MINE.value] });
     for (const bot of bots) {
@@ -26,7 +28,7 @@ export function startTagBehaviors(): void {
         if (hit) (bot as SimulatedPlayer).breakBlock(hit.block.location, hit.face);
       } catch (e: any) { console.warn(`[MockPlayer] 自动挖掘异常 ${bot.name}: ${e?.message ?? e}`); }
     }
-  }, 8);
+  }, 6);
 
   // ─── 自动攻击 ── 每 5 tick ───────────────────────────
   system.runInterval(() => {
@@ -67,23 +69,21 @@ export function startTagBehaviors(): void {
     }
   }, 2);
 
-  // ─── 自动放置管理 — 持续建造模式 ─────────────────────
-  // 有 TAG_AUTO_PLACE 时 startBuild，无标签时 stopBuild
-  const buildingBots: Set<string> = new Set();
+  // ─── 自动放置 ── 每 6 tick（与 autoMine 同频） ──────
+  // startBuild + stopBuild 背靠背 = 放置一个方块的一次性动作
+  // 执行前先 stopBreakingBlock 确保上个动作已清除
   system.runInterval(() => {
-    const bots = world.getPlayers({ tags: [BOT_TAG] });
+    const bots = world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_PLACE.value] });
     for (const bot of bots) {
-      const name = bot.name;
-      const record = botRegistry.get(name);
-      const hasTag = !!record?.tags.includes(TAG_AUTO_PLACE.value);
-      if (hasTag && !buildingBots.has(name)) {
+      const record = botRegistry.get(bot.name);
+      if (!record) continue;
+      try {
+        (bot as SimulatedPlayer).stopBreakingBlock();
         (bot as SimulatedPlayer).startBuild(0);
-        buildingBots.add(name);
-      } else if (!hasTag && buildingBots.delete(name)) {
         (bot as SimulatedPlayer).stopBuild();
-      }
+      } catch (e: any) { console.warn(`[MockPlayer] 自动放置异常 ${bot.name}: ${e?.message ?? e}`); }
     }
-  }, 10);
+  }, 6);
 
   // ─── 周期持久化 ── 每 100 tick ───────────────────────
   // 保存位置/经验/装备。背包由 playerInventoryItemChange 事件实时保存
@@ -113,4 +113,20 @@ export function startTagBehaviors(): void {
     }
     if (saved.length > 0) console.warn(`[MockPlayer] 周期保存 ${saved.join(",")}`);
   }, 100);
+
+  // ─── 状态清理 ── 每 40 tick ──────────────────────────
+  // 兜底：某些代码路径直接改标签但不清理 SimulatedPlayer 残留状态。
+  // 通过原生实体 tag 查询（Set.has O(1)），比查 record.tags 更高效。
+  system.runInterval(() => {
+    const mining = new Set(world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_MINE.value] }).map((p) => p.id));
+    const placing = new Set(world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_PLACE.value] }).map((p) => p.id));
+    for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
+      if (!mining.has(bot.id)) {
+        try { (bot as SimulatedPlayer).stopBreakingBlock(); } catch {}
+      }
+      if (!placing.has(bot.id)) {
+        try { (bot as SimulatedPlayer).stopBuild(); } catch {}
+      }
+    }
+  }, 40);
 }
