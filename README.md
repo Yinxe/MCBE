@@ -6,31 +6,35 @@
 
 ```
 mc/
-├── mcaddon/                # MCBE Addon 项目
+├── mcaddon/                # MCBE Addon 项目（TypeScript + 构建脚本）
 │   └── <name>/
 │       ├── BP/<Project>/   # 行为包（manifest.json）
-│       ├── RP/<Project>/   # 资源包（配置选）
+│       ├── RP/<Project>/   # 资源包（可选）
 │       ├── scripts/        # TypeScript 源码
-│       ├── tests/          # 测试（配置选）
-│       ├── tools/          # 工具（配置选）
+│       ├── tests/          # 测试（可选）
 │       ├── package.json
 │       ├── just.config.ts
 │       └── tsconfig.json
+├── server-plugin/          # 服务端插件（纯 JSON / 轻量 BP）
+│   └── <name>/
+│       ├── BP/<Project>/   # 行为包
+│       ├── scripts/        # 打包脚本（可选）
+│       └── package.json
 ├── packages/               # 共享库和工具包
 │   └── toolkit/            # @yinxe/toolkit — 共享构建工具
-├── apps/                   # 其他应用
 ├── pnpm-workspace.yaml
 └── package.json
 ```
 
 ## 包含的模组
 
-| 模组 | 目录 | 版本标签 |
+| 模组 | 目录 | 最新 tag |
 |------|------|---------|
-| MockPlayer | `mcaddon/mock-player/` | `mock-player@1.0.0`, `mock-player@1.0.6` |
+| MockPlayer | `mcaddon/mock-player/` | `mock-player@1.0.9` |
 | CraftableRarities | `mcaddon/craftablerarities/` | `craftablerarities@1.0.1` |
-| KeepINventory | `mcaddon/keepinventory/` | `keepinventory@1.0.0`, `keepinventory@2.0.0` |
-| SmartWarehouse | `mcaddon/smartwarehouse/` | `smartwarehouse@0.0.7` ~ `@0.0.55-beta` |
+| KeepINventory | `mcaddon/keepinventory/` | `keepinventory@2.0.0` |
+| SmartWarehouse | `mcaddon/smartwarehouse/` | `smartwarehouse@0.0.59` |
+| 反收纳袋刷物 | `server-plugin/antibundledup/` | `antibundledup@1.0.0` |
 
 ## 要求
 
@@ -43,17 +47,19 @@ mc/
 # 安装依赖
 pnpm install
 
-# 构建（TypeScript 编译 + esbuild 打包）
+# 构建（TypeScript 编译 + esbuild 打包，仅 mcaddon 项目需要）
 pnpm run build                   # 全部
-pnpm run build:mock-player       # 单个
+pnpm run build:mock-player
 pnpm run build:keepinventory
 pnpm run build:smartwarehouse
 
-# 打包（BP/RP → .mcpack / .mcaddon）
+# 同步版本并打包
+pnpm run pack                    # 全部打包
 pnpm run pack:mock-player
 pnpm run pack:keepinventory
 pnpm run pack:craftablerarities
 pnpm run pack:smartwarehouse
+pnpm run pack:antibundledup      # server-plugin 打包（无需 build 阶段）
 
 # 清理
 pnpm run clean
@@ -61,8 +67,8 @@ pnpm run clean
 # 同步版本（package.json → BP/RP manifest.json）
 pnpm run sync-version
 
-# 发布模组
-git tag mock-player@1.1.0
+# 发布模组（自动触发 CI 构建发布）
+git tag <name>@<version>
 git push --tags
 ```
 
