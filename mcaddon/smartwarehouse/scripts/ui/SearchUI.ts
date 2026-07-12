@@ -79,12 +79,12 @@ export async function showSearchUI(
   const form = new ModalFormBuilder()
     .title("容器搜索")
     .label("info", "§7输入物品名称搜索仓库中的容器\n支持输入物品 ID（minecraft:xxx）、英文名或中文名模糊搜索")
-    .textFieldWithPlaceholder("query", "§a搜索关键字", "输入物品名称…", { defaultValue: "" })
+    .textFieldWithPlaceholder("query", "§a搜索关键字", "输入物品名称…", { defaultValue: "", tooltip: "支持输入物品 ID（minecraft:xxx）、英文名或中文名" })
     .dropdown(
       "warehouse",
       "§a选择仓库",
       sortedWarehouses.map((sw) => `${sw.warehouse.displayName} §7(距离 ${Math.round(sw.distance)} 格)`),
-      { defaultValueIndex: 0 }
+      { defaultValueIndex: 0, tooltip: "选择要在哪个仓库中搜索物品（按距离排序）" }
     );
 
   const vals = await form.show(player);

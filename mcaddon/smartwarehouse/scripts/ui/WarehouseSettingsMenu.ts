@@ -90,15 +90,16 @@ export async function showWarehouseSettingsMenu(
   const form = new ModalFormBuilder()
     .title("仓库设置")
     .label("info", statsLabel)
-    .textFieldWithPlaceholder("name", "仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName })
-    .dropdown("defaultRole", "默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex) })
+    .textFieldWithPlaceholder("name", "仓库名称", "输入仓库名称...", { defaultValue: warehouse.displayName, tooltip: "修改仓库的显示名称" })
+    .dropdown("defaultRole", "默认新容器角色", roleLabels, { defaultValueIndex: Math.max(0, defaultRoleIndex), tooltip: "后续新增容器的默认角色" })
     .dropdown("defaultEnabled", "新容器默认启用", ["是", "否"], {
       defaultValueIndex: settings.defaultNewContainerEnabled ? 0 : 1,
+      tooltip: "后续新增容器默认是否参与分拣",
     })
-    .dropdown("speed", "处理速度", speedLabels, { defaultValueIndex: Math.max(0, defaultSpeedIndex) })
-    .toggle("autoCreate", "自动创建分类", { defaultValue: settings.autoCreateCategories })
-    .toggle("warehouseEnabled", "启用仓库", { defaultValue: settings.enabled })
-    .toggle("showBoundary", "显示边界光幕", { defaultValue: settings.showBoundary })
+    .dropdown("speed", "处理速度", speedLabels, { defaultValueIndex: Math.max(0, defaultSpeedIndex), tooltip: "分拣引擎每轮执行的间隔（tick），间隔越小越快" })
+    .toggle("autoCreate", "自动创建分类", { defaultValue: settings.autoCreateCategories, tooltip: "在杂项中按物品类型自动创建新分类以保持整齐" })
+    .toggle("warehouseEnabled", "启用仓库", { defaultValue: settings.enabled, tooltip: "关闭后该仓库暂停所有分拣操作，数据保留" })
+    .toggle("showBoundary", "显示边界光幕", { defaultValue: settings.showBoundary, tooltip: "在仓库区域边缘显示彩色粒子边界，方便查看范围" })
     .slider(
       "autoSortThreshold",
       "§7自动整理混乱度阈值\n" +
@@ -106,9 +107,9 @@ export async function showWarehouseSettingsMenu(
         "§c0每次整理  §a20敏感  §a40适中  §e60宽松  §c100永不\n§b混乱度:§4",
       0,
       100,
-      { defaultValue: settings.autoSortThreshold, valueStep: 20 }
+      { defaultValue: settings.autoSortThreshold, valueStep: 20, tooltip: "混乱度超过此阈值时自动触发整理，数值越低越频繁" }
     )
-    .toggle("capacityWarning", "§e容量预警", { defaultValue: settings.capacityWarning })
+    .toggle("capacityWarning", "§e容量预警", { defaultValue: settings.capacityWarning, tooltip: "仓库总容量达到 80%/90%/95% 时向管理员发送预警消息" })
     .label("opSep", "§8━━━ 操作 ━━━")
     .toggle("rescan", "§a刷新容器（重新扫描仓库容器列表）")
     .toggle("repair", "§6修复仓库（检查并修复仓库数据完整性）")

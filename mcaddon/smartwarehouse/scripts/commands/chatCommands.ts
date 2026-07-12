@@ -11,6 +11,7 @@ import type { WarehouseService } from "../warehouse/WarehouseService";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { ModConfigStore } from "../storage/ModConfigStore";
 import { showMainMenu } from "../ui/MainMenu";
+import { showHelpGuide } from "../ui/HelpGuide";
 import { Logger } from "../util/Logger";
 
 const log = new Logger("ChatCommands");
@@ -61,7 +62,15 @@ export function registerChatCommands(
         });
       });
     }
+
+    // 匹配 /sw:help 命令
+    if (/^\/sw:help\s*$/i.test(msg)) {
+      event.cancel = true;
+      system.run(() => {
+        showHelpGuide(player);
+      });
+    }
   });
 
-  log.info("chat 命令回退已注册（/sw:menu）");
+  log.info("chat 命令回退已注册（/sw:menu, /sw:help）");
 }

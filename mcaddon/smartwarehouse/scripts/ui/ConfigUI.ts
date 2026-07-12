@@ -42,6 +42,7 @@ async function showModalConfig(player: Player, configStore: ModConfigStore): Pro
       TOKEN_OPTIONS.map((o) => o.label),
       {
         defaultValueIndex: Math.max(0, tokenIdx),
+        tooltip: "手持此物品右键方块来选择仓库区域或打开菜单",
       }
     )
     .dropdown(
@@ -50,6 +51,7 @@ async function showModalConfig(player: Player, configStore: ModConfigStore): Pro
       VOLUME_OPTIONS.map((o) => o.label),
       {
         defaultValueIndex: Math.max(0, volIdx),
+        tooltip: "限制单个仓库的最大体积（方块数），超出后无法添加新容器",
       }
     )
     .dropdown(
@@ -58,15 +60,17 @@ async function showModalConfig(player: Player, configStore: ModConfigStore): Pro
       CONTAINER_OPTIONS.map((o) => o.label),
       {
         defaultValueIndex: Math.max(0, conIdx),
+        tooltip: "限制每个仓库中最多可注册的容器数量",
       }
     )
-    .slider("maxWarehouses", "§a每玩家最多仓库数", 1, 5, { defaultValue: config.maxWarehousesPerPlayer })
+    .slider("maxWarehouses", "§a每玩家最多仓库数", 1, 5, { defaultValue: config.maxWarehousesPerPlayer, tooltip: "限制每个玩家可创建的仓库最大数量" })
     .dropdown(
       "speedLimit",
       "§a全局处理速度最快限制",
       GLOBAL_SPEED_OPTIONS.map((o) => o.label),
       {
         defaultValueIndex: Math.max(0, speedIdx),
+        tooltip: "限制全服所有仓库的最高处理速度（tick），空值不限",
       }
     )
     .show(player);

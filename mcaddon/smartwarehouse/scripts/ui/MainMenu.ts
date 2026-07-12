@@ -5,6 +5,8 @@ import { showWarehouseManageMenu } from "./WarehouseManageMenu";
 import { showSearchUI } from "./SearchUI";
 import { showConfigUI } from "./ConfigUI";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
+import { showHelpGuide } from "./HelpGuide";
+import { tryShowNewPlayerGuide } from "./NewPlayerGuide";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import type { ModConfigStore } from "../storage/ModConfigStore";
@@ -35,6 +37,9 @@ export async function showMainMenu(
 ): Promise<void> {
   const isAdmin = canManageWarehouse(player);
 
+  // 首次使用 → 显示新手引导
+  tryShowNewPlayerGuide(player);
+
   const form = new ActionFormBuilder()
     .title("SmartWarehouse")
     .body("选择一个操作")
@@ -58,7 +63,8 @@ export async function showMainMenu(
       }
     })
     .button("仓库列表", () => showWarehouseManageMenu(player, repository, service, configStore))
-    .button("创建仓库", () => showWarehouseCreateForm(player));
+    .button("创建仓库", () => showWarehouseCreateForm(player))
+    .button("§e❓ 帮助", () => showHelpGuide(player));
 
   if (isAdmin) {
     form.button("§e⚙ 设置", () => showConfigUI(player, configStore));

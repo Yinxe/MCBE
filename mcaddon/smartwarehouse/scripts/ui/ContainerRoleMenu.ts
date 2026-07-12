@@ -223,16 +223,16 @@ export async function showContainerRoleMenu(
   const form = new ModalFormBuilder()
     .title("容器设置")
     .label("info", infoHeader(container.enabled ? "§a" : "§c", container.enabled ? "已启用" : "已禁用"))
-    .toggle("enabled", "启用容器", { defaultValue: container.enabled });
+    .toggle("enabled", "启用容器", { defaultValue: container.enabled, tooltip: "开启后该容器参与分拣，关闭后跳过" });
 
   if (isHopper) {
     form.label("hopperHint", "§8§o此容器是漏斗，只能作为输入容器使用。");
   } else {
-    form.dropdown("role", "容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0 });
+    form.dropdown("role", "容器角色", roleOptions, { defaultValueIndex: currentRoleIndex >= 0 ? currentRoleIndex : 0, tooltip: "角色决定容器在分拣中的功能（如输入/大宗/杂项）" });
   }
 
   form
-    .toggle("capacityWarning", "§e容量预警", { defaultValue: container.capacityWarningEnabled })
+    .toggle("capacityWarning", "§e容量预警", { defaultValue: container.capacityWarningEnabled, tooltip: "容器容量达到 80%/90%/95% 时向玩家发送预警消息" })
     .toggle("organize", "§e立即整理（按物品 ID 排序合并）");
 
   const vals = await form.show(player);

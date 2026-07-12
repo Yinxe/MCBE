@@ -14,6 +14,7 @@ import { registerRescanPreview } from "./rescanPreview";
 import { registerOrganize } from "./organize";
 import { registerMenu } from "./menu";
 import { registerSearch } from "./search";
+import { registerHelpCommand } from "./help";
 
 export function registerAllCommands(
   event: StartupEvent,
@@ -31,4 +32,5 @@ export function registerAllCommands(
   registerOrganize(registry);
   registerMenu(registry, service, repository, configStore);
   registerSearch(registry, repository, configStore);
+  registerHelpCommand(registry);
 }
