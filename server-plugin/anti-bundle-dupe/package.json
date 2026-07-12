@@ -1,0 +1,14 @@
+{
+  "name": "antibundledup",
+  "version": "1.0.0",
+  "productName": "反收纳袋刷物",
+  "description": "将收纳袋改为可食用食物，防止收纳袋刷物漏洞",
+  "private": true,
+  "scripts": {
+    "build": "node ../../packages/toolkit/bin/sync-version.mjs .",
+    "pack": "node scripts/pack.mjs"
+  },
+  "mcbe": {
+    "bpDir": "BundleAntiDupe"
+  }
+}
