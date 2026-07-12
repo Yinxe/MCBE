@@ -4,11 +4,15 @@
 
 ```
 mc/
-├── mcaddon/<name>/       # MCBE Addon 项目
+├── mcaddon/<name>/       # MCBE Addon 项目（TypeScript + 构建脚本）
 │   ├── BP/<Project>/     # 行为包（manifest.json）
 │   ├── RP/<Project>/     # 资源包（可选）
 │   ├── scripts/          # TypeScript 源码
 │   ├── just.config.ts    # 构建配置
+│   └── package.json      # 独立版本号
+├── server-plugin/<name>/ # 服务端插件（纯 JSON / 轻量 BP）
+│   ├── BP/<Project>/     # 行为包
+│   ├── scripts/          # 打包脚本（可选）
 │   └── package.json      # 独立版本号
 ├── packages/toolkit/     # @yinxe/toolkit — 共享构建工具
 └── package.json          # 根 workspace
