@@ -18,7 +18,7 @@ import { runVaultCycle } from "../vaultMode";
 // 每个 runInterval 独立轮询，通过实体标签筛选确保互斥
 
 export function startTagBehaviors(): void {
-  // ─── 自动挖掘 ── 每 6 tick ───────────────────────────
+  // ─── 自动挖掘 ── 每 1 tick ───────────────────────────
   system.runInterval(() => {
     const bots = world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_MINE.value] });
     for (const bot of bots) {
@@ -29,9 +29,9 @@ export function startTagBehaviors(): void {
         if (hit) (bot as SimulatedPlayer).breakBlock(hit.block.location, hit.face);
       } catch (e: any) { console.warn(`[MockPlayer] 自动挖掘异常 ${bot.name}: ${e?.message ?? e}`); }
     }
-  }, 6);
+  }, 1);
 
-  // ─── 自动攻击 ── 每 5 tick ───────────────────────────
+  // ─── 自动攻击 ── 每 1 tick ───────────────────────────
   system.runInterval(() => {
     const bots = world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_ATTACK.value] });
     for (const bot of bots) {
@@ -39,7 +39,7 @@ export function startTagBehaviors(): void {
       if (!record) continue;
       try { (bot as SimulatedPlayer).attack(); } catch (e: any) { console.warn(`[MockPlayer] 自动攻击异常 ${bot.name}: ${e?.message ?? e}`); }
     }
-  }, 5);
+  }, 3);
 
   // ─── 自动跳跃 ── 每 3 tick ───────────────────────────
   system.runInterval(() => {
@@ -70,7 +70,7 @@ export function startTagBehaviors(): void {
     }
   }, 2);
 
-  // ─── 自动放置 ── 每 6 tick（与 autoMine 同频） ──────
+  // ─── 自动放置 ── 每 5 tick（与 autoMine 同频） ──────
   // startBuild + stopBuild 背靠背 = 放置一个方块的一次性动作
   // 执行前先 stopBreakingBlock 确保上个动作已清除
   system.runInterval(() => {
@@ -84,9 +84,9 @@ export function startTagBehaviors(): void {
         (bot as SimulatedPlayer).stopBuild();
       } catch (e: any) { console.warn(`[MockPlayer] 自动放置异常 ${bot.name}: ${e?.message ?? e}`); }
     }
-  }, 6);
+  }, 5);
 
-  // ─── 使用物品 ── 每 8 tick ───────────────────────────
+  // ─── 使用物品 ── 每 10 tick ───────────────────────────
   // interact() = 右键单击，返回 boolean 表示交互是否执行
   system.runInterval(() => {
     const bots = world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_USE.value] });
@@ -97,7 +97,7 @@ export function startTagBehaviors(): void {
         (bot as SimulatedPlayer).interact();
       } catch (e: any) { console.warn(`[MockPlayer] 使用物品异常 ${bot.name}: ${e?.message ?? e}`); }
     }
-  }, 8);
+  }, 10);
 
   // ─── 宝库模式 ── 每 10 tick ──────────────────────────
   system.runInterval(() => {
