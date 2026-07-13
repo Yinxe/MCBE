@@ -38,3 +38,10 @@ _遇到问题持续增加踩坑记录_
 - **`saveBotFullState` 改了 `record.experience` 后必须调 `saveBotRecord`**：经验值存在 `BotRecord` 中，修改后不保存不会持久化。其他模块同理——任何对 `record` 对象的修改后都需要显式调用 `saveBotRecord`。
 - **背包持久化避免 32KB 上限使用每格独立 key**：单条 DynamicProperty 上限约 32KB。一个装满潜影盒的背包（36格 × 27格子物品）远超此限制。每格独立 key（`<name>:inv:<slot>`）彻底规避此问题。
 - **`ItemStack.getComponent("minecraft:inventory")` 运行时对原版潜影盒/收纳袋返回 `undefined`**：类型定义中有 `ItemInventoryComponent`（componentId `"minecraft:inventory"`），但运行时只对自定义 BP 物品（含 `minecraft:storage_item` 组件）生效。原版潜影盒/收纳袋的内部物品 Script API 无法读取、无法序列化，重启后内容丢失。解决方向：`structureManager.createFromWorld` 对特殊物品做结构快照存储（`scripts/lib/ItemStorage.ts`），绕过 Script API 序列化限制直接由引擎保留完整 NBT。目前因时间原因未实装，等待 Mojang 修复或后续实现 ItemStorage 模块。
+- **GameTest `test.spawnSimulatedPlayer()` 锁定实体旋转，外部 teleport/lookAtLocation 不生效**：
+  通过 `test.spawnSimulatedPlayer()` 创建的 SimulatedPlayer 归 GameTest 系统管理。GameTest 每 tick 重置实体的旋转为默认值（`0°/-135°`），外部调用的 `bot.teleport({rotation})` 和 `bot.lookAtLocation()` 虽然执行成功，但下个 tick 被拉回默认。表现：扭头/控制模式一瞬生效然后弹回、控制模式疯狂点头。
+  模块级 `spawnSimulatedPlayer`（从 `@minecraft/server-gametest` 直接导入的独立函数，不在 GameTest.register 回调中）创建的实体不受此限制，体态完全可控。
+  **结论：GameTest 的 chunk ticket 机制与 SimulatedPlayer 的外部体态控制互斥，不可兼得。要常加载只能用 TickingArea。**
+- **GameTest startup 会篡改游戏规则**：注册的 GameTest 启动后自动关闭生物生成（`doMobSpawning`）、锁定昼夜循环（`doDayLightCycle`）、重置随机刻速度（`randomTickSpeed`）。必须在 register 回调中手动恢复。FlashFakePlayerPack 的做法是保存初始规则值，在 register 回调中写回。
+- **GameTest `world.structureManager` / `world.gameRules` 在 worldLoad 回调期内不可访问**：`world.afterEvents.worldLoad` 订阅的回调仍处于 early-execution 模式，`structureManager.get()` 和 `gameRules.*` 会抛 "cannot be used in early execution"。必须在 `system.run()` 中延迟到下一 tick 执行。
+- **`@minecraft/server-gametest` 版本兼容性**：`1.0.0-beta` 和 `2.0.0-alpha` 是互斥的版本，不能混合声明。`2.0.0-alpha` 依赖 `@minecraft/server@3.0.0-alpha`，`1.0.0-beta` 依赖 `@minecraft/server@2.x`。manifest 中所有依赖必须使用同一代际的版本，否则游戏内报 "version conflict for module [@minecraft/server]"。
