@@ -1,14 +1,14 @@
 // ─── 体态操作（核心层） ────────────────────────────────
-// 给假人设置朝向/视线，不依赖上层模块。
-// setPose/lookAt 被 spawn/teleport/control/behavior 共用。
+// 包含底层体态操作、视角计算、数据持久化，无上层业务依赖。
 
-import { TeleportOptions, Vector2, Vector3 } from "@minecraft/server";
+import { Player, TeleportOptions, Vector2, Vector3 } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
-/**
- * 设置假人朝向（body yaw + head pitch）
- * 不延迟，直接执行
- */
+import type { BotRecord } from "./types";
+
+// ─── 底层体态操作 ──────────────────────────────────────
+
+/** 设置假人朝向（body yaw + head pitch） */
 export function setPose(
   bot: SimulatedPlayer,
   rotation: Vector2,
@@ -19,12 +19,55 @@ export function setPose(
   bot.teleport(bot.location, opts);
 }
 
-/**
- * 扭头：仅头部转向固定坐标点，身体不动
- */
+/** 扭头：仅头部转向固定坐标点，身体不动 */
 export function lookAt(
   bot: SimulatedPlayer,
   target: Vector3,
 ): void {
   bot.lookAtLocation(target, LookDuration.Continuous);
+}
+
+// ─── 视角计算 ──────────────────────────────────────────
+
+function rotationToDirection(rotation: Vector2): Vector3 {
+  const pitchRad = (rotation.x * Math.PI) / 180;
+  const yawRad = (rotation.y * Math.PI) / 180;
+  return {
+    x: -Math.sin(yawRad) * Math.cos(pitchRad),
+    y: -Math.sin(pitchRad),
+    z: Math.cos(yawRad) * Math.cos(pitchRad),
+  };
+}
+
+/** 计算玩家当前看向的目标点 */
+export function getPlayerLookTarget(player: Player, maxDistance: number = 64): Vector3 {
+  const hit = player.getBlockFromViewDirection({ maxDistance });
+  if (hit) {
+    const b = hit.block;
+    return { x: b.location.x + 0.5, y: b.location.y + 0.5, z: b.location.z + 0.5 };
+  }
+  const head = player.getHeadLocation();
+  const dir = rotationToDirection(player.getRotation());
+  return {
+    x: head.x + dir.x * maxDistance,
+    y: head.y + dir.y * maxDistance,
+    z: head.z + dir.z * maxDistance,
+  };
+}
+
+// ─── 持久化 ────────────────────────────────────────────
+
+/** 统一入口：将体态数据持久化到 BotRecord.lastPoint */
+export function savePoseToRecord(
+  record: BotRecord,
+  location?: Vector3,
+  dimension?: string,
+  rotation?: Vector2,
+  lookTarget?: Vector3,
+): void {
+  if (!record.lastPoint) return;
+  if (location) record.lastPoint.location = location;
+  if (dimension) record.lastPoint.dimension = dimension;
+  if (rotation) record.lastPoint.rotation = rotation;
+  if (lookTarget !== undefined) record.lastPoint.lookTarget = lookTarget;
 }

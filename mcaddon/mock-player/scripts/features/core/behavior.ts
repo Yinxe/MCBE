@@ -13,8 +13,7 @@ import { botRegistry, isBotRestored, saveBotEquipment, saveBotRecord } from "./p
 import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_USE, TAG_CONTROL, TAG_VAULT_MODE } from "./tags";
 import { captureExperience, serializeEquipment } from "./utils";
 import { runVaultCycle } from "../vaultMode";
-import { setPose } from "./pose";
-import { getPlayerLookTarget, savePoseToRecord } from "../bodyPose";
+import { setPose, getPlayerLookTarget, savePoseToRecord } from "./pose";
 
 // ─── 启动引擎 ──────────────────────────────────────────
 // 每个 runInterval 独立轮询，通过实体标签筛选确保互斥
