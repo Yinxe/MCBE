@@ -7,10 +7,27 @@ import { BotRecord } from "../features/core/types";
 import { getTagDef } from "../features/core/tags";
 import { formatPos, formatDimensionId, serializeItemStack, getTotalXpForLevels } from "../features/core/utils";
 import { botRegistry, loadBotInventory } from "../features/core/persistence";
+import { isGameTestReady, isChunkLoaded } from "../features/core/gametestContext";
 
 export function sendData(player: Player, record: BotRecord): void {
   const lines: string[] = [];
   lines.push(`§6===== §e${record.name} §6数据总览 =====`);
+
+  // ── GameTest / 区块加载 ──
+  const gtReady = isGameTestReady();
+  lines.push(`§7GameTest: ${gtReady ? "§a就绪" : "§c未就绪"}`);
+
+  // 根据记录的最后位置检测区块加载状态（未上线的假人取重生点）
+  const checkPos = record.lastPoint ?? record.respawnPoint;
+  if (checkPos) {
+    try {
+      const dim = world.getDimension(checkPos.dimension);
+      const loaded = isChunkLoaded(dim, checkPos.location);
+      lines.push(`§7区块(${formatDimensionId(checkPos.dimension)} ${formatPos(checkPos.location)}): ${loaded ? "§a已加载" : "§c未加载"}`);
+    } catch {
+      lines.push(`§7区块: §c检测失败`);
+    }
+  }
 
   // ── 基础信息 ──
   const status = record.death ? "§c死亡" : record.online ? "§a在线" : "§7离线";
@@ -43,6 +60,18 @@ export function sendData(player: Player, record: BotRecord): void {
   if (record.online && record.entityId) {
     const bot = world.getEntity(record.entityId) as Player | undefined;
     if (bot) {
+      // ── 身位/视角 ──
+      const rot = bot.getRotation();
+      lines.push(`§7身位俯仰/偏航: §f${Math.floor(rot.x)}° §7/ §f${Math.floor(rot.y)}°`);
+      try {
+        const hit = (bot as any).getBlockFromViewDirection?.({ maxDistance: 64 });
+        if (hit) {
+          const b = hit.block;
+          lines.push(`§7视角方块: §f${b.typeId} §7@ ${formatPos(b.location)}`);
+        } else {
+          lines.push(`§7视角方块: §7无`);
+        }
+      } catch { lines.push(`§7视角方块: §c获取失败`); }
       // 装备
       const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
       if (equip) {

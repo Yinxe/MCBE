@@ -5,7 +5,8 @@ import { ModalFormBuilder } from "@yinxe/toolkit/ui";
 
 import { PositionState } from "../features/core/types";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../features/core/tags";
-import { getPlayerLookTarget, parseCoordinateInput } from "../features/core/utils";
+import { parseCoordinateInput } from "../features/core/utils";
+import { getPlayerLookTarget } from "../features/bodyPose";
 import { generateBotName } from "../features/core/persistence";
 import { createBot } from "../features/createBot";
 

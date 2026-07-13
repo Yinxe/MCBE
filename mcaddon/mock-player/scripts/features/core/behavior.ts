@@ -7,12 +7,13 @@
 // 各行为通过实体标签查询筛选，确保互斥生效
 
 import { EntityEquippableComponent, Player, system, world } from "@minecraft/server";
-import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
+import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, isBotRestored, saveBotEquipment, saveBotRecord } from "./persistence";
 import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_USE, TAG_CONTROL, TAG_VAULT_MODE } from "./tags";
-import { captureExperience, getPlayerLookTarget, serializeEquipment } from "./utils";
+import { captureExperience, serializeEquipment } from "./utils";
 import { runVaultCycle } from "../vaultMode";
+import { setPose, getPlayerLookTarget } from "../bodyPose";
 
 // ─── 启动引擎 ──────────────────────────────────────────
 // 每个 runInterval 独立轮询，通过实体标签筛选确保互斥
@@ -62,8 +63,8 @@ export function startTagBehaviors(): void {
         if (!controller) continue;
         const playerRot = (controller as Player).getRotation();
         const lookTarget = getPlayerLookTarget(controller as Player);
-        (bot as SimulatedPlayer).teleport(controller.location, { rotation: playerRot });
-        (bot as SimulatedPlayer).lookAtLocation(lookTarget, LookDuration.Continuous);
+        (bot as SimulatedPlayer).teleport(controller.location, { dimension: controller.dimension });
+        setPose(bot as SimulatedPlayer, playerRot, lookTarget);
         (bot as SimulatedPlayer).isSneaking = (controller as Player).isSneaking;
         record.isSneaking = (bot as SimulatedPlayer).isSneaking;
       } catch (e: any) { console.warn(`[MockPlayer] 体态控制异常 ${bot.name}: ${e?.message ?? e}`); }

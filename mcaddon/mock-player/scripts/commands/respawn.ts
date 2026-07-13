@@ -3,7 +3,7 @@ import { defineCommand } from "@yinxe/toolkit/command";
 import { TAG_RESPAWN, TAG_BOT } from "../features/core/tags";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
-import { getPlayerLookTarget } from "../features/core/utils";
+import { getPlayerLookTarget } from "../features/bodyPose";
 export function registerRespawnCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:respawn", description: "切换假人的自动重生标签",

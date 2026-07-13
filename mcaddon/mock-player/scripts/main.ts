@@ -8,12 +8,12 @@
 // 所有事件订阅委托给 events/index.ts 的 registerAllEvents()
 // main.ts 保持最小职责：只做初始化编排，不塞业务逻辑
 
-import { world, system } from "@minecraft/server";
+import { system, world } from "@minecraft/server";
 
 import { registerAllCommands } from "./commands/index";
 import { registerAllEvents } from "./events/index";
-import { botRegistry, saveBotRecord, loadAllBotRecords } from "./features/core/persistence";
 import { startTagBehaviors } from "./features/core/behavior";
+import { botRegistry, loadAllBotRecords, saveBotRecord } from "./features/core/persistence";
 
 // ─── 命令注册（early-execution mode） ─────────────────────
 // customCommandRegistry 不在 world 上，而是在 StartupEvent 上
@@ -43,6 +43,8 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 同时启动 100tick 周期持久化（位置/经验/装备栏）
   console.warn(`[MockPlayer] 启动引擎`);
   startTagBehaviors();
+
+
 
   // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
   console.warn(`[MockPlayer] 注册事件`);

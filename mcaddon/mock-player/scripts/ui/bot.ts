@@ -1,7 +1,7 @@
-// ─── 统一假人操作面板（v2） ──────────────────────────
-// 按用户需求重新排序：扭头 → 移动 → 互换主手 → 互换装备（含副手）
-// → 互换背包 → 回收资源 → 改名 → 上线/离线 → 潜行 → 控制模式
-// → 标签 → 设置重生点 → 传送到假人(TPA) → 查看数据 → 杀死 → 删除 → 返回列表
+// ─── 统一假人操作面板（v3） ──────────────────────────
+// 简化主菜单：行为标签、在线/潜行/控制等集中在
+// showTagManagement 模态表单中统一管理。
+// 主菜单保留移动/物品/回收/传送等直接操作。
 //
 // 已弃用功能移除此面板：
 //   - 一键卸甲（合并至回收资源）
@@ -10,12 +10,13 @@
 //   - 互换副手（合并至互换装备，SWAP_SLOTS 已含 Offhand）
 
 import { Player, system, world } from "@minecraft/server";
-import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
+import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit/ui";
 
 import { BotRecord, DP_PREFIX } from "../features/core/types";
-import { TAG_CONTROL, BOT_TAG, getTagDef } from "../features/core/tags";
-import { formatPos, formatDimensionId, serializeContainer, getPlayerLookTarget } from "../features/core/utils";
+import { BOT_TAG, getTagDef } from "../features/core/tags";
+import { formatPos, formatDimensionId, serializeContainer } from "../features/core/utils";
+import { getPlayerLookTarget } from "../features/bodyPose";
 import {
   botRegistry, saveBotRecord, saveBotInventory,
   isBotRestored, markBotRestored, removeBotRestored,
@@ -36,6 +37,7 @@ import { offlineBot } from "../features/offlineBot";
 import { confirmDelete } from "./move";
 import { showTagManagement } from "./tags";
 import { sendData } from "../commands/data";
+import { lookAt } from "../features/bodyPose";
 
 // ─── 工具 ──────────────────────────────────────────────
 
@@ -83,7 +85,7 @@ function equip(player: Player, botName: string, fn: (p: Player, b: Player) => vo
   system.run(() => { try { fn(player, bot); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
 }
 
-// ─── 统一假人操作面板 ────────────────────────────────
+// ─── 统一假人操作面板（v3） ──────────────────────────
 
 export function showBotPanel(player: Player, botName: string, onBack?: () => void): void {
   const record = botRegistry.get(botName);
@@ -93,13 +95,17 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
   const tagStr = tagLabels.length > 0 ? `\n§7标签: §b${tagLabels.join(" §7| §b")}` : "";
   const expStr = record.experience ? `\n§7经验: §bLv.${record.experience.level} §7(${record.experience.totalXp} XP)` : "";
 
-  const hasControl = record.tags.includes(TAG_CONTROL.value);
-
   new ActionFormBuilder()
     .title(`§l${botName} ${getStatusIcon(record)}`)
     .body(`${getPosSummary(record)}${tagStr}${expStr}`)
     // ── 扭头 ──
-    .button("§a扭头", () => doLookAtPlayer(player, botName))
+    .button("§a扭头", () => {
+      const r = botRegistry.get(botName);
+      if (!r || !resolveBotEntity(r)) { player.sendMessage("§c假人不在线或已死亡"); return; }
+      const bot = resolveBotEntity(r)!;
+      lookAt(bot as SimulatedPlayer, player.getHeadLocation());
+      player.sendMessage(`§a§e${botName}§a 正在持续看向你所在的位置`);
+    })
     // ── 移动（同步姿态） ──
     .button("§6移动（同步姿态）", () => requireActive(player, botName, (r) => {
       system.run(() => { try { tpBotToPlayer(r, player); player.sendMessage(`§a已将 §e${botName}§a 移动到身边，同步姿态`); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
@@ -110,23 +116,12 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     .button("§5互换背包", () => requireActive(player, botName, (_) => doSwapInventory(player, botName)))
     .button("§e回收资源", () => doReclaim(player, botName))
     .button("§e改名", () => doRename(player, botName))
-    // ── 状态 ──
-    .button(record.online ? "§b下线" : "§b上线", () => toggleOnline(player, botName))
-    .button(record.isSneaking ? "§b潜行 §a[开]" : "§b潜行 §7[关]", () => requireActive(player, botName, (r) => {
-      setSneaking(r, !r.isSneaking);
-      player.sendMessage(r.isSneaking ? `§a§e${botName}§a 已潜行` : `§a§e${botName}§a 已站起`);
-    }))
-    .button(hasControl ? "§b控制模式 §a[开]" : "§b控制模式 §7[关]", () => requireActive(player, botName, (r) => {
-      toggleControl(r, player);
-      player.sendMessage(r.tags.includes(TAG_CONTROL.value) ? `§a已开启 §e${botName}§a 控制模式` : `§a已关闭 §e${botName}§a 控制模式`);
-    }))
+    // ── 行为 ──
+    .button("§b行为标签", () => showTagManagement(player, botName))
     // ── 设置 ──
-    .button("§d行为标签", () => showTagManagement(player, botName))
     .button("§a设置重生点", () => updateSpawn(player, botName))
     // ── 其他 ──
-    .button("§8传送到假人 (TPA)", () => requireActive(player, botName, (r) => {
-      system.run(() => { try { tpPlayerToBot(player, r); player.sendMessage(`§a已传送到 §e${botName}§a 身边`); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
-    }))
+    .button("§8传送到假人", () => tpToBot(player, botName))
     .button("§d查看数据", () => { const r = botRegistry.get(botName); if (r) sendData(player, r); })
     // ── 危险 ──
     .button("§4杀死", () => requireActive(player, botName, (r) => {
@@ -175,23 +170,8 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
 // ─── 操作实现 ──────────────────────────────────────────
 
 /**
- * 扭头：使假人持续看向玩家当时头部的坐标
- * 使用 LookDuration.Continuous 持续追踪固定点
+ * 互换背包：与玩家完全交换所有背包格子（0-35，含快捷栏）
  */
-function doLookAtPlayer(player: Player, botName: string): void {
-  const r = botRegistry.get(botName);
-  if (!r || !isActive(r)) { player.sendMessage("§c模拟玩家不在线或已死亡"); return; }
-  const entity = r.entityId ? world.getEntity(r.entityId) : undefined;
-  if (!entity || !entity.hasTag(BOT_TAG)) { player.sendMessage("§c无法获取假人实体"); return; }
-  system.run(() => {
-    try {
-      (entity as SimulatedPlayer).lookAtLocation(player.getHeadLocation(), LookDuration.Continuous);
-      player.sendMessage(`§a§e${botName}§a 正在持续看向你`);
-    } catch (e: any) { player.sendMessage(`§c扭头失败: ${e.message}`); }
-  });
-}
-
-/** 互换背包：与玩家完全交换所有背包格子（0-35，含快捷栏） */
 function doSwapInventory(player: Player, botName: string): void {
   const r = botRegistry.get(botName);
   if (!r || !isActive(r)) { player.sendMessage("§c假人不在线或已死亡"); return; }
@@ -305,6 +285,32 @@ function toggleOnline(player: Player, botName: string): void {
       } else {
         onlineBot(r);
         player.sendMessage(`§a§e${botName}§a 已上线`);
+      }
+    } catch (e: any) { player.sendMessage(`§c${e.message}`); }
+  });
+}
+
+/**
+ * 传送到假人（TPA）：若假人未上线则先上线再传送
+ */
+function tpToBot(player: Player, botName: string): void {
+  const r = botRegistry.get(botName);
+  if (!r) { player.sendMessage(`§c模拟玩家 §e${botName}§c 已不存在`); return; }
+
+  system.run(() => {
+    try {
+      if (!r.online || r.death) {
+        // 先上线
+        onlineBot(r);
+        player.sendMessage(`§a§e${botName}§a 已上线`);
+        // 等 1 tick 让实体就绪后再传送
+        system.run(() => {
+          tpPlayerToBot(player, botRegistry.get(botName)!);
+          player.sendMessage(`§a已传送到 §e${botName}§a 身边`);
+        });
+      } else {
+        tpPlayerToBot(player, r);
+        player.sendMessage(`§a已传送到 §e${botName}§a 身边`);
       }
     } catch (e: any) { player.sendMessage(`§c${e.message}`); }
   });

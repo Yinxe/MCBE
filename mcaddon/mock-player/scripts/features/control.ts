@@ -1,12 +1,12 @@
 // ─── 控制模式 ──────────────────────────────────────────
 
 import { Player, world } from "@minecraft/server";
-import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
+import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "./core/types";
 import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, BOT_TAG, syncEntityTags } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
-import { getPlayerLookTarget } from "./core/utils";
+import { setPose, getPlayerLookTarget } from "./bodyPose";
 import { setTags } from "./setTags";
 
 export function toggleControl(record: BotRecord, player: Player): void {
@@ -33,9 +33,9 @@ export function toggleControl(record: BotRecord, player: Player): void {
     // 立即同步一次体态
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
-      const lookTarget = getPlayerLookTarget(player);
-      (entity as SimulatedPlayer).teleport(player.location, { rotation: player.getRotation() });
-      (entity as SimulatedPlayer).lookAtLocation(lookTarget, LookDuration.Continuous);
+      const bot = entity as SimulatedPlayer;
+      bot.teleport(player.location, { dimension: player.dimension });
+      setPose(bot, player.getRotation(), getPlayerLookTarget(player));
     }
   }
 }

@@ -12,13 +12,14 @@
 //   - 死亡后 world.getPlayers({ tags }) 不再返回该假人
 
 import { world, EntityDieAfterEvent } from "@minecraft/server";
-import { SimulatedPlayer, LookDuration } from "@minecraft/server-gametest";
+import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { PositionState } from "../features/core/types";
 import { BOT_TAG, TAG_RESPAWN, syncEntityTags } from "../features/core/tags";
 import { formatPos, formatDimensionId } from "../features/core/utils";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
 import { saveBotFullState } from "../features/saveState";
+import { setPose } from "../features/bodyPose";
 
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;
@@ -54,9 +55,8 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
     try {
       bot.respawn();
       const dim = world.getDimension(record.respawnPoint.dimension);
-      bot.teleport(record.respawnPoint.location, { rotation: record.respawnPoint.rotation, dimension: dim });
-      bot.isSneaking = record.isSneaking;
-      bot.lookAtLocation(record.respawnPoint.lookTarget, LookDuration.Continuous);
+      bot.teleport(record.respawnPoint.location, { dimension: dim });
+      setPose(bot, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
 
       // 复活后更新 entityId 并恢复标签（死亡可能导致实体重建，标签丢失）
       record.entityId = bot.id;

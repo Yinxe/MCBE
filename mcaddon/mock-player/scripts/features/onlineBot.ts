@@ -8,10 +8,9 @@ import { finalizeBotSpawn } from "./core/spawn";
 
 /**
  * 恢复离线假人上线
- * - 从记录中取最后位置/重生点生成 SimulatedPlayer
+ * - 模块级 spawnSimulatedPlayer（不受 GameTest 锁定）
+ * - 从记录中取最后位置/重生点
  * - 背包/装备/经验由后续的 playerJoin 事件恢复
- * - ⚠️ 注意：spawnSimulatedPlayer 无视坐标（永远在西边角生成）
- *   所以必须跟随 teleport 修正位置
  */
 export function onlineBot(record: BotRecord): SimulatedPlayer {
   const state = record.lastPoint ?? record.respawnPoint;
@@ -31,7 +30,7 @@ export function onlineBot(record: BotRecord): SimulatedPlayer {
   record.online = true;
   record.death = false;
   record.entityId = bot.id;
-  finalizeBotSpawn(bot, record, state.location, state.rotation, state.lookTarget, record.isSneaking);
+  finalizeBotSpawn(bot, record, state.rotation, state.lookTarget);
 
   return bot;
 }

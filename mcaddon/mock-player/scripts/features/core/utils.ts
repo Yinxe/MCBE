@@ -16,31 +16,6 @@ import { PositionState, SerializedItemStack, SerializedEnchantment, ExperienceRe
 
 // ─── 坐标方向 ──────────────────────────────────────────
 
-export function rotationToDirection(rotation: Vector2): Vector3 {
-  const pitchRad = (rotation.x * Math.PI) / 180;
-  const yawRad = (rotation.y * Math.PI) / 180;
-  return {
-    x: -Math.sin(yawRad) * Math.cos(pitchRad),
-    y: -Math.sin(pitchRad),
-    z: Math.cos(yawRad) * Math.cos(pitchRad),
-  };
-}
-
-export function getPlayerLookTarget(player: Player, maxDistance: number = 64): Vector3 {
-  const hit = player.getBlockFromViewDirection({ maxDistance });
-  if (hit) {
-    const b = hit.block;
-    return { x: b.location.x + 0.5, y: b.location.y + 0.5, z: b.location.z + 0.5 };
-  }
-  const head = player.getHeadLocation();
-  const dir = rotationToDirection(player.getRotation());
-  return {
-    x: head.x + dir.x * maxDistance,
-    y: head.y + dir.y * maxDistance,
-    z: head.z + dir.z * maxDistance,
-  };
-}
-
 // ─── 格式化 ────────────────────────────────────────────
 
 const DIM_MAP: Record<string, string> = {

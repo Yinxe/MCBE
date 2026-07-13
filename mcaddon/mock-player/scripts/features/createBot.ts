@@ -1,7 +1,7 @@
 // ─── 创建假人 ──────────────────────────────────────────
 
 import { Vector2, Vector3, Dimension, world, GameMode } from "@minecraft/server";
-import { spawnSimulatedPlayer, SimulatedPlayer } from "@minecraft/server-gametest";
+import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord, PositionState } from "./core/types";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "./core/tags";
@@ -19,9 +19,10 @@ export interface CreateBotOptions {
 
 /**
  * 创建新假人
- * - 生成 SimulatedPlayer
+ * - 模块级 spawnSimulatedPlayer（不受 GameTest 锁定）
+ * - setPose 设置体态（不受 GameTest 重置）
  * - 构建 BotRecord（初始标签、位置、重生点）
- * - 背包/装备/经验由 playerJoin 事件从持久化恢复（新假人无保存数据，自动跳过）
+ * - 背包/装备/经验由 playerJoin 事件从持久化恢复
  */
 export function createBot(options: CreateBotOptions): BotRecord {
   const { name, location, dimension, initialTags, rotation, lookTarget, isSneaking } = options;
@@ -55,6 +56,6 @@ export function createBot(options: CreateBotOptions): BotRecord {
     experience: { level: 0, xpProgress: 0, totalXp: 0 },
   };
 
-  finalizeBotSpawn(bot, record, location, { x: rotation.x, y: rotation.y }, lookTarget, isSneaking);
+  finalizeBotSpawn(bot, record, { x: rotation.x, y: rotation.y }, lookTarget);
   return record;
 }

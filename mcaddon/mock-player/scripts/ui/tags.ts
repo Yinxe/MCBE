@@ -1,14 +1,16 @@
 // ─── 行为标签 + 帮助 ──────────────────────────────────
 
 import { Player, system } from "@minecraft/server";
-import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit/ui";
+import { ModalFormBuilder } from "@yinxe/toolkit/ui";
 
-import { BOT_TAG, TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
+import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
 import { botRegistry } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
-import { showMainMenu } from "./menu";
+import { setSneaking } from "../features";
+import { onlineBot } from "../features/onlineBot";
+import { offlineBot } from "../features/offlineBot";
 
-// ─── 行为标签管理 ─────────────────────────────────────
+// ─── 行为标签管理（含 上线/潜行 快捷开关） ───────────
 
 export function showTagManagement(player: Player, botName: string): void {
   const record = botRegistry.get(botName);
@@ -33,8 +35,18 @@ export function showTagManagement(player: Player, botName: string): void {
     .join(" · ");
 
   const builder = new ModalFormBuilder()
-    .title(`§l行为标签 · ${botName}`)
-    .label("current", `§7当前标签: §e${currentTagsText}`);
+    .title(`§l行为 · ${botName}`)
+    .label("current", `§7当前: §e${currentTagsText}`)
+    // ── 快捷开关 ──
+    .toggle("online", "§a上线", {
+      defaultValue: record.online,
+      tooltip: record.online ? "关闭将下线该假人" : "开启将上线该假人",
+    })
+    .toggle("sneaking", "§b潜行", {
+      defaultValue: record.isSneaking,
+      tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
+    })
+    .label("sep1", "§7━━ 标签设置 ────");
 
   for (const tag of manageableCoexist) {
     builder.toggle(tag.value, tag.label, {
@@ -57,6 +69,25 @@ export function showTagManagement(player: Player, botName: string): void {
       return;
     }
 
+    // ── 处理快捷开关 ──
+    const wantOnline = vals.online as boolean;
+    if (wantOnline !== currentRecord.online) {
+      system.run(() => {
+        try {
+          if (wantOnline) onlineBot(currentRecord);
+          else offlineBot(currentRecord);
+        } catch (e: any) { player.sendMessage(`§c切换在线状态失败: ${e.message}`); }
+      });
+    }
+
+    const wantSneaking = vals.sneaking as boolean;
+    if (wantSneaking !== currentRecord.isSneaking) {
+      system.run(() => {
+        try { setSneaking(currentRecord, wantSneaking); } catch (e: any) { player.sendMessage(`§c切换潜行失败: ${e.message}`); }
+      });
+    }
+
+    // ── 处理标签 ──
     const newTags: string[] = [TAG_BOT.value];
     for (const tag of manageableCoexist) {
       if (vals[tag.value]) newTags.push(tag.value);
@@ -67,6 +98,6 @@ export function showTagManagement(player: Player, botName: string): void {
     system.run(() => {
       setTags(currentRecord, newTags, player);
     });
-    player.sendMessage(`§a已更新 §e${botName}§a 的行为标签`);
+    player.sendMessage(`§a已更新 §e${botName}§a 的行为设置`);
   });
 }

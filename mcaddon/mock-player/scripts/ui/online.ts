@@ -69,7 +69,7 @@ export function showOnlineManagement(player: Player): void {
           player.sendMessage(`§c${record.name} 状态切换失败: ${e.message}`);
         }
       }, tickDelay);
-      tickDelay += 4;
+      tickDelay += 20;
       changedCount++;
     }
 

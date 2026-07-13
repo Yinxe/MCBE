@@ -1,12 +1,12 @@
 // ─── 传送 ──────────────────────────────────────────────
 
 import { Player, world } from "@minecraft/server";
-import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
+import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "./core/types";
 import { BOT_TAG } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
-import { getPlayerLookTarget } from "./core/utils";
+import { setPose, getPlayerLookTarget } from "./bodyPose";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
   if (!record.online || record.death) {
@@ -16,7 +16,7 @@ export function tpPlayerToBot(player: Player, record: BotRecord): void {
   if (!entity || !entity.hasTag(BOT_TAG)) {
     throw new Error("无法在世界中找到该模拟玩家");
   }
-  player.teleport(entity.location);
+  player.teleport(entity.location, { dimension: entity.dimension });
 }
 
 export function tpBotToPlayer(record: BotRecord, player: Player): void {
@@ -29,19 +29,17 @@ export function tpBotToPlayer(record: BotRecord, player: Player): void {
   }
 
   const bot = entity as SimulatedPlayer;
-  const playerRot = player.getRotation();
-  const lookTarget = getPlayerLookTarget(player);
 
-  bot.teleport(player.location, { rotation: playerRot });
-  bot.lookAtLocation(lookTarget, LookDuration.Continuous);
+  bot.teleport(player.location, { dimension: player.dimension });
+  setPose(bot, player.getRotation(), getPlayerLookTarget(player));
   bot.isSneaking = player.isSneaking;
 
   record.isSneaking = player.isSneaking;
   if (record.lastPoint) {
     record.lastPoint.location = player.location;
     record.lastPoint.dimension = player.dimension.id;
-    record.lastPoint.rotation = playerRot;
-    record.lastPoint.lookTarget = lookTarget;
+    record.lastPoint.rotation = player.getRotation();
+    // record.lastPoint.lookTarget 由 bodyPose 模块管理
   }
   botRegistry.set(record.name, record);
   saveBotRecord(record);
