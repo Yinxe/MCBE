@@ -8,6 +8,8 @@
 import { Player, Vector2, Vector3 } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
+import type { BotRecord } from "./core/types";
+
 // ─── 视角计算 ──────────────────────────────────────────
 
 function rotationToDirection(rotation: Vector2): Vector3 {
@@ -58,6 +60,26 @@ export function setPose(
   bot.teleport(bot.location, { rotation });
   if (lookTarget) {
     bot.lookAtLocation(lookTarget, LookDuration.Continuous);
+  }
+}
+
+/**
+ * 统一入口：将体态数据持久化到 BotRecord.lastPoint
+ * 所有修改体态的模块都应通过此函数保存，确保数据一致
+ *
+ * @param record    假人记录（必须有 lastPoint）
+ * @param rotation  当前朝向
+ * @param lookTarget 当前视线目标（可选，不传则清除）
+ */
+export function savePoseToRecord(
+  record: BotRecord,
+  rotation: Vector2,
+  lookTarget?: Vector3,
+): void {
+  if (!record.lastPoint) return;
+  record.lastPoint.rotation = rotation;
+  if (lookTarget !== undefined) {
+    record.lastPoint.lookTarget = lookTarget;
   }
 }
 

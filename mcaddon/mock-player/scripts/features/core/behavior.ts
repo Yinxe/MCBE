@@ -13,7 +13,7 @@ import { botRegistry, isBotRestored, saveBotEquipment, saveBotRecord } from "./p
 import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_USE, TAG_CONTROL, TAG_VAULT_MODE } from "./tags";
 import { captureExperience, serializeEquipment } from "./utils";
 import { runVaultCycle } from "../vaultMode";
-import { setPose, getPlayerLookTarget } from "../bodyPose";
+import { setPose, getPlayerLookTarget, savePoseToRecord } from "../bodyPose";
 
 // ─── 启动引擎 ──────────────────────────────────────────
 // 每个 runInterval 独立轮询，通过实体标签筛选确保互斥
@@ -65,6 +65,7 @@ export function startTagBehaviors(): void {
         const lookTarget = getPlayerLookTarget(controller as Player);
         (bot as SimulatedPlayer).teleport(controller.location, { dimension: controller.dimension });
         setPose(bot as SimulatedPlayer, playerRot, lookTarget);
+        savePoseToRecord(record, playerRot, lookTarget);
         (bot as SimulatedPlayer).isSneaking = (controller as Player).isSneaking;
         record.isSneaking = (bot as SimulatedPlayer).isSneaking;
       } catch (e: any) { console.warn(`[MockPlayer] 体态控制异常 ${bot.name}: ${e?.message ?? e}`); }
@@ -126,7 +127,7 @@ export function startTagBehaviors(): void {
       } else {
         record.lastPoint.location = bot.location;
         record.lastPoint.dimension = bot.dimension.id;
-        record.lastPoint.rotation = bot.getRotation();
+        savePoseToRecord(record, bot.getRotation());
       }
       record.isSneaking = bot.isSneaking;
       record.experience = captureExperience(bot);

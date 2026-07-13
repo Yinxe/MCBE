@@ -6,7 +6,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotRecord } from "./core/types";
 import { BOT_TAG } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
-import { setPose, getPlayerLookTarget } from "./bodyPose";
+import { setPose, getPlayerLookTarget, savePoseToRecord } from "./bodyPose";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
   if (!record.online || record.death) {
@@ -31,16 +31,12 @@ export function tpBotToPlayer(record: BotRecord, player: Player): void {
   const bot = entity as SimulatedPlayer;
 
   bot.teleport(player.location, { dimension: player.dimension });
-  setPose(bot, player.getRotation(), getPlayerLookTarget(player));
+  const lookTarget = getPlayerLookTarget(player);
+  setPose(bot, player.getRotation(), lookTarget);
   bot.isSneaking = player.isSneaking;
 
   record.isSneaking = player.isSneaking;
-  if (record.lastPoint) {
-    record.lastPoint.location = player.location;
-    record.lastPoint.dimension = player.dimension.id;
-    record.lastPoint.rotation = player.getRotation();
-    // record.lastPoint.lookTarget 由 bodyPose 模块管理
-  }
+  savePoseToRecord(record, player.getRotation(), lookTarget);
   botRegistry.set(record.name, record);
   saveBotRecord(record);
 }

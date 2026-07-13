@@ -6,7 +6,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotRecord } from "./core/types";
 import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, BOT_TAG, syncEntityTags } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
-import { setPose, getPlayerLookTarget } from "./bodyPose";
+import { setPose, getPlayerLookTarget, savePoseToRecord } from "./bodyPose";
 import { setTags } from "./setTags";
 
 export function toggleControl(record: BotRecord, player: Player): void {
@@ -34,8 +34,10 @@ export function toggleControl(record: BotRecord, player: Player): void {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
       const bot = entity as SimulatedPlayer;
+      const lookTarget = getPlayerLookTarget(player);
       bot.teleport(player.location, { dimension: player.dimension });
-      setPose(bot, player.getRotation(), getPlayerLookTarget(player));
+      setPose(bot, player.getRotation(), lookTarget);
+      savePoseToRecord(record, player.getRotation(), lookTarget);
     }
   }
 }
