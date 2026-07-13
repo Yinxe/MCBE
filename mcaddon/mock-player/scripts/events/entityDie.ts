@@ -19,7 +19,7 @@ import { BOT_TAG, TAG_RESPAWN, syncEntityTags } from "../features/core/tags";
 import { formatPos, formatDimensionId } from "../features/core/utils";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
 import { saveBotFullState } from "../features/saveState";
-import { setPose } from "../features/bodyPose";
+import { setPose } from "../features/core/pose";
 
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;

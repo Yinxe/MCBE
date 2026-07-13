@@ -8,7 +8,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotRecord } from "./types";
 import { syncEntityTags } from "./tags";
 import { botRegistry, saveBotRecord } from "./persistence";
-import { setPose } from "../bodyPose";
+import { setPose } from "./pose";
 
 export function finalizeBotSpawn(
   bot: SimulatedPlayer,

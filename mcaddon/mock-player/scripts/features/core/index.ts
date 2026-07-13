@@ -6,3 +6,4 @@ export * from "./persistence";
 export * from "./utils";
 export * from "./behavior";
 export * from "./spawn";
+export * from "./pose";

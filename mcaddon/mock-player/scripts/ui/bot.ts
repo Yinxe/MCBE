@@ -37,7 +37,7 @@ import { offlineBot } from "../features/offlineBot";
 import { confirmDelete } from "./move";
 import { showTagManagement } from "./tags";
 import { sendData } from "../commands/data";
-import { lookAt } from "../features/bodyPose";
+import { lookAt } from "../features/core/pose";
 
 // ─── 工具 ──────────────────────────────────────────────
 
