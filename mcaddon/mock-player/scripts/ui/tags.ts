@@ -19,7 +19,7 @@ export function showTagManagement(player: Player, botName: string): void {
 
   const manageableCoexist = COEXIST_TAGS.filter((t) => t.value !== TAG_BOT.value);
 
-  const exclusiveOptions = ["§7无", ...EXCLUSIVE_TAGS.map((t) => `§e${t.label}`)];
+  const exclusiveOptions = ["§7无", ...EXCLUSIVE_TAGS.map((t) => `§f${t.label}`)];
   let exclusiveIndex = 0;
   for (let i = 0; i < EXCLUSIVE_TAGS.length; i++) {
     if (record.tags.includes(EXCLUSIVE_TAGS[i].value)) {
@@ -34,9 +34,9 @@ export function showTagManagement(player: Player, botName: string): void {
 
   const builder = new ModalFormBuilder()
     .title(`§l行为 · ${botName}`)
-    .label("current", `§7当前: §e${currentTagsText}`)
+    .label("current", `§7当前: §f${currentTagsText}`)
     // ── 快捷开关 ──
-    .toggle("sneaking", "§b潜行", {
+    .toggle("sneaking", "§7潜行", {
       defaultValue: record.isSneaking,
       tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
     })
