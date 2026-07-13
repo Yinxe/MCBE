@@ -13,7 +13,7 @@ import { BotRecord, PositionState } from "../features/core/types";
 import { BOT_TAG, TAG_IDLE, getTagDef } from "../features/core/tags";
 import { formatPos, formatDimensionId } from "../features/core/utils";
 import { botRegistry } from "../features/core/persistence";
-import { savePoseToRecord } from "../features/bodyPose";
+import { savePoseToRecord } from "../features/core/pose";
 
 /** 格式化点位状态（仅列表显示用） */
 function formatState(state: PositionState): string {

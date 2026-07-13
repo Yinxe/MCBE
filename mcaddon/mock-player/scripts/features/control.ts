@@ -7,7 +7,7 @@ import { BotRecord } from "./core/types";
 import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, BOT_TAG, syncEntityTags } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
 import { setPose } from "./core/pose";
-import { getPlayerLookTarget, savePoseToRecord } from "./bodyPose";
+import { getPlayerLookTarget, savePoseToRecord } from "./core/pose";
 import { setTags } from "./setTags";
 
 export function toggleControl(record: BotRecord, player: Player): void {

@@ -16,7 +16,7 @@ import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit/ui";
 import { BotRecord, DP_PREFIX } from "../features/core/types";
 import { BOT_TAG, getTagDef } from "../features/core/tags";
 import { formatPos, formatDimensionId, serializeContainer } from "../features/core/utils";
-import { getPlayerLookTarget } from "../features/bodyPose";
+import { getPlayerLookTarget } from "../features/core/pose";
 import {
   botRegistry, saveBotRecord, saveBotInventory,
   isBotRestored, markBotRestored, removeBotRestored,

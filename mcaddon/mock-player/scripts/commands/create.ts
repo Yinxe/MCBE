@@ -2,7 +2,7 @@ import { world, Vector3 } from "@minecraft/server";
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit/command";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../features/core/tags";
-import { getPlayerLookTarget } from "../features/bodyPose";
+import { getPlayerLookTarget } from "../features/core/pose";
 import { generateBotName } from "../features/core/persistence";
 import { createBot } from "../features/createBot";
 
