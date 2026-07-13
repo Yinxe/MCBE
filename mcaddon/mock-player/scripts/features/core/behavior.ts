@@ -3,15 +3,16 @@
 // 同时承载位置/经验/装备的周期持久化（100tick ≈ 5秒）
 // 因为装备栏没有对应的事件，只能轮询兜底
 //
-// 互斥标签：autoMine / autoPlace / autoAttack / control / idle
+// 互斥标签：autoMine / autoPlace / autoAttack / control / idle / autoUse / vaultMode
 // 各行为通过实体标签查询筛选，确保互斥生效
 
 import { EntityEquippableComponent, Player, system, world } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, isBotRestored, saveBotEquipment, saveBotRecord } from "./persistence";
-import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL } from "./tags";
+import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_USE, TAG_CONTROL, TAG_VAULT_MODE } from "./tags";
 import { captureExperience, getPlayerLookTarget, serializeEquipment } from "./utils";
+import { runVaultCycle } from "../vaultMode";
 
 // ─── 启动引擎 ──────────────────────────────────────────
 // 每个 runInterval 独立轮询，通过实体标签筛选确保互斥
@@ -85,6 +86,29 @@ export function startTagBehaviors(): void {
     }
   }, 6);
 
+  // ─── 使用物品 ── 每 8 tick ───────────────────────────
+  // interact() = 右键单击，返回 boolean 表示交互是否执行
+  system.runInterval(() => {
+    const bots = world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_USE.value] });
+    for (const bot of bots) {
+      const record = botRegistry.get(bot.name);
+      if (!record) continue;
+      try {
+        (bot as SimulatedPlayer).interact();
+      } catch (e: any) { console.warn(`[MockPlayer] 使用物品异常 ${bot.name}: ${e?.message ?? e}`); }
+    }
+  }, 8);
+
+  // ─── 宝库模式 ── 每 10 tick ──────────────────────────
+  system.runInterval(() => {
+    const bots = world.getPlayers({ tags: [BOT_TAG, TAG_VAULT_MODE.value] });
+    for (const bot of bots) {
+      const record = botRegistry.get(bot.name);
+      if (!record) continue;
+      try { runVaultCycle(bot as SimulatedPlayer, record); } catch (e: any) { console.warn(`[MockPlayer] 宝库模式异常 ${bot.name}: ${e?.message ?? e}`); }
+    }
+  }, 10);
+
   // ─── 周期持久化 ── 每 100 tick ───────────────────────
   // 保存位置/经验/装备。背包由 playerInventoryItemChange 事件实时保存
   system.runInterval(() => {
@@ -120,12 +144,16 @@ export function startTagBehaviors(): void {
   system.runInterval(() => {
     const mining = new Set(world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_MINE.value] }).map((p) => p.id));
     const placing = new Set(world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_PLACE.value] }).map((p) => p.id));
+    const using = new Set(world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_USE.value] }).map((p) => p.id));
     for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
       if (!mining.has(bot.id)) {
         try { (bot as SimulatedPlayer).stopBreakingBlock(); } catch {}
       }
       if (!placing.has(bot.id)) {
         try { (bot as SimulatedPlayer).stopBuild(); } catch {}
+      }
+      if (!using.has(bot.id)) {
+        try { (bot as SimulatedPlayer).stopInteracting(); } catch {}
       }
     }
   }, 40);

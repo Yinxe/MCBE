@@ -16,12 +16,14 @@ export const TAG_AUTO_MINE: TagDef = { label: "自动挖掘", value: `${TAG_PREF
 export const TAG_AUTO_PLACE: TagDef = { label: "自动放置", value: `${TAG_PREFIX}autoPlace` };
 export const TAG_AUTO_ATTACK: TagDef = { label: "自动攻击", value: `${TAG_PREFIX}autoAttack` };
 export const TAG_CONTROL: TagDef = { label: "体态控制", value: `${TAG_PREFIX}control` };
+export const TAG_AUTO_USE: TagDef = { label: "使用物品", value: `${TAG_PREFIX}autoUse` };
+export const TAG_VAULT_MODE: TagDef = { label: "宝库模式", value: `${TAG_PREFIX}vaultMode` };
 
 /** 可共存的标签组 */
 export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
 
 /** 互斥的标签组 */
-export const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL];
+export const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE, TAG_VAULT_MODE];
 
 /** 所有已定义的标签 */
 export const ALL_TAGS: TagDef[] = [...COEXIST_TAGS, ...EXCLUSIVE_TAGS];

@@ -121,7 +121,7 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
       player.sendMessage(r.tags.includes(TAG_CONTROL.value) ? `§a已开启 §e${botName}§a 控制模式` : `§a已关闭 §e${botName}§a 控制模式`);
     }))
     // ── 设置 ──
-    .button("§d标签管理", () => showTagManagement(player, botName))
+    .button("§d行为标签", () => showTagManagement(player, botName))
     .button("§a设置重生点", () => updateSpawn(player, botName))
     // ── 其他 ──
     .button("§8传送到假人 (TPA)", () => requireActive(player, botName, (r) => {

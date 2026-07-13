@@ -13,12 +13,12 @@ export function showCreateForm(player: Player): void {
   const dimOptions = ["跟随玩家", "主世界 (overworld)", "下界 (nether)", "末地 (the_end)"];
 
   ModalFormBuilder.showQuick(player, "§l创建模拟玩家", (f) => {
-    f.textField("name", "名称（留空自动生成）", { defaultValue: "" })
-     .textField("coord", "坐标（留空使用玩家位置）", { defaultValue: "" })
-     .dropdown("dim", "维度", dimOptions, { defaultValueIndex: 0 })
-     .toggle("copyPosture", "§7复刻玩家体态（同步潜行/朝向）", { defaultValue: true })
-     .toggle("respawn", "§7自动重生", { defaultValue: true })
-     .toggle("idle", "§7空闲状态", { defaultValue: true });
+    f.textField("name", "名称（留空自动生成）", { defaultValue: "", tooltip: "输入假人名称，留空则自动生成随机名字" })
+     .textField("coord", "坐标（留空使用玩家位置）", { defaultValue: "", tooltip: "格式: x y z，留空则生成在玩家当前位置" })
+     .dropdown("dim", "维度", dimOptions, { defaultValueIndex: 0, tooltip: "假人所在的维度，跟随玩家则为当前维度" })
+     .toggle("copyPosture", "§7复刻玩家体态（同步潜行/朝向）", { defaultValue: true, tooltip: "创建时复制玩家的潜行和面向方向" })
+     .toggle("respawn", "§7自动重生", { defaultValue: true, tooltip: "开启后假人死亡会自动复活到重生点" })
+     .toggle("idle", "§7空闲状态", { defaultValue: true, tooltip: "开启后假人默认处于空闲状态，不执行任何行为" });
   }).then((vals) => {
     if (!vals) return;
     const botName = (vals.name as string).trim() || generateBotName();

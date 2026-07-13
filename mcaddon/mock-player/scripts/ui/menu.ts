@@ -11,7 +11,7 @@ import { botRegistry } from "../features/core/persistence";
 import { showBotPanel, showBotList } from "./bot";
 import { showCreateForm } from "./create";
 import { showOnlineManagement } from "./online";
-import { showTagLookup } from "./tags";
+import { showHelpGuide } from "./HelpGuide";
 
 // ─── 主菜单 ──────────────────────────────────────────
 
@@ -21,6 +21,6 @@ export function showMainMenu(player: Player): void {
     .button("§a创建模拟玩家", () => showCreateForm(player))
     .button("§b模拟玩家列表", () => showBotList(player, () => showMainMenu(player)))
     .button("§6在线管理", () => showOnlineManagement(player))
-    .button("§d标签速查", () => showTagLookup(player))
+    .button("§e❓ 帮助", () => showHelpGuide(player))
     .show(player);
 }

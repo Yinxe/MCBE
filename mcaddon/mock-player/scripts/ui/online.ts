@@ -46,6 +46,7 @@ export function showOnlineManagement(player: Player): void {
       .join(" ");
     builder.toggle(`s${i}`, `${icon} §e${record.name} §7| ${posSummary}${tagSummary ? ` §7[${tagSummary}]` : ""}`, {
       defaultValue: record.online,
+      tooltip: record.online ? "关闭此开关将下线该假人" : "开启此开关将上线该假人",
     });
   }
 
