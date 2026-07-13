@@ -7,15 +7,11 @@ import { BotRecord } from "../features/core/types";
 import { getTagDef } from "../features/core/tags";
 import { formatPos, formatDimensionId, serializeItemStack, getTotalXpForLevels } from "../features/core/utils";
 import { botRegistry, loadBotInventory } from "../features/core/persistence";
-import { isGameTestReady, isChunkLoaded } from "../features/core/gametestContext";
+import { isChunkLoaded } from "../features/core/utils";
 
 export function sendData(player: Player, record: BotRecord): void {
   const lines: string[] = [];
   lines.push(`§6===== §e${record.name} §6数据总览 =====`);
-
-  // ── GameTest / 区块加载 ──
-  const gtReady = isGameTestReady();
-  lines.push(`§7GameTest: ${gtReady ? "§a就绪" : "§c未就绪"}`);
 
   // 根据记录的最后位置检测区块加载状态（未上线的假人取重生点）
   const checkPos = record.lastPoint ?? record.respawnPoint;

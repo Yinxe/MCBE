@@ -11,6 +11,7 @@ import {
   EnchantmentType,
   EquipmentSlot,
   EntityEquippableComponent,
+  Dimension,
 } from "@minecraft/server";
 import { PositionState, SerializedItemStack, SerializedEnchantment, ExperienceRecord, EQUIP_SLOT_MAP } from "./types";
 
@@ -422,4 +423,25 @@ export function getEquipmentSlot(typeId: string): EquipmentSlot | undefined {
 /** 判断是否为可穿戴装备（盔甲/鞘翅/南瓜/头颅等） */
 export function isWearableItem(typeId: string): boolean {
   return getEquipmentSlot(typeId) !== undefined;
+}
+
+// ─── 区块加载检测 ──────────────────────────────────────
+
+/**
+ * 检测指定位置的区块是否已加载
+ * 通过访问 Block.typeId 迫使引擎加载区块，以 catch 判断状态
+ */
+export function isChunkLoaded(dimension: Dimension, pos: Vector3): boolean {
+  try {
+    const block = dimension.getBlock({
+      x: Math.floor(pos.x),
+      y: Math.max(Math.floor(pos.y), -64),
+      z: Math.floor(pos.z),
+    });
+    if (!block) return false;
+    const _ = block.typeId;
+    return true;
+  } catch {
+    return false;
+  }
 }
