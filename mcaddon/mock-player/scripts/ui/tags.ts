@@ -7,8 +7,6 @@ import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from ".
 import { botRegistry } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
 import { setSneaking } from "../features";
-import { onlineBot } from "../features/onlineBot";
-import { offlineBot } from "../features/offlineBot";
 
 // ─── 行为标签管理（含 上线/潜行 快捷开关） ───────────
 
@@ -38,10 +36,6 @@ export function showTagManagement(player: Player, botName: string): void {
     .title(`§l行为 · ${botName}`)
     .label("current", `§7当前: §e${currentTagsText}`)
     // ── 快捷开关 ──
-    .toggle("online", "§a上线", {
-      defaultValue: record.online,
-      tooltip: record.online ? "关闭将下线该假人" : "开启将上线该假人",
-    })
     .toggle("sneaking", "§b潜行", {
       defaultValue: record.isSneaking,
       tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
@@ -70,16 +64,6 @@ export function showTagManagement(player: Player, botName: string): void {
     }
 
     // ── 处理快捷开关 ──
-    const wantOnline = vals.online as boolean;
-    if (wantOnline !== currentRecord.online) {
-      system.run(() => {
-        try {
-          if (wantOnline) onlineBot(currentRecord);
-          else offlineBot(currentRecord);
-        } catch (e: any) { player.sendMessage(`§c切换在线状态失败: ${e.message}`); }
-      });
-    }
-
     const wantSneaking = vals.sneaking as boolean;
     if (wantSneaking !== currentRecord.isSneaking) {
       system.run(() => {

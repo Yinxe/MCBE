@@ -1,5 +1,5 @@
 // ─── 统一假人操作面板（v3） ──────────────────────────
-// 简化主菜单：行为标签、在线/潜行/控制等集中在
+// 主菜单：移动/物品/状态/行为标签/传送
 // showTagManagement 模态表单中统一管理。
 // 主菜单保留移动/物品/回收/传送等直接操作。
 //
@@ -116,6 +116,8 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     .button("§5互换背包", () => requireActive(player, botName, (_) => doSwapInventory(player, botName)))
     .button("§e回收资源", () => doReclaim(player, botName))
     .button("§e改名", () => doRename(player, botName))
+    // ── 状态 ──
+    .button(record.online ? "§b下线" : "§b上线", () => toggleOnline(player, botName))
     // ── 行为 ──
     .button("§b行为标签", () => showTagManagement(player, botName))
     // ── 设置 ──
