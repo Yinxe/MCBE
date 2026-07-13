@@ -37,7 +37,7 @@ export function toggleControl(record: BotRecord, player: Player): void {
       const lookTarget = getPlayerLookTarget(player);
       bot.teleport(player.location, { dimension: player.dimension });
       setPose(bot, player.getRotation(), lookTarget);
-      savePoseToRecord(record, player.getRotation(), lookTarget);
+      savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
     }
   }
 }

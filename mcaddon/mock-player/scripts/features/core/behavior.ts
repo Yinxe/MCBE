@@ -65,7 +65,7 @@ export function startTagBehaviors(): void {
         const lookTarget = getPlayerLookTarget(controller as Player);
         (bot as SimulatedPlayer).teleport(controller.location, { dimension: controller.dimension });
         setPose(bot as SimulatedPlayer, playerRot, lookTarget);
-        savePoseToRecord(record, playerRot, lookTarget);
+        savePoseToRecord(record, controller.location, controller.dimension.id, playerRot, lookTarget);
         (bot as SimulatedPlayer).isSneaking = (controller as Player).isSneaking;
         record.isSneaking = (bot as SimulatedPlayer).isSneaking;
       } catch (e: any) { console.warn(`[MockPlayer] 体态控制异常 ${bot.name}: ${e?.message ?? e}`); }
@@ -125,9 +125,7 @@ export function startTagBehaviors(): void {
       if (!record.lastPoint) {
         record.lastPoint = { location: bot.location, dimension: bot.dimension.id, rotation: bot.getRotation(), lookTarget: record.respawnPoint.lookTarget };
       } else {
-        record.lastPoint.location = bot.location;
-        record.lastPoint.dimension = bot.dimension.id;
-        savePoseToRecord(record, bot.getRotation());
+        savePoseToRecord(record, bot.location, bot.dimension.id, bot.getRotation());
       }
       record.isSneaking = bot.isSneaking;
       record.experience = captureExperience(bot);

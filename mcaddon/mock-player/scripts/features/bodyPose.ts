@@ -64,23 +64,27 @@ export function setPose(
 }
 
 /**
- * 统一入口：将体态数据持久化到 BotRecord.lastPoint
- * 所有修改体态的模块都应通过此函数保存，确保数据一致
+ * 统一入口：将体态和位置数据持久化到 BotRecord.lastPoint
+ * 所有修改体态/位置的模块都应通过此函数保存，确保数据一致
  *
  * @param record    假人记录（必须有 lastPoint）
- * @param rotation  当前朝向
- * @param lookTarget 当前视线目标（可选，不传则清除）
+ * @param location  当前坐标（可选，不传不改）
+ * @param dimension 当前维度（可选，不传不改）
+ * @param rotation  当前朝向（可选，不传不改）
+ * @param lookTarget 当前视线目标（可选，不传则保留原值）
  */
 export function savePoseToRecord(
   record: BotRecord,
-  rotation: Vector2,
+  location?: Vector3,
+  dimension?: string,
+  rotation?: Vector2,
   lookTarget?: Vector3,
 ): void {
   if (!record.lastPoint) return;
-  record.lastPoint.rotation = rotation;
-  if (lookTarget !== undefined) {
-    record.lastPoint.lookTarget = lookTarget;
-  }
+  if (location) record.lastPoint.location = location;
+  if (dimension) record.lastPoint.dimension = dimension;
+  if (rotation) record.lastPoint.rotation = rotation;
+  if (lookTarget !== undefined) record.lastPoint.lookTarget = lookTarget;
 }
 
 /**

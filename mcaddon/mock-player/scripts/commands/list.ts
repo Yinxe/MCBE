@@ -13,6 +13,7 @@ import { BotRecord, PositionState } from "../features/core/types";
 import { BOT_TAG, TAG_IDLE, getTagDef } from "../features/core/tags";
 import { formatPos, formatDimensionId } from "../features/core/utils";
 import { botRegistry } from "../features/core/persistence";
+import { savePoseToRecord } from "../features/bodyPose";
 
 /** 格式化点位状态（仅列表显示用） */
 function formatState(state: PositionState): string {
@@ -67,9 +68,7 @@ export function registerListCommand(registry: any): void {
     for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
       const record = botRegistry.get(bot.name);
       if (record && record.lastPoint) {
-        record.lastPoint.location = bot.location;
-        record.lastPoint.dimension = bot.dimension.id;
-        record.lastPoint.rotation = bot.getRotation();
+        savePoseToRecord(record, bot.location, bot.dimension.id, bot.getRotation());
       }
     }
     player.sendMessage(buildListMessage(Array.from(botRegistry.values()), filterOnline, filterDeath));

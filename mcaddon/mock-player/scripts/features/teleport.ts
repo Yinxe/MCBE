@@ -36,7 +36,7 @@ export function tpBotToPlayer(record: BotRecord, player: Player): void {
   bot.isSneaking = player.isSneaking;
 
   record.isSneaking = player.isSneaking;
-  savePoseToRecord(record, player.getRotation(), lookTarget);
+  savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
   botRegistry.set(record.name, record);
   saveBotRecord(record);
 }
