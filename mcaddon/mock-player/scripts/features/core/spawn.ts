@@ -17,7 +17,7 @@ export function finalizeBotSpawn(
   lookTarget?: Vector3,
 ): void {
   syncEntityTags(bot, record.tags);
-  // 设置体态（旋转 + 视线）
+  bot.isSneaking = record.isSneaking;
   setPose(bot, rotation, lookTarget);
 
   botRegistry.set(record.name, record);

@@ -1,22 +1,23 @@
 // ─── 体态操作（核心层） ────────────────────────────────
 // 包含底层体态操作、视角计算、数据持久化，无上层业务依赖。
 
-import { Player, TeleportOptions, Vector2, Vector3 } from "@minecraft/server";
+import { Player, Vector2, Vector3 } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "./types";
 
 // ─── 底层体态操作 ──────────────────────────────────────
 
-/** 设置假人朝向（body yaw + head pitch） */
+/** 设置假人朝向（body yaw + head pitch），可选头部转向 */
 export function setPose(
   bot: SimulatedPlayer,
   rotation: Vector2,
   lookTarget?: Vector3,
 ): void {
-  const opts: TeleportOptions = { rotation };
-  if (lookTarget) opts.facingLocation = lookTarget;
-  bot.teleport(bot.location, opts);
+  bot.teleport(bot.location, { rotation });
+  if (lookTarget) {
+    bot.lookAtLocation(lookTarget, LookDuration.Continuous);
+  }
 }
 
 /** 扭头：仅头部转向固定坐标点，身体不动 */
