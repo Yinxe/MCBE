@@ -47,12 +47,14 @@ export function getPlayerLookTarget(player: Player, maxDistance: number = 64): V
     const b = hit.block;
     return { x: b.location.x + 0.5, y: b.location.y + 0.5, z: b.location.z + 0.5 };
   }
+  // 无命中时取 10 格外的稳定点（作为假人视线方向参考，太远头几乎不动）
   const head = player.getHeadLocation();
   const dir = rotationToDirection(player.getRotation());
+  const FALLBACK_DISTANCE = 10;
   return {
-    x: head.x + dir.x * maxDistance,
-    y: head.y + dir.y * maxDistance,
-    z: head.z + dir.z * maxDistance,
+    x: head.x + dir.x * FALLBACK_DISTANCE,
+    y: head.y + dir.y * FALLBACK_DISTANCE,
+    z: head.z + dir.z * FALLBACK_DISTANCE,
   };
 }
 
