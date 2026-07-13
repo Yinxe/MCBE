@@ -136,15 +136,13 @@ jobs:
           echo "path=$ARTIFACT" | tee -a "$GITHUB_OUTPUT"
 
       # ── 生成 Release Notes ──────────────────────────────
+      # 只用 tag 所在提交的 commit message，不用 git log 范围
+      # （多个模组混提时 log 范围会包含无关提交）
       - name: Generate release notes
         id: notes
         run: |
-          PKG="${{ steps.parse.outputs.pkg }}"
           TAG="${{ steps.parse.outputs.pkg }}@${{ steps.parse.outputs.version }}"
-          PREV_TAG=$(git tag -l "${PKG}@*" --sort=-v:refname | head -2 | tail -1)
-          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$TAG" ]; then
-            NOTES=$(git log --oneline --format="* %s" "${PREV_TAG}..${TAG}" 2>/dev/null || true)
-          fi
+          NOTES=$(git log --format="* %s" -1 "$TAG" 2>/dev/null || true)
           if [ -z "${NOTES:-}" ]; then
             NOTES="🎉 ${{ steps.config.outputs.packName }} ${{ steps.parse.outputs.version }} 首次发布"
           fi
