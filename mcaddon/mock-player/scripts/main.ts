@@ -13,6 +13,7 @@ import { system, world } from "@minecraft/server";
 import { registerAllCommands } from "./commands/index";
 import { registerAllEvents } from "./events/index";
 import { startTagBehaviors } from "./features/core/behavior";
+import { initGameTestContext } from "./features/core/gametestContext";
 import { botRegistry, loadAllBotRecords, saveBotRecord } from "./features/core/persistence";
 
 // ─── 命令注册（early-execution mode） ─────────────────────
@@ -44,7 +45,8 @@ world.afterEvents.worldLoad.subscribe(() => {
   console.warn(`[MockPlayer] 启动引擎`);
   startTagBehaviors();
 
-
+  // 初始化 GameTest（供 chunkload 模式使用）
+  initGameTestContext();
 
   // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
   console.warn(`[MockPlayer] 注册事件`);

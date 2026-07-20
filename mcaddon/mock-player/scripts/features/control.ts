@@ -6,8 +6,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotRecord } from "./core/types";
 import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, BOT_TAG, syncEntityTags } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
-import { setPose } from "./core/pose";
-import { getPlayerLookTarget, savePoseToRecord } from "./core/pose";
+import { setPose, getPlayerLookTarget, savePoseToRecord } from "./core/pose";
 import { setTags } from "./setTags";
 
 export function toggleControl(record: BotRecord, player: Player): void {
@@ -35,10 +34,15 @@ export function toggleControl(record: BotRecord, player: Player): void {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
       const bot = entity as SimulatedPlayer;
-      const lookTarget = getPlayerLookTarget(player);
       bot.teleport(player.location, { dimension: player.dimension });
-      setPose(bot, player.getRotation(), lookTarget);
-      savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
+
+      // 强加载模式不可转向
+      if (record.spawnMode !== "chunkload") {
+        setPose(bot, player.getRotation(), getPlayerLookTarget(player));
+        savePoseToRecord(record, player.location, player.dimension.id, player.getRotation());
+      } else {
+        savePoseToRecord(record, player.location, player.dimension.id);
+      }
     }
   }
 }

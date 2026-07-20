@@ -16,7 +16,8 @@ import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit/ui";
 import { BotRecord, DP_PREFIX } from "../features/core/types";
 import { BOT_TAG, getTagDef } from "../features/core/tags";
 import { formatPos, formatDimensionId, serializeContainer } from "../features/core/utils";
-import { getPlayerLookTarget } from "../features/core/pose";
+import { getPlayerLookTarget, lookAt } from "../features/core/pose";
+import { getSpawnModeInfo, switchSpawnMode } from "../features/spawnMode";
 import {
   botRegistry, saveBotRecord, saveBotInventory,
   isBotRestored, markBotRestored, removeBotRestored,
@@ -37,7 +38,6 @@ import { offlineBot } from "../features/offlineBot";
 import { confirmDelete } from "./move";
 import { showTagManagement } from "./tags";
 import { sendData } from "../commands/data";
-import { lookAt } from "../features/core/pose";
 
 // ─── 工具 ──────────────────────────────────────────────
 
@@ -120,6 +120,22 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     .button(record.online ? "§a下线" : "§a上线", () => toggleOnline(player, botName))
     // ── 行为 ──
     .buttonWithIcon("§a行为标签", "textures/ui/icon_star", () => showTagManagement(player, botName))
+    // ── 生成模式 ──
+    .buttonWithIcon("§7生成模式", "textures/ui/icon_setting", () => {
+      const r = botRegistry.get(botName);
+      if (!r) return;
+      const info = getSpawnModeInfo(r.spawnMode);
+      const newMode: "normal" | "chunkload" = r.spawnMode === "chunkload" ? "normal" : "chunkload";
+      const newInfo = getSpawnModeInfo(newMode);
+      player.sendMessage(
+        `§7${botName} §a→ ${newInfo.label}\n` +
+        newInfo.limitations.map(l => `§c⚠ ${l}`).join("\n")
+      );
+      switchSpawnMode(r, newMode);
+      if (r.online && !r.death) {
+        player.sendMessage("§7下次下线/上线后生效");
+      }
+    })
     // ── 设置 ──
     .buttonWithIcon("§7设置重生点", "textures/ui/icon_setting", () => updateSpawn(player, botName))
     // ── 其他 ──

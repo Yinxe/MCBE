@@ -61,11 +61,19 @@ export function startTagBehaviors(): void {
       try {
         const controller = world.getEntity(record.controllerId);
         if (!controller) continue;
-        const playerRot = (controller as Player).getRotation();
-        const lookTarget = getPlayerLookTarget(controller as Player);
+
         (bot as SimulatedPlayer).teleport(controller.location, { dimension: controller.dimension });
-        setPose(bot as SimulatedPlayer, playerRot, lookTarget);
-        savePoseToRecord(record, controller.location, controller.dimension.id, playerRot, lookTarget);
+
+        // 强加载模式不可转向，只跟位置
+        if (record.spawnMode !== "chunkload") {
+          const playerRot = (controller as Player).getRotation();
+          const lookTarget = getPlayerLookTarget(controller as Player);
+          setPose(bot as SimulatedPlayer, playerRot, lookTarget);
+          savePoseToRecord(record, controller.location, controller.dimension.id, playerRot, lookTarget);
+        } else {
+          savePoseToRecord(record, controller.location, controller.dimension.id);
+        }
+
         (bot as SimulatedPlayer).isSneaking = (controller as Player).isSneaking;
         record.isSneaking = (bot as SimulatedPlayer).isSneaking;
       } catch (e: any) { console.warn(`[MockPlayer] 体态控制异常 ${bot.name}: ${e?.message ?? e}`); }

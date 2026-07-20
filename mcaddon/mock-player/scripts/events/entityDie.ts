@@ -56,7 +56,9 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
       bot.respawn();
       const dim = world.getDimension(record.respawnPoint.dimension);
       bot.teleport(record.respawnPoint.location, { dimension: dim });
-      setPose(bot, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
+      if (record.spawnMode !== "chunkload") {
+        setPose(bot, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
+      }
 
       // 复活后更新 entityId 并恢复标签（死亡可能导致实体重建，标签丢失）
       record.entityId = bot.id;

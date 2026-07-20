@@ -32,12 +32,15 @@ export function tpBotToPlayer(record: BotRecord, player: Player): void {
   const bot = entity as SimulatedPlayer;
 
   bot.teleport(player.location, { dimension: player.dimension });
-  const lookTarget = getPlayerLookTarget(player);
-  setPose(bot, player.getRotation(), lookTarget);
   bot.isSneaking = player.isSneaking;
-
   record.isSneaking = player.isSneaking;
-  savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
+
+  // 强加载模式不可转向，但扭头仍可用（由 lookAt 独立处理）
+  if (record.spawnMode !== "chunkload") {
+    const lookTarget = getPlayerLookTarget(player);
+    setPose(bot, player.getRotation(), lookTarget);
+    savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
+  }
   botRegistry.set(record.name, record);
   saveBotRecord(record);
 }

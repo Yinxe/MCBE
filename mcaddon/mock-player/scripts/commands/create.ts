@@ -28,6 +28,7 @@ export function registerCreateCommand(registry: any): void {
       initialTags: DEFAULT_TAGS,
       rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
       lookTarget, isSneaking: player.isSneaking,
+      spawnMode: "normal",
     });
     player.sendMessage(`§a成功创建假人 §e${botName}§b [自动重生]`);
   });

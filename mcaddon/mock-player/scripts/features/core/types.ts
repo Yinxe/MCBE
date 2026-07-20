@@ -162,4 +162,6 @@ export interface BotRecord {
   deathPoint: PositionState | null;
   /** 经验值（等级 + 进度 + 总值） */
   experience: ExperienceRecord;
+  /** 生成模式：normal=普通可转向 / chunkload=强加载不可转向 */
+  spawnMode?: "normal" | "chunkload";
 }

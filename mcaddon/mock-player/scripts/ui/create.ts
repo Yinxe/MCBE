@@ -51,6 +51,7 @@ export function showCreateForm(player: Player): void {
           rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
           lookTarget: copyPosture ? lookTarget : { x: pos.x, y: pos.y, z: pos.z + 1 },
           isSneaking: sneaking,
+          spawnMode: "normal",
         });
         player.sendMessage(`§a成功创建模拟玩家 §e${botName}`);
       } catch (e: any) {
