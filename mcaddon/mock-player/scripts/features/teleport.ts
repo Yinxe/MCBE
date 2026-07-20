@@ -6,8 +6,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotRecord } from "./core/types";
 import { BOT_TAG } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
-import { setPose } from "./core/pose";
-import { getPlayerLookTarget, savePoseToRecord } from "./core/pose";
+import { setPose, getPlayerLookTarget, savePoseToRecord } from "./core/pose";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
   if (!record.online || record.death) {
