@@ -1,9 +1,8 @@
 // ─── 创建假人 ──────────────────────────────────────────
 
-import { Vector2, Vector3, Dimension, world, GameMode } from "@minecraft/server";
+import { Vector3, Dimension } from "@minecraft/server";
 
-import { BotRecord, PositionState } from "./core/types";
-import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "./core/tags";
+import { BotRecord } from "./core/types";
 import { spawnBot } from "./spawnMode";
 
 export interface CreateBotOptions {
@@ -41,7 +40,6 @@ export function createBot(options: CreateBotOptions): BotRecord {
   };
 
   const bot = spawnBot(record, location, dimension, rot2, lookTarget);
-  record.entityId = bot.id;
 
   console.warn(
     `[MockPlayer] 创建假人 ${name} 模式=${record.spawnMode ?? "normal"}` +

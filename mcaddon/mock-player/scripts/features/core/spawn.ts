@@ -15,10 +15,11 @@ export function finalizeBotSpawn(
   record: BotRecord,
   rotation: Vector2,
   lookTarget?: Vector3,
+  noPose?: boolean,
 ): void {
   syncEntityTags(bot, record.tags);
   bot.isSneaking = record.isSneaking;
-  setPose(bot, rotation, lookTarget);
+  if (!noPose) setPose(bot, rotation, lookTarget);
 
   botRegistry.set(record.name, record);
   saveBotRecord(record);
