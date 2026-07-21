@@ -124,17 +124,22 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     .buttonWithIcon("§7生成模式", "textures/ui/icon_setting", () => {
       const r = botRegistry.get(botName);
       if (!r) return;
-      const info = getSpawnModeInfo(r.spawnMode);
       const newMode: "normal" | "chunkload" = r.spawnMode === "chunkload" ? "normal" : "chunkload";
       const newInfo = getSpawnModeInfo(newMode);
       player.sendMessage(
         `§7${botName} §a→ ${newInfo.label}\n` +
         newInfo.limitations.map(l => `§c⚠ ${l}`).join("\n")
       );
-      switchSpawnMode(r, newMode);
-      if (r.online && !r.death) {
-        player.sendMessage("§7下次下线/上线后生效");
-      }
+      system.run(() => {
+        try {
+          if (r.online && !r.death) offlineBot(r);
+          switchSpawnMode(r, newMode);
+          if (!r.death) onlineBot(r);
+          player.sendMessage(`§a已切换为 ${newInfo.label}，已自动重新上线`);
+        } catch (e: any) {
+          player.sendMessage(`§c切换模式失败: ${e.message}`);
+        }
+      });
     })
     // ── 设置 ──
     .buttonWithIcon("§7设置重生点", "textures/ui/icon_setting", () => updateSpawn(player, botName))

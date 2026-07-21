@@ -75,6 +75,8 @@ function doNormalSpawn(
     record.name,
     GameMode.Survival,
   );
+  // spawnSimulatedPlayer 无视坐标，必须 teleport 校准
+  bot.teleport(location, { dimension });
   record.entityId = bot.id;
   finalizeBotSpawn(bot, record, rotation, lookTarget);
   return bot;
