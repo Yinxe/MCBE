@@ -3,10 +3,17 @@
 import { world } from "@minecraft/server";
 
 import { BotRecord } from "./core/types";
-import { TAG_CONTROL, BOT_TAG, syncEntityTags } from "./core/tags";
+import { TAG_CONTROL, TAG_VAULT_MODE, BOT_TAG, syncEntityTags } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
 
 export function setTags(record: BotRecord, newTags: string[], controllerPlayer?: any): void {
+  // 宝库模式只允许普通模式
+  if (newTags.includes(TAG_VAULT_MODE.value) && record.spawnMode === "chunkload") {
+    if (controllerPlayer) {
+      controllerPlayer.sendMessage(`§c宝库模式需要普通生成模式，请先切换为普通模式`);
+    }
+    return;
+  }
   const hadControl = record.tags.includes(TAG_CONTROL.value);
   const hasControlNow = newTags.includes(TAG_CONTROL.value);
 
