@@ -18,7 +18,11 @@ export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBefore
   const { player, target, itemStack } = event;
 
   // 不是模拟玩家则不处理
-  if (!target.hasTag(TAG_BOT.value)) return;
+  try {
+    if (!target.hasTag(TAG_BOT.value)) return;
+  } catch {
+    return; // 非假人实体
+  }
   console.warn(`[MockPlayer] 交互 ${(target as Player).name}（手持 ${itemStack?.typeId ?? "空"} 潜行=${player.isSneaking}）`);
 
   // 取消默认交互行为（玩家之间默认行为不可预测）

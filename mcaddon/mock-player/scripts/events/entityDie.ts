@@ -23,7 +23,11 @@ import { setPose } from "../features/core/pose";
 
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;
-  if (!entity.hasTag(BOT_TAG)) return;
+  try {
+    if (!entity.hasTag(BOT_TAG)) return;
+  } catch {
+    return; // 一次性投掷物等非假人实体
+  }
   const record = botRegistry.get(entity.nameTag);
   if (!record) return;
 
