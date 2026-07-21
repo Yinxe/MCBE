@@ -59,7 +59,12 @@ function getPosSummary(record: BotRecord): string {
 function resolveBotEntity(record: BotRecord): Player | undefined {
   if (!record.entityId) return undefined;
   const entity = world.getEntity(record.entityId);
-  return entity?.hasTag(BOT_TAG) ? (entity as Player) : undefined;
+  if (!entity?.isValid) return undefined;
+  try {
+    return entity.hasTag(BOT_TAG) ? (entity as Player) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** 检查假人是否在线且未死亡 */
