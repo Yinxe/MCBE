@@ -107,7 +107,9 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
       const r = botRegistry.get(botName);
       if (!r || !resolveBotEntity(r)) { player.sendMessage("§c假人不在线或已死亡"); return; }
       const bot = resolveBotEntity(r)!;
-      lookAt(bot as SimulatedPlayer, player.getHeadLocation());
+      // 强加载模式用 Instant（GameTest 无法维持 Continuous），普通模式用 Continuous
+      const isChunkload = r.spawnMode === "chunkload";
+      lookAt(bot as SimulatedPlayer, player.getHeadLocation(), !isChunkload);
       player.sendMessage(`§a§e${botName}§a 正在持续看向你所在的位置`);
     })
     // ── 移动（同步姿态） ──

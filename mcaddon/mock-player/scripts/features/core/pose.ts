@@ -1,7 +1,7 @@
 // ─── 体态操作（核心层） ────────────────────────────────
 // 包含底层体态操作、视角计算、数据持久化，无上层业务依赖。
 
-import { Player, Vector2, Vector3 } from "@minecraft/server";
+import { Player, Vector2, Vector3, system } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "./types";
@@ -24,8 +24,9 @@ export function setPose(
 export function lookAt(
   bot: SimulatedPlayer,
   target: Vector3,
+  continuous: boolean = true,
 ): void {
-  bot.lookAtLocation(target, LookDuration.Continuous);
+  bot.lookAtLocation(target, continuous ? LookDuration.Continuous : LookDuration.Instant);
 }
 
 // ─── 视角计算 ──────────────────────────────────────────
