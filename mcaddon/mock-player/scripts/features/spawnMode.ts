@@ -36,12 +36,25 @@ export const MODE_CHUNKLOAD_INFO: SpawnModeInfo = {
   limitations: [
     "不支持体态同步",
     "TP 时不会设置朝向",
-    "扭头可用（仅头部转向，身体不动）",
+    "扭头不可用（GameTest 限制）",
   ],
 };
 
 export function getSpawnModeInfo(mode?: SpawnMode): SpawnModeInfo {
   return mode === MODE_CHUNKLOAD ? MODE_CHUNKLOAD_INFO : MODE_NORMAL_INFO;
+}
+
+// ─── 工具：普通生成（无体态） ──────────────────────────
+
+function doFallbackSpawn(record: BotRecord, location: any, dimension: any): SimulatedPlayer {
+  const bot = spawnSimulatedPlayer(
+    { x: location.x, y: location.y, z: location.z, dimension },
+    record.name, GameMode.Survival,
+  );
+  bot.teleport(location, { dimension });
+  record.entityId = bot.id;
+  finalizeBotSpawn(bot, record, { x: 0, y: 0 }, undefined, true);
+  return bot;
 }
 
 // ─── 生成入口 ──────────────────────────────────────────
@@ -75,7 +88,6 @@ function doNormalSpawn(
     record.name,
     GameMode.Survival,
   );
-  // spawnSimulatedPlayer 无视坐标，必须 teleport 校准
   bot.teleport(location, { dimension });
   record.entityId = bot.id;
   finalizeBotSpawn(bot, record, rotation, lookTarget);
@@ -91,13 +103,7 @@ function doChunkloadSpawn(
 ): SimulatedPlayer {
   if (!globalTest) {
     console.warn(`[MockPlayer] GameTest 未就绪，${record.name} 改用普通模式`);
-    const bot = spawnSimulatedPlayer(
-      { x: location.x, y: location.y, z: location.z, dimension },
-      record.name, GameMode.Survival,
-    );
-    record.entityId = bot.id;
-    finalizeBotSpawn(bot, record, { x: 0, y: 0 }, undefined, true);
-    return bot;
+    return doFallbackSpawn(record, location, dimension);
   }
 
   const bot = globalTest.spawnSimulatedPlayer({ x: 0, y: 8, z: 0 }, record.name, GameMode.Survival);
@@ -105,15 +111,9 @@ function doChunkloadSpawn(
     (bot as any).setSpawnPoint({ ...location, dimension });
     bot.teleport(location, { dimension });
   } catch (e: any) {
-    console.warn(`[MockPlayer] chunkload 传送失败 ${record.name}: ${e?.message ?? e}`);
+    console.warn(`[MockPlayer] chunkload 传送失败 ${record.name}，改普通模式`);
     bot.disconnect();
-    const fallback = spawnSimulatedPlayer(
-      { x: location.x, y: location.y, z: location.z, dimension },
-      record.name, GameMode.Survival,
-    );
-    record.entityId = fallback.id;
-    finalizeBotSpawn(fallback, record, { x: 0, y: 0 }, undefined, true);
-    return fallback;
+    return doFallbackSpawn(record, location, dimension);
   }
 
   record.entityId = bot.id;
