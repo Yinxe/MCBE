@@ -1,10 +1,36 @@
 // ─── 体态操作（核心层） ────────────────────────────────
 // 包含底层体态操作、视角计算、数据持久化，无上层业务依赖。
+//
+// 对于 GameTest 管理的假人（chunkload 模式），lookAtLocation
+// 会被 GameTest 每 tick 重置。解决方案：定期重新施加视线方向。
 
 import { Player, Vector2, Vector3, system } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "./types";
+
+// ─── 持续视觉锁定（用于 chunkload 模式） ───────────────
+// 实体 ID → { target, intervalId }
+const lookIntervals = new Map<string, { target: Vector3; id: number }>();
+
+function startLookRefresh(entityId: string, target: Vector3, bot: SimulatedPlayer): void {
+  stopLookRefresh(entityId);
+  const id = system.runInterval(() => {
+    try {
+      if (!(bot as any).isValid) { stopLookRefresh(entityId); return; }
+      bot.lookAtLocation(target, LookDuration.Instant);
+    } catch { stopLookRefresh(entityId); }
+  }, 3);
+  lookIntervals.set(entityId, { target, id });
+}
+
+function stopLookRefresh(entityId: string): void {
+  const existing = lookIntervals.get(entityId);
+  if (existing) {
+    system.clearRun(existing.id);
+    lookIntervals.delete(entityId);
+  }
+}
 
 // ─── 底层体态操作 ──────────────────────────────────────
 
@@ -26,7 +52,17 @@ export function lookAt(
   target: Vector3,
   continuous: boolean = true,
 ): void {
-  bot.lookAtLocation(target, continuous ? LookDuration.Continuous : LookDuration.Instant);
+  // 清理旧 interval（如存在）
+  stopLookRefresh((bot as any).id);
+
+  if (continuous) {
+    bot.lookAtLocation(target, LookDuration.Continuous);
+  } else {
+    // 非 Continuous 模式（chunkload）：用 runInterval 定期重施加，
+    // 绕开 GameTest 对实体旋转的每 tick 重置
+    bot.lookAtLocation(target, LookDuration.Instant);
+    startLookRefresh((bot as any).id, target, bot);
+  }
 }
 
 // ─── 视角计算 ──────────────────────────────────────────
