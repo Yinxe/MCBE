@@ -28,6 +28,7 @@ export function sendData(player: Player, record: BotRecord): void {
   // ── 基础信息 ──
   const status = record.death ? "§c死亡" : record.online ? "§a在线" : "§7离线";
   lines.push(`§7状态: ${status}  §7实体ID: §f${record.entityId ?? "无"}`);
+  lines.push(`§7生成模式: ${record.spawnMode === "chunkload" ? "§b强加载" : "§a普通"}`);
   lines.push(`§7潜行: ${record.isSneaking ? "§a是" : "§7否"}  §7控制器: ${record.controllerId ?? "§7无"}`);
 
   // ── 标签 ──
