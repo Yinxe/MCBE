@@ -98,7 +98,7 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     .title(`§l${botName} ${getStatusIcon(record)}`)
     .body(`${getPosSummary(record)}${tagStr}${expStr}`)
     // ── 扭头 ──
-    .buttonWithIcon("§f扭头", "textures/ui/icon_user", () => {
+    .button("§b扭头", () => {
       const r = botRegistry.get(botName);
       if (!r || !resolveBotEntity(r)) { player.sendMessage("§c假人不在线或已死亡"); return; }
       const bot = resolveBotEntity(r)!;
@@ -106,30 +106,30 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
       player.sendMessage(`§a§e${botName}§a 正在持续看向你所在的位置`);
     })
     // ── 移动（同步姿态） ──
-    .buttonWithIcon("§f移动（同步姿态）", "textures/ui/icon_location", () => requireActive(player, botName, (r) => {
+    .button("§b移动（同步姿态）", () => requireActive(player, botName, (r) => {
       system.run(() => { try { tpBotToPlayer(r, player); player.sendMessage(`§a已将 §e${botName}§a 移动到身边，同步姿态`); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
     }))
     // ── 物品交换 ──
-    .buttonWithIcon("§f互换主手", "textures/ui/icon_refresh", () => equip(player, botName, (p, b) => { swapMainhandWithBot(p, b); player.sendMessage(`§a已与 §e${botName}§a 交换主手`); }))
-    .buttonWithIcon("§f互换装备", "textures/ui/icon_setting", () => equip(player, botName, (p, b) => { swapEquipmentWithBot(p, b); saveBotEquipState(b, botRegistry.get(botName)!); player.sendMessage(`§a已与 §e${botName}§a 交换全部装备（含副手）`); }))
-    .buttonWithIcon("§f互换背包", "textures/ui/icon_menu", () => requireActive(player, botName, (_) => doSwapInventory(player, botName)))
-    .buttonWithIcon("§f回收资源", "textures/ui/icon_plus", () => doReclaim(player, botName))
-    .buttonWithIcon("§f改名", "textures/ui/icon_edit", () => doRename(player, botName))
+    .button("§b互换主手", () => equip(player, botName, (p, b) => { swapMainhandWithBot(p, b); player.sendMessage(`§a已与 §e${botName}§a 交换主手`); }))
+    .buttonWithIcon("§b互换装备", "textures/ui/icon_setting", () => equip(player, botName, (p, b) => { swapEquipmentWithBot(p, b); saveBotEquipState(b, botRegistry.get(botName)!); player.sendMessage(`§a已与 §e${botName}§a 交换全部装备（含副手）`); }))
+    .button("§b互换背包", () => requireActive(player, botName, (_) => doSwapInventory(player, botName)))
+    .button("§b回收资源", () => doReclaim(player, botName))
+    .buttonWithIcon("§b改名", "textures/ui/icon_edit", () => doRename(player, botName))
     // ── 状态 ──
     .button(record.online ? "§a下线" : "§a上线", () => toggleOnline(player, botName))
     // ── 行为 ──
-    .buttonWithIcon("§a行为标签", "textures/ui/icon_star", () => showTagManagement(player, botName))
+    .button("§a行为标签", () => showTagManagement(player, botName))
     // ── 设置 ──
-    .buttonWithIcon("§f设置重生点", "textures/ui/icon_setting", () => updateSpawn(player, botName))
+    .buttonWithIcon("§b设置重生点", "textures/ui/icon_setting", () => updateSpawn(player, botName))
     // ── 其他 ──
-    .buttonWithIcon("§f传送到假人", "textures/ui/icon_user", () => tpToBot(player, botName))
-    .buttonWithIcon("§f查看数据", "textures/ui/icon_info", () => { const r = botRegistry.get(botName); if (r) sendData(player, r); })
+    .button("§b传送到假人", () => tpToBot(player, botName))
+    .button("§b查看数据", () => { const r = botRegistry.get(botName); if (r) sendData(player, r); })
     // ── 危险 ──
-    .buttonWithIcon("§c杀死", "textures/ui/icon_warning", () => requireActive(player, botName, (r) => {
+    .button("§c杀死", () => requireActive(player, botName, (r) => {
       system.run(() => { try { killBot(r); player.sendMessage(`§a已杀死 §e${botName}`); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
     }))
     .buttonWithIcon("§c删除", "textures/ui/icon_trash", () => confirmDelete(player, botName))
-    .buttonWithIcon("§f返回列表", "textures/ui/icon_back", () => { if (onBack) onBack(); })
+    .button("§b返回列表", () => { if (onBack) onBack(); })
     .show(player);
 }
 
@@ -162,10 +162,10 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
       : record.deathPoint
         ? formatDimensionId(record.deathPoint.dimension)
         : formatDimensionId(record.respawnPoint.dimension);
-    builder.buttonWithIcon(`${getStatusIcon(record)} §f${record.name} §7${dim}`, "textures/ui/icon_user", () => showBotPanel(player, record.name, () => showBotList(player, onMainMenu)));
+    builder.button(`${getStatusIcon(record)} §f${record.name} §f${dim}`, () => showBotPanel(player, record.name, () => showBotList(player, onMainMenu)));
   }
 
-  builder.button("§7← 返回", () => { if (onMainMenu) onMainMenu(); }).show(player);
+  builder.button("§b← 返回", () => { if (onMainMenu) onMainMenu(); }).show(player);
 }
 
 // ─── 操作实现 ──────────────────────────────────────────
