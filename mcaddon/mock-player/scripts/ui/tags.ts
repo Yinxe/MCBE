@@ -39,7 +39,7 @@ export function showTagManagement(player: Player, botName: string): void {
     .title(`§l行为 · ${botName}`)
     .label("current", `§7当前: §f${currentTagsText}`)
     // ── 快捷开关 ──
-    .toggle("sneaking", "§7潜行", {
+    .toggle("sneaking", "§b潜行", {
       defaultValue: record.isSneaking,
       tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
     })
