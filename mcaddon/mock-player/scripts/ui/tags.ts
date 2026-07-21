@@ -83,16 +83,25 @@ export function showTagManagement(player: Player, botName: string): void {
     const currentMode = currentRecord.spawnMode ?? "normal";
     const targetMode = wantChunkload ? "chunkload" : "normal";
     if (targetMode !== currentMode) {
-      system.run(() => {
-        try {
-          if (currentRecord.online && !currentRecord.death) offlineBot(currentRecord);
-          switchSpawnMode(currentRecord, targetMode);
-          if (!currentRecord.death) onlineBot(currentRecord);
-          player.sendMessage(`§a已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`);
-        } catch (e: any) {
-          player.sendMessage(`§c切换生成模式失败: ${e.message}`);
-        }
-      });
+      const wasOnline = currentRecord.online && !currentRecord.death;
+      // 先下线
+      if (wasOnline) {
+        system.run(() => {
+          try { offlineBot(currentRecord); } catch {}
+        });
+      }
+      switchSpawnMode(currentRecord, targetMode);
+      // 延迟 5tick 等实体完全移除再重新上线
+      if (wasOnline) {
+        system.runTimeout(() => {
+          try {
+            if (!currentRecord.death) onlineBot(currentRecord);
+            player.sendMessage(`§a已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`);
+          } catch (e: any) {
+            player.sendMessage(`§c切换失败: ${e.message}`);
+          }
+        }, 5);
+      }
     }
 
     // ── 处理标签 ──
