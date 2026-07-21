@@ -7,6 +7,9 @@ import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from ".
 import { botRegistry } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
 import { setSneaking } from "../features";
+import { switchSpawnMode, getSpawnModeInfo } from "../features/spawnMode";
+import { onlineBot } from "../features/onlineBot";
+import { offlineBot } from "../features/offlineBot";
 
 // ─── 行为标签管理（含 上线/潜行 快捷开关） ───────────
 
@@ -40,6 +43,10 @@ export function showTagManagement(player: Player, botName: string): void {
       defaultValue: record.isSneaking,
       tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
     })
+    .toggle("chunkload", "§b强加载模式", {
+      defaultValue: record.spawnMode === "chunkload",
+      tooltip: "开启后区块常驻加载，但不可转向。切换时自动重新上线",
+    })
     .label("sep1", "§7━━ 标签设置 ────");
 
   for (const tag of manageableCoexist) {
@@ -68,6 +75,23 @@ export function showTagManagement(player: Player, botName: string): void {
     if (wantSneaking !== currentRecord.isSneaking) {
       system.run(() => {
         try { setSneaking(currentRecord, wantSneaking); } catch (e: any) { player.sendMessage(`§c切换潜行失败: ${e.message}`); }
+      });
+    }
+
+    // ── 处理生成模式切换 ──
+    const wantChunkload = vals.chunkload as boolean;
+    const currentMode = currentRecord.spawnMode ?? "normal";
+    const targetMode = wantChunkload ? "chunkload" : "normal";
+    if (targetMode !== currentMode) {
+      system.run(() => {
+        try {
+          if (currentRecord.online && !currentRecord.death) offlineBot(currentRecord);
+          switchSpawnMode(currentRecord, targetMode);
+          if (!currentRecord.death) onlineBot(currentRecord);
+          player.sendMessage(`§a已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`);
+        } catch (e: any) {
+          player.sendMessage(`§c切换生成模式失败: ${e.message}`);
+        }
       });
     }
 

@@ -20,10 +20,7 @@ export function showCreateForm(player: Player): void {
      .toggle("copyPosture", "§7复刻玩家体态（同步潜行/朝向）", { defaultValue: true, tooltip: "创建时复制玩家的潜行和面向方向" })
      .toggle("respawn", "§7自动重生", { defaultValue: true, tooltip: "开启后假人死亡会自动复活到重生点" })
      .toggle("idle", "§7空闲状态", { defaultValue: true, tooltip: "开启后假人默认处于空闲状态，不执行任何行为" })
-     .dropdown("spawnMode", "§b生成模式", ["§a普通模式（完整体态控制）", "§b强加载模式（区块常驻，不可转向）"], {
-       defaultValueIndex: 0,
-       tooltip: "普通模式：完全体态可操控，无区块常加载能力。强加载模式：区块常驻加载，但不可转向",
-     });
+     .toggle("chunkload", "§b强加载模式", { defaultValue: false, tooltip: "开启后区块常驻加载，但不可设置身体朝向" });
   }).then((vals) => {
     if (!vals) return;
     const botName = (vals.name as string).trim() || generateBotName();
@@ -55,7 +52,7 @@ export function showCreateForm(player: Player): void {
           rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
           lookTarget: copyPosture ? lookTarget : { x: pos.x, y: pos.y, z: pos.z + 1 },
           isSneaking: sneaking,
-          spawnMode: vals.spawnMode === 1 ? "chunkload" : "normal",
+          spawnMode: vals.chunkload ? "chunkload" : "normal",
         });
         player.sendMessage(`§a成功创建模拟玩家 §e${botName}`);
       } catch (e: any) {
