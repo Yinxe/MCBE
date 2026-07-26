@@ -1,4 +1,4 @@
-import { ItemStack, Player, world } from "@minecraft/server";
+import { ItemStack, Player, world, system } from "@minecraft/server";
 import { showMainMenu } from "../ui/menu";
 
 // ─── Token 常量 ────────────────────────────────────────────────────
@@ -34,18 +34,16 @@ export function createTeleportToken(): ItemStack {
  * 使用传送信物时取消事件并打开菜单，避免触发任何方块交互。
  */
 export function subscribeItemUseEvent(): void {
-  // 空中使用 → 取消
   world.beforeEvents.itemUse.subscribe((event) => {
     if (!isTeleportToken(event.itemStack)) return;
     event.cancel = true;
-    showMainMenu(event.source);
+    system.run(() => showMainMenu(event.source));
   });
 
-  // 对着方块使用 → 取消交互
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
     if (!event.itemStack || !isTeleportToken(event.itemStack)) return;
     event.cancel = true;
-    showMainMenu(event.player);
+    system.run(() => showMainMenu(event.player));
   });
 }
 

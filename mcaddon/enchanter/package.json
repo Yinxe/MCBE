@@ -1,7 +1,7 @@
 {
-  "name": "teleporter",
-  "version": "0.0.4",
-  "description": "传送管理 — 玩家间传送请求、TPA、TPHERE、返回点",
+  "name": "enchanter",
+  "version": "0.0.1",
+  "description": "高级附魔管理 — 附魔铭刻、附魔超限，突破原版附魔限制",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
@@ -25,7 +25,7 @@
     "@minecraft/server-ui": "2.0.0"
   },
   "mcbe": {
-    "packName": "传送",
-    "bp": "BP/Teleporter"
+    "packName": "高级附魔",
+    "bp": "BP/Enchanter"
   }
 }
