@@ -155,8 +155,12 @@ export function getSortedWaypoints(playerId: string): WaypointRecord[] {
 /**
  * 获取所有公共传送点，按传送次数(desc)排序。
  * 包含每个传送点的所有者信息。
+ * 需要在 publicWaypointEnabled 开启时才返回数据。
  */
 export function getPublicWaypoints(): WaypointRecord[] {
+  const config = loadConfig();
+  if (!config.publicWaypointEnabled) return [];
+
   const ids = getAllPlayerIds();
   const all: WaypointRecord[] = [];
 

@@ -37,10 +37,10 @@ export function showWarpSelector(player: Player): void {
 
   const options = waypoints.map((wp) => {
     const pin = wp.isPinned ? "★ " : "";
-    const biome = wp.biomeInfo ? ` (${wp.biomeInfo})` : "";
+    const biome = wp.biomeInfo ? ` ${wp.biomeInfo}` : "";
     const dim = shortDimension(wp.dimensionId);
     const loc = `${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}`;
-    return `${pin}${wp.name} §f${wp.category}${biome} §6${dim} ${loc}`;
+    return `${pin}${wp.name}§r${biome} §f${dim} ${loc} §6${wp.teleportCount}次`;
   });
 
   new ModalFormBuilder()
@@ -85,9 +85,9 @@ export function showWarpManagement(player: Player): void {
     const pubIcon = wp.isPublic ? " 🌐" : "";
     const dim = shortDimension(wp.dimensionId);
     const loc = `${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}`;
-    const biome = wp.biomeInfo ? ` §f(${wp.biomeInfo})` : "";
+    const biome = wp.biomeInfo ? ` ${wp.biomeInfo}` : "";
     const label =
-      `${pinIcon}§e${wp.name}§r ${wp.category}${pubIcon}${biome}\n§f${dim} ${loc} §6${wp.teleportCount}次`;
+      `${pinIcon}§e${wp.name}§r${biome}${pubIcon}\n§f${dim} ${loc} §6${wp.teleportCount}次`;
 
     form.button(label, () => showWaypointActions(player, wp));
   }
@@ -109,10 +109,10 @@ function showWaypointActions(
   new ModalFormBuilder()
     .title(`§l${wp.isPinned ? "★ " : ""}${wp.name}`)
     .label("info",
-      `§b分类: §f${wp.category}   §b群系: §f${wp.biomeInfo || "未知"}\n` +
-      `§b坐标: §f${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}\n` +
-      `§b维度: §f${fullDimension(wp.dimensionId)}\n` +
-      `§b传送: §f${wp.teleportCount}次   §b公共: ${wp.isPublic ? "§a是" : "§c否"}`,
+      `§7${wp.category}   §7${wp.biomeInfo || "未知"}\n` +
+      `§b坐标 §f${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}\n` +
+      `§b维度 §f${fullDimension(wp.dimensionId)}\n` +
+      `§b传送 §f${wp.teleportCount}次   §b公共 ${wp.isPublic ? "§a是" : "§c否"}`,
     )
     .divider()
     .textField("name", "名称", { defaultValue: wp.name })
@@ -160,24 +160,29 @@ function showWaypointActions(
         }
       }
 
-      // 更新坐标到当前位置
-      if (shouldUpdateLocation) {
-        updateWaypointLocation(
-          player.id, wp.id,
-          player.location,
-          player.dimension.id,
-        );
-        player.sendMessage(`§a已更新 §e${newName} §a的坐标到当前位置`);
-      }
+      // 互斥检验：更新坐标和传送到此不能同时为 true
+      if (shouldUpdateLocation && shouldTeleport) {
+        player.sendMessage("§c更新坐标和传送到传送点不能同时使用");
+      } else {
+        // 更新坐标到当前位置
+        if (shouldUpdateLocation) {
+          updateWaypointLocation(
+            player.id, wp.id,
+            player.location,
+            player.dimension.id,
+          );
+          player.sendMessage(`§a已更新 §e${newName} §a的坐标到当前位置`);
+        }
 
-      // 传送到传送点
-      if (shouldTeleport) {
-        incrementTeleportCount(player.id, wp.id);
-        const ok = teleportPlayerTo(player, wp.location, wp.dimensionId);
-        if (ok) {
-          notifySuccess(player, `§a已传送到 §e${newName} §6（${formatLocation(wp.location, wp.dimensionId)}§6）`);
-        } else {
-          player.sendMessage(`§c传送到 §e${newName}§c 失败`);
+        // 传送到传送点
+        if (shouldTeleport) {
+          incrementTeleportCount(player.id, wp.id);
+          const ok = teleportPlayerTo(player, wp.location, wp.dimensionId);
+          if (ok) {
+            notifySuccess(player, `§a已传送到 §e${newName} §6（${formatLocation(wp.location, wp.dimensionId)}§6）`);
+          } else {
+            player.sendMessage(`§c传送到 §e${newName}§c 失败`);
+          }
         }
       }
 
@@ -209,7 +214,7 @@ export function showCreateWarpForm(player: Player): void {
 
   new ModalFormBuilder()
     .title("§l新建传送点")
-    .label("info", detectedBiome ? `§b检测到群系: §f${detectedBiome}` : "§c（无法检测群系）")
+    .label("info", detectedBiome ? `§b检测到 §f${detectedBiome}` : "§c（无法检测）")
     .divider()
     .textField("name", "传送点名称", {
       defaultValue: "",

@@ -1,6 +1,6 @@
 {
   "name": "teleporter",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "传送管理 — 玩家间传送请求、TPA、TPHERE、返回点",
   "private": true,
   "devDependencies": {

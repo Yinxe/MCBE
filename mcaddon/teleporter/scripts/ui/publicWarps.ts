@@ -36,8 +36,9 @@ export function showPublicWarpsList(
   for (const wp of pageWaypoints) {
     const dim = shortDimension(wp.dimensionId);
     const loc = `${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}`;
+    const biome = wp.biomeInfo ? ` ${wp.biomeInfo}` : "";
     const label =
-      `§e${wp.name}§r §f(${wp.category})\n§f${dim} ${loc} §6${wp.teleportCount}次 §e@${wp.ownerName}`;
+      `§e${wp.name}§r${biome}\n§f${dim} ${loc} §6${wp.teleportCount}次 §e@${wp.ownerName}`;
 
     form.button(label, () => {
       incrementTeleportCount(player.id, wp.id);
