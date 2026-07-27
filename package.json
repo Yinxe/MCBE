@@ -19,15 +19,12 @@
     "clean": "pnpm -r run clean",
     "lint": "pnpm -r run lint",
     "format": "prettier --write .",
-
     "build": "pnpm -r run build",
     "build:mock-player": "pnpm --filter mock-player run build",
     "build:keepinventory": "pnpm --filter keepinventory run build",
     "build:smartwarehouse": "pnpm --filter smartwarehouse run build",
     "build:antibundledup": "pnpm --filter antibundledup run build",
     "build:teleporter": "pnpm --filter teleporter run build",
-    "build:enchanter": "pnpm --filter enchanter run build",
-
     "pack:mock-player": "pnpm --filter mock-player run pack",
     "pack:keepinventory": "pnpm --filter keepinventory run pack",
     "pack:craftablerarities": "pnpm --filter craftablerarities run pack",
@@ -35,7 +32,7 @@
     "pack:antibundledup": "pnpm --filter antibundledup run pack",
     "pack:teleporter": "pnpm --filter teleporter run pack",
     "pack:enchanter": "pnpm --filter enchanter run pack",
-
-    "sync-version": "node packages/toolkit/bin/sync-version.mjs"
+    "sync-version": "node packages/toolkit/bin/sync-version.mjs",
+    "pack:stackable": "pnpm --filter stackable run pack"
   }
 }
