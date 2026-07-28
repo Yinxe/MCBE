@@ -1,6 +1,6 @@
 {
   "name": "keepinventory",
-  "version": "2.0.0",
+  "version": "1.0.0",
   "description": "死亡不掉落·无需开启作弊·保留成就·极限复活",
   "private": true,
   "devDependencies": {
