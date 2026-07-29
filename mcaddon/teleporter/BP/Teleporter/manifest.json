@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "传送 v0.0.5",
-    "description": "传送管理 - 玩家间传送请求、TPA、TPHERE、返回点 v0.0.5",
+    "name": "传送 v0.0.6",
+    "description": "传送管理 - 玩家间传送请求、TPA、TPHERE、返回点 v0.0.6",
     "uuid": "84645fc0-cf8b-4b06-885e-0e0f39e18874",
     "version": [
       0,
       0,
-      5
+      6
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         0,
         0,
-        5
+        6
       ],
       "uuid": "5d9bb899-ef94-4e3a-a40f-707c430b8404",
       "type": "data"
@@ -34,7 +34,7 @@
       "version": [
         0,
         0,
-        5
+        6
       ],
       "entry": "scripts/main.js"
     }

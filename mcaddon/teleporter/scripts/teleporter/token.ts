@@ -1,4 +1,4 @@
-import { ItemStack, Player, world, system } from "@minecraft/server";
+import { ItemLockMode, ItemStack, Player, world, system } from "@minecraft/server";
 import { showMainMenu } from "../ui/menu";
 
 // ─── Token 常量 ────────────────────────────────────────────────────
@@ -24,6 +24,7 @@ export function createTeleportToken(): ItemStack {
   item.nameTag = TOKEN_NAME;
   item.setLore([TOKEN_LORE]);
   item.keepOnDeath = true;
+  item.lockMode = ItemLockMode.inventory;
   return item;
 }
 

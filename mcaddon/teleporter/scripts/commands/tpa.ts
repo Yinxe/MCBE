@@ -17,16 +17,31 @@ import {
 
 const pendingRequests = new Map<string, TeleportRequest>();
 
+/**
+ * 创建传送请求。
+ * 如果该目标已有未处理的请求，通知旧请求方被覆盖。
+ */
 function createRequest(
   fromId: string,
   fromName: string,
   toId: string,
   type: TeleportRequestType,
 ): void {
+  // 清理发送方自己的旧请求
   for (const [key, req] of pendingRequests) {
     if (req.toId === toId && req.fromId === fromId) {
       pendingRequests.delete(key);
     }
+  }
+
+  // 如果目标已有来自其他人的请求，通知旧请求方被覆盖
+  const existing = pendingRequests.get(toId);
+  if (existing) {
+    const oldRequester = world.getEntity(existing.fromId) as Player | undefined;
+    if (oldRequester) {
+      oldRequester.sendMessage(`§6你的传送请求已被 §e${fromName}§6 的新请求覆盖`);
+    }
+    pendingRequests.delete(toId);
   }
 
   const request: TeleportRequest = {
@@ -45,9 +60,54 @@ function createRequest(
   }, Math.ceil(TELEPORT_REQUEST_TIMEOUT_MS / 50));
 }
 
-function findPendingRequest(playerId: string): TeleportRequest | undefined {
+/** @internal 导出供 UI 模块使用 */
+export function findPendingRequest(playerId: string): TeleportRequest | undefined {
   cleanExpiredRequests();
   return pendingRequests.get(playerId);
+}
+
+/** @internal 执行接受请求逻辑 */
+export function acceptRequest(player: Player, request: TeleportRequest): boolean {
+  pendingRequests.delete(player.id);
+  const requester = world.getEntity(request.fromId) as Player | undefined;
+  if (!requester) {
+    player.sendMessage("§c请求方已不在游戏中");
+    return false;
+  }
+
+  if (request.type === "tpa") {
+    const loc = formatLocation(player.location, player.dimension.id);
+    const ok = teleportPlayerTo(requester, player.location, player.dimension.id);
+    if (ok) {
+      requester.sendMessage(`§a请求被接受，已传送到 §e${player.name}§a 身边 §6（${loc}§6）`);
+      player.sendMessage(`§a已接受 §e${requester.name}§a 的传送请求`);
+    } else {
+      player.sendMessage("§c传送失败，请稍后重试");
+      requester.sendMessage("§c传送失败，目标位置可能未加载");
+    }
+    return ok;
+  } else {
+    const loc = formatLocation(requester.location, requester.dimension.id);
+    const ok = teleportPlayerTo(player, requester.location, requester.dimension.id);
+    if (ok) {
+      requester.sendMessage(`§e${player.name} §a已传送到你身边 §6（${loc}§6）`);
+      player.sendMessage(`§a已接受 §e${requester.name}§a 的传送请求，传送到他身边`);
+    } else {
+      player.sendMessage("§c传送失败，请稍后重试");
+      requester.sendMessage("§c传送失败，目标位置可能未加载");
+    }
+    return ok;
+  }
+}
+
+/** @internal 执行拒绝请求逻辑 */
+export function denyRequest(player: Player, request: TeleportRequest): void {
+  pendingRequests.delete(player.id);
+  const requester = world.getEntity(request.fromId) as Player | undefined;
+  if (requester) {
+    requester.sendMessage(`§e${player.name} §c拒绝了你的传送请求`);
+  }
+  player.sendMessage(`§c已拒绝 §e${request.fromName}§c 的传送请求`);
 }
 
 function cleanExpiredRequests(): void {
@@ -135,35 +195,7 @@ export function registerTpAcceptCommand(registry: any): void {
       player.sendMessage("§c你没有任何待处理的传送请求 §6（可能已超时）");
       return;
     }
-
-    pendingRequests.delete(player.id);
-    const requester = world.getEntity(request.fromId) as Player | undefined;
-    if (!requester) {
-      player.sendMessage("§c请求方已不在游戏中");
-      return;
-    }
-
-    if (request.type === "tpa") {
-      const loc = formatLocation(player.location, player.dimension.id);
-      const ok = teleportPlayerTo(requester, player.location, player.dimension.id);
-      if (ok) {
-        requester.sendMessage(`§a请求被接受，已传送到 §e${player.name}§a 身边 §6（${loc}§6）`);
-        player.sendMessage(`§a已接受 §e${requester.name}§a 的传送请求`);
-      } else {
-        player.sendMessage("§c传送失败，请稍后重试");
-        requester.sendMessage("§c传送失败，目标位置可能未加载");
-      }
-    } else {
-      const loc = formatLocation(requester.location, requester.dimension.id);
-      const ok = teleportPlayerTo(player, requester.location, requester.dimension.id);
-      if (ok) {
-        requester.sendMessage(`§e${player.name} §a已传送到你身边 §6（${loc}§6）`);
-        player.sendMessage(`§a已接受 §e${requester.name}§a 的传送请求，传送到他身边`);
-      } else {
-        player.sendMessage("§c传送失败，请稍后重试");
-        requester.sendMessage("§c传送失败，目标位置可能未加载");
-      }
-    }
+    acceptRequest(player, request);
   });
 }
 
@@ -179,13 +211,7 @@ export function registerTpDenyCommand(registry: any): void {
       player.sendMessage("§c你没有任何待处理的传送请求 §6（可能已超时）");
       return;
     }
-
-    pendingRequests.delete(player.id);
-    const requester = world.getEntity(request.fromId) as Player | undefined;
-    if (requester) {
-      requester.sendMessage(`§e${player.name} §c拒绝了你的传送请求`);
-    }
-    player.sendMessage(`§c已拒绝 §e${request.fromName}§c 的传送请求`);
+    denyRequest(player, request);
   });
 }
 

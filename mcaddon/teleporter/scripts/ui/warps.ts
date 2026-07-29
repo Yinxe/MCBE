@@ -9,6 +9,7 @@ import {
 import {
   getSortedWaypoints,
   createWaypoint,
+  deleteWaypoint,
   togglePin,
   togglePublic,
   incrementTeleportCount,
@@ -126,6 +127,8 @@ function showWaypointActions(
       tooltip: "将传送点坐标更新到你当前所在位置" })
     .toggle("doTeleport", "§a传送到此传送点", { defaultValue: false,
       tooltip: "保存后立即传送到此传送点" })
+    .toggle("deleteWarp", "§c删除此传送点", { defaultValue: false,
+      tooltip: "永久删除此传送点" })
     .submitButton("§a保存")
     .show(player)
     .then((vals) => {
@@ -139,6 +142,23 @@ function showWaypointActions(
       const newPublic = vals.isPublic as boolean;
       const shouldUpdateLocation = vals.updateLocation as boolean;
       const shouldTeleport = vals.doTeleport as boolean;
+      const shouldDelete = vals.deleteWarp as boolean;
+
+      // 互斥检验：三个操作不能同时选择
+      const selectedOps = [shouldUpdateLocation, shouldTeleport, shouldDelete].filter(Boolean);
+      if (selectedOps.length > 1) {
+        player.sendMessage("§c更新坐标、传送和删除不能同时使用");
+        showWarpManagement(player);
+        return;
+      }
+
+      // 删除操作（优先处理，跳过保存编辑）
+      if (shouldDelete) {
+        deleteWaypoint(player.id, wp.id);
+        player.sendMessage(`§c已删除传送点 §e${newName}`);
+        showWarpManagement(player);
+        return;
+      }
 
       // 保存编辑
       editWaypoint(player.id, wp.id, {
@@ -160,29 +180,24 @@ function showWaypointActions(
         }
       }
 
-      // 互斥检验：更新坐标和传送到此不能同时为 true
-      if (shouldUpdateLocation && shouldTeleport) {
-        player.sendMessage("§c更新坐标和传送到传送点不能同时使用");
-      } else {
-        // 更新坐标到当前位置
-        if (shouldUpdateLocation) {
-          updateWaypointLocation(
-            player.id, wp.id,
-            player.location,
-            player.dimension.id,
-          );
-          player.sendMessage(`§a已更新 §e${newName} §a的坐标到当前位置`);
-        }
+      // 更新坐标到当前位置
+      if (shouldUpdateLocation) {
+        updateWaypointLocation(
+          player.id, wp.id,
+          player.location,
+          player.dimension.id,
+        );
+        player.sendMessage(`§a已更新 §e${newName} §a的坐标到当前位置`);
+      }
 
-        // 传送到传送点
-        if (shouldTeleport) {
-          incrementTeleportCount(player.id, wp.id);
-          const ok = teleportPlayerTo(player, wp.location, wp.dimensionId);
-          if (ok) {
-            notifySuccess(player, `§a已传送到 §e${newName} §6（${formatLocation(wp.location, wp.dimensionId)}§6）`);
-          } else {
-            player.sendMessage(`§c传送到 §e${newName}§c 失败`);
-          }
+      // 传送到传送点
+      if (shouldTeleport) {
+        incrementTeleportCount(player.id, wp.id);
+        const ok = teleportPlayerTo(player, wp.location, wp.dimensionId);
+        if (ok) {
+          notifySuccess(player, `§a已传送到 §e${newName} §6（${formatLocation(wp.location, wp.dimensionId)}§6）`);
+        } else {
+          player.sendMessage(`§c传送到 §e${newName}§c 失败`);
         }
       }
 
