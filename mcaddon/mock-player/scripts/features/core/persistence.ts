@@ -9,8 +9,9 @@
 // 载入时用 getDynamicPropertyIds() 枚举所有 key 按前缀过滤
 // 清理时只删 inv: 和 equip: 子 key，不动主 record
 
-import { world } from "@minecraft/server";
-import { BotRecord, DP_PREFIX, SerializedItemStack, INVENTORY_SIZE } from "./types";
+import { world, Player } from "@minecraft/server";
+import { SimulatedPlayer } from "@minecraft/server-gametest";
+import { BotRecord, DP_PREFIX, SerializedItemStack, INVENTORY_SIZE, TAG_PREFIX } from "./types";
 
 // ─── 全局状态 ──────────────────────────────────────────────
 
@@ -46,6 +47,21 @@ export function isBotRestored(name: string): boolean {
 export function removeBotRestored(name: string): void {
   restoredBots.delete(name);
   console.warn(`[MockPlayer] 清除恢复标记 ${name}`);
+}
+
+/**
+ * 根据假人名解析 SimulatedPlayer 实体。
+ * 共享函数，避免各 feature 文件重复。
+ */
+export function resolveBotPlayer(name: string): SimulatedPlayer | undefined {
+  const record = botRegistry.get(name);
+  if (!record || !record.entityId) return undefined;
+  try {
+    const e = world.getEntity(record.entityId);
+    if (!e?.isValid) return undefined;
+    const tag = `${TAG_PREFIX}bot`;
+    return e.hasTag(tag) ? (e as SimulatedPlayer) : undefined;
+  } catch { return undefined; }
 }
 
 /** 自动生成假人名的计数器（sim001、sim002…） */

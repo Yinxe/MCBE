@@ -6,7 +6,6 @@
 // 已弃用功能移除此面板：
 //   - 一键卸甲（合并至回收资源）
 //   - 传送到身边（已合并至移动→同步姿态）
-//   - 移动至坐标（可通过 /mp:move 命令）
 //   - 互换副手（合并至互换装备，SWAP_SLOTS 已含 Offhand）
 
 import { Player, system, world } from "@minecraft/server";
@@ -34,7 +33,10 @@ import {
 import { saveBotEquipState } from "../features/equip";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
-import { confirmDelete } from "./move";
+import { startFollow, stopFollow, isFollowing } from "../features/follow";
+import { showTridentSelector } from "./trident";
+import { showMainhandSelector } from "./mainhand";
+import { confirmDelete, showMoveForm } from "./move";
 import { showTagManagement } from "./tags";
 import { sendData } from "../commands/data";
 
@@ -102,8 +104,8 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
   new ActionFormBuilder()
     .title(`§l${botName} ${getStatusIcon(record)}`)
     .body(`${getPosSummary(record)}${tagStr}${expStr}`)
-    // ── 扭头 ──
-    .buttonWithIcon("§b扭头", "textures/ui/icon_setting", () => {
+    // ── 看向我 ──
+    .buttonWithIcon("§b看向我", "textures/ui/icon_setting", () => {
       const r = botRegistry.get(botName);
       if (!r || !resolveBotEntity(r)) { player.sendMessage("§c假人不在线或已死亡"); return; }
       const bot = resolveBotEntity(r)!;
@@ -112,12 +114,62 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
         return;
       }
       lookAt(bot as SimulatedPlayer, player.getHeadLocation());
-      player.sendMessage(`§a§e${botName}§a 正在持续看向你所在的位置`);
+      player.sendMessage(`§a§e${botName}§a 正在持续看向你`);
     })
-    // ── 移动（同步姿态） ──
-    .buttonWithIcon("§b移动（同步姿态）", "textures/ui/icon_exit", () => requireActive(player, botName, (r) => {
-      system.run(() => { try { tpBotToPlayer(r, player); player.sendMessage(`§a已将 §e${botName}§a 移动到身边，同步姿态`); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
+    // ── 同步（视角/位置/体态） ──
+    .buttonWithIcon("§b同步（视角/位置/体态）", "textures/ui/icon_exit", () => requireActive(player, botName, (r) => {
+      system.run(() => {
+        try {
+          tpBotToPlayer(r, player);
+          // ── 读取同步后的体态信息 ──
+          const bot = resolveBotEntity(r);
+          if (!bot) { player.sendMessage(`§a已同步 §e${botName}`); return; }
+          const rot = bot.getRotation();
+          const dim = formatDimensionId(bot.dimension.id);
+          const loc = bot.location;
+          // 检测注视方向的目标方块
+          let lookMsg = "";
+          try {
+            const hit = bot.getBlockFromViewDirection({ maxDistance: 64 });
+            if (hit) {
+              const b = hit.block;
+              lookMsg = `§7注视目标: §f${b.typeId} §7@ §f${Math.floor(b.location.x)} ${Math.floor(b.location.y)} ${Math.floor(b.location.z)}`;
+            }
+          } catch { /* 检测失败忽略 */ }
+          const sneak = bot.isSneaking ? "§a潜行" : "§7站立";
+          player.sendMessage(
+            `§a已同步 §e${botName}§a\n` +
+            `§7维度: ${dim}\n` +
+            `§7坐标: §f${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}\n` +
+            `§7朝向: §f${Math.floor(rot.x)}° ${Math.floor(rot.y)}°\n` +
+            `§7体态: ${sneak}` +
+            (lookMsg ? `\n${lookMsg}` : "")
+          );
+        } catch (e: any) { player.sendMessage(`§c${e.message}`); }
+      });
     }))
+    .buttonWithIcon("§b选择主手", "textures/ui/icon_edit", () => {
+      showMainhandSelector(player, botName);
+    })
+    .buttonWithIcon("§b跟随/停止", "textures/ui/icon_multiplayer", () => {
+      system.run(() => {
+        if (isFollowing(botName)) {
+          stopFollow(botName);
+          player.sendMessage(`§a已停止 §e${botName}§a 的跟随`);
+        } else {
+          const r = botRegistry.get(botName);
+          if (!r || !r.online || r.death) { player.sendMessage("§c假人不在线或已死亡"); return; }
+          const ok = startFollow(botName, player.id);
+          player.sendMessage(ok ? `§a§e${botName}§a 正在跟随你` : "§c启动跟随失败");
+        }
+      });
+    })
+    .buttonWithIcon("§b投掷三叉戟", "textures/ui/icon_trade", () => {
+      showTridentSelector(player, botName);
+    })
+    .buttonWithIcon("§b移动至坐标", "textures/ui/icon_exit", () => {
+      showMoveForm(player, botName);
+    })
     // ── 物品交换 ──
     .buttonWithIcon("§b互换主手", "textures/ui/icon_copy", () => equip(player, botName, (p, b) => { swapMainhandWithBot(p, b); player.sendMessage(`§a已与 §e${botName}§a 交换主手`); }))
     .buttonWithIcon("§b互换装备", "textures/ui/icon_setting", () => equip(player, botName, (p, b) => { swapEquipmentWithBot(p, b); saveBotEquipState(b, botRegistry.get(botName)!); player.sendMessage(`§a已与 §e${botName}§a 交换全部装备（含副手）`); }))

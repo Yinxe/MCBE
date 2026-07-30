@@ -18,6 +18,8 @@ import { registerTagsCommand, registerTagCommand } from "./tag";
 import { registerMenuCommand } from "./menu";
 import { registerDataCommand } from "./data";
 import { registerReclaimCommand } from "./reclaim";
+import { registerFollowCommand } from "./follow";
+import { registerTridentCommand } from "./trident";
 
 export function registerAllCommands(event: StartupEvent): void {
   const registry = event.customCommandRegistry;
@@ -40,4 +42,6 @@ export function registerAllCommands(event: StartupEvent): void {
   registerMenuCommand(registry);
   registerDataCommand(registry);
   registerReclaimCommand(registry);
+  registerFollowCommand(registry);
+  registerTridentCommand(registry);
 }
