@@ -12,6 +12,7 @@
 import { Player, Container, system, world } from "@minecraft/server";
 
 import { BOT_TAG } from "./core/tags";
+import { color } from "@yinxe/toolkit";
 
 // ─── 配置常量 ──────────────────────────────────────────
 
@@ -124,7 +125,7 @@ function swapSlots(container: Container, slotA: number, slotB: number): void {
 // ─── 广播 ──────────────────────────────────────────────
 
 function broadcast(botName: string, message: string): void {
-  world.sendMessage(`§e[${botName}] ${message}`);
+  world.sendMessage(`${color.playerName}[${botName}] ${message}`);
 }
 
 // ─── 冷却 ──────────────────────────────────────────────
@@ -203,7 +204,7 @@ export function checkMainHandDurability(bot: Player, changedSlot: number): void 
 
       const newItem = container.getItem(0);
       const newName = newItem ? getItemDisplayName(newItem) : currentName;
-      broadcast(bot.name, `§a工具已自动更换为 §f${newName}`);
+      broadcast(bot.name, `${color.success}工具已自动更换为 ${color.info}${newName}`);
       console.warn(`[MockPlayer] 工具补充 ${bot.name}: ${handItem.typeId} → slot ${candidate.slot}`);
     } else {
       // 2) 无可用替代工具 → 保护性移出主手
@@ -211,7 +212,7 @@ export function checkMainHandDurability(bot: Player, changedSlot: number): void 
       const targetSlot = emptySlot ?? findAnySlot(handSlot, container.size);
 
       swapSlots(container, handSlot, targetSlot);
-      broadcast(bot.name, `§c${currentName} 耐久不足，背包中无替代工具，已保护性收起`);
+      broadcast(bot.name, `${color.error}${currentName} 耐久不足，背包中无替代工具，已保护性收起`);
       console.warn(`[MockPlayer] 工具保护 ${bot.name}: ${handItem.typeId} → slot ${targetSlot}`);
     }
 

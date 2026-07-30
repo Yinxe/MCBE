@@ -1,0 +1,11 @@
+{
+  "name": "@yinxe/toolkit-build",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Build tools for MCBE addon monorepo (@yinxe/toolkit 构建子包)",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@types/node": "*"
+  }
+}

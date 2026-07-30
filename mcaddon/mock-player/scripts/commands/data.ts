@@ -1,7 +1,8 @@
 // ─── /mp:data <name> — 查看模拟玩家完整数据 ────────────
 
 import { Player, world, EntityInventoryComponent, EntityEquippableComponent, EquipmentSlot, CustomCommandParamType, CommandPermissionLevel } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
+import { color } from "@yinxe/toolkit";
 
 import { BotRecord } from "../features/core/types";
 import { getTagDef } from "../features/core/tags";
@@ -11,7 +12,7 @@ import { isChunkLoaded } from "../features/core/utils";
 
 export function sendData(player: Player, record: BotRecord): void {
   const lines: string[] = [];
-  lines.push(`§6===== §e${record.name} §6数据总览 =====`);
+  lines.push(`${color.gold}===== ${color.playerName}${record.name} ${color.gold}数据总览 =====`);
 
   // 根据记录的最后位置检测区块加载状态（未上线的假人取重生点）
   const checkPos = record.lastPoint ?? record.respawnPoint;
@@ -19,17 +20,17 @@ export function sendData(player: Player, record: BotRecord): void {
     try {
       const dim = world.getDimension(checkPos.dimension);
       const loaded = isChunkLoaded(dim, checkPos.location);
-      lines.push(`§7区块(${formatDimensionId(checkPos.dimension)} ${formatPos(checkPos.location)}): ${loaded ? "§a已加载" : "§c未加载"}`);
+      lines.push(`${color.muted}区块(${formatDimensionId(checkPos.dimension)} ${formatPos(checkPos.location)}): ${loaded ? `${color.success}已加载` : `${color.error}未加载`}`);
     } catch {
-      lines.push(`§7区块: §c检测失败`);
+      lines.push(`${color.muted}区块: ${color.error}检测失败`);
     }
   }
 
   // ── 基础信息 ──
-  const status = record.death ? "§c死亡" : record.online ? "§a在线" : "§7离线";
-  lines.push(`§7状态: ${status}  §7实体ID: §f${record.entityId ?? "无"}`);
-  lines.push(`§7生成模式: ${record.spawnMode === "chunkload" ? "§b强加载" : "§a普通"}`);
-  lines.push(`§7潜行: ${record.isSneaking ? "§a是" : "§7否"}  §7控制器: ${record.controllerId ?? "§7无"}`);
+  const status = record.death ? `${color.error}死亡` : record.online ? `${color.success}在线` : `${color.muted}离线`;
+  lines.push(`${color.muted}状态: ${status}  ${color.muted}实体ID: ${color.info}${record.entityId ?? "无"}`);
+  lines.push(`${color.muted}生成模式: ${record.spawnMode === "chunkload" ? `${color.accent}强加载` : `${color.success}普通`}`);
+  lines.push(`${color.muted}潜行: ${record.isSneaking ? `${color.success}是` : `${color.muted}否`}  ${color.muted}控制器: ${record.controllerId ?? `${color.muted}无`}`);
 
   // ── 标签 ──
   const tagLabels = record.tags
@@ -37,21 +38,21 @@ export function sendData(player: Player, record: BotRecord): void {
       const def = getTagDef(t);
       return def ? def.label : t;
     })
-    .join(" §7| ");
-  lines.push(`§7标签: §b${tagLabels}`);
+    .join(` ${color.muted}| `);
+  lines.push(`${color.muted}标签: ${color.accent}${tagLabels}`);
 
   // ── 位置 ──
   if (record.lastPoint) {
-    lines.push(`§7最后位置: ${formatPos(record.lastPoint.location)} §8${formatDimensionId(record.lastPoint.dimension)}`);
+    lines.push(`${color.muted}最后位置: ${formatPos(record.lastPoint.location)} ${color.darkGray}${formatDimensionId(record.lastPoint.dimension)}`);
   }
-  lines.push(`§7重生点: ${formatPos(record.respawnPoint.location)} §8${formatDimensionId(record.respawnPoint.dimension)}`);
+  lines.push(`${color.muted}重生点: ${formatPos(record.respawnPoint.location)} ${color.darkGray}${formatDimensionId(record.respawnPoint.dimension)}`);
   if (record.deathPoint) {
-    lines.push(`§7死亡点: ${formatPos(record.deathPoint.location)} §8${formatDimensionId(record.deathPoint.dimension)}`);
+    lines.push(`${color.muted}死亡点: ${formatPos(record.deathPoint.location)} ${color.darkGray}${formatDimensionId(record.deathPoint.dimension)}`);
   }
 
   // ── 经验 ──
   const exp = record.experience;
-  lines.push(`§7经验: §bLv.${exp.level} §7进度 §f${exp.xpProgress} §7/ §f${getTotalXpForLevels(exp.level + 1) - getTotalXpForLevels(exp.level)} §7总经验 §f${exp.totalXp}`);
+  lines.push(`${color.muted}经验: ${color.accent}Lv.${exp.level} ${color.muted}进度 ${color.info}${exp.xpProgress} ${color.muted}/ ${color.info}${getTotalXpForLevels(exp.level + 1) - getTotalXpForLevels(exp.level)} ${color.muted}总经验 ${color.info}${exp.totalXp}`);
 
   // ── 背包和装备（在线时读取实时数据） ──
   if (record.online && record.entityId) {
@@ -59,20 +60,20 @@ export function sendData(player: Player, record: BotRecord): void {
     if (bot) {
       // ── 身位/视角 ──
       const rot = bot.getRotation();
-      lines.push(`§7身位俯仰/偏航: §f${Math.floor(rot.x)}° §7/ §f${Math.floor(rot.y)}°`);
+      lines.push(`${color.muted}身位俯仰/偏航: ${color.info}${Math.floor(rot.x)}° ${color.muted}/ ${color.info}${Math.floor(rot.y)}°`);
       try {
         const hit = (bot as any).getBlockFromViewDirection?.({ maxDistance: 64 });
         if (hit) {
           const b = hit.block;
-          lines.push(`§7视角方块: §f${b.typeId} §7@ ${formatPos(b.location)}`);
+          lines.push(`${color.muted}视角方块: ${color.info}${b.typeId} ${color.muted}@ ${formatPos(b.location)}`);
         } else {
-          lines.push(`§7视角方块: §7无`);
+          lines.push(`${color.muted}视角方块: ${color.muted}无`);
         }
-      } catch { lines.push(`§7视角方块: §c获取失败`); }
+      } catch { lines.push(`${color.muted}视角方块: ${color.error}获取失败`); }
       // 装备
       const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
       if (equip) {
-        lines.push(`§7━━ 装备 ━━`);
+        lines.push(`${color.muted}━━ 装备 ━━`);
         const slots: [string, EquipmentSlot][] = [
           ["头盔", EquipmentSlot.Head],
           ["胸甲", EquipmentSlot.Chest],
@@ -86,9 +87,9 @@ export function sendData(player: Player, record: BotRecord): void {
           if (item) {
             const serialized = serializeItemStack(item);
             const ench = serialized.enchantments && serialized.enchantments.length > 0
-              ? ` §7[${serialized.enchantments.map((e) => `${e.id} ${e.level}`).join(" ")}]`
+              ? ` ${color.muted}[${serialized.enchantments.map((e) => `${e.id} ${e.level}`).join(" ")}]`
               : "";
-            lines.push(` §7${label}: §f${item.typeId} §7x${item.amount}${ench}`);
+            lines.push(` ${color.muted}${label}: ${color.info}${item.typeId} ${color.muted}x${item.amount}${ench}`);
           }
         }
       }
@@ -96,7 +97,7 @@ export function sendData(player: Player, record: BotRecord): void {
       // 背包详情（逐格显示）
       const inv = bot.getComponent("minecraft:inventory") as EntityInventoryComponent;
       if (inv?.container) {
-        lines.push(`§7━━ 背包(0-8快捷栏 9-35背包) ━━`);
+        lines.push(`${color.muted}━━ 背包(0-8快捷栏 9-35背包) ━━`);
         let itemCount = 0;
         for (let i = 0; i < inv.container.size; i++) {
           const item = inv.container.getItem(i);
@@ -104,16 +105,16 @@ export function sendData(player: Player, record: BotRecord): void {
           itemCount += item.amount;
           const serialized = serializeItemStack(item);
           const ench = serialized.enchantments && serialized.enchantments.length > 0
-            ? ` §7[${serialized.enchantments.map((e) => `${e.id} ${e.level}`).join(" ")}]`
+            ? ` ${color.muted}[${serialized.enchantments.map((e) => `${e.id} ${e.level}`).join(" ")}]`
             : "";
           const slotLabel = i < 9 ? `快捷${i}` : `背包${i - 9}`;
-          lines.push(` §7${slotLabel}: §f${item.typeId} §7x${item.amount}${ench}`);
+          lines.push(` ${color.muted}${slotLabel}: ${color.info}${item.typeId} ${color.muted}x${item.amount}${ench}`);
         }
-        lines.push(`§7共 §f${itemCount} §7个物品`);
+        lines.push(`${color.muted}共 ${color.info}${itemCount} ${color.muted}个物品`);
       }
     }
   } else {
-    lines.push(`§7━━ 背包(离线数据) ━━`);
+    lines.push(`${color.muted}━━ 背包(离线数据) ━━`);
     const saved = loadBotInventory(record.name);
     if (saved) {
       let itemCount = 0;
@@ -122,13 +123,13 @@ export function sendData(player: Player, record: BotRecord): void {
         if (!item) continue;
         itemCount += item.amount;
         const slotLabel = i < 9 ? `快捷${i}` : `背包${i - 9}`;
-        lines.push(` §7${slotLabel}: §f${item.typeId} §7x${item.amount}`);
+        lines.push(` ${color.muted}${slotLabel}: ${color.info}${item.typeId} ${color.muted}x${item.amount}`);
       }
-      lines.push(`§7共 §f${itemCount} §7个物品`);
+      lines.push(`${color.muted}共 ${color.info}${itemCount} ${color.muted}个物品`);
     }
   }
 
-  lines.push(`§6========================`);
+  lines.push(`${color.gold}========================`);
 
   for (const line of lines) {
     player.sendMessage(line);
@@ -145,12 +146,12 @@ export function registerDataCommand(registry: any): void {
   }, ({ player, params }) => {
     const nameInput = params.name as string | undefined;
     if (!nameInput) {
-      player.sendMessage("§c用法: /mp:data <假人名>");
+      player.sendMessage(`${color.error}用法: /mp:data <假人名>`);
       return;
     }
     const record = botRegistry.get(nameInput);
     if (!record) {
-      player.sendMessage(`§c未找到模拟玩家 §e${nameInput}§c`);
+      player.sendMessage(`${color.error}未找到模拟玩家 ${color.playerName}${nameInput}${color.error}`);
       return;
     }
     sendData(player, record);

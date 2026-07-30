@@ -14,6 +14,7 @@ import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 import { BOT_TAG } from "../features/core/tags";
 import { botRegistry, saveBotRecord, removeBotRestored } from "../features/core/persistence";
 import { saveBotFullState } from "../features/saveState";
+import { color } from "@yinxe/toolkit";
 
 export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   let record = botRegistry.get(event.playerName);
@@ -51,5 +52,5 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   // 无论主动下线/死亡下线/删除，离开世界就是标记清除的唯一时机
   // 下次上线重新走 playerJoin 恢复流程
   removeBotRestored(record.name);
-  world.sendMessage(`§7[§a假人§7] §e${record.name} 离开了游戏`);
+  world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 离开了游戏`);
 }

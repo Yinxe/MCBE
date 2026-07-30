@@ -7,6 +7,11 @@
 // 1. 保存当前游戏规则
 // 2. 注册永续 GameTest（回调中立即恢复规则）
 // 3. 启动测试
+//
+// ⚠️ 世界边界限制：GameTest 仅在世界边界内 ±~30,000,000 区块对齐位置注册。
+//    此处硬编码 15000000 偏移（世界中心附近），若自定义世界边界过小，
+//    GameTest 注册将失败。失败后 globalTest 保持 null，
+//    spawnMode.ts 会回退到 normal 模式。
 
 import { world, system, StructureSaveMode } from "@minecraft/server";
 import { register, Test } from "@minecraft/server-gametest";
@@ -47,6 +52,7 @@ export function initGameTestContext(): void {
       world.getDimension("minecraft:overworld")
         .runCommand(`execute positioned 15000000 256 ${zOff} run gametest run ${CLASS}:${NAME}`);
     } catch (e: any) {
+      globalTest = null as any;
       console.warn(`[MockPlayer] GameTest 初始化失败: ${e?.message ?? e}`);
     }
   });

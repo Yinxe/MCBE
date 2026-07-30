@@ -1,5 +1,5 @@
 import { Player, world } from "@minecraft/server";
-import { ActionFormBuilder, notifySuccess } from "@yinxe/toolkit/ui";
+import { ActionFormBuilder, notifySuccess } from "@yinxe/toolkit";
 import { teleportPlayerTo, formatLocation } from "../teleporter/teleportManager";
 import { showMainMenu } from "./menu";
 

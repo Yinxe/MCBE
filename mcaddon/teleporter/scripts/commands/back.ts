@@ -1,5 +1,5 @@
 import { system, CommandPermissionLevel } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { getLatestDeathPoint } from "../teleporter/deathManager";
 import { teleportPlayerTo, formatLocation } from "../teleporter/teleportManager";
 

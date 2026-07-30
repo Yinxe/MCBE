@@ -1,12 +1,13 @@
 {
   "name": "mock-player",
-  "version": "1.1.21",
+  "version": "1.1.23",
   "description": "创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
     "@types/node": "^26.1.1",
     "@yinxe/toolkit": "workspace:*",
+    "@yinxe/toolkit-build": "workspace:*",
     "eslint-plugin-minecraft-linting": "2.0.2",
     "just-scripts": "^2.6.2",
     "source-map": "0.7.4",

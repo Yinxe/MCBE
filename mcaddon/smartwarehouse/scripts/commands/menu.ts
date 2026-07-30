@@ -1,5 +1,5 @@
 import { system, CommandPermissionLevel, type CustomCommand } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { ModConfigStore } from "../storage/ModConfigStore";

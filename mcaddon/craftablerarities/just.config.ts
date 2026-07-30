@@ -2,7 +2,7 @@ import { execSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
 import { series, task } from "just-scripts";
 import path from "path";
-import { syncManifestVersion } from "@yinxe/toolkit";
+import { syncManifestVersion } from "@yinxe/toolkit-build";
 
 // ── Project metadata ────────────────────────────────────────────
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));

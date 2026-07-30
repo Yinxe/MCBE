@@ -1,6 +1,7 @@
 import { world, Vector3 } from "@minecraft/server";
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
+import { color } from "@yinxe/toolkit";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../features/core/tags";
 import { getPlayerLookTarget } from "../features/core/pose";
 import { generateBotName } from "../features/core/persistence";
@@ -30,6 +31,6 @@ export function registerCreateCommand(registry: any): void {
       lookTarget, isSneaking: player.isSneaking,
       spawnMode: "normal",
     });
-    player.sendMessage(`§a成功创建假人 §e${botName}§b [自动重生]`);
+    player.sendMessage(`${color.success}成功创建假人 ${color.playerName}${botName}${color.accent} [自动重生]`);
   });
 }

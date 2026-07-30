@@ -1,5 +1,5 @@
 import { CommandPermissionLevel } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { giveTeleportToken } from "../teleporter/token";
 
 export function registerTokenCommand(registry: any): void {

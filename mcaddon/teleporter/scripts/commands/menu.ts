@@ -1,5 +1,5 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { showMainMenu } from "../ui/menu";
 
 export function registerMenuCommand(registry: any): void {

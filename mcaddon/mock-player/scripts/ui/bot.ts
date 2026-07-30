@@ -10,7 +10,8 @@
 
 import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
-import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit/ui";
+import { color, style } from "@yinxe/toolkit";
+import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotRecord, DP_PREFIX } from "../features/core/types";
 import { BOT_TAG, getTagDef } from "../features/core/tags";
@@ -43,19 +44,19 @@ import { sendData } from "../commands/data";
 // ─── 工具 ──────────────────────────────────────────────
 
 function getStatusIcon(record: BotRecord): string {
-  if (record.death) return "§4[死亡]";
-  if (record.online) return "§a[在线]";
-  return "§7[离线]";
+  if (record.death) return style("[死亡]", color.darkRed);
+  if (record.online) return style("[在线]", color.darkGreen);
+  return style("[离线]", color.darkGray);
 }
 
 function getPosSummary(record: BotRecord): string {
   if (record.lastPoint) {
-    return `${formatPos(record.lastPoint.location)} §8${formatDimensionId(record.lastPoint.dimension)}`;
+    return `${formatPos(record.lastPoint.location)} ${color.darkGray}${formatDimensionId(record.lastPoint.dimension)}`;
   }
   if (record.death && record.deathPoint) {
-    return `${formatPos(record.deathPoint.location)} §8${formatDimensionId(record.deathPoint.dimension)} §7(死亡点)`;
+    return `${formatPos(record.deathPoint.location)} ${color.darkGray}${formatDimensionId(record.deathPoint.dimension)} ${style("(死亡点)", color.darkGray)}`;
   }
-  return `${formatPos(record.respawnPoint.location)} §8${formatDimensionId(record.respawnPoint.dimension)} §7(重生点)`;
+  return `${formatPos(record.respawnPoint.location)} ${color.darkGray}${formatDimensionId(record.respawnPoint.dimension)} ${style("(重生点)", color.darkGray)}`;
 }
 
 function resolveBotEntity(record: BotRecord): Player | undefined {
@@ -77,53 +78,53 @@ function isActive(record: BotRecord): boolean {
 /** 检查假人是否可交互（在线且未死亡），然后执行 */
 function requireActive(player: Player, botName: string, fn: (r: BotRecord) => void): void {
   const r = botRegistry.get(botName);
-  if (!r) { player.sendMessage(`§c模拟玩家 §e${botName}§c 已不存在`); return; }
-  if (!r.online || r.death) { player.sendMessage("§c模拟玩家不在线或已死亡"); return; }
+  if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`); return; }
+  if (!r.online || r.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
   fn(r);
 }
 
 /** 获取假人 + 玩家双实体并安全执行装备操作 */
 function equip(player: Player, botName: string, fn: (p: Player, b: Player) => void): void {
   const r = botRegistry.get(botName);
-  if (!r || !r.online || r.death) { player.sendMessage("§c模拟玩家不在线或已死亡"); return; }
+  if (!r || !r.online || r.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
   const bot = resolveBotEntity(r);
-  if (!bot) { player.sendMessage("§c无法获取假人实体"); return; }
-  system.run(() => { try { fn(player, bot); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
+  if (!bot) { player.sendMessage(`${color.error}无法获取假人实体`); return; }
+  system.run(() => { try { fn(player, bot); } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); } });
 }
 
 // ─── 统一假人操作面板（v3） ──────────────────────────
 
 export function showBotPanel(player: Player, botName: string, onBack?: () => void): void {
   const record = botRegistry.get(botName);
-  if (!record) { player.sendMessage(`§c模拟玩家 §e${botName}§c 已被删除`); return; }
+  if (!record) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`); return; }
 
   const tagLabels = record.tags.filter(t => t !== BOT_TAG).map(t => { const d = getTagDef(t); return d ? d.label : t; });
-  const tagStr = tagLabels.length > 0 ? `\n§7标签: §b${tagLabels.join(" §7| §b")}` : "";
-  const expStr = record.experience ? `\n§7经验: §bLv.${record.experience.level} §7(${record.experience.totalXp} XP)` : "";
+  const tagStr = tagLabels.length > 0 ? `\n${color.darkGray}标签: ${color.darkBlue}${tagLabels.join(`${color.darkGray} | ${color.darkBlue}`)}` : "";
+  const expStr = record.experience ? `\n${color.darkGray}经验: ${color.darkBlue}Lv.${record.experience.level} ${color.darkGray}(${record.experience.totalXp} XP)` : "";
 
   new ActionFormBuilder()
-    .title(`§l${botName} ${getStatusIcon(record)}`)
+    .title(`${color.bold}${botName} ${getStatusIcon(record)}`)
     .body(`${getPosSummary(record)}${tagStr}${expStr}`)
     // ── 看向我 ──
-    .buttonWithIcon("§b看向我", "textures/ui/icon_setting", () => {
+    .buttonWithIcon(style("看向我", color.darkBlue), "textures/ui/icon_setting", () => {
       const r = botRegistry.get(botName);
-      if (!r || !resolveBotEntity(r)) { player.sendMessage("§c假人不在线或已死亡"); return; }
+      if (!r || !resolveBotEntity(r)) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
       const bot = resolveBotEntity(r)!;
       if (r.spawnMode === "chunkload") {
-        player.sendMessage("§c强加载模式不支持扭头功能");
+        player.sendMessage(`${color.error}强加载模式不支持扭头功能`);
         return;
       }
       lookAt(bot as SimulatedPlayer, player.getHeadLocation());
-      player.sendMessage(`§a§e${botName}§a 正在持续看向你`);
+      player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 正在持续看向你`);
     })
     // ── 同步（视角/位置/体态） ──
-    .buttonWithIcon("§b同步（视角/位置/体态）", "textures/ui/icon_exit", () => requireActive(player, botName, (r) => {
+    .buttonWithIcon(style("同步（视角/位置/体态）", color.darkBlue), "textures/ui/icon_exit", () => requireActive(player, botName, (r) => {
       system.run(() => {
         try {
           tpBotToPlayer(r, player);
           // ── 读取同步后的体态信息 ──
           const bot = resolveBotEntity(r);
-          if (!bot) { player.sendMessage(`§a已同步 §e${botName}`); return; }
+          if (!bot) { player.sendMessage(`${color.success}已同步 ${color.playerName}${botName}`); return; }
           const rot = bot.getRotation();
           const dim = formatDimensionId(bot.dimension.id);
           const loc = bot.location;
@@ -133,64 +134,64 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
             const hit = bot.getBlockFromViewDirection({ maxDistance: 64 });
             if (hit) {
               const b = hit.block;
-              lookMsg = `§7注视目标: §f${b.typeId} §7@ §f${Math.floor(b.location.x)} ${Math.floor(b.location.y)} ${Math.floor(b.location.z)}`;
+              lookMsg = `${color.muted}注视目标: ${color.info}${b.typeId} ${color.muted}@ ${color.info}${Math.floor(b.location.x)} ${Math.floor(b.location.y)} ${Math.floor(b.location.z)}`;
             }
           } catch { /* 检测失败忽略 */ }
-          const sneak = bot.isSneaking ? "§a潜行" : "§7站立";
+          const sneak = bot.isSneaking ? `${color.success}潜行` : `${color.muted}站立`;
           player.sendMessage(
-            `§a已同步 §e${botName}§a\n` +
-            `§7维度: ${dim}\n` +
-            `§7坐标: §f${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}\n` +
-            `§7朝向: §f${Math.floor(rot.x)}° ${Math.floor(rot.y)}°\n` +
-            `§7体态: ${sneak}` +
+            `${color.success}已同步 ${color.playerName}${botName}${color.success}\n` +
+            `${color.muted}维度: ${dim}\n` +
+            `${color.muted}坐标: ${color.info}${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}\n` +
+            `${color.muted}朝向: ${color.info}${Math.floor(rot.x)}° ${Math.floor(rot.y)}°\n` +
+            `${color.muted}体态: ${sneak}` +
             (lookMsg ? `\n${lookMsg}` : "")
           );
-        } catch (e: any) { player.sendMessage(`§c${e.message}`); }
+        } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
       });
     }))
-    .buttonWithIcon("§b选择主手", "textures/ui/icon_edit", () => {
+    .buttonWithIcon(style("选择主手", color.darkBlue), "textures/ui/icon_edit", () => {
       showMainhandSelector(player, botName);
     })
-    .buttonWithIcon("§b跟随/停止", "textures/ui/icon_multiplayer", () => {
+    .buttonWithIcon(style("跟随/停止", color.darkBlue), "textures/ui/icon_multiplayer", () => {
       system.run(() => {
         if (isFollowing(botName)) {
           stopFollow(botName);
-          player.sendMessage(`§a已停止 §e${botName}§a 的跟随`);
+          player.sendMessage(`${color.success}已停止 ${color.playerName}${botName}${color.success} 的跟随`);
         } else {
           const r = botRegistry.get(botName);
-          if (!r || !r.online || r.death) { player.sendMessage("§c假人不在线或已死亡"); return; }
+          if (!r || !r.online || r.death) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
           const ok = startFollow(botName, player.id);
-          player.sendMessage(ok ? `§a§e${botName}§a 正在跟随你` : "§c启动跟随失败");
+          player.sendMessage(ok ? `${color.success}${color.playerName}${botName}${color.success} 正在跟随你` : `${color.error}启动跟随失败`);
         }
       });
     })
-    .buttonWithIcon("§b投掷三叉戟", "textures/ui/icon_trade", () => {
+    .buttonWithIcon(style("投掷三叉戟", color.darkBlue), "textures/ui/icon_trade", () => {
       showTridentSelector(player, botName);
     })
-    .buttonWithIcon("§b移动至坐标", "textures/ui/icon_exit", () => {
+    .buttonWithIcon(style("移动至坐标", color.darkBlue), "textures/ui/icon_exit", () => {
       showMoveForm(player, botName);
     })
     // ── 物品交换 ──
-    .buttonWithIcon("§b互换主手", "textures/ui/icon_copy", () => equip(player, botName, (p, b) => { swapMainhandWithBot(p, b); player.sendMessage(`§a已与 §e${botName}§a 交换主手`); }))
-    .buttonWithIcon("§b互换装备", "textures/ui/icon_setting", () => equip(player, botName, (p, b) => { swapEquipmentWithBot(p, b); saveBotEquipState(b, botRegistry.get(botName)!); player.sendMessage(`§a已与 §e${botName}§a 交换全部装备（含副手）`); }))
-    .buttonWithIcon("§b互换背包", "textures/ui/icon_copy", () => requireActive(player, botName, (_) => doSwapInventory(player, botName)))
-    .buttonWithIcon("§b回收资源", "textures/ui/icon_trash", () => doReclaim(player, botName))
-    .buttonWithIcon("§b改名", "textures/ui/icon_edit", () => doRename(player, botName))
+    .buttonWithIcon(style("互换主手", color.darkBlue), "textures/ui/icon_copy", () => equip(player, botName, (p, b) => { swapMainhandWithBot(p, b); player.sendMessage(`${color.success}已与 ${color.playerName}${botName}${color.success} 交换主手`); }))
+    .buttonWithIcon(style("互换装备", color.darkBlue), "textures/ui/icon_setting", () => equip(player, botName, (p, b) => { swapEquipmentWithBot(p, b); saveBotEquipState(b, botRegistry.get(botName)!); player.sendMessage(`${color.success}已与 ${color.playerName}${botName}${color.success} 交换全部装备（含副手）`); }))
+    .buttonWithIcon(style("互换背包", color.darkBlue), "textures/ui/icon_copy", () => requireActive(player, botName, (_) => doSwapInventory(player, botName)))
+    .buttonWithIcon(style("回收资源", color.darkBlue), "textures/ui/icon_trash", () => doReclaim(player, botName))
+    .buttonWithIcon(style("改名", color.darkBlue), "textures/ui/icon_edit", () => doRename(player, botName))
     // ── 状态 ──
-    .button(record.online ? "§a下线" : "§a上线", () => toggleOnline(player, botName))
+    .button(record.online ? style("下线", color.darkGreen) : style("上线", color.darkGreen), () => toggleOnline(player, botName))
     // ── 行为 ──
-    .buttonWithIcon("§a行为标签", "textures/ui/icon_recipe", () => showTagManagement(player, botName))
+    .buttonWithIcon(style("行为标签", color.darkGreen), "textures/ui/icon_recipe", () => showTagManagement(player, botName))
     // ── 设置 ──
-    .buttonWithIcon("§b设置重生点", "textures/ui/icon_setting", () => updateSpawn(player, botName))
+    .buttonWithIcon(style("设置重生点", color.darkBlue), "textures/ui/icon_setting", () => updateSpawn(player, botName))
     // ── 其他 ──
-    .buttonWithIcon("§b传送到假人", "textures/ui/icon_exit", () => tpToBot(player, botName))
-    .buttonWithIcon("§b查看数据", "textures/ui/icon_search", () => { const r = botRegistry.get(botName); if (r) sendData(player, r); })
+    .buttonWithIcon(style("传送到假人", color.darkBlue), "textures/ui/icon_exit", () => tpToBot(player, botName))
+    .buttonWithIcon(style("查看数据", color.darkBlue), "textures/ui/icon_search", () => { const r = botRegistry.get(botName); if (r) sendData(player, r); })
     // ── 危险 ──
-    .buttonWithIcon("§c杀死", "textures/ui/icon_lock", () => requireActive(player, botName, (r) => {
-      system.run(() => { try { killBot(r); player.sendMessage(`§a已杀死 §e${botName}`); } catch (e: any) { player.sendMessage(`§c${e.message}`); } });
+    .buttonWithIcon(style("杀死", color.darkRed), "textures/ui/icon_lock", () => requireActive(player, botName, (r) => {
+      system.run(() => { try { killBot(r); player.sendMessage(`${color.success}已杀死 ${color.playerName}${botName}`); } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); } });
     }))
-    .buttonWithIcon("§c删除", "textures/ui/icon_trash", () => confirmDelete(player, botName))
-    .buttonWithIcon("§b返回列表", "textures/ui/icon_exit", () => { if (onBack) onBack(); })
+    .buttonWithIcon(style("删除", color.darkRed), "textures/ui/icon_trash", () => confirmDelete(player, botName))
+    .buttonWithIcon(style("返回列表", color.darkBlue), "textures/ui/icon_exit", () => { if (onBack) onBack(); })
     .show(player);
 }
 
@@ -203,7 +204,7 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
 export function showBotList(player: Player, onMainMenu?: () => void): void {
   const records = Array.from(botRegistry.values());
   if (records.length === 0) {
-    player.sendMessage("§e暂无模拟玩家，请先创建");
+    player.sendMessage(`${color.warn}暂无模拟玩家，请先创建`);
     return;
   }
 
@@ -214,8 +215,8 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
   });
 
   const builder = new ActionFormBuilder()
-    .title("§l模拟玩家列表")
-    .body(`§7共 §b${records.length} §7个`);
+    .title(`${color.bold}模拟玩家列表`)
+    .body(`${color.darkGray}共 ${color.darkBlue}${records.length} ${color.darkGray}个`);
 
   for (const record of sorted) {
     const dim = record.lastPoint
@@ -223,10 +224,10 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
       : record.deathPoint
         ? formatDimensionId(record.deathPoint.dimension)
         : formatDimensionId(record.respawnPoint.dimension);
-    builder.button(`${getStatusIcon(record)} §f${record.name} §f${dim}`, () => showBotPanel(player, record.name, () => showBotList(player, onMainMenu)));
+    builder.button(`${getStatusIcon(record)} ${color.black}${record.name} ${color.black}${dim}`, () => showBotPanel(player, record.name, () => showBotList(player, onMainMenu)));
   }
 
-  builder.button("§b← 返回", () => { if (onMainMenu) onMainMenu(); }).show(player);
+  builder.button(style("← 返回", color.darkBlue), () => { if (onMainMenu) onMainMenu(); }).show(player);
 }
 
 // ─── 操作实现 ──────────────────────────────────────────
@@ -236,15 +237,15 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
  */
 function doSwapInventory(player: Player, botName: string): void {
   const r = botRegistry.get(botName);
-  if (!r || !isActive(r)) { player.sendMessage("§c假人不在线或已死亡"); return; }
+  if (!r || !isActive(r)) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
   const bot = resolveBotEntity(r);
-  if (!bot) { player.sendMessage("§c无法获取假人实体"); return; }
+  if (!bot) { player.sendMessage(`${color.error}无法获取假人实体`); return; }
 
   system.run(() => {
     try {
       const pInv = player.getComponent("inventory") as any;
       const bInv = bot.getComponent("inventory") as any;
-      if (!pInv?.container || !bInv?.container) { player.sendMessage("§c无法获取背包容器"); return; }
+      if (!pInv?.container || !bInv?.container) { player.sendMessage(`${color.error}无法获取背包容器`); return; }
 
       const size = Math.min(pInv.container.size, bInv.container.size);
       // 读取双方全部格子（0-35，含快捷栏）
@@ -260,8 +261,8 @@ function doSwapInventory(player: Player, botName: string): void {
         pInv.container.setItem(i, botItems[i] ?? undefined);
       }
       saveBotInventory(r.name, serializeContainer(bInv.container));
-      player.sendMessage(`§a已与 §e${botName}§a 互换全部背包（含快捷栏）`);
-    } catch (e: any) { player.sendMessage(`§c互换背包失败: ${e.message}`); }
+      player.sendMessage(`${color.success}已与 ${color.playerName}${botName}${color.success} 互换全部背包（含快捷栏）`);
+    } catch (e: any) { player.sendMessage(`${color.error}互换背包失败: ${e.message}`); }
   });
 }
 
@@ -278,21 +279,21 @@ function doSwapInventory(player: Player, botName: string): void {
  *    不影响功能，仅头顶显示名和 registry key 更新。
  */
 function doRename(player: Player, botName: string): void {
-  ModalFormBuilder.showQuick(player, "§l修改名字", (f) => {
+  ModalFormBuilder.showQuick(player, `${color.bold}修改名字`, (f) => {
     f.textField("name", "新名字", { defaultValue: botName });
   }).then((vals) => {
     if (!vals) return;
     const newName = (vals.name as string).trim();
     if (!newName || newName === botName) return;
-    if (botRegistry.has(newName)) { player.sendMessage(`§c假人 §e${newName}§c 已存在`); return; }
+    if (botRegistry.has(newName)) { player.sendMessage(`${color.error}假人 ${color.playerName}${newName}${color.error} 已存在`); return; }
 
     const r = botRegistry.get(botName);
-    if (!r) { player.sendMessage("§c假人已不存在"); return; }
+    if (!r) { player.sendMessage(`${color.error}假人已不存在`); return; }
 
     // ⚠️ 在线改名会导致 Player.name（只读）与 registry key 不一致，
     //    事件处理器（playerLeave、背包保存等）用 Player.name 查 registry 失败，
     //    造成数据泄露或写错前缀。
-    if (r.online) { player.sendMessage("§c请先将假人下线后再改名"); return; }
+    if (r.online) { player.sendMessage(`${color.error}请先将假人下线后再改名`); return; }
 
     system.run(() => {
       try {
@@ -329,8 +330,8 @@ function doRename(player: Player, botName: string): void {
         botRegistry.set(newName, r);
         saveBotRecord(r);
 
-        player.sendMessage(`§a已重命名为 §e${newName}`);
-      } catch (e: any) { player.sendMessage(`§c改名失败: ${e.message}`); }
+        player.sendMessage(`${color.success}已重命名为 ${color.playerName}${newName}`);
+      } catch (e: any) { player.sendMessage(`${color.error}改名失败: ${e.message}`); }
     });
   });
 }
@@ -343,12 +344,12 @@ function toggleOnline(player: Player, botName: string): void {
     try {
       if (r.online) {
         offlineBot(r);
-        player.sendMessage(`§a§e${botName}§a 已下线`);
+        player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已下线`);
       } else {
         onlineBot(r);
-        player.sendMessage(`§a§e${botName}§a 已上线`);
+        player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已上线`);
       }
-    } catch (e: any) { player.sendMessage(`§c${e.message}`); }
+    } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
   });
 }
 
@@ -357,24 +358,24 @@ function toggleOnline(player: Player, botName: string): void {
  */
 function tpToBot(player: Player, botName: string): void {
   const r = botRegistry.get(botName);
-  if (!r) { player.sendMessage(`§c模拟玩家 §e${botName}§c 已不存在`); return; }
+  if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已不存在`); return; }
 
   system.run(() => {
     try {
       if (!r.online || r.death) {
         // 先上线
         onlineBot(r);
-        player.sendMessage(`§a§e${botName}§a 已上线`);
+        player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已上线`);
         // 等 1 tick 让实体就绪后再传送
         system.run(() => {
           tpPlayerToBot(player, botRegistry.get(botName)!);
-          player.sendMessage(`§a已传送到 §e${botName}§a 身边`);
+          player.sendMessage(`${color.success}已传送到 ${color.playerName}${botName}${color.success} 身边`);
         });
       } else {
         tpPlayerToBot(player, r);
-        player.sendMessage(`§a已传送到 §e${botName}§a 身边`);
+        player.sendMessage(`${color.success}已传送到 ${color.playerName}${botName}${color.success} 身边`);
       }
-    } catch (e: any) { player.sendMessage(`§c${e.message}`); }
+    } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
   });
 }
 
@@ -403,8 +404,8 @@ function updateSpawn(player: Player, botName: string): void {
       }
       botRegistry.set(r.name, r);
       saveBotRecord(r);
-      player.sendMessage(`§a已更新 §e${botName}§a 的重生点`);
-    } catch (e: any) { player.sendMessage(`§c${e.message}`); }
+      player.sendMessage(`${color.success}已更新 ${color.playerName}${botName}${color.success} 的重生点`);
+    } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
   });
 }
 
@@ -416,10 +417,10 @@ function doReclaim(player: Player, botName: string): void {
     try {
       const result = reclaimBot(player, r);
       const parts: string[] = [];
-      if (result.items > 0) parts.push(`§a${result.items}§7 件物品`);
-      if (result.overflow > 0) parts.push(`§e${result.overflow}§7 件溢出掉落`);
-      if (result.xp > 0) parts.push(`§b${result.xp} XP§7（Lv.${result.xpLevel}）`);
-      if (parts.length === 0) { player.sendMessage(`§e假人 §e${botName}§e 背包是空的`); } else { player.sendMessage(`§a已从 §e${botName}§a 回收: ${parts.join("、")}`); }
-    } catch (e: any) { player.sendMessage(`§c回收失败: ${e.message}`); }
+      if (result.items > 0) parts.push(`${color.success}${result.items}${color.muted} 件物品`);
+      if (result.overflow > 0) parts.push(`${color.warn}${result.overflow}${color.muted} 件溢出掉落`);
+      if (result.xp > 0) parts.push(`${color.accent}${result.xp} XP${color.muted}（Lv.${result.xpLevel}）`);
+      if (parts.length === 0) { player.sendMessage(`${color.warn}假人 ${color.playerName}${botName}${color.warn} 背包是空的`); } else { player.sendMessage(`${color.success}已从 ${color.playerName}${botName}${color.success} 回收: ${parts.join("、")}`); }
+    } catch (e: any) { player.sendMessage(`${color.error}回收失败: ${e.message}`); }
   });
 }

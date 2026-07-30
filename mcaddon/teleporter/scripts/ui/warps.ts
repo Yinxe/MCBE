@@ -5,7 +5,7 @@ import {
   ActionFormBuilder,
   ModalFormBuilder,
   notifySuccess,
-} from "@yinxe/toolkit/ui";
+} from "@yinxe/toolkit";
 import {
   getSortedWaypoints,
   createWaypoint,

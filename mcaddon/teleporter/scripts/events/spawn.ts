@@ -1,5 +1,5 @@
 import { world, system, Player } from "@minecraft/server";
-import { MessageFormBuilder } from "@yinxe/toolkit/ui";
+import { MessageFormBuilder } from "@yinxe/toolkit";
 import { getLatestDeathPoint } from "../teleporter/deathManager";
 import { teleportPlayerTo, formatLocation } from "../teleporter/teleportManager";
 import { loadPlayerData } from "../teleporter/persistence";

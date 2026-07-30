@@ -1,7 +1,8 @@
 // ─── 行为标签 + 帮助 ──────────────────────────────────
 
 import { Player, system } from "@minecraft/server";
-import { ModalFormBuilder } from "@yinxe/toolkit/ui";
+import { color, style } from "@yinxe/toolkit";
+import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
 import { botRegistry } from "../features/core/persistence";
@@ -16,13 +17,13 @@ import { offlineBot } from "../features/offlineBot";
 export function showTagManagement(player: Player, botName: string): void {
   const record = botRegistry.get(botName);
   if (!record) {
-    player.sendMessage(`§c模拟玩家 §e${botName}§c 已被删除`);
+      player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
     return;
   }
 
   const manageableCoexist = COEXIST_TAGS.filter((t) => t.value !== TAG_BOT.value);
 
-  const exclusiveOptions = ["§7无", ...EXCLUSIVE_TAGS.map((t) => `§f${t.label}`)];
+  const exclusiveOptions = [style("无", color.darkGray), ...EXCLUSIVE_TAGS.map((t) => style(t.label, color.black))];
   let exclusiveIndex = 0;
   for (let i = 0; i < EXCLUSIVE_TAGS.length; i++) {
     if (record.tags.includes(EXCLUSIVE_TAGS[i].value)) {
@@ -36,18 +37,18 @@ export function showTagManagement(player: Player, botName: string): void {
     .join(" · ");
 
   const builder = new ModalFormBuilder()
-    .title(`§l行为 · ${botName}`)
-    .label("current", `§7当前: §f${currentTagsText}`)
+    .title(`${color.bold}行为 · ${botName}`)
+    .label("current", `${color.darkGray}当前: ${color.black}${currentTagsText}`)
     // ── 快捷开关 ──
-    .toggle("sneaking", "§b潜行", {
+    .toggle("sneaking", style("潜行", color.darkBlue), {
       defaultValue: record.isSneaking,
       tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
     })
-    .toggle("chunkload", "§b强加载模式", {
+    .toggle("chunkload", style("强加载模式", color.darkBlue), {
       defaultValue: record.spawnMode === "chunkload",
       tooltip: "开启后区块常驻加载，但不可转向。切换时自动重新上线",
     })
-    .label("sep1", "§7━━ 标签设置 ────");
+    .label("sep1", style("━━ 标签设置 ────", color.darkGray));
 
   for (const tag of manageableCoexist) {
     builder.toggle(tag.value, tag.label, {
@@ -57,7 +58,7 @@ export function showTagManagement(player: Player, botName: string): void {
   }
 
   const shortNames = EXCLUSIVE_TAGS.map((t) => t.value.replace("mockplayer:tag:", ""));
-  builder.dropdown("exclusive", "§c行为（仅选一项）", exclusiveOptions, {
+  builder.dropdown("exclusive", style("行为（仅选一项）", color.darkRed), exclusiveOptions, {
     defaultValueIndex: exclusiveIndex,
     tooltip: "自动挖掘/放置/攻击/使用物品/宝库模式等，互斥只能选一项",
   });
@@ -66,7 +67,7 @@ export function showTagManagement(player: Player, botName: string): void {
     if (!vals) return;
     const currentRecord = botRegistry.get(botName);
     if (!currentRecord) {
-      player.sendMessage(`§c模拟玩家 §e${botName}§c 已被删除`);
+    player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
       return;
     }
 
@@ -74,7 +75,7 @@ export function showTagManagement(player: Player, botName: string): void {
     const wantSneaking = vals.sneaking as boolean;
     if (wantSneaking !== currentRecord.isSneaking) {
       system.run(() => {
-        try { setSneaking(currentRecord, wantSneaking); } catch (e: any) { player.sendMessage(`§c切换潜行失败: ${e.message}`); }
+        try { setSneaking(currentRecord, wantSneaking); } catch (e: any) { player.sendMessage(`${color.error}切换潜行失败: ${e.message}`); }
       });
     }
 
@@ -96,9 +97,9 @@ export function showTagManagement(player: Player, botName: string): void {
         system.runTimeout(() => {
           try {
             if (!currentRecord.death) onlineBot(currentRecord);
-            player.sendMessage(`§a已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`);
+            player.sendMessage(`${color.success}已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`);
           } catch (e: any) {
-            player.sendMessage(`§c切换失败: ${e.message}`);
+            player.sendMessage(`${color.error}切换失败: ${e.message}`);
           }
         }, 5);
       }
@@ -115,6 +116,6 @@ export function showTagManagement(player: Player, botName: string): void {
     system.run(() => {
       setTags(currentRecord, newTags, player);
     });
-    player.sendMessage(`§a已更新 §e${botName}§a 的行为设置`);
+    player.sendMessage(`${color.success}已更新 ${color.playerName}${botName}${color.success} 的行为设置`);
   });
 }

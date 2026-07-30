@@ -1,5 +1,5 @@
 import { type Player } from "@minecraft/server";
-import { canManage } from "@yinxe/toolkit/player";
+import { canManage } from "@yinxe/toolkit";
 
 /**
  * 判断玩家是否为 OP（管理员）。

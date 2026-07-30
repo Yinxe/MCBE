@@ -1,5 +1,5 @@
 import { CommandPermissionLevel } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { isAdmin } from "../teleporter/adminManager";
 import { showAdminConfig } from "../ui/admin";
 import { loadConfig } from "../teleporter/config";

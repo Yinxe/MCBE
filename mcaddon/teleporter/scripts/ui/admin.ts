@@ -1,5 +1,5 @@
 import { Player } from "@minecraft/server";
-import { ModalFormBuilder, notifySuccess } from "@yinxe/toolkit/ui";
+import { ModalFormBuilder, notifySuccess } from "@yinxe/toolkit";
 import { loadConfig, saveConfig } from "../teleporter/config";
 import { showMainMenu } from "./menu";
 

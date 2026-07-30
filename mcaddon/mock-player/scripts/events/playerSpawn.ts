@@ -9,6 +9,7 @@
 //   恢复背包的正确时机是 playerJoin（仅加入世界时触发）
 
 import { world, PlayerSpawnAfterEvent } from "@minecraft/server";
+import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG, syncEntityTags } from "../features/core/tags";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
@@ -29,5 +30,5 @@ export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   syncEntityTags(player, record.tags);
 
   saveBotRecord(record);
-  world.sendMessage(`§7[§a假人§7] §b${record.name} 重生了`);
+  world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 重生了`);
 }

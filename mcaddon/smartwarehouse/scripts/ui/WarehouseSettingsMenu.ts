@@ -6,7 +6,7 @@ import type { WarehouseId, WarehouseSettings } from "../types";
 import { ROLE_LABELS, ROLE_ORDER, SPEED_LABELS } from "../types";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { showFamilyConfigMenu } from "./FamilyConfigMenu";
-import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit/ui";
+import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import { isWarehouseOwner } from "../util/PlayerAuth";
 import type { ModConfigStore } from "../storage/ModConfigStore";
 import { formatWarehouseStats, getWarehouseStats, invalidateWarehouseStats } from "./WarehouseStats";

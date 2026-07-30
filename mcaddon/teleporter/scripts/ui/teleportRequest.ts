@@ -1,5 +1,5 @@
 import { Player } from "@minecraft/server";
-import { ActionFormBuilder } from "@yinxe/toolkit/ui";
+import { ActionFormBuilder } from "@yinxe/toolkit";
 import { findPendingRequest, acceptRequest, denyRequest } from "../commands/tpa";
 
 // ─── TPA 请求 UI ──────────────────────────────────────────────────

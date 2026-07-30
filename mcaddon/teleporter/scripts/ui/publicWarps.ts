@@ -1,5 +1,5 @@
 import { Player } from "@minecraft/server";
-import { ActionFormBuilder, notifySuccess, notifyError } from "@yinxe/toolkit/ui";
+import { ActionFormBuilder, notifySuccess, notifyError } from "@yinxe/toolkit";
 import {
   getPublicWaypoints,
   incrementTeleportCount,

@@ -5,7 +5,7 @@ import {
   CustomCommandParamType,
   Player,
 } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { teleportPlayerTo, formatLocation } from "../teleporter/teleportManager";
 import {
   TeleportRequest,

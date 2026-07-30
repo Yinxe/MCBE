@@ -1,5 +1,5 @@
 import { system, CommandPermissionLevel, CustomCommandParamType, type CustomCommand, type Vector3 } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import type { WarehouseService } from "../warehouse/WarehouseService";
 import { canManageWarehouse } from "../util/PlayerAuth";
 import { normalizeWarehouseId } from "../storage/WarehouseRepository";

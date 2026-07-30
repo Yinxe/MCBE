@@ -1,5 +1,6 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
+import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../features/core/persistence";
 import { reclaimBot } from "../features/reclaim";
 export function registerReclaimCommand(registry: any): void {
@@ -9,14 +10,14 @@ export function registerReclaimCommand(registry: any): void {
     mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
   }, ({ player, params }) => {
     const targetName = params.name as string;
-    if (!targetName) { player.sendMessage("§c用法: /mp:reclaim <假人名>"); return; }
+    if (!targetName) { player.sendMessage(`${color.error}用法: /mp:reclaim <假人名>`); return; }
     const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     const r = reclaimBot(player, record);
     const parts = [];
-    if (r.items > 0) parts.push(`§a${r.items}§7 件物品`);
-    if (r.overflow > 0) parts.push(`§e${r.overflow}§7 件溢出掉落`);
-    if (r.xp > 0) parts.push(`§b${r.xp} XP§7（Lv.${r.xpLevel}）`);
-    player.sendMessage(parts.length ? `§a已从 §e${targetName}§a 回收: ${parts.join("、")}` : `§e假人 §e${targetName}§e 背包是空的`);
+    if (r.items > 0) parts.push(`${color.success}${r.items}${color.muted} 件物品`);
+    if (r.overflow > 0) parts.push(`${color.playerName}${r.overflow}${color.muted} 件溢出掉落`);
+    if (r.xp > 0) parts.push(`${color.accent}${r.xp} XP${color.muted}（Lv.${r.xpLevel}）`);
+    player.sendMessage(parts.length ? `${color.success}已从 ${color.playerName}${targetName}${color.success} 回收: ${parts.join("、")}` : `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 背包是空的`);
   });
 }

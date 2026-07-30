@@ -7,6 +7,7 @@ import { BotRecord } from "./core/types";
 import { BOT_TAG } from "./core/tags";
 import { botRegistry, removeBotRecord, removeBotInventory, removeBotRestored } from "./core/persistence";
 import { reclaimBot } from "./reclaim";
+import { color } from "@yinxe/toolkit";
 
 /**
  * 删除假人（可选回收物品和经验到指定玩家）
@@ -23,10 +24,10 @@ export function deleteBot(record: BotRecord, reclaimTo?: Player): void {
       if (result.overflow > 0) parts.push(`${result.overflow} 件溢出掉落`);
       if (result.xp > 0) parts.push(`${result.xp} XP（Lv.${result.xpLevel}）`);
       if (parts.length > 0) {
-        reclaimTo.sendMessage(`§7回收自 §e${record.name}§7: ${parts.join("、")}`);
+        reclaimTo.sendMessage(`${color.muted}回收自 ${color.playerName}${record.name}${color.muted}: ${parts.join("、")}`);
       }
     } catch (e: any) {
-      reclaimTo?.sendMessage(`§c回收 ${record.name} 物品时出错: ${e.message}`);
+      reclaimTo?.sendMessage(`${color.error}回收 ${record.name} 物品时出错: ${e.message}`);
     }
   }
 

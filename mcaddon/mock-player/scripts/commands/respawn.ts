@@ -1,5 +1,6 @@
 import { world, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
+import { color } from "@yinxe/toolkit";
 import { TAG_RESPAWN, TAG_BOT } from "../features/core/tags";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
@@ -11,17 +12,17 @@ export function registerRespawnCommand(registry: any): void {
     mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
   }, ({ player, params }) => {
     const targetName = params.name as string;
-    if (!targetName) { player.sendMessage("§c请指定假人名字"); return; }
+    if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
     const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     const has = record.tags.includes(TAG_RESPAWN.value);
     const newTags = has
       ? record.tags.filter(t => t !== TAG_RESPAWN.value)
       : [...record.tags, TAG_RESPAWN.value];
     setTags(record, newTags);
     player.sendMessage(has
-      ? `§e假人 §e${record.name}§e 已关闭自动重生`
-      : `§a假人 §e${record.name}§a 已开启自动重生`);
+      ? `${color.playerName}假人 ${color.playerName}${record.name}${color.playerName} 已关闭自动重生`
+      : `${color.success}假人 ${color.playerName}${record.name}${color.success} 已开启自动重生`);
   });
 }
 
@@ -35,9 +36,9 @@ export function registerSetRespawnCommand(registry: any): void {
     mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
   }, ({ player, params }) => {
     const targetName = params.name as string;
-    if (!targetName) { player.sendMessage("§c请指定假人名字"); return; }
+    if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
     const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     const lookTarget = getPlayerLookTarget(player);
     record.respawnPoint = { location: player.location, dimension: player.dimension.id, rotation: player.getRotation(), lookTarget };
     if (record.online && record.entityId) {
@@ -48,6 +49,6 @@ export function registerSetRespawnCommand(registry: any): void {
     }
     botRegistry.set(record.name, record);
     saveBotRecord(record);
-    player.sendMessage(`§a已更新 §e${targetName}§a 的重生点`);
+    player.sendMessage(`${color.success}已更新 ${color.playerName}${targetName}${color.success} 的重生点`);
   });
 }

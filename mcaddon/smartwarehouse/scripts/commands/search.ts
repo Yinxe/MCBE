@@ -1,5 +1,5 @@
 import { world, system, CommandPermissionLevel, CustomCommandParamType, type CustomCommand } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import type { WarehouseRepository } from "../storage/WarehouseRepository";
 import type { ModConfigStore } from "../storage/ModConfigStore";
 import { SearchService, formatSearchResult } from "../warehouse/SearchService";

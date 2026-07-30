@@ -5,11 +5,15 @@ import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, resolveBotPlayer } from "./core/persistence";
+import { color } from "@yinxe/toolkit";
 
 // ─── 跟随状态 ──────────────────────────────────────────
 // Map<假人名, 目标玩家 ID> 跟踪当前跟随关系
 
 const followMap = new Map<string, string>();
+
+let engineRunning = false;
+let followPaused = false;
 
 const FOLLOW_TICK = 10; // 每 10 tick 更新一次寻路
 const STOP_DIST = 3;    // 距离目标 3 格内停止寻路
@@ -46,21 +50,46 @@ export function isFollowing(botName: string): boolean {
   return followMap.has(botName);
 }
 
+/**
+ * 暂停所有假人跟随导航（不删除跟随关系）。
+ */
+export function pauseFollow(): void {
+  followPaused = true;
+}
+
+/**
+ * 恢复所有假人跟随导航。
+ */
+export function resumeFollow(): void {
+  followPaused = false;
+}
+
+/**
+ * 返回当前跟随关系数量。
+ */
+export function getFollowCount(): number {
+  return followMap.size;
+}
+
 // ─── 内部 ──────────────────────────────────────────────
 
 let followIntervalId: number | undefined;
 
 function ensureEngine(): void {
   if (followIntervalId !== undefined) return;
+  engineRunning = true;
   followIntervalId = system.runInterval(() => {
     if (followMap.size === 0) {
       // 没有跟随关系，停止引擎
       system.clearRun(followIntervalId!);
       followIntervalId = undefined;
+      engineRunning = false;
       return;
     }
 
     for (const [botName, targetId] of followMap) {
+      if (followPaused) return;
+
       const record = botRegistry.get(botName);
       if (!record) { followMap.delete(botName); continue; }
 
@@ -80,7 +109,7 @@ function ensureEngine(): void {
 
       const target = world.getEntity(targetId) as Player | undefined;
       if (!target?.isValid) {
-        bot.sendMessage("§c跟随目标已离线，停止跟随");
+        bot.sendMessage(`${color.error}跟随目标已离线，停止跟随`);
         try { bot.stopMoving(); } catch { /* ignore */ }
         followMap.delete(botName);
         continue;
@@ -95,7 +124,7 @@ function ensureEngine(): void {
       const dist = Math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
 
       if (dist > MAX_DIST) {
-        bot.sendMessage("§c距离目标过远，停止跟随");
+        bot.sendMessage(`${color.error}距离目标过远，停止跟随`);
         try { bot.stopMoving(); } catch { /* ignore */ }
         followMap.delete(botName);
         continue;

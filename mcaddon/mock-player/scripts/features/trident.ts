@@ -9,11 +9,14 @@ import {
   ItemEnchantableComponent,
 } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
+import { color } from "@yinxe/toolkit";
 
 import { botRegistry, resolveBotPlayer, saveBotRecord, isBotRestored } from "./core/persistence";
+import { formatEnchantments, formatDurability } from "./core/utils";
 import { offlineBot } from "./offlineBot";
 import { onlineBot } from "./onlineBot";
 import { switchSpawnMode } from "./spawnMode";
+import { pauseFollow, resumeFollow, isFollowing } from "./follow";
 
 const TRIDENT_ID = "minecraft:trident";
 const SLOT_HOTBAR = 9; // 热栏格数
@@ -55,11 +58,11 @@ export function scanTridents(botName: string): TridentInfo[] | undefined {
   }
 
   // 背包（含热栏，排除主手已找到的格子）
-  const inv = bot.getComponent("minecraft:inventory") as any;
-  if (inv?.container) {
-    for (let i = 0; i < inv.container.size; i++) {
+  const container = getContainer(bot);
+  if (container) {
+    for (let i = 0; i < container.size; i++) {
       if (i === mainhandSlot && mainhand?.typeId === TRIDENT_ID) continue;
-      const item = inv.container.getItem(i);
+      const item = container.getItem(i);
       if (item?.typeId === TRIDENT_ID) {
         try {
           tridents.push(makeTridentInfo(bot, item, i, false));
@@ -108,9 +111,12 @@ export function throwTridents(
   if (!record || !record.online || record.death) { onComplete?.(); return; }
 
   const wasChunkload = record.spawnMode === "chunkload";
+  const wasFollowing = isFollowing(botName);
+  if (wasFollowing) pauseFollow();
 
   const done = () => {
     if (wasChunkload) finishAndRestoreMode(botName, "chunkload");
+    if (wasFollowing) resumeFollow();
     onComplete?.();
   };
 
@@ -216,9 +222,10 @@ function finishAndRestoreMode(botName: string, targetMode: "normal" | "chunkload
 
 // ─── 等待恢复 ──────────────────────────────────────────
 
-function waitForRestored(botName: string, callback: () => void, retries = 30): void {
+function waitForRestored(botName: string, callback: () => void, retries = 50): void {
   if (retries <= 0) {
-    console.warn(`[MockPlayer] ⚠️ 恢复等待超时 ${botName}`);
+    console.warn(`[MockPlayer] ⚠️ 恢复等待超时 ${botName}——已跳过`);
+    callback();
     return;
   }
   if (isBotRestored(botName)) {
@@ -260,45 +267,28 @@ function makeTridentInfo(
   isMainhand: boolean,
 ): TridentInfo {
   const slotLabel = isMainhand
-    ? "§e[主手]"
+    ? `${color.darkGray}[主手]`
     : slotIndex < SLOT_HOTBAR
-      ? `§7[热栏${slotIndex + 1}]`
-      : `§7[背包${slotIndex + 1}]`;
+      ? `${color.darkGray}[热栏${slotIndex + 1}]`
+      : `${color.darkGray}[背包${slotIndex + 1}]`;
 
   const customName = item.nameTag || undefined;
-  const displayName = customName ? `§f${customName}` : "§f三叉戟";
+  const displayName = customName ? `${color.black}${customName}` : `${color.black}三叉戟`;
 
-  // 附魔
-  const enchParts: string[] = [];
-  if (item.hasComponent("minecraft:enchantable")) {
-    const ench = item.getComponent("minecraft:enchantable") as ItemEnchantableComponent;
-    for (const e of ench.getEnchantments()) {
-      const levelNum = e.level;
-      const roman = levelToRoman(levelNum);
-      enchParts.push(`§b${e.type.id}${roman}`);
-    }
-  }
-  const enchStr = enchParts.length > 0 ? enchParts.join(" ") : "";
+  const enchStr = formatEnchantments(item);
 
   // 耐久
-  let durStr: string;
-  const dur = item.getComponent("minecraft:durability") as any;
-  if (dur) {
-    const maxD = dur.maxDurability ?? 250;
-    const dmg = dur.damage ?? 0;
-    const cur = maxD - dmg;
-    const pct = Math.floor((cur / maxD) * 100);
-    const color = pct > 50 ? "§a" : pct > 20 ? "§e" : "§c";
-    durStr = `${color}(${cur}/${maxD})`;
-  } else {
-    durStr = "§7(∞)";
-  }
+  let durStr = formatDurability(item);
+  if (!durStr) durStr = `${color.darkGray}(∞)`;
 
   const label = `${slotLabel} ${displayName} ${enchStr} ${durStr}`;
 
   return { slotIndex, isMainhand, label, customName, enchantments: enchStr, durability: durStr };
 }
 
+/**
+ * @deprecated 请使用 core/utils 的 levelToRoman
+ */
 function levelToRoman(level: number): string {
   const map: Record<number, string> = {
     1: "I", 2: "II", 3: "III", 4: "IV", 5: "V",

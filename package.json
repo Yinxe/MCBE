@@ -32,7 +32,7 @@
     "pack:antibundledup": "pnpm --filter antibundledup run pack",
     "pack:teleporter": "pnpm --filter teleporter run pack",
     "pack:enchanter": "pnpm --filter enchanter run pack",
-    "sync-version": "node packages/toolkit/bin/sync-version.mjs",
+    "sync-version": "node packages/toolkit-build/bin/sync-version.mjs",
     "pack:stackable": "pnpm --filter stackable run pack"
   }
 }

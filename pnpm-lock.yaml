@@ -212,9 +212,9 @@ importers:
       '@minecraft/core-build-tasks':
         specifier: 5.5.0
         version: 5.5.0(@types/node@26.1.1)
-      '@yinxe/toolkit':
+      '@yinxe/toolkit-build':
         specifier: workspace:*
-        version: link:../../packages/toolkit
+        version: link:../../packages/toolkit-build
       just-scripts:
         specifier: ^2.1.5
         version: 2.6.2
@@ -237,9 +237,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
-      '@yinxe/toolkit':
+      '@yinxe/toolkit-build':
         specifier: workspace:*
-        version: link:../../packages/toolkit
+        version: link:../../packages/toolkit-build
       eslint-plugin-minecraft-linting:
         specifier: 2.0.2
         version: 2.0.2(typescript@5.0.2)
@@ -283,6 +283,9 @@ importers:
       '@yinxe/toolkit':
         specifier: workspace:*
         version: link:../../packages/toolkit
+      '@yinxe/toolkit-build':
+        specifier: workspace:*
+        version: link:../../packages/toolkit-build
       eslint-plugin-minecraft-linting:
         specifier: 2.0.2
         version: 2.0.2(typescript@5.0.2)
@@ -320,6 +323,9 @@ importers:
       '@yinxe/toolkit':
         specifier: workspace:*
         version: link:../../packages/toolkit
+      '@yinxe/toolkit-build':
+        specifier: workspace:*
+        version: link:../../packages/toolkit-build
       eslint-plugin-minecraft-linting:
         specifier: 2.0.2
         version: 2.0.2(typescript@5.0.2)
@@ -354,6 +360,9 @@ importers:
       '@yinxe/toolkit':
         specifier: workspace:*
         version: link:../../packages/toolkit
+      '@yinxe/toolkit-build':
+        specifier: workspace:*
+        version: link:../../packages/toolkit-build
       eslint-plugin-minecraft-linting:
         specifier: 2.0.2
         version: 2.0.2(typescript@5.0.2)
@@ -388,6 +397,12 @@ importers:
       '@minecraft/server-ui':
         specifier: '>=2.0.0'
         version: 2.0.0(@minecraft/vanilla-data@1.26.20)
+
+  packages/toolkit-build:
+    dependencies:
+      '@types/node':
+        specifier: '*'
+        version: 26.1.1
 
   server-plugin/antibundledup: {}
 

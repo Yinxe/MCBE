@@ -4,7 +4,7 @@
   "description": "将收纳袋改为可食用食物，防止收纳袋刷物漏洞",
   "private": true,
   "scripts": {
-    "build": "node ../../packages/toolkit/bin/sync-version.mjs .",
+    "build": "node ../../packages/toolkit-build/bin/sync-version.mjs .",
     "pack": "node scripts/pack.mjs"
   },
   "mcbe": {

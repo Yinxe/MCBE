@@ -38,6 +38,10 @@ export function reclaimBot(player: Player, record: BotRecord): ReclaimResult {
     if (!entity || !entity.hasTag(BOT_TAG)) throw new Error("无法在世界中找到该模拟玩家");
     const bot = entity as Player;
 
+    // ⚠️ 先保存空状态再转移，防止中途崩溃后重启恢复旧数据导致物品复制
+    record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
+    saveBotFullState(bot, record);
+
     // 背包 36 格
     const botInv = bot.getComponent("minecraft:inventory") as any;
     if (botInv?.container) {
@@ -76,10 +80,6 @@ export function reclaimBot(player: Player, record: BotRecord): ReclaimResult {
     if (result.xp > 0) {
       try { player.addExperience(result.xp); } catch {}
     }
-
-    // 清空假人状态
-    record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
-    saveBotFullState(bot, record);
 
   // ── 从持久化回收（离线/死亡） ──
   } else {

@@ -1,5 +1,5 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { findWaypointByName, togglePublic } from "../teleporter/waypointManager";
 import { showPublicWarpsList } from "../ui/publicWarps";
 

@@ -2,7 +2,8 @@
 // 模态表单用下拉选择框选择假人的主手物品
 
 import { Player, system } from "@minecraft/server";
-import { ModalFormBuilder } from "@yinxe/toolkit/ui";
+import { color, style } from "@yinxe/toolkit";
+import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { botRegistry } from "../features/core/persistence";
 import { getMainhandOptions, setMainhandSlot } from "../features/mainhand";
@@ -13,19 +14,19 @@ import { getMainhandOptions, setMainhandSlot } from "../features/mainhand";
  */
 export function showMainhandSelector(player: Player, botName: string): void {
   const record = botRegistry.get(botName);
-  if (!record) { player.sendMessage(`§c假人 §e${botName}§c 已不存在`); return; }
-  if (!record.online || record.death) { player.sendMessage("§c假人不在线或已死亡"); return; }
+  if (!record) { player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 已不存在`); return; }
+  if (!record.online || record.death) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
 
   const options = getMainhandOptions(botName);
-  if (!options) { player.sendMessage("§c无法获取假人实体"); return; }
+  if (!options) { player.sendMessage(`${color.error}无法获取假人实体`); return; }
   if (options.length <= 1) {
-    player.sendMessage("§c假人背包中没有其他物品可供选择");
+    player.sendMessage(`${color.error}假人背包中没有其他物品可供选择`);
     return;
   }
 
   new ModalFormBuilder()
-    .title("§l选择主手物品")
-    .dropdown("slot", "§7选择要放置在主手（slot 0）的物品", options.map(o => o.label), { defaultValueIndex: 0 })
+    .title(`${color.bold}选择主手物品`)
+    .dropdown("slot", style("选择要放置在主手（slot 0）的物品", color.darkGray), options.map(o => o.label), { defaultValueIndex: 0 })
     .show(player)
     .then((vals) => {
       if (!vals) return;
@@ -35,9 +36,9 @@ export function showMainhandSelector(player: Player, botName: string): void {
       system.run(() => {
         setMainhandSlot(botName, selected.value);
         if (selected.value === -1) {
-          player.sendMessage(`§a已将 §e${botName}§a 的主手清空`);
+          player.sendMessage(`${color.success}已将 ${color.playerName}${botName}${color.success} 的主手清空`);
         } else {
-          player.sendMessage(`§a已将 §e${botName}§a 的物品设置为主手`);
+          player.sendMessage(`${color.success}已将 ${color.playerName}${botName}${color.success} 的物品设置为主手`);
         }
       });
     });

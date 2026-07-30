@@ -1,5 +1,5 @@
 import { system, CommandPermissionLevel } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { showDeathPointsList } from "../ui/deathpoints";
 
 export function registerDeathPointsCommand(registry: any): void {

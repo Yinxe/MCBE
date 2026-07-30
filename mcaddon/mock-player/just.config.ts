@@ -12,7 +12,7 @@ import {
 import { argv, parallel, series, task, tscTask } from "just-scripts";
 import path from "path";
 import { renameSync } from "fs";
-import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
+import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit-build";
 
 const pkg = JSON.parse(require("fs").readFileSync(path.join(__dirname, "package.json"), "utf8"));
 const CHINESE_NAME = pkg.mcbe.packName;

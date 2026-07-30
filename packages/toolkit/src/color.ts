@@ -125,17 +125,21 @@ export const actionFormFg: readonly {
 // ─── 辅助函数 ───────────────────────────────────────────
 
 /**
- * 给文本加上 MCBE 颜色/格式码，自动追加 §r 重置。
+ * 给文本加上 MCBE 颜色/格式码。
+ *
+ * 不追加 §r，便于多段拼接。需要重置时手动追加 `color.reset`。
  *
  * @param text  要着色的文本
  * @param styles  颜色/格式码，按顺序应用（color 在先，format 在后）
  * @returns  着色后的字符串
  *
  * @example
- *   string("已上线", color.green)             // "§a已上线§r"
- *   string("危险操作", color.red, color.bold)   // "§c§l危险操作§r"
- *   string("确认", color.black, color.bold)     // "§0§l确认§r"
+ *   style("已上线", color.green)               // "§a已上线"
+ *   style("危险操作", color.red, color.bold)   // "§c§l危险操作"
+ *   style(botName, color.playerName)           // "§e假人A"
+ *   // 独立消息需手动追加 reset 防泄漏：
+ *   style("完成", color.success) + color.reset // "§a完成§r"
  */
-export function string(text: string | number | boolean, ...styles: string[]): string {
-  return styles.join("") + text + `${S}r`;
+export function style(text: string | number | boolean, ...styles: string[]): string {
+  return styles.join("") + text;
 }

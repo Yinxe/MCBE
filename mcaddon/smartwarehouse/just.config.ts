@@ -12,7 +12,7 @@ import {
   watchTask,
 } from "@minecraft/core-build-tasks";
 import path from "path";
-import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit";
+import { bundleOptions, copyOptions, syncManifestVersion } from "@yinxe/toolkit-build";
 
 // ── Project metadata ────────────────────────────────────────────
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf8"));

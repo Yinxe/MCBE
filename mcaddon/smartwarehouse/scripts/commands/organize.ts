@@ -1,6 +1,6 @@
 import { system, CommandPermissionLevel, type CustomCommand } from "@minecraft/server";
 import type { EntityInventoryComponent } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { SlotOrganizer } from "../organize/SlotOrganizer";
 import { formatOrganizeResult } from "../organize/OrganizeFormatter";
 

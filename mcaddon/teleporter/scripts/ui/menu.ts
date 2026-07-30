@@ -1,5 +1,5 @@
 import { Player } from "@minecraft/server";
-import { ActionFormBuilder } from "@yinxe/toolkit/ui";
+import { ActionFormBuilder } from "@yinxe/toolkit";
 import { isAdmin } from "../teleporter/adminManager";
 import { showAdminConfig } from "./admin";
 import { showDeathPointsList } from "./deathpoints";

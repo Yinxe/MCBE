@@ -13,6 +13,7 @@ import { offlineBot } from "./offlineBot";
 import { onlineBot } from "./onlineBot";
 import { botRegistry } from "./core/persistence";
 import { saveBotFullState } from "./saveState";
+import { color } from "@yinxe/toolkit";
 
 // ─── 可用的宝库钥匙 ──────────────────────────────────
 
@@ -175,10 +176,10 @@ function notifyNearestPlayer(bot: SimulatedPlayer, record: BotRecord, keyInfo: K
 
     if (keyInfo) {
       nearest.sendMessage(
-        `§e[宝库] §a${record.name} §7手中还有 §f${keyInfo.totalInInventory} §e${keyInfo.label}§7（手持 §f${keyInfo.count}§7）`,
+        `${color.playerName}[宝库] ${color.success}${record.name} ${color.muted}手中还有 ${color.info}${keyInfo.totalInInventory} ${color.playerName}${keyInfo.label}${color.muted}（手持 ${color.info}${keyInfo.count}${color.muted}）`,
       );
     } else {
-      nearest.sendMessage(`§e[宝库] §a${record.name} §7手上没有钥匙，请放入钥匙到主手`);
+      nearest.sendMessage(`${color.playerName}[宝库] ${color.success}${record.name} ${color.muted}手上没有钥匙，请放入钥匙到主手`);
     }
   } catch {
     // 通知失败不影响主流程

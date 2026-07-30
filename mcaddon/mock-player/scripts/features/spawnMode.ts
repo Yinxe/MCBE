@@ -9,6 +9,7 @@ import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametes
 import type { BotRecord } from "./core/types";
 import { finalizeBotSpawn } from "./core/spawn";
 import { globalTest } from "./core/gametestContext";
+import { color } from "@yinxe/toolkit";
 
 export type SpawnMode = "normal" | "chunkload";
 
@@ -24,14 +25,14 @@ const MODE_CHUNKLOAD = "chunkload" as const;
 
 export const MODE_NORMAL_INFO: SpawnModeInfo = {
   value: MODE_NORMAL,
-  label: "§a普通模式",
+  label: `${color.success}普通模式`,
   desc: "完全体态可操控",
   limitations: [],
 };
 
 export const MODE_CHUNKLOAD_INFO: SpawnModeInfo = {
   value: MODE_CHUNKLOAD,
-  label: "§b强加载模式",
+  label: `${color.accent}强加载模式`,
   desc: "区块常加载，但不可转向",
   limitations: [
     "不支持体态同步",

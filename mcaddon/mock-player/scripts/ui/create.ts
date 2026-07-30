@@ -1,7 +1,8 @@
 // ─── 创建模拟玩家表单 ───────────────────────────────────
 
 import { Player, system, world, Vector3 } from "@minecraft/server";
-import { ModalFormBuilder } from "@yinxe/toolkit/ui";
+import { color, style } from "@yinxe/toolkit";
+import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { PositionState } from "../features/core/types";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../features/core/tags";
@@ -13,14 +14,14 @@ import { createBot } from "../features/createBot";
 export function showCreateForm(player: Player): void {
   const dimOptions = ["跟随玩家", "主世界 (overworld)", "下界 (nether)", "末地 (the_end)"];
 
-  ModalFormBuilder.showQuick(player, "§l创建模拟玩家", (f) => {
+  ModalFormBuilder.showQuick(player, `${color.bold}创建模拟玩家`, (f) => {
     f.textField("name", "名称（留空自动生成）", { defaultValue: "", tooltip: "输入假人名称，留空则自动生成随机名字" })
      .textField("coord", "坐标（留空使用玩家位置）", { defaultValue: "", tooltip: "格式: x y z，留空则生成在玩家当前位置" })
      .dropdown("dim", "维度", dimOptions, { defaultValueIndex: 0, tooltip: "假人所在的维度，跟随玩家则为当前维度" })
-     .toggle("copyPosture", "§7复刻玩家体态（同步潜行/朝向）", { defaultValue: true, tooltip: "创建时复制玩家的潜行和面向方向" })
-     .toggle("respawn", "§7自动重生", { defaultValue: true, tooltip: "开启后假人死亡会自动复活到重生点" })
-     .toggle("idle", "§7空闲状态", { defaultValue: true, tooltip: "开启后假人默认处于空闲状态，不执行任何行为" })
-     .toggle("chunkload", "§b强加载模式", { defaultValue: false, tooltip: "开启后区块常驻加载，但不可设置身体朝向" });
+      .toggle("copyPosture", style("复刻玩家体态（同步潜行/朝向）", color.darkGray), { defaultValue: true, tooltip: "创建时复制玩家的潜行和面向方向" })
+      .toggle("respawn", style("自动重生", color.darkGray), { defaultValue: true, tooltip: "开启后假人死亡会自动复活到重生点" })
+      .toggle("idle", style("空闲状态", color.darkGray), { defaultValue: true, tooltip: "开启后假人默认处于空闲状态，不执行任何行为" })
+      .toggle("chunkload", style("强加载模式", color.darkBlue), { defaultValue: false, tooltip: "开启后区块常驻加载，但不可设置身体朝向" });
   }).then((vals) => {
     if (!vals) return;
     const botName = (vals.name as string).trim() || generateBotName();
@@ -54,9 +55,9 @@ export function showCreateForm(player: Player): void {
           isSneaking: sneaking,
           spawnMode: vals.chunkload ? "chunkload" : "normal",
         });
-        player.sendMessage(`§a成功创建模拟玩家 §e${botName}`);
+        player.sendMessage(`${color.success}成功创建模拟玩家 ${color.playerName}${botName}`);
       } catch (e: any) {
-        player.sendMessage(`§c创建模拟玩家失败: ${e.message}`);
+        player.sendMessage(`${color.error}创建模拟玩家失败: ${e.message}`);
       }
     });
   });

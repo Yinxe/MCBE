@@ -1,5 +1,5 @@
 import { Player } from "@minecraft/server";
-import { ActionFormBuilder } from "@yinxe/toolkit/ui";
+import { ActionFormBuilder } from "@yinxe/toolkit";
 import { getDeathPoints, deleteDeathPoint } from "../teleporter/deathManager";
 import { teleportPlayerTo, formatLocation } from "../teleporter/teleportManager";
 import { showMainMenu } from "./menu";

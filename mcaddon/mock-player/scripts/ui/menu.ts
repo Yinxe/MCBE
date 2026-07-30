@@ -2,7 +2,8 @@
 // 顶层菜单入口，bot 操作面板已移至 bot.ts
 
 import { Player } from "@minecraft/server";
-import { ActionFormBuilder } from "@yinxe/toolkit/ui";
+import { color, style } from "@yinxe/toolkit";
+import { ActionFormBuilder } from "@yinxe/toolkit";
 
 import { BotRecord } from "../features/core/types";
 import { BOT_TAG } from "../features/core/tags";
@@ -17,10 +18,10 @@ import { showHelpGuide } from "./HelpGuide";
 
 export function showMainMenu(player: Player): void {
   new ActionFormBuilder()
-    .title("§l模拟玩家管理")
-    .buttonWithIcon("§a创建模拟玩家", "textures/ui/icon_add", () => showCreateForm(player))
-    .buttonWithIcon("§b模拟玩家列表", "textures/ui/icon_search", () => showBotList(player, () => showMainMenu(player)))
-    .buttonWithIcon("§b在线管理", "textures/ui/icon_setting", () => showOnlineManagement(player))
-    .buttonWithIcon("§b帮助", "textures/ui/icon_recipe", () => showHelpGuide(player))
+    .title(`${color.bold}模拟玩家管理`)
+    .buttonWithIcon(style("创建模拟玩家", color.darkGreen), "textures/ui/icon_add", () => showCreateForm(player))
+    .buttonWithIcon(style("模拟玩家列表", color.darkBlue), "textures/ui/icon_search", () => showBotList(player, () => showMainMenu(player)))
+    .buttonWithIcon(style("在线管理", color.darkBlue), "textures/ui/icon_setting", () => showOnlineManagement(player))
+    .buttonWithIcon(style("帮助", color.darkBlue), "textures/ui/icon_recipe", () => showHelpGuide(player))
     .show(player);
 }

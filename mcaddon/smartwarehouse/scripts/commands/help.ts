@@ -1,5 +1,5 @@
 import { system, CommandPermissionLevel } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
 import { showHelpGuide } from "../ui/HelpGuide";
 
 export function registerHelpCommand(registry: any): void {

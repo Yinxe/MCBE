@@ -1,5 +1,6 @@
 import { Vector3, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
+import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../features/core/persistence";
 import { moveBot } from "../features/move";
 export function registerMoveCommand(registry: any): void {
@@ -10,13 +11,13 @@ export function registerMoveCommand(registry: any): void {
     optionalParameters: [{ name: "location", type: CustomCommandParamType.Location }],
   }, ({ player, params }) => {
     const targetName = params.name as string;
-    if (!targetName) { player.sendMessage("§c用法: /mp:move <假人> [x] [y] [z]"); return; }
+    if (!targetName) { player.sendMessage(`${color.error}用法: /mp:move <假人> [x] [y] [z]`); return; }
     const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`§c未找到假人 §e${targetName}§c 的记录`); return; }
+    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     const loc = (params.location as Vector3 | undefined) ?? player.location;
     const ok = moveBot(record, loc);
     player.sendMessage(ok
-      ? `§a假人 §e${targetName}§a 正在前往 §e${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}`
-      : `§e假人 §e${targetName}§e 无法完全到达目标位置，但已开始移动`);
+      ? `${color.success}假人 ${color.playerName}${targetName}${color.success} 正在前往 ${color.playerName}${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}`
+      : `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 无法完全到达目标位置，但已开始移动`);
   });
 }

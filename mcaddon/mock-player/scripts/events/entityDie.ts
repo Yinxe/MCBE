@@ -11,6 +11,7 @@
 //   - respawn() 必须在 entityDie 中调用，离开事件后实体 ID 就无效了
 //   - 死亡后 world.getPlayers({ tags }) 不再返回该假人
 
+import { color } from "@yinxe/toolkit";
 import { world, EntityDieAfterEvent } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
@@ -51,7 +52,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   saveBotRecord(record);
 
   world.sendMessage(
-    `§7[§a假人§7] §c${record.name} 死亡了 §7@ ${formatPos(deathState.location)} §8${formatDimensionId(deathState.dimension)}`,
+    `${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 死亡了 ${color.muted}@ ${formatPos(deathState.location)} ${color.darkGray}${formatDimensionId(deathState.dimension)}`,
   );
 
   // 3. 有自动重生标签 → 自动复活到重生点
@@ -73,11 +74,11 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
       record.deathPoint = null;
       record.lastPoint = { ...record.respawnPoint };
       saveBotRecord(record);
-      world.sendMessage(`§7[§a假人§7] §b${record.name} 已自动复活`);
+      world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 已自动复活`);
       return;
     } catch (e: any) {
       // 重生失败→继续走死亡下线流程
-      world.sendMessage(`§7[§a假人§7] §c${record.name} 自动重生失败: ${e.message}`);
+      world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动重生失败: ${e.message}`);
     }
   }
 
@@ -86,5 +87,5 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   record.entityId = undefined;
   saveBotRecord(record);
   bot.disconnect();
-  world.sendMessage(`§7[§a假人§7] §e${record.name} 已死亡下线`);
+  world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 已死亡下线`);
 }

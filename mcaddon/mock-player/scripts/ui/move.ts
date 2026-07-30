@@ -1,7 +1,8 @@
 // ─── 移动表单 + 删除确认 ──────────────────────────────
 
 import { Player, system } from "@minecraft/server";
-import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit/ui";
+import { color, style } from "@yinxe/toolkit";
+import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
 import { botRegistry } from "../features/core/persistence";
 import { moveBot } from "../features/move";
@@ -15,7 +16,7 @@ import { parseCoordinateInput } from "../features/core/utils";
  *   菜单中不再暴露此入口，保留代码以兼容外部调用。
  */
 export function showMoveForm(player: Player, botName: string): void {
-  ModalFormBuilder.showQuick(player, "§l移动至坐标", (f) => {
+  ModalFormBuilder.showQuick(player, `${color.bold}移动至坐标`, (f) => {
     f.textField("coord", "目标坐标（留空则移动到你位置）", { defaultValue: "" });
   }).then((vals) => {
     if (!vals) return;
@@ -24,11 +25,11 @@ export function showMoveForm(player: Player, botName: string): void {
 
     const record = botRegistry.get(botName);
     if (!record) {
-      player.sendMessage(`§c模拟玩家 §e${botName}§c 已被删除`);
+      player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
       return;
     }
     if (!record.online || record.death) {
-      player.sendMessage("§c模拟玩家不在线或已死亡");
+      player.sendMessage(`${color.error}模拟玩家不在线或已死亡`);
       return;
     }
 
@@ -36,14 +37,14 @@ export function showMoveForm(player: Player, botName: string): void {
       try {
         const fullPath = moveBot(record, targetPos);
         if (!fullPath) {
-          player.sendMessage(`§e${botName}§e 无法完全到达目标位置（路径不完整）`);
+          player.sendMessage(`${color.playerName}${botName}${color.warn} 无法完全到达目标位置（路径不完整）`);
         } else {
           player.sendMessage(
-            `§a${botName}§a 正在前往 §e${Math.floor(targetPos.x)} ${Math.floor(targetPos.y)} ${Math.floor(targetPos.z)}`
+            `${color.success}${botName}${color.success} 正在前往 ${color.warn}${Math.floor(targetPos.x)} ${Math.floor(targetPos.y)} ${Math.floor(targetPos.z)}`
           );
         }
       } catch (e: any) {
-        player.sendMessage(`§c移动失败: ${e.message}`);
+        player.sendMessage(`${color.error}移动失败: ${e.message}`);
       }
     });
   });
@@ -54,20 +55,20 @@ export function showMoveForm(player: Player, botName: string): void {
 export function confirmDelete(player: Player, botName: string): void {
   MessageFormBuilder.confirm(
     player,
-    "§l确认删除",
-    `§7确定要删除模拟玩家 §e${botName}§7 吗？\n\n§6背包、装备和经验将被回收。\n§c此操作不可撤销！`,
+    `${color.bold}确认删除`,
+    `${style("确定要删除模拟玩家", color.darkGray)} ${color.playerName}${botName}${color.muted} 吗？\n\n${color.gold}背包、装备和经验将被回收。\n${color.darkRed}此操作不可撤销！`,
     () => {
       const record = botRegistry.get(botName);
       if (!record) {
-        player.sendMessage(`§c模拟玩家 §e${botName}§c 不存在`);
+        player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 不存在`);
         return;
       }
       system.run(() => {
         try {
           deleteBot(record, player);
-          player.sendMessage(`§a已删除模拟玩家 §e${botName}，物品和经验已回收`);
+          player.sendMessage(`${color.success}已删除模拟玩家 ${color.playerName}${botName}${color.success}，物品和经验已回收`);
         } catch (e: any) {
-          player.sendMessage(`§c删除失败: ${e.message}`);
+          player.sendMessage(`${color.error}删除失败: ${e.message}`);
         }
       });
     }

@@ -8,6 +8,7 @@
 // 不能只用 name 过滤——加 tags 确保只操作假人，避免误操作同名的真实玩家
 
 import { world, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEquippableComponent } from "@minecraft/server";
+import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG } from "../features/core/tags";
 import { botRegistry, saveBotRecord, loadBotInventory, loadBotEquipment, markBotRestored } from "../features/core/persistence";
@@ -59,5 +60,5 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   if (player) {
     markBotRestored(record.name);
   }
-  world.sendMessage(`§7[§a假人§7] §a${record.name} 加入了游戏`);
+  world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.success}${record.name} 加入了游戏`);
 }

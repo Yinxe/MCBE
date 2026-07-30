@@ -1,6 +1,7 @@
 // ─── /mp:list — 列出模拟玩家 ──────────────────────────
 
-import { defineCommand } from "@yinxe/toolkit/command";
+import { defineCommand } from "@yinxe/toolkit";
+import { color } from "@yinxe/toolkit";
 import {
   system,
   world,
@@ -17,7 +18,7 @@ import { savePoseToRecord } from "../features/core/pose";
 
 /** 格式化点位状态（仅列表显示用） */
 function formatState(state: PositionState): string {
-  return `${formatPos(state.location)} §8${formatDimensionId(state.dimension)} §7旋转(${Math.floor(state.rotation.x)},${Math.floor(state.rotation.y)})`;
+  return `${formatPos(state.location)} ${color.darkGray}${formatDimensionId(state.dimension)} ${color.muted}旋转(${Math.floor(state.rotation.x)},${Math.floor(state.rotation.y)})`;
 }
 
 /** 构建列表消息 */
@@ -25,28 +26,28 @@ function buildListMessage(records: BotRecord[], filterOnline?: boolean, filterDe
   let filtered = records;
   if (filterOnline !== undefined) filtered = filtered.filter((r) => r.online === filterOnline);
   if (filterDeath !== undefined) filtered = filtered.filter((r) => r.death === filterDeath);
-  if (filtered.length === 0) return "§e没有匹配的假人";
+  if (filtered.length === 0) return `${color.playerName}没有匹配的假人`;
 
   const lines = filtered.map((r) => {
-    const icon = r.death ? "§c💀" : r.online ? "§a✔" : "§7❌";
-    const txt = r.death ? "§c死亡" : r.online ? "§a在线" : "§7离线";
+    const icon = r.death ? `${color.error}💀` : r.online ? `${color.success}✔` : `${color.muted}❌`;
+    const txt = r.death ? `${color.error}死亡` : r.online ? `${color.success}在线` : `${color.muted}离线`;
     const pos =
       r.death && r.deathPoint
-        ? `${formatPos(r.deathPoint.location)} §8${formatDimensionId(r.deathPoint.dimension)} §7(死亡点)`
+        ? `${formatPos(r.deathPoint.location)} ${color.darkGray}${formatDimensionId(r.deathPoint.dimension)} ${color.muted}(死亡点)`
         : r.lastPoint
           ? formatState(r.lastPoint)
-          : formatState(r.respawnPoint) + " §7(重生点)";
+          : formatState(r.respawnPoint) + ` ${color.muted}(重生点)`;
     const displayTags = r.tags
       .filter((t) => t !== BOT_TAG && t !== TAG_IDLE.value)
       .map((t) => {
         const def = getTagDef(t);
-        return def ? `§b${def.label}§7` : t;
+        return def ? `${color.accent}${def.label}${color.muted}` : t;
       });
-    const tagHint = displayTags.length > 0 ? ` §7[${displayTags.join(" §7| ")}]` : "";
-    return `${icon} §e${r.name}§7 — ${txt}§7 | ${pos}${tagHint}`;
+    const tagHint = displayTags.length > 0 ? ` ${color.muted}[${displayTags.join(` ${color.muted}| `)}]` : "";
+    return `${icon} ${color.playerName}${r.name}${color.muted} — ${txt}${color.muted} | ${pos}${tagHint}`;
   });
 
-  lines.unshift(`§a假人列表 (§b${filtered.length}§a/${records.length}§a):`);
+  lines.unshift(`${color.success}假人列表 (${color.accent}${filtered.length}${color.success}/${records.length}${color.success}):`);
   return lines.join("\n");
 }
 

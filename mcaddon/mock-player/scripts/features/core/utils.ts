@@ -14,8 +14,7 @@ import {
   Dimension,
 } from "@minecraft/server";
 import { PositionState, SerializedItemStack, SerializedEnchantment, ExperienceRecord, EQUIP_SLOT_MAP } from "./types";
-
-// ─── 坐标方向 ──────────────────────────────────────────
+import { color } from "@yinxe/toolkit";
 
 // ─── 格式化 ────────────────────────────────────────────
 
@@ -30,11 +29,11 @@ export function formatDimensionId(dimId: string): string {
 }
 
 export function formatPos(v: Vector3): string {
-  return `§7[§f${Math.floor(v.x)} §f${Math.floor(v.y)} §f${Math.floor(v.z)}§7]`;
+  return `${color.muted}[${color.info}${Math.floor(v.x)} ${color.info}${Math.floor(v.y)} ${color.info}${Math.floor(v.z)}${color.muted}]`;
 }
 
 export function formatState(state: PositionState): string {
-  return `${formatPos(state.location)} §8${formatDimensionId(state.dimension)} §7旋转(${Math.floor(state.rotation.x)},${Math.floor(state.rotation.y)})`;
+  return `${formatPos(state.location)} ${color.darkGray}${formatDimensionId(state.dimension)} ${color.muted}旋转(${Math.floor(state.rotation.x)},${Math.floor(state.rotation.y)})`;
 }
 
 // ─── 状态捕获 ──────────────────────────────────────────
@@ -69,6 +68,104 @@ export function parseCoordinateInput(input: string): Vector3 | undefined {
   const z = parseFloat(parts[2]);
   if (isNaN(x) || isNaN(y) || isNaN(z)) return undefined;
   return { x, y, z };
+}
+
+// ─── 格式化工具（共享：附魔/耐久） ─────────────────────
+
+/** 将数字等级转为罗马数字表示（1→I, 5→V, 10→X） */
+export function levelToRoman(level: number): string {
+  const map: Record<number, string> = {
+    1: "I", 2: "II", 3: "III", 4: "IV", 5: "V",
+    6: "VI", 7: "VII", 8: "VIII", 9: "IX", 10: "X",
+  };
+  return map[level] || `[${level}]`;
+}
+
+/**
+ * 附魔 ID → 中文名映射（原版全附魔）。
+ * 参考：https://zh.minecraft.wiki/w/附魔
+ */
+const ENCH_ZH: Record<string, string> = {
+  // 通用
+  protection:       "保护",
+  fire_protection:  "火焰保护",
+  feather_falling:  "摔落保护",
+  blast_protection: "爆炸保护",
+  projectile_protection: "弹射物保护",
+  respiration:      "水下呼吸",
+  aqua_affinity:    "水下速掘",
+  thorns:           "荆棘",
+  depth_strider:    "深海探索者",
+  frost_walker:     "冰霜行者",
+  binding_curse:    "绑定诅咒",
+  // 通用工具/武器
+  sharpness:        "锋利",
+  smite:            "亡灵杀手",
+  bane_of_arthropods: "节肢杀手",
+  knockback:        "击退",
+  fire_aspect:      "火焰附加",
+  looting:          "抢夺",
+  sweeping:         "横扫之刃",
+  efficiency:       "效率",
+  silk_touch:       "精准采集",
+  unbreaking:       "耐久",
+  fortune:          "时运",
+  mending:          "经验修补",
+  vanilla_curse:    "消失诅咒",
+  // 弓/弩
+  power:            "力量",
+  punch:            "冲击",
+  flame:            "火焰",
+  infinity:         "无限",
+  multishot:        "多重射击",
+  quick_charge:     "快速装填",
+  piercing:         "穿透",
+  // 三叉戟
+  impaling:         "穿刺",
+  riptide:          "激流",
+  loyalty:          "忠诚",
+  channeling:       "引雷",
+  // 钓鱼竿
+  luck_of_the_sea:  "海之眷顾",
+  lure:             "诱饵",
+  // 头盔专属
+  soul_speed:       "灵魂疾行",
+  swift_sneak:      "迅捷潜行",
+  wind_burst:       "风爆",
+  // 新增 1.21+
+  density:          "致密",
+  breach:           "破甲",
+  // 不详附魔
+  venom:            "渗毒",
+  infestation:      "增生",
+};
+
+/**
+ * 格式化物品的附魔列表为彩色字符串。
+ * @returns 如 "§9锋利III §9击退II" 或 ""（无附魔）
+ */
+export function formatEnchantments(item: ItemStack): string {
+  if (!item.hasComponent("minecraft:enchantable")) return "";
+  const ench = item.getComponent("minecraft:enchantable") as any;
+  if (!ench) return "";
+  const parts: string[] = [];
+  for (const e of ench.getEnchantments()) {
+    const zh = ENCH_ZH[e.type.id] ?? e.type.id;
+    parts.push(`${color.darkBlue}${zh}${e.level}`);
+  }
+  return parts.join(" ");
+}
+
+/** 格式化物品的耐久值为带颜色的字符串。返回 "" 表示无耐久组件 */
+export function formatDurability(item: ItemStack): string {
+  const dur = item.getComponent("minecraft:durability") as any;
+  if (!dur) return "";
+  const maxD = dur.maxDurability ?? 1;
+  const dmg = dur.damage ?? 0;
+  const cur = maxD - dmg;
+  const pct = Math.floor((cur / maxD) * 100);
+  const code = pct > 50 ? "" : pct > 20 ? color.darkGray : color.darkRed;
+  return `${code}(${cur}/${maxD})`;
 }
 
 // ─── 背包序列化 ──────────────────────────────────────────

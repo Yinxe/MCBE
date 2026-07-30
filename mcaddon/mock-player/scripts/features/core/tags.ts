@@ -2,6 +2,7 @@
 
 import { Entity } from "@minecraft/server";
 import { TagDef, TAG_PREFIX } from "./types";
+import { color } from "@yinxe/toolkit";
 
 // ─── 标签定义 ──────────────────────────────────────────
 
@@ -68,16 +69,16 @@ export function resolveTag(input: string): TagDef | undefined {
 
 /** 构建可用标签列表文字 */
 export function buildTagListMessage(): string {
-  const lines: string[] = ["§a可用标签:"];
+  const lines: string[] = [`${color.success}可用标签:`];
 
-  lines.push("§7━━ 可共存 ────");
+  lines.push(`${color.muted}━━ 可共存 ────`);
   for (const t of COEXIST_TAGS) {
-    lines.push(` §e${t.label}§7 (${t.value})`);
+    lines.push(` ${color.playerName}${t.label}${color.muted} (${t.value})`);
   }
 
-  lines.push("§7━━ 互斥 ────");
+  lines.push(`${color.muted}━━ 互斥 ────`);
   for (const t of EXCLUSIVE_TAGS) {
-    lines.push(` §e${t.label}§7 (${t.value})`);
+    lines.push(` ${color.playerName}${t.label}${color.muted} (${t.value})`);
   }
 
   return lines.join("\n");
