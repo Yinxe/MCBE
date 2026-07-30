@@ -15,6 +15,7 @@ import { registerAllEvents } from "./events/index";
 import { startTagBehaviors } from "./features/core/behavior";
 import { initGameTestContext } from "./features/core/gametestContext";
 import { botRegistry, loadAllBotRecords, saveBotRecord } from "./features/core/persistence";
+import { initTridentTracker } from "./features/tridentTracker";
 
 // ─── 命令注册（early-execution mode） ─────────────────────
 // customCommandRegistry 不在 world 上，而是在 StartupEvent 上
@@ -47,6 +48,10 @@ world.afterEvents.worldLoad.subscribe(() => {
 
   // 初始化 GameTest（供 chunkload 模式使用）
   initGameTestContext();
+
+  // 初始化三叉戟追踪（entitySpawn 标记假人抛出的三叉戟）
+  console.warn(`[MockPlayer] 初始化三叉戟追踪`);
+  initTridentTracker();
 
   // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
   console.warn(`[MockPlayer] 注册事件`);

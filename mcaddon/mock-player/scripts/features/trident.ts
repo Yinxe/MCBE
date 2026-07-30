@@ -10,7 +10,10 @@ import {
 } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { botRegistry, resolveBotPlayer } from "./core/persistence";
+import { botRegistry, resolveBotPlayer, saveBotRecord, isBotRestored } from "./core/persistence";
+import { offlineBot } from "./offlineBot";
+import { onlineBot } from "./onlineBot";
+import { switchSpawnMode } from "./spawnMode";
 
 const TRIDENT_ID = "minecraft:trident";
 const SLOT_HOTBAR = 9; // 热栏格数
@@ -87,9 +90,12 @@ export function isMainhandTrident(botName: string): boolean {
 /**
  * 让假人投掷指定槽位的三叉戟。
  *
- * 保持假人当前朝向投掷，不扭头、不切换模式。
+ * chunkload 模式先切普通模式让假人能投掷（useItemInSlot 需要普通模式），
+ * 投掷完成后再恢复原模式。
+ * 实体重建导致的三叉戟所属权丢失由 tridentTracker 自动恢复。
  *
  * @param botName 假人名
+ * @param playerId 操作玩家 ID
  * @param slots 要投掷的三叉戟所在容器槽位数组
  */
 export function throwTridents(
@@ -101,9 +107,23 @@ export function throwTridents(
   const record = botRegistry.get(botName);
   if (!record || !record.online || record.death) { onComplete?.(); return; }
 
-  // ⚠️ 不切换模式：保持假人当前实体，三叉戟所属权不丢失
-  // 扭头已移除，chunkload 模式也可以直接投掷
-  system.run(() => doThrowLoop(botName, playerId, slots, onComplete ?? (() => {})));
+  const wasChunkload = record.spawnMode === "chunkload";
+
+  const done = () => {
+    if (wasChunkload) finishAndRestoreMode(botName, "chunkload");
+    onComplete?.();
+  };
+
+  if (wasChunkload) {
+    // chunkload → 普通模式（让假人能使用物品投掷）
+    offlineBot(record);
+    switchSpawnMode(record, "normal");
+    saveBotRecord(record);
+    onlineBot(record);
+    waitForRestored(botName, () => doThrowLoop(botName, playerId, slots, done));
+  } else {
+    system.run(() => doThrowLoop(botName, playerId, slots, done));
+  }
 }
 
 // ─── 投掷循环 ──────────────────────────────────────────
@@ -177,6 +197,35 @@ function doThrowLoop(
   }
 
   throwNext();
+}
+
+// ─── 模式恢复 ──────────────────────────────────────────
+
+function finishAndRestoreMode(botName: string, targetMode: "normal" | "chunkload"): void {
+  const record = botRegistry.get(botName);
+  if (!record) return;
+
+  // 下线/上线切换模式（实体重建）
+  // tridentTracker 会在上线后自动重绑定该假人的三叉戟所属权
+  offlineBot(record);
+  switchSpawnMode(record, targetMode);
+  saveBotRecord(record);
+  onlineBot(record);
+  // playerJoin 事件会自动恢复背包，无需等待
+}
+
+// ─── 等待恢复 ──────────────────────────────────────────
+
+function waitForRestored(botName: string, callback: () => void, retries = 30): void {
+  if (retries <= 0) {
+    console.warn(`[MockPlayer] ⚠️ 恢复等待超时 ${botName}`);
+    return;
+  }
+  if (isBotRestored(botName)) {
+    system.run(callback);
+    return;
+  }
+  system.runTimeout(() => waitForRestored(botName, callback, retries - 1), 3);
 }
 
 // ─── 工具函数 ──────────────────────────────────────────

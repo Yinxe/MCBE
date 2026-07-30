@@ -7,6 +7,7 @@ import { BotRecord } from "./core/types";
 import { BOT_TAG } from "./core/tags";
 import { botRegistry, saveBotRecord } from "./core/persistence";
 import { saveBotFullState } from "./saveState";
+import { trackBotOffline } from "./tridentTracker";
 
 /**
  * 主动下线假人
@@ -18,6 +19,9 @@ import { saveBotFullState } from "./saveState";
 export function offlineBot(record: BotRecord): void {
   const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
   const online = entity as SimulatedPlayer | undefined;
+
+  // 下线前清理反查表（需要先保存 entityId）
+  const oldEntityId = record.entityId;
 
   if (online && online.hasTag(BOT_TAG)) {
     record.lastPoint = {
@@ -40,4 +44,6 @@ export function offlineBot(record: BotRecord): void {
   record.entityId = undefined;
   botRegistry.set(record.name, record);
   saveBotRecord(record);
+
+  if (oldEntityId) trackBotOffline(oldEntityId);
 }
