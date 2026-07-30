@@ -13,7 +13,8 @@ import { DynamicPropertyStore } from "./DynamicPropertyStore";
 /** 仓库索引在动态属性中存储的键名 */
 const INDEX_KEY = "sw:index";
 /** 每个分片最多容纳的容器数量 —— 用于将容器数据分片存储，避免单条动态属性超限 */
-const CONTAINERS_PER_SHARD = 128;
+// 每个容器序列化约 1.4KB，24KB 安全上限 ÷ 1.4KB ≈ 17，设 14 留余量
+const CONTAINERS_PER_SHARD = 5;
 
 export const DEFAULT_WAREHOUSE_SETTINGS: WarehouseSettings = {
   defaultNewContainerRole: "misc",
