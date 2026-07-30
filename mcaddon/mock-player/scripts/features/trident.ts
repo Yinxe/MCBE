@@ -5,18 +5,12 @@ import {
   EntityEquippableComponent,
   EquipmentSlot,
   ItemStack,
-  Player,
   system,
-  world,
   ItemEnchantableComponent,
 } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { botRegistry, saveBotRecord, isBotRestored, resolveBotPlayer } from "./core/persistence";
-import { lookAt } from "./core/pose";
-import { offlineBot } from "./offlineBot";
-import { onlineBot } from "./onlineBot";
-import { switchSpawnMode } from "./spawnMode";
+import { botRegistry, resolveBotPlayer } from "./core/persistence";
 
 const TRIDENT_ID = "minecraft:trident";
 const SLOT_HOTBAR = 9; // 热栏格数
@@ -93,16 +87,9 @@ export function isMainhandTrident(botName: string): boolean {
 /**
  * 让假人投掷指定槽位的三叉戟。
  *
- * 处理流程：
- *   1. 若常加载模式 → 切换普通模式（使扭头生效）
- *   2. 等待背包恢复
- *   3. 保存当前主手物品
- *   4. 逐把投掷：换主手 → 看向玩家 → 蓄力 → 释放
- *   5. 恢复主手物品
- *   6. 若曾切换模式 → 恢复原始模式
+ * 保持假人当前朝向投掷，不扭头、不切换模式。
  *
  * @param botName 假人名
- * @param playerId 操作玩家 ID（用于扭头方向）
  * @param slots 要投掷的三叉戟所在容器槽位数组
  */
 export function throwTridents(
@@ -114,22 +101,9 @@ export function throwTridents(
   const record = botRegistry.get(botName);
   if (!record || !record.online || record.death) { onComplete?.(); return; }
 
-  const wasChunkload = record.spawnMode === "chunkload";
-
-  const done = () => {
-    if (wasChunkload) finishAndRestoreMode(botName, "chunkload");
-    onComplete?.();
-  };
-
-  if (wasChunkload) {
-    offlineBot(record);
-    switchSpawnMode(record, "normal");
-    saveBotRecord(record);
-    onlineBot(record);
-    waitForRestored(botName, () => doThrowLoop(botName, playerId, slots, done));
-  } else {
-    system.run(() => doThrowLoop(botName, playerId, slots, done));
-  }
+  // ⚠️ 不切换模式：保持假人当前实体，三叉戟所属权不丢失
+  // 扭头已移除，chunkload 模式也可以直接投掷
+  system.run(() => doThrowLoop(botName, playerId, slots, onComplete ?? (() => {})));
 }
 
 // ─── 投掷循环 ──────────────────────────────────────────
@@ -203,33 +177,6 @@ function doThrowLoop(
   }
 
   throwNext();
-}
-
-// ─── 模式恢复 ──────────────────────────────────────────
-
-function finishAndRestoreMode(botName: string, targetMode: "normal" | "chunkload"): void {
-  const record = botRegistry.get(botName);
-  if (!record) return;
-
-  offlineBot(record);
-  switchSpawnMode(record, targetMode);
-  saveBotRecord(record);
-  onlineBot(record);
-  // playerJoin 事件会自动恢复背包，无需等待
-}
-
-// ─── 等待恢复 ──────────────────────────────────────────
-
-function waitForRestored(botName: string, callback: () => void, retries = 30): void {
-  if (retries <= 0) {
-    console.warn(`[MockPlayer] ⚠️ 恢复等待超时 ${botName}`);
-    return;
-  }
-  if (isBotRestored(botName)) {
-    system.run(callback);
-    return;
-  }
-  system.runTimeout(() => waitForRestored(botName, callback, retries - 1), 3);
 }
 
 // ─── 工具函数 ──────────────────────────────────────────
