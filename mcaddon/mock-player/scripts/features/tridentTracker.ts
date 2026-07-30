@@ -1,27 +1,24 @@
 // ─── 三叉戟所属权追踪 ──────────────────────────────────
 //
-// 用假人名标记抛出的三叉戟投射物，确保实体重建后所属权不丢失。
+// 当假人抛出的三叉戟生成时（entitySpawn），用假人名打永久 tag。
+// 假人上线时（onlineBot），扫描所有带 tag 的三叉戟，将 owner
+// 重设为当前假人实体——确保实体重建后击杀经验不丢失。
 //
-// 流程：
-//   1. entitySpawn → 检测三叉戟，owner 属于假人 → addTag("mp:trident:<botName>")
-//   2. onlineBot   → 扫描标记三叉戟，重设 owner = 新实体
-//
-// 覆盖场景：模式切换（chunkload↔normal）、游戏重启、任意实体重建
+// 覆盖场景：模式切换（chunkload↔normal）、手动重连、游戏重启
 
-import { world, EntityProjectileComponent, EntityEquippableComponent, EquipmentSlot } from "@minecraft/server";
+import { world, EntityProjectileComponent } from "@minecraft/server";
 import { botRegistry } from "./core/persistence";
 
-/** @internal 导出让 trident.ts 投掷后主动标记 */
-export const TAG_PREFIX = "mp:trid:";
+const TAG_PREFIX = "mp:trid:";
 const THROWN_TRIDENT = "minecraft:thrown_trident";
 
-// entityId → botName 快速反查（避免遍历 botRegistry）
+// entityId → botName 反查表（O(1)，避免遍历 botRegistry）
 const entityOwnerMap = new Map<string, string>();
 
 // ─── 初始化 ─────────────────────────────────────────────
 
 /**
- * 订阅 entitySpawn，给假人抛出的三叉戟打永久 tag。
+ * 订阅 entitySpawn，给假人抛出的三叉戟打 tag。
  * 在 worldLoad 后调用一次。
  */
 export function initTridentTracker(): void {
@@ -31,24 +28,19 @@ export function initTridentTracker(): void {
 
     try {
       const proj = entity.getComponent("minecraft:projectile") as EntityProjectileComponent | undefined;
-
       if (!proj) {
-        console.warn(`[MockPlayer] [DBG] 三叉戟生成但无 projectile component`);
+        console.warn(`[MockPlayer] [DBG] thrown_trident 无 projectile component`);
         return;
       }
-
       const owner = proj.owner;
       if (!owner) {
-        console.warn(`[MockPlayer] [DBG] 三叉戟生成 ${entity.id} 但 owner 为空`);
+        console.warn(`[MockPlayer] [DBG] thrown_trident ${entity.id} owner 为空`);
         return;
       }
-
       const botName = entityOwnerMap.get(owner.id);
       if (botName) {
         entity.addTag(`${TAG_PREFIX}${botName}`);
-        console.warn(`[MockPlayer] [DBG] 标记三叉戟 ${entity.id} → ${botName}（owner=${owner.id}）`);
-      } else {
-        console.warn(`[MockPlayer] [DBG] 三叉戟 owner=${owner.id} 不在反查表中（非假人投射物）`);
+        console.warn(`[MockPlayer] [DBG] 标记三叉戟 ${entity.id} → ${botName}`);
       }
     } catch (e) {
       console.warn(`[MockPlayer] [DBG] entitySpawn 异常: ${e}`);
@@ -60,19 +52,18 @@ export function initTridentTracker(): void {
 
 export function trackBotOnline(entityId: string, botName: string): void {
   entityOwnerMap.set(entityId, botName);
-  console.warn(`[MockPlayer] [DBG] 反查表写入 ${entityId} → ${botName}（当前 ${entityOwnerMap.size} 条）`);
+  console.warn(`[MockPlayer] [DBG] 反查表 += ${botName}（${entityId}）共 ${entityOwnerMap.size} 条`);
 }
 
 export function trackBotOffline(entityId: string): void {
   entityOwnerMap.delete(entityId);
-  console.warn(`[MockPlayer] [DBG] 反查表删除 ${entityId}（剩余 ${entityOwnerMap.size} 条）`);
+  console.warn(`[MockPlayer] [DBG] 反查表 -= ${entityId} 剩余 ${entityOwnerMap.size} 条`);
 }
 
 // ─── 重绑定 ─────────────────────────────────────────────
 
 /**
- * 扫描所有维度中标记的三叉戟，将 owner 重置为假人的当前实体。
- * 在 onlineBot 创建新实体后调用。
+ * 扫描所有维度，将标记三叉戟的 owner 重设为假人当前实体。
  */
 export function rebindBotTridents(botName: string): void {
   const record = botRegistry.get(botName);
@@ -88,24 +79,17 @@ export function rebindBotTridents(botName: string): void {
   }
 
   let total = 0;
-  const dimIds = ["overworld", "nether", "the_end"];
-  for (const dimId of dimIds) {
+  for (const dimId of ["overworld", "nether", "the_end"]) {
     try {
       const dim = world.getDimension(dimId);
-      const tridents = dim.getEntities({
-        tags: [`${TAG_PREFIX}${botName}`],
-        type: THROWN_TRIDENT,
-      });
+      const tridents = dim.getEntities({ tags: [`${TAG_PREFIX}${botName}`], type: THROWN_TRIDENT });
       for (const t of tridents) {
         total++;
         try {
           const proj = t.getComponent("minecraft:projectile") as EntityProjectileComponent;
-          if (proj) {
-            proj.owner = newOwner;
-            console.warn(`[MockPlayer] [DBG] 重绑定 ${t.id} → ${botName}(entity=${record.entityId})`);
-          }
-        } catch {
-          console.warn(`[MockPlayer] [DBG] 重绑定 ${t.id} 失败`);
+          if (proj) proj.owner = newOwner;
+        } catch (e) {
+          console.warn(`[MockPlayer] [DBG] 重绑定 ${t.id} 失败: ${e}`);
         }
       }
     } catch {
@@ -113,7 +97,7 @@ export function rebindBotTridents(botName: string): void {
     }
   }
   if (total > 0) {
-    console.warn(`[MockPlayer] [DBG] rebindBotTridents(${botName}) 完成，共重绑定 ${total} 把三叉戟`);
+    console.warn(`[MockPlayer] [DBG] rebindBotTridents(${botName}) 完成，重绑定 ${total} 把三叉戟`);
   }
 }
 
