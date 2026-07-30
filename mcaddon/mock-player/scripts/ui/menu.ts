@@ -19,9 +19,9 @@ import { showHelpGuide } from "./HelpGuide";
 export function showMainMenu(player: Player): void {
   new ActionFormBuilder()
     .title(`${color.bold}模拟玩家管理`)
-    .buttonWithIcon(style("创建模拟玩家", color.darkGreen), "textures/ui/icon_add", () => showCreateForm(player))
-    .buttonWithIcon(style("模拟玩家列表", color.darkBlue), "textures/ui/icon_search", () => showBotList(player, () => showMainMenu(player)))
-    .buttonWithIcon(style("在线管理", color.darkBlue), "textures/ui/icon_setting", () => showOnlineManagement(player))
-    .buttonWithIcon(style("帮助", color.darkBlue), "textures/ui/icon_recipe", () => showHelpGuide(player))
+    .button(style("创建模拟玩家", color.darkGreen), () => showCreateForm(player))
+    .button(style("模拟玩家列表", color.darkBlue), () => showBotList(player, () => showMainMenu(player)))
+    .button(style("在线管理", color.darkBlue), () => showOnlineManagement(player))
+    .button(style("帮助", color.darkBlue), () => showHelpGuide(player))
     .show(player);
 }

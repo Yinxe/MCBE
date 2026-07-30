@@ -11,19 +11,19 @@ import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 
 function getStatusIcon(death: boolean, online: boolean): string {
-  if (death) return style("[死亡]", color.darkRed);
-  if (online) return style("[在线]", color.darkGreen);
-  return style("[离线]", color.darkGray);
+  if (death) return style("[死亡]", color.error);
+  if (online) return style("[在线]", color.success);
+  return style("[离线]", color.warn);
 }
 
 function getPosSummary(record: import("../features/core/types").BotRecord): string {
   if (record.lastPoint) {
-    return `${formatPos(record.lastPoint.location)} ${color.darkGray}${formatDimensionId(record.lastPoint.dimension)}`;
+    return `${formatPos(record.lastPoint.location)} ${color.gold}${formatDimensionId(record.lastPoint.dimension)}`;
   }
   if (record.death && record.deathPoint) {
-    return `${formatPos(record.deathPoint.location)} ${color.darkGray}${formatDimensionId(record.deathPoint.dimension)}`;
+    return `${formatPos(record.deathPoint.location)} ${color.gold}${formatDimensionId(record.deathPoint.dimension)}`;
   }
-  return `${formatPos(record.respawnPoint.location)} ${color.darkGray}${formatDimensionId(record.respawnPoint.dimension)}`;
+  return `${formatPos(record.respawnPoint.location)} ${color.gold}${formatDimensionId(record.respawnPoint.dimension)}`;
 }
 
 export function showOnlineManagement(player: Player): void {
@@ -45,7 +45,7 @@ export function showOnlineManagement(player: Player): void {
       .filter((t) => t !== BOT_TAG)
       .map((t) => { const d = getTagDef(t); return d ? d.label : t; })
       .join(" ");
-    builder.toggle(`s${i}`, `${icon} ${color.playerName}${record.name} ${color.muted}| ${posSummary}${tagSummary ? ` ${color.muted}[${tagSummary}]` : ""}`, {
+    builder.toggle(`s${i}`, `${icon} ${color.playerName}${record.name} ${color.accent}| ${posSummary}${tagSummary ? ` ${color.accent}[${tagSummary}]` : ""}`, {
       defaultValue: record.online,
       tooltip: record.online ? "关闭此开关将下线该假人" : "开启此开关将上线该假人",
     });

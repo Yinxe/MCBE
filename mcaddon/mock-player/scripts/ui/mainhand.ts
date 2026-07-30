@@ -26,7 +26,7 @@ export function showMainhandSelector(player: Player, botName: string): void {
 
   new ModalFormBuilder()
     .title(`${color.bold}选择主手物品`)
-    .dropdown("slot", style("选择要放置在主手（slot 0）的物品", color.darkGray), options.map(o => o.label), { defaultValueIndex: 0 })
+    .dropdown("slot", style("选择要放置在主手（slot 0）的物品", color.playerName), options.map(o => o.label), { defaultValueIndex: 0 })
     .show(player)
     .then((vals) => {
       if (!vals) return;

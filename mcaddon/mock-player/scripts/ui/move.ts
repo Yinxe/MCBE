@@ -56,7 +56,7 @@ export function confirmDelete(player: Player, botName: string): void {
   MessageFormBuilder.confirm(
     player,
     `${color.bold}确认删除`,
-    `${style("确定要删除模拟玩家", color.darkGray)} ${color.playerName}${botName}${color.muted} 吗？\n\n${color.gold}背包、装备和经验将被回收。\n${color.darkRed}此操作不可撤销！`,
+    `${style("确定要删除模拟玩家", color.warn)} ${color.playerName}${botName}${color.warn} 吗？\n\n${color.gold}背包、装备和经验将被回收。\n${color.error}此操作不可撤销！`,
     () => {
       const record = botRegistry.get(botName);
       if (!record) {

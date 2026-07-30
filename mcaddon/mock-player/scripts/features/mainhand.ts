@@ -81,18 +81,18 @@ export function getMainhandOptions(botName: string): MainhandOption[] | undefine
  * @param value -1 表示清空主手，>=0 表示物品所在槽位
  */
 export function setMainhandSlot(botName: string, slotValue: number): void {
-  const bot = resolveBotPlayer(botName);
-  if (!bot) return;
-
-  const inv = bot.getComponent("minecraft:inventory") as any;
-  if (!inv?.container) return;
-  const container = inv.container;
-
   system.run(() => {
     try {
+      const bot = resolveBotPlayer(botName);
+      if (!bot) return;
+
+      const inv = bot.getComponent("minecraft:inventory") as any;
+      if (!inv?.container) return;
+      const container = inv.container;
+
       const handSlot = bot.selectedSlotIndex;
       if (slotValue === -1) {
-        // 清空主手：先移到背包首个空位，防止吞物
+        // 清空主手：swap 到首个空位
         for (let i = 0; i < container.size; i++) {
           if (i !== handSlot && !container.getItem(i)) {
             container.swapItems(handSlot, i);

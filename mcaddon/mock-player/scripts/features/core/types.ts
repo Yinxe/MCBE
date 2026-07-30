@@ -165,3 +165,26 @@ export interface BotRecord {
   /** 生成模式：normal=普通可转向 / chunkload=强加载不可转向 */
   spawnMode?: "normal" | "chunkload";
 }
+
+/** 回收预览——单个物品的展示信息 */
+export interface ItemPreview {
+  typeId: string;
+  amount: number;
+  nameTag?: string;
+  damage?: number;
+  maxDurability?: number;
+  enchantments: SerializedEnchantment[];
+}
+
+/** 回收预览——表单展示用 */
+export interface ReclaimPreview {
+  xp: { level: number; totalXp: number } | null;
+  mainhand: ItemPreview | null;
+  offhand: ItemPreview | null;
+  head: ItemPreview | null;
+  chest: ItemPreview | null;
+  legs: ItemPreview | null;
+  feet: ItemPreview | null;
+  /** 背包略写文字 */
+  inventorySummary: string;
+}

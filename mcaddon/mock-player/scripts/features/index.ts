@@ -13,7 +13,7 @@ export { tpPlayerToBot, tpBotToPlayer } from "./teleport";
 export { moveBot } from "./move";
 export { toggleControl } from "./control";
 export { setSneaking } from "./sneak";
-export { reclaimBot, type ReclaimResult } from "./reclaim";
+export { reclaimBot, type ReclaimResult, type ReclaimOptions } from "./reclaim";
 export {
   swapMainhandWithBot,
   swapOffhandWithBot,

@@ -4,13 +4,14 @@ import { Player, system } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
+import { TAG_BOT, TAG_CONTROL, TAG_FOLLOW, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
 import { botRegistry } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
 import { setSneaking } from "../features";
 import { switchSpawnMode, getSpawnModeInfo } from "../features/spawnMode";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
+import { startFollow, stopFollow, isFollowing } from "../features/follow";
 
 // ─── 行为标签管理（含 上线/潜行 快捷开关） ───────────
 
@@ -23,7 +24,7 @@ export function showTagManagement(player: Player, botName: string): void {
 
   const manageableCoexist = COEXIST_TAGS.filter((t) => t.value !== TAG_BOT.value);
 
-  const exclusiveOptions = [style("无", color.darkGray), ...EXCLUSIVE_TAGS.map((t) => style(t.label, color.black))];
+  const exclusiveOptions = [style("无", color.muted), ...EXCLUSIVE_TAGS.map((t) => style(t.label, color.black))];
   let exclusiveIndex = 0;
   for (let i = 0; i < EXCLUSIVE_TAGS.length; i++) {
     if (record.tags.includes(EXCLUSIVE_TAGS[i].value)) {
@@ -38,17 +39,22 @@ export function showTagManagement(player: Player, botName: string): void {
 
   const builder = new ModalFormBuilder()
     .title(`${color.bold}行为 · ${botName}`)
-    .label("current", `${color.darkGray}当前: ${color.black}${currentTagsText}`)
+    .label("current", `${color.accent}当前: ${color.black}${currentTagsText}`)
     // ── 快捷开关 ──
-    .toggle("sneaking", style("潜行", color.darkBlue), {
+    .toggle("sneaking", style("潜行", color.playerName), {
       defaultValue: record.isSneaking,
       tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
     })
-    .toggle("chunkload", style("强加载模式", color.darkBlue), {
+    .toggle("chunkload", style("强加载模式", color.playerName), {
       defaultValue: record.spawnMode === "chunkload",
       tooltip: "开启后区块常驻加载，但不可转向。切换时自动重新上线",
     })
-    .label("sep1", style("━━ 标签设置 ────", color.darkGray));
+    .label("sep1", style("━━ 标签设置 ────", color.accent))
+    // ── 跟随 ──
+    .toggle("follow", style("自动跟随", color.playerName), {
+      defaultValue: isFollowing(botName),
+      tooltip: "开启后假人会持续跟随你",
+    });
 
   for (const tag of manageableCoexist) {
     builder.toggle(tag.value, tag.label, {
@@ -58,7 +64,7 @@ export function showTagManagement(player: Player, botName: string): void {
   }
 
   const shortNames = EXCLUSIVE_TAGS.map((t) => t.value.replace("mockplayer:tag:", ""));
-  builder.dropdown("exclusive", style("行为（仅选一项）", color.darkRed), exclusiveOptions, {
+  builder.dropdown("exclusive", style("行为（仅选一项）", color.warn), exclusiveOptions, {
     defaultValueIndex: exclusiveIndex,
     tooltip: "自动挖掘/放置/攻击/使用物品/宝库模式等，互斥只能选一项",
   });
@@ -103,6 +109,22 @@ export function showTagManagement(player: Player, botName: string): void {
           }
         }, 5);
       }
+    }
+
+    // ── 处理跟随 ──
+    const wantFollow = vals.follow as boolean;
+    if (wantFollow !== isFollowing(botName)) {
+      system.run(() => {
+        try {
+          if (wantFollow) {
+            startFollow(botName, player.id);
+            player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 正在跟随你`);
+          } else {
+            stopFollow(botName);
+            player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已停止跟随`);
+          }
+        } catch (e: any) { player.sendMessage(`${color.error}切换跟随失败: ${e.message}`); }
+      });
     }
 
     // ── 处理标签 ──

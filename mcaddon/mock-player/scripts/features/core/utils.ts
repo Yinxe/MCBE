@@ -85,7 +85,7 @@ export function levelToRoman(level: number): string {
  * 附魔 ID → 中文名映射（原版全附魔）。
  * 参考：https://zh.minecraft.wiki/w/附魔
  */
-const ENCH_ZH: Record<string, string> = {
+export const ENCH_ZH: Record<string, string> = {
   // 通用
   protection:       "保护",
   fire_protection:  "火焰保护",
