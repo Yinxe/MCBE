@@ -2,6 +2,8 @@
 
 import {
   Player,
+  system,
+  world,
   Vector3,
   Vector2,
   Container,
@@ -246,10 +248,10 @@ export function serializeItemStack(item: ItemStack): SerializedItemStack {
     if (invComp?.container) {
       data.container = serializeContainer(invComp.container);
     } else {
-      console.warn(`[MockPlayer] [DIAG] 序列化容器 ${item.typeId} hasComp=${item.hasComponent("minecraft:inventory")} invComp=${typeof invComp} container=${typeof invComp?.container}`);
+      console.info(`[MockPlayer] 序列化容器 ${item.typeId} hasComp=${item.hasComponent("minecraft:inventory")} invComp=${typeof invComp} container=${typeof invComp?.container}`);
     }
   } catch (e: any) {
-    console.warn(`[MockPlayer] [DIAG] 序列化容器异常 ${item.typeId}: ${e.message}`);
+    console.info(`[MockPlayer] 序列化容器异常 ${item.typeId}: ${e.message}`);
   }
 
   return data;
@@ -353,7 +355,7 @@ export function deserializeContainer(container: Container, items: (SerializedIte
     }
     const hasContainer = !!data.container && data.container.length > 0;
     if (hasContainer) {
-      console.warn(`[MockPlayer] [DIAG] 反序列化 slot=${i} ${data.typeId} 有嵌套容器=${data.container?.filter(x=>!!x).length || 0}/${data.container?.length || 0}`);
+      console.info(`[MockPlayer] 反序列化 slot=${i} ${data.typeId} 有嵌套容器=${data.container?.filter(x=>!!x).length || 0}/${data.container?.length || 0}`);
     }
     // 先放入「外壳物品」（不含嵌套容器填充）
     container.setItem(i, deserializeItemStack(data));
@@ -384,14 +386,14 @@ function fillNestedContainer(
     if (!parentItem) return;
     const invComp = parentItem.getComponent("minecraft:inventory") as any;
     if (!invComp?.container) {
-      console.warn(`[MockPlayer] [DIAG] 填充容器失败: slot=${parentSlot} 无可访问容器组件`);
+      console.info(`[MockPlayer] 填充容器失败: slot=${parentSlot} 无可访问容器组件`);
       return;
     }
 
     const inner = invComp.container;
     const len = Math.min(inner.size, nestedData.length);
     const nonNull = nestedData.filter(x => !!x).length;
-    console.warn(`[MockPlayer] [DIAG] 填充容器 slot=${parentSlot} ${parentItem.typeId} 内部容器大小=${inner.size} 待填充=${nonNull}/${len}`);
+    console.info(`[MockPlayer] 填充容器 slot=${parentSlot} ${parentItem.typeId} 内部容器大小=${inner.size} 待填充=${nonNull}/${len}`);
 
     // 第一遍：填充外层物品（不含其内部容器）
     for (let i = 0; i < len; i++) {
@@ -417,13 +419,13 @@ function fillNestedContainer(
         for (let i = 0; i < Math.min(verifyComp.container.size, len); i++) {
           if (verifyComp.container.getItem(i)) stillHas++;
         }
-        console.warn(`[MockPlayer] [DIAG] ✅ 写回验证 slot=${parentSlot} 容器物品=${stillHas}/${nonNull}`);
+        console.info(`[MockPlayer] ✅ 写回验证 slot=${parentSlot} 容器物品=${stillHas}/${nonNull}`);
       } else {
-        console.warn(`[MockPlayer] [DIAG] ❌ 写回验证 slot=${parentSlot} 容器组件丢失`);
+        console.info(`[MockPlayer] ❌ 写回验证 slot=${parentSlot} 容器组件丢失`);
       }
     }
   } catch (e: any) {
-    console.warn(`[MockPlayer] [DIAG] 填充容器异常 slot=${parentSlot}: ${e.message}`);
+    console.info(`[MockPlayer] 填充容器异常 slot=${parentSlot}: ${e.message}`);
   }
 }
 
@@ -541,4 +543,54 @@ export function isChunkLoaded(dimension: Dimension, pos: Vector3): boolean {
   } catch {
     return false;
   }
+}
+
+// ─── 名称可用性轮询 ──────────────────────────────────────
+
+const NAME_POLL_INTERVAL = 2;
+const NAME_POLL_MAX = 60 / 2; // 60 tick 超时 ≈ 3 秒
+
+/**
+ * 轮询等待假人名称在世界上完全释放（无同名实体）。
+ * disconnect 后旧实体需异步清理，提前 spawn 会导致 "(2)" 重名后缀。
+ * resolve 表示名称已可用；reject 表示超时（但仍可强制上线）。
+ */
+export function waitForNameAvailable(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let polls = 0;
+
+    function check(): void {
+      try {
+        const players = world.getPlayers({ name });
+        if (players.length === 0) { resolve(); return; }
+      } catch {
+        // 降级：遍历所有维度扫 player 实体
+        try {
+          let found = false;
+          for (const dimId of ["overworld", "nether", "the_end"]) {
+            try {
+              const dim = world.getDimension(dimId);
+              const entities = dim.getEntities({ type: "minecraft:player" });
+              for (const e of entities) {
+                if ((e as Player).name === name) { found = true; break; }
+              }
+            } catch { /* skip */ }
+            if (found) break;
+          }
+          if (!found) { resolve(); return; }
+        } catch { resolve(); return; }
+      }
+
+      polls++;
+      if (polls >= NAME_POLL_MAX) {
+        console.warn(`[MockPlayer] waitForNameAvailable 超时 ${name}`);
+        reject(new Error(`waitForNameAvailable 超时 ${name}`));
+        return;
+      }
+      system.runTimeout(check, NAME_POLL_INTERVAL);
+    }
+
+    // 首轮由 system.runTimeout 调度，确保在任何调用上下文都安全
+    system.runTimeout(check, NAME_POLL_INTERVAL);
+  });
 }

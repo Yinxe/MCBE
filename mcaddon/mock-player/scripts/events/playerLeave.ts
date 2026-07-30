@@ -14,6 +14,7 @@ import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 import { BOT_TAG } from "../features/core/tags";
 import { botRegistry, saveBotRecord, removeBotRestored } from "../features/core/persistence";
 import { saveBotFullState } from "../features/saveState";
+import { reconnectingBots } from "../features/pendingRespawn";
 import { color } from "@yinxe/toolkit";
 
 export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
@@ -24,7 +25,7 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   if (!record) {
     for (const r of botRegistry.values()) {
       if (r.entityId === event.playerId) {
-        console.warn(`[MockPlayer] playerLeave 反查命中 ${r.name}（playerName=${event.playerName}）`);
+        console.info(`[MockPlayer] playerLeave 反查命中 ${r.name}（playerName=${event.playerName}）`);
         record = r;
         break;
       }
@@ -32,7 +33,14 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   }
 
   if (!record) return;
-  console.warn(`[MockPlayer] 事件 playerLeave ${event.playerName}`);
+  console.info(`[MockPlayer] 事件 playerLeave ${event.playerName}`);
+
+  // ⚠️ 旧实体残留：如果 record 已指向新实体（safeReconnect 已完成），
+  // 忽略此事件——避免覆写新实体的 online/entityId/restore 标记
+  if (record.entityId && event.playerId !== record.entityId) {
+    console.info(`[MockPlayer] playerLeave 跳过：旧实体离开（${event.playerName} 已重建为新实体 ${record.entityId}）`);
+    return;
+  }
 
   // 实体可能还在，尽力保存
   if (record.entityId) {
@@ -49,8 +57,12 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   record.online = false;
   record.entityId = undefined;
   saveBotRecord(record);
-  // 无论主动下线/死亡下线/删除，离开世界就是标记清除的唯一时机
-  // 下次上线重新走 playerJoin 恢复流程
   removeBotRestored(record.name);
+
+  // 重连周期（宝库/模式切换）不发送"离开游戏"消息
+  if (reconnectingBots.has(record.name)) {
+    reconnectingBots.delete(record.name);
+    return;
+  }
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 离开了游戏`);
 }

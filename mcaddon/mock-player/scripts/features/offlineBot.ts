@@ -32,7 +32,7 @@ export function offlineBot(record: BotRecord): void {
     };
     record.isSneaking = online.isSneaking;
 
-    console.warn(
+    console.info(
       `[MockPlayer] 下线保存 ${record.name}（${record.lastPoint.dimension} ${Math.floor(record.lastPoint.location.x)} ${Math.floor(record.lastPoint.location.y)} ${Math.floor(record.lastPoint.location.z)}）`,
     );
     saveBotFullState(online, record);

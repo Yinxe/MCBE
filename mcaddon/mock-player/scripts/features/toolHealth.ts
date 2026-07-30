@@ -205,7 +205,7 @@ export function checkMainHandDurability(bot: Player, changedSlot: number): void 
       const newItem = container.getItem(0);
       const newName = newItem ? getItemDisplayName(newItem) : currentName;
       broadcast(bot.name, `${color.success}工具已自动更换为 ${color.info}${newName}`);
-      console.warn(`[MockPlayer] 工具补充 ${bot.name}: ${handItem.typeId} → slot ${candidate.slot}`);
+      console.info(`[MockPlayer] 工具补充 ${bot.name}: ${handItem.typeId} → slot ${candidate.slot}`);
     } else {
       // 2) 无可用替代工具 → 保护性移出主手
       const emptySlot = findEmptySlot(container, handSlot);
@@ -213,12 +213,12 @@ export function checkMainHandDurability(bot: Player, changedSlot: number): void 
 
       swapSlots(container, handSlot, targetSlot);
       broadcast(bot.name, `${color.error}${currentName} 耐久不足，背包中无替代工具，已保护性收起`);
-      console.warn(`[MockPlayer] 工具保护 ${bot.name}: ${handItem.typeId} → slot ${targetSlot}`);
+      console.info(`[MockPlayer] 工具保护 ${bot.name}: ${handItem.typeId} → slot ${targetSlot}`);
     }
 
     // 确保主手选中 slot 0（固定主手位）
     bot.selectedSlotIndex = 0;
   } catch (e: any) {
-    console.warn(`[MockPlayer] 工具补充异常 ${bot?.name ?? "?"}: ${e?.message ?? e}`);
+    console.error(`[MockPlayer] 工具补充异常 ${bot?.name ?? "?"}: ${e?.message ?? e}`);
   }
 }

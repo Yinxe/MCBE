@@ -94,13 +94,16 @@ export function startTagBehaviors(): void {
 
     // ── 状态清理 ── 每 40 tick ──
     if (tick % 40 === 0) {
-      const miningSet = new Set(world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_MINE.value] }).map(p => p.id));
-      const placingSet = new Set(world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_PLACE.value] }).map(p => p.id));
-      const usingSet = new Set(world.getPlayers({ tags: [BOT_TAG, TAG_AUTO_USE.value] }).map(p => p.id));
+      const miningIds = new Set<string>();
+      const placingIds = new Set<string>();
+      const usingIds = new Set<string>();
       for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
-        if (!miningSet.has(bot.id)) { try { (bot as SimulatedPlayer).stopBreakingBlock(); } catch {} }
-        if (!placingSet.has(bot.id)) { try { (bot as SimulatedPlayer).stopBuild(); } catch {} }
-        if (!usingSet.has(bot.id)) { try { (bot as SimulatedPlayer).stopInteracting(); } catch {} }
+        if (bot.hasTag(TAG_AUTO_MINE.value)) miningIds.add(bot.id);
+        if (bot.hasTag(TAG_AUTO_PLACE.value)) placingIds.add(bot.id);
+        if (bot.hasTag(TAG_AUTO_USE.value)) usingIds.add(bot.id);
+        if (!miningIds.has(bot.id)) { try { (bot as SimulatedPlayer).stopBreakingBlock(); } catch {} }
+        if (!placingIds.has(bot.id)) { try { (bot as SimulatedPlayer).stopBuild(); } catch {} }
+        if (!usingIds.has(bot.id)) { try { (bot as SimulatedPlayer).stopInteracting(); } catch {} }
       }
     }
 
@@ -124,7 +127,7 @@ export function startTagBehaviors(): void {
         if (equip) saveBotEquipment(bot.name, serializeEquipment(equip));
         saved.push(record.name);
       }
-      if (saved.length > 0) console.warn(`[MockPlayer] 周期保存 ${saved.join(",")}`);
+      if (saved.length > 0) console.info(`[MockPlayer] 周期保存 ${saved.join(",")}`);
     }
   }, 1);
 }

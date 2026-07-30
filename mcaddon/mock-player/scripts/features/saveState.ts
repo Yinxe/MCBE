@@ -37,5 +37,5 @@ export function saveBotFullState(bot: Player, record: BotRecord): void {
   }
   record.experience = captureExperience(bot);
   saveBotRecord(record);
-  console.warn(`[MockPlayer] 全量状态保存完成 ${record.name}`);
+  console.info(`[MockPlayer] 全量状态保存完成 ${record.name}`);
 }

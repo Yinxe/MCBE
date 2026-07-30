@@ -37,7 +37,7 @@ const restoredBots: Set<string> = new Set();
 
 export function markBotRestored(name: string): void {
   restoredBots.add(name);
-  console.warn(`[MockPlayer] ✅ 恢复完成 ${name}——禁止空背包覆写`);
+  console.info(`[MockPlayer] ✅ 恢复完成 ${name}——禁止空背包覆写`);
 }
 
 export function isBotRestored(name: string): boolean {
@@ -46,7 +46,7 @@ export function isBotRestored(name: string): boolean {
 
 export function removeBotRestored(name: string): void {
   restoredBots.delete(name);
-  console.warn(`[MockPlayer] 清除恢复标记 ${name}`);
+  console.info(`[MockPlayer] 清除恢复标记 ${name}`);
 }
 
 /**
@@ -82,9 +82,9 @@ function getDPKey(name: string): string {
 export function saveBotRecord(record: BotRecord): void {
   try {
     world.setDynamicProperty(getDPKey(record.name), JSON.stringify(record));
-    console.warn(`[MockPlayer] 记录保存 ${record.name}（在线=${record.online} 死亡=${record.death} 经验Lv=${record.experience.level}）`);
+    console.info(`[MockPlayer] 记录保存 ${record.name}（在线=${record.online} 死亡=${record.death} 经验Lv=${record.experience.level}）`);
   } catch (e: any) {
-    console.warn(`[MockPlayer] 保存假人 ${record.name} 失败: ${e.message}`);
+    console.error(`[MockPlayer] 保存假人 ${record.name} 失败: ${e.message}`);
   }
 }
 
@@ -93,10 +93,10 @@ export function loadBotRecord(name: string): BotRecord | undefined {
   if (typeof value !== "string") return undefined;
   try {
     const record = JSON.parse(value) as BotRecord;
-    console.warn(`[MockPlayer] 加载单条记录 ${name}`);
+    console.info(`[MockPlayer] 加载单条记录 ${name}`);
     return record;
   } catch {
-    console.warn(`[MockPlayer] 加载记录 ${name} 损坏`);
+    console.error(`[MockPlayer] 加载记录 ${name} 损坏`);
     return undefined;
   }
 }
@@ -117,16 +117,16 @@ export function loadAllBotRecords(): BotRecord[] {
     try {
       records.push(JSON.parse(value) as BotRecord);
     } catch {
-      console.warn(`[MockPlayer] 加载记录 ${id} 损坏已跳过`);
+      console.error(`[MockPlayer] 加载记录 ${id} 损坏已跳过`);
     }
   }
-  console.warn(`[MockPlayer] 世界加载恢复 ${records.length} 个假人记录`);
+  console.info(`[MockPlayer] 世界加载恢复 ${records.length} 个假人记录`);
   return records;
 }
 
 export function removeBotRecord(name: string): void {
   world.setDynamicProperty(getDPKey(name), undefined);
-  console.warn(`[MockPlayer] 删除记录 ${name}`);
+  console.info(`[MockPlayer] 删除记录 ${name}`);
 }
 
 // ─── 背包持久化（每格独立 key，避免 32KB 上限）────────────
@@ -167,7 +167,7 @@ export function saveBotInventory(name: string, items: (SerializedItemStack | nul
   for (let i = 0; i < items.length && i < INVENTORY_SIZE; i++) {
     saveBotSlot(name, i, items[i]);
   }
-  console.warn(`[MockPlayer] 背包保存 ${name}——${nonEmpty}/${items.length} 格`);
+  console.info(`[MockPlayer] 背包保存 ${name}——${nonEmpty}/${items.length} 格`);
 }
 
 /**
@@ -191,12 +191,12 @@ export function loadBotInventory(name: string): (SerializedItemStack | null)[] |
         result[slot] = JSON.parse(value) as SerializedItemStack;
         found = true;
       } catch {
-        console.warn(`[MockPlayer] 加载背包 ${name} slot ${slot} 损坏`);
+        console.error(`[MockPlayer] 加载背包 ${name} slot ${slot} 损坏`);
       }
     }
   }
   const count = result.filter((i) => i !== null).length;
-  if (found) console.warn(`[MockPlayer] 背包加载 ${name}——${count}/${INVENTORY_SIZE} 格`);
+  if (found) console.info(`[MockPlayer] 背包加载 ${name}——${count}/${INVENTORY_SIZE} 格`);
   return found ? result : undefined;
 }
 
@@ -230,7 +230,7 @@ export function saveBotEquipment(
   for (const [slot, item] of Object.entries(equipment)) {
     saveBotEquipSlot(name, slot, item);
   }
-  console.warn(`[MockPlayer] 装备保存 ${name}——${nonEmpty}/${slots.length} 槽`);
+  console.info(`[MockPlayer] 装备保存 ${name}——${nonEmpty}/${slots.length} 槽`);
 }
 
 /** 加载全部装备栏，返回 { head?, chest?, legs?, feet?, offhand? } */
@@ -246,12 +246,12 @@ export function loadBotEquipment(name: string): Record<string, SerializedItemSta
       try {
         result[slot] = JSON.parse(value) as SerializedItemStack;
       } catch {
-        console.warn(`[MockPlayer] 加载装备 ${name} ${slot} 损坏`);
+        console.error(`[MockPlayer] 加载装备 ${name} ${slot} 损坏`);
       }
     }
   }
   const count = Object.keys(result).length;
-  if (count > 0) console.warn(`[MockPlayer] 装备加载 ${name}——${count}/5 槽`);
+  if (count > 0) console.info(`[MockPlayer] 装备加载 ${name}——${count}/5 槽`);
   return count > 0 ? result : undefined;
 }
 

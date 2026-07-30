@@ -13,6 +13,7 @@ import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG, syncEntityTags } from "../features/core/tags";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
+import { trackBotOnline } from "../features/tridentTracker";
 
 export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   // 首次生成不处理（由 playerJoin 负责恢复）
@@ -21,12 +22,13 @@ export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   if (!player.hasTag(BOT_TAG)) return;
   const record = botRegistry.get(player.name);
   if (!record) return;
-  console.warn(`[MockPlayer] 事件 playerSpawn(重生) ${record.name}`);
+  console.info(`[MockPlayer] 事件 playerSpawn(重生) ${record.name}`);
   record.death = false;
   record.online = true;
 
   // 重生后实体可能重建，更新 entityId 并恢复标签
   record.entityId = player.id;
+  trackBotOnline(player.id, record.name);
   syncEntityTags(player, record.tags);
 
   saveBotRecord(record);

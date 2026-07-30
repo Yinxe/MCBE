@@ -42,7 +42,7 @@ export function initGameTestContext(): void {
         world.gameRules.randomTickSpeed = savedTick;
         world.gameRules.doDayLightCycle = savedDay;
         world.gameRules.doMobSpawning = savedMob;
-        console.warn("[MockPlayer] GameTest 上下文就绪");
+        console.info("[MockPlayer] GameTest 上下文就绪");
       })
         .maxTicks(2_000_000_000)
         .structureName(STRUCTURE_ID);
@@ -52,8 +52,8 @@ export function initGameTestContext(): void {
       world.getDimension("minecraft:overworld")
         .runCommand(`execute positioned 15000000 256 ${zOff} run gametest run ${CLASS}:${NAME}`);
     } catch (e: any) {
-      globalTest = null as any;
-      console.warn(`[MockPlayer] GameTest 初始化失败: ${e?.message ?? e}`);
+      globalTest = null;
+      console.error(`[MockPlayer] GameTest 初始化失败: ${e?.message ?? e}`);
     }
   });
 }

@@ -29,7 +29,7 @@ export function swapMainhandWithBot(player: Player, bot: Player): boolean {
   const both = getBothEquip(player, bot);
   if (!both) return false;
   swapSlot(both[0], both[1], EquipmentSlot.Mainhand);
-  console.warn(`[MockPlayer] 交换主手 ${bot.name} ←→ ${player.name}`);
+  console.info(`[MockPlayer] 交换主手 ${bot.name} ←→ ${player.name}`);
   return true;
 }
 
@@ -43,7 +43,7 @@ export function swapOffhandWithBot(player: Player, bot: Player): boolean {
   const both = getBothEquip(player, bot);
   if (!both) return false;
   swapSlot(both[0], both[1], EquipmentSlot.Offhand);
-  console.warn(`[MockPlayer] 交换副手 ${bot.name} ←→ ${player.name}`);
+  console.info(`[MockPlayer] 交换副手 ${bot.name} ←→ ${player.name}`);
   return true;
 }
 
@@ -52,7 +52,7 @@ export function swapEquipmentWithBot(player: Player, bot: Player): boolean {
   const both = getBothEquip(player, bot);
   if (!both) return false;
   for (const slot of SWAP_SLOTS) swapSlot(both[0], both[1], slot);
-  console.warn(`[MockPlayer] 交换装备 ${bot.name} ←→ ${player.name}`);
+  console.info(`[MockPlayer] 交换装备 ${bot.name} ←→ ${player.name}`);
   return true;
 }
 
@@ -83,7 +83,7 @@ export function unequipBotAll(player: Player, bot: Player): boolean {
       player.dimension.spawnItem(remainder, player.location);
     }
   }
-  console.warn(`[MockPlayer] 一键卸甲 ${bot.name}——${count} 件 → ${player.name}`);
+  console.info(`[MockPlayer] 一键卸甲 ${bot.name}——${count} 件 → ${player.name}`);
   return true;
 }
 
@@ -137,5 +137,5 @@ export function saveBotEquipState(bot: Player, record: BotRecord): void {
   }
   record.experience = captureExperience(bot);
   saveBotRecord(record);
-  console.warn(`[MockPlayer] 装备状态保存完成 ${record.name}`);
+  console.info(`[MockPlayer] 装备状态保存完成 ${record.name}`);
 }

@@ -9,10 +9,8 @@ import { world, system, EquipmentSlot, type Player, ItemStack } from "@minecraft
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "./core/types";
-import { offlineBot } from "./offlineBot";
-import { onlineBot } from "./onlineBot";
-import { botRegistry } from "./core/persistence";
 import { saveBotFullState } from "./saveState";
+import { safeReconnect } from "./pendingRespawn";
 import { color } from "@yinxe/toolkit";
 
 // ─── 可用的宝库钥匙 ──────────────────────────────────
@@ -80,21 +78,14 @@ export function runVaultCycle(bot: SimulatedPlayer, record: BotRecord): void {
   keyInfo.count = Math.max(0, keyInfo.count - 1);
 
   // ── 4. 保存状态 + 下线 + 重新上线 ───────────────────
+  // 使用 safeReconnect：自动等待旧实体完全释放后再 spawn，
+  // 成功后通过 onOnline 通知最近玩家
   saveBotFullState(bot, record);
-  offlineBot(record);
-
-  system.runTimeout(() => {
-    try {
-      const fresh = onlineBot(record);
-      notifyNearestPlayer(fresh, record, keyInfo);
-    } catch (e: any) {
-      console.warn(`[MockPlayer] 宝库模式上线失败 ${record.name}: ${e?.message ?? e}`);
-      record.online = false;
-      record.entityId = undefined;
-      botRegistry.set(record.name, record);
-    }
-  }, 5);
+  safeReconnect(record, {
+    onOnline: (fresh, r) => notifyNearestPlayer(fresh, r, keyInfo),
+  });
 }
+
 
 // ─── 主手物品 ───────────────────────────────────────
 

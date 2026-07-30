@@ -23,7 +23,7 @@ export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBefore
   } catch {
     return; // 非假人实体
   }
-  console.warn(`[MockPlayer] 交互 ${(target as Player).name}（手持 ${itemStack?.typeId ?? "空"} 潜行=${player.isSneaking}）`);
+  console.info(`[MockPlayer] 交互 ${(target as Player).name}（手持 ${itemStack?.typeId ?? "空"} 潜行=${player.isSneaking}）`);
 
   // 取消默认交互行为（玩家之间默认行为不可预测）
   event.cancel = true;

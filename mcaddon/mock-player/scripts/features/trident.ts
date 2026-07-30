@@ -1,60 +1,44 @@
-// ─── 三叉戟投掷 ──────────────────────────────────────
-// 扫描背包中所有三叉戟，支持模式切换、扭头投掷、主手恢复
+// ─── 三叉戟投掷 — 纯业务逻辑 ─────────────────────────────
+// 扫描背包中所有三叉戟 + 逐把投掷（不含 UI 格式化）
+// UI 格式化在 ui/trident.ts 中
 
-import {
-  EntityEquippableComponent,
-  EquipmentSlot,
-  ItemStack,
-  system,
-  ItemEnchantableComponent,
-} from "@minecraft/server";
+import { EntityEquippableComponent, EquipmentSlot, ItemStack, system } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
-import { color } from "@yinxe/toolkit";
 
-import { botRegistry, resolveBotPlayer, saveBotRecord, isBotRestored } from "./core/persistence";
-import { formatEnchantments, formatDurability } from "./core/utils";
-import { offlineBot } from "./offlineBot";
-import { onlineBot } from "./onlineBot";
-import { switchSpawnMode } from "./spawnMode";
+import { botRegistry, resolveBotPlayer } from "./core/persistence";
 import { pauseFollow, resumeFollow, isFollowing } from "./follow";
 
 const TRIDENT_ID = "minecraft:trident";
-const SLOT_HOTBAR = 9; // 热栏格数
+
+// ─── 投掷互斥 ──────────────────────────────────────────
+let isThrowing = false;
 
 // ─── 公开类型 ──────────────────────────────────────────
 
-export interface TridentInfo {
+export interface TridentSlot {
   slotIndex: number;
   isMainhand: boolean;
-  /** 展示用的格式化标签，如 "§7[热栏1] §f三叉戟 §b锋利III §7(123/250)" */
-  label: string;
-  customName?: string;
-  enchantments: string;
-  durability: string;
+  item: ItemStack;
 }
 
 // ─── 扫描背包 ──────────────────────────────────────────
 
 /**
- * 扫描假人全部背包，收集所有三叉戟信息。
+ * 扫描假人全部背包，收集所有三叉戟的原始槽位信息。
  * @returns undefined 表示假人不可用，空数组表示无三叉戟
  */
-export function scanTridents(botName: string): TridentInfo[] | undefined {
+export function scanTridents(botName: string): TridentSlot[] | undefined {
   const bot = resolveBotPlayer(botName);
   if (!bot) return undefined;
 
-  const tridents: TridentInfo[] = [];
+  const tridents: TridentSlot[] = [];
   const mainhandSlot = bot.selectedSlotIndex;
   const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent | undefined;
   const mainhand = equip?.getEquipment(EquipmentSlot.Mainhand);
 
   // 主手三叉戟
   if (mainhand?.typeId === TRIDENT_ID) {
-    try {
-      tridents.push(makeTridentInfo(bot, mainhand, mainhandSlot, true));
-    } catch (e) {
-      console.warn(`[MockPlayer] ⚠️ 主手三叉戟扫描失败: ${e}`);
-    }
+    tridents.push({ slotIndex: mainhandSlot, isMainhand: true, item: mainhand });
   }
 
   // 背包（含热栏，排除主手已找到的格子）
@@ -64,16 +48,12 @@ export function scanTridents(botName: string): TridentInfo[] | undefined {
       if (i === mainhandSlot && mainhand?.typeId === TRIDENT_ID) continue;
       const item = container.getItem(i);
       if (item?.typeId === TRIDENT_ID) {
-        try {
-          tridents.push(makeTridentInfo(bot, item, i, false));
-        } catch (e) {
-          console.warn(`[MockPlayer] ⚠️ 背包三叉戟 slot ${i} 扫描失败: ${e}`);
-        }
+        tridents.push({ slotIndex: i, isMainhand: false, item });
       }
     }
   }
 
-  console.warn(`[MockPlayer] 扫描到 ${tridents.length} 把三叉戟 (${botName})`);
+  console.info(`[MockPlayer] 扫描到 ${tridents.length} 把三叉戟 (${botName})`);
   return tridents;
 }
 
@@ -107,29 +87,30 @@ export function throwTridents(
   slots: number[],
   onComplete?: () => void,
 ): void {
+  if (isThrowing) {
+    console.warn(`[MockPlayer] 投掷已在进行中 ${botName}`);
+    onComplete?.();
+    return;
+  }
+
   const record = botRegistry.get(botName);
   if (!record || !record.online || record.death) { onComplete?.(); return; }
 
-  const wasChunkload = record.spawnMode === "chunkload";
+  // 常加载模式拒绝投掷（useItemInSlot 需要普通模式）
+  if (record.spawnMode === "chunkload") { onComplete?.(); return; }
+
+  isThrowing = true;
+
   const wasFollowing = isFollowing(botName);
   if (wasFollowing) pauseFollow();
 
   const done = () => {
-    if (wasChunkload) finishAndRestoreMode(botName, "chunkload");
+    isThrowing = false;
     if (wasFollowing) resumeFollow();
     onComplete?.();
   };
 
-  if (wasChunkload) {
-    // chunkload → 普通模式（让假人能使用物品投掷）
-    offlineBot(record);
-    switchSpawnMode(record, "normal");
-    saveBotRecord(record);
-    onlineBot(record);
-    waitForRestored(botName, () => doThrowLoop(botName, playerId, slots, done));
-  } else {
-    system.run(() => doThrowLoop(botName, playerId, slots, done));
-  }
+  system.run(() => doThrowLoop(botName, playerId, slots, done));
 }
 
 // ─── 投掷循环 ──────────────────────────────────────────
@@ -205,36 +186,6 @@ function doThrowLoop(
   throwNext();
 }
 
-// ─── 模式恢复 ──────────────────────────────────────────
-
-function finishAndRestoreMode(botName: string, targetMode: "normal" | "chunkload"): void {
-  const record = botRegistry.get(botName);
-  if (!record) return;
-
-  // 下线/上线切换模式（实体重建）
-  // tridentTracker 会在上线后自动重绑定该假人的三叉戟所属权
-  offlineBot(record);
-  switchSpawnMode(record, targetMode);
-  saveBotRecord(record);
-  onlineBot(record);
-  // playerJoin 事件会自动恢复背包，无需等待
-}
-
-// ─── 等待恢复 ──────────────────────────────────────────
-
-function waitForRestored(botName: string, callback: () => void, retries = 50): void {
-  if (retries <= 0) {
-    console.warn(`[MockPlayer] ⚠️ 恢复等待超时 ${botName}——已跳过`);
-    callback();
-    return;
-  }
-  if (isBotRestored(botName)) {
-    system.run(callback);
-    return;
-  }
-  system.runTimeout(() => waitForRestored(botName, callback, retries - 1), 3);
-}
-
 // ─── 工具函数 ──────────────────────────────────────────
 
 function getContainer(bot: SimulatedPlayer): any {
@@ -249,50 +200,10 @@ function restoreMainhand(container: any, slot: number, saved: ItemStack | undefi
     } else {
       const current = container.getItem(slot);
       if (current?.typeId === TRIDENT_ID) {
-        // 主手还是三叉戟（投掷失败残留），清空
         container.setItem(slot, undefined);
       }
     }
   } catch {
     // 恢复失败时忽略
   }
-}
-
-// ─── 三叉戟信息构建 ────────────────────────────────────
-
-function makeTridentInfo(
-  bot: SimulatedPlayer,
-  item: ItemStack,
-  slotIndex: number,
-  isMainhand: boolean,
-): TridentInfo {
-  const slotLabel = isMainhand
-    ? `${color.darkGray}[主手]`
-    : slotIndex < SLOT_HOTBAR
-      ? `${color.darkGray}[热栏${slotIndex + 1}]`
-      : `${color.darkGray}[背包${slotIndex + 1}]`;
-
-  const customName = item.nameTag || undefined;
-  const displayName = customName ? `${color.black}${customName}` : `${color.black}三叉戟`;
-
-  const enchStr = formatEnchantments(item);
-
-  // 耐久
-  let durStr = formatDurability(item);
-  if (!durStr) durStr = `${color.darkGray}(∞)`;
-
-  const label = `${slotLabel} ${displayName} ${enchStr} ${durStr}`;
-
-  return { slotIndex, isMainhand, label, customName, enchantments: enchStr, durability: durStr };
-}
-
-/**
- * @deprecated 请使用 core/utils 的 levelToRoman
- */
-function levelToRoman(level: number): string {
-  const map: Record<number, string> = {
-    1: "I", 2: "II", 3: "III", 4: "IV", 5: "V",
-    6: "VI", 7: "VII", 8: "VIII", 9: "IX", 10: "X",
-  };
-  return map[level] || `[${level}]`;
 }

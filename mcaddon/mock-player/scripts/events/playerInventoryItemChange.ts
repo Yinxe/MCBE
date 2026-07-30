@@ -28,7 +28,7 @@ export function onPlayerInventoryItemChange(event: PlayerInventoryItemChangeAfte
   // afterEvents 回调不在受限模式运行，可直接序列化
   const serialized = itemStack ? serializeItemStack(itemStack) : null;
   saveBotSlot(player.name, slot, serialized);
-  console.warn(`[MockPlayer] 背包变化 ${player.name} slot=${slot} ${itemStack?.typeId ?? "空"}`);
+  console.info(`[MockPlayer] 背包变化 ${player.name} slot=${slot} ${itemStack?.typeId ?? "空"}`);
 
   // 检查主手工具耐久，必要时自动补充
   checkMainHandDurability(player, slot);

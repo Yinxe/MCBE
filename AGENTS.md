@@ -28,6 +28,46 @@ pnpm run pack:<mod>    # 打包（BP/RP → .mcpack / .mcaddon）
 pnpm run clean         # 全部清理
 ```
 
+## 开发流程
+
+### 日常迭代
+
+```
+修改代码 → pnpm run build → pnpm run pack → 部署 .mcpack → 进游戏测试
+```
+
+### 版本迭代
+
+```
+bump version (+0.01) → build → pack → commit → tag → push
+```
+
+- 版本在 `mcaddon/<name>/package.json` 中维护
+- commit message 格式：`<包名>@<新版本>: <中文描述>`（如 `mock-player@1.1.25: 回收详情表单 + 精确瞄准`）
+- tag 格式：`<包名>@<版本>`（如 `mock-player@1.1.25`）
+- 发布时同时 push commit + tag
+
+### 分支管理
+
+- `main`：稳定分支，发布产物
+- `feat/<name>`：新 addon 开发分支（如 `feat/auto-refill`）
+- 新 addon 完成构建验证后，切出 feature branch 提交，main 保持干净
+
+### 新建 Addon
+
+1. 复制现有项目结构（`just.config.ts` / `tsconfig.json` / `package.json` / `BP/<Project>/manifest.json`）
+2. `pnpm install` 安装依赖
+3. 按依赖版本匹配 `@minecraft/server` 版本
+4. 确保构建通过后切 feature branch 提交
+
+### 调试技巧
+
+- 日志通过 `console.warn` 输出，格式 `[前缀] 消息`
+- 面向玩家的错误消息使用中文；调试日志使用英文
+- GameTest 生成的假人触发 `playerJoin` 事件恢复背包，使用 `isBotRestored` 防护空背包覆写
+- `disconnect()` 后至少等待 20 tick 才能重新 `spawnSimulatedPlayer`，否则出现 "(2)" 重复名导致数据丢失
+- 常加载模式（chunkload）假人不可扭头/瞄准，需切普通模式才能使用物品
+
 ## 命名与版本
 
 - **显示名称**: 中文（`header.name`），如"模拟玩家"、"智能仓库"

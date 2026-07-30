@@ -1,4 +1,4 @@
-import { world, Vector3 } from "@minecraft/server";
+import { system, world, Vector3 } from "@minecraft/server";
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
@@ -19,18 +19,20 @@ export function registerCreateCommand(registry: any): void {
       { name: "dimension", type: CustomCommandParamType.String },
     ],
   }, ({ player, params }) => {
-    const botName = (params.name as string) || generateBotName();
-    const pos = (params.location as Vector3 | undefined) ?? player.location;
-    const dimension = params.dimension ? world.getDimension(params.dimension as string) : player.dimension;
-    const playerRot = player.getRotation();
-    const lookTarget = getPlayerLookTarget(player);
-    createBot({
-      name: botName, location: pos, dimension,
-      initialTags: DEFAULT_TAGS,
-      rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
-      lookTarget, isSneaking: player.isSneaking,
-      spawnMode: "normal",
+    system.run(() => {
+      const botName = (params.name as string) || generateBotName();
+      const pos = (params.location as Vector3 | undefined) ?? player.location;
+      const dimension = params.dimension ? world.getDimension(params.dimension as string) : player.dimension;
+      const playerRot = player.getRotation();
+      const lookTarget = getPlayerLookTarget(player);
+      createBot({
+        name: botName, location: pos, dimension,
+        initialTags: DEFAULT_TAGS,
+        rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
+        lookTarget, isSneaking: player.isSneaking,
+        spawnMode: "normal",
+      });
+      player.sendMessage(`${color.success}成功创建假人 ${color.playerName}${botName}${color.accent} [自动重生]`);
     });
-    player.sendMessage(`${color.success}成功创建假人 ${color.playerName}${botName}${color.accent} [自动重生]`);
   });
 }

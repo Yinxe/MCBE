@@ -206,10 +206,15 @@ export function getReclaimPreview(record: BotRecord): {
   const savedInv = loadBotInventory(record.name);
   const savedEquip = loadBotEquipment(record.name) ?? {};
 
-  // 主手（离线假人假设在 slot 0）
+  // 主手（离线/死亡假人从持久化读取，假设最早的热键栏格是主手）
+  // 在线/存活时已从实体读取 selectedSlotIndex，不走此分支
   let mainhand: ItemPreview | null = null;
-  if (savedInv && savedInv.length > 0 && savedInv[0]) {
-    mainhand = serializedToPreview(savedInv[0]);
+  if (savedInv && savedInv.length > 0) {
+    // savedInv[0] 是热键栏第 0 格（不一定是最新主手，但离线无法确定）
+    for (let i = 0; i < 9 && i < savedInv.length; i++) {
+      const data = savedInv[i];
+      if (data) { mainhand = serializedToPreview(data); break; }
+    }
   }
 
   // 装备

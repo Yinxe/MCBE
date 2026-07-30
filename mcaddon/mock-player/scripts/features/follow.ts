@@ -12,7 +12,6 @@ import { color } from "@yinxe/toolkit";
 
 const followMap = new Map<string, string>();
 
-let engineRunning = false;
 let followPaused = false;
 
 const FOLLOW_TICK = 10; // 每 10 tick 更新一次寻路
@@ -77,13 +76,11 @@ let followIntervalId: number | undefined;
 
 function ensureEngine(): void {
   if (followIntervalId !== undefined) return;
-  engineRunning = true;
   followIntervalId = system.runInterval(() => {
     if (followMap.size === 0) {
       // 没有跟随关系，停止引擎
       system.clearRun(followIntervalId!);
       followIntervalId = undefined;
-      engineRunning = false;
       return;
     }
 

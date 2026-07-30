@@ -21,6 +21,7 @@ import { formatPos, formatDimensionId } from "../features/core/utils";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
 import { saveBotFullState } from "../features/saveState";
 import { setPose } from "../features/core/pose";
+import { trackBotOffline } from "../features/tridentTracker";
 
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;
@@ -32,7 +33,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   const record = botRegistry.get(entity.nameTag);
   if (!record) return;
 
-  console.warn(`[MockPlayer] 事件 entityDie ${record.name}（${entity.dimension.id} ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y)} ${Math.floor(entity.location.z)}）`);
+  console.info(`[MockPlayer] 事件 entityDie ${record.name}（${entity.dimension.id} ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y)} ${Math.floor(entity.location.z)}）`);
 
   const bot = entity as SimulatedPlayer;
   const deathState: PositionState = {
@@ -58,6 +59,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   // 3. 有自动重生标签 → 自动复活到重生点
   if (entity.hasTag(TAG_RESPAWN.value)) {
     try {
+      trackBotOffline(record.entityId!);
       bot.respawn();
       const dim = world.getDimension(record.respawnPoint.dimension);
       bot.teleport(record.respawnPoint.location, { dimension: dim });
@@ -83,6 +85,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   }
 
   // 4. 无自动重生 / 自动重生失败 → 死亡下线
+  trackBotOffline(record.entityId!);
   record.online = false;
   record.entityId = undefined;
   saveBotRecord(record);

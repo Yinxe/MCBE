@@ -4,13 +4,12 @@ import { Player, system } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_CONTROL, TAG_FOLLOW, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
+import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
 import { botRegistry } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
 import { setSneaking } from "../features";
 import { switchSpawnMode, getSpawnModeInfo } from "../features/spawnMode";
-import { onlineBot } from "../features/onlineBot";
-import { offlineBot } from "../features/offlineBot";
+import { safeReconnect } from "../features/pendingRespawn";
 import { startFollow, stopFollow, isFollowing } from "../features/follow";
 
 // ─── 行为标签管理（含 上线/潜行 快捷开关） ───────────
@@ -91,23 +90,13 @@ export function showTagManagement(player: Player, botName: string): void {
     const targetMode = wantChunkload ? "chunkload" : "normal";
     if (targetMode !== currentMode) {
       const wasOnline = currentRecord.online && !currentRecord.death;
-      // 先下线
       if (wasOnline) {
-        system.run(() => {
-          try { offlineBot(currentRecord); } catch {}
+        safeReconnect(currentRecord, {
+          onOffline: () => switchSpawnMode(currentRecord, targetMode),
+          onOnline: () => player.sendMessage(`${color.success}已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`),
         });
-      }
-      switchSpawnMode(currentRecord, targetMode);
-      // 延迟 5tick 等实体完全移除再重新上线
-      if (wasOnline) {
-        system.runTimeout(() => {
-          try {
-            if (!currentRecord.death) onlineBot(currentRecord);
-            player.sendMessage(`${color.success}已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`);
-          } catch (e: any) {
-            player.sendMessage(`${color.error}切换失败: ${e.message}`);
-          }
-        }, 5);
+      } else {
+        switchSpawnMode(currentRecord, targetMode);
       }
     }
 

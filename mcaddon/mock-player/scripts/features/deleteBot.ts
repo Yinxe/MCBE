@@ -8,6 +8,7 @@ import { BOT_TAG } from "./core/tags";
 import { botRegistry, removeBotRecord, removeBotInventory, removeBotRestored } from "./core/persistence";
 import { reclaimBot } from "./reclaim";
 import { color } from "@yinxe/toolkit";
+import { trackBotOffline } from "./tridentTracker";
 
 /**
  * 删除假人（可选回收物品和经验到指定玩家）
@@ -35,6 +36,7 @@ export function deleteBot(record: BotRecord, reclaimTo?: Player): void {
   if (record.online) {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
+      trackBotOffline(record.entityId!);
       (entity as SimulatedPlayer).disconnect();
     }
   }

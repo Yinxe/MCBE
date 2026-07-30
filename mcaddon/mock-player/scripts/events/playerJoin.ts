@@ -7,18 +7,19 @@
 // 需要用 world.getPlayers({ name, tags }) 查找对应的 Player 对象
 // 不能只用 name 过滤——加 tags 确保只操作假人，避免误操作同名的真实玩家
 
-import { world, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEquippableComponent } from "@minecraft/server";
+import { world, system, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEquippableComponent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG } from "../features/core/tags";
 import { botRegistry, saveBotRecord, loadBotInventory, loadBotEquipment, markBotRestored } from "../features/core/persistence";
 import { deserializeContainer, deserializeEquipment, getTotalXpForLevels } from "../features/core/utils";
+import { rebindBotTridents, trackBotOnline } from "../features/tridentTracker";
 
 export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   const record = botRegistry.get(event.playerName);
   if (!record) return;
 
-  console.warn(`[MockPlayer] 事件 playerJoin ${event.playerName}`);
+  console.info(`[MockPlayer] 事件 playerJoin ${event.playerName}`);
   record.online = true;
   saveBotRecord(record);
 
@@ -59,6 +60,11 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   // ⚠️ 必须放在 if(player) 块内：只有确实恢复成功才标记，防止空背包被误保存
   if (player) {
     markBotRestored(record.name);
+
+    // 更新 entityId 并认主三叉戟（覆盖所有上线方式）
+    record.entityId = player.id;
+    trackBotOnline(player.id, record.name);
+    system.run(() => rebindBotTridents(record.name));
   }
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.success}${record.name} 加入了游戏`);
 }

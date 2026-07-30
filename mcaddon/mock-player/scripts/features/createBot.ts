@@ -41,7 +41,7 @@ export function createBot(options: CreateBotOptions): BotRecord {
 
   const bot = spawnBot(record, location, dimension, rot2, lookTarget);
 
-  console.warn(
+  console.info(
     `[MockPlayer] 创建假人 ${name} 模式=${record.spawnMode ?? "normal"}` +
     `（${dimension.id} ${Math.floor(location.x)} ${Math.floor(location.y)} ${Math.floor(location.z)}）`,
   );
