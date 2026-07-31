@@ -24,7 +24,7 @@ scripts/
 ├── main.ts              # 入口
 ```
 
-核心逻辑：玩家死亡时检测 `keepInventory` 状态，保存/恢复玩家背包。
+核心逻辑：`worldLoad` 时自动设置 `gameRules.keepInventory = true` 与 `gameRules.commandBlocksEnabled = true`。
 
 ---
 

@@ -8,10 +8,10 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 - **在线/离线管理** — 上线（重新生成）、下线（保存状态并断开）（`/mp:online` `/mp:offline`）
 - **传送** — TPHERE（假人传送到玩家）、TPA（玩家传送到假人）（`/mp:tphere` `/mp:tp`）
 - **移动** — 假人自动寻路到目标位置（`/mp:move`）
-- **自动行为** — 通过标签系统控制：自动挖掘、自动攻击、自动跳跃、自动放置
+- **自动行为** — 通过标签系统控制：自动挖掘、自动攻击、自动跳跃、自动放置、跟随、使用物品、宝库模式
 - **体态控制** — 控制模式让假人跟随玩家的位置和朝向
 - **潜行** — 切换假人潜行状态（`/mp:sneak`）
-- **装备管理** — 交换主手/副手/全部装备、一键卸甲
+- **装备管理** — 交换主手/副手/装备、回收资源
 - **标签系统** — 灵活的行为标签，支持共存标签与互斥标签分组
 - **物品回收** — 回收假人的全部物品和经验到玩家背包
 - **数据持久化** — 世界重启后自动恢复假人记录、背包、装备和经验
@@ -32,12 +32,15 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 | `/mp:tp <name>` | 传送到假人 |
 | `/mp:tphere <name>` | 假人传送到身边 |
 | `/mp:move <name> <location>` | 假人移动到目标位置 |
+| `/mp:follow <name>` | 自动跟随 |
 | `/mp:control <name>` | 切换控制模式 |
 | `/mp:sneak <name>` | 切换潜行状态 |
 | `/mp:tag <name> <add\|remove\|list> [tag]` | 管理标签 |
 | `/mp:tags` | 列出所有可用标签 |
 | `/mp:respawn <name>` | 假人重生 |
-| `/mp:setRespawn <name>` | 设置重生点 |
+| `/mp:setrespawn <name>` | 设置重生点 |
+| `/mp:trident <name>` | 投掷三叉戟（打开选择界面） |
+| `/mp:recover <name>` | 从持久化强制恢复背包/装备/经验 |
 | `/mp:delete <name>` | 删除假人（可回收物品） |
 | `/mp:reclaim <name>` | 回收假人物品和经验 |
 | `/mp:data <name>` | 查看假人详细数据 |
@@ -51,6 +54,7 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 | `bot` | 假人标识（默认） |
 | `respawn` | 自动重生（默认） |
 | `autoJump` | 自动跳跃 |
+| `follow` | 自动跟随 |
 
 ### 互斥标签（同一时间只能一个生效）
 | 标签 | 效果 |
@@ -60,6 +64,8 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 | `autoPlace` | 持续放置模式 |
 | `autoAttack` | 自动攻击 |
 | `control` | 体态控制模式（跟随玩家） |
+| `autoUse` | 使用物品 |
+| `vaultMode` | 宝库模式 |
 
 ## UI 交互
 
@@ -76,7 +82,7 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 
 ### 需求
 
-- Minecraft Bedrock 1.26.0+
+- Minecraft Bedrock 1.21.120+
 - 世界开启「测试版 API」或「Beta APIs」
 - 需要作弊权限
 
@@ -99,16 +105,21 @@ just-scripts lint         # ESLint 检查
 ```
 scripts/
 ├── main.ts               # 入口：命令注册、持久化恢复、事件监听
-├── commands/             # 每条命令独立文件
+├── commands/             # 每条命令独立文件（create/online/offline/follow/trident/recover 等）
+├── events/               # 事件处理（entityDie/playerSpawn/Join/Leave/背包变化 等）
 ├── features/             # 核心业务逻辑
-│   ├── types.ts          # 类型与常量
-│   ├── operations.ts     # 核心操作
-│   ├── persistence.ts    # 全局状态 + DynamicProperty 持久化
-│   ├── behavior.ts       # 标签行为引擎（轮询模式）
-│   ├── tags.ts           # 标签系统
-│   └── utils.ts          # 工具函数
-├── events/               # 事件处理（entityDie/playerSpawn/Join/Leave 等）
-└── ui/                   # ModalFormData UI
+│   ├── core/             # 基础设施
+│   │   ├── types.ts      # 类型定义
+│   │   ├── tags.ts       # 标签系统定义/解析/同步
+│   │   ├── persistence.ts # 动态属性持久化
+│   │   ├── utils.ts      # 坐标/背包/序列化工具
+│   │   ├── behavior.ts   # 标签行为引擎（轮询）
+│   │   ├── spawn.ts      # 假人生成公共尾部逻辑
+│   │   ├── pose.ts       # 体态控制
+│   │   ├── gametestContext.ts # GameTest 上下文（chunkload 模式）
+│   │   └── ...
+│   ├── createBot/onlineBot/offlineBot/deleteBot/killBot/teleport/move/control/sneak/reclaim/equip/saveState/setTags/follow/trident/vaultMode/toolHealth/pendingRespawn/spawnMode/tridentTracker
+└── ui/                   # ActionForm/ModalForm UI（menu/bot/create/move/online/tags/trident/reclaim 等）
 ```
 
 ### 依赖版本
@@ -116,7 +127,7 @@ scripts/
 |---|---|
 | `@minecraft/server` | 2.6.0 |
 | `@minecraft/server-ui` | 2.0.0 |
-| `@minecraft/server-gametest` | 1.0.0-beta |
+| `@minecraft/server-gametest` | 1.0.0-beta.1.26.0-stable |
 | `@minecraft/math` | 2.2.7 |
 | `@minecraft/vanilla-data` | 1.26.20 |
 

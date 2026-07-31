@@ -2,7 +2,7 @@
 
 Minecraft Bedrock Edition 智能仓库管理 Addon。基于 Script API 实现自动分拣、容器整理、仓库统计等功能。
 
-> **版本**: 0.0.55 | **许可证**: MIT
+> **版本**: 0.0.62 | **许可证**: MIT
 > **项目地址**: https://github.com/YinxSmartHouse/SmartWarehouse
 
 > **测试版本** — 可能存在未发现的 bug，使用前请备份世界。
@@ -88,6 +88,7 @@ Minecraft Bedrock Edition 智能仓库管理 Addon。基于 Script API 实现自
 | `/sw:delete <名称>` | 删除仓库 | op |
 | `/sw:organize` | 整理玩家背包 | 所有人 |
 | `/sw:menu` | 打开 SmartWarehouse 主菜单 | 所有人 |
+| `/sw:help` | 查看命令帮助 | 所有人 |
 | `/sw:search <关键词>` | 在附近且属于该玩家的仓库中搜索物品 | op |
 
 ---
@@ -98,7 +99,7 @@ Minecraft Bedrock Edition 智能仓库管理 Addon。基于 Script API 实现自
 - **容器搜索** — 打开搜索界面输入关键字
 - **管理仓库** — 智能定位附近且属于该玩家的仓库，直达设置页
 - **仓库列表** — 列出所有仓库（管理员看全部，非管理员只看自己的）
-- **创建仓库** — 启动创建流程（需 op）
+- **创建仓库** — 启动创建流程（创建入口对所有人可用，仅 `/sw:create` 命令校验管理员权限）
 - **设置** — 模组配置面板（仅管理员）
 
 ### 容器设置菜单（手持信物右键容器）
@@ -140,21 +141,20 @@ Minecraft Bedrock Edition 智能仓库管理 Addon。基于 Script API 实现自
 
 ### 环境要求
 - Node.js >= 18
-- npm >= 9
+- pnpm >= 9
 
 ### 构建步骤
 
 ```bash
-npm install
-npx tsc
+pnpm run build
 ```
 
-编译产物输出到 `lib/` 目录，需手动部署到行为包的 `scripts/` 目录。
+构建流程：generate-version（生成 version.ts）→ sync（同步 manifest 版本号）→ tsc → esbuild bundle（编译产物输出到行为包的 `scripts/` 目录）。
 
 ### 一键打包（.mcaddon）
 
 ```bash
-npm run mcaddon
+pnpm run pack
 ```
 
 输出文件位于 `dist/packages/`。
@@ -170,7 +170,7 @@ npm run mcaddon
 | `tools/findDups.mjs` | 查找物品 ID 重复 |
 | `tools/findUncategorized.mjs` | 查找未分类物品 |
 
-修改流程：编辑生成器 -> `node generateItemFamilies.mjs` -> `node annotateFamilies.mjs` -> `npx tsc`
+修改流程：编辑生成器 -> `node generateItemFamilies.mjs` -> `node annotateFamilies.mjs` -> `pnpm run build`
 
 ---
 
@@ -183,14 +183,14 @@ scripts/              TypeScript 源码
   main.ts             入口文件（初始化依赖、注册事件和命令）
   types.ts            集中式类型定义（40+ 类型/接口）
   version.ts          自动生成的版本号与构建时间
-  commands/           命令路由层（8 条自定义命令）
+  commands/           命令路由层（9 条自定义命令）
   data/               数据文件（51 家族物品分类、中文名映射）
   interaction/        工具交互（信物右键、方块事件处理）
   organize/           容器整理器（混乱度评分、三段式 API）
   runtime/            运行时缓存层（内存索引、惰性重建）
   sorting/            分拣引擎和调度器（含容量预警、事务日志）
   storage/            持久化层（DynamicProperty 世代分片存储）
-  ui/                 玩家交互界面（11 个 UI 模块）
+  ui/                 玩家交互界面（12 个 UI 模块）
   util/               工具函数（日志、坐标、JSON、权限、钩子）
   warehouse/          核心业务逻辑（仓库 CRUD、容器扫描、搜索）
 tools/                维护工具（6 个 Node.js 脚本）
@@ -205,7 +205,7 @@ tests/safety/         安全测试（回滚、快照、整理器）
 ## 技术栈
 
 - **语言**：TypeScript（ES6 target, strict 模式）
-- **运行时**：Minecraft Bedrock Script API（@minecraft/server ^2.6.0）
+- **运行时**：Minecraft Bedrock Script API（@minecraft/server ^2.0.0）
 - **UI**：@minecraft/server-ui（ActionForm / ModalForm）
 - **构建**：TypeScript 编译器 + just-scripts
 - **代码规范**：Prettier + ESLint（eslint-plugin-minecraft-linting）
