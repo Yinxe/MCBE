@@ -339,7 +339,19 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
         try {
           player.addExperience(botXp.totalXp);
           // 必须清除假人实体上的经验，否则 saveBotFullState 会重新捕获并写回记录
-          bot.addExperience(-botXp.totalXp);
+          // ⚠️ addExperience(-n) 对 SimulatedPlayer 完全不生效（经验从未被扣过）
+          //    resetLevel() 仅 2.6.0+；用 xp 指令清空最保险，全版本可用
+          try {
+            bot.runCommand("xp -2147483647L");
+          } catch {
+            const anyBot = bot as any;
+            if (typeof anyBot.resetLevel === "function") {
+              try { anyBot.resetLevel(); } catch {}
+            } else {
+              try { anyBot.addLevels(-bot.level); } catch {}
+              try { anyBot.addExperience(-bot.xpEarnedAtCurrentLevel); } catch {}
+            }
+          }
         } catch {}
       }
       record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
@@ -347,6 +359,12 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
 
     // 保存剩余状态到持久化（此时假人实体上的经验已清零）
     saveBotFullState(bot, record);
+
+    // ⚠️ 兜底：saveBotFullState 会重新 captureExperience 覆盖 record.experience。
+    //    若实体经验清除失败（低版本 API 限制），此处强制归零，杜绝重复回收
+    if (opts.xp) {
+      record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
+    }
 
   // ── 离线/死亡：从持久化回收 ──
   } else {
