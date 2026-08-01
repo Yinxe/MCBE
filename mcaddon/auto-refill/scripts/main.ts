@@ -45,6 +45,7 @@ function refillMainhand(player: Player, typeId: string): boolean {
       equippable.setEquipment(EquipmentSlot.Mainhand, item);
       inventory.container.setItem(slot, undefined);
       player.playSound("random.pop");
+      console.info(`[AutoRefill] 替换 ${player.name}: ${typeId} ← slot ${slot}`);
       return true;
     }
   }
@@ -86,6 +87,7 @@ function refillPotion(player: Player, potionTypeId: string): boolean {
       }
 
       player.playSound("random.pop");
+      console.info(`[AutoRefill] 药水替换 ${player.name}: ${potionTypeId}（空瓶回填）`);
       return true;
     }
   }
@@ -95,54 +97,77 @@ function refillPotion(player: Player, potionTypeId: string): boolean {
 // ─── 事件订阅 ──────────────────────────────────────────
 
 /**
- * 检查玩家是否为生存/冒险模式。
- * ⚠️ 兼容模拟玩家（SimulatedPlayer）：其 getGameMode() 可能抛异常或返回
- *    undefined，且模拟玩家默认都是生存模式，故失败时按生存处理。
+ * 判断是否为真实玩家（非模拟玩家）。
+ * 假人标识 tag（mock-player 模组给所有假人打的标），带 tag 即假人。
+ */
+function isRealPlayer(player: Player): boolean {
+  return !player.hasTag("mockplayer:tag:bot");
+}
+
+/**
+ * 判断玩家是否为生存/冒险模式。
+ * 模拟玩家的 getGameMode() 会抛异常或返回 undefined，此时返回 false。
  */
 function isSurvivalOrAdventure(player: Player): boolean {
+  let mode: GameMode | undefined;
   try {
-    const mode = player.getGameMode();
-    if (mode === undefined) return true; // 模拟玩家无 mode → 默认生存
-    return mode === GameMode.Survival || mode === GameMode.Adventure;
+    mode = player.getGameMode();
   } catch {
-    // 模拟玩家 getGameMode 不可用 → 默认生存
-    return true;
+    return false;
   }
+  if (mode === undefined) return false;
+  return mode === GameMode.Survival || mode === GameMode.Adventure;
+}
+
+/**
+ * 目标校验通过后执行回调。
+ * 统一守卫：实体存在 → 真实玩家（非假人）→ 生存/冒险模式。
+ * @param player   玩家实体（可能为 undefined）
+ * @param callback 校验通过后要执行的替换逻辑
+ */
+function ifRefillEligible(player: Player | undefined, callback: (p: Player) => void): void {
+  if (!player) return;
+  if (!isRealPlayer(player)) return;
+  if (!isSurvivalOrAdventure(player)) return;
+  callback(player);
 }
 
 /**
  * 物品使用完毕 — 食物/药水/弓/弩/三叉戟等蓄力到满释放后
  */
 world.afterEvents.itemCompleteUse.subscribe((event) => {
-  const player = event.source;
-  if (!isSurvivalOrAdventure(player)) return;
-  // 药水特例：喝药后主手变空瓶 → 替换新药水并回填空瓶
-  if (event.itemStack.typeId === "minecraft:potion" && refillPotion(player, event.itemStack.typeId)) {
-    return;
-  }
-  refillMainhand(player, event.itemStack.typeId);
+  ifRefillEligible(event.source, (player) => {
+    if (!event.itemStack) return;
+    // 药水特例：喝药后主手变空瓶 → 替换新药水并回填空瓶
+    if (event.itemStack.typeId === "minecraft:potion") {
+      if (refillPotion(player, event.itemStack.typeId)) {
+        return;
+      }
+    }
+    refillMainhand(player, event.itemStack.typeId);
+  });
 });
 
 /**
  * 提前释放蓄力物品 — 弓/弩/三叉戟蓄力时提前松开
  */
 world.afterEvents.itemReleaseUse.subscribe((event) => {
-  const player = event.source;
-  if (!isSurvivalOrAdventure(player)) return;
-  if (event.itemStack !== undefined) {
-    refillMainhand(player, event.itemStack.typeId);
-  }
+  ifRefillEligible(event.source, (player) => {
+    if (event.itemStack !== undefined) {
+      refillMainhand(player, event.itemStack.typeId);
+    }
+  });
 });
 
 /**
  * 使用物品 — 放置方块/盾牌/钓鱼竿/打火石等
  */
 world.afterEvents.itemUse.subscribe((event) => {
-  const player = event.source;
-  if (!isSurvivalOrAdventure(player)) return;
-  if (event.itemStack !== undefined) {
-    refillMainhand(player, event.itemStack.typeId);
-  }
+  ifRefillEligible(event.source, (player) => {
+    if (event.itemStack !== undefined) {
+      refillMainhand(player, event.itemStack.typeId);
+    }
+  });
 });
 
 /**
@@ -151,24 +176,22 @@ world.afterEvents.itemUse.subscribe((event) => {
  * 交互成功后主手物品可能消失（消耗类），此时自动替换。
  */
 world.afterEvents.playerInteractWithBlock.subscribe((event) => {
-  const player = event.player;
-  if (!isSurvivalOrAdventure(player)) return;
-
-  // 交互前的物品类型（beforeItemStack 是交互前主手拿的物品）
-  const usedType = event.beforeItemStack?.typeId ?? event.itemStack?.typeId;
-  if (!usedType) return;
-
-  // 交互成功后主手可能已被消耗 → 自动替换同类
-  refillMainhand(player, usedType);
+  ifRefillEligible(event.player, (player) => {
+    // 交互前的物品类型（beforeItemStack 是交互前主手拿的物品）
+    const usedType = event.beforeItemStack?.typeId ?? event.itemStack?.typeId;
+    if (!usedType) return;
+    // 交互成功后主手可能已被消耗 → 自动替换同类
+    refillMainhand(player, usedType);
+  });
 });
 
 /**
  * 方块破碎 — 工具耐久耗尽自动替换同类工具
  */
 world.afterEvents.playerBreakBlock.subscribe((event) => {
-  const player = event.player;
-  if (!isSurvivalOrAdventure(player)) return;
-  if (event.itemStackBeforeBreak !== undefined && event.itemStackAfterBreak === undefined) {
+  ifRefillEligible(event.player, (player) => {
+    if (event.itemStackBeforeBreak === undefined) return;
+    if (event.itemStackAfterBreak !== undefined) return;
     refillMainhand(player, event.itemStackBeforeBreak.typeId);
-  }
+  });
 });
