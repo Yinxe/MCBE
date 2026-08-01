@@ -53,7 +53,8 @@ function refillMainhand(player: Player, typeId: string): boolean {
 
 /**
  * 药水特例：喝药后主手剩空瓶（glass_bottle），
- * 从背包找新药水换上，空瓶放回原槽位。
+ * 从背包找新药水换上；空瓶优先堆叠进背包已有同种瓶，
+ * 堆叠满再找空位放，放不下则溢出掉落。
  * @returns 是否成功替换
  */
 function refillPotion(player: Player, potionTypeId: string): boolean {
@@ -69,9 +70,21 @@ function refillPotion(player: Player, potionTypeId: string): boolean {
     const item = inventory.container.getItem(slot);
     if (!item) continue;
     if (item.typeId === potionTypeId) {
-      const bottle = mainhand.clone();
       equippable.setEquipment(EquipmentSlot.Mainhand, item);
-      inventory.container.setItem(slot, bottle);
+
+      // 空瓶回填：优先堆叠，其次空位，最后溢出掉落
+      const remaining = inventory.container.addItem(mainhand);
+      if (remaining) {
+        // addItem 返回余量说明背包已满/堆叠满 → 溢出到玩家位置
+        try {
+          player.dimension.spawnItem(remaining, {
+            x: player.location.x,
+            y: player.location.y + 1,
+            z: player.location.z,
+          });
+        } catch { /* 溢出失败时忽略 */ }
+      }
+
       player.playSound("random.pop");
       return true;
     }
