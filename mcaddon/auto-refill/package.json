@@ -1,6 +1,6 @@
 {
   "name": "auto-refill",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "自动替换主手消耗物品——保留成就",
   "private": true,
   "devDependencies": {
@@ -21,7 +21,7 @@
     "pack": "just-scripts mcaddon"
   },
   "dependencies": {
-    "@minecraft/server": "2.6.0"
+    "@minecraft/server": "2.0.0"
   },
   "mcbe": {
     "packName": "自动替换",

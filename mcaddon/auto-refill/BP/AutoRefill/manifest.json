@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "自动替换 v1.0.0",
+    "name": "自动替换 v1.0.1",
     "description": "自动替换消耗品——保留成就",
     "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "version": [
       1,
       0,
-      0
+      1
     ],
     "min_engine_version": [
       1,
@@ -23,7 +23,7 @@
       "version": [
         1,
         0,
-        0
+        1
       ],
       "entry": "scripts/main.js"
     }
