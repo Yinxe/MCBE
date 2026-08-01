@@ -79,10 +79,12 @@ function getDPKey(name: string): string {
   return `${DP_PREFIX}${name}`;
 }
 
-export function saveBotRecord(record: BotRecord): void {
+export function saveBotRecord(record: BotRecord, silent = false): void {
   try {
     world.setDynamicProperty(getDPKey(record.name), JSON.stringify(record));
-    console.info(`[MockPlayer] 记录保存 ${record.name}（在线=${record.online} 死亡=${record.death} 经验Lv=${record.experience.level}）`);
+    if (!silent) {
+      console.info(`[MockPlayer] 记录保存 ${record.name}（在线=${record.online} 死亡=${record.death} 经验Lv=${record.experience.level}）`);
+    }
   } catch (e: any) {
     console.error(`[MockPlayer] 保存假人 ${record.name} 失败: ${e.message}`);
   }
@@ -223,14 +225,15 @@ export function saveBotEquipSlot(name: string, slot: string, item: SerializedIte
 /** 保存全部装备栏 */
 export function saveBotEquipment(
   name: string,
-  equipment: Record<string, SerializedItemStack | null>
+  equipment: Record<string, SerializedItemStack | null>,
+  silent = false
 ): void {
   const slots = Object.keys(equipment);
   const nonEmpty = Object.values(equipment).filter((i) => i !== null).length;
   for (const [slot, item] of Object.entries(equipment)) {
     saveBotEquipSlot(name, slot, item);
   }
-  console.info(`[MockPlayer] 装备保存 ${name}——${nonEmpty}/${slots.length} 槽`);
+  if (!silent) console.info(`[MockPlayer] 装备保存 ${name}——${nonEmpty}/${slots.length} 槽`);
 }
 
 /** 加载全部装备栏，返回 { head?, chest?, legs?, feet?, offhand? } */

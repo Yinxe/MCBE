@@ -108,8 +108,8 @@ export function startTagBehaviors(): void {
     }
 
     // ── 周期持久化 ── 每 100 tick ──
+    // 高频轮询路径全部静默保存（silent），防止每 5 秒刷日志
     if (tick % 100 === 0) {
-      const saved: string[] = [];
       for (const entity of bots) {
         const record = botRegistry.get(entity.name);
         if (!record || record.death) continue;
@@ -122,12 +122,10 @@ export function startTagBehaviors(): void {
         }
         record.isSneaking = bot.isSneaking;
         record.experience = captureExperience(bot);
-        saveBotRecord(record);
+        saveBotRecord(record, true);
         const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
-        if (equip) saveBotEquipment(bot.name, serializeEquipment(equip));
-        saved.push(record.name);
+        if (equip) saveBotEquipment(bot.name, serializeEquipment(equip), true);
       }
-      if (saved.length > 0) console.info(`[MockPlayer] 周期保存 ${saved.join(",")}`);
     }
   }, 1);
 }
