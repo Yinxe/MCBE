@@ -46,7 +46,7 @@ export function showTagManagement(player: Player, botName: string): void {
     })
     .toggle("chunkload", style("强加载模式", color.playerName), {
       defaultValue: record.spawnMode === "chunkload",
-      tooltip: "开启后区块常驻加载，但不可转向。切换时自动重新上线",
+      tooltip: "区块持续加载，但不可转向。异地上线仅加载当前区块附近，需玩家靠近补足模拟距离；重新上线后需再次靠近。切换时自动重新上线",
     })
     .label("sep1", style("━━ 标签设置 ────", color.accent))
     // ── 跟随 ──

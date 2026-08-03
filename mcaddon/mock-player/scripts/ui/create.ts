@@ -21,7 +21,7 @@ export function showCreateForm(player: Player): void {
       .toggle("copyPosture", style("复刻玩家体态（同步潜行/朝向）", color.playerName), { defaultValue: true, tooltip: "创建时复制玩家的潜行和面向方向" })
       .toggle("respawn", style("自动重生", color.playerName), { defaultValue: true, tooltip: "开启后假人死亡会自动复活到重生点" })
       .toggle("idle", style("空闲状态", color.playerName), { defaultValue: true, tooltip: "开启后假人默认处于空闲状态，不执行任何行为" })
-      .toggle("chunkload", style("强加载模式", color.playerName), { defaultValue: false, tooltip: "开启后区块常驻加载，但不可设置身体朝向" });
+      .toggle("chunkload", style("强加载模式", color.playerName), { defaultValue: false, tooltip: "区块持续加载，但不可设置身体朝向。异地上线需玩家靠近后补足模拟距离" });
   }).then((vals) => {
     if (!vals) return;
     const botName = (vals.name as string).trim() || generateBotName();

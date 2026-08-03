@@ -33,11 +33,13 @@ export const MODE_NORMAL_INFO: SpawnModeInfo = {
 export const MODE_CHUNKLOAD_INFO: SpawnModeInfo = {
   value: MODE_CHUNKLOAD,
   label: `${color.accent}强加载模式`,
-  desc: "区块常加载，但不可转向",
+  desc: "区块持续加载，但不可转向",
   limitations: [
     "不支持体态同步",
     "TP 时不会设置朝向",
     "扭头不可用（GameTest 限制）",
+    "异地上线仅加载当前区块附近，需玩家靠近后补足模拟距离",
+    "假人重新上线后，之前辅助加载的区块会失效，需玩家再次靠近",
   ],
 };
 
