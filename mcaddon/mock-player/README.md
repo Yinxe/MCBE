@@ -54,12 +54,11 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 | `bot` | 假人标识（默认） |
 | `respawn` | 自动重生（默认） |
 | `autoJump` | 自动跳跃 |
-| `follow` | 自动跟随 |
 
 ### 互斥标签（同一时间只能一个生效）
 | 标签 | 效果 |
 |---|---|
-| `idle` | 无状态（默认） |
+| `idle` | 空闲（默认） |
 | `autoMine` | 自动挖掘前方的方块 |
 | `autoPlace` | 持续放置模式 |
 | `autoAttack` | 自动攻击 |

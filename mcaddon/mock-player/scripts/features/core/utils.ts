@@ -60,16 +60,55 @@ export function capturePlayerStateFromRotation(
 
 // ─── 坐标解析 ──────────────────────────────────────────
 
-/** 解析 "x y z" 格式的坐标文本 */
-export function parseCoordinateInput(input: string): Vector3 | undefined {
-  if (!input || input.trim() === "") return undefined;
-  const parts = input.trim().split(/\s+/);
-  if (parts.length !== 3) return undefined;
-  const x = parseFloat(parts[0]);
-  const y = parseFloat(parts[1]);
-  const z = parseFloat(parts[2]);
-  if (isNaN(x) || isNaN(y) || isNaN(z)) return undefined;
-  return { x, y, z };
+export type CoordinateParseResult =
+  | { ok: true; pos: Vector3 }
+  | { ok: false; reason: "empty" | "invalid"; message: string };
+
+/**
+ * 容错解析坐标输入
+ * - 分隔符：空格 / 全角空格 / 中英文逗号 / 混合
+ * - 支持括号包裹：(100, 20, 30) / [100 20 30] / 【100,20,30】
+ * - 支持 ~ 相对坐标（~ / ~5 / ~-3），基于 origin 偏移
+ * - 空输入返回 { ok: false, reason: "empty" }，调用方据此原地创建
+ */
+export function parseCoordinateInput(input: string, origin?: Vector3): CoordinateParseResult {
+  if (!input || input.trim() === "") {
+    return { ok: false, reason: "empty", message: "坐标为空" };
+  }
+
+  // 去掉首尾括号，统一分隔符（中英文逗号、全角空格 → 半角空格）
+  let s = input.trim().replace(/^[([【]/, "").replace(/[)\]】]$/, "");
+  s = s.replace(/[，,]/g, " ").replace(/\u3000/g, " ");
+
+  const parts = s.trim().split(/\s+/);
+  if (parts.length !== 3) {
+    return { ok: false, reason: "invalid", message: `需要 3 个数字（x y z），实际收到 ${parts.length} 个` };
+  }
+
+  const axis = ["x", "y", "z"] as const;
+  const nums: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const token = parts[i];
+    if (token.startsWith("~")) {
+      // 相对坐标：~ 或 ~N，基于 origin 偏移
+      if (!origin) {
+        return { ok: false, reason: "invalid", message: `第 ${i + 1} 个坐标 "${token}" 是相对坐标，但缺少基准位置` };
+      }
+      const offset = token.length > 1 ? parseFloat(token.slice(1)) : 0;
+      if (isNaN(offset)) {
+        return { ok: false, reason: "invalid", message: `第 ${i + 1} 个坐标 "${token}" 不是有效数字` };
+      }
+      nums.push(origin[axis[i]] + offset);
+    } else {
+      const n = parseFloat(token);
+      if (isNaN(n)) {
+        return { ok: false, reason: "invalid", message: `第 ${i + 1} 个坐标 "${token}" 不是有效数字` };
+      }
+      nums.push(n);
+    }
+  }
+
+  return { ok: true, pos: { x: nums[0], y: nums[1], z: nums[2] } };
 }
 
 // ─── 格式化工具（共享：附魔/耐久） ─────────────────────

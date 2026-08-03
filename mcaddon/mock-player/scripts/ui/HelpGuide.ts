@@ -33,7 +33,7 @@ const HELP_SECTIONS: { title: string; content: string[] }[] = [
       `${color.muted}  ${color.playerName}自动跳跃${color.muted}: 每 3 tick 自动跳跃一次`,
       "",
       `${color.accent}▶ 互斥行为标签（同一时间只能选一个）`,
-      `${color.muted}  ${color.playerName}无状态${color.muted}: 默认空闲，不执行任何行为`,
+      `${color.muted}  ${color.playerName}空闲${color.muted}: 默认状态，不执行任何行为`,
       `${color.muted}  ${color.playerName}自动挖掘${color.muted}: 自动破坏面前的方块（6 格内）`,
       `${color.muted}  ${color.playerName}自动放置${color.muted}: 将手中方块放置到面前位置`,
       `${color.muted}  ${color.playerName}自动攻击${color.muted}: 持续攻击附近的实体`,

@@ -29,6 +29,13 @@ system.beforeEvents.startup.subscribe((event) => {
 // worldLoad 在 world 完全加载后触发，此时可以安全读写动态属性
 
 world.afterEvents.worldLoad.subscribe(() => {
+  // 初始化 GameTest（供 chunkload 模式使用）
+  initGameTestContext();
+
+  // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
+  console.info(`[MockPlayer] 注册事件`);
+  registerAllEvents();
+
   // 从 DynamicProperty 加载所有假人记录
   // 重启后所有假人默认为 offline 状态
   const loaded = loadAllBotRecords();
@@ -46,14 +53,7 @@ world.afterEvents.worldLoad.subscribe(() => {
   console.info(`[MockPlayer] 启动引擎`);
   startTagBehaviors();
 
-  // 初始化 GameTest（供 chunkload 模式使用）
-  initGameTestContext();
-
   // 初始化三叉戟追踪（entitySpawn 标记假人抛出的三叉戟）
   console.info(`[MockPlayer] 初始化三叉戟追踪`);
   initTridentTracker();
-
-  // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
-  console.info(`[MockPlayer] 注册事件`);
-  registerAllEvents();
 });

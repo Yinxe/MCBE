@@ -1,6 +1,6 @@
 // ─── 移动表单 + 删除确认 ──────────────────────────────
 
-import { Player, system } from "@minecraft/server";
+import { Player, system, Vector3 } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
@@ -21,7 +21,16 @@ export function showMoveForm(player: Player, botName: string): void {
   }).then((vals) => {
     if (!vals) return;
     const coordInput = vals.coord as string;
-    const targetPos = parseCoordinateInput(coordInput) ?? player.location;
+    const coordResult = parseCoordinateInput(coordInput, player.location);
+    let targetPos: Vector3;
+    if (coordResult.ok) {
+      targetPos = coordResult.pos;
+    } else {
+      targetPos = player.location;
+      if (coordResult.reason === "invalid") {
+        player.sendMessage(`${color.warn}坐标解析失败：${coordResult.message}，已改为移动到你所在位置`);
+      }
+    }
 
     const record = botRegistry.get(botName);
     if (!record) {

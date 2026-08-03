@@ -25,7 +25,7 @@ export function showCreateForm(player: Player): void {
   }).then((vals) => {
     if (!vals) return;
     const botName = (vals.name as string).trim() || generateBotName();
-    const parsedCoord = parseCoordinateInput(vals.coord as string);
+    const coordResult = parseCoordinateInput(vals.coord as string, player.location);
     const dimIndex = vals.dim as number;
     const copyPosture = vals.copyPosture as boolean;
 
@@ -34,7 +34,16 @@ export function showCreateForm(player: Player): void {
     else if (dimIndex === 2) targetDim = world.getDimension("nether");
     else if (dimIndex === 3) targetDim = world.getDimension("the_end");
 
-    const pos: Vector3 = parsedCoord ?? player.location;
+    // 坐标解析失败（非空但格式错误）→ 提示用户并原地创建
+    let pos: Vector3;
+    if (coordResult.ok) {
+      pos = coordResult.pos;
+    } else {
+      pos = player.location;
+      if (coordResult.reason === "invalid") {
+        player.sendMessage(`${color.warn}坐标解析失败：${coordResult.message}，已在原地创建`);
+      }
+    }
     const initTags: string[] = [TAG_BOT.value];
     if (vals.respawn) initTags.push(TAG_RESPAWN.value);
     if (vals.idle) initTags.push(TAG_IDLE.value);
