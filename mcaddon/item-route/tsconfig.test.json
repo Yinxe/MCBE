@@ -11,5 +11,5 @@
     "outDir": ".test-build",
     "rootDir": "."
   },
-  "include": ["scripts/core/**/*.ts", "tests/**/*.ts"]
+  "include": ["scripts/core/**/*.ts", "scripts/mc/storage/**/*.ts", "tests/**/*.ts"]
 }
