@@ -9,9 +9,11 @@ import { EventBus } from "../scripts/core/events/DomainEvents";
 function makeCtx() {
   const warehouses = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
   const session = new SelectionSessionStore();
+  const bus = new EventBus();
   return {
     warehouses,
     session,
+    bus,
     resolveWarehouse: (id: string) => warehouses.loadAll().find((w) => w.id === id ?? "") ?? undefined,
   };
 }
@@ -69,4 +71,14 @@ test("handleCornerClick: resize 调整区域", () => {
   assert.match(msg, /已调整/);
   const wh = ctx.warehouses.loadAll().find((w) => w.id === created.warehouse.id);
   assert.deepEqual(wh?.area.corner1, { x: 1, y: 61, z: 1 });
+});
+test("handleCornerClick: 建仓完成触发 boundary-glow 视觉事件", () => {
+  const ctx = makeCtx();
+  const glows: string[] = [];
+  ctx.bus.visualEffect.subscribe((e) => glows.push(`${e.kind}:${e.warehouseId}`));
+  ctx.session.set("p1", { kind: "createWarehouse", name: "仓B", defaultRole: "single", defaultEnabled: true });
+  handleCornerClick(ctx, "p1", { x: 0, y: 64, z: 0 }, "overworld");
+  handleCornerClick(ctx, "p1", { x: 5, y: 70, z: 5 }, "overworld");
+  assert.equal(glows.length, 1);
+  assert.match(glows[0] ?? "", /^boundary-glow:/);
 });

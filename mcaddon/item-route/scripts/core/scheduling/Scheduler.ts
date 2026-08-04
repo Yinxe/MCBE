@@ -2,6 +2,7 @@
 import type { Router } from "../routing/Router";
 import type { IntervalHandle, IntervalScheduler } from "./IntervalScheduler";
 import type { Warehouse } from "../model/Warehouse";
+import type { Container } from "../model/Container";
 import type { ContainerId, WarehouseId } from "../model/types";
 import type { EventBus } from "../events/DomainEvents";
 
@@ -31,7 +32,9 @@ export class Scheduler {
     private readonly proximity: ProximityChecker,
     private readonly bus: EventBus,
     private readonly globalSpeedLimit = 20,
-    private readonly deactivateDelayTicks = 40
+    private readonly deactivateDelayTicks = 40,
+    /** 路由成功放入后的自动整理钩子（v1 onDeposit：混乱度超阈值即整理目标容器） */
+    private readonly onAutoSort?: (warehouse: Warehouse, target: Container) => void
   ) {}
 
   registerWarehouse(warehouse: Warehouse): void {
@@ -143,7 +146,11 @@ export class Scheduler {
         const item = container.getItem(slot);
         if (item === undefined) continue;
         rt.slotCursors.set(id, slot + 1);
-        this.router.routeFrom(container, slot, rt.warehouse);
+        const routed = this.router.routeFrom(container, slot, rt.warehouse);
+        if (routed !== undefined && this.onAutoSort !== undefined) {
+          const target = rt.warehouse.containers.get(routed.to);
+          if (target !== undefined) this.onAutoSort(rt.warehouse, target);
+        }
         return; // 本轮只处理一个 slot
       }
     }

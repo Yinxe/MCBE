@@ -7,10 +7,70 @@ import type { EventBus } from "../events/DomainEvents";
 
 export type CreateResult = { ok: true; warehouse: Warehouse } | { ok: false; error: string };
 
+/** 建仓限制（v1 沉淀：防超大区域拖垮扫描/刷仓） */
+export interface WarehouseLimits {
+  /** 单轴最大边长 */
+  maxEdgeLength: number;
+  /** 与其他仓库最小间距 */
+  minSpacing: number;
+  /** 最大体积（格数） */
+  maxVolume: number;
+  /** 每玩家最多仓库数 */
+  maxWarehousesPerPlayer: number;
+}
+
+export const DEFAULT_WAREHOUSE_LIMITS: WarehouseLimits = {
+  maxEdgeLength: 64,
+  minSpacing: 4,
+  maxVolume: 262_144,
+  maxWarehousesPerPlayer: 8,
+};
+
+/** 区域尺寸（各轴归一化边长 + 体积） */
+export function areaSize(area: WarehouseArea): { x: number; y: number; z: number; volume: number } {
+  const x = Math.abs(area.corner1.x - area.corner2.x) + 1;
+  const y = Math.abs(area.corner1.y - area.corner2.y) + 1;
+  const z = Math.abs(area.corner1.z - area.corner2.z) + 1;
+  return { x, y, z, volume: x * y * z };
+}
+
+/** 两区域是否过于接近（各自外扩 minSpacing 后相交） */
+export function areaTooClose(a: WarehouseArea, b: WarehouseArea, minSpacing: number): boolean {
+  if (a.dimension !== b.dimension) return false;
+  const pad = Math.max(0, minSpacing - 1);
+  const expanded: WarehouseArea = {
+    dimension: a.dimension,
+    corner1: {
+      x: Math.min(a.corner1.x, a.corner2.x) - pad,
+      y: Math.min(a.corner1.y, a.corner2.y) - pad,
+      z: Math.min(a.corner1.z, a.corner2.z) - pad,
+    },
+    corner2: {
+      x: Math.max(a.corner1.x, a.corner2.x) + pad,
+      y: Math.max(a.corner1.y, a.corner2.y) + pad,
+      z: Math.max(a.corner1.z, a.corner2.z) + pad,
+    },
+  };
+  return areaOverlaps(expanded, b);
+}
+
+/** 区域是否超限；超限返回中文错误消息，否则 undefined */
+export function areaExceedsLimits(area: WarehouseArea, limits: WarehouseLimits): string | undefined {
+  const size = areaSize(area);
+  if (size.x > limits.maxEdgeLength || size.y > limits.maxEdgeLength || size.z > limits.maxEdgeLength) {
+    return `区域单轴边长超限（最大 ${limits.maxEdgeLength} 格）`;
+  }
+  if (size.volume > limits.maxVolume) {
+    return `区域体积超限（最大 ${limits.maxVolume} 格）`;
+  }
+  return undefined;
+}
+
 export class WarehouseService {
   constructor(
     private readonly store: WarehouseStore,
-    private readonly bus: EventBus
+    private readonly bus: EventBus,
+    private readonly limits: WarehouseLimits = DEFAULT_WAREHOUSE_LIMITS
   ) {}
 
   /** 启动加载全部仓库（容器由 mc 层按 containerIds 补注册） */
@@ -21,12 +81,21 @@ export class WarehouseService {
   createWarehouse(displayName: string, ownerId: PlayerId, area: WarehouseArea): CreateResult {
     const name = displayName.trim();
     if (name.length === 0) return { ok: false, error: "仓库名不能为空" };
+    const sizeLimitError = areaExceedsLimits(area, this.limits);
+    if (sizeLimitError !== undefined) return { ok: false, error: sizeLimitError };
     const existing = this.store.list();
     if (existing.some((w) => w.displayName === name)) {
       return { ok: false, error: "存在同名仓库" };
     }
     if (existing.some((w) => areaOverlaps(w.area, area))) {
       return { ok: false, error: "区域与已有仓库重叠" };
+    }
+    if (existing.some((w) => areaTooClose(w.area, area, this.limits.minSpacing))) {
+      return { ok: false, error: `区域与其他仓库过于接近（最小间距 ${this.limits.minSpacing} 格）` };
+    }
+    const ownedCount = existing.filter((w) => w.ownerId === ownerId).length;
+    if (ownedCount >= this.limits.maxWarehousesPerPlayer) {
+      return { ok: false, error: `每个玩家最多创建 ${this.limits.maxWarehousesPerPlayer} 个仓库` };
     }
     const warehouse: Warehouse = {
       id: `wh-${Date.now()}-${Math.floor(Math.random() * 10000)}`,

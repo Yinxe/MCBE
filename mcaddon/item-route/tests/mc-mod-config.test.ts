@@ -40,11 +40,19 @@ test("McModConfig: setTokenItemId 持久化", () => {
   assert.equal(reloaded.isToken("minecraft:wooden_hoe"), false);
 });
 
-test("McModConfig: 引导标记 hasSeenGuide/markSeenGuide 持久化", () => {
+test("McModConfig: 引导标记按玩家独立 hasSeenGuide/markSeenGuide", () => {
   const kv = new InMemoryKeyValueStore();
   const cfg = McModConfig.load(new ShardStore(kv));
-  assert.equal(cfg.hasSeenGuide(), false);
-  cfg.markSeenGuide();
-  assert.equal(cfg.hasSeenGuide(), true);
-  assert.equal(McModConfig.load(new ShardStore(kv)).hasSeenGuide(), true);
+  assert.equal(cfg.hasSeenGuide("p1"), false);
+  assert.equal(cfg.hasSeenGuide("p2"), false);
+  cfg.markSeenGuide("p1");
+  assert.equal(cfg.hasSeenGuide("p1"), true);
+  assert.equal(cfg.hasSeenGuide("p2"), false); // p2 不受影响
+  assert.equal(McModConfig.load(new ShardStore(kv)).hasSeenGuide("p1"), true);
+});
+
+test("McModConfig: 建仓限制字段默认值", () => {
+  const cfg = McModConfig.load(new ShardStore(new InMemoryKeyValueStore()));
+  assert.equal(cfg.maxWarehouseVolume, 16384);
+  assert.equal(cfg.maxWarehousesPerPlayer, 1);
 });

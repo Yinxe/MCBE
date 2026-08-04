@@ -19,6 +19,11 @@ export function registerCreate(registry: Parameters<typeof defineCommand>[0], de
         return;
       }
       player.sendMessage(`§a仓库 "${result.warehouse.displayName}" 创建成功！可 /ir:rescan 扫描容器`);
+      deps.bus.visualEffect.trigger({
+        type: "visual-effect",
+        kind: "boundary-glow",
+        warehouseId: result.warehouse.id,
+      });
     });
   });
 }

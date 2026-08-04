@@ -24,6 +24,7 @@ export function registerResize(registry: Parameters<typeof defineCommand>[0], de
     system.runTimeout(() => {
       deps.warehouses.updateArea(warehouse, area);
       player.sendMessage(`§a仓库 "${warehouse.displayName}" 区域已调整`);
+      deps.bus.visualEffect.trigger({ type: "visual-effect", kind: "boundary-glow", warehouseId: warehouse.id });
     });
   });
 }

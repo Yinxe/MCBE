@@ -3,9 +3,9 @@ import { type Player } from "@minecraft/server";
 import { ActionFormBuilder } from "@yinxe/toolkit";
 import type { McModConfig } from "../storage/McModConfig";
 
-/** 首次使用主菜单时展示引导页；已看过则跳过 */
+/** 首次使用主菜单时展示引导页；该玩家已看过则跳过 */
 export async function tryShowNewPlayerGuide(player: Player, config: McModConfig): Promise<boolean> {
-  if (config.hasSeenGuide()) return false;
+  if (config.hasSeenGuide(player.id)) return false;
   const form = new ActionFormBuilder()
     .title("§a物品路由 · 欢迎")
     .body(
@@ -24,6 +24,6 @@ export async function tryShowNewPlayerGuide(player: Player, config: McModConfig)
     )
     .button("知道了", () => undefined);
   await form.show(player);
-  config.markSeenGuide();
+  config.markSeenGuide(player.id);
   return true;
 }

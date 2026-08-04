@@ -3,6 +3,7 @@ import type { WarehouseArea } from "../../core/model/Warehouse";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";
 import type { WarehouseService } from "../../core/services/WarehouseService";
+import type { EventBus } from "../../core/events/DomainEvents";
 import type { SelectionSessionStore } from "./SelectionSessionStore";
 
 /** 两点归一化为区域（角点乱序自动纠正） */
@@ -26,8 +27,14 @@ export function areaFromPoints(dimension: string, p1: Location, p2: Location): W
 export interface CornerContext {
   session: SelectionSessionStore;
   warehouses: WarehouseService;
+  bus: EventBus;
   /** 解析已加载仓库（resize 用） */
   resolveWarehouse: (id: string) => Warehouse | undefined;
+}
+
+/** 触发仓库边界光幕（视觉反馈） */
+function glow(ctx: CornerContext, warehouseId: string): void {
+  ctx.bus.visualEffect.trigger({ type: "visual-effect", kind: "boundary-glow", warehouseId });
 }
 
 /**
@@ -52,11 +59,13 @@ export function handleCornerClick(
   if (session.kind === "createWarehouse") {
     const result = ctx.warehouses.createWarehouse(session.name, playerId, area);
     if (!result.ok) return `§c${result.error}`;
+    glow(ctx, result.warehouse.id);
     return `§a仓库 "${result.warehouse.displayName}" 创建成功！区域内容器自动注册`;
   }
   // resize
   const wh = ctx.resolveWarehouse(session.warehouseId);
   if (wh === undefined) return "§c仓库不存在或未加载";
   ctx.warehouses.updateArea(wh, area);
+  glow(ctx, wh.id);
   return `§a仓库 "${wh.displayName}" 区域已调整`;
 }

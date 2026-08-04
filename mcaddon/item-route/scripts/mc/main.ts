@@ -34,6 +34,8 @@ import { registerToolInteraction } from "./interaction/ToolInteractionController
 import { registerAllCommands, type CommandDeps } from "./commands/index";
 import { registerSortEffects } from "./effects/SortEffects";
 import { registerBoundaryDisplay } from "./effects/BoundaryDisplay";
+import { registerWarningRelay } from "./effects/WarningRelay";
+import { MoveJournal } from "../core/routing/Move";
 
 // Phase 1: 无状态基础设施
 const dp = new DynamicPropertyStore();
@@ -53,15 +55,34 @@ const router = new Router(
 );
 const warehouseStore = new McWarehouseStore(shards);
 const indexStore = new McIndexStore(shards);
-const warehouses = new WarehouseService(warehouseStore, bus);
 const members = new MemberService();
 const config = McModConfig.load(shards);
+// 建仓限制：来自模组配置（v1 口径：体积 32×32×16、每玩家 1 仓）
+const warehouses = new WarehouseService(warehouseStore, bus, {
+  maxEdgeLength: 64,
+  minSpacing: 4,
+  maxVolume: config.maxWarehouseVolume,
+  maxWarehousesPerPlayer: config.maxWarehousesPerPlayer,
+});
 const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));
-const scheduler = new Scheduler(router, intervals, proximity, bus, config.globalSpeedLimit);
-const stats = new StatsService(new McStatsStore(shards), bus);
 const organizer = new Organizer(new DefaultCandidateSorter());
 const organize = new OrganizeService(organizer, index, bus);
+const scheduler = new Scheduler(
+  router,
+  intervals,
+  proximity,
+  bus,
+  config.globalSpeedLimit,
+  undefined,
+  // 自动整理（v1 onDeposit）：目标容器混乱度超阈值即整理该仓
+  (wh, target) => {
+    if (organizer.shouldAutoSort(target, wh.settings.autoSortThreshold)) {
+      organize.organize(wh, new MoveJournal());
+    }
+  }
+);
+const stats = new StatsService(new McStatsStore(shards), bus);
 const route = new RouteService(scheduler);
 route.setGlobalEnabled(config.globalEnabled);
 
@@ -94,6 +115,7 @@ bridge.start();
 // 交互层：选区会话 + 命令 deps + 视觉订阅 + 信物交互
 const sessionStore = new SelectionSessionStore();
 const commandDeps: CommandDeps = {
+  bus,
   members,
   warehouses,
   stats,
@@ -127,6 +149,7 @@ registerBoundaryDisplay(bus, (whId) => {
   const w = loaded.find((x) => x.id === whId);
   return w === undefined ? undefined : { dimensionId: w.area.dimension, area: w.area };
 });
+registerWarningRelay(bus, () => loaded);
 
 // Phase 3 续：startup 事件注册 9 命令
 system.beforeEvents.startup.subscribe((event) => {

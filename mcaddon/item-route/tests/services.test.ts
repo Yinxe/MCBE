@@ -41,7 +41,7 @@ test("MemberService: 权限矩阵", () => {
 });
 
 // ── Task 21: WarehouseService ─────────────────────────────
-import { WarehouseService } from "../scripts/core/services/WarehouseService";
+import { WarehouseService, areaSize, areaTooClose, areaExceedsLimits, DEFAULT_WAREHOUSE_LIMITS } from "../scripts/core/services/WarehouseService";
 import { InMemoryWarehouseStore } from "../scripts/core/storage/Stores";
 import { EventBus } from "../scripts/core/events/DomainEvents";
 import type { WarehouseArea } from "../scripts/core/model/Warehouse";
@@ -200,4 +200,48 @@ test("OrganizeService: organize 合并后索引更新", () => {
   // 索引已更新：misc 不再命中 stone
   const lookup = index.lookup("minecraft:stone");
   assert.deepEqual(lookup.multi, ["m1"]);
+});
+// ── 建仓限制（v1 沉淀：边界/间距/体积/每玩家数量） ─────────
+test("areaSize: 归一化尺寸与体积", () => {
+  const area: WarehouseArea = { dimension: "overworld", corner1: { x: 10, y: 10, z: 10 }, corner2: { x: 0, y: 0, z: 0 } };
+  const size = areaSize(area);
+  assert.deepEqual(size, { x: 11, y: 11, z: 11, volume: 1331 });
+});
+
+test("areaExceedsLimits: 单轴边长超限 / 体积超限", () => {
+  const small: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
+  assert.equal(areaExceedsLimits(small, DEFAULT_WAREHOUSE_LIMITS), undefined);
+  const long: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 100, y: 5, z: 5 } };
+  assert.match(areaExceedsLimits(long, DEFAULT_WAREHOUSE_LIMITS) ?? "", /边长/);
+});
+
+test("areaTooClose: 间距不足判定", () => {
+  const a: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
+  const close: WarehouseArea = { dimension: "overworld", corner1: { x: 12, y: 0, z: 0 }, corner2: { x: 15, y: 10, z: 10 } };
+  const far: WarehouseArea = { dimension: "overworld", corner1: { x: 30, y: 0, z: 0 }, corner2: { x: 40, y: 10, z: 10 } };
+  assert.equal(areaTooClose(a, close, 4), true);
+  assert.equal(areaTooClose(a, far, 4), false);
+  assert.equal(areaTooClose(a, close, 0), false); // 零间距即仅重叠判定
+});
+
+test("createWarehouse: 超大区域被拒 / 过于接近被拒", () => {
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
+  const ok = svc.createWarehouse("仓A", "p1", { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } });
+  assert.equal(ok.ok, true);
+  const huge = svc.createWarehouse("仓B", "p1", { dimension: "overworld", corner1: { x: 100, y: 0, z: 0 }, corner2: { x: 200, y: 10, z: 10 } });
+  assert.equal(huge.ok, false);
+  assert.match((huge as { error: string }).error, /边长|体积/);
+  const close = svc.createWarehouse("仓C", "p1", { dimension: "overworld", corner1: { x: 13, y: 0, z: 0 }, corner2: { x: 18, y: 10, z: 10 } });
+  assert.equal(close.ok, false);
+  assert.match((close as { error: string }).error, /间距|接近/);
+});
+
+test("createWarehouse: 每玩家数量上限", () => {
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus(), { ...DEFAULT_WAREHOUSE_LIMITS, maxWarehousesPerPlayer: 2 });
+  svc.createWarehouse("仓1", "p1", { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } });
+  svc.createWarehouse("仓2", "p2", { dimension: "overworld", corner1: { x: 50, y: 0, z: 0 }, corner2: { x: 60, y: 10, z: 10 } }); // 不同玩家不受限
+  svc.createWarehouse("仓3", "p1", { dimension: "overworld", corner1: { x: 100, y: 0, z: 0 }, corner2: { x: 110, y: 10, z: 10 } }); // p1 第 2 个（达上限）
+  const fourth = svc.createWarehouse("仓4", "p1", { dimension: "overworld", corner1: { x: 150, y: 0, z: 0 }, corner2: { x: 160, y: 10, z: 10 } });
+  assert.equal(fourth.ok, false);
+  assert.match((fourth as { error: string }).error, /最多/);
 });

@@ -9,8 +9,10 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import type { McModConfig } from "../storage/McModConfig";
 import type { McContainerFactory } from "../adapters/McContainerFactory";
 import type { SelectionSessionStore } from "../interaction/SelectionSessionStore";
+import type { EventBus } from "../../core/events/DomainEvents";
 
 export interface CommandDeps {
+  bus: EventBus;
   members: MemberService;
   warehouses: WarehouseService;
   stats: StatsService;

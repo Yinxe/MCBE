@@ -7,11 +7,16 @@ import type { MemberRole } from "../../core/model/Warehouse";
 
 const ROLE_OPTIONS = ["owner", "member", "visitor"];
 
+/** 玩家 ID 短显示（UUID 尾 8 位，v1 口径，聊天友好） */
+function shortId(playerId: string): string {
+  return playerId.length > 10 ? playerId.slice(-8) : playerId;
+}
+
 export async function showMemberMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   const form = new ActionFormBuilder()
     .title(`§6成员管理 · ${warehouse.displayName}`)
     .body(
-      `§7成员：\n${warehouse.members.map((m) => `§f${m.playerId} §7(${ROLE_OPTIONS[m.role === "owner" ? 0 : m.role === "member" ? 1 : 2]})`).join("\n")}`
+      `§7成员：\n${warehouse.members.map((m) => `§f${shortId(m.playerId)} §7(${ROLE_OPTIONS[m.role === "owner" ? 0 : m.role === "member" ? 1 : 2]})`).join("\n")}`
     )
     .button("§a添加成员", () => void addMemberForm(player, deps, warehouse))
     .button("§b调整角色", () => void changeRoleForm(player, deps, warehouse))

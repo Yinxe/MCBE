@@ -2,7 +2,7 @@
 import type { ShardStore } from "./ShardStore";
 
 const CONFIG_KEY = "ir2:modcfg";
-const GUIDE_SEEN_KEY = "ir2:guide_seen";
+const GUIDE_SEEN_KEY = "ir2:guide_seen:"; // 每玩家独立（v1 按玩家标记）
 const SPEED_MIN = 1;
 const SPEED_MAX = 40; // 与 core Scheduler clamp 一致
 
@@ -10,12 +10,18 @@ export interface ModConfigData {
   globalEnabled: boolean;
   globalSpeedLimit: number;
   tokenItemId: string;
+  /** 单仓最大体积（格，v1 默认 32×32×16） */
+  maxWarehouseVolume: number;
+  /** 每玩家最多仓库数（v1 默认 1） */
+  maxWarehousesPerPlayer: number;
 }
 
 export const DEFAULT_MOD_CONFIG: ModConfigData = {
   globalEnabled: true,
   globalSpeedLimit: 20,
   tokenItemId: "minecraft:wooden_hoe",
+  maxWarehouseVolume: 16_384,
+  maxWarehousesPerPlayer: 1,
 };
 
 /** 信物可选列表（ConfigUI 下拉） */
@@ -45,12 +51,16 @@ export class McModConfig {
       globalEnabled: data?.globalEnabled ?? DEFAULT_MOD_CONFIG.globalEnabled,
       globalSpeedLimit: McModConfig.clamp(data?.globalSpeedLimit ?? DEFAULT_MOD_CONFIG.globalSpeedLimit),
       tokenItemId: data?.tokenItemId ?? DEFAULT_MOD_CONFIG.tokenItemId,
+      maxWarehouseVolume: data?.maxWarehouseVolume ?? DEFAULT_MOD_CONFIG.maxWarehouseVolume,
+      maxWarehousesPerPlayer: data?.maxWarehousesPerPlayer ?? DEFAULT_MOD_CONFIG.maxWarehousesPerPlayer,
     });
   }
 
   get globalEnabled(): boolean { return this.data.globalEnabled; }
   get globalSpeedLimit(): number { return this.data.globalSpeedLimit; }
   get tokenItemId(): string { return this.data.tokenItemId; }
+  get maxWarehouseVolume(): number { return this.data.maxWarehouseVolume; }
+  get maxWarehousesPerPlayer(): number { return this.data.maxWarehousesPerPlayer; }
 
   setGlobalEnabled(enabled: boolean): void {
     this.data.globalEnabled = enabled;
@@ -73,13 +83,13 @@ export class McModConfig {
     return itemTypeId === this.data.tokenItemId;
   }
 
-  /** 新手引导是否已看过（独立 DP 键） */
-  hasSeenGuide(): boolean {
-    return this.shards.read<boolean>(GUIDE_SEEN_KEY) ?? false;
+  /** 新手引导是否已看过（按玩家独立 DP 键，v1 口径） */
+  hasSeenGuide(playerId: string): boolean {
+    return this.shards.read<boolean>(GUIDE_SEEN_KEY + playerId) ?? false;
   }
 
-  markSeenGuide(): void {
-    this.shards.write(GUIDE_SEEN_KEY, true, "overwrite");
+  markSeenGuide(playerId: string): void {
+    this.shards.write(GUIDE_SEEN_KEY + playerId, true, "overwrite");
   }
 
   private static clamp(speed: number): number {

@@ -34,6 +34,16 @@ export class McEventBridge {
   start(): void {
     const { bus, index, stats, scheduler, indexStore, factory } = this.deps;
 
+    // 路由移动物品 → 标记索引脏 + 统计失效（写穿透闭环，v1 索引批量落盘）
+    bus.itemRouted.subscribe((e) => {
+      try {
+        indexStore.markDirty(e.warehouseId, index.serialize());
+        stats.invalidate(e.to);
+      } catch (err) {
+        console.warn(`[ItemRoute] 路由副作用失败: ${err}`);
+      }
+    });
+
     // 代理信号：玩家交互带容器方块 → 三层兜底第二层（verifyCandidate 惰性校验）
     world.afterEvents.playerInteractWithBlock.subscribe((e) => {
       try {

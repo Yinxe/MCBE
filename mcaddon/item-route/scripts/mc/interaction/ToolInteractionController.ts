@@ -23,6 +23,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
   const cornerCtx = {
     session: deps.session,
     warehouses: deps.warehouses,
+    bus: deps.bus,
     resolveWarehouse: (id: string) => deps.loadedWarehouses().find((w) => w.id === id),
   };
 
