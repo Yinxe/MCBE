@@ -35,3 +35,6 @@ tmp/
 temp/
 apk
 item-matrix
+
+# Deepwork state
+.slim/deepwork/
