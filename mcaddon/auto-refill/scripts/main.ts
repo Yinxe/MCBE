@@ -2,6 +2,14 @@
 // 当主手物品被消耗/破碎时，自动从背包中查找同类物品替换。
 // 保留成就，无需开启作弊。
 //
+// 核心思路：交换 + 堆叠
+//   1. 交换：主手即快捷栏选中槽（player.selectedSlotIndex），
+//      用官方 Container.swapItems 一步交换主手与背包同类槽位，
+//      原子操作，无复制/丢失风险
+//   2. 堆叠：交换后原主手残留物（如喝药后的空瓶）留在槽位，
+//      用官方 Container.transferItem 转移回背包，优先堆叠到
+//      已有同类堆，其次填入空槽
+//
 // 监听事件：
 //   itemCompleteUse            — 使用完毕（食物/药水/弓/弩/三叉戟蓄力满）
 //   itemReleaseUse             — 提前松开蓄力物品
@@ -16,42 +24,59 @@ import {
   world,
   EntityComponentTypes,
   EntityInventoryComponent,
-  EntityEquippableComponent,
-  EquipmentSlot,
   GameMode,
-  type Container,
-  type ItemStack,
   type Player,
 } from "@minecraft/server";
 
 // ─── 通用替换逻辑（交换 + 堆叠）────────────────────────
 
 /**
- * 将物品塞回背包：优先堆叠到已有同类堆，其次填入首个空槽。
- * addItem 失败（异常）时原样返回物品，由调用方决定放置位置。
+ * 交换主手与背包指定槽位的物品。
+ * 主手即快捷栏选中槽（player.selectedSlotIndex），
+ * 使用官方 Container.swapItems 一步完成，原子操作无复制/丢失风险。
  *
- * @param container 目标容器
- * @param item      要回填的物品
- * @returns 未放下的剩余物品；undefined 表示全部放入
+ * @param player 目标玩家
+ * @param slot   背包槽位（必须非空）
+ * @returns 是否成功
  */
-function stashItem(container: Container, item: ItemStack): ItemStack | undefined {
+function swapMainhandWithSlot(player: Player, slot: number): boolean {
+  const inventory = player.getComponent(EntityComponentTypes.Inventory) as EntityInventoryComponent | undefined;
+  if (!inventory?.container) return false;
   try {
-    return container.addItem(item);
+    inventory.container.swapItems(player.selectedSlotIndex, slot, inventory.container);
+    return true;
   } catch (e) {
-    console.warn(`[AutoRefill] addItem failed: ${item.typeId} - ${e}`);
-    return item;
+    console.warn(`[AutoRefill] swap failed ${player.name}: slot ${slot} - ${e}`);
+    return false;
   }
 }
 
 /**
- * 主手物品耗尽后自动补充：交换 + 堆叠统一逻辑。
+ * 将槽位中的残留物堆叠回背包：优先堆叠到已有同类堆，其次填入空槽。
+ * 使用官方 Container.transferItem 原子转移，全部放入则槽位自动清空。
+ *
+ * @param player 目标玩家
+ * @param slot   残留物所在槽位
+ * @returns 是否全部放入（true = 槽位已清空）
+ */
+function stackRemainder(player: Player, slot: number): boolean {
+  const inventory = player.getComponent(EntityComponentTypes.Inventory) as EntityInventoryComponent | undefined;
+  if (!inventory?.container) return false;
+  try {
+    return inventory.container.transferItem(slot, inventory.container) === undefined;
+  } catch (e) {
+    console.warn(`[AutoRefill] stack failed ${player.name}: slot ${slot} - ${e}`);
+    return false;
+  }
+}
+
+/**
+ * 主手物品耗尽后自动补充：交换 + 堆叠。
  *
  * 1. 主手仍有同类物品（未耗尽）→ 不需要替换
- * 2. 从背包查找同类物品，与主手交换位置
- * 3. 交换后残留物（如喝药后的空瓶）交给 Container.addItem：
- *    优先堆叠到已有同类堆，其次填入首个空槽；背包满则剩余留在槽位
- * 4. 背包无同类物品（最后一件已用完）→ 不替换，但主手残留物
- *    （如空桶/空瓶）仍回填背包堆叠，避免副产物滞留主手
+ * 2. 从背包查找同类物品 → 交换主手与槽位
+ * 3. 交换后残留物（如喝药后的空瓶）堆叠回背包
+ * 4. 背包无同类物品（最后一件已用完）→ 主手残留物堆叠回背包
  *
  * 覆盖场景：食物/药水（空瓶回填）/弓弩蓄力/工具破碎/交互消耗等，
  * 无需按物品类型特判。
@@ -62,45 +87,26 @@ function stashItem(container: Container, item: ItemStack): ItemStack | undefined
  */
 function refillMainhand(player: Player, typeId: string): boolean {
   const inventory = player.getComponent(EntityComponentTypes.Inventory) as EntityInventoryComponent | undefined;
-  const equippable = player.getComponent(EntityComponentTypes.Equippable) as EntityEquippableComponent | undefined;
-  if (!inventory?.container || !equippable) return false;
+  if (!inventory?.container) return false;
+  const container = inventory.container;
+  const hotbarSlot = player.selectedSlotIndex;
 
   // 主手残留物（可能为空：物品耗尽；也可能非空：如喝药后的空瓶）
-  const mainhand = equippable.getEquipment(EquipmentSlot.Mainhand);
+  const mainhand = container.getItem(hotbarSlot);
   // 主手仍是同类物品（未耗尽）→ 不需要替换
   if (mainhand && mainhand.typeId === typeId) return false;
 
-  for (let slot = 0; slot < inventory.container.size; slot++) {
-    const item = inventory.container.getItem(slot);
+  for (let slot = 0; slot < container.size; slot++) {
+    const item = container.getItem(slot);
     if (!item) continue;
     if (item.typeId !== typeId) continue;
 
-    // 1. 主手 ← 背包同类副本；失败则主手/背包都未变，安全退出
-    try {
-      equippable.setEquipment(EquipmentSlot.Mainhand, item);
-    } catch (e) {
-      console.warn(`[AutoRefill] setEquipment failed ${player.name}: ${typeId} - ${e}`);
-      return false;
-    }
+    // 1. 交换：主手（hotbar 选中槽）↔ 背包槽位
+    if (!swapMainhandWithSlot(player, slot)) return false;
 
-    // 2. 清理/覆盖原槽位（主手已有副本，必须清空原槽位否则复制物品）
-    try {
-      if (mainhand) {
-        // 残留物回填：addItem 内部会堆叠/找空槽；失败则原样放回该槽位
-        const remaining = stashItem(inventory.container, mainhand);
-        inventory.container.setItem(slot, remaining ?? undefined);
-      } else {
-        inventory.container.setItem(slot, undefined);
-      }
-    } catch (e) {
-      // 原槽位清理失败 → 主手副本 + 槽位原物并存（复制）；重试一次，仍失败则记录
-      console.warn(`[AutoRefill] clear slot ${slot} failed ${player.name}: ${typeId} - ${e}`);
-      try {
-        inventory.container.setItem(slot, undefined);
-      } catch {
-        console.warn(`[AutoRefill] retry clear slot ${slot} failed ${player.name}: ${typeId} - 物品可能复制`);
-      }
-      return false;
+    // 2. 堆叠：交换后残留物（如空瓶）已在槽位，回填背包
+    if (container.getItem(slot)) {
+      stackRemainder(player, slot);
     }
 
     player.playSound("random.pop");
@@ -108,25 +114,9 @@ function refillMainhand(player: Player, typeId: string): boolean {
     return true;
   }
 
-  // 3. 背包无同类物品（最后一件已用完）→ 不替换；
-  //    但主手残留物（如空桶/空瓶）仍回填背包堆叠，避免滞留主手
+  // 3. 背包无同类物品（最后一件已用完）→ 主手残留物堆叠回背包
   if (mainhand) {
-    const remaining = stashItem(inventory.container, mainhand);
-    if (remaining) {
-      // 背包已满，残留物放回主手
-      try {
-        equippable.setEquipment(EquipmentSlot.Mainhand, remaining);
-      } catch (e) {
-        console.warn(`[AutoRefill] restore mainhand failed ${player.name}: ${typeId} - ${e}`);
-      }
-    } else {
-      // 残留物全部回填成功 → 清空主手
-      try {
-        equippable.setEquipment(EquipmentSlot.Mainhand, undefined);
-      } catch (e) {
-        console.warn(`[AutoRefill] clear mainhand failed ${player.name}: ${typeId} - ${e}`);
-      }
-    }
+    stackRemainder(player, hotbarSlot);
   }
   return false;
 }
