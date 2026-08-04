@@ -19,11 +19,29 @@ import {
   EntityEquippableComponent,
   EquipmentSlot,
   GameMode,
-  type Player,
+  type Container,
   type ItemStack,
+  type Player,
 } from "@minecraft/server";
 
 // ─── 通用替换逻辑（交换 + 堆叠）────────────────────────
+
+/**
+ * 将物品塞回背包：优先堆叠到已有同类堆，其次填入首个空槽。
+ * addItem 失败（异常）时原样返回物品，由调用方决定放置位置。
+ *
+ * @param container 目标容器
+ * @param item      要回填的物品
+ * @returns 未放下的剩余物品；undefined 表示全部放入
+ */
+function stashItem(container: Container, item: ItemStack): ItemStack | undefined {
+  try {
+    return container.addItem(item);
+  } catch (e) {
+    console.warn(`[AutoRefill] addItem failed: ${item.typeId} - ${e}`);
+    return item;
+  }
+}
 
 /**
  * 主手物品耗尽后自动补充：交换 + 堆叠统一逻辑。
@@ -32,6 +50,8 @@ import {
  * 2. 从背包查找同类物品，与主手交换位置
  * 3. 交换后残留物（如喝药后的空瓶）交给 Container.addItem：
  *    优先堆叠到已有同类堆，其次填入首个空槽；背包满则剩余留在槽位
+ * 4. 背包无同类物品（最后一件已用完）→ 不替换，但主手残留物
+ *    （如空桶/空瓶）仍回填背包堆叠，避免副产物滞留主手
  *
  * 覆盖场景：食物/药水（空瓶回填）/弓弩蓄力/工具破碎/交互消耗等，
  * 无需按物品类型特判。
@@ -67,13 +87,7 @@ function refillMainhand(player: Player, typeId: string): boolean {
     try {
       if (mainhand) {
         // 残留物回填：addItem 内部会堆叠/找空槽；失败则原样放回该槽位
-        let remaining: ItemStack | undefined;
-        try {
-          remaining = inventory.container.addItem(mainhand);
-        } catch (e) {
-          console.warn(`[AutoRefill] addItem failed ${player.name}: ${typeId} - ${e}`);
-          remaining = mainhand;
-        }
+        const remaining = stashItem(inventory.container, mainhand);
         inventory.container.setItem(slot, remaining ?? undefined);
       } else {
         inventory.container.setItem(slot, undefined);
@@ -92,6 +106,27 @@ function refillMainhand(player: Player, typeId: string): boolean {
     player.playSound("random.pop");
     console.info(`[AutoRefill] 替换 ${player.name}: ${typeId} ← slot ${slot}`);
     return true;
+  }
+
+  // 3. 背包无同类物品（最后一件已用完）→ 不替换；
+  //    但主手残留物（如空桶/空瓶）仍回填背包堆叠，避免滞留主手
+  if (mainhand) {
+    const remaining = stashItem(inventory.container, mainhand);
+    if (remaining) {
+      // 背包已满，残留物放回主手
+      try {
+        equippable.setEquipment(EquipmentSlot.Mainhand, remaining);
+      } catch (e) {
+        console.warn(`[AutoRefill] restore mainhand failed ${player.name}: ${typeId} - ${e}`);
+      }
+    } else {
+      // 残留物全部回填成功 → 清空主手
+      try {
+        equippable.setEquipment(EquipmentSlot.Mainhand, undefined);
+      } catch (e) {
+        console.warn(`[AutoRefill] clear mainhand failed ${player.name}: ${typeId} - ${e}`);
+      }
+    }
   }
   return false;
 }
