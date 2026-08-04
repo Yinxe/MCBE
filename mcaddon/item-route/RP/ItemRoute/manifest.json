@@ -1,0 +1,27 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "物品路由 v0.1.0",
+    "description": "物品路由仓库 - 自动分拣、容器整理、仓库统计、容量预警 v0.1.0",
+    "uuid": "1bc7314d-ae1c-4b79-8015-de48a030b605",
+    "version": [0, 1, 0],
+    "min_engine_version": [1, 21, 90]
+  },
+  "modules": [
+    {
+      "description": "Add-on Pack Resources",
+      "type": "resources",
+      "uuid": "8b952bc1-c4c7-4b4d-acf8-e3378f85bf34",
+      "version": [0, 1, 0]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "746aab1e-dd00-4f24-bdbb-42bc411a3003",
+      "version": [0, 1, 0]
+    }
+  ],
+  "metadata": {
+    "product_type": "addon"
+  }
+}
