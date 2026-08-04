@@ -23,9 +23,4 @@ export class DynamicPropertyStore implements KeyValueStore {
   remove(key: string): void {
     world.setDynamicProperty(PREFIX + key, undefined);
   }
-
-  /** 当前 DP 总用量（1MB 预算判定） */
-  totalBytes(): number {
-    return world.getDynamicPropertyTotalByteCount();
-  }
 }

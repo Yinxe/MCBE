@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ShardStore, MAX_TOTAL_BYTES } from "../scripts/mc/storage/ShardStore";
+import { ShardStore } from "../scripts/mc/storage/ShardStore";
 import { McIndexStore } from "../scripts/mc/storage/McIndexStore";
 import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
 import type { IndexSnapshotData } from "../scripts/core/storage/Stores";
@@ -21,15 +21,6 @@ test("McIndexStore: markDirty + flush 批量落盘 + 读取", () => {
   assert.equal(store.hasDirty(), false);
   assert.equal(store.load("w1")?.byItem["minecraft:stone:1"]!.single[0], "s1");
   assert.equal(store.load("w2")?.byItem["minecraft:stone:2"]!.single[0], "s1");
-});
-
-test("McIndexStore: 1MB 超限 flush 保留脏标记（降级）", () => {
-  const store = new McIndexStore(new ShardStore(new InMemoryKeyValueStore(), () => MAX_TOTAL_BYTES));
-  store.markDirty("w1", snap(1));
-  const failed = store.flush();
-  assert.equal(failed, 1);
-  assert.equal(store.hasDirty(), true);
-  assert.equal(store.load("w1"), undefined);
 });
 
 test("McIndexStore: remove 清键 + 清脏", () => {

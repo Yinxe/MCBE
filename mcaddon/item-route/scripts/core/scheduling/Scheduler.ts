@@ -93,9 +93,14 @@ export class Scheduler {
       switch (rt.lifecycle) {
         case "inactive":
           if (nearby) {
-            rt.lifecycle = "activating";
-            rt.handle = this.createInterval(rt);
-            rt.lifecycle = "active";
+            // 创建 interval 失败 → 保持 inactive（下次 tick 重试），避免卡死
+            try {
+              rt.handle = this.createInterval(rt);
+              rt.lifecycle = "active";
+            } catch {
+              rt.handle = undefined;
+              rt.lifecycle = "inactive";
+            }
           }
           break;
         case "active":

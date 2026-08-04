@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MemoryIntervalScheduler } from "../scripts/core/scheduling/IntervalScheduler";
+import type { IntervalScheduler } from "../scripts/core/scheduling/IntervalScheduler";
 
 test("MemoryIntervalScheduler: 按 tick 间隔触发，stop 后停止", () => {
   const sched = new MemoryIntervalScheduler();
@@ -141,4 +142,35 @@ test("Scheduler: 全局开关暂停/恢复", () => {
   w.scheduler.setGlobalEnabled(true);
   w.scheduler.tick();
   assert.equal(w.scheduler.getIntervalTicks("w1") !== undefined, true);
+});
+test("Scheduler: 激活创建 interval 失败 → 保持 inactive 且可重试", () => {
+  const intervals = new MemoryIntervalScheduler();
+  let shouldThrow = true;
+  const throwingIntervals: IntervalScheduler = {
+    createInterval: (fn, t) => {
+      if (shouldThrow) { shouldThrow = false; throw new Error("激活失败"); }
+      return intervals.createInterval(fn, t);
+    },
+  };
+  const proximity = new StubProximity();
+  const index = new ItemIndex();
+  const bus = new EventBus();
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    index,
+    bus
+  );
+  const scheduler = new Scheduler(router, throwingIntervals, proximity, bus);
+  const warehouse = {
+    id: "w1", displayName: "w", ownerId: "p1", members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(), containers: new Map<string, InMemoryContainer>(),
+  };
+  scheduler.registerWarehouse(warehouse);
+  proximity.setNearby("w1", true);
+  scheduler.tick(); // 第一次激活抛错 → 保持 inactive（不卡死在半激活态）
+  assert.equal(scheduler.getLifecycle("w1"), "inactive");
+  scheduler.tick(); // 重试成功
+  assert.equal(scheduler.getLifecycle("w1"), "active");
 });

@@ -39,7 +39,7 @@ import { MoveJournal } from "../core/routing/Move";
 
 // Phase 1: 无状态基础设施
 const dp = new DynamicPropertyStore();
-const shards = new ShardStore(dp, () => dp.totalBytes());
+const shards = new ShardStore(dp);
 const item = new McItemAdapter();
 const factory = new McContainerFactory(item);
 const intervals = new McIntervalScheduler();

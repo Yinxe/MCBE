@@ -1,10 +1,8 @@
 // ─── 分片键值仓储：DP 单键 26KB 安全线 → 多分片 + hash 写后验 ──
 import type { KeyValueStore } from "../../core/storage/KeyValueStore";
 
-/** 单键信封安全线（UTF-16 长度，v1 24KB 同款口径留余量） */
+/** 单键信封安全线（UTF-16 长度：DP 仅单 key 有上限，总量随存档无限制） */
 export const SAFE_ENVELOPE_LENGTH = 26_000;
-/** DP 总配额 1MB 的保守预算（预留余量，判定用；可在构造时覆盖） */
-export const MAX_TOTAL_BYTES = 900_000;
 /** 信封 JSON 开销（{h,v} 结构 + 引号转义预留） */
 const ENVELOPE_OVERHEAD = 64;
 
@@ -29,10 +27,7 @@ const dataKey = (key: string, gen: number, i: number): string => `${key}:data:${
 export class ShardStore {
   constructor(
     private readonly kv: KeyValueStore,
-    private readonly totalBytes: () => number = () => 0,
-    private readonly safeLength: number = SAFE_ENVELOPE_LENGTH,
-    /** DP 总预算（1MB 降级判定线），可配置 */
-    private readonly maxTotalBytes: number = MAX_TOTAL_BYTES
+    private readonly safeLength: number = SAFE_ENVELOPE_LENGTH
   ) {}
 
   /**
@@ -44,10 +39,6 @@ export class ShardStore {
   write<T>(key: string, payload: T, mode: "overwrite" | "generation" = "overwrite"): boolean {
     const json = JSON.stringify(payload);
     const chunks = this.chunk(json);
-    if (this.totalBytes() + json.length > this.maxTotalBytes) {
-      console.warn(`[ItemRoute] DP 总量预算不足，拒绝写入 ${key}（+${json.length}B）`);
-      return false;
-    }
     const old = this.kv.read<Header>(hdrKey(key));
     const gen = mode === "generation" ? (old?.gen ?? 0) + 1 : 0;
     for (let i = 0; i < chunks.length; i++) {

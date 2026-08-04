@@ -112,12 +112,17 @@ export class McEventBridge {
       }
     });
 
-    // 主任务：5 tick 调度 + 100 tick 批量落盘
+    // 主任务：5 tick 调度 + 预警冷却递减 + 100 tick 批量落盘
     system.runInterval(() => {
       try {
         scheduler.tick();
       } catch (err) {
         console.warn(`[ItemRoute] 主任务异常: ${err}`);
+      }
+      try {
+        stats.tick(); // 预警冷却递减（否则冷却永不失效，预警只触发一次）
+      } catch (err) {
+        console.warn(`[ItemRoute] 统计冷却异常: ${err}`);
       }
     }, MAIN_TICK_INTERVAL);
     system.runInterval(() => {
