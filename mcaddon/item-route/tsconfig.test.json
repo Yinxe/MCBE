@@ -11,6 +11,14 @@
     "outDir": ".test-build",
     "rootDir": "."
   },
-  "include": ["scripts/core/**/*.ts", "scripts/mc/storage/**/*.ts", "tests/**/*.ts"],
+  "include": [
+    "scripts/core/**/*.ts",
+    "scripts/mc/storage/**/*.ts",
+    "scripts/mc/ui/**/*.ts",
+    "scripts/mc/interaction/**/*.ts",
+    "scripts/mc/commands/**/*.ts",
+    "scripts/mc/effects/**/*.ts",
+    "tests/**/*.ts"
+  ],
   "exclude": ["node_modules", ".test-build", "scripts/mc/storage/DynamicPropertyStore.ts"]
 }
