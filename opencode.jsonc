@@ -1,0 +1,7 @@
+{
+  "references": {
+    "mc-docs": {
+      "path": "./docs/mc-api",
+    },
+  },
+}
