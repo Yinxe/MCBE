@@ -77,3 +77,9 @@ test("ShardStore: remove 清理全部键", () => {
   assert.equal(store.read("a"), undefined);
   assert.equal(kv.keys().filter((k) => k.startsWith("a:")).length, 0);
 });
+test("ShardStore: 构造注入预算线（可配置总量）", () => {
+  const store = new ShardStore(new TestKV(), () => 0, SAFE_ENVELOPE_LENGTH, 1000);
+  assert.equal(store.write("a", { items: "x".repeat(2000) }, "overwrite"), false); // 超预算拒绝
+  assert.equal(store.write("a", { n: 1 }, "overwrite"), true); // 小数据可写
+  assert.deepEqual(store.read("a"), { n: 1 });
+});
