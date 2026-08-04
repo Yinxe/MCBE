@@ -1,6 +1,6 @@
 {
   "name": "auto-refill",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "自动替换主手消耗物品——保留成就",
   "private": true,
   "devDependencies": {
