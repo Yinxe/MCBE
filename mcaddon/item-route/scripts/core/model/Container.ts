@@ -5,6 +5,14 @@ import type { ContainerId, ItemId, Location } from "./types";
 /** 容器角色 */
 export type ContainerRole = "input" | "single" | "multi" | "misc";
 
+/** 容器角色中文标签（UI 下拉选项） */
+export const ROLE_LABELS: Record<ContainerRole, string> = {
+  input: "输入",
+  single: "单物",
+  multi: "多物",
+  misc: "杂项",
+};
+
 /** 概念级容器：不感知 MC，由适配层实现 */
 export interface Container {
   readonly id: ContainerId;

@@ -87,6 +87,12 @@ export class WarehouseService {
     this.persist(warehouse);
   }
 
+  /** 调整仓库区域（resize 命令）：改区域并持久化 */
+  updateArea(warehouse: Warehouse, area: WarehouseArea): void {
+    warehouse.area = { ...area };
+    this.persist(warehouse);
+  }
+
   persist(warehouse: Warehouse): void {
     this.store.save(this.toSnapshot(warehouse));
   }

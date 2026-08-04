@@ -1,0 +1,62 @@
+// ─── 选区流程纯逻辑：两点 → 区域 + 建仓/调整完成（可单测） ──
+import type { WarehouseArea } from "../../core/model/Warehouse";
+import type { Warehouse } from "../../core/model/Warehouse";
+import type { Location } from "../../core/model/types";
+import type { WarehouseService } from "../../core/services/WarehouseService";
+import type { SelectionSessionStore } from "./SelectionSessionStore";
+
+/** 两点归一化为区域（角点乱序自动纠正） */
+export function areaFromPoints(dimension: string, p1: Location, p2: Location): WarehouseArea {
+  return {
+    dimension,
+    corner1: {
+      x: Math.min(p1.x, p2.x),
+      y: Math.min(p1.y, p2.y),
+      z: Math.min(p1.z, p2.z),
+    },
+    corner2: {
+      x: Math.max(p1.x, p2.x),
+      y: Math.max(p1.y, p2.y),
+      z: Math.max(p1.z, p2.z),
+    },
+  };
+}
+
+/** 选区流程依赖 */
+export interface CornerContext {
+  session: SelectionSessionStore;
+  warehouses: WarehouseService;
+  /** 解析已加载仓库（resize 用） */
+  resolveWarehouse: (id: string) => Warehouse | undefined;
+}
+
+/**
+ * 处理信物点击对角：
+ * - 无已记角 → 记录 corner1，等待对角
+ * - 已有 corner1 → 建仓/调整区域完成，清会话，返回玩家提示
+ */
+export function handleCornerClick(
+  ctx: CornerContext,
+  playerId: string,
+  clicked: Location,
+  dimension: string
+): string {
+  const session = ctx.session.get(playerId);
+  if (session === undefined) return "";
+  if (session.corner1 === undefined) {
+    ctx.session.set(playerId, { ...session, corner1: clicked });
+    return "§a已记录第一个对角点，请手持信物右键对角方块完成选区";
+  }
+  const area = areaFromPoints(dimension, session.corner1, clicked);
+  ctx.session.clear(playerId);
+  if (session.kind === "createWarehouse") {
+    const result = ctx.warehouses.createWarehouse(session.name, playerId, area);
+    if (!result.ok) return `§c${result.error}`;
+    return `§a仓库 "${result.warehouse.displayName}" 创建成功！区域内容器自动注册`;
+  }
+  // resize
+  const wh = ctx.resolveWarehouse(session.warehouseId);
+  if (wh === undefined) return "§c仓库不存在或未加载";
+  ctx.warehouses.updateArea(wh, area);
+  return `§a仓库 "${wh.displayName}" 区域已调整`;
+}

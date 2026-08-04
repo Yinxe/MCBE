@@ -14,10 +14,11 @@
   "include": [
     "scripts/core/**/*.ts",
     "scripts/mc/storage/**/*.ts",
-    "scripts/mc/ui/**/*.ts",
-    "scripts/mc/interaction/**/*.ts",
-    "scripts/mc/commands/**/*.ts",
-    "scripts/mc/effects/**/*.ts",
+    "scripts/mc/ui/Table.ts",
+    "scripts/mc/interaction/SelectionSessionStore.ts",
+    "scripts/mc/interaction/interactionLogic.ts",
+    "scripts/mc/commands/auth.ts",
+    "scripts/mc/effects/SortEffects.ts",
     "tests/**/*.ts"
   ],
   "exclude": ["node_modules", ".test-build", "scripts/mc/storage/DynamicPropertyStore.ts"]

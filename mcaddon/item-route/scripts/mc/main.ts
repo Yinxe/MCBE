@@ -29,6 +29,11 @@ import { McContainerFactory } from "./adapters/McContainerFactory";
 import { McProximityChecker } from "./adapters/McProximityChecker";
 import { McIntervalScheduler } from "./adapters/McIntervalScheduler";
 import { McEventBridge } from "./adapters/McEventBridge";
+import { SelectionSessionStore } from "./interaction/SelectionSessionStore";
+import { registerToolInteraction } from "./interaction/ToolInteractionController";
+import { registerAllCommands, type CommandDeps } from "./commands/index";
+import { registerSortEffects } from "./effects/SortEffects";
+import { registerBoundaryDisplay } from "./effects/BoundaryDisplay";
 
 // Phase 1: 无状态基础设施
 const dp = new DynamicPropertyStore();
@@ -85,6 +90,48 @@ const bridge = new McEventBridge({
   onContainerUnregistered: persistContainers,
 });
 bridge.start();
+
+// 交互层：选区会话 + 命令 deps + 视觉订阅 + 信物交互
+const sessionStore = new SelectionSessionStore();
+const commandDeps: CommandDeps = {
+  members,
+  warehouses,
+  stats,
+  route,
+  organize,
+  index,
+  config,
+  session: sessionStore,
+  loadedWarehouses: () => loaded,
+  factory,
+  persistContainers,
+};
+registerToolInteraction(commandDeps);
+registerSortEffects(bus, {
+  dimensionOf: (whId) => {
+    const w = loaded.find((x) => x.id === whId);
+    return w === undefined ? undefined : world.getDimension(w.area.dimension);
+  },
+  containerCenter: (containerId) => {
+    for (const w of loaded) {
+      const c = w.containers.get(containerId);
+      if (c && c.occupiedLocations.length > 0) {
+        const l = c.occupiedLocations[0]!;
+        return { x: l.x + 0.5, y: l.y + 0.5, z: l.z + 0.5 };
+      }
+    }
+    return undefined;
+  },
+});
+registerBoundaryDisplay(bus, (whId) => {
+  const w = loaded.find((x) => x.id === whId);
+  return w === undefined ? undefined : { dimensionId: w.area.dimension, area: w.area };
+});
+
+// Phase 3 续：startup 事件注册 9 命令
+system.beforeEvents.startup.subscribe((event) => {
+  registerAllCommands(event.customCommandRegistry, commandDeps);
+});
 
 // Phase 4: 延迟启动（世界完全加载）
 system.run(() => {

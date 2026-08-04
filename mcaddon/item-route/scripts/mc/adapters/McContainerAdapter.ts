@@ -12,17 +12,21 @@ export class McContainerAdapter implements Container {
   enabled = true;
   priority = 10;
   readonly occupiedLocations: Location[];
+  /** 源方块类型 ID（漏斗强制 input 判定用） */
+  readonly blockType: string;
 
   constructor(
     id: ContainerId,
     role: ContainerRole,
     private readonly mc: McContainer,
     private readonly item: McItemAdapter,
-    occupiedLocations: Location[]
+    occupiedLocations: Location[],
+    blockType = ""
   ) {
     this.id = id;
     this.role = role;
     this.occupiedLocations = occupiedLocations;
+    this.blockType = blockType;
   }
 
   get capacity(): number { return this.mc.size; }

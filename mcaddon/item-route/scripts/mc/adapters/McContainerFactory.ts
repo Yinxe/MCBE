@@ -40,7 +40,7 @@ export class McContainerFactory {
 
       const finalRole: ContainerRole = isHopperType(typeId) ? "input" : role;
       const id = `c@${loc.x},${loc.y},${loc.z}`;
-      return new McContainerAdapter(id, finalRole, inv, this.item, occupied);
+      return new McContainerAdapter(id, finalRole, inv, this.item, occupied, typeId);
     } catch {
       return undefined;
     }
