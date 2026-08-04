@@ -21,13 +21,23 @@ import {
   GameMode,
   type Player,
   type ItemStack,
+  type Container,
 } from "@minecraft/server";
 
-// ─── 通用替换逻辑 ──────────────────────────────────────
+// ─── 通用替换逻辑（交换 + 堆叠）────────────────────────
 
 /**
- * 在主手为空时，从背包查找相同 typeId 的物品替换到主手。
- * 找到后播放 pop 音效。
+ * 主手物品耗尽后自动补充：交换 + 堆叠统一逻辑。
+ *
+ * 1. 主手仍有同类物品（未耗尽）→ 不需要替换
+ * 2. 从背包查找同类物品，与主手交换位置
+ * 3. 交换后残留物（如喝药后的空瓶）优先堆叠到背包其他未满同类堆，剩余留在槽位
+ *
+ * 覆盖场景：食物/药水（空瓶回填）/弓弩蓄力/工具破碎/交互消耗等，
+ * 无需按物品类型特判。
+ *
+ * @param player 目标玩家
+ * @param typeId 需要补充的物品类型
  * @returns 是否成功替换
  */
 function refillMainhand(player: Player, typeId: string): boolean {
@@ -35,65 +45,61 @@ function refillMainhand(player: Player, typeId: string): boolean {
   const equippable = player.getComponent(EntityComponentTypes.Equippable) as EntityEquippableComponent | undefined;
   if (!inventory?.container || !equippable) return false;
 
-  // 主手已有物品 → 不需要替换
-  if (equippable.getEquipment(EquipmentSlot.Mainhand) !== undefined) return false;
+  // 主手残留物（可能为空：物品耗尽；也可能非空：如喝药后的空瓶）
+  const mainhand = equippable.getEquipment(EquipmentSlot.Mainhand);
+  // 主手仍是同类物品（未耗尽）→ 不需要替换
+  if (mainhand && mainhand.typeId === typeId) return false;
 
   for (let slot = 0; slot < inventory.container.size; slot++) {
     const item = inventory.container.getItem(slot);
     if (!item) continue;
-    if (item.typeId === typeId) {
-      equippable.setEquipment(EquipmentSlot.Mainhand, item);
+    if (item.typeId !== typeId) continue;
+
+    // 交换：主手 ← 背包同类；残留物 → 背包槽位
+    equippable.setEquipment(EquipmentSlot.Mainhand, item);
+    if (mainhand) {
+      // 残留物优先堆叠到其他未满同类堆，剩余留在当前槽位
+      const remaining = stackIntoExisting(inventory.container, slot, mainhand);
+      inventory.container.setItem(slot, remaining ?? undefined);
+    } else {
       inventory.container.setItem(slot, undefined);
-      player.playSound("random.pop");
-      console.info(`[AutoRefill] 替换 ${player.name}: ${typeId} ← slot ${slot}`);
-      return true;
     }
+
+    player.playSound("random.pop");
+    console.info(`[AutoRefill] 替换 ${player.name}: ${typeId} ← slot ${slot}`);
+    return true;
   }
   return false;
 }
 
 /**
- * 药水特例：喝药后主手剩空瓶（glass_bottle），
- * 从背包找新药水换上；空瓶优先堆叠进背包已有同种瓶，
- * 堆叠满再找空位放，放不下则溢出掉落。
- * @returns 是否成功替换
+ * 把物品优先堆叠到背包中其他未堆叠满的同类型槽位。
+ * 仅堆叠、不占用空位；堆叠不完的剩余部分返回，全部堆走返回 undefined。
+ * @param container    背包容器
+ * @param excludeSlot  排除的槽位（残留物所在槽）
+ * @param item         待堆叠物品
+ * @returns 剩余物品（未堆完）或 undefined（全部堆走）
  */
-function refillPotion(player: Player, potionTypeId: string): boolean {
-  const inventory = player.getComponent(EntityComponentTypes.Inventory) as EntityInventoryComponent | undefined;
-  const equippable = player.getComponent(EntityComponentTypes.Equippable) as EntityEquippableComponent | undefined;
-  if (!inventory?.container || !equippable) return false;
+function stackIntoExisting(container: Container, excludeSlot: number, item: ItemStack): ItemStack | undefined {
+  if (item.maxAmount <= 1) return item; // 不可堆叠
+  let rest = item.amount;
+  for (let other = 0; other < container.size; other++) {
+    if (other === excludeSlot) continue;
+    const target = container.getItem(other);
+    if (!target) continue;
+    if (target.typeId !== item.typeId) continue;
+    if (target.amount >= target.maxAmount) continue;
 
-  // 主手必须是空瓶（玻璃瓶）
-  const mainhand = equippable.getEquipment(EquipmentSlot.Mainhand);
-  if (mainhand?.typeId !== "minecraft:glass_bottle") return false;
-
-  for (let slot = 0; slot < inventory.container.size; slot++) {
-    const item = inventory.container.getItem(slot);
-    if (!item) continue;
-    if (item.typeId === potionTypeId) {
-      equippable.setEquipment(EquipmentSlot.Mainhand, item);
-      // 扣除背包中的药水（getItem 返回副本，setEquipment 不会移除原槽位）
-      inventory.container.setItem(slot, undefined);
-
-      // 空瓶回填：优先堆叠，其次空位，最后溢出掉落
-      const remaining = inventory.container.addItem(mainhand);
-      if (remaining) {
-        // addItem 返回余量说明背包已满/堆叠满 → 溢出到玩家位置
-        try {
-          player.dimension.spawnItem(remaining, {
-            x: player.location.x,
-            y: player.location.y + 1,
-            z: player.location.z,
-          });
-        } catch { /* 溢出失败时忽略 */ }
-      }
-
-      player.playSound("random.pop");
-      console.info(`[AutoRefill] 药水替换 ${player.name}: ${potionTypeId}（空瓶回填）`);
-      return true;
-    }
+    const space = target.maxAmount - target.amount;
+    const move = Math.min(space, rest);
+    target.amount += move;
+    container.setItem(other, target);
+    rest -= move;
+    if (rest <= 0) return undefined;
   }
-  return false;
+  if (rest === item.amount) return item;
+  item.amount = rest;
+  return item;
 }
 
 // ─── 事件订阅 ──────────────────────────────────────────
@@ -140,12 +146,6 @@ function ifRefillEligible(player: Player | undefined, callback: (p: Player) => v
 world.afterEvents.itemCompleteUse.subscribe((event) => {
   ifRefillEligible(event.source, (player) => {
     if (!event.itemStack) return;
-    // 药水特例：喝药后主手变空瓶 → 替换新药水并回填空瓶
-    if (event.itemStack.typeId === "minecraft:potion") {
-      if (refillPotion(player, event.itemStack.typeId)) {
-        return;
-      }
-    }
     refillMainhand(player, event.itemStack.typeId);
   });
 });
