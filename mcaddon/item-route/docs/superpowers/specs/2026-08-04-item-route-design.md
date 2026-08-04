@@ -22,7 +22,8 @@
 mcaddon/item-route/
 ├── core/                        # 纯 TS，零 MC API（可单测）
 │   ├── model/       ItemId/ItemStack/Container/Warehouse/Member
-│   ├── routing/     RouteStrategy/CandidateSorter/Router
+│   ├── data/        name-maps 中文名映射（纯数据层，零 MC 依赖，供搜索/统计显示）
+│   ├── routing/     RouteStrategy/CandidateSorter/Router/Move/MoveJournal
 │   ├── index/       ItemIndex + 增量维护 + 持久化快照
 │   ├── scheduling/  Scheduler(5tick)/WarehouseLifecycle/Interval
 │   ├── organizing/  Organizer（混乱度/analyze/apply/回滚）
@@ -77,15 +78,19 @@ interface Container {
   role: ContainerRole;              // 可变更（角色可改）
   enabled: boolean;                 // 单容器开关
   readonly capacity: number;        // 总槽位数（动态读取，不写死）
+  readonly emptySlotsCount: number; // O(1) 属性（adapter 委托 MC 属性，零遍历）
+  readonly usedSlots: number;       // 同上，用于排序/统计
+  readonly occupiedLocations: Location[];  // 逻辑容器全部方块坐标（大箱子=primary+附属）
   getItem(slot: number): ItemStack | undefined;
   setItem(slot: number, item?: ItemStack): void;
-  addItem(stack: ItemStack): ItemStack | undefined;  // 返回剩余（未放入部分）
   // 单物绑定：由"首个非空 slot 物品"推导，可被玩家拿走/替换破坏
-  getDedicatedItemId(): ItemId | undefined;
+  getDedicatedItemId(): ItemId | undefined;  // 推导/重绑判定为 core 纯函数 deriveBinding(container)，adapter 不实现绑定逻辑
 }
 ```
 
-**容器类型支持**：箱子 / 木桶 / 潜影盒。**漏斗**只能作为输入容器（`input`），且默认禁用，需要玩家显式启用。
+**容器类型支持**：箱子 / 木桶 / 潜影盒 / **陷阱箱**（同箱子 size，双箱合并逻辑一致）。**漏斗**只能作为输入容器（`input`），且默认禁用，需要玩家显式启用。
+
+**双箱合并**：大箱子/陷阱箱注册时合并为单一逻辑容器，`capacity = 槽位总和`、`occupiedLocations` 含两半坐标（沿用 v1 occupiedLocations 方案）。
 
 ### 3.3 仓库与成员
 
@@ -155,13 +160,22 @@ interface RouteContext {
 2. `MultiItemStrategy`（多物）：候选 = 索引中该 typeId 的多物容器
 3. `MiscStrategy`（杂项）：兜底，候选 = 杂项容器
 
-**默认 CandidateSorter：** 满箱跳过 → priority 升序 → usageRatio 降序（越满越先）。
+**默认 CandidateSorter：** 满箱跳过 → priority 升序 → usageRatio 降序（越满越先）。排序数据来自 `Container.emptySlotsCount/usedSlots`（O(1) 属性），候选处理为 O(候选数)。
+
+### 4.1 移动事务（Move / MoveJournal）
+
+**核心原则：路由只移动/堆叠，绝不修改/吞物/复制物品。** 实现层面：
+
+- **移动原语 `Move`**：`transfer(from: SlotRef, to: Container): ItemStack | undefined`——语义 = 原子移动 + 返回剩余。mc 适配层委托 `Container.transferItem(fromSlot, toContainer)`（2.6.0 存在，源自动清除、单步移动，天然满足"只移动不复制"）；core 用概念容器实现（先移出源槽、目标 addItem、剩余放回源槽）。
+- **`MoveJournal`（概念层，进 core）**：单 tick 事务，`snapshotTargets/snapshotSource/rollback`，失败逆序恢复（沿用 v1 安全机制 #2）。
+- **流程硬约束：要么全成功要么全回滚；回滚失败 → 仓库强制停用**（沿用 v1 策略）。
+- 部分成功语义：`transfer` 返回剩余 → 剩余放回源 slot，记录日志；索引/统计只按实际移动量更新。
 
 **O(1) 路由流程（每输入 slot）：**
 1. 从输入容器取一个非空 slot 的 ItemStack
-2. `itemIndex.lookup(typeId)` → O(1) Map 查询得到候选容器列表
+2. `itemIndex.lookup(typeId)` → O(1) Map 查询得到候选容器列表（索引查询 O(1)，候选处理 O(候选数)）
 3. 按策略 priority 升序执行各策略；策略内用 CandidateSorter 排序
-4. 尝试 `target.addItem(stack)`（只堆叠/移动），成功则更新索引 + 统计 + 发事件
+4. 尝试 `Move.transfer(源槽 → 目标)`（只堆叠/移动），经 MoveJournal 保证原子性，成功则更新索引 + 统计 + 发事件
 5. 全部失败 → 物品留在输入容器，触发容量预警事件
 
 ## 5. 索引系统（core/index/）
@@ -180,7 +194,7 @@ interface ItemIndex {
 }
 
 interface IndexSnapshot {
-  version: number;
+  version: number;   // 迁移钩子：load 时按 version 升级，失败即重建快照
   // typeId → 各角色容器 ID 列表
   byItem: Record<ItemId, { single: ContainerId[]; multi: ContainerId[] }>;
   // 容器 → 其内物品类型集合（增量维护反查）
@@ -190,10 +204,16 @@ interface IndexSnapshot {
 }
 ```
 
+**重要事实：`@minecraft/server 2.6.0` 不存在容器内容变化事件**（已核对全部 60+ 世界事件）。玩家手动改箱无法被事件直接监听，索引漂移收敛采用**三层兜底**：
+
+1. **代理信号**：`playerInteractWithBlock`（玩家右键容器/信物交互）→ 派发 `container-changed`（点击是"可能改箱"的代理信号，v1 同款思路）
+2. **惰性校验（第一类机制，非可选项）**：路由命中候选时校验容器内容与索引一致（`containerHasType` / 首槽绑定），漂移则局部修复——清失效条目 / 重绑 / 全量回退（参照 v1 SortingIndexManager 三阶段，提纯为 core 纯函数）
+3. **单物空箱重绑**：玩家取走唯一物品 → 容器变空 → 索引移除候选；代理信号触发时校验空单物容器首槽，有物即重绑入索引（否则空箱永久退出路由）
+
 **"越用越快"机制：**
 - 索引持久化到 DP 分片，启动时加载，不依赖全量重建
-- 运行中事件驱动增量更新：分拣移动、容器放置/破坏、角色变更、整理、玩家手动改箱（经容器内容变化事件）
-- 惰性校验：路由命中候选时发现容器内容与索引漂移（如单物绑定被玩家破坏），局部修复该条目，不触发全量重建
+- 运行中事件驱动增量更新：分拣移动、容器放置/破坏、角色变更、整理（addon 自身动作全覆盖）+ 代理信号（玩家动作）
+- **批量落盘**：索引写采用脏标记，仓库 deactivate 时 / 每 N tick / 脏条目达阈值时落盘（避免每路由一写放大 DP IO）；崩溃丢失由惰性补算兜底
 - 崩溃恢复：从持久化快照恢复，缺失条目下次访问时自动补算
 
 **索引不含容量**：容器容量/仓库容量单独动态读取 + 持久化。
@@ -217,9 +237,10 @@ interface WarehouseRuntime {
 ```
 
 **调度规则：**
-- 全局 5 tick 主任务：检查各仓库邻近状态（玩家进入/离开事件驱动切换，非每 tick 轮询）
+- 全局 5 tick 主任务 = **低频邻近轮询**（MC 无玩家位置事件，必须轮询）：每 5 tick 做一次 XZ 距离判断（O(玩家×仓库)，廉价；按维度过滤），`playerSpawn/playerLeave/playerDimensionChange` 作为即时加速信号
 - 激活：玩家进入邻近范围 → `activating` → 创建该仓库独立 interval（间隔 = processingSpeed）
 - 停用：无玩家 → `deactivating` → 延迟后清除 interval → `inactive`
+- **删除仓库 = 强制停 interval + 移除 runtime + 清索引/统计 DP**（不留泄漏）
 - 每个 interval 每轮处理**一个输入容器的非空 slot**（槽位游标轮询）
 - 单仓速度可调（processingSpeed ∈ [4,8,16,20,30,40]）+ 全局速度限制（ModConfig.globalSpeedLimit，clamp 单仓速度）
 - 全局分拣总开关（暂停/恢复）
@@ -257,7 +278,11 @@ interface WarehouseStats {
 - 写穿透：分拣/整理后立即重算受影响容器统计并持久化（DP 分片）
 - 失效驱动：设置页"刷新统计" → 清缓存 + 删 DP → 下次访问全量重算
 - 崩溃恢复：从 DP 加载，缺失条目自动补算
-- 三级容量预警（黄/红/深红）基于统计触发，冷却 100 tick，事件驱动发送
+- **三级容量预警**（基于统计，冷却 100 tick，事件驱动发送）：
+  - 黄色：容器 usedSlots/totalSlots ≥ 90%
+  - 红色：某角色容器组全部满载（分拣降级提示）
+  - 深红：仓库全满（无法分拣）
+  - 阈值常量统一于 core/stats，单测锁定
 
 ## 8. 存储接口与 DP 分片实现（core/storage/ + mc/storage/）
 
@@ -289,10 +314,10 @@ interface StatsStore {
 
 **DP 分片实现（mc/storage/）：**
 - **单键满容量实测 32KB**，分片为必选方案
-- 每个分片键内容 ≤ **30KB 安全线**（留余量给 hash 校验字段）
-- 内容 hash 分片 + 世代号防陈旧数据（沿用 v1 方案）
-- 写后验：读回校验 hash，失败则重写
-- 单仓库数据超总量限制（1MB）的极端场景：按仓库拆分快照降级兜底
+- 每个分片键内容 ≤ **26-28KB 安全线**（留余量给 hash 校验字段）
+- **索引/统计分片用单键覆盖写 + 内容 hash 校验**（DP 单键写是原子的，无需世代号；写后验读回校验 hash，失败则重写）
+- **世代号仅用于仓库元数据/容器全量重写**场景（同 v1 方案），并定义孤儿键清理时机（写新世代时删除旧世代键）
+- 单仓库数据超 1MB 总量限制（DP 总配额）的极端场景：按仓库拆分快照降级兜底（判定：写入前估算总量，超限则降级为多片拆分，恢复条件明确）
 - 核心测试用 `InMemoryKeyValueStore`
 
 ## 9. 领域事件（core/events/）
@@ -330,14 +355,17 @@ class McItemAdapter {
 
 // 事件桥接：MC 世界事件 → 领域事件
 class McEventBridge {
-  // containerContentChange / blockPlace / blockBreak / blockExplode / playerInteract
-  // → 过滤本仓库容器 → 派发 container-changed → 索引增量维护
+  // playerInteractWithBlock（代理信号）/ playerPlaceBlock / playerBreakBlock
+  // / blockExplode / playerLeave
+  // → 过滤本仓库容器（过滤谓词提为 core 纯函数，可单测）→ 派发 container-changed → 索引增量维护
 }
 ```
 
 **适配层职责边界：**
 - 容器变更监听只在本仓库激活区间挂载（性能）
 - 区块安全访问：所有方块/容器访问 try-catch，适配层返回 undefined 而非抛错
+- `"是否属于本仓库容器"` 判定为 core 纯函数（零 MC 依赖，可单测）
+- 移动委托 `Container.transferItem`（原子移动），MoveJournal 快照/回滚在 core
 - core 完全不知道 MC 存在——单测零 mock 成本
 
 ## 11. 应用服务层（core/services/）
@@ -363,7 +391,7 @@ class MemberService {
 }
 ```
 
-**整理器（core/organizing/）**：保留 v1 思路——混乱度评分、analyze/apply 三段式、快照回滚，全部基于概念容器实现。
+**整理器（core/organizing/）**：保留 v1 思路——混乱度评分、analyze/apply 三段式、快照回滚，全部基于概念容器实现。另保留 v1 的**自动整理阈值触发**（`autoSortThreshold`：单容器混乱度超阈值时自动触发整理 / `onDeposit` 入仓即整理），阈值存储于仓库设置。
 
 ## 12. 交互层（mc/ui/ + mc/commands/ + mc/interaction/）
 
@@ -379,14 +407,16 @@ class MemberService {
 
 **核心单测清单：**
 1. 路由引擎：O(1) 流程正确性（单物→多物→杂项顺序、堆叠/移动、满箱跳过、不吞物不复制）
-2. 候选排序器：priority + usageRatio 排序、满箱过滤
-3. 单物绑定：首个非空 slot 推导、玩家破坏后索引自愈
-4. 索引：增量维护正确性（分拣/角色变更/移除）、序列化往返、崩溃恢复
-5. 调度：生命周期状态机（inactive↔active）、速度 clamp、全局开关
-6. 统计：三级预警阈值（90%）、冷却、失效刷新
-7. 整理器：混乱度评分、analyze/apply/回滚
-8. 存储：InMemoryKeyValueStore 上的分片写读、hash 校验、世代号
-9. 成员：权限矩阵
+2. 移动事务 MoveJournal：部分转移、目标满、源失效、回滚失败四类用例（M2 完成，非 M5）
+3. 候选排序器：priority + usageRatio 排序、满箱过滤
+4. 单物绑定：首个非空 slot 推导、玩家破坏后索引自愈、**空箱重绑**（代理信号触发）
+5. 索引：增量维护正确性（分拣/角色变更/移除）、序列化往返、崩溃恢复、**无事件时惰性收敛**、version 迁移
+6. 调度：生命周期状态机（inactive↔active）、速度 clamp、全局开关、**删除仓库无 interval/runtime 泄漏**
+7. 统计：三级预警阈值（黄 90%/红/深红）、冷却、失效刷新
+8. 整理器：混乱度评分、analyze/apply/回滚、自动阈值触发
+9. 存储：InMemoryKeyValueStore 上的分片写读、hash 校验写后验失败重写、世代号陈旧读、**超 30KB 分片降级路径**
+10. 成员：权限矩阵
+11. 桥接过滤谓词：`"是否属于本仓库容器"` 判定（core 纯函数）
 
 ## 14. v1 技术债规避（对照 v1 分析 §15）
 
@@ -399,6 +429,10 @@ class MemberService {
 | 内容 hash 分片无写后验 | 写后验读回校验 hash，失败重写 |
 | 调度全局单速度 | 单仓速度 + 全局 clamp |
 | 索引全量重建 | 事件驱动增量维护 + 崩溃恢复 |
+| MoveJournal/事务安全（v1 安全机制 #2，新设计曾遗漏） | 概念层 Move/MoveJournal 进 core，要么全成功要么全回滚 |
+| SafeProbe 双箱探测（v1 安全机制） | 提纯为 core 可测的"双箱判定 + 临时物写入/恢复"工具 |
+| 容器内容事件依赖（不存在的事件） | 代理信号 + 惰性校验 + 空箱重绑三层兜底 |
+| 索引快照无迁移机制 | version 迁移钩子，失败重建 |
 
 ## 15. 里程碑
 
