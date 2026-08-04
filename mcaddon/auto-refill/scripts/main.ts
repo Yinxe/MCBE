@@ -72,6 +72,8 @@ function refillPotion(player: Player, potionTypeId: string): boolean {
     if (!item) continue;
     if (item.typeId === potionTypeId) {
       equippable.setEquipment(EquipmentSlot.Mainhand, item);
+      // 扣除背包中的药水（getItem 返回副本，setEquipment 不会移除原槽位）
+      inventory.container.setItem(slot, undefined);
 
       // 空瓶回填：优先堆叠，其次空位，最后溢出掉落
       const remaining = inventory.container.addItem(mainhand);
