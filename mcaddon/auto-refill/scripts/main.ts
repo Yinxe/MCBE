@@ -21,7 +21,6 @@ import {
   GameMode,
   type Player,
   type ItemStack,
-  type Container,
 } from "@minecraft/server";
 
 // ─── 通用替换逻辑（交换 + 堆叠）────────────────────────
@@ -31,7 +30,8 @@ import {
  *
  * 1. 主手仍有同类物品（未耗尽）→ 不需要替换
  * 2. 从背包查找同类物品，与主手交换位置
- * 3. 交换后残留物（如喝药后的空瓶）优先堆叠到背包其他未满同类堆，剩余留在槽位
+ * 3. 交换后残留物（如喝药后的空瓶）交给 Container.addItem：
+ *    优先堆叠到已有同类堆，其次填入首个空槽；背包满则剩余留在槽位
  *
  * 覆盖场景：食物/药水（空瓶回填）/弓弩蓄力/工具破碎/交互消耗等，
  * 无需按物品类型特判。
@@ -58,8 +58,13 @@ function refillMainhand(player: Player, typeId: string): boolean {
     // 交换：主手 ← 背包同类；残留物 → 背包槽位
     equippable.setEquipment(EquipmentSlot.Mainhand, item);
     if (mainhand) {
-      // 残留物优先堆叠到其他未满同类堆，剩余留在当前槽位
-      const remaining = stackIntoExisting(inventory.container, slot, mainhand);
+      // 残留物交给 addItem：优先堆叠到已有同类堆，其次填入首个空槽；背包满则剩余留回该槽位
+      let remaining: ItemStack | undefined;
+      try {
+        remaining = inventory.container.addItem(mainhand);
+      } catch {
+        remaining = mainhand; // 添加失败 → 残留物留在交换槽位
+      }
       inventory.container.setItem(slot, remaining ?? undefined);
     } else {
       inventory.container.setItem(slot, undefined);
@@ -70,36 +75,6 @@ function refillMainhand(player: Player, typeId: string): boolean {
     return true;
   }
   return false;
-}
-
-/**
- * 把物品优先堆叠到背包中其他未堆叠满的同类型槽位。
- * 仅堆叠、不占用空位；堆叠不完的剩余部分返回，全部堆走返回 undefined。
- * @param container    背包容器
- * @param excludeSlot  排除的槽位（残留物所在槽）
- * @param item         待堆叠物品
- * @returns 剩余物品（未堆完）或 undefined（全部堆走）
- */
-function stackIntoExisting(container: Container, excludeSlot: number, item: ItemStack): ItemStack | undefined {
-  if (item.maxAmount <= 1) return item; // 不可堆叠
-  let rest = item.amount;
-  for (let other = 0; other < container.size; other++) {
-    if (other === excludeSlot) continue;
-    const target = container.getItem(other);
-    if (!target) continue;
-    if (target.typeId !== item.typeId) continue;
-    if (target.amount >= target.maxAmount) continue;
-
-    const space = target.maxAmount - target.amount;
-    const move = Math.min(space, rest);
-    target.amount += move;
-    container.setItem(other, target);
-    rest -= move;
-    if (rest <= 0) return undefined;
-  }
-  if (rest === item.amount) return item;
-  item.amount = rest;
-  return item;
 }
 
 // ─── 事件订阅 ──────────────────────────────────────────
