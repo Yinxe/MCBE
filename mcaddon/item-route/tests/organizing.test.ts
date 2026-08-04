@@ -108,3 +108,15 @@ test("Organizer: shouldAutoSort 阈值", () => {
   mixed.setItem(3, new SimpleItemStack("minecraft:iron", 1, 64));
   assert.equal(organizer.shouldAutoSort(mixed, 3), false); // chaos 3 不 > 阈值 3（需第 5 种类型才触发）
 });
+test("Organizer: apply 目标不可堆叠/已满 → 跳过而非失败", () => {
+  const organizer = new Organizer(new DefaultCandidateSorter());
+  const misc = new InMemoryContainer("x", "misc", 4);
+  misc.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const full = new InMemoryContainer("m1", "multi", 1);
+  full.setItem(0, new SimpleItemStack("minecraft:dirt", 64, 64)); // 占满且类型不符 → 无法放入
+  const wh = makeWarehouse([misc, full]);
+  const plan = { actions: [{ from: "x", fromSlot: 0, to: "m1" }], chaosBefore: 0, chaosAfter: 0 };
+  assert.equal(organizer.apply(wh, plan, new MoveJournal()), true); // 跳过不可移动动作
+  assert.equal(misc.getItem(0)?.amount, 10); // 源不变
+  assert.equal(full.getItem(0)?.itemId, "minecraft:dirt");
+});

@@ -98,7 +98,9 @@ export class Organizer {
   }
 
   /**
-   * 执行计划：逐 action 原子移动；任一失败整体回滚并返回 false。
+   * 执行计划：逐 action 原子移动；目标失效/写入异常 → 整体回滚并返回 false。
+   * "未移动"（目标满/同 typeId 但 NBT 不可堆叠，如不同名/特殊组件）→ 跳过该动作继续，
+   * 不视为失败——源与目标均未变，快照回滚对其是空操作。
    * 调用方在 apply 前创建空 journal。
    */
   apply(warehouse: Warehouse, plan: OrganizePlan, journal: MoveJournal): boolean {
@@ -114,8 +116,8 @@ export class Organizer {
       journal.snapshot(to);
       const remaining = transfer({ container: from, slot: action.fromSlot }, to);
       if (remaining !== undefined && remaining.amount === original) {
-        journal.rollback();
-        return false;
+        // 未移动：跳过（不可堆叠/目标满），源与目标均未被修改
+        continue;
       }
     }
     return true;
