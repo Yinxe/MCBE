@@ -117,3 +117,125 @@ function cand(id: string, priority: number, usage: number, full = false): Candid
     isFull: full,
   };
 }
+
+// ── Task 14: Router ─────────────────────────────────────
+import { Router } from "../scripts/core/routing/Router";
+import { EventBus } from "../scripts/core/events/DomainEvents";
+
+// 可编程索引 stub：lookup 返回固定结果，verifyCandidate 可编程
+function makeIndexStub() {
+  const state = {
+    byItem: new Map<string, { single: string[]; multi: string[] }>(),
+    moved: [] as string[],
+    verified: [] as string[],
+    verifyResult: true,
+  };
+  const stub = {
+    lookup: (typeId: string) => state.byItem.get(typeId) ?? { single: [], multi: [] },
+    verifyCandidate: (c: unknown) => {
+      state.verified.push((c as { id: string }).id);
+      return state.verifyResult;
+    },
+    onItemMoved: (from: string, to: string, itemId: string) => {
+      state.moved.push(`${from}->${to}:${itemId}`);
+    },
+    state,
+  };
+  return stub;
+}
+
+function makeWarehouse() {
+  const containers = new Map<string, InMemoryContainer>();
+  const wh = {
+    id: "w1",
+    displayName: "w",
+    ownerId: "p1",
+    members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: { sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 3 },
+    containers,
+  };
+  const add = (c: InMemoryContainer) => {
+    containers.set(c.id, c);
+    return c;
+  };
+  return { wh, add };
+}
+
+test("Router: 单物优先于多物（stone 进 single 容器）", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const single = add(new InMemoryContainer("s1", "single", 3));
+  single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  const multi = add(new InMemoryContainer("m1", "multi", 3));
+  const index = makeIndexStub();
+  index.state.byItem.set("minecraft:stone", { single: ["s1"], multi: ["m1"] });
+  const bus = new EventBus();
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    index,
+    bus
+  );
+  let routed: string | undefined;
+  bus.itemRouted.subscribe((e) => (routed = `${e.from}->${e.to}`));
+  const result = router.routeFrom(input, 0, wh);
+  assert.equal(result?.to, "s1");
+  assert.equal(routed, "in->s1");
+  assert.deepEqual(index.state.moved, ["in->s1:minecraft:stone"]);
+});
+
+test("Router: 优先级/使用率排序决定目标（priority 5 先于 10）", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:dirt", 10, 64));
+  const a = add(new InMemoryContainer("a", "multi", 3));
+  a.priority = 5;
+  const b = add(new InMemoryContainer("b", "multi", 3));
+  const index = makeIndexStub();
+  index.state.byItem.set("minecraft:dirt", { single: [], multi: ["a", "b"] });
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    index,
+    new EventBus()
+  );
+  const result = router.routeFrom(input, 0, wh);
+  assert.equal(result?.to, "a");
+});
+
+test("Router: 全部候选失败 → 物品留在源", () => {
+  const wh2 = makeWarehouse();
+  const input2 = wh2.add(new InMemoryContainer("in", "input", 3));
+  input2.setItem(0, new SimpleItemStack("minecraft:bedrock", 10, 64));
+  const index = makeIndexStub();
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    index,
+    new EventBus()
+  );
+  const result = router.routeFrom(input2, 0, wh2.wh);
+  assert.equal(result, undefined);
+  assert.equal(input2.getItem(0)?.amount, 10);
+});
+
+test("Router: verifyCandidate 漂移 → 候选被跳过", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  add(new InMemoryContainer("m1", "multi", 3));
+  const index = makeIndexStub();
+  index.state.byItem.set("minecraft:stone", { single: [], multi: ["m1"] });
+  index.state.verifyResult = false; // 漂移：容器实际为空
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    index,
+    new EventBus()
+  );
+  const result = router.routeFrom(input, 0, wh);
+  assert.equal(result, undefined);
+  assert.deepEqual(index.state.verified, ["m1"]);
+});
