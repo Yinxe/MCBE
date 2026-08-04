@@ -4,7 +4,7 @@
 
 **Goal:** 实现 item-route 的纯 TypeScript 核心引擎（零 `@minecraft/*` 依赖），全部逻辑可在 node 下直接单测。
 
-**Architecture:** 分层六边形。`core/` 定义概念模型（Item/Container/Warehouse）、路由引擎（策略 + 候选排序 + 原子移动事务）、O(1) 物品索引、双调度（全局 5 tick + 仓库 interval）、统计预警、整理器、应用服务与存储接口；所有外部能力（DP 持久化、MC 容器、邻近检测）通过接口注入。mc 适配层另行计划实现。
+**Architecture:** 分层六边形。`scripts/core/` 定义概念模型（Item/Container/Warehouse）、路由引擎（策略 + 候选排序 + 原子移动事务）、O(1) 物品索引、双调度（全局 5 tick + 仓库 interval）、统计预警、整理器、应用服务与存储接口；所有外部能力（DP 持久化、MC 容器、邻近检测）通过接口注入。mc 适配层另行计划实现。
 
 **Tech Stack:** TypeScript（strict）、node:test（node ≥ 18，本机 v24 已确认）、无任何运行时依赖。
 
@@ -19,7 +19,7 @@ mcaddon/item-route/
 ├── package.json              # 版本 + scripts（test:core 等）
 ├── tsconfig.json             # addon 编译配置（构建用，M 适配计划补全）
 ├── tsconfig.test.json        # 单测编译配置 → .test-build/
-├── core/
+├── scripts/core/
 │   ├── model/
 │   │   ├── types.ts          # ItemId/ContainerId/WarehouseId/PlayerId/Location
 │   │   ├── ItemStack.ts      # 概念物品堆接口 + SimpleItemStack
@@ -112,7 +112,7 @@ mcaddon/item-route/
     "outDir": ".test-build",
     "rootDir": "."
   },
-  "include": ["core/**/*.ts", "tests/**/*.ts"]
+  "include": ["scripts/core/**/*.ts", "tests/**/*.ts"]
 }
 ```
 
@@ -148,10 +148,10 @@ git commit -m "item-route: 项目脚手架 + node:test 测试运行器（core �
 
 ---
 
-### Task 2: core/model/types.ts
+### Task 2: scripts/core/model/types.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/model/types.ts`
+- Create: `mcaddon/item-route/scripts/core/model/types.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（本任务只加 Location 测试，后续任务追加）
 
 - [ ] **Step 1: 写失败测试**
@@ -160,7 +160,7 @@ git commit -m "item-route: 项目脚手架 + node:test 测试运行器（core �
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { locationKey } from "../core/model/types";
+import { locationKey } from "../scripts/core/model/types";
 
 test("locationKey: 生成稳定坐标键", () => {
   assert.equal(locationKey({ x: 1, y: 2, z: 3 }), "1,2,3");
@@ -175,7 +175,7 @@ Expected: FAIL（`locationKey` 不存在，模块加载错误）。
 
 - [ ] **Step 3: 最小实现**
 
-`core/model/types.ts`:
+`scripts/core/model/types.ts`:
 ```ts
 // ─── 核心 ID 类型与概念坐标 ──────────────────────────────
 export type ItemId = string;
@@ -204,22 +204,22 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/model/types.ts mcaddon/item-route/tests/model.test.ts
-git commit -m "item-route: core/model 基础类型（ID/坐标/locationKey）"
+git add mcaddon/item-route/scripts/core/model/types.ts mcaddon/item-route/tests/model.test.ts
+git commit -m "item-route: scripts/core/model 基础类型（ID/坐标/locationKey）"
 ```
 
 ---
 
-### Task 3: core/model/ItemStack.ts
+### Task 3: scripts/core/model/ItemStack.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/model/ItemStack.ts`
+- Create: `mcaddon/item-route/scripts/core/model/ItemStack.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加到 model.test.ts 末尾）**
 
 ```ts
-import { SimpleItemStack } from "../core/model/ItemStack";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
 test("SimpleItemStack: 基础属性与克隆", () => {
   const s = new SimpleItemStack("minecraft:stone", 64, 64);
@@ -254,7 +254,7 @@ Expected: FAIL（SimpleItemStack 不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`core/model/ItemStack.ts`:
+`scripts/core/model/ItemStack.ts`:
 ```ts
 // ─── 概念级物品堆 ────────────────────────────────────────
 import type { ItemId } from "./types";
@@ -305,23 +305,23 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/model/ItemStack.ts mcaddon/item-route/tests/model.test.ts
-git commit -m "item-route: core/model ItemStack 概念模型（可堆叠/相等/克隆）"
+git add mcaddon/item-route/scripts/core/model/ItemStack.ts mcaddon/item-route/tests/model.test.ts
+git commit -m "item-route: scripts/core/model ItemStack 概念模型（可堆叠/相等/克隆）"
 ```
 
 ---
 
-### Task 4: core/model/Container.ts
+### Task 4: scripts/core/model/Container.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/model/Container.ts`
+- Create: `mcaddon/item-route/scripts/core/model/Container.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（追加；实现由 Task 11 的 InMemoryContainer 提供）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
 test("InMemoryContainer: 基础读写与容量", () => {
   const c = new InMemoryContainer("c1", "multi", 3);
@@ -356,7 +356,7 @@ Expected: FAIL（InMemoryContainer 未实现 addItem 等）。
 
 - [ ] **Step 3: 实现接口与测试容器**
 
-`core/model/Container.ts`:
+`scripts/core/model/Container.ts`:
 ```ts
 // ─── 概念级容器 ──────────────────────────────────────────
 import type { ItemStack } from "./ItemStack";
@@ -390,9 +390,9 @@ export interface Container {
 `tests/helpers/InMemoryContainer.ts`（完整实现）:
 ```ts
 // 测试用概念容器实现（产品代码中由 mc 适配层提供真实实现）
-import type { Container, ContainerRole } from "../../core/model/Container";
-import type { ItemStack } from "../../core/model/ItemStack";
-import type { ContainerId, ItemId, Location } from "../../core/model/types";
+import type { Container, ContainerRole } from "../../scripts/core/model/Container";
+import type { ItemStack } from "../../scripts/core/model/ItemStack";
+import type { ContainerId, ItemId, Location } from "../../scripts/core/model/types";
 
 export class InMemoryContainer implements Container {
   readonly id: ContainerId;
@@ -468,22 +468,22 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/model/Container.ts mcaddon/item-route/tests/helpers/InMemoryContainer.ts mcaddon/item-route/tests/model.test.ts
-git commit -m "item-route: core/model Container 接口 + 测试容器实现（O(1) 容量属性/堆叠语义）"
+git add mcaddon/item-route/scripts/core/model/Container.ts mcaddon/item-route/tests/helpers/InMemoryContainer.ts mcaddon/item-route/tests/model.test.ts
+git commit -m "item-route: scripts/core/model Container 接口 + 测试容器实现（O(1) 容量属性/堆叠语义）"
 ```
 
 ---
 
-### Task 5: core/model/Warehouse.ts
+### Task 5: scripts/core/model/Warehouse.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/model/Warehouse.ts`
+- Create: `mcaddon/item-route/scripts/core/model/Warehouse.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（追加：仅验证默认值工厂函数）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { createDefaultSettings } from "../core/model/Warehouse";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 
 test("createDefaultSettings: 默认值", () => {
   const s = createDefaultSettings();
@@ -501,7 +501,7 @@ Expected: FAIL（createDefaultSettings 不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`core/model/Warehouse.ts`:
+`scripts/core/model/Warehouse.ts`:
 ```ts
 // ─── 概念级仓库与成员 ────────────────────────────────────
 import type { Container } from "./Container";
@@ -562,24 +562,24 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/model/Warehouse.ts mcaddon/item-route/tests/model.test.ts
-git commit -m "item-route: core/model Warehouse/成员/区域/设置模型"
+git add mcaddon/item-route/scripts/core/model/Warehouse.ts mcaddon/item-route/tests/model.test.ts
+git commit -m "item-route: scripts/core/model Warehouse/成员/区域/设置模型"
 ```
 
 ---
 
-### Task 6: core/model/DeriveBinding.ts
+### Task 6: scripts/core/model/DeriveBinding.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/model/DeriveBinding.ts`
+- Create: `mcaddon/item-route/scripts/core/model/DeriveBinding.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { deriveBinding } from "../core/model/DeriveBinding";
+import { deriveBinding } from "../scripts/core/model/DeriveBinding";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
 test("deriveBinding: 由首个非空 slot 推导", () => {
   const c = new InMemoryContainer("c1", "single", 3);
@@ -600,7 +600,7 @@ Expected: FAIL（deriveBinding 不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`core/model/DeriveBinding.ts`:
+`scripts/core/model/DeriveBinding.ts`:
 ```ts
 // ─── 单物绑定推导（core 纯函数，可单测） ──────────────────
 import type { Container } from "./Container";
@@ -624,16 +624,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/model/DeriveBinding.ts mcaddon/item-route/tests/model.test.ts
-git commit -m "item-route: core/model deriveBinding 单物绑定推导纯函数"
+git add mcaddon/item-route/scripts/core/model/DeriveBinding.ts mcaddon/item-route/tests/model.test.ts
+git commit -m "item-route: scripts/core/model deriveBinding 单物绑定推导纯函数"
 ```
 
 ---
 
-### Task 7: core/events/EventSignal.ts
+### Task 7: scripts/core/events/EventSignal.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/events/EventSignal.ts`
+- Create: `mcaddon/item-route/scripts/core/events/EventSignal.ts`
 - Test: `mcaddon/item-route/tests/events.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -642,7 +642,7 @@ git commit -m "item-route: core/model deriveBinding 单物绑定推导纯函数"
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EventSignal } from "../core/events/EventSignal";
+import { EventSignal } from "../scripts/core/events/EventSignal";
 
 test("EventSignal: 订阅/触发/取消订阅", () => {
   const sig = new EventSignal<{ n: number }>();
@@ -684,7 +684,7 @@ Expected: FAIL（模块加载错误）。
 
 - [ ] **Step 3: 最小实现（与 toolkit EventSignal 同语义，core 自包含）**
 
-`core/events/EventSignal.ts`:
+`scripts/core/events/EventSignal.ts`:
 ```ts
 // ─── 事件订阅触发机制（core 自实现，与 @yinxe/toolkit 同语义） ──
 // 保持 core 零依赖：mc 适配层可自由选择复用 toolkit 版本。
@@ -726,22 +726,22 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/events/EventSignal.ts mcaddon/item-route/tests/events.test.ts
-git commit -m "item-route: core/events EventSignal（零依赖自实现）"
+git add mcaddon/item-route/scripts/core/events/EventSignal.ts mcaddon/item-route/tests/events.test.ts
+git commit -m "item-route: scripts/core/events EventSignal（零依赖自实现）"
 ```
 
 ---
 
-### Task 8: core/events/DomainEvents.ts
+### Task 8: scripts/core/events/DomainEvents.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/events/DomainEvents.ts`
+- Create: `mcaddon/item-route/scripts/core/events/DomainEvents.ts`
 - Test: `mcaddon/item-route/tests/events.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { EventBus } from "../core/events/DomainEvents";
+import { EventBus } from "../scripts/core/events/DomainEvents";
 
 test("EventBus: 各领域事件独立派发", () => {
   const bus = new EventBus();
@@ -760,7 +760,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/events/DomainEvents.ts`:
+`scripts/core/events/DomainEvents.ts`:
 ```ts
 // ─── 领域事件类型与事件总线 ──────────────────────────────
 import { EventSignal } from "./EventSignal";
@@ -830,16 +830,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/events/DomainEvents.ts mcaddon/item-route/tests/events.test.ts
-git commit -m "item-route: core/events 领域事件类型 + EventBus"
+git add mcaddon/item-route/scripts/core/events/DomainEvents.ts mcaddon/item-route/tests/events.test.ts
+git commit -m "item-route: scripts/core/events 领域事件类型 + EventBus"
 ```
 
 ---
 
-### Task 9: core/storage/KeyValueStore.ts
+### Task 9: scripts/core/storage/KeyValueStore.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/storage/KeyValueStore.ts`
+- Create: `mcaddon/item-route/scripts/core/storage/KeyValueStore.ts`
 - Test: `mcaddon/item-route/tests/storage.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -848,7 +848,7 @@ git commit -m "item-route: core/events 领域事件类型 + EventBus"
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { InMemoryKeyValueStore } from "../core/storage/KeyValueStore";
+import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
 
 test("InMemoryKeyValueStore: 写读删", () => {
   const kv = new InMemoryKeyValueStore();
@@ -874,7 +874,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/storage/KeyValueStore.ts`:
+`scripts/core/storage/KeyValueStore.ts`:
 ```ts
 // ─── 键值仓储接口（core 只定义接口，DP 分片实现在 mc 层） ──
 export interface KeyValueStore {
@@ -909,23 +909,23 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/storage/KeyValueStore.ts mcaddon/item-route/tests/storage.test.ts
-git commit -m "item-route: core/storage KeyValueStore 接口 + 内存实现"
+git add mcaddon/item-route/scripts/core/storage/KeyValueStore.ts mcaddon/item-route/tests/storage.test.ts
+git commit -m "item-route: scripts/core/storage KeyValueStore 接口 + 内存实现"
 ```
 
 ---
 
-### Task 10: core/storage/Stores.ts
+### Task 10: scripts/core/storage/Stores.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/storage/Stores.ts`
+- Create: `mcaddon/item-route/scripts/core/storage/Stores.ts`
 - Test: `mcaddon/item-route/tests/storage.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { InMemoryWarehouseStore } from "../core/storage/Stores";
-import { createDefaultSettings } from "../core/model/Warehouse";
+import { InMemoryWarehouseStore } from "../scripts/core/storage/Stores";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 
 test("InMemoryWarehouseStore: 列表/加载/保存/删除", () => {
   const store = new InMemoryWarehouseStore();
@@ -953,7 +953,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/storage/Stores.ts`:
+`scripts/core/storage/Stores.ts`:
 ```ts
 // ─── 仓库/索引/统计仓储接口（core 定义，mc 层实现 DP 分片） ──
 import { InMemoryKeyValueStore, type KeyValueStore } from "./KeyValueStore";
@@ -1071,18 +1071,18 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/storage/Stores.ts mcaddon/item-route/tests/storage.test.ts
-git commit -m "item-route: core/storage 三仓储接口 + 内存实现（快照结构可序列化）"
+git add mcaddon/item-route/scripts/core/storage/Stores.ts mcaddon/item-route/tests/storage.test.ts
+git commit -m "item-route: scripts/core/storage 三仓储接口 + 内存实现（快照结构可序列化）"
 ```
 
 ---
 
 ---
 
-### Task 11: core/routing/RouteStrategy.ts
+### Task 11: scripts/core/routing/RouteStrategy.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/routing/RouteStrategy.ts`
+- Create: `mcaddon/item-route/scripts/core/routing/RouteStrategy.ts`
 - Test: `mcaddon/item-route/tests/routing.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -1091,10 +1091,10 @@ git commit -m "item-route: core/storage 三仓储接口 + 内存实现（快照�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
-import type { RouteContext } from "../core/routing/RouteStrategy";
+import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
+import type { RouteContext } from "../scripts/core/routing/RouteStrategy";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
 function makeCtx(containers: InMemoryContainer[], lookup: (typeId: string) => { single: string[]; multi: string[] }): RouteContext {
   const warehouse = {
@@ -1147,7 +1147,7 @@ Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`core/routing/RouteStrategy.ts`:
+`scripts/core/routing/RouteStrategy.ts`:
 ```ts
 // ─── 路由策略（可插拔，数字优先级越小越快） ────────────────
 import type { Container } from "../model/Container";
@@ -1254,23 +1254,23 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/routing/RouteStrategy.ts mcaddon/item-route/tests/routing.test.ts
-git commit -m "item-route: core/routing 路由策略抽象 + 单物/多物/杂项三策略"
+git add mcaddon/item-route/scripts/core/routing/RouteStrategy.ts mcaddon/item-route/tests/routing.test.ts
+git commit -m "item-route: scripts/core/routing 路由策略抽象 + 单物/多物/杂项三策略"
 ```
 
 ---
 
-### Task 12: core/routing/CandidateSorter.ts
+### Task 12: scripts/core/routing/CandidateSorter.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/routing/CandidateSorter.ts`
+- Create: `mcaddon/item-route/scripts/core/routing/CandidateSorter.ts`
 - Test: `mcaddon/item-route/tests/routing.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import type { CandidateContainer } from "../core/routing/RouteStrategy";
+import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
+import type { CandidateContainer } from "../scripts/core/routing/RouteStrategy";
 
 function cand(id: string, priority: number, usage: number, full = false): CandidateContainer {
   return {
@@ -1301,7 +1301,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/routing/CandidateSorter.ts`:
+`scripts/core/routing/CandidateSorter.ts`:
 ```ts
 // ─── 候选排序器（可插拔，默认实现） ──────────────────────
 import type { CandidateContainer } from "./RouteStrategy";
@@ -1331,24 +1331,24 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/routing/CandidateSorter.ts mcaddon/item-route/tests/routing.test.ts
-git commit -m "item-route: core/routing 候选排序器（满箱跳过/优先级/使用率）"
+git add mcaddon/item-route/scripts/core/routing/CandidateSorter.ts mcaddon/item-route/tests/routing.test.ts
+git commit -m "item-route: scripts/core/routing 候选排序器（满箱跳过/优先级/使用率）"
 ```
 
 ---
 
-### Task 13: core/routing/Move.ts（原子移动事务）
+### Task 13: scripts/core/routing/Move.ts（原子移动事务）
 
 **Files:**
-- Create: `mcaddon/item-route/core/routing/Move.ts`
+- Create: `mcaddon/item-route/scripts/core/routing/Move.ts`
 - Test: `mcaddon/item-route/tests/routing.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { transfer, MoveJournal } from "../core/routing/Move";
+import { transfer, MoveJournal } from "../scripts/core/routing/Move";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
 test("transfer: 全部移走（源清空，目标放入）", () => {
   const from = new InMemoryContainer("f", "input", 3);
@@ -1401,7 +1401,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/routing/Move.ts`:
+`scripts/core/routing/Move.ts`:
 ```ts
 // ─── 原子移动与事务日志（核心安全机制：不吞物/不复制/可回滚） ──
 import type { Container } from "../model/Container";
@@ -1470,26 +1470,26 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/routing/Move.ts mcaddon/item-route/tests/routing.test.ts
-git commit -m "item-route: core/routing 原子移动 transfer + MoveJournal 事务回滚"
+git add mcaddon/item-route/scripts/core/routing/Move.ts mcaddon/item-route/tests/routing.test.ts
+git commit -m "item-route: scripts/core/routing 原子移动 transfer + MoveJournal 事务回滚"
 ```
 
 ---
 
-### Task 14: core/routing/Router.ts
+### Task 14: scripts/core/routing/Router.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/routing/Router.ts`
+- Create: `mcaddon/item-route/scripts/core/routing/Router.ts`
 - Test: `mcaddon/item-route/tests/routing.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { Router } from "../core/routing/Router";
-import type { CandidateContainer } from "../core/routing/RouteStrategy";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
-import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import { EventBus } from "../core/events/DomainEvents";
+import { Router } from "../scripts/core/routing/Router";
+import type { CandidateContainer } from "../scripts/core/routing/RouteStrategy";
+import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
+import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
+import { EventBus } from "../scripts/core/events/DomainEvents";
 
 // 可编程索引 stub：lookup 返回固定结果，verifyCandidate 可编程
 function makeIndexStub() {
@@ -1622,7 +1622,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/routing/Router.ts`:
+`scripts/core/routing/Router.ts`:
 ```ts
 // ─── 路由编排：单槽路由，策略升序 + 候选排序 + 原子移动 ──
 import { transfer } from "./Move";
@@ -1706,16 +1706,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/routing/Router.ts mcaddon/item-route/tests/routing.test.ts
-git commit -m "item-route: core/routing Router 路由编排（策略升序/候选排序/原子移动/事件）"
+git add mcaddon/item-route/scripts/core/routing/Router.ts mcaddon/item-route/tests/routing.test.ts
+git commit -m "item-route: scripts/core/routing Router 路由编排（策略升序/候选排序/原子移动/事件）"
 ```
 
 ---
 
-### Task 15: core/index/ItemIndex.ts（O(1) 索引）
+### Task 15: scripts/core/index/ItemIndex.ts（O(1) 索引）
 
 **Files:**
-- Create: `mcaddon/item-route/core/index/ItemIndex.ts`
+- Create: `mcaddon/item-route/scripts/core/index/ItemIndex.ts`
 - Test: `mcaddon/item-route/tests/index.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -1724,9 +1724,9 @@ git commit -m "item-route: core/routing Router 路由编排（策略升序/候�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ItemIndex, INDEX_VERSION } from "../core/index/ItemIndex";
+import { ItemIndex, INDEX_VERSION } from "../scripts/core/index/ItemIndex";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
 function stoneMulti() {
   const c = new InMemoryContainer("m1", "multi", 3);
@@ -1827,7 +1827,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/index/ItemIndex.ts`:
+`scripts/core/index/ItemIndex.ts`:
 ```ts
 // ─── O(1) 物品索引：查询/增量维护/惰性校验/持久化快照 ──
 import type { Container } from "../model/Container";
@@ -2035,16 +2035,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/index/ItemIndex.ts mcaddon/item-route/tests/index.test.ts
-git commit -m "item-route: core/index ItemIndex O(1) 索引（增量维护/惰性校验/快照）"
+git add mcaddon/item-route/scripts/core/index/ItemIndex.ts mcaddon/item-route/tests/index.test.ts
+git commit -m "item-route: scripts/core/index ItemIndex O(1) 索引（增量维护/惰性校验/快照）"
 ```
 
 ---
 
-### Task 16: core/scheduling/IntervalScheduler.ts
+### Task 16: scripts/core/scheduling/IntervalScheduler.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/scheduling/IntervalScheduler.ts`
+- Create: `mcaddon/item-route/scripts/core/scheduling/IntervalScheduler.ts`
 - Test: `mcaddon/item-route/tests/scheduling.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -2053,7 +2053,7 @@ git commit -m "item-route: core/index ItemIndex O(1) 索引（增量维护/惰�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MemoryIntervalScheduler } from "../core/scheduling/IntervalScheduler";
+import { MemoryIntervalScheduler } from "../scripts/core/scheduling/IntervalScheduler";
 
 test("MemoryIntervalScheduler: 按 tick 间隔触发，stop 后停止", () => {
   const sched = new MemoryIntervalScheduler();
@@ -2087,7 +2087,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/scheduling/IntervalScheduler.ts`:
+`scripts/core/scheduling/IntervalScheduler.ts`:
 ```ts
 // ─── 间隔调度抽象（mc 层用 system.runInterval，测试用内存版） ──
 export interface IntervalHandle {
@@ -2140,30 +2140,30 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/scheduling/IntervalScheduler.ts mcaddon/item-route/tests/scheduling.test.ts
-git commit -m "item-route: core/scheduling 间隔调度抽象 + 内存实现"
+git add mcaddon/item-route/scripts/core/scheduling/IntervalScheduler.ts mcaddon/item-route/tests/scheduling.test.ts
+git commit -m "item-route: scripts/core/scheduling 间隔调度抽象 + 内存实现"
 ```
 
 ---
 
-### Task 17: core/scheduling/Scheduler.ts（生命周期状态机）
+### Task 17: scripts/core/scheduling/Scheduler.ts（生命周期状态机）
 
 **Files:**
-- Create: `mcaddon/item-route/core/scheduling/Scheduler.ts`
+- Create: `mcaddon/item-route/scripts/core/scheduling/Scheduler.ts`
 - Test: `mcaddon/item-route/tests/scheduling.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { Scheduler } from "../core/scheduling/Scheduler";
-import { Router } from "../core/routing/Router";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
-import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import { ItemIndex } from "../core/index/ItemIndex";
-import { EventBus } from "../core/events/DomainEvents";
+import { Scheduler } from "../scripts/core/scheduling/Scheduler";
+import { Router } from "../scripts/core/routing/Router";
+import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
+import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
+import { ItemIndex } from "../scripts/core/index/ItemIndex";
+import { EventBus } from "../scripts/core/events/DomainEvents";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
-import { createDefaultSettings } from "../core/model/Warehouse";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 
 class StubProximity {
   private nearby = new Set<string>();
@@ -2276,7 +2276,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/scheduling/Scheduler.ts`:
+`scripts/core/scheduling/Scheduler.ts`:
 ```ts
 // ─── 调度器：5 tick 全局主任务 + 仓库级独立 interval ──
 import type { Router } from "../routing/Router";
@@ -2439,16 +2439,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/scheduling/Scheduler.ts mcaddon/item-route/tests/scheduling.test.ts
-git commit -m "item-route: core/scheduling Scheduler 生命周期状态机 + 每轮单槽处理"
+git add mcaddon/item-route/scripts/core/scheduling/Scheduler.ts mcaddon/item-route/tests/scheduling.test.ts
+git commit -m "item-route: scripts/core/scheduling Scheduler 生命周期状态机 + 每轮单槽处理"
 ```
 
 ---
 
-### Task 18: core/stats/StatsService.ts
+### Task 18: scripts/core/stats/StatsService.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/stats/StatsService.ts`
+- Create: `mcaddon/item-route/scripts/core/stats/StatsService.ts`
 - Test: `mcaddon/item-route/tests/stats.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -2457,12 +2457,12 @@ git commit -m "item-route: core/scheduling Scheduler 生命周期状态机 + 每
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { StatsService } from "../core/stats/StatsService";
-import { InMemoryStatsStore } from "../core/storage/Stores";
-import { EventBus } from "../core/events/DomainEvents";
+import { StatsService } from "../scripts/core/stats/StatsService";
+import { InMemoryStatsStore } from "../scripts/core/storage/Stores";
+import { EventBus } from "../scripts/core/events/DomainEvents";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
-import { createDefaultSettings } from "../core/model/Warehouse";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 
 function makeWarehouse() {
   const containers = new Map<string, InMemoryContainer>();
@@ -2560,7 +2560,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/stats/StatsService.ts`:
+`scripts/core/stats/StatsService.ts`:
 ```ts
 // ─── 统计系统：容器/仓库统计 + 三级预警（冷却） ────────────
 import type { Container } from "../model/Container";
@@ -2743,18 +2743,18 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/stats/StatsService.ts mcaddon/item-route/tests/stats.test.ts
-git commit -m "item-route: core/stats 统计服务（容器/仓库统计 + 三级预警冷却）"
+git add mcaddon/item-route/scripts/core/stats/StatsService.ts mcaddon/item-route/tests/stats.test.ts
+git commit -m "item-route: scripts/core/stats 统计服务（容器/仓库统计 + 三级预警冷却）"
 ```
 
 ---
 
 ---
 
-### Task 19: core/organizing/Organizer.ts（概念化整理器）
+### Task 19: scripts/core/organizing/Organizer.ts（概念化整理器）
 
 **Files:**
-- Create: `mcaddon/item-route/core/organizing/Organizer.ts`
+- Create: `mcaddon/item-route/scripts/core/organizing/Organizer.ts`
 - Test: `mcaddon/item-route/tests/organizing.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -2763,12 +2763,12 @@ git commit -m "item-route: core/stats 统计服务（容器/仓库统计 + 三�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Organizer } from "../core/organizing/Organizer";
-import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import { MoveJournal, transfer } from "../core/routing/Move";
+import { Organizer } from "../scripts/core/organizing/Organizer";
+import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
+import { MoveJournal, transfer } from "../scripts/core/routing/Move";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
-import { createDefaultSettings } from "../core/model/Warehouse";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 
 function makeWarehouse(containers: InMemoryContainer[]) {
   return {
@@ -2882,7 +2882,7 @@ Expected: FAIL（模块不存在；`transfer` 导入未用会有 lint 提示但 
 
 - [ ] **Step 3: 最小实现**
 
-`core/organizing/Organizer.ts`:
+`scripts/core/organizing/Organizer.ts`:
 ```ts
 // ─── 概念化整理器：混乱度评分 + analyze/apply/回滚 + 自动阈值 ──
 import type { Container } from "../model/Container";
@@ -3020,16 +3020,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/organizing/Organizer.ts mcaddon/item-route/tests/organizing.test.ts
-git commit -m "item-route: core/organizing 概念化整理器（评分/分析/应用/回滚）"
+git add mcaddon/item-route/scripts/core/organizing/Organizer.ts mcaddon/item-route/tests/organizing.test.ts
+git commit -m "item-route: scripts/core/organizing 概念化整理器（评分/分析/应用/回滚）"
 ```
 
 ---
 
-### Task 20: core/services/MemberService.ts
+### Task 20: scripts/core/services/MemberService.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/services/MemberService.ts`
+- Create: `mcaddon/item-route/scripts/core/services/MemberService.ts`
 - Test: `mcaddon/item-route/tests/services.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -3038,9 +3038,9 @@ git commit -m "item-route: core/organizing 概念化整理器（评分/分析/�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MemberService } from "../core/services/MemberService";
-import type { Warehouse } from "../core/model/Warehouse";
-import { createDefaultSettings } from "../core/model/Warehouse";
+import { MemberService } from "../scripts/core/services/MemberService";
+import type { Warehouse } from "../scripts/core/model/Warehouse";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 
 function makeWarehouse(): Warehouse {
   return {
@@ -3086,7 +3086,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/services/MemberService.ts`:
+`scripts/core/services/MemberService.ts`:
 ```ts
 // ─── 成员权限服务：owner > member > visitor ────────────────
 import type { Warehouse } from "../model/Warehouse";
@@ -3119,25 +3119,25 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/services/MemberService.ts mcaddon/item-route/tests/services.test.ts
-git commit -m "item-route: core/services 成员权限服务（owner/member/visitor）"
+git add mcaddon/item-route/scripts/core/services/MemberService.ts mcaddon/item-route/tests/services.test.ts
+git commit -m "item-route: scripts/core/services 成员权限服务（owner/member/visitor）"
 ```
 
 ---
 
-### Task 21: core/services/WarehouseService.ts
+### Task 21: scripts/core/services/WarehouseService.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/services/WarehouseService.ts`
+- Create: `mcaddon/item-route/scripts/core/services/WarehouseService.ts`
 - Test: `mcaddon/item-route/tests/services.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { WarehouseService } from "../core/services/WarehouseService";
-import { InMemoryWarehouseStore } from "../core/storage/Stores";
-import { EventBus } from "../core/events/DomainEvents";
-import type { WarehouseArea } from "../core/model/Warehouse";
+import { WarehouseService } from "../scripts/core/services/WarehouseService";
+import { InMemoryWarehouseStore } from "../scripts/core/storage/Stores";
+import { EventBus } from "../scripts/core/events/DomainEvents";
+import type { WarehouseArea } from "../scripts/core/model/Warehouse";
 
 const area1: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
 const area2: WarehouseArea = { dimension: "overworld", corner1: { x: 20, y: 0, z: 0 }, corner2: { x: 30, y: 10, z: 10 } };
@@ -3198,7 +3198,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/services/WarehouseService.ts`:
+`scripts/core/services/WarehouseService.ts`:
 ```ts
 // ─── 仓库服务：CRUD/成员/设置（经 store 持久化） ──────────
 import type { Warehouse, WarehouseArea, WarehouseSettings, MemberRole } from "../model/Warehouse";
@@ -3343,33 +3343,33 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/services/WarehouseService.ts mcaddon/item-route/tests/services.test.ts
-git commit -m "item-route: core/services 仓库服务（CRUD/重名/区域重叠/成员/设置）"
+git add mcaddon/item-route/scripts/core/services/WarehouseService.ts mcaddon/item-route/tests/services.test.ts
+git commit -m "item-route: scripts/core/services 仓库服务（CRUD/重名/区域重叠/成员/设置）"
 ```
 
 ---
 
-### Task 22: core/services/RouteService.ts
+### Task 22: scripts/core/services/RouteService.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/services/RouteService.ts`
+- Create: `mcaddon/item-route/scripts/core/services/RouteService.ts`
 - Test: `mcaddon/item-route/tests/services.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { RouteService } from "../core/services/RouteService";
-import { Scheduler } from "../core/scheduling/Scheduler";
-import { Router } from "../core/routing/Router";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
-import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import { ItemIndex } from "../core/index/ItemIndex";
-import { MemoryIntervalScheduler } from "../core/scheduling/IntervalScheduler";
-import { EventBus } from "../core/events/DomainEvents";
+import { RouteService } from "../scripts/core/services/RouteService";
+import { Scheduler } from "../scripts/core/scheduling/Scheduler";
+import { Router } from "../scripts/core/routing/Router";
+import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
+import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
+import { ItemIndex } from "../scripts/core/index/ItemIndex";
+import { MemoryIntervalScheduler } from "../scripts/core/scheduling/IntervalScheduler";
+import { EventBus } from "../scripts/core/events/DomainEvents";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
-import { createDefaultSettings } from "../core/model/Warehouse";
-import type { Warehouse } from "../core/model/Warehouse";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
+import type { Warehouse } from "../scripts/core/model/Warehouse";
 
 function makeRouteService() {
   const intervals = new MemoryIntervalScheduler();
@@ -3437,7 +3437,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/services/RouteService.ts`:
+`scripts/core/services/RouteService.ts`:
 ```ts
 // ─── 路由服务：全局开关/单仓速度/容器开关 ─────────────────
 import type { Scheduler } from "../scheduling/Scheduler";
@@ -3471,28 +3471,28 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/services/RouteService.ts mcaddon/item-route/tests/services.test.ts
-git commit -m "item-route: core/services 路由服务（全局开关/速度/容器开关）"
+git add mcaddon/item-route/scripts/core/services/RouteService.ts mcaddon/item-route/tests/services.test.ts
+git commit -m "item-route: scripts/core/services 路由服务（全局开关/速度/容器开关）"
 ```
 
 ---
 
-### Task 23: core/services/OrganizeService.ts
+### Task 23: scripts/core/services/OrganizeService.ts
 
 **Files:**
-- Create: `mcaddon/item-route/core/services/OrganizeService.ts`
+- Create: `mcaddon/item-route/scripts/core/services/OrganizeService.ts`
 - Test: `mcaddon/item-route/tests/services.test.ts`（追加）
 
 - [ ] **Step 1: 写失败测试（追加）**
 
 ```ts
-import { OrganizeService } from "../core/services/OrganizeService";
-import { Organizer } from "../core/organizing/Organizer";
-import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import { MoveJournal } from "../core/routing/Move";
-import { ItemIndex } from "../core/index/ItemIndex";
+import { OrganizeService } from "../scripts/core/services/OrganizeService";
+import { Organizer } from "../scripts/core/organizing/Organizer";
+import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
+import { MoveJournal } from "../scripts/core/routing/Move";
+import { ItemIndex } from "../scripts/core/index/ItemIndex";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
 test("OrganizeService: organize 合并后索引更新", () => {
   const bus = new EventBus();
@@ -3532,7 +3532,7 @@ Expected: FAIL。
 
 - [ ] **Step 3: 最小实现**
 
-`core/services/OrganizeService.ts`:
+`scripts/core/services/OrganizeService.ts`:
 ```ts
 // ─── 整理服务：分析/执行/索引联动 ─────────────────────────
 import type { Organizer } from "../organizing/Organizer";
@@ -3576,8 +3576,8 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/services/OrganizeService.ts mcaddon/item-route/tests/services.test.ts
-git commit -m "item-route: core/services 整理服务（分析/应用/索引联动）"
+git add mcaddon/item-route/scripts/core/services/OrganizeService.ts mcaddon/item-route/tests/services.test.ts
+git commit -m "item-route: scripts/core/services 整理服务（分析/应用/索引联动）"
 ```
 
 ---
@@ -3593,26 +3593,26 @@ git commit -m "item-route: core/services 整理服务（分析/应用/索引联�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ItemIndex } from "../core/index/ItemIndex";
-import { Router } from "../core/routing/Router";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
-import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import { Scheduler } from "../core/scheduling/Scheduler";
-import { MemoryIntervalScheduler } from "../core/scheduling/IntervalScheduler";
-import { StatsService } from "../core/stats/StatsService";
-import { OrganizeService } from "../core/services/OrganizeService";
-import { Organizer } from "../core/organizing/Organizer";
-import { WarehouseService } from "../core/services/WarehouseService";
-import { MemberService } from "../core/services/MemberService";
-import { InMemoryWarehouseStore, InMemoryStatsStore } from "../core/storage/Stores";
-import { EventBus } from "../core/events/DomainEvents";
-import { MoveJournal } from "../core/routing/Move";
+import { ItemIndex } from "../scripts/core/index/ItemIndex";
+import { Router } from "../scripts/core/routing/Router";
+import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
+import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
+import { Scheduler } from "../scripts/core/scheduling/Scheduler";
+import { MemoryIntervalScheduler } from "../scripts/core/scheduling/IntervalScheduler";
+import { StatsService } from "../scripts/core/stats/StatsService";
+import { OrganizeService } from "../scripts/core/services/OrganizeService";
+import { Organizer } from "../scripts/core/organizing/Organizer";
+import { WarehouseService } from "../scripts/core/services/WarehouseService";
+import { MemberService } from "../scripts/core/services/MemberService";
+import { InMemoryWarehouseStore, InMemoryStatsStore } from "../scripts/core/storage/Stores";
+import { EventBus } from "../scripts/core/events/DomainEvents";
+import { MoveJournal } from "../scripts/core/routing/Move";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../core/model/ItemStack";
-import { createDefaultSettings } from "../core/model/Warehouse";
-import type { Warehouse } from "../core/model/Warehouse";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
+import type { Warehouse } from "../scripts/core/model/Warehouse";
 
-// ── 装配（对应 mc/main.ts 的 DI 组装，全部内存实现） ──────
+// ── 装配（对应 scripts/mc/main.ts 的 DI 组装，全部内存实现） ──────
 function bootstrap() {
   const bus = new EventBus();
   const index = new ItemIndex();
@@ -3798,7 +3798,7 @@ Expected: 全部 PASS（smoke/model/events/storage/routing/index/scheduling/stat
 
 - [ ] **Step 2: 验证 core 零 MC 依赖**
 
-Run: `rg -n "@minecraft" core/`
+Run: `rg -n "@minecraft" scripts/core/`
 Expected: 无输出（core 目录零 MC import）。
 
 - [ ] **Step 3: 自检清单核对**
@@ -3817,7 +3817,7 @@ git commit -m "item-route: core 引擎完成（model/events/storage/routing/inde
 
 **验收标准（本计划完成 = 以下全部满足）：**
 1. `pnpm test:core` 全绿（11 个测试文件）
-2. `rg "@minecraft" core/` 零命中
+2. `rg "@minecraft" scripts/core/` 零命中
 3. 不吞物不复制、单物优先、杂项兜底、事务回滚、索引惰性自愈、生命周期状态机均有测试锁定
 
 ---

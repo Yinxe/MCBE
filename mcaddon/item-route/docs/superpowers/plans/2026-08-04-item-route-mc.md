@@ -4,12 +4,12 @@
 
 **Goal:** 实现 item-route 的 MC 适配层：DP 分片存储（安全线/hash 写后验/世代号/孤儿清理/1MB 降级）、三仓储 DP 实现、容器/物品/事件/邻近/间隔适配器，以及 main.ts 四阶段 DI 装配，使 core 引擎在真实 MC 世界中运行。
 
-**Architecture:** 分层六边形。`mc/storage/` 实现 core 定义的存储接口（`KeyValueStore`/`WarehouseStore`/`IndexStore`/`StatsStore`），纯逻辑（分片/hash/世代/降级）与 `@minecraft/server` 解耦、可在 node 下用 `InMemoryKeyValueStore` 单测；`mc/adapters/` 实现 `Container`/`ProximityChecker`/`IntervalScheduler` 接口与事件桥接（薄，游戏内验证）；`mc/main.ts` 按 4 Phase 装配 DI。core 追加三个零 MC 依赖纯函数（容器类型判定/区域包含与邻近判定/双箱合并判定）供适配层使用。
+**Architecture:** 分层六边形。`scripts/mc/storage/` 实现 core 定义的存储接口（`KeyValueStore`/`WarehouseStore`/`IndexStore`/`StatsStore`），纯逻辑（分片/hash/世代/降级）与 `@minecraft/server` 解耦、可在 node 下用 `InMemoryKeyValueStore` 单测；`scripts/mc/adapters/` 实现 `Container`/`ProximityChecker`/`IntervalScheduler` 接口与事件桥接（薄，游戏内验证）；`scripts/mc/main.ts` 按 4 Phase 装配 DI。core 追加三个零 MC 依赖纯函数（容器类型判定/区域包含与邻近判定/双箱合并判定）供适配层使用。
 
 **Tech Stack:** TypeScript（strict）、`@minecraft/server` 2.6.0（类型 + 运行时）、node:test（node ≥ 18，本机 v24 已确认）、`@minecraft/core-build-tasks` + `@yinxe/toolkit-build`（构建）。
 
 **设计基线:** `docs/superpowers/specs/2026-08-04-item-route-design.md`（§8 存储 / §10 适配层 / §6 调度 / §9 事件 / §14 技术债规避）。
-**前置:** 计划 1（core 引擎）已执行完毕，`core/` 全部模块与 `tests/` 就绪。
+**前置:** 计划 1（core 引擎）已执行完毕，`scripts/core/` 全部模块与 `tests/` 就绪。
 
 ---
 
@@ -18,21 +18,21 @@
 ```
 mcaddon/item-route/
 ├── package.json              # 追加 devDependencies + 构建 scripts + mcbe 元数据
-├── tsconfig.json             # addon 编译配置（构建用，include scripts/core/mc）
-├── tsconfig.test.json        # 追加 include "mc/storage/**/*.ts"
+├── tsconfig.json             # addon 编译配置（构建用，include scripts/scripts/core/mc）
+├── tsconfig.test.json        # 追加 include "scripts/mc/storage/**/*.ts"
 ├── just.config.ts            # 构建任务（bundle/mcaddon/clean，参照 v1）
 ├── scripts/
-│   └── main.ts               # addon 入口（Task 2 空骨架 → Task 15 接线 mc/main）
+│   └── main.ts               # addon 入口（Task 2 空骨架 → Task 15 接线 scripts/mc/main）
 ├── BP/ItemRoute/
 │   └── manifest.json         # 行为包清单（Task 2）
 ├── RP/ItemRoute/
 │   └── manifest.json         # 资源包清单（最小，Task 2）
-├── core/                     # 追加（零 MC 依赖，可单测）
+├── scripts/core/                     # 追加（零 MC 依赖，可单测）
 │   ├── model/
 │   │   ├── ContainerTypes.ts # 容器类型判定纯函数（chest/hopper/shulker/barrel）
 │   │   ├── Area.ts           # containsLocation + isPlayerNearby 纯函数
 │   │   └── ChestMerge.ts     # 双箱合并判定纯函数（SafeProbe 提纯）
-├── mc/
+├── scripts/mc/
 │   ├── storage/
 │   │   ├── ShardStore.ts     # 分片键值仓储（安全线/hash 写后验/1MB 降级）——纯 TS 可单测
 │   │   ├── DynamicPropertyStore.ts # DP 后端（KeyValueStore 实现，薄）
@@ -63,7 +63,7 @@ mcaddon/item-route/
 **测试约定（全计划通用）：**
 - 运行：`pnpm test:core` = `tsc -p tsconfig.test.json && node --test .test-build/tests/`
 - 每个测试文件顶部：`import { test } from "node:test"; import assert from "node:assert/strict";`
-- mc/storage 纯逻辑文件**不 import `@minecraft/server`**（后端注入），因此可在 node 下用 `InMemoryKeyValueStore` 单测；`DynamicPropertyStore.ts` 与 `mc/adapters/*` 依赖 `@minecraft/server`，仅编译检查 + 游戏内验证（无 node 测试）
+- scripts/mc/storage 纯逻辑文件**不 import `@minecraft/server`**（后端注入），因此可在 node 下用 `InMemoryKeyValueStore` 单测；`DynamicPropertyStore.ts` 与 `scripts/mc/adapters/*` 依赖 `@minecraft/server`，仅编译检查 + 游戏内验证（无 node 测试）
 - 依赖注入全部显式：`new ShardStore(backend)` / `new McWarehouseStore(backend)`
 
 ---
@@ -92,9 +92,9 @@ mcaddon/item-route/
 }
 ```
 
-- [ ] **Step 2: tsconfig.test.json 追加 mc/storage include**
+- [ ] **Step 2: tsconfig.test.json 追加 scripts/mc/storage include**
 
-`mcaddon/item-route/tsconfig.test.json`（include 追加 `"mc/storage/**/*.ts"`）:
+`mcaddon/item-route/tsconfig.test.json`（include 追加 `"scripts/mc/storage/**/*.ts"`）:
 ```json
 {
   "compilerOptions": {
@@ -109,20 +109,20 @@ mcaddon/item-route/
     "outDir": ".test-build",
     "rootDir": "."
   },
-  "include": ["core/**/*.ts", "mc/storage/**/*.ts", "tests/**/*.ts"]
+  "include": ["scripts/core/**/*.ts", "scripts/mc/storage/**/*.ts", "tests/**/*.ts"]
 }
 ```
 
 - [ ] **Step 3: 安装依赖并验证编译**
 
 Run: `cd mcaddon/item-route && pnpm install && pnpm test:core`
-Expected: smoke 测试 PASS；tsc 编译通过（mc/storage 目录尚空，不影响）。
+Expected: smoke 测试 PASS；tsc 编译通过（scripts/mc/storage 目录尚空，不影响）。
 
 - [ ] **Step 4: 提交**
 
 ```bash
 git add mcaddon/item-route/package.json mcaddon/item-route/tsconfig.test.json mcaddon/item-route/pnpm-lock.yaml
-git commit -m "item-route: 追加 @minecraft/server 类型依赖 + 测试配置扩展 mc/storage"
+git commit -m "item-route: 追加 @minecraft/server 类型依赖 + 测试配置扩展 scripts/mc/storage"
 ```
 
 ---
@@ -169,7 +169,7 @@ git commit -m "item-route: 追加 @minecraft/server 类型依赖 + 测试配置�
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true
   },
-  "include": ["scripts/**/*", "core/**/*", "mc/**/*"],
+  "include": ["scripts/**/*", "scripts/core/**/*", "scripts/mc/**/*"],
   "exclude": ["lib", "dist", "node_modules", ".test-build"],
   "compileOnSave": false
 }
@@ -246,7 +246,7 @@ task("build", ["generate-version", "update-version", "typescript", "bundle", "co
 
 `mcaddon/item-route/scripts/main.ts`（空骨架，Task 15 接线）:
 ```ts
-// ─── addon 入口（Task 15 接线 mc/main） ─────────────────────
+// ─── addon 入口（Task 15 接线 scripts/mc/main） ─────────────────────
 console.warn("[item-route] 启动中…");
 ```
 
@@ -357,10 +357,10 @@ git commit -m "item-route: addon 构建骨架（tsconfig/just.config/manifest/�
 
 ---
 
-### Task 3: core/model/ContainerTypes.ts（容器类型判定纯函数）
+### Task 3: scripts/core/model/ContainerTypes.ts（容器类型判定纯函数）
 
 **Files:**
-- Create: `mcaddon/item-route/core/model/ContainerTypes.ts`
+- Create: `mcaddon/item-route/scripts/core/model/ContainerTypes.ts`
 - Test: `mcaddon/item-route/tests/container-types.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -369,7 +369,7 @@ git commit -m "item-route: addon 构建骨架（tsconfig/just.config/manifest/�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isChestType, isHopperType, isSupportedContainerType, SHULKER_BOX_IDS } from "../core/model/ContainerTypes";
+import { isChestType, isHopperType, isSupportedContainerType, SHULKER_BOX_IDS } from "../scripts/core/model/ContainerTypes";
 
 test("ContainerTypes: 箱子/陷阱箱判定", () => {
   assert.equal(isChestType("minecraft:chest"), true);
@@ -408,7 +408,7 @@ Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`core/model/ContainerTypes.ts`:
+`scripts/core/model/ContainerTypes.ts`:
 ```ts
 // ─── 容器类型判定（纯数据，零 MC 依赖，可单测） ──────────────
 /** 全部 17 种潜影盒类型 ID（16 染色 + 1 未染色） */
@@ -457,16 +457,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/model/ContainerTypes.ts mcaddon/item-route/tests/container-types.test.ts
-git commit -m "item-route: core/model 容器类型判定纯函数（chest/hopper/shulker/barrel）"
+git add mcaddon/item-route/scripts/core/model/ContainerTypes.ts mcaddon/item-route/tests/container-types.test.ts
+git commit -m "item-route: scripts/core/model 容器类型判定纯函数（chest/hopper/shulker/barrel）"
 ```
 
 ---
 
-### Task 4: core/model/Area.ts（区域包含 + 邻近判定纯函数）
+### Task 4: scripts/core/model/Area.ts（区域包含 + 邻近判定纯函数）
 
 **Files:**
-- Create: `mcaddon/item-route/core/model/Area.ts`
+- Create: `mcaddon/item-route/scripts/core/model/Area.ts`
 - Test: `mcaddon/item-route/tests/area.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -475,8 +475,8 @@ git commit -m "item-route: core/model 容器类型判定纯函数（chest/hopper
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { containsLocation, isPlayerNearby } from "../core/model/Area";
-import type { WarehouseArea } from "../core/model/Warehouse";
+import { containsLocation, isPlayerNearby } from "../scripts/core/model/Area";
+import type { WarehouseArea } from "../scripts/core/model/Warehouse";
 
 const area: WarehouseArea = {
   dimension: "overworld",
@@ -519,7 +519,7 @@ Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`core/model/Area.ts`:
+`scripts/core/model/Area.ts`:
 ```ts
 // ─── 区域包含与邻近判定（纯函数，零 MC 依赖，可单测） ──────
 import type { WarehouseArea } from "./Warehouse";
@@ -562,16 +562,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/model/Area.ts mcaddon/item-route/tests/area.test.ts
-git commit -m "item-route: core/model 区域包含 + 邻近判定纯函数（桥接过滤谓词）"
+git add mcaddon/item-route/scripts/core/model/Area.ts mcaddon/item-route/tests/area.test.ts
+git commit -m "item-route: scripts/core/model 区域包含 + 邻近判定纯函数（桥接过滤谓词）"
 ```
 
 ---
 
-### Task 5: core/model/ChestMerge.ts（双箱合并判定纯函数）
+### Task 5: scripts/core/model/ChestMerge.ts（双箱合并判定纯函数）
 
 **Files:**
-- Create: `mcaddon/item-route/core/model/ChestMerge.ts`
+- Create: `mcaddon/item-route/scripts/core/model/ChestMerge.ts`
 - Test: `mcaddon/item-route/tests/chest-merge.test.ts`
 
 - [ ] **Step 1: 写失败测试**
@@ -580,7 +580,7 @@ git commit -m "item-route: core/model 区域包含 + 邻近判定纯函数（桥
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findChestPartner, type BlockInfo } from "../core/model/ChestMerge";
+import { findChestPartner, type BlockInfo } from "../scripts/core/model/ChestMerge";
 
 const primary: BlockInfo = { typeId: "minecraft:chest", x: 10, y: 64, z: 10 };
 
@@ -625,7 +625,7 @@ Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`core/model/ChestMerge.ts`:
+`scripts/core/model/ChestMerge.ts`:
 ```ts
 // ─── 双箱合并判定（SafeProbe 提纯：纯几何规则，零 MC 依赖） ──
 import { isChestType } from "./ContainerTypes";
@@ -667,16 +667,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/core/model/ChestMerge.ts mcaddon/item-route/tests/chest-merge.test.ts
-git commit -m "item-route: core/model 双箱合并判定纯函数（SafeProbe 提纯）"
+git add mcaddon/item-route/scripts/core/model/ChestMerge.ts mcaddon/item-route/tests/chest-merge.test.ts
+git commit -m "item-route: scripts/core/model 双箱合并判定纯函数（SafeProbe 提纯）"
 ```
 
 ---
 
-### Task 6: mc/storage/ShardStore.ts（分片键值仓储：安全线/hash 写后验/世代/孤儿清理/1MB 降级）
+### Task 6: scripts/mc/storage/ShardStore.ts（分片键值仓储：安全线/hash 写后验/世代/孤儿清理/1MB 降级）
 
 **Files:**
-- Create: `mcaddon/item-route/mc/storage/ShardStore.ts`
+- Create: `mcaddon/item-route/scripts/mc/storage/ShardStore.ts`
 - Test: `mcaddon/item-route/tests/shard-store.test.ts`
 
 **设计（对应设计 §8）:**
@@ -691,8 +691,8 @@ git commit -m "item-route: core/model 双箱合并判定纯函数（SafeProbe �
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ShardStore, MAX_TOTAL_BYTES, SAFE_ENVELOPE_LENGTH, fnv1a } from "../mc/storage/ShardStore";
-import type { KeyValueStore } from "../core/storage/KeyValueStore";
+import { ShardStore, MAX_TOTAL_BYTES, SAFE_ENVELOPE_LENGTH, fnv1a } from "../scripts/mc/storage/ShardStore";
+import type { KeyValueStore } from "../scripts/core/storage/KeyValueStore";
 
 /** 可枚举键的测试 KV（验证孤儿清理/覆盖写收缩） */
 class TestKV implements KeyValueStore {
@@ -770,10 +770,10 @@ Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`mc/storage/ShardStore.ts`:
+`scripts/mc/storage/ShardStore.ts`:
 ```ts
 // ─── 分片键值仓储：DP 单键 26KB 安全线 → 多分片 + hash 写后验 ──
-import type { KeyValueStore } from "../../core/storage/KeyValueStore";
+import type { KeyValueStore } from "../../scripts/core/storage/KeyValueStore";
 
 /** 单键信封安全线（UTF-16 长度，v1 24KB 同款口径留余量） */
 export const SAFE_ENVELOPE_LENGTH = 26_000;
@@ -916,16 +916,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/storage/ShardStore.ts mcaddon/item-route/tests/shard-store.test.ts
-git commit -m "item-route: mc/storage 分片键值仓储（26KB 安全线/hash 写后验/世代孤儿清理/1MB 降级）"
+git add mcaddon/item-route/scripts/mc/storage/ShardStore.ts mcaddon/item-route/tests/shard-store.test.ts
+git commit -m "item-route: scripts/mc/storage 分片键值仓储（26KB 安全线/hash 写后验/世代孤儿清理/1MB 降级）"
 ```
 
 ---
 
-### Task 7: mc/storage/DynamicPropertyStore.ts（DP 后端，薄）+ tsconfig.test.json 排除
+### Task 7: scripts/mc/storage/DynamicPropertyStore.ts（DP 后端，薄）+ tsconfig.test.json 排除
 
 **Files:**
-- Create: `mcaddon/item-route/mc/storage/DynamicPropertyStore.ts`
+- Create: `mcaddon/item-route/scripts/mc/storage/DynamicPropertyStore.ts`
 - Modify: `mcaddon/item-route/tsconfig.test.json`
 
 **说明:** 唯一 import `@minecraft/server` 的 storage 文件——薄包装 `world.getDynamicProperty`，无业务逻辑，不进 node 测试构建。
@@ -935,17 +935,17 @@ git commit -m "item-route: mc/storage 分片键值仓储（26KB 安全线/hash �
 `mcaddon/item-route/tsconfig.test.json`（在 include 基础上追加）:
 ```json
 {
-  "exclude": ["node_modules", ".test-build", "mc/storage/DynamicPropertyStore.ts"]
+  "exclude": ["node_modules", ".test-build", "scripts/mc/storage/DynamicPropertyStore.ts"]
 }
 ```
 
 - [ ] **Step 2: 实现**
 
-`mc/storage/DynamicPropertyStore.ts`:
+`scripts/mc/storage/DynamicPropertyStore.ts`:
 ```ts
 // ─── DP 后端：KeyValueStore 的 world 实现（薄，无业务逻辑） ──
 import { world } from "@minecraft/server";
-import type { KeyValueStore } from "../../core/storage/KeyValueStore";
+import type { KeyValueStore } from "../../scripts/core/storage/KeyValueStore";
 
 const PREFIX = "ir2:";
 
@@ -984,16 +984,16 @@ Expected: PASS（无类型错误）。
 - [ ] **Step 4: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/storage/DynamicPropertyStore.ts mcaddon/item-route/tsconfig.test.json
-git commit -m "item-route: mc/storage DP 后端（world 包装，薄）+ 测试构建排除"
+git add mcaddon/item-route/scripts/mc/storage/DynamicPropertyStore.ts mcaddon/item-route/tsconfig.test.json
+git commit -m "item-route: scripts/mc/storage DP 后端（world 包装，薄）+ 测试构建排除"
 ```
 
 ---
 
-### Task 8: mc/storage/McWarehouseStore.ts（注册表 + 世代分片元数据 + 容器注册表）
+### Task 8: scripts/mc/storage/McWarehouseStore.ts（注册表 + 世代分片元数据 + 容器注册表）
 
 **Files:**
-- Create: `mcaddon/item-route/mc/storage/McWarehouseStore.ts`
+- Create: `mcaddon/item-route/scripts/mc/storage/McWarehouseStore.ts`
 - Test: `mcaddon/item-route/tests/mc-warehouse-store.test.ts`
 
 **职责:** 三个数据面，全部经 ShardStore：
@@ -1007,11 +1007,11 @@ git commit -m "item-route: mc/storage DP 后端（world 包装，薄）+ 测试�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ShardStore } from "../mc/storage/ShardStore";
-import { McWarehouseStore } from "../mc/storage/McWarehouseStore";
-import { createDefaultSettings } from "../core/model/Warehouse";
-import { InMemoryKeyValueStore } from "../core/storage/KeyValueStore";
-import type { WarehouseSnapshot } from "../core/storage/Stores";
+import { ShardStore } from "../scripts/mc/storage/ShardStore";
+import { McWarehouseStore } from "../scripts/mc/storage/McWarehouseStore";
+import { createDefaultSettings } from "../scripts/core/model/Warehouse";
+import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
+import type { WarehouseSnapshot } from "../scripts/core/storage/Stores";
 
 const snapshot = (id: string): WarehouseSnapshot => ({
   id,
@@ -1072,13 +1072,13 @@ Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`mc/storage/McWarehouseStore.ts`:
+`scripts/mc/storage/McWarehouseStore.ts`:
 ```ts
 // ─── 仓库仓储：注册表 + 世代分片元数据 + 容器注册表（全量重写） ──
 import type { ShardStore } from "./ShardStore";
-import type { ContainerId, Location, PlayerId, WarehouseId } from "../../core/model/types";
-import type { ContainerRole } from "../../core/model/Container";
-import type { WarehouseSnapshot } from "../../core/storage/Stores";
+import type { ContainerId, Location, PlayerId, WarehouseId } from "../../scripts/core/model/types";
+import type { ContainerRole } from "../../scripts/core/model/Container";
+import type { WarehouseSnapshot } from "../../scripts/core/storage/Stores";
 
 // ── 键规划 ─────────────────────────────────────────────
 const REGISTRY_KEY = "ir2:registry";
@@ -1151,16 +1151,16 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/storage/McWarehouseStore.ts mcaddon/item-route/tests/mc-warehouse-store.test.ts
-git commit -m "item-route: mc/storage 仓库仓储（注册表/世代元数据/容器注册表全量重写）"
+git add mcaddon/item-route/scripts/mc/storage/McWarehouseStore.ts mcaddon/item-route/tests/mc-warehouse-store.test.ts
+git commit -m "item-route: scripts/mc/storage 仓库仓储（注册表/世代元数据/容器注册表全量重写）"
 ```
 
 ---
 
-### Task 9: mc/storage/McIndexStore.ts（脏标记批量落盘 + 1MB 降级）
+### Task 9: scripts/mc/storage/McIndexStore.ts（脏标记批量落盘 + 1MB 降级）
 
 **Files:**
-- Create: `mcaddon/item-route/mc/storage/McIndexStore.ts`
+- Create: `mcaddon/item-route/scripts/mc/storage/McIndexStore.ts`
 - Test: `mcaddon/item-route/tests/mc-index-store.test.ts`
 
 **设计:** 实现 core `IndexStore` 接口 + mc 专属脏标记：
@@ -1175,10 +1175,10 @@ git commit -m "item-route: mc/storage 仓库仓储（注册表/世代元数据/�
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ShardStore, MAX_TOTAL_BYTES } from "../mc/storage/ShardStore";
-import { McIndexStore } from "../mc/storage/McIndexStore";
-import { InMemoryKeyValueStore } from "../core/storage/KeyValueStore";
-import type { IndexSnapshotData } from "../core/storage/Stores";
+import { ShardStore, MAX_TOTAL_BYTES } from "../scripts/mc/storage/ShardStore";
+import { McIndexStore } from "../scripts/mc/storage/McIndexStore";
+import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
+import type { IndexSnapshotData } from "../scripts/core/storage/Stores";
 
 const snap = (n: number): IndexSnapshotData => ({
   version: 1,
@@ -1224,11 +1224,11 @@ Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`mc/storage/McIndexStore.ts`:
+`scripts/mc/storage/McIndexStore.ts`:
 ```ts
 // ─── 索引仓储：脏标记批量落盘 + 1MB 降级（overwrite + hash 写后验） ──
 import type { ShardStore } from "./ShardStore";
-import type { IndexSnapshotData, IndexStore, WarehouseId } from "../../core/storage/Stores";
+import type { IndexSnapshotData, IndexStore, WarehouseId } from "../../scripts/core/storage/Stores";
 
 const indexKey = (id: WarehouseId): string => `ir2:idx:${id}`;
 
@@ -1282,17 +1282,17 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/storage/McIndexStore.ts mcaddon/item-route/tests/mc-index-store.test.ts
-git commit -m "item-route: mc/storage 索引仓储（脏标记批量落盘 + 1MB 降级）"
+git add mcaddon/item-route/scripts/mc/storage/McIndexStore.ts mcaddon/item-route/tests/mc-index-store.test.ts
+git commit -m "item-route: scripts/mc/storage 索引仓储（脏标记批量落盘 + 1MB 降级）"
 ```
 
 ---
 
-### Task 10: mc/storage/McStatsStore.ts（写穿透）+ McModConfig.ts（全局配置）
+### Task 10: scripts/mc/storage/McStatsStore.ts（写穿透）+ McModConfig.ts（全局配置）
 
 **Files:**
-- Create: `mcaddon/item-route/mc/storage/McStatsStore.ts`
-- Create: `mcaddon/item-route/mc/storage/McModConfig.ts`
+- Create: `mcaddon/item-route/scripts/mc/storage/McStatsStore.ts`
+- Create: `mcaddon/item-route/scripts/mc/storage/McModConfig.ts`
 - Test: `mcaddon/item-route/tests/mc-stats-store.test.ts`
 - Test: `mcaddon/item-route/tests/mc-mod-config.test.ts`
 
@@ -1302,10 +1302,10 @@ git commit -m "item-route: mc/storage 索引仓储（脏标记批量落盘 + 1MB
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ShardStore } from "../mc/storage/ShardStore";
-import { McStatsStore } from "../mc/storage/McStatsStore";
-import { InMemoryKeyValueStore } from "../core/storage/KeyValueStore";
-import type { StatsSnapshotData } from "../core/storage/Stores";
+import { ShardStore } from "../scripts/mc/storage/ShardStore";
+import { McStatsStore } from "../scripts/mc/storage/McStatsStore";
+import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
+import type { StatsSnapshotData } from "../scripts/core/storage/Stores";
 
 test("McStatsStore: 写穿透 save/load/remove", () => {
   const store = new McStatsStore(new ShardStore(new InMemoryKeyValueStore()));
@@ -1321,9 +1321,9 @@ test("McStatsStore: 写穿透 save/load/remove", () => {
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ShardStore } from "../mc/storage/ShardStore";
-import { McModConfig } from "../mc/storage/McModConfig";
-import { InMemoryKeyValueStore } from "../core/storage/KeyValueStore";
+import { ShardStore } from "../scripts/mc/storage/ShardStore";
+import { McModConfig } from "../scripts/mc/storage/McModConfig";
+import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
 
 test("McModConfig: 缺失 → 默认值", () => {
   const cfg = McModConfig.load(new ShardStore(new InMemoryKeyValueStore()));
@@ -1351,11 +1351,11 @@ Expected: FAIL（模块不存在）。
 
 - [ ] **Step 3: 最小实现**
 
-`mc/storage/McStatsStore.ts`:
+`scripts/mc/storage/McStatsStore.ts`:
 ```ts
 // ─── 统计仓储：写穿透（overwrite + hash） ──
 import type { ShardStore } from "./ShardStore";
-import type { StatsSnapshotData, StatsStore, WarehouseId } from "../../core/storage/Stores";
+import type { StatsSnapshotData, StatsStore, WarehouseId } from "../../scripts/core/storage/Stores";
 
 const statsKey = (id: WarehouseId): string => `ir2:st:${id}`;
 
@@ -1376,7 +1376,7 @@ export class McStatsStore implements StatsStore {
 }
 ```
 
-`mc/storage/McModConfig.ts`:
+`scripts/mc/storage/McModConfig.ts`:
 ```ts
 // ─── 模组全局配置：globalSpeedLimit + 全局分拣开关（overwrite + hash） ──
 import type { ShardStore } from "./ShardStore";
@@ -1441,27 +1441,27 @@ Expected: PASS。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/storage/McStatsStore.ts mcaddon/item-route/mc/storage/McModConfig.ts mcaddon/item-route/tests/mc-stats-store.test.ts mcaddon/item-route/tests/mc-mod-config.test.ts
-git commit -m "item-route: mc/storage 统计仓储（写穿透）+ 全局配置（速度上限/开关）"
+git add mcaddon/item-route/scripts/mc/storage/McStatsStore.ts mcaddon/item-route/scripts/mc/storage/McModConfig.ts mcaddon/item-route/tests/mc-stats-store.test.ts mcaddon/item-route/tests/mc-mod-config.test.ts
+git commit -m "item-route: scripts/mc/storage 统计仓储（写穿透）+ 全局配置（速度上限/开关）"
 ```
 
 ---
 
-### Task 11: mc/adapters/McItemAdapter.ts + McContainerAdapter.ts（概念容器实现）
+### Task 11: scripts/mc/adapters/McItemAdapter.ts + McContainerAdapter.ts（概念容器实现）
 
 **Files:**
-- Create: `mcaddon/item-route/mc/adapters/McItemAdapter.ts`
-- Create: `mcaddon/item-route/mc/adapters/McContainerAdapter.ts`
+- Create: `mcaddon/item-route/scripts/mc/adapters/McItemAdapter.ts`
+- Create: `mcaddon/item-route/scripts/mc/adapters/McContainerAdapter.ts`
 
 **职责:** 实现 core `Container` 接口；委托 `mc.Container` + 区块安全访问（全部 try-catch，失败静默/返回 undefined）；容量动态读 `mc.size`。
 
 - [ ] **Step 1: 实现物品适配器**
 
-`mc/adapters/McItemAdapter.ts`:
+`scripts/mc/adapters/McItemAdapter.ts`:
 ```ts
 // ─── 物品适配器：mc.ItemStack ↔ 概念 ItemStack ──
 import { ItemStack as McItemStack } from "@minecraft/server";
-import type { ItemStack } from "../../core/model/ItemStack";
+import type { ItemStack } from "../../scripts/core/model/ItemStack";
 
 export class McItemAdapter {
   toDomain(stack: McItemStack | undefined): ItemStack | undefined {
@@ -1477,14 +1477,14 @@ export class McItemAdapter {
 
 - [ ] **Step 2: 实现容器适配器**
 
-`mc/adapters/McContainerAdapter.ts`:
+`scripts/mc/adapters/McContainerAdapter.ts`:
 ```ts
 // ─── 容器适配器：概念 Container ← mc.Container（委托 + 安全访问） ──
 import type { Container as McContainer } from "@minecraft/server";
-import type { Container, ContainerRole } from "../../core/model/Container";
-import type { ItemStack } from "../../core/model/ItemStack";
-import type { ContainerId, Location } from "../../core/model/types";
-import { deriveBinding } from "../../core/model/DeriveBinding";
+import type { Container, ContainerRole } from "../../scripts/core/model/Container";
+import type { ItemStack } from "../../scripts/core/model/ItemStack";
+import type { ContainerId, Location } from "../../scripts/core/model/types";
+import { deriveBinding } from "../../scripts/core/model/DeriveBinding";
 import type { McItemAdapter } from "./McItemAdapter";
 
 export class McContainerAdapter implements Container {
@@ -1548,29 +1548,29 @@ Expected: PASS（两个适配器无类型错误）。
 - [ ] **Step 4: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/adapters/McItemAdapter.ts mcaddon/item-route/mc/adapters/McContainerAdapter.ts
-git commit -m "item-route: mc/adapters 物品/容器适配器（委托 mc.Container + 区块安全访问）"
+git add mcaddon/item-route/scripts/mc/adapters/McItemAdapter.ts mcaddon/item-route/scripts/mc/adapters/McContainerAdapter.ts
+git commit -m "item-route: scripts/mc/adapters 物品/容器适配器（委托 mc.Container + 区块安全访问）"
 ```
 
 ---
 
-### Task 12: mc/adapters/McContainerFactory.ts（Block → 容器适配器：双箱探测/漏斗约束）
+### Task 12: scripts/mc/adapters/McContainerFactory.ts（Block → 容器适配器：双箱探测/漏斗约束）
 
 **Files:**
-- Create: `mcaddon/item-route/mc/adapters/McContainerFactory.ts`
+- Create: `mcaddon/item-route/scripts/mc/adapters/McContainerFactory.ts`
 
 **职责:** 方块 → `McContainerAdapter`；双箱合并用 `findChestPartner`（core 纯函数，Task 5）+ 实例同一性判定（mc API 2.x 双箱共享同一 Container 实例，替代 v1 探针法）；漏斗强制 input；一切失败返回 undefined。
 
 - [ ] **Step 1: 实现**
 
-`mc/adapters/McContainerFactory.ts`:
+`scripts/mc/adapters/McContainerFactory.ts`:
 ```ts
 // ─── 容器工厂：Block → McContainerAdapter（双箱合并/漏斗约束/安全访问） ──
 import type { Block } from "@minecraft/server";
-import { isChestType, isHopperType, isSupportedContainerType } from "../../core/model/ContainerTypes";
-import { findChestPartner, type BlockInfo } from "../../core/model/ChestMerge";
-import type { ContainerRole } from "../../core/model/Container";
-import type { Location } from "../../core/model/types";
+import { isChestType, isHopperType, isSupportedContainerType } from "../../scripts/core/model/ContainerTypes";
+import { findChestPartner, type BlockInfo } from "../../scripts/core/model/ChestMerge";
+import type { ContainerRole } from "../../scripts/core/model/Container";
+import type { Location } from "../../scripts/core/model/types";
 import { McContainerAdapter } from "./McContainerAdapter";
 import type { McItemAdapter } from "./McItemAdapter";
 
@@ -1698,27 +1698,27 @@ Expected: PASS（用修正后的 findPartner/Block 版本，删除占位骨架�
 - [ ] **Step 3: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/adapters/McContainerFactory.ts
-git commit -m "item-route: mc/adapters 容器工厂（双箱实例同一性合并/漏斗强制 input/安全访问）"
+git add mcaddon/item-route/scripts/mc/adapters/McContainerFactory.ts
+git commit -m "item-route: scripts/mc/adapters 容器工厂（双箱实例同一性合并/漏斗强制 input/安全访问）"
 ```
 
 ---
 
-### Task 13: mc/adapters/McProximityChecker.ts + McIntervalScheduler.ts
+### Task 13: scripts/mc/adapters/McProximityChecker.ts + McIntervalScheduler.ts
 
 **Files:**
-- Create: `mcaddon/item-route/mc/adapters/McProximityChecker.ts`
-- Create: `mcaddon/item-route/mc/adapters/McIntervalScheduler.ts`
+- Create: `mcaddon/item-route/scripts/mc/adapters/McProximityChecker.ts`
+- Create: `mcaddon/item-route/scripts/mc/adapters/McIntervalScheduler.ts`
 
 - [ ] **Step 1: 实现邻近检查器**
 
-`mc/adapters/McProximityChecker.ts`:
+`scripts/mc/adapters/McProximityChecker.ts`:
 ```ts
 // ─── 邻近检查器：ProximityChecker 实现（玩家位置轮询，按维度过滤） ──
 import { world, type Player } from "@minecraft/server";
-import type { ProximityChecker } from "../../core/scheduling/Scheduler";
-import type { WarehouseId } from "../../core/model/types";
-import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
+import type { ProximityChecker } from "../../scripts/core/scheduling/Scheduler";
+import type { WarehouseId } from "../../scripts/core/model/types";
+import { isPlayerNearby, type PlayerPosition } from "../../scripts/core/model/Area";
 
 export interface WarehouseAreaRef {
   dimension: string;
@@ -1748,11 +1748,11 @@ export class McProximityChecker implements ProximityChecker {
 
 - [ ] **Step 2: 实现间隔调度器**
 
-`mc/adapters/McIntervalScheduler.ts`:
+`scripts/mc/adapters/McIntervalScheduler.ts`:
 ```ts
 // ─── 间隔调度器：IntervalScheduler 实现（system.runInterval） ──
 import { system } from "@minecraft/server";
-import type { IntervalHandle, IntervalScheduler } from "../../core/scheduling/IntervalScheduler";
+import type { IntervalHandle, IntervalScheduler } from "../../scripts/core/scheduling/IntervalScheduler";
 
 export class McIntervalScheduler implements IntervalScheduler {
   createInterval(fn: () => void, tickInterval: number): IntervalHandle {
@@ -1772,18 +1772,18 @@ Expected: PASS。
 - [ ] **Step 4: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/adapters/McProximityChecker.ts mcaddon/item-route/mc/adapters/McIntervalScheduler.ts
-git commit -m "item-route: mc/adapters 邻近检查器 + 间隔调度器"
+git add mcaddon/item-route/scripts/mc/adapters/McProximityChecker.ts mcaddon/item-route/scripts/mc/adapters/McIntervalScheduler.ts
+git commit -m "item-route: scripts/mc/adapters 邻近检查器 + 间隔调度器"
 ```
 
 ---
 
-### Task 14: core/model/Area.ts 追加 findWarehouseAt/findContainerAt + McEventBridge.ts
+### Task 14: scripts/core/model/Area.ts 追加 findWarehouseAt/findContainerAt + McEventBridge.ts
 
 **Files:**
-- Modify: `mcaddon/item-route/core/model/Area.ts`
+- Modify: `mcaddon/item-route/scripts/core/model/Area.ts`
 - Modify: `mcaddon/item-route/tests/area.test.ts`（追加）
-- Create: `mcaddon/item-route/mc/adapters/McEventBridge.ts`
+- Create: `mcaddon/item-route/scripts/mc/adapters/McEventBridge.ts`
 
 **职责:** "是否属于本仓库容器" 判定为 core 纯函数（设计 §10）；桥接 MC 世界事件 → 领域事件 + 索引增量维护 + 落盘时机。
 
@@ -1791,9 +1791,9 @@ git commit -m "item-route: mc/adapters 邻近检查器 + 间隔调度器"
 
 `tests/area.test.ts` 追加:
 ```ts
-import { findWarehouseAt, findContainerAt } from "../core/model/Area";
-import type { Warehouse } from "../core/model/Warehouse";
-import type { Container } from "../core/model/Container";
+import { findWarehouseAt, findContainerAt } from "../scripts/core/model/Area";
+import type { Warehouse } from "../scripts/core/model/Warehouse";
+import type { Container } from "../scripts/core/model/Container";
 
 const area = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
 
@@ -1837,7 +1837,7 @@ Expected: FAIL（findWarehouseAt/findContainerAt 不存在）。
 
 - [ ] **Step 3: 实现纯函数（Area.ts 追加）**
 
-`core/model/Area.ts` 追加:
+`scripts/core/model/Area.ts` 追加:
 ```ts
 // ─── 仓库/容器定位（事件桥接过滤谓词，零 MC 依赖） ─────────
 import type { Warehouse } from "./Warehouse";
@@ -1881,24 +1881,24 @@ Expected: PASS。
 - [ ] **Step 5: 提交 core 纯函数**
 
 ```bash
-git add mcaddon/item-route/core/model/Area.ts mcaddon/item-route/tests/area.test.ts
-git commit -m "item-route: core/model 仓库/容器定位纯函数（事件桥接过滤谓词）"
+git add mcaddon/item-route/scripts/core/model/Area.ts mcaddon/item-route/tests/area.test.ts
+git commit -m "item-route: scripts/core/model 仓库/容器定位纯函数（事件桥接过滤谓词）"
 ```
 
 - [ ] **Step 6: 实现事件桥接**
 
-`mc/adapters/McEventBridge.ts`:
+`scripts/mc/adapters/McEventBridge.ts`:
 ```ts
 // ─── 事件桥接：MC 世界事件 → 领域事件 + 索引增量维护 + 落盘时机 ──
 import { world, system, type Block } from "@minecraft/server";
-import type { EventBus } from "../../core/events/DomainEvents";
-import type { ItemIndex } from "../../core/index/ItemIndex";
-import type { StatsService } from "../../core/stats/StatsService";
-import type { Scheduler } from "../../core/scheduling/Scheduler";
-import type { Warehouse } from "../../core/model/Warehouse";
-import type { Container } from "../../core/model/Container";
-import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
-import { locationKey, type Location } from "../../core/model/types";
+import type { EventBus } from "../../scripts/core/events/DomainEvents";
+import type { ItemIndex } from "../../scripts/core/index/ItemIndex";
+import type { StatsService } from "../../scripts/core/stats/StatsService";
+import type { Scheduler } from "../../scripts/core/scheduling/Scheduler";
+import type { Warehouse } from "../../scripts/core/model/Warehouse";
+import type { Container } from "../../scripts/core/model/Container";
+import { findContainerAt, findWarehouseAt } from "../../scripts/core/model/Area";
+import { locationKey, type Location } from "../../scripts/core/model/types";
 import type { McIndexStore } from "../storage/McIndexStore";
 import type { McContainerFactory } from "./McContainerFactory";
 
@@ -2025,42 +2025,42 @@ Expected: PASS。
 - [ ] **Step 8: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/adapters/McEventBridge.ts
-git commit -m "item-route: mc/adapters 事件桥接（代理信号/注册注销/落盘时机）"
+git add mcaddon/item-route/scripts/mc/adapters/McEventBridge.ts
+git commit -m "item-route: scripts/mc/adapters 事件桥接（代理信号/注册注销/落盘时机）"
 ```
 
 ---
 
-### Task 15: mc/main.ts（4 Phase 启动装配）+ scripts/main.ts 接线
+### Task 15: scripts/mc/main.ts（4 Phase 启动装配）+ scripts/main.ts 接线
 
 **Files:**
-- Create: `mcaddon/item-route/mc/main.ts`
+- Create: `mcaddon/item-route/scripts/mc/main.ts`
 - Modify: `mcaddon/item-route/scripts/main.ts`
 
 **装配蓝图 = core 计划 Task 24 bootstrap + mc 适配层 DI**（Phase 1 无状态 → Phase 2 有状态 → Phase 3 事件 → Phase 4 延迟启动）。
 
 - [ ] **Step 1: 实现 4 Phase 装配**
 
-`mc/main.ts`:
+`scripts/mc/main.ts`:
 ```ts
 // ─── item-route 入口：4 Phase 启动装配（DI） ──
 import { world, system } from "@minecraft/server";
 
 // ── core ──
-import { EventBus } from "./core/events/DomainEvents";
-import { ItemIndex } from "./core/index/ItemIndex";
-import { Router } from "./core/routing/Router";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "./core/routing/RouteStrategy";
-import { DefaultCandidateSorter } from "./core/routing/CandidateSorter";
-import { Scheduler } from "./core/scheduling/Scheduler";
-import { StatsService } from "./core/stats/StatsService";
-import { Organizer } from "./core/organizing/Organizer";
-import { OrganizeService } from "./core/services/OrganizeService";
-import { WarehouseService } from "./core/services/WarehouseService";
-import { MemberService } from "./core/services/MemberService";
-import { RouteService } from "./core/services/RouteService";
-import type { Warehouse } from "./core/model/Warehouse";
-import type { Container } from "./core/model/Container";
+import { EventBus } from "./scripts/core/events/DomainEvents";
+import { ItemIndex } from "./scripts/core/index/ItemIndex";
+import { Router } from "./scripts/core/routing/Router";
+import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "./scripts/core/routing/RouteStrategy";
+import { DefaultCandidateSorter } from "./scripts/core/routing/CandidateSorter";
+import { Scheduler } from "./scripts/core/scheduling/Scheduler";
+import { StatsService } from "./scripts/core/stats/StatsService";
+import { Organizer } from "./scripts/core/organizing/Organizer";
+import { OrganizeService } from "./scripts/core/services/OrganizeService";
+import { WarehouseService } from "./scripts/core/services/WarehouseService";
+import { MemberService } from "./scripts/core/services/MemberService";
+import { RouteService } from "./scripts/core/services/RouteService";
+import type { Warehouse } from "./scripts/core/model/Warehouse";
+import type { Container } from "./scripts/core/model/Container";
 
 // ── mc ──
 import { DynamicPropertyStore } from "./storage/DynamicPropertyStore";
@@ -2181,8 +2181,8 @@ system.run(() => {
 
 `scripts/main.ts`（Task 2 空骨架 → 接线）:
 ```ts
-// addon 入口：委托 mc/main.ts 4 Phase 装配
-import "../mc/main";
+// addon 入口：委托 scripts/mc/main.ts 4 Phase 装配
+import "../scripts/mc/main";
 ```
 
 - [ ] **Step 2: 编译检查**
@@ -2193,8 +2193,8 @@ Expected: PASS（core + mc 全量类型检查）。
 - [ ] **Step 3: 提交**
 
 ```bash
-git add mcaddon/item-route/mc/main.ts mcaddon/item-route/scripts/main.ts
-git commit -m "item-route: mc/main 4 Phase 启动装配（DI）+ scripts 入口接线"
+git add mcaddon/item-route/scripts/mc/main.ts mcaddon/item-route/scripts/main.ts
+git commit -m "item-route: scripts/mc/main 4 Phase 启动装配（DI）+ scripts 入口接线"
 ```
 
 ---

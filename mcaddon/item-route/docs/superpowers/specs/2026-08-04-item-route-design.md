@@ -9,7 +9,7 @@
 
 基于 smartwarehouse v1 全面重写为全新项目 **item-route**。核心目标：
 
-1. **核心引擎零 MC API**：`core/` 目录为纯 TypeScript，不 import 任何 `@minecraft/*`。所有外部世界操作通过接口 + 实现类注入，使核心逻辑可在 node 下直接单测，零 mock 成本。
+1. **核心引擎零 MC API**：`scripts/core/` 目录为纯 TypeScript，不 import 任何 `@minecraft/*`。所有外部世界操作通过接口 + 实现类注入，使核心逻辑可在 node 下直接单测，零 mock 成本。
 2. **O(1) 路由**：每次调度只处理一个输入容器的非空 slot；路由经索引 Map 查询（O(1)）定位候选容器，不做全仓扫描。
 3. **路由安全**：路由过程绝不修改/吞物/复制物品，唯一允许的变化是堆叠和移动。
 4. **越用越快**：索引持久化 + 事件驱动增量维护，崩溃可恢复，缺失条目惰性补算。
@@ -20,7 +20,7 @@
 
 ```
 mcaddon/item-route/
-├── core/                        # 纯 TS，零 MC API（可单测）
+├── scripts/core/                        # 纯 TS，零 MC API（可单测）
 │   ├── model/       ItemId/ItemStack/Container/Warehouse/Member
 │   ├── data/        name-maps 中文名映射（纯数据层，零 MC 依赖，供搜索/统计显示）
 │   ├── routing/     RouteStrategy/CandidateSorter/Router/Move/MoveJournal
@@ -31,7 +31,7 @@ mcaddon/item-route/
 │   ├── storage/     KeyValueStore/WarehouseStore/IndexStore/StatsStore
 │   ├── events/      EventSignal 领域事件总线
 │   └── services/    Warehouse/Route/Organize/Stats/Member
-├── mc/                         # 适配层（薄）
+├── scripts/mc/                         # 适配层（薄）
 │   ├── adapters/    McContainerAdapter/McItemAdapter/McEventBridge
 │   ├── storage/     DP 分片实现（30KB 安全线 + hash + 世代号）
 │   ├── ui/          ActionForm/ModalForm 12 模块
@@ -48,7 +48,7 @@ mcaddon/item-route/
 
 **依赖方向**：`core` 不依赖 `mc`；`mc` 依赖 `core` 与 `@minecraft/server`。`core` 内各模块仅依赖 `model/` 与 `events/`。
 
-## 3. 概念模型（core/model/）
+## 3. 概念模型（scripts/core/model/）
 
 ### 3.1 物品
 
@@ -124,7 +124,7 @@ interface Warehouse {
 | 整理执行 | ✓ | ✓ | - |
 | 统计/只读查看 | ✓ | ✓ | ✓ |
 
-## 4. 路由引擎（core/routing/）
+## 4. 路由引擎（scripts/core/routing/）
 
 **核心原则：路由只移动/堆叠，绝不修改/吞物/复制物品。**
 
@@ -178,7 +178,7 @@ interface RouteContext {
 4. 尝试 `Move.transfer(源槽 → 目标)`（只堆叠/移动），经 MoveJournal 保证原子性，成功则更新索引 + 统计 + 发事件
 5. 全部失败 → 物品留在输入容器，触发容量预警事件
 
-## 5. 索引系统（core/index/）
+## 5. 索引系统（scripts/core/index/）
 
 **目标：O(1) 查询 + 持久化 + 事件驱动增量维护 + 越用越快。**
 
@@ -218,7 +218,7 @@ interface IndexSnapshot {
 
 **索引不含容量**：容器容量/仓库容量单独动态读取 + 持久化。
 
-## 6. 调度系统（core/scheduling/）
+## 6. 调度系统（scripts/core/scheduling/）
 
 ```ts
 // 全局主任务：每 5 tick 运行一次
@@ -245,7 +245,7 @@ interface WarehouseRuntime {
 - 单仓速度可调（processingSpeed ∈ [4,8,16,20,30,40]）+ 全局速度限制（ModConfig.globalSpeedLimit，clamp 单仓速度）
 - 全局分拣总开关（暂停/恢复）
 
-## 7. 统计系统（core/stats/）
+## 7. 统计系统（scripts/core/stats/）
 
 ```ts
 // 容器级统计
@@ -282,9 +282,9 @@ interface WarehouseStats {
   - 黄色：容器 usedSlots/totalSlots ≥ 90%
   - 红色：某角色容器组全部满载（分拣降级提示）
   - 深红：仓库全满（无法分拣）
-  - 阈值常量统一于 core/stats，单测锁定
+  - 阈值常量统一于 scripts/core/stats，单测锁定
 
-## 8. 存储接口与 DP 分片实现（core/storage/ + mc/storage/）
+## 8. 存储接口与 DP 分片实现（scripts/core/storage/ + scripts/mc/storage/）
 
 **原则：core 只定义接口，实现注入。**
 
@@ -312,7 +312,7 @@ interface StatsStore {
 }
 ```
 
-**DP 分片实现（mc/storage/）：**
+**DP 分片实现（scripts/mc/storage/）：**
 - **单键满容量实测 32KB**，分片为必选方案
 - 每个分片键内容 ≤ **26-28KB 安全线**（留余量给 hash 校验字段）
 - **索引/统计分片用单键覆盖写 + 内容 hash 校验**（DP 单键写是原子的，无需世代号；写后验读回校验 hash，失败则重写）
@@ -320,7 +320,7 @@ interface StatsStore {
 - 单仓库数据超 1MB 总量限制（DP 总配额）的极端场景：按仓库拆分快照降级兜底（判定：写入前估算总量，超限则降级为多片拆分，恢复条件明确）
 - 核心测试用 `InMemoryKeyValueStore`
 
-## 9. 领域事件（core/events/）
+## 9. 领域事件（scripts/core/events/）
 
 **core 内部事件用 toolkit EventSignal（纯 TS，已就绪）：**
 
@@ -338,7 +338,7 @@ type DomainEvent =
 - 预警事件带冷却（100 tick）由 core 统计模块统一管理
 - 索引/统计更新作为事件副作用，形成闭环
 
-## 10. MC 适配层（mc/adapters/）
+## 10. MC 适配层（scripts/mc/adapters/）
 
 ```ts
 // 容器适配器：真实 MC 容器 ↔ 概念 Container
@@ -368,7 +368,7 @@ class McEventBridge {
 - 移动委托 `Container.transferItem`（原子移动），MoveJournal 快照/回滚在 core
 - core 完全不知道 MC 存在——单测零 mock 成本
 
-## 11. 应用服务层（core/services/）
+## 11. 应用服务层（scripts/core/services/）
 
 ```ts
 class WarehouseService {
@@ -391,9 +391,9 @@ class MemberService {
 }
 ```
 
-**整理器（core/organizing/）**：保留 v1 思路——混乱度评分、analyze/apply 三段式、快照回滚，全部基于概念容器实现。另保留 v1 的**自动整理阈值触发**（`autoSortThreshold`：单容器混乱度超阈值时自动触发整理 / `onDeposit` 入仓即整理），阈值存储于仓库设置。
+**整理器（scripts/core/organizing/）**：保留 v1 思路——混乱度评分、analyze/apply 三段式、快照回滚，全部基于概念容器实现。另保留 v1 的**自动整理阈值触发**（`autoSortThreshold`：单容器混乱度超阈值时自动触发整理 / `onDeposit` 入仓即整理），阈值存储于仓库设置。
 
-## 12. 交互层（mc/ui/ + mc/commands/ + mc/interaction/）
+## 12. 交互层（scripts/mc/ui/ + scripts/mc/commands/ + scripts/mc/interaction/）
 
 - **UI：** 12 模块结构（ActionForm/ModalForm），用 toolkit 的 ActionFormBuilder/ModalFormBuilder 重构；新增统计页（类型/物品统计双视图）
 - **命令：** 9 命令平移（`<prefix>:<command>` via defineCommand），含注册页命令（区域点选/容器点选/信物），权限经 MemberService 校验
@@ -425,7 +425,7 @@ class MemberService {
 | 模块级单例 | 构造函数依赖注入，显式装配（main.ts） |
 | 搜索无索引 | 本期索引即搜索底座（byItem/containerItems），搜索页直接查索引 |
 | 模型不淘汰（v1 索引缓存不清理） | 快照 + 惰性补算，定期清理失效条目 |
-| 文档阈值不一致（90% vs 80%） | 常量统一于 core/stats，单测锁定 |
+| 文档阈值不一致（90% vs 80%） | 常量统一于 scripts/core/stats，单测锁定 |
 | 内容 hash 分片无写后验 | 写后验读回校验 hash，失败重写 |
 | 调度全局单速度 | 单仓速度 + 全局 clamp |
 | 索引全量重建 | 事件驱动增量维护 + 崩溃恢复 |
@@ -436,9 +436,9 @@ class MemberService {
 
 ## 15. 里程碑
 
-1. **M1 骨架**：项目脚手架（just.config/tsconfig/manifest/package.json）+ core/model + 存储接口 + InMemory 实现 + DI 装配
+1. **M1 骨架**：项目脚手架（just.config/tsconfig/manifest/package.json）+ scripts/core/model + 存储接口 + InMemory 实现 + DI 装配
 2. **M2 核心路由**：routing + index + scheduling 最小闭环 + 路由/索引/排序单测
-3. **M3 数据层**：mc/storage DP 分片实现 + McContainerAdapter/McItemAdapter/McEventBridge
+3. **M3 数据层**：scripts/mc/storage DP 分片实现 + McContainerAdapter/McItemAdapter/McEventBridge
 4. **M4 服务与交互**：services + 12 UI 模块 + 9 命令 + 信物交互 + 视觉反馈
 5. **M5 整理与统计**：organizing + stats 完整实现 + 预警
 6. **M6 收尾**：全量单测、构建、打包、游戏内验证

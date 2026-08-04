@@ -26,7 +26,7 @@
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true
   },
-  "include": ["scripts/**/*", "core/**/*", "mc/**/*"],
+  "include": ["scripts/**/*"],
   "exclude": ["lib", "dist", "node_modules", ".test-build"],
   "compileOnSave": false
 }
