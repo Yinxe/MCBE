@@ -55,19 +55,38 @@ function refillMainhand(player: Player, typeId: string): boolean {
     if (!item) continue;
     if (item.typeId !== typeId) continue;
 
-    // 交换：主手 ← 背包同类；残留物 → 背包槽位
-    equippable.setEquipment(EquipmentSlot.Mainhand, item);
-    if (mainhand) {
-      // 残留物交给 addItem：优先堆叠到已有同类堆，其次填入首个空槽；背包满则剩余留回该槽位
-      let remaining: ItemStack | undefined;
-      try {
-        remaining = inventory.container.addItem(mainhand);
-      } catch {
-        remaining = mainhand; // 添加失败 → 残留物留在交换槽位
+    // 1. 主手 ← 背包同类副本；失败则主手/背包都未变，安全退出
+    try {
+      equippable.setEquipment(EquipmentSlot.Mainhand, item);
+    } catch (e) {
+      console.warn(`[AutoRefill] setEquipment failed ${player.name}: ${typeId} - ${e}`);
+      return false;
+    }
+
+    // 2. 清理/覆盖原槽位（主手已有副本，必须清空原槽位否则复制物品）
+    try {
+      if (mainhand) {
+        // 残留物回填：addItem 内部会堆叠/找空槽；失败则原样放回该槽位
+        let remaining: ItemStack | undefined;
+        try {
+          remaining = inventory.container.addItem(mainhand);
+        } catch (e) {
+          console.warn(`[AutoRefill] addItem failed ${player.name}: ${typeId} - ${e}`);
+          remaining = mainhand;
+        }
+        inventory.container.setItem(slot, remaining ?? undefined);
+      } else {
+        inventory.container.setItem(slot, undefined);
       }
-      inventory.container.setItem(slot, remaining ?? undefined);
-    } else {
-      inventory.container.setItem(slot, undefined);
+    } catch (e) {
+      // 原槽位清理失败 → 主手副本 + 槽位原物并存（复制）；重试一次，仍失败则记录
+      console.warn(`[AutoRefill] clear slot ${slot} failed ${player.name}: ${typeId} - ${e}`);
+      try {
+        inventory.container.setItem(slot, undefined);
+      } catch {
+        console.warn(`[AutoRefill] retry clear slot ${slot} failed ${player.name}: ${typeId} - 物品可能复制`);
+      }
+      return false;
     }
 
     player.playSound("random.pop");
