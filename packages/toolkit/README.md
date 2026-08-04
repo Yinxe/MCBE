@@ -36,6 +36,45 @@ MCBE addon monorepo 的**共享运行时库**，提供 color（着色）、ui（
 
 - **`canManage(player)`**：判断玩家是否为 OP（`playerPermissionLevel >= Operator`）
 
+### `src/events/` — 自定义事件订阅触发机制
+
+参考 MCBE 原生事件机制（`world.afterEvents.xxx.subscribe / unsubscribe`），为 addon 内部模块间解耦通信提供纯自定义事件。
+
+- **`EventSignal<T>` 类**：订阅 / 取消订阅 / 触发
+  - `.subscribe(callback)` 订阅，`.unsubscribe(callback)` 取消订阅（同一回调引用），`.trigger(event)` 同步派发
+  - 同一回调重复订阅只注册一次（去重）；订阅者异常隔离（`[events] 订阅者回调异常` 日志，不影响其他订阅者）；快照遍历（回调中增删订阅安全）
+  - 无订阅者时 `trigger` 为安全空操作
+- **`CancelableEventSignal<T>` 类**：可取消事件（MCBE beforeEvents 语义）
+  - 订阅者收到 `T & { cancel: boolean }`，可置 `e.cancel = true`；`trigger` 返回是否被取消
+  - 所有订阅者都会收到事件；内部浅拷贝派发，不污染原始数据
+- 每个事件独立定义（一个 interface = 事件属性），各自持有 signal 实例，不引入事件总线 / 全局单例
+- 不依赖 `@minecraft/server`，可在 node 环境直接测试（见 `test/EventSignal.test.ts`）
+
+```typescript
+import { EventSignal, CancelableEventSignal } from "@yinxe/toolkit";
+
+interface PlayerJoinEvent {
+  playerId: string;
+  playerName: string;
+}
+
+// 每个事件一个独立 signal 实例
+const playerJoin = new EventSignal<PlayerJoinEvent>();
+playerJoin.subscribe((e) => console.warn(`[demo] ${e.playerName} 加入`));
+playerJoin.trigger({ playerId: "x", playerName: "Alice" });
+
+interface ItemUseEvent {
+  playerId: string;
+  itemTypeId: string;
+}
+
+const itemUse = new CancelableEventSignal<ItemUseEvent>();
+itemUse.subscribe((e) => {
+  if (e.itemTypeId === "minecraft:bedrock") e.cancel = true;
+});
+const ok = itemUse.trigger({ playerId: "x", itemTypeId: "minecraft:bedrock" }); // false
+```
+
 ### `src/command/index.ts` — 自定义命令封装
 
 - **`defineCommand(registry, config, handler)`**：`customCommandRegistry.registerCommand()` 的轻量封装

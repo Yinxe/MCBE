@@ -3,6 +3,7 @@
 export { color, style, actionFormFg } from "./color";
 export { canManage } from "./player";
 export { defineCommand, type CommandContext } from "./command";
+export { EventSignal, CancelableEventSignal, type CancelableEvent } from "./events";
 export {
   ActionFormBuilder,
   MessageFormBuilder,
