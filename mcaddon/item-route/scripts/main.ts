@@ -1,2 +1,2 @@
-// ─── addon 入口（Task 15 接线 mc/main） ─────────────────────
-console.warn("[item-route] 启动中…");
+// addon 入口：委托 scripts/mc/main.ts 4 Phase 装配
+import "../scripts/mc/main";

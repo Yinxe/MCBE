@@ -1,6 +1,9 @@
 // ─── 区域包含与邻近判定（纯函数，零 MC 依赖，可单测） ──────
 import type { WarehouseArea } from "./Warehouse";
+import type { Warehouse } from "./Warehouse";
+import type { Container } from "./Container";
 import type { Location } from "./types";
+import { locationKey } from "./types";
 
 /** 位置是否位于仓库区域内（维度匹配 + 三轴区间内，边界含） */
 export function containsLocation(area: WarehouseArea, dimension: string, loc: Location): boolean {
@@ -26,4 +29,32 @@ export function isPlayerNearby(area: WarehouseArea, players: PlayerPosition[], r
   const cx = (Math.min(area.corner1.x, area.corner2.x) + Math.max(area.corner1.x, area.corner2.x)) / 2;
   const cz = (Math.min(area.corner1.z, area.corner2.z) + Math.max(area.corner1.z, area.corner2.z)) / 2;
   return players.some((p) => p.dimension === area.dimension && Math.hypot(p.x - cx, p.z - cz) <= range);
+}
+
+// ─── 仓库/容器定位（事件桥接过滤谓词，零 MC 依赖） ─────────
+
+/** 维度 + 坐标 → 所属仓库（仅区域判定，容器未注册也能命中） */
+export function findWarehouseAt(
+  warehouses: Warehouse[],
+  dimension: string,
+  loc: Location
+): Warehouse | undefined {
+  return warehouses.find((w) => containsLocation(w.area, dimension, loc));
+}
+
+/** 维度 + 坐标 → 仓库 + 逻辑容器（occupiedLocations 匹配，含双箱任一半） */
+export function findContainerAt(
+  warehouses: Warehouse[],
+  dimension: string,
+  loc: Location
+): { warehouse: Warehouse; container: Container } | undefined {
+  for (const w of warehouses) {
+    if (w.area.dimension !== dimension || !containsLocation(w.area, dimension, loc)) continue;
+    for (const c of w.containers.values()) {
+      if (c.occupiedLocations.some((l) => locationKey(l) === locationKey(loc))) {
+        return { warehouse: w, container: c };
+      }
+    }
+  }
+  return undefined;
 }
