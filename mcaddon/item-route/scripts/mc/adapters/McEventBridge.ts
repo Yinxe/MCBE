@@ -97,7 +97,7 @@ export class McEventBridge {
             index?.onContainerRemoved(existing);
             warehouse.containers.delete(existing.id);
             existing.occupiedLocations.push({ x: loc.x, y: loc.y, z: loc.z });
-            (existing as McContainerAdapter).rebaseId(containerIdOf(primaryLocationOf(existing.occupiedLocations)!));
+            (existing as McContainerAdapter).rebaseId(containerIdOf(primaryLocationOf(existing.occupiedLocations)!, warehouse.area.dimension));
             warehouse.containers.set(existing.id, existing);
             index?.onContainerAdded(existing);
             stats.invalidate(existing.id);
@@ -135,10 +135,10 @@ export class McEventBridge {
           index?.onContainerRemoved(container);
           stats.invalidate(container.id);
           this.deps.onContainerUnregistered?.(warehouse, container);
-        } else if (containerIdPointsTo(container.id, loc)) {
+        } else if (containerIdPointsTo(container.id, loc, warehouse.area.dimension)) {
           // 半拆且拆的是主坐标（id 承载位）：重定 id 到幸存主坐标，
           // 否则 ID 悬空 + 后续在原主坐标新放容器会撞 ID
-          const newId = containerIdOf(primaryLocationOf(container.occupiedLocations)!);
+          const newId = containerIdOf(primaryLocationOf(container.occupiedLocations)!, warehouse.area.dimension);
           if (newId !== container.id) {
             index?.onContainerRemoved(container);
             warehouse.containers.delete(container.id);

@@ -12,6 +12,7 @@ import { createDefaultSettings } from "../model/Warehouse";
 import type { PlayerId, WarehouseId } from "../model/types";
 import type { WarehouseStore, WarehouseSnapshot } from "../storage/Stores";
 import type { EventBus } from "../events/DomainEvents";
+import { warehouseIdOf } from "../model/ContainerId";
 
 export type CreateResult = { ok: true; warehouse: Warehouse } | { ok: false; error: string };
 
@@ -106,7 +107,7 @@ export class WarehouseService {
       return { ok: false, error: `每个玩家最多创建 ${this.limits.maxWarehousesPerPlayer} 个仓库` };
     }
     const warehouse: Warehouse = {
-      id: `wh-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+      id: warehouseIdOf(area),
       displayName: name,
       ownerId,
       members: [{ playerId: ownerId, role: "owner" }],
