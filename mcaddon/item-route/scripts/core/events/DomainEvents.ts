@@ -71,7 +71,8 @@ export interface StatsChangedEvent {
   containerId?: ContainerId;
 }
 
-export type WarningLevel = "yellow" | "red" | "deep-red";
+/** 预警级别：仅容器级（某容器容量超阈值）；不带角色组/全仓级红深红 */
+export type WarningLevel = "yellow";
 
 export interface WarningEvent {
   type: "warning";

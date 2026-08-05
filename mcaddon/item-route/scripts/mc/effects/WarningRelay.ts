@@ -9,8 +9,6 @@ export const WARNING_MARGIN = 8;
 
 const LEVEL_TEXT: Record<WarningLevel, string> = {
   yellow: `${color.warn}黄色`,
-  red: `${color.error}红色`,
-  "deep-red": `${color.darkRed}深红`,
 };
 
 /** 距仓库中心 XZ 距离是否在范围内 */

@@ -155,10 +155,10 @@ bus.itemRouted.subscribe((e) => {
     stats.updateFromScan(target, scan, wh.settings.warningThreshold); // 趁机增量维护统计
   }
 });
-// ③ 容量增量：路由后目标容量变化 → 重评三级预警（冷却内抑制重复播报）
+// ③ 容量增量：路由后目标容器容量变化 → 容器级预警（只查目标，O(1) 无全仓扫描；冷却抑制重复）
 bus.itemRouted.subscribe((e) => {
   const wh = loaded.find((x) => x.id === e.warehouseId);
-  if (wh !== undefined) stats.evaluateWarnings(wh);
+  if (wh !== undefined) stats.evaluateWarnings(wh, e.to);
 });
 // ④ 路由成功视觉反馈：目标容器闪光（v1 同款：放入物品即播放粒子）
 bus.itemRouted.subscribe((e) => {

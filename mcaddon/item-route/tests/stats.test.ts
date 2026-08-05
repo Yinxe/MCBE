@@ -61,6 +61,21 @@ test("StatsService: 90% 阈值触发黄色预警（带冷却）", () => {
   assert.equal(warnings.length, 2);
 });
 
+test("StatsService: 容器级增量预警（只查目标容器，O(1)）", () => {
+  const { warehouse, containers } = makeWarehouse();
+  const over = new InMemoryContainer("over", "multi", 10);
+  for (let i = 0; i < 9; i++) over.setItem(i, new SimpleItemStack(`minecraft:o${i}`, 1, 64)); // 90%
+  const under = new InMemoryContainer("under", "multi", 10);
+  under.setItem(0, new SimpleItemStack("minecraft:stone", 1, 64)); // 10%
+  containers.set("over", over);
+  containers.set("under", under);
+  const svc = new StatsService(new InMemoryStatsStore(), new EventBus());
+  // 路由到超阈值目标 → 报 yellow（容器级）
+  assert.deepEqual(svc.evaluateWarnings(warehouse, "over"), ["yellow"]);
+  // 路由到未超阈值目标 → 不报（即使同仓另有超阈值容器，增量只查目标）
+  assert.deepEqual(svc.evaluateWarnings(warehouse, "under"), []);
+});
+
 test("StatsService: 仓库统计汇总", () => {
   const { warehouse, containers } = makeWarehouse();
   const input = new InMemoryContainer("in", "input", 3);

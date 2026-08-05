@@ -163,50 +163,34 @@ export class StatsService {
   }
 
   /**
-   * 三级预警（带冷却，冷却内返回 []）：
-   * yellow = 任一容器超阈值；red = 任一非 input 角色组全满；deep-red = 全仓（除 input）全满。
-   * yellow 携带最满容器 id 供玩家定位；各级去重（同 tick 不重复播报）。
+   * 容器级容量预警（带仓库级冷却，冷却内返回 []，避免每路由刷屏）。
+   * 只报"某容器超阈值"（yellow，携带最满容器 id 供玩家定位），**不做角色组/全仓级**红深红。
+   * - 路由热路径：`evaluateWarnings(wh, targetContainerId)` —— 只查目标容器，O(1) 无全仓扫描
+   * - 手动/全览：不传 containerId → 遍历容器取最满超阈值者报一次
    */
-  evaluateWarnings(warehouse: Warehouse): WarningLevel[] {
+  evaluateWarnings(warehouse: Warehouse, containerId?: ContainerId): WarningLevel[] {
     const cd = this.cooldowns.get(warehouse.id) ?? 0;
     if (cd > 0) return [];
-    const levels = new Set<WarningLevel>();
-    const roleFull: Record<string, boolean> = {};
-    let nonInputCount = 0;
-    let nonInputFull = 0;
-    let yellowContainerId: ContainerId | undefined;
+    const targets = (
+      containerId !== undefined
+        ? [warehouse.containers.get(containerId)]
+        : [...warehouse.containers.values()]
+    ).filter((c): c is Container => c !== undefined && c.role !== "input");
+    let yellowId: ContainerId | undefined;
     let worstRatio = -1;
-    for (const container of warehouse.containers.values()) {
-      if (container.role === "input") continue;
-      nonInputCount++;
-      const full = container.usedSlots > 0 && container.emptySlotsCount === 0;
-      if (full) nonInputFull++;
-      roleFull[container.role] = (roleFull[container.role] ?? true) && full;
+    for (const container of targets) {
       const cs = this.getContainerStats(warehouse, container);
-      if (cs.isWarning) {
-        levels.add("yellow");
-        const ratio = cs.totalSlots > 0 ? cs.usedSlots / cs.totalSlots : 0;
-        if (ratio > worstRatio) {
-          worstRatio = ratio;
-          yellowContainerId = cs.containerId;
-        }
+      if (!cs.isWarning) continue;
+      const ratio = cs.totalSlots > 0 ? cs.usedSlots / cs.totalSlots : 0;
+      if (ratio > worstRatio) {
+        worstRatio = ratio;
+        yellowId = cs.containerId;
       }
     }
-    for (const [role, full] of Object.entries(roleFull)) {
-      if (full) levels.add("red");
-    }
-    if (nonInputCount > 0 && nonInputFull === nonInputCount) levels.add("deep-red");
-    if (levels.size > 0) {
+    if (yellowId !== undefined) {
       this.cooldowns.set(warehouse.id, this.warningCooldownTicks);
-      for (const level of levels) {
-        this.bus.warning.trigger({
-          type: "warning",
-          warehouseId: warehouse.id,
-          level,
-          containerId: level === "yellow" ? yellowContainerId : undefined,
-        });
-      }
-      return [...levels];
+      this.bus.warning.trigger({ type: "warning", warehouseId: warehouse.id, level: "yellow", containerId: yellowId });
+      return ["yellow"];
     }
     return [];
   }
