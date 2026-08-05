@@ -25,7 +25,7 @@ import type { Router, IndexGateway } from "../routing/Router";
 import type { IntervalHandle, IntervalScheduler } from "./IntervalScheduler";
 import type { Warehouse } from "../model/Warehouse";
 import type { Container } from "../model/Container";
-import type { ContainerId, WarehouseId } from "../model/types";
+import type { WarehouseId } from "../model/types";
 import type { EventBus } from "../events/DomainEvents";
 import type { ItemIndex } from "../index/ItemIndex";
 
@@ -66,7 +66,6 @@ interface Runtime {
   lifecycle: WarehouseLifecycle;
   handle?: IntervalHandle;
   inputCursor: number;
-  slotCursors: Map<ContainerId, number>;
   deactivateCounter: number;
   /** 激活时加载的仓库级索引（空闲超时卸载置 undefined） */
   index?: ItemIndex;
@@ -97,7 +96,6 @@ export class Scheduler {
       warehouse,
       lifecycle: "inactive",
       inputCursor: 0,
-      slotCursors: new Map(),
       deactivateCounter: 0,
     });
   }
@@ -235,20 +233,14 @@ export class Scheduler {
       rt.inputCursor++;
       const container = rt.warehouse.containers.get(id);
       if (!container || container.role !== "input" || !container.enabled) continue;
-      const start = rt.slotCursors.get(id) ?? 0;
-      const capacity = container.capacity;
-      for (let offset = 0; offset < capacity; offset++) {
-        const slot = (start + offset) % capacity;
-        const item = container.getItem(slot);
-        if (item === undefined) continue;
-        rt.slotCursors.set(id, slot + 1);
-        const routed = this.router.routeFrom(container, slot, rt.warehouse, index);
-        if (routed !== undefined && this.options.onAutoSort !== undefined) {
-          const target = rt.warehouse.containers.get(routed.to);
-          if (target !== undefined) this.options.onAutoSort(rt.warehouse, target);
-        }
-        return; // 本轮只处理一个 slot
+      const slot = container.firstItem(); // 首个非空槽（委托原生，省去内部 for）
+      if (slot === undefined) continue;
+      const routed = this.router.routeFrom(container, slot, rt.warehouse, index);
+      if (routed !== undefined && this.options.onAutoSort !== undefined) {
+        const target = rt.warehouse.containers.get(routed.to);
+        if (target !== undefined) this.options.onAutoSort(rt.warehouse, target);
       }
+      return; // 本轮只处理一个 slot
     }
   }
 }

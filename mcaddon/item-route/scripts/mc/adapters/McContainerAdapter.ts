@@ -77,6 +77,47 @@ export class McContainerAdapter implements Container {
     return deriveBinding(this);
   }
 
+  // ── 便捷搜索：直接委托 mc.Container 原生方法（零遍历，官方语义） ──
+  firstItem(): number | undefined {
+    try {
+      return this.mc.firstItem();
+    } catch {
+      return undefined;
+    }
+  }
+
+  firstEmptySlot(): number | undefined {
+    try {
+      return this.mc.firstEmptySlot();
+    } catch {
+      return undefined;
+    }
+  }
+
+  contains(itemStack: ItemStack): boolean {
+    try {
+      return this.mc.contains(this.item.toMc(itemStack));
+    } catch {
+      return false;
+    }
+  }
+
+  find(itemStack: ItemStack): number | undefined {
+    try {
+      return this.mc.find(this.item.toMc(itemStack));
+    } catch {
+      return undefined;
+    }
+  }
+
+  findLast(itemStack: ItemStack): number | undefined {
+    try {
+      return this.mc.findLast(this.item.toMc(itemStack));
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * 合并/拆箱时重定容器 ID（主坐标迁移）。
    * 概念接口将 id 标为 readonly（语义上 identity），但双箱拆主半后 id 必须跟随

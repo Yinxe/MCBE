@@ -79,3 +79,19 @@ test("deriveBinding: 由首个非空 slot 推导", () => {
   c.setItem(0, undefined);
   assert.equal(deriveBinding(c), "minecraft:stone");
 });
+
+test("Container 便捷搜索: firstItem/firstEmptySlot/contains/find/findLast", () => {
+  const c = new InMemoryContainer("c1", "multi", 4);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  c.setItem(2, new SimpleItemStack("minecraft:dirt", 3, 64));
+  assert.equal(c.firstItem(), 0);
+  assert.equal(c.firstEmptySlot(), 1);
+  assert.equal(c.contains(new SimpleItemStack("minecraft:stone", 1, 64)), true);
+  assert.equal(c.contains(new SimpleItemStack("minecraft:wood", 1, 64)), false);
+  assert.equal(c.find(new SimpleItemStack("minecraft:dirt", 1, 64)), 2);
+  assert.equal(c.findLast(new SimpleItemStack("minecraft:dirt", 1, 64)), 2);
+  // 两个同型堆 → findLast 返回更大槽
+  c.setItem(2, new SimpleItemStack("minecraft:dirt", 3, 64));
+  c.setItem(3, new SimpleItemStack("minecraft:dirt", 1, 64));
+  assert.equal(c.findLast(new SimpleItemStack("minecraft:dirt", 1, 64)), 3);
+});

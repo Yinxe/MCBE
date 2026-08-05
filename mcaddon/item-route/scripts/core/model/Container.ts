@@ -41,4 +41,15 @@ export interface Container {
   addItem(stack: ItemStack): ItemStack | undefined;
   /** 单物绑定：由首个非空 slot 物品推导（core 纯函数 deriveBinding 实现） */
   getDedicatedItemId(): ItemId | undefined;
+  // ── 便捷搜索（委托 mc.Container 原生方法，避免 core 手写遍历） ──
+  /** 首个非空槽索引（无则 undefined）——调度轮询省一层 for */
+  firstItem(): number | undefined;
+  /** 首个空槽索引（无则 undefined） */
+  firstEmptySlot(): number | undefined;
+  /** 是否包含给定物品（按 mc 语义：类型+组件相等，非仅 itemId） */
+  contains(itemStack: ItemStack): boolean;
+  /** 查找给定物品所在的槽（首个） */
+  find(itemStack: ItemStack): number | undefined;
+  /** 查找给定物品所在的槽（最后一个） */
+  findLast(itemStack: ItemStack): number | undefined;
 }

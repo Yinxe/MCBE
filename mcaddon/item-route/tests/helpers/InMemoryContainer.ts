@@ -64,4 +64,39 @@ export class InMemoryContainer implements Container {
     }
     return undefined;
   }
+
+  // ── 便捷搜索（与 mc.Container 同语义；测试容器用线性扫描模拟） ──
+  firstItem(): number | undefined {
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.slots[i] !== undefined) return i;
+    }
+    return undefined;
+  }
+
+  firstEmptySlot(): number | undefined {
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.slots[i] === undefined) return i;
+    }
+    return undefined;
+  }
+
+  contains(itemStack: ItemStack): boolean {
+    return this.find(itemStack) !== undefined;
+  }
+
+  find(itemStack: ItemStack): number | undefined {
+    for (let i = 0; i < this.capacity; i++) {
+      const s = this.slots[i];
+      if (s !== undefined && s.isStackableWith(itemStack)) return i;
+    }
+    return undefined;
+  }
+
+  findLast(itemStack: ItemStack): number | undefined {
+    for (let i = this.capacity - 1; i >= 0; i--) {
+      const s = this.slots[i];
+      if (s !== undefined && s.isStackableWith(itemStack)) return i;
+    }
+    return undefined;
+  }
 }
