@@ -46,7 +46,9 @@ export function runSearch(deps: CommandDeps, query: string): SearchResultLine[] 
     let count = 0;
     const containerIds: string[] = [];
     for (const w of deps.loadedWarehouses()) {
-      const hits = deps.index.lookup(typeId);
+      const index = deps.resolveIndex(w.id); // 该仓库自己的索引（隔离）
+      if (index === undefined) continue;
+      const hits = index.lookup(typeId);
       for (const id of [...hits.single, ...hits.multi]) {
         if (containerIds.includes(id)) continue;
         containerIds.push(id);

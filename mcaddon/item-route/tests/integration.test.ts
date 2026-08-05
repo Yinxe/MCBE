@@ -26,15 +26,14 @@ function bootstrap() {
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
-    index,
     bus
   );
   const intervals = new MemoryIntervalScheduler();
   const proximity = { hasNearbyPlayer: () => true };
-  const scheduler = new Scheduler(router, intervals, proximity, bus);
+  const scheduler = new Scheduler(router, intervals, proximity, bus, 20, 40, { fallbackIndex: index });
   const stats = new StatsService(new InMemoryStatsStore(), bus);
   const organizer = new Organizer(new DefaultCandidateSorter());
-  const organize = new OrganizeService(organizer, index, bus);
+  const organize = new OrganizeService(organizer, () => index, bus);
   const warehouses = new WarehouseService(new InMemoryWarehouseStore(), bus);
   const members = new MemberService();
   return { bus, index, router, scheduler, intervals, stats, organize, warehouses, members };

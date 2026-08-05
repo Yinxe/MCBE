@@ -118,10 +118,9 @@ function makeRouteService() {
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
-    index,
     bus
   );
-  const scheduler = new Scheduler(router, intervals, proximity, bus);
+  const scheduler = new Scheduler(router, intervals, proximity, bus, 20, 40, { fallbackIndex: index });
   const service = new RouteService(scheduler);
   const containers = new Map<string, InMemoryContainer>();
   const warehouse: Warehouse = {
@@ -176,7 +175,7 @@ test("OrganizeService: organize 合并后索引更新", () => {
   const bus = new EventBus();
   const index = new ItemIndex();
   const organizer = new Organizer(new DefaultCandidateSorter());
-  const svc = new OrganizeService(organizer, index, bus);
+  const svc = new OrganizeService(organizer, () => index, bus);
   const misc = new InMemoryContainer("x", "misc", 4);
   misc.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
   const multi = new InMemoryContainer("m1", "multi", 4);

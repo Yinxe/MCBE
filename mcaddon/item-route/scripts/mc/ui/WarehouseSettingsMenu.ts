@@ -64,7 +64,7 @@ function refreshContainers(player: Player, deps: CommandDeps, warehouse: Warehou
   for (const c of [...warehouse.containers.values()]) {
     if (c.occupiedLocations.length === 0) {
       warehouse.containers.delete(c.id);
-      deps.index.onContainerRemoved(c);
+      deps.resolveIndex(warehouse.id)?.onContainerRemoved(c);
     }
   }
   deps.persistContainers(warehouse);

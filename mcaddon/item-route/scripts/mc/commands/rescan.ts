@@ -24,7 +24,7 @@ export function registerRescan(registry: Parameters<typeof defineCommand>[0], de
         player.sendMessage(`${chat.error}维度加载失败`);
         return;
       }
-      const result = scanWarehouseArea(dim, warehouse.area, deps.factory, deps.index, warehouse, deps.persistContainers);
+      const result = scanWarehouseArea(dim, warehouse.area, deps.factory, deps.resolveIndex(warehouse.id), warehouse, deps.persistContainers);
       if (result.skipped) {
         player.sendMessage(`${chat.warn}区域过大（>${40_000} 格）已跳过，请缩小区域或手动放置注册`);
         return;

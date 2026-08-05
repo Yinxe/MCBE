@@ -175,12 +175,11 @@ test("Router: 单物优先于多物（stone 进 single 容器）", () => {
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
-    index,
     bus
   );
   let routed: string | undefined;
   bus.itemRouted.subscribe((e) => (routed = `${e.from}->${e.to}`));
-  const result = router.routeFrom(input, 0, wh);
+  const result = router.routeFrom(input, 0, wh, index);
   assert.equal(result?.to, "s1");
   assert.equal(routed, "in->s1");
   assert.deepEqual(index.state.moved, ["in->s1:minecraft:stone"]);
@@ -198,10 +197,9 @@ test("Router: 优先级/使用率排序决定目标（priority 5 先于 10）", 
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
-    index,
     new EventBus()
   );
-  const result = router.routeFrom(input, 0, wh);
+  const result = router.routeFrom(input, 0, wh, index);
   assert.equal(result?.to, "a");
 });
 
@@ -213,10 +211,9 @@ test("Router: 全部候选失败 → 物品留在源", () => {
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
-    index,
     new EventBus()
   );
-  const result = router.routeFrom(input2, 0, wh2.wh);
+  const result = router.routeFrom(input2, 0, wh2.wh, index);
   assert.equal(result, undefined);
   assert.equal(input2.getItem(0)?.amount, 10);
 });
@@ -232,10 +229,9 @@ test("Router: verifyCandidate 漂移 → 候选被跳过", () => {
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
-    index,
     new EventBus()
   );
-  const result = router.routeFrom(input, 0, wh);
+  const result = router.routeFrom(input, 0, wh, index);
   assert.equal(result, undefined);
   assert.deepEqual(index.state.verified, ["m1"]);
 });

@@ -4,7 +4,8 @@
 // （满箱跳过/优先级/使用率）→ 逐个尝试 transfer，第一个发生移动即返回。
 // 关键设计：
 //   · 依赖注入 IndexGateway（结构类型）而非直接引 ItemIndex —— 隔离 index 模块，
-//     可单测用 stub 替身（tests/routing.test.ts 的 makeIndexStub）。
+//     可单测用 stub 替身；且索引按**每次路由调用**传入（而非 Router 持有全局单例），
+//     支撑"每仓库独立索引、激活加载/空闲卸载"的隔离（见 Scheduler 的 processOnce）。
 //   · 全部候选失败返回 undefined，物品留在源 —— 单槽原子性，不产生半成品。
 import { transfer } from "./Move";
 import type { CandidateContainer, RouteStrategy } from "./RouteStrategy";
@@ -33,24 +34,24 @@ export class Router {
   constructor(
     private readonly strategies: RouteStrategy[],
     private readonly sorter: CandidateSorter,
-    private readonly index: IndexGateway,
     private readonly bus: EventBus
   ) {}
 
   /**
    * 处理一个输入容器的非空 slot。
+   * 每个动作仅查询该仓库自己的索引（`index` 由调用方按仓库传入）。
    * 按策略 priority 升序执行，策略内候选经排序后逐个尝试转移；
    * 第一个发生移动即返回结果；全部失败返回 undefined（物品留在源）。
    */
-  routeFrom(input: Container, slot: number, warehouse: Warehouse): RouteResult | undefined {
+  routeFrom(input: Container, slot: number, warehouse: Warehouse, index: IndexGateway): RouteResult | undefined {
     const stack = input.getItem(slot);
     if (stack === undefined) return undefined;
     const originalAmount = stack.amount;
     const ctx = {
       item: stack,
       warehouse,
-      lookupIndex: (typeId: ItemId) => this.index.lookup(typeId),
-      verifyCandidate: (c: Container) => this.index.verifyCandidate(c),
+      lookupIndex: (typeId: ItemId) => index.lookup(typeId),
+      verifyCandidate: (c: Container) => index.verifyCandidate(c),
     };
     const ordered = [...this.strategies].sort((a, b) => a.priority - b.priority);
     for (const strategy of ordered) {
@@ -62,7 +63,7 @@ export class Router {
         const remaining = transfer({ container: input, slot }, target);
         if (remaining !== undefined && remaining.amount === originalAmount) continue; // 未移动
         const moved = originalAmount - (remaining?.amount ?? 0);
-        this.index.onItemMoved(input.id, target.id, stack.itemId);
+        index.onItemMoved(input.id, target.id, stack.itemId);
         this.bus.itemRouted.trigger({
           type: "item-routed",
           warehouseId: warehouse.id,

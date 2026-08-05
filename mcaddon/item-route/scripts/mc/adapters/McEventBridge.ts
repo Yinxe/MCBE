@@ -17,7 +17,7 @@ import type { Scheduler } from "../../core/scheduling/Scheduler";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
 import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
-import { locationKey, type Location } from "../../core/model/types";
+import { locationKey, type Location, type WarehouseId } from "../../core/model/types";
 import { containerIdOf, primaryLocationOf, containerIdPointsTo } from "../../core/model/ContainerId";
 import type { McIndexStore } from "../storage/McIndexStore";
 import type { McContainerFactory } from "./McContainerFactory";
@@ -25,7 +25,8 @@ import type { McContainerAdapter } from "./McContainerAdapter";
 
 export interface EventBridgeDeps {
   bus: EventBus;
-  index: ItemIndex;
+  /** 每仓库索引解析（隔离：由 Scheduler 持有，激活加载/空闲卸载） */
+  resolveIndex: (warehouseId: WarehouseId) => ItemIndex | undefined;
   stats: StatsService;
   scheduler: Scheduler;
   indexStore: McIndexStore;
@@ -44,12 +45,13 @@ export class McEventBridge {
   constructor(private readonly deps: EventBridgeDeps) {}
 
   start(): void {
-    const { bus, index, stats, scheduler, indexStore, factory } = this.deps;
+    const { bus, stats, scheduler, indexStore, factory } = this.deps;
 
-    // 路由移动物品 → 标记索引脏 + 统计失效（写穿透闭环，v1 索引批量落盘）
+    // 路由移动物品 → 标记该仓库索引脏 + 统计失效（写穿透闭环，批量落盘）
     bus.itemRouted.subscribe((e) => {
       try {
-        indexStore.markDirty(e.warehouseId, index.serialize());
+        const index = this.deps.resolveIndex(e.warehouseId);
+        if (index !== undefined) indexStore.markDirty(e.warehouseId, index.serialize());
         stats.invalidate(e.to);
       } catch (err) {
         console.warn(`[ItemRoute] 路由副作用失败: ${err}`);
@@ -62,10 +64,11 @@ export class McEventBridge {
         if (!e.isFirstEvent) return;
         const hit = this.locate(e.block);
         if (!hit) return;
-        index.verifyCandidate(hit.container);
+        this.deps.resolveIndex(hit.warehouse.id)?.verifyCandidate(hit.container);
         stats.invalidate(hit.container.id);
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: hit.warehouse.id, containerId: hit.container.id });
-        indexStore.markDirty(hit.warehouse.id, index.serialize());
+        const index = this.deps.resolveIndex(hit.warehouse.id);
+        if (index !== undefined) indexStore.markDirty(hit.warehouse.id, index.serialize());
       } catch (err) {
         console.warn(`[ItemRoute] interact 事件处理失败: ${err}`);
       }
@@ -89,25 +92,27 @@ export class McEventBridge {
           const hit = findContainerAt(this.deps.warehouses(), dim, partnerLoc);
           if (hit !== undefined && hit.container.id !== container.id) {
             const existing = hit.container;
+            const index = this.deps.resolveIndex(warehouse.id);
             // 拆旧 id 索引条目 + map 旧键 → 并入新格并重定主 id → 放回新键 → 重建索引
-            index.onContainerRemoved(existing);
+            index?.onContainerRemoved(existing);
             warehouse.containers.delete(existing.id);
             existing.occupiedLocations.push({ x: loc.x, y: loc.y, z: loc.z });
             (existing as McContainerAdapter).rebaseId(containerIdOf(primaryLocationOf(existing.occupiedLocations)!));
             warehouse.containers.set(existing.id, existing);
-            index.onContainerAdded(existing);
+            index?.onContainerAdded(existing);
             stats.invalidate(existing.id);
             bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: existing.id });
-            indexStore.markDirty(warehouse.id, index.serialize());
+            if (index !== undefined) indexStore.markDirty(warehouse.id, index.serialize());
             this.deps.onContainerRegistered?.(warehouse, existing);
             return;
           }
         }
         warehouse.containers.set(container.id, container);
-        index.onContainerAdded(container);
+        const index = this.deps.resolveIndex(warehouse.id);
+        index?.onContainerAdded(container);
         stats.invalidate(container.id);
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
-        indexStore.markDirty(warehouse.id, index.serialize());
+        if (index !== undefined) indexStore.markDirty(warehouse.id, index.serialize());
         this.deps.onContainerRegistered?.(warehouse, container);
       } catch (err) {
         console.warn(`[ItemRoute] place 事件处理失败: ${err}`);
@@ -123,10 +128,11 @@ export class McEventBridge {
         const loc: Location = { x: block.location.x, y: block.location.y, z: block.location.z };
         const idx = container.occupiedLocations.findIndex((l) => locationKey(l) === locationKey(loc));
         if (idx >= 0) container.occupiedLocations.splice(idx, 1);
+        const index = this.deps.resolveIndex(warehouse.id);
         if (container.occupiedLocations.length === 0) {
           // 完全拆除
           warehouse.containers.delete(container.id);
-          index.onContainerRemoved(container);
+          index?.onContainerRemoved(container);
           stats.invalidate(container.id);
           this.deps.onContainerUnregistered?.(warehouse, container);
         } else if (containerIdPointsTo(container.id, loc)) {
@@ -134,17 +140,17 @@ export class McEventBridge {
           // 否则 ID 悬空 + 后续在原主坐标新放容器会撞 ID
           const newId = containerIdOf(primaryLocationOf(container.occupiedLocations)!);
           if (newId !== container.id) {
-            index.onContainerRemoved(container);
+            index?.onContainerRemoved(container);
             warehouse.containers.delete(container.id);
             (container as McContainerAdapter).rebaseId(newId);
             warehouse.containers.set(newId, container);
-            index.onContainerAdded(container);
+            index?.onContainerAdded(container);
             stats.invalidate(container.id);
             this.deps.onContainerRegistered?.(warehouse, container);
           }
         }
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
-        indexStore.markDirty(warehouse.id, index.serialize());
+        if (index !== undefined) indexStore.markDirty(warehouse.id, index.serialize());
       } catch (err) {
         console.warn(`[ItemRoute] 移除事件处理失败: ${err}`);
       }

@@ -18,7 +18,8 @@ export interface CommandDeps {
   stats: StatsService;
   route: RouteService;
   organize: OrganizeService;
-  index: ItemIndex;
+  /** 按仓库解析其索引（隔离：取该仓当前加载的，未激活返回 undefined） */
+  resolveIndex: (warehouseId: string) => ItemIndex | undefined;
   config: McModConfig;
   /** 选区会话（信物交互与建仓流程共享） */
   session: SelectionSessionStore;

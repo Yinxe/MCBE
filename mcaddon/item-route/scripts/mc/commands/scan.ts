@@ -17,12 +17,14 @@ export interface RescanResult {
 /**
  * 遍历仓库区域，将支持的容器方块注册进仓库 + 索引。
  * 体积上限内逐块探测；超限则跳过（需玩家缩小区域或手动放置注册）。
+ * `index` 为该仓库当前加载的索引（隔离；未激活时为 undefined → 只注册容器、
+ * 跳过索引增量，由索引懒加载/惰性校验兜底）。
  */
 export function scanWarehouseArea(
   dimension: { getBlock(loc: { x: number; y: number; z: number }): { typeId: string } | undefined },
   area: WarehouseArea,
   factory: McContainerFactory,
-  index: ItemIndex,
+  index: ItemIndex | undefined,
   warehouse: Warehouse,
   persist: (warehouse: Warehouse) => void
 ): RescanResult {
@@ -45,7 +47,7 @@ export function scanWarehouseArea(
         if (container === undefined) continue;
         if (warehouse.containers.has(container.id)) continue;
         warehouse.containers.set(container.id, container);
-        index.onContainerAdded(container);
+        index?.onContainerAdded(container);
         registered++;
       }
     }

@@ -52,7 +52,7 @@ async function showContainerEdit(
   const role = Object.keys(ROLE_LABELS)[values.role as number] as ContainerRole;
   if (!forced) container.role = role;
   container.enabled = values.enabled as boolean;
-  deps.index.onContainerChanged(container);
+  deps.resolveIndex(warehouse.id)?.onContainerChanged(container); // 该仓自己的索引
   deps.stats.invalidate(container.id);
   deps.persistContainers(warehouse);
   player.sendMessage(`${uiColor.chat.success}容器 ${container.id} 已更新${forced ? "（漏斗强制 input）" : ""}`);

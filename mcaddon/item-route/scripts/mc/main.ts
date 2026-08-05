@@ -19,7 +19,7 @@ import { ItemIndex } from "../core/index/ItemIndex";
 import { Router } from "../core/routing/Router";
 import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import { Scheduler } from "../core/scheduling/Scheduler";
+import { Scheduler, type IndexLifecycle } from "../core/scheduling/Scheduler";
 import { StatsService } from "../core/stats/StatsService";
 import { Organizer } from "../core/organizing/Organizer";
 import { OrganizeService } from "../core/services/OrganizeService";
@@ -58,11 +58,9 @@ const intervals = new McIntervalScheduler();
 
 // Phase 2: 有状态业务逻辑
 const bus = new EventBus();
-const index = new ItemIndex();
 const router = new Router(
   [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
   new DefaultCandidateSorter(),
-  index,
   bus
 );
 const warehouseStore = new McWarehouseStore(shards);
@@ -79,7 +77,24 @@ const warehouses = new WarehouseService(warehouseStore, bus, {
 const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));
 const organizer = new Organizer(new DefaultCandidateSorter());
-const organize = new OrganizeService(organizer, index, bus);
+// 每仓库索引生命周期（隔离）：激活时从 McIndexStore 加载/恢复，空闲卸载时落盘
+const indexLifecycle: IndexLifecycle = {
+  load: (warehouse) => {
+    const idx = new ItemIndex();
+    const snap = indexStore.load(warehouse.id);
+    if (snap !== undefined && idx.restore(snap)) {
+      console.warn(`[ItemRoute] 索引加载 ${warehouse.id}`);
+      return idx;
+    }
+    for (const c of warehouse.containers.values()) idx.onContainerAdded(c);
+    console.warn(`[ItemRoute] 索引重建 ${warehouse.id}`);
+    return idx;
+  },
+  unload: (warehouse, idx) => {
+    // 落盘最新快照（实际写入由 100-tick / playerLeave flush 批量完成）
+    indexStore.markDirty(warehouse.id, idx.serialize());
+  },
+};
 const scheduler = new Scheduler(
   router,
   intervals,
@@ -87,16 +102,22 @@ const scheduler = new Scheduler(
   bus,
   config.globalSpeedLimit,
   undefined,
-  // 自动整理（v1 onDeposit）：目标容器混乱度超阈值即整理该仓
-  (wh, target) => {
-    if (organizer.shouldAutoSort(target, wh.settings.autoSortThreshold)) {
-      organize.organize(wh, new MoveJournal());
-    }
+  {
+    // 自动整理（v1 onDeposit）：目标容器混乱度超阈值即整理该仓
+    onAutoSort: (wh, target) => {
+      if (organizer.shouldAutoSort(target, wh.settings.autoSortThreshold)) {
+        organize.organize(wh, new MoveJournal());
+      }
+    },
+    // 每仓库索引隔离：激活加载/空闲卸载
+    indexLifecycle,
   }
 );
 const stats = new StatsService(new McStatsStore(shards), bus);
 const route = new RouteService(scheduler);
 route.setGlobalEnabled(config.globalEnabled);
+// 整理服务：按仓库解析索引（取该仓当前加载的，未激活则跳过索引联动）
+const organize = new OrganizeService(organizer, (wh) => scheduler.getIndex(wh.id), bus);
 
 // 容器注册表持久化钩子（事件桥接 → DP）
 const persistContainers = (warehouse: Warehouse): void => {
@@ -113,7 +134,7 @@ const persistContainers = (warehouse: Warehouse): void => {
 // Phase 3: 注册事件
 const bridge = new McEventBridge({
   bus,
-  index,
+  resolveIndex: (id) => scheduler.getIndex(id),
   stats,
   scheduler,
   indexStore,
@@ -133,7 +154,7 @@ const commandDeps: CommandDeps = {
   stats,
   route,
   organize,
-  index,
+  resolveIndex: (id) => scheduler.getIndex(id),
   config,
   session: sessionStore,
   loadedWarehouses: () => loaded,
@@ -200,15 +221,8 @@ system.run(() => {
       }
     }
 
-    // 索引恢复：版本不符/缺失 → 全量重建（verifyCandidate 兜底路径）
-    const snap = indexStore.load(snapshot.id);
-    if (snap !== undefined && index.restore(snap)) {
-      console.warn(`[ItemRoute] 索引恢复 ${snapshot.id}`);
-    } else {
-      for (const c of warehouse.containers.values()) index.onContainerAdded(c);
-      console.warn(`[ItemRoute] 索引重建 ${snapshot.id}`);
-    }
-
+    // 索引不在此预加载：每仓库索引改为"激活时加载/空闲卸载"（数据隔离），
+    // 由 Scheduler 经 indexLifecycle 在玩家邻近激活时从 McIndexStore 恢复/重建。
     scheduler.registerWarehouse(warehouse);
     warehouses.loadAll(); // 触发 core 侧缓存（如有）
   }

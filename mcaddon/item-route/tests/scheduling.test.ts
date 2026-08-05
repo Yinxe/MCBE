@@ -28,7 +28,7 @@ test("MemoryIntervalScheduler: 多 interval 独立", () => {
 });
 
 // ── Task 17: Scheduler ─────────────────────────────────
-import { Scheduler } from "../scripts/core/scheduling/Scheduler";
+import { Scheduler, type IndexLifecycle } from "../scripts/core/scheduling/Scheduler";
 import { Router } from "../scripts/core/routing/Router";
 import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
@@ -57,10 +57,9 @@ function makeWorld() {
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
-    index,
     bus
   );
-  const scheduler = new Scheduler(router, intervals, proximity, bus);
+  const scheduler = new Scheduler(router, intervals, proximity, bus, 20, 40, { fallbackIndex: index });
   const containers = new Map<string, InMemoryContainer>();
   const warehouse = {
     id: "w1",
@@ -158,7 +157,6 @@ test("Scheduler: 激活创建 interval 失败 → 保持 inactive 且可重试",
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
-    index,
     bus
   );
   const scheduler = new Scheduler(router, throwingIntervals, proximity, bus);
@@ -173,4 +171,49 @@ test("Scheduler: 激活创建 interval 失败 → 保持 inactive 且可重试",
   assert.equal(scheduler.getLifecycle("w1"), "inactive");
   scheduler.tick(); // 重试成功
   assert.equal(scheduler.getLifecycle("w1"), "active");
+});
+
+test("Scheduler: 每仓库索引隔离（激活加载/空闲卸载/各仓独立）", () => {
+  const intervals = new MemoryIntervalScheduler();
+  const proximity = new StubProximity();
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  const loadedIds: string[] = [];
+  const unloadedIds: string[] = [];
+  const lifecycle: IndexLifecycle = {
+    load: (wh) => { loadedIds.push(wh.id); return new ItemIndex(); },
+    unload: (wh) => { unloadedIds.push(wh.id); },
+  };
+  const scheduler = new Scheduler(router, intervals, proximity, new EventBus(), 20, 40, {
+    indexLifecycle: lifecycle,
+    idleUnloadTicks: 3, // 短空闲阈值便于测试
+  });
+  const mk = (id: string) => ({
+    id, displayName: id, ownerId: "p1", members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(), containers: new Map<string, InMemoryContainer>(),
+  });
+  const w1 = mk("w1");
+  const w2 = mk("w2");
+  scheduler.registerWarehouse(w1);
+  scheduler.registerWarehouse(w2);
+  // w1 激活 → 加载 w1 索引；w2 未激活 → 无索引
+  proximity.setNearby("w1", true);
+  scheduler.tick();
+  assert.equal(scheduler.getIndex("w1") !== undefined, true);
+  assert.equal(scheduler.getIndex("w2"), undefined);
+  assert.deepEqual(loadedIds, ["w1"]);
+  // w1 停用 → 空闲超阈值 → 卸载
+  proximity.setNearby("w1", false);
+  for (let i = 0; i < 50; i++) scheduler.tick(); // 40 停用宽限 + 3+ 空闲
+  assert.equal(scheduler.getIndex("w1"), undefined);
+  assert.deepEqual(unloadedIds, ["w1"]);
+  // 重新激活 → 重新加载（每次独立实例，非共享）
+  proximity.setNearby("w1", true);
+  scheduler.tick();
+  assert.equal(scheduler.getIndex("w1") !== undefined, true);
+  assert.deepEqual(loadedIds, ["w1", "w1"]);
 });
