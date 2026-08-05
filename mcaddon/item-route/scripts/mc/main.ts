@@ -69,7 +69,9 @@ const router = new Router(
 const warehouseStore = new McWarehouseStore(shards);
 const indexStore = new McIndexStore(shards);
 const members = new MemberService();
-const config = McModConfig.load(shards);
+// ⚠️ 早执行安全：create 只建默认值不读 DP（world.getDynamicProperty 早执行会报错）；
+// 持久化值在 Phase 4 system.run 里 config.refresh() 读取并重应用
+const config = McModConfig.create(shards);
 const statsStore = new McStatsStore(shards); // 每容器一条统计键，StatsService 写穿/清除
 // 建仓限制：来自模组配置（v1 口径：体积 32×32×16、每玩家 1 仓）
 const warehouses = new WarehouseService(
@@ -252,6 +254,10 @@ system.beforeEvents.startup.subscribe((event) => {
 
 // Phase 4: 延迟启动（世界完全加载）
 system.run(() => {
+  // 早执行安全：此处置顶读取持久化配置并应用到运行时（Phase 2 用 create 默认值）
+  config.refresh();
+  route.setGlobalEnabled(config.globalEnabled);
+  route.setGlobalSpeedLimit(config.globalSpeedLimit);
   for (const snapshot of warehouseStore.list()) {
     // 重建仓库（core 快照不含容器适配器）
     const warehouse: Warehouse = {

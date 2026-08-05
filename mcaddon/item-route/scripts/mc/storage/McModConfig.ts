@@ -50,15 +50,35 @@ export class McModConfig {
     this.data = data;
   }
 
+  /**
+   * Phase 2（模块加载顶层）用：只建默认值、**不读 DP**。
+   * ⚠️ world.getDynamicProperty 在"早执行"（世界加载前）调用会抛
+   * `cannot be used in early execution`——持久化值必须由 Phase 4 refresh() 读取。
+   */
+  static create(shards: ShardStore): McModConfig {
+    return new McModConfig(shards, { ...DEFAULT_MOD_CONFIG });
+  }
+
+  /** 读取持久化配置（测试/Phase 4 用；早执行不可调用） */
   static load(shards: ShardStore): McModConfig {
-    const data = shards.read<ModConfigData>(CONFIG_KEY);
-    return new McModConfig(shards, {
+    const cfg = new McModConfig(shards, { ...DEFAULT_MOD_CONFIG });
+    cfg.refresh();
+    return cfg;
+  }
+
+  /** Phase 4（世界加载后）读取持久化配置并合并（早执行不可用） */
+  refresh(): void {
+    this.applyData(this.shards.read<ModConfigData>(CONFIG_KEY));
+  }
+
+  private applyData(data: ModConfigData | undefined): void {
+    this.data = {
       globalEnabled: data?.globalEnabled ?? DEFAULT_MOD_CONFIG.globalEnabled,
       globalSpeedLimit: McModConfig.clamp(data?.globalSpeedLimit ?? DEFAULT_MOD_CONFIG.globalSpeedLimit),
       tokenItemId: data?.tokenItemId ?? DEFAULT_MOD_CONFIG.tokenItemId,
       maxWarehouseVolume: data?.maxWarehouseVolume ?? DEFAULT_MOD_CONFIG.maxWarehouseVolume,
       maxWarehousesPerPlayer: data?.maxWarehousesPerPlayer ?? DEFAULT_MOD_CONFIG.maxWarehousesPerPlayer,
-    });
+    };
   }
 
   get globalEnabled(): boolean { return this.data.globalEnabled; }
