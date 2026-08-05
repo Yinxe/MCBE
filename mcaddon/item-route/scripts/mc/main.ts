@@ -113,7 +113,7 @@ const indexLifecycle: IndexLifecycle = {
   },
   unload: (warehouse, idx) => {
     // 落盘最新快照（实际写入由 100-tick / playerLeave flush 批量完成）
-    indexStore.markDirty(warehouse.id, idx.serialize());
+    indexStore.markDirty(warehouse.id, idx);
   },
 };
 const scheduler = new Scheduler(
@@ -201,6 +201,10 @@ bridge.start();
 
 // 交互层：选区会话 + 命令 deps + 视觉订阅 + 信物交互
 const sessionStore = new SelectionSessionStore();
+// 玩家离开：清该玩家选区会话（防下线残留，重连误完成选区）
+world.afterEvents.playerLeave.subscribe((e) => {
+  sessionStore.clear(e.playerId);
+});
 const commandDeps: CommandDeps = {
   bus,
   members,

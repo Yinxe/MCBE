@@ -12,10 +12,10 @@ const snap = (n: number): IndexSnapshotData => ({
   singleBindings: { s1: `minecraft:stone:${n}` },
 });
 
-test("McIndexStore: markDirty + flush 批量落盘 + 读取", () => {
+test("McIndexStore: markDirty + flush 批量落盘 + 读取（flush 时序列化）", () => {
   const store = new McIndexStore(new ShardStore(new InMemoryKeyValueStore()));
-  store.markDirty("w1", snap(1));
-  store.markDirty("w2", snap(2));
+  store.markDirty("w1", { serialize: () => snap(1) });
+  store.markDirty("w2", { serialize: () => snap(2) });
   assert.equal(store.hasDirty(), true);
   store.flush();
   assert.equal(store.hasDirty(), false);
@@ -25,7 +25,7 @@ test("McIndexStore: markDirty + flush 批量落盘 + 读取", () => {
 
 test("McIndexStore: remove 清键 + 清脏", () => {
   const store = new McIndexStore(new ShardStore(new InMemoryKeyValueStore()));
-  store.markDirty("w1", snap(1));
+  store.markDirty("w1", { serialize: () => snap(1) });
   store.flush();
   store.remove("w1");
   assert.equal(store.load("w1"), undefined);

@@ -163,14 +163,17 @@ export class StatsService {
   /**
    * 三级预警（带冷却，冷却内返回 []）：
    * yellow = 任一容器超阈值；red = 任一非 input 角色组全满；deep-red = 全仓（除 input）全满。
+   * yellow 携带最满容器 id 供玩家定位；各级去重（同 tick 不重复播报）。
    */
   evaluateWarnings(warehouse: Warehouse): WarningLevel[] {
     const cd = this.cooldowns.get(warehouse.id) ?? 0;
     if (cd > 0) return [];
-    const levels: WarningLevel[] = [];
+    const levels = new Set<WarningLevel>();
     const roleFull: Record<string, boolean> = {};
     let nonInputCount = 0;
     let nonInputFull = 0;
+    let yellowContainerId: ContainerId | undefined;
+    let worstRatio = -1;
     for (const container of warehouse.containers.values()) {
       if (container.role === "input") continue;
       nonInputCount++;
@@ -178,18 +181,30 @@ export class StatsService {
       if (full) nonInputFull++;
       roleFull[container.role] = (roleFull[container.role] ?? true) && full;
       const cs = this.getContainerStats(warehouse, container);
-      if (cs.isWarning) levels.push("yellow");
+      if (cs.isWarning) {
+        levels.add("yellow");
+        const ratio = cs.totalSlots > 0 ? cs.usedSlots / cs.totalSlots : 0;
+        if (ratio > worstRatio) {
+          worstRatio = ratio;
+          yellowContainerId = cs.containerId;
+        }
+      }
     }
     for (const [role, full] of Object.entries(roleFull)) {
-      if (full) levels.push("red");
+      if (full) levels.add("red");
     }
-    if (nonInputCount > 0 && nonInputFull === nonInputCount) levels.push("deep-red");
-    if (levels.length > 0) {
+    if (nonInputCount > 0 && nonInputFull === nonInputCount) levels.add("deep-red");
+    if (levels.size > 0) {
       this.cooldowns.set(warehouse.id, this.warningCooldownTicks);
       for (const level of levels) {
-        this.bus.warning.trigger({ type: "warning", warehouseId: warehouse.id, level });
+        this.bus.warning.trigger({
+          type: "warning",
+          warehouseId: warehouse.id,
+          level,
+          containerId: level === "yellow" ? yellowContainerId : undefined,
+        });
       }
-      return levels;
+      return [...levels];
     }
     return [];
   }

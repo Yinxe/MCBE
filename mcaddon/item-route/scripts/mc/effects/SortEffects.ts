@@ -6,18 +6,7 @@
 // 仓库引用，保持薄订阅者角色。RP 粒子 identifier：itemroute:sort / itemroute:deposit。
 import { type Dimension } from "@minecraft/server";
 import type { EventBus, VisualEffectEvent } from "../../core/events/DomainEvents";
-import type { ContainerRole } from "../../core/model/Container";
 
-/** 角色 → 粒子类型（v1 同款色值） */
-export const ROLE_COLOR: Record<ContainerRole, string> = {
-  input: "minecraft:gold_particle",
-  single: "minecraft:green_sparkle",
-  multi: "minecraft:blue_sparkle",
-  misc: "minecraft:heart_particle",
-};
-
-export const CHEST_SIZE = 0.96;
-export const FULL_BLOCK_SIZE = 1.08;
 export const SORT_PARTICLE = "itemroute:sort";
 export const DEPOSIT_PARTICLE = "itemroute:deposit";
 
@@ -43,16 +32,4 @@ export function registerSortEffects(bus: EventBus, locator: EffectLocator): void
       console.warn(`[item-route] 视觉反馈失败: ${err}`);
     }
   });
-}
-
-/** 播放单次路由闪光（无玩家在场自动跳过） */
-export function playSortEffect(dimension: Dimension, loc: { x: number; y: number; z: number }, color?: string): void {
-  if (dimension.getPlayers().length === 0) return;
-  dimension.spawnParticle(color ?? SORT_PARTICLE, { x: loc.x + 0.5, y: loc.y + FULL_BLOCK_SIZE / 2, z: loc.z + 0.5 });
-}
-
-/** 播放存入效果（较小粒子） */
-export function playSearchEffect(dimension: Dimension, loc: { x: number; y: number; z: number }): void {
-  if (dimension.getPlayers().length === 0) return;
-  dimension.spawnParticle(DEPOSIT_PARTICLE, { x: loc.x + 0.5, y: loc.y + CHEST_SIZE, z: loc.z + 0.5 });
 }

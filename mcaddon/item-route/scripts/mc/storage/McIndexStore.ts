@@ -17,7 +17,8 @@ import type { WarehouseId } from "../../core/model/types";
 const indexKey = (id: WarehouseId): string => `ir2:idx:${id}`;
 
 export class McIndexStore implements IndexStore {
-  private dirty = new Map<WarehouseId, IndexSnapshotData>();
+  /** 脏项持**索引对象引用**，flush 时才序列化——路由热路径零拷贝（索引每轮都在变，延后序列化拿到最新态） */
+  private dirty = new Map<WarehouseId, { serialize(): IndexSnapshotData }>();
 
   constructor(private readonly shards: ShardStore) {}
 
@@ -34,20 +35,20 @@ export class McIndexStore implements IndexStore {
     this.shards.remove(indexKey(id));
   }
 
-  /** 标记脏：路由热路径零 DP 写，仅内存 */
-  markDirty(id: WarehouseId, snapshot: IndexSnapshotData): void {
-    this.dirty.set(id, snapshot);
+  /** 标记脏：持索引引用，零 DP 写、零序列化（flush 时再序列化最新态） */
+  markDirty(id: WarehouseId, index: { serialize(): IndexSnapshotData }): void {
+    this.dirty.set(id, index);
   }
 
   hasDirty(): boolean {
     return this.dirty.size > 0;
   }
 
-  /** 批量落盘全部脏项；返回失败数（1MB 超限项保留脏标记，自动恢复） */
+  /** 批量落盘全部脏项（此刻才 serialize）；返回失败数（1MB 超限项保留脏标记，自动恢复） */
   flush(): number {
     let failed = 0;
-    for (const [id, snapshot] of this.dirty) {
-      if (this.shards.write(indexKey(id), snapshot, "overwrite")) {
+    for (const [id, index] of this.dirty) {
+      if (this.shards.write(indexKey(id), index.serialize(), "overwrite")) {
         this.dirty.delete(id);
       } else {
         failed++;

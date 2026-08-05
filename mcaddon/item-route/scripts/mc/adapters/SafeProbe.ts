@@ -82,11 +82,21 @@ export function probeDoubleChestSafely(
     return undefined;
   } finally {
     if (probeWritten) {
+      let restored = false;
       try {
         container.setItem(probeSlot, original);
-        const restored = container.getItem(probeSlot);
-        if (!sameStack(restored, original)) return undefined;
+        restored = sameStack(container.getItem(probeSlot), original);
       } catch {
+        /* 恢复抛错：视为未恢复 */
+      }
+      if (!restored) {
+        // 恢复失败：仅当槽里仍是探针才清掉（避免 structure_void 污染玩家箱子）；
+        // 若是原物（读回校验因 lore/耐久怪癖失败）则不动——宁留探针不丢原物
+        try {
+          if (container.getItem(probeSlot)?.typeId === PROBE_ID) container.setItem(probeSlot, undefined);
+        } catch {
+          /* 尽力清探针 */
+        }
         return undefined;
       }
     }

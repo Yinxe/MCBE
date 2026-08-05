@@ -26,6 +26,7 @@ export interface BoundaryOptions {
 
 interface ActiveBoundary {
   handle: number;
+  timeout: number;
 }
 
 const activeBoundaries = new Map<string, ActiveBoundary>();
@@ -67,17 +68,18 @@ export function startBoundary(warehouseId: string, options: BoundaryOptions): vo
     }
   }, REFRESH_INTERVAL);
 
-  activeBoundaries.set(warehouseId, { handle });
-  system.runTimeout(() => {
-    stopBoundary(warehouseId);
-  }, duration);
+  activeBoundaries.set(warehouseId, {
+    handle,
+    timeout: system.runTimeout(() => stopBoundary(warehouseId), duration),
+  });
 }
 
-/** 停止边界粒子（无需还原方块） */
+/** 停止边界粒子（无需还原方块；同时清 interval + 超时句柄，防旧 timeout 提前停新边界） */
 export function stopBoundary(warehouseId: string): void {
   const active = activeBoundaries.get(warehouseId);
   if (active === undefined) return;
   system.clearRun(active.handle);
+  system.clearRun(active.timeout);
   activeBoundaries.delete(warehouseId);
 }
 

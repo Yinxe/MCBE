@@ -18,7 +18,7 @@ function makeCtx(containers: InMemoryContainer[], lookup: (typeId: string) => { 
     ownerId: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: { routingEnabled: true, sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 0.4 },
+    settings: { routingEnabled: true, sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 0.4, defaultContainerRole: "single" as const, defaultContainerEnabled: true },
     containers: new Map(containers.map((c) => [c.id, c])),
     inputs: new Map(),
   };
@@ -156,7 +156,7 @@ function makeWarehouse() {
     ownerId: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: { routingEnabled: true, sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 0.4 },
+    settings: { routingEnabled: true, sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 0.4, defaultContainerRole: "single" as const, defaultContainerEnabled: true },
     containers,
     inputs: new Map<string, InMemoryContainer>(),
   };

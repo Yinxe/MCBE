@@ -7,9 +7,6 @@ import { getChineseName } from "../../core/data/ItemNameMap";
 import { Table } from "./Table";
 import * as uiColor from "./uiColor";
 
-/** 满仓预警阈值（容量占用比） */
-export const CAPACITY_WARNING_THRESHOLD = 0.9;
-
 export async function showStatsUI(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   const stats = deps.stats.getWarehouseStats(warehouse);
   // 按钮文字深色（ActionForm 浅灰按钮背景）
@@ -36,13 +33,7 @@ function showByItem(player: Player, deps: CommandDeps, warehouse: Warehouse): vo
   const stats = deps.stats.getWarehouseStats(warehouse);
   const table = new Table().header("物品", "数量", "堆叠", "所在容器");
   for (const [typeId, itemStat] of Object.entries(stats.byItem)) {
-    const warning = itemStat.count >= 0 && itemStat.containerIds.length > 0 ? "" : "";
-    void warning;
     table.row(getChineseName(typeId), String(itemStat.count), String(itemStat.stacks), itemStat.containerIds.join("、"));
   }
   player.sendMessage(`${uiColor.chat.warn}按物品统计（${warehouse.displayName}）\n${table.render() || "空"}`);
-}
-
-export function isCapacityWarning(used: number, capacity: number): boolean {
-  return capacity > 0 && used / capacity >= CAPACITY_WARNING_THRESHOLD;
 }

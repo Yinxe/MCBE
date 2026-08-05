@@ -31,6 +31,10 @@ async function showContainerEdit(
   container: Container
 ): Promise<void> {
   const isMember = requireRole(deps.members, warehouse, player.id, "member");
+  if (!isMember) {
+    player.sendMessage(`${uiColor.chat.error}需要 member 及以上权限`);
+    return;
+  }
   const forced = isHopperType((container as { blockType?: string }).blockType ?? "");
 
   const roleOptions = [ROLE_LABELS.input, ROLE_LABELS.single, ROLE_LABELS.multi, ROLE_LABELS.misc];
@@ -46,10 +50,6 @@ async function showContainerEdit(
 
   const values = await form.show(player);
   if (!values) return;
-  if (!isMember) {
-    player.sendMessage(`${uiColor.chat.error}需要 member 及以上权限`);
-    return;
-  }
   const role = Object.keys(ROLE_LABELS)[values.role as number] as ContainerRole;
   if (!forced) container.role = role;
   container.enabled = values.enabled as boolean;

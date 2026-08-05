@@ -34,7 +34,7 @@ function sectionBody(index: number): string {
         `${chat.info}/ir:rescan_preview${chat.muted} 预览重扫（member+）`,
         `${chat.info}/ir:delete${chat.muted} 删除仓库（owner）`,
         `${chat.info}/ir:menu${chat.muted} 主菜单（visitor+）`,
-        `${chat.info}/ir:search${chat.muted} 搜索物品（visitor+）`,
+        `${chat.info}/ir:search${chat.muted} 在你有权限的最近仓库搜索物品（member+）`,
         `${chat.info}/ir:organize${chat.muted} 整理（任意）`,
         `${chat.info}/ir:help${chat.muted} 帮助（任意）`,
       ].join("\n");

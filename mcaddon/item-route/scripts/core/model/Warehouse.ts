@@ -5,6 +5,7 @@
 // 权限模型（配合 services/MemberService.ts）：owner > member > visitor，
 // 命令/UI 统一经 `MemberService.can()` 判定，替代 v1 的 OP 二元判断。
 import type { Container } from "./Container";
+import type { ContainerRole } from "./Container";
 import type { PlayerId, WarehouseId } from "./types";
 
 /** 成员角色：owner 全权限 / member 管理 / visitor 只读 */
@@ -34,6 +35,10 @@ export interface WarehouseSettings {
   warningThreshold: number;
   /** 自动整理触发阈值（0-1，v1 混乱度模型；超过即触发） */
   autoSortThreshold: number;
+  /** 新放置容器的默认角色（漏斗仍强制 input） */
+  defaultContainerRole: ContainerRole;
+  /** 新放置容器的默认启用 */
+  defaultContainerEnabled: boolean;
 }
 
 export function createDefaultSettings(): WarehouseSettings {
@@ -43,6 +48,8 @@ export function createDefaultSettings(): WarehouseSettings {
     processingSpeed: 8,
     warningThreshold: 0.9,
     autoSortThreshold: 0.4,
+    defaultContainerRole: "single",
+    defaultContainerEnabled: true,
   };
 }
 

@@ -53,7 +53,7 @@ export class McEventBridge {
     bus.itemRouted.subscribe((e) => {
       try {
         const index = this.deps.resolveIndex(e.warehouseId);
-        if (index !== undefined) indexStore.markDirty(e.warehouseId, index.serialize());
+        if (index !== undefined) indexStore.markDirty(e.warehouseId, index);
       } catch (err) {
         console.warn(`[ItemRoute] 路由副作用失败: ${err}`);
       }
@@ -69,7 +69,7 @@ export class McEventBridge {
         stats.invalidate(hit.container.id);
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: hit.warehouse.id, containerId: hit.container.id });
         const index = this.deps.resolveIndex(hit.warehouse.id);
-        if (index !== undefined) indexStore.markDirty(hit.warehouse.id, index.serialize());
+        if (index !== undefined) indexStore.markDirty(hit.warehouse.id, index);
       } catch (err) {
         console.warn(`[ItemRoute] interact 事件处理失败: ${err}`);
       }
@@ -84,8 +84,10 @@ export class McEventBridge {
         const loc = e.block.location;
         const warehouse = findWarehouseAt(this.deps.warehouses(), dim, { x: loc.x, y: loc.y, z: loc.z });
         if (warehouse === undefined) return;
-        const container = factory.create(e.block, "single");
+        // 新放置容器按仓库默认角色/启用注册（漏斗仍强制 input，见工厂）
+        const container = factory.create(e.block, warehouse.settings.defaultContainerRole);
         if (container === undefined) return;
+        container.enabled = warehouse.settings.defaultContainerEnabled;
 
         if (container.occupiedLocations.length > 1) {
           // 双箱：找伙伴块是否已是注册容器
@@ -103,7 +105,7 @@ export class McEventBridge {
             index?.onContainerAdded(existing);
             stats.invalidate(existing.id);
             bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: existing.id });
-            if (index !== undefined) indexStore.markDirty(warehouse.id, index.serialize());
+            if (index !== undefined) indexStore.markDirty(warehouse.id, index);
             this.deps.onContainerRegistered?.(warehouse, existing);
             return;
           }
@@ -114,7 +116,7 @@ export class McEventBridge {
         stats.invalidate(container.id);
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
         bus.containerAdded.trigger({ type: "container-added", warehouseId: warehouse.id, containerId: container.id, role: container.role });
-        if (index !== undefined) indexStore.markDirty(warehouse.id, index.serialize());
+        if (index !== undefined) indexStore.markDirty(warehouse.id, index);
         this.deps.onContainerRegistered?.(warehouse, container);
       } catch (err) {
         console.warn(`[ItemRoute] place 事件处理失败: ${err}`);
@@ -156,7 +158,7 @@ export class McEventBridge {
           this.deps.onContainerRegistered?.(warehouse, container);
         }
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
-        if (index !== undefined) indexStore.markDirty(warehouse.id, index.serialize());
+        if (index !== undefined) indexStore.markDirty(warehouse.id, index);
       } catch (err) {
         console.warn(`[ItemRoute] 移除事件处理失败: ${err}`);
       }

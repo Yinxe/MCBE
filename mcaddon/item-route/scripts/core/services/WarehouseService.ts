@@ -9,6 +9,7 @@
 // 以上任一不满足 → 返回中文错误（CreateResult.ok=false）。
 import type { Warehouse, WarehouseArea, WarehouseSettings, MemberRole } from "../model/Warehouse";
 import { createDefaultSettings } from "../model/Warehouse";
+import type { ContainerRole } from "../model/Container";
 import type { PlayerId, WarehouseId } from "../model/types";
 import type { WarehouseStore, WarehouseSnapshot } from "../storage/Stores";
 import type { EventBus } from "../events/DomainEvents";
@@ -89,7 +90,12 @@ export class WarehouseService {
     return this.store.list().map((s) => this.buildWarehouse(s));
   }
 
-  createWarehouse(displayName: string, ownerId: PlayerId, area: WarehouseArea): CreateResult {
+  createWarehouse(
+    displayName: string,
+    ownerId: PlayerId,
+    area: WarehouseArea,
+    defaults?: { role: ContainerRole; enabled: boolean }
+  ): CreateResult {
     const name = displayName.trim();
     if (name.length === 0) return { ok: false, error: "仓库名不能为空" };
     const sizeLimitError = areaExceedsLimits(area, this.limits);
@@ -108,13 +114,18 @@ export class WarehouseService {
     if (ownedCount >= this.limits.maxWarehousesPerPlayer) {
       return { ok: false, error: `每个玩家最多创建 ${this.limits.maxWarehousesPerPlayer} 个仓库` };
     }
+    const settings = createDefaultSettings();
+    if (defaults !== undefined) {
+      settings.defaultContainerRole = defaults.role;
+      settings.defaultContainerEnabled = defaults.enabled;
+    }
     const warehouse: Warehouse = {
       id: warehouseIdOf(area),
       displayName: name,
       ownerId,
       members: [{ playerId: ownerId, role: "owner" }],
       area,
-      settings: createDefaultSettings(),
+      settings,
       containers: new Map(),
       inputs: new Map(),
     };
@@ -229,7 +240,7 @@ export class WarehouseService {
       ownerId: snapshot.ownerId,
       members: snapshot.members.map((m) => ({ ...m })),
       area: { ...snapshot.area },
-      settings: { ...snapshot.settings },
+      settings: { ...createDefaultSettings(), ...snapshot.settings }, // 旧档缺新字段 → 补默认值
       containers: new Map(),
       inputs: new Map(),
     };

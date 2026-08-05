@@ -64,7 +64,10 @@ export function handleCornerClick(
   const area = areaFromPoints(dimension, session.corner1, clicked);
   ctx.session.clear(playerId);
   if (session.kind === "createWarehouse") {
-    const result = ctx.warehouses.createWarehouse(session.name, playerId, area);
+    const result = ctx.warehouses.createWarehouse(session.name, playerId, area, {
+      role: session.defaultRole,
+      enabled: session.defaultEnabled,
+    });
     if (!result.ok) return `${chat.error}${result.error}`;
     glow(ctx, result.warehouse.id);
     return `${chat.success}仓库 "${result.warehouse.displayName}" 创建成功！区域内容器自动注册`;
