@@ -50,14 +50,16 @@ export interface SchedulerOptions {
   onAutoSort?: (warehouse: Warehouse, target: Container) => void;
   /** 每仓库索引生命周期（未提供时用 fallbackIndex 共享实例） */
   indexLifecycle?: IndexLifecycle;
-  /** 空闲卸载阈值（tick() 次数；mc 每 5 游戏 tick 调一次 → 7200 ≈ 30 分钟） */
-  idleUnloadTicks?: number;
+  /** 空闲卸载阈值（**墙钟毫秒**，与调度 tick 节奏解耦；默认 30 分钟） */
+  idleUnloadMs?: number;
+  /** 时钟注入（默认 Date.now；测试可用假时钟） */
+  now?: () => number;
   /** 共享索引回退（测试/未隔离场景；生产不传，用 per-warehouse） */
   fallbackIndex?: ItemIndex;
 }
 
-/** 空闲卸载阈值（tick() 调用次数；mc 每 5 游戏 tick 调一次 → 7200 ≈ 30 分钟） */
-export const DEFAULT_IDLE_UNLOAD_TICKS = 7200;
+/** 空闲卸载阈值（墙钟毫秒；30 分钟。用墙钟而非 tick 计数，避免耦合 mc 主循环节奏） */
+export const DEFAULT_IDLE_UNLOAD_MS = 30 * 60 * 1000;
 
 interface Runtime {
   warehouse: Warehouse;
@@ -68,13 +70,14 @@ interface Runtime {
   deactivateCounter: number;
   /** 激活时加载的仓库级索引（空闲超时卸载置 undefined） */
   index?: ItemIndex;
-  /** 停用后的空闲 tick() 计数，超阈值卸载索引 */
-  idleTicks: number;
+  /** 该仓库进入 inactive 的时间戳（Date.now 墙钟）；未 inactive 为 undefined */
+  inactiveSince?: number;
 }
 
 export class Scheduler {
   private runtimes = new Map<WarehouseId, Runtime>();
   private globalEnabled = true;
+  private readonly now: () => number;
 
   constructor(
     private readonly router: Router,
@@ -84,7 +87,9 @@ export class Scheduler {
     private readonly globalSpeedLimit = 20,
     private readonly deactivateDelayTicks = 40,
     private readonly options: SchedulerOptions = {}
-  ) {}
+  ) {
+    this.now = options.now ?? Date.now;
+  }
 
   registerWarehouse(warehouse: Warehouse): void {
     if (this.runtimes.has(warehouse.id)) return;
@@ -94,7 +99,6 @@ export class Scheduler {
       inputCursor: 0,
       slotCursors: new Map(),
       deactivateCounter: 0,
-      idleTicks: 0,
     });
   }
 
@@ -140,7 +144,7 @@ export class Scheduler {
         rt.handle?.stop();
         rt.handle = undefined;
         rt.lifecycle = "inactive";
-        // 索引交由空闲计时卸载（保持 setGlobalEnabled(false) 语义不变）
+        rt.inactiveSince = this.now(); // 全局关 → 立即开始空闲计时
       }
     }
   }
@@ -156,7 +160,7 @@ export class Scheduler {
             try {
               if (rt.index === undefined) rt.index = this.resolveIndex(rt.warehouse);
               rt.handle = this.createInterval(rt);
-              rt.idleTicks = 0;
+              rt.inactiveSince = undefined;
               rt.lifecycle = "active";
               this.emitLifecycle(rt, "inactive", "active");
             } catch {
@@ -164,13 +168,13 @@ export class Scheduler {
               rt.lifecycle = "inactive";
             }
           } else {
-            // 空闲计时：超过 idleUnloadTicks → 卸载索引（仅 per-warehouse 生命周期模式）
-            rt.idleTicks++;
-            const unloadAfter = this.options.idleUnloadTicks ?? DEFAULT_IDLE_UNLOAD_TICKS;
-            if (rt.index !== undefined && this.options.indexLifecycle !== undefined && rt.idleTicks > unloadAfter) {
+            // 空闲卸载：距本仓最近进入 inactive 超过 idleUnloadMs（墙钟）→ 卸载索引
+            const since = rt.inactiveSince ?? this.now();
+            const idleMs = this.options.idleUnloadMs ?? DEFAULT_IDLE_UNLOAD_MS;
+            if (rt.index !== undefined && this.options.indexLifecycle !== undefined && this.now() - since > idleMs) {
               this.options.indexLifecycle.unload(rt.warehouse, rt.index);
               rt.index = undefined;
-              rt.idleTicks = 0;
+              rt.inactiveSince = undefined;
             }
           }
           break;
@@ -191,6 +195,7 @@ export class Scheduler {
               rt.handle?.stop();
               rt.handle = undefined;
               rt.lifecycle = "inactive";
+              rt.inactiveSince = this.now(); // 从此进入空闲计时（墙钟）
               this.emitLifecycle(rt, "deactivating", "inactive");
             }
           }

@@ -6,6 +6,13 @@
 //     经 `item.toMc` 还原的堆（携带源引用、保留组件）放入。这正是"同型不同 NBT
 //     不错误合并"的保证（见 McItemAdapter 的 SOURCE symbol）。
 //   · O(1) 属性——capacity/emptySlotsCount/usedSlots 直接读 mc 容器，零遍历。
+//
+// 已勘察的 mc.Container API 面（5513 行起）与取舍：
+//   · 用：size/emptySlotsCount/usedSlots、getItem/setItem/clearAll(未用)/addItem、
+//         getSlot、firstEmptySlot(供 SafeProbe)
+//   · 知而不引：moveItem/transferItem/swapItems 是原生"移动/交换"原语，正确性高，
+//     但概念层 transfer/Organizer 已通过 addItem(+源引用) 达成等价且不绕过抽象边界；
+//     contains/find/findLast/firstItem 为线性搜索，索引已在 ItemIndex 缓存，无需。
 // 注意：本文件依赖 @minecraft/server，仅编译检查 + 游戏内冒烟，不进 node 测试构建。
 import type { Container as McContainer } from "@minecraft/server";
 import type { Container, ContainerRole } from "../../core/model/Container";
@@ -51,7 +58,8 @@ export class McContainerAdapter implements Container {
 
   setItem(slot: number, item?: ItemStack): void {
     try {
-      this.mc.getSlot(slot).setItem(item === undefined ? undefined : this.item.toMc(item));
+      // 直接用 Container.setItem（比经 getSlot().setItem 更贴近 mc API）
+      this.mc.setItem(slot, item === undefined ? undefined : this.item.toMc(item));
     } catch {
       // 区块未加载/容器失效：静默
     }

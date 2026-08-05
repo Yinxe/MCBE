@@ -5,7 +5,7 @@ import { containerIdOf, primaryLocationOf, parseContainerId, containerIdPointsTo
 const DIM = "overworld";
 
 test("containerIdOf: 生成 c@x,y,z@维度", () => {
-  assert.equal(containerIdOf({ x: 10, y: 64, z: 3 }, DIM), "c@10,64,3@overworld");
+  assert.equal(containerIdOf({ x: 10, y: 64, z: 3 }, DIM), "c@(10,64,3)@overworld");
 });
 
 test("primaryLocationOf: 双箱取 (x,y,z) 最小者（与创建顺序无关）", () => {
@@ -19,12 +19,12 @@ test("primaryLocationOf: 双箱取 (x,y,z) 最小者（与创建顺序无关）"
 });
 
 test("parseContainerId / containerIdPointsTo: 解析与指向判定（含维度）", () => {
-  assert.deepEqual(parseContainerId("c@10,64,3@overworld"), { loc: { x: 10, y: 64, z: 3 }, dimension: "overworld" });
+  assert.deepEqual(parseContainerId("c@(10,64,3)@overworld"), { loc: { x: 10, y: 64, z: 3 }, dimension: "overworld" });
   assert.equal(parseContainerId("bad-id"), undefined);
-  assert.equal(containerIdPointsTo("c@10,64,3@overworld", { x: 10, y: 64, z: 3 }, "overworld"), true);
-  assert.equal(containerIdPointsTo("c@10,64,3@overworld", { x: 11, y: 64, z: 3 }, "overworld"), false);
+  assert.equal(containerIdPointsTo("c@(10,64,3)@overworld", { x: 10, y: 64, z: 3 }, "overworld"), true);
+  assert.equal(containerIdPointsTo("c@(10,64,3)@overworld", { x: 11, y: 64, z: 3 }, "overworld"), false);
   // 维度不匹配 → 不指向（跨维不重叠的核心保证）
-  assert.equal(containerIdPointsTo("c@10,64,3@overworld", { x: 10, y: 64, z: 3 }, "nether"), false);
+  assert.equal(containerIdPointsTo("c@(10,64,3)@overworld", { x: 10, y: 64, z: 3 }, "nether"), false);
 });
 
 test("containerId 跨维度不冲突：同坐标不同维度 ID 不同", () => {
@@ -33,9 +33,9 @@ test("containerId 跨维度不冲突：同坐标不同维度 ID 不同", () => {
 
 test("containerIdOf/primaryLocationOf: 拆主半后重定到幸存半（同维度）", () => {
   const both = [{ x: 10, y: 64, z: 3 }, { x: 11, y: 64, z: 3 }];
-  assert.equal(containerIdOf(primaryLocationOf(both)!, DIM), "c@10,64,3@overworld");
+  assert.equal(containerIdOf(primaryLocationOf(both)!, DIM), "c@(10,64,3)@overworld");
   const survivor = primaryLocationOf([{ x: 11, y: 64, z: 3 }])!;
-  assert.equal(containerIdOf(survivor, DIM), "c@11,64,3@overworld");
+  assert.equal(containerIdOf(survivor, DIM), "c@(11,64,3)@overworld");
 });
 
 test("warehouseIdOf: 由归一化区域生成稳定 ID（角点乱序纠正 + 维度）", () => {

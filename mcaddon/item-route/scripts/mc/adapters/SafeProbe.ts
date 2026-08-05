@@ -61,14 +61,8 @@ export function probeDoubleChestSafely(
   let original: ItemStack | undefined;
 
   try {
-    // 优先选空槽（从 0 起），否则用最后一格
-    probeSlot = container.size - 1;
-    for (let slot = 0; slot < container.size; slot++) {
-      if (!container.getItem(slot)) {
-        probeSlot = slot;
-        break;
-      }
-    }
+    // 优先选空槽（firstEmptySlot），否则用最后一格（占满时）
+    probeSlot = container.firstEmptySlot() ?? container.size - 1;
     original = container.getItem(probeSlot)?.clone();
     const probe = new ItemStack(PROBE_ID, 1);
     container.setItem(probeSlot, probe);

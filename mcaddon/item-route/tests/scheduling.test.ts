@@ -187,9 +187,11 @@ test("Scheduler: 每仓库索引隔离（激活加载/空闲卸载/各仓独立�
     load: (wh) => { loadedIds.push(wh.id); return new ItemIndex(); },
     unload: (wh) => { unloadedIds.push(wh.id); },
   };
-  const scheduler = new Scheduler(router, intervals, proximity, new EventBus(), 20, 40, {
+  let fakeNow = 0; // 可注入墙钟：把"空闲 30 分钟"压成可测试的毫秒窗口
+  const scheduler = new Scheduler(router, intervals, proximity, new EventBus(), 20, 20, {
     indexLifecycle: lifecycle,
-    idleUnloadTicks: 3, // 短空闲阈值便于测试
+    idleUnloadMs: 1000,
+    now: () => fakeNow,
   });
   const mk = (id: string) => ({
     id, displayName: id, ownerId: "p1", members: [],
@@ -206,9 +208,14 @@ test("Scheduler: 每仓库索引隔离（激活加载/空闲卸载/各仓独立�
   assert.equal(scheduler.getIndex("w1") !== undefined, true);
   assert.equal(scheduler.getIndex("w2"), undefined);
   assert.deepEqual(loadedIds, ["w1"]);
-  // w1 停用 → 空闲超阈值 → 卸载
+  // w1 停用（20 宽限）→ inactive，空闲未超时 → 不卸载
   proximity.setNearby("w1", false);
-  for (let i = 0; i < 50; i++) scheduler.tick(); // 40 停用宽限 + 3+ 空闲
+  for (let i = 0; i < 30; i++) scheduler.tick();
+  assert.equal(scheduler.getIndex("w1") !== undefined, true); // fakeNow 仍 0，未超 1000ms
+  assert.deepEqual(unloadedIds, []);
+  // 推进墙钟超过阈值 → 下一次 tick 卸载
+  fakeNow = 2000;
+  scheduler.tick();
   assert.equal(scheduler.getIndex("w1"), undefined);
   assert.deepEqual(unloadedIds, ["w1"]);
   // 重新激活 → 重新加载（每次独立实例，非共享）

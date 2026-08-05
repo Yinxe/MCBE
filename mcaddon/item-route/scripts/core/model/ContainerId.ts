@@ -1,5 +1,5 @@
 // ─── 容器/仓库 ID 生成与主坐标（纯函数，可单测） ──────────
-// 容器 ID = `c@x,y,z@维度`；仓库 ID = `w@(min)-(max)@维度`。
+// 容器 ID = `c@(x,y,z)@维度`；仓库 ID = `w@(min)-(max)@维度`（括号风格统一）。
 // **带维度后缀**：同一批发坐标在不同维度会各自成为唯一 ID，避免跨维重叠
 // （否则 overworld 与 nether 的容器在全局统计缓存等以 ID 为键处会串味）。
 // 容器主坐标 = 双箱合并时两半 (x,y,z) 最小者：保证同双箱不论从哪半开始创建 ID 一致，
@@ -10,7 +10,7 @@ import type { WarehouseArea } from "./Warehouse";
 
 /** 由主坐标 + 维度生成容器 ID */
 export function containerIdOf(loc: Location, dimension: string): ContainerId {
-  return `c@${loc.x},${loc.y},${loc.z}@${dimension}`;
+  return `c@(${loc.x},${loc.y},${loc.z})@${dimension}`;
 }
 
 /** 从坐标列表取主坐标（(x,y,z) 字典序最小者；空列表返回 undefined） */
@@ -21,7 +21,7 @@ export function primaryLocationOf(locations: Location[]): Location | undefined {
 
 /** 解析容器 ID 的主坐标（含维度） */
 export function parseContainerId(id: ContainerId): { loc: Location; dimension: string } | undefined {
-  const m = /^c@(-?\d+),(-?\d+),(-?\d+)@(.+)$/.exec(id);
+  const m = /^c@\((-?\d+),(-?\d+),(-?\d+)\)@(.+)$/.exec(id);
   if (!m) return undefined;
   return {
     loc: { x: Number(m[1]), y: Number(m[2]), z: Number(m[3]) },
