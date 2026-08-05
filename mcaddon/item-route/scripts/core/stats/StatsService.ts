@@ -162,11 +162,13 @@ export class StatsService {
     this.store.save(warehouse.id, snap);
   }
 
-  /**
-   * 容器级容量预警（带仓库级冷却，冷却内返回 []，避免每路由刷屏）。
-   * 只报"某容器超阈值"（yellow，携带最满容器 id 供玩家定位），**不做角色组/全仓级**红深红。
-   * - 路由热路径：`evaluateWarnings(wh, targetContainerId)` —— 只查目标容器，O(1) 无全仓扫描
-   * - 手动/全览：不传 containerId → 遍历容器取最满超阈值者报一次
+/**
+   * 容量预警（带仓库级冷却，冷却内返回 []，避免每路由刷屏）——两级：
+   *   · warning：某容器容量超阈值（**容器级**，携带最满容器 id 供定位）
+   *   · full   ：全仓库（除 input）**满仓**
+   * - 路由热路径：`evaluateWarnings(wh, targetContainerId)` —— 警告只查目标 O(1)；
+   *   满仓只在"目标容器已满"时才做全仓空仓判定（全仓只能因目标变满而变满，gated 全仓扫描 + 冷却限流）
+   * - 手动/全览：不传 containerId → 遍历容器。
    */
   evaluateWarnings(warehouse: Warehouse, containerId?: ContainerId): WarningLevel[] {
     const cd = this.cooldowns.get(warehouse.id) ?? 0;
@@ -176,7 +178,10 @@ export class StatsService {
         ? [warehouse.containers.get(containerId)]
         : [...warehouse.containers.values()]
     ).filter((c): c is Container => c !== undefined && c.role !== "input");
-    let yellowId: ContainerId | undefined;
+    if (targets.length === 0) return [];
+
+    // warning：最满的超阈值容器（容器级）
+    let warnId: ContainerId | undefined;
     let worstRatio = -1;
     for (const container of targets) {
       const cs = this.getContainerStats(warehouse, container);
@@ -184,15 +189,37 @@ export class StatsService {
       const ratio = cs.totalSlots > 0 ? cs.usedSlots / cs.totalSlots : 0;
       if (ratio > worstRatio) {
         worstRatio = ratio;
-        yellowId = cs.containerId;
+        warnId = cs.containerId;
       }
     }
-    if (yellowId !== undefined) {
-      this.cooldowns.set(warehouse.id, this.warningCooldownTicks);
-      this.bus.warning.trigger({ type: "warning", warehouseId: warehouse.id, level: "yellow", containerId: yellowId });
-      return ["yellow"];
+    // full：仅当本轮涉及容器存在满仓才可能全仓满 → gated 全仓判定
+    const hasFull = targets.some((c) => c.emptySlotsCount === 0);
+    const full = hasFull && this.warehouseFullStocked(warehouse);
+
+    if (warnId === undefined && !full) return [];
+    this.cooldowns.set(warehouse.id, this.warningCooldownTicks);
+    const emitted: WarningLevel[] = [];
+    if (warnId !== undefined) {
+      this.bus.warning.trigger({ type: "warning", warehouseId: warehouse.id, level: "warning", containerId: warnId });
+      emitted.push("warning");
     }
-    return [];
+    if (full) {
+      this.bus.warning.trigger({ type: "warning", warehouseId: warehouse.id, level: "full" });
+      emitted.push("full");
+    }
+    return emitted;
+  }
+
+  /** 全仓库（除 input）是否满仓（非空且所有非 input 容器 usedSlots>0 且无空槽） */
+  private warehouseFullStocked(warehouse: Warehouse): boolean {
+    let nonInputCount = 0;
+    let nonInputFull = 0;
+    for (const c of warehouse.containers.values()) {
+      if (c.role === "input") continue;
+      nonInputCount++;
+      if (c.usedSlots > 0 && c.emptySlotsCount === 0) nonInputFull++;
+    }
+    return nonInputCount > 0 && nonInputFull === nonInputCount;
   }
 
   /** 冷却递减（由 Scheduler.tick 调用） */

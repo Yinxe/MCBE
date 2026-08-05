@@ -47,7 +47,7 @@ test("EventBus: 各领域事件独立派发", () => {
     itemId: "minecraft:stone",
     amount: 5,
   });
-  bus.warning.trigger({ type: "warning", warehouseId: "w1", level: "yellow", containerId: "c1" });
+  bus.warning.trigger({ type: "warning", warehouseId: "w1", level: "warning", containerId: "c1" });
   assert.deepEqual(routed, ["c1->c2:5"]);
 });
 

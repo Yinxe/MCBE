@@ -40,7 +40,7 @@ test("StatsService: 容器统计（槽位/物品/类型）", () => {
   assert.equal(stats.isWarning, false);
 });
 
-test("StatsService: 90% 阈值触发黄色预警（带冷却）", () => {
+test("StatsService: 90% 阈值触发警告预警（带冷却）", () => {
   const { warehouse, containers } = makeWarehouse();
   const c = new InMemoryContainer("m1", "multi", 10);
   for (let i = 0; i < 9; i++) {
@@ -51,13 +51,13 @@ test("StatsService: 90% 阈值触发黄色预警（带冷却）", () => {
   const warnings: string[] = [];
   bus.warning.subscribe((e) => warnings.push(e.level));
   const svc = new StatsService(new InMemoryStatsStore(), bus);
-  assert.deepEqual(svc.evaluateWarnings(warehouse), ["yellow"]);
-  assert.deepEqual(warnings, ["yellow"]);
+  assert.deepEqual(svc.evaluateWarnings(warehouse), ["warning"]);
+  assert.deepEqual(warnings, ["warning"]);
   // 冷却内不再触发
   assert.deepEqual(svc.evaluateWarnings(warehouse), []);
   svc.tick(); // 冷却递减（100 tick 需 100 次）
   for (let i = 0; i < 100; i++) svc.tick();
-  assert.deepEqual(svc.evaluateWarnings(warehouse), ["yellow"]);
+  assert.deepEqual(svc.evaluateWarnings(warehouse), ["warning"]);
   assert.equal(warnings.length, 2);
 });
 
@@ -70,10 +70,35 @@ test("StatsService: 容器级增量预警（只查目标容器，O(1)）", () =>
   containers.set("over", over);
   containers.set("under", under);
   const svc = new StatsService(new InMemoryStatsStore(), new EventBus());
-  // 路由到超阈值目标 → 报 yellow（容器级）
-  assert.deepEqual(svc.evaluateWarnings(warehouse, "over"), ["yellow"]);
+  // 路由到超阈值目标 → 报 warning（容器级）
+  assert.deepEqual(svc.evaluateWarnings(warehouse, "over"), ["warning"]);
   // 路由到未超阈值目标 → 不报（即使同仓另有超阈值容器，增量只查目标）
   assert.deepEqual(svc.evaluateWarnings(warehouse, "under"), []);
+});
+
+test("StatsService: 满仓预警（全仓非 input 全满才报 full）", () => {
+  const { warehouse, containers } = makeWarehouse();
+  const a = new InMemoryContainer("a", "multi", 2);
+  a.setItem(0, new SimpleItemStack("minecraft:stone", 64, 64));
+  a.setItem(1, new SimpleItemStack("minecraft:stone", 64, 64)); // 满
+  const b = new InMemoryContainer("b", "misc", 2);
+  b.setItem(0, new SimpleItemStack("minecraft:dirt", 64, 64));
+  b.setItem(1, new SimpleItemStack("minecraft:dirt", 64, 64)); // 满
+  containers.set("a", a);
+  containers.set("b", b);
+  const svc = new StatsService(new InMemoryStatsStore(), new EventBus());
+  const levels = svc.evaluateWarnings(warehouse);
+  assert.ok(levels.includes("full")); // 满仓
+  assert.ok(levels.includes("warning")); // 满容器也超阈值
+  // 有容器超阈值但仓库未满 → 只 warning 不 full（c：90% 未满；d：空）
+  const c = new InMemoryContainer("c", "multi", 10);
+  for (let i = 0; i < 9; i++) c.setItem(i, new SimpleItemStack(`minecraft:wood:${i}`, 1, 64));
+  const d = new InMemoryContainer("d", "multi", 10); // 空
+  const wh2 = makeWarehouse();
+  wh2.warehouse.containers.set("c", c);
+  wh2.warehouse.containers.set("d", d);
+  const svc2 = new StatsService(new InMemoryStatsStore(), new EventBus());
+  assert.deepEqual(svc2.evaluateWarnings(wh2.warehouse), ["warning"]); // 无 full
 });
 
 test("StatsService: 仓库统计汇总", () => {
