@@ -74,3 +74,19 @@ test("findContainerAt: 容器坐标命中 / 未注册坐标 undefined", () => {
   assert.equal(findContainerAt(ws, "overworld", { x: 5, y: 5, z: 5 })?.container.id, "c1");
   assert.equal(findContainerAt(ws, "overworld", { x: 6, y: 5, z: 5 }), undefined);
 });
+// ── Task 24/20: 外接圆半径 + 大仓库中心直线距离（margin） ──
+import { areaCircumradius } from "../scripts/core/model/Area";
+
+test("areaCircumradius: 中心到最远角的直线距离", () => {
+  const zero: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
+  assert.equal(areaCircumradius(zero), Math.hypot(5, 5)); // (dx/2, dz/2)
+});
+
+test("isPlayerNearby: 大仓库中心附近玩家在场（margin 而非固定格数）", () => {
+  // 仓库 40×40，外接圆半径 ≈28.28 + margin=8 → 半径 ≈36.28
+  const big: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 40, y: 10, z: 40 } };
+  const nearCenter = { dimension: "overworld", x: 20, z: 20 }; // 中心
+  const insideFarFromFixed = { dimension: "overworld", x: 39, z: 39 }; // 仓库内但距中心 >16（旧固定 16 会漏）
+  assert.equal(isPlayerNearby(big, [nearCenter], 8), true);
+  assert.equal(isPlayerNearby(big, [insideFarFromFixed], 8), true); // 仓库内必然在场
+});

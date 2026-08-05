@@ -29,11 +29,25 @@ export interface PlayerPosition {
   z: number;
 }
 
-/** 是否有玩家在仓库区域中心 XZ 距离 range 内（按维度过滤） */
-export function isPlayerNearby(area: WarehouseArea, players: PlayerPosition[], range: number): boolean {
+/** 区域 XZ 外接圆半径（从中心到最远角，直线距离参考点） */
+export function areaCircumradius(area: WarehouseArea): number {
+  const dx = Math.max(area.corner1.x, area.corner2.x) - Math.min(area.corner1.x, area.corner2.x);
+  const dz = Math.max(area.corner1.z, area.corner2.z) - Math.min(area.corner1.z, area.corner2.z);
+  return Math.hypot(dx / 2, dz / 2);
+}
+
+/**
+ * 是否有玩家在仓库中心直线距离 ≤ (外接圆半径 + margin) 内（按维度过滤）。
+ * 用中心直线距离而非固定格数（v1 口径）：仓库很大时，玩家身处区域内部、
+ * 但距中心超过固定值，也能正确判定"在场"（否则大仓永远不激活）。
+ */
+export function isPlayerNearby(area: WarehouseArea, players: PlayerPosition[], margin: number): boolean {
   const cx = (Math.min(area.corner1.x, area.corner2.x) + Math.max(area.corner1.x, area.corner2.x)) / 2;
   const cz = (Math.min(area.corner1.z, area.corner2.z) + Math.max(area.corner1.z, area.corner2.z)) / 2;
-  return players.some((p) => p.dimension === area.dimension && Math.hypot(p.x - cx, p.z - cz) <= range);
+  const radius = areaCircumradius(area) + margin;
+  return players.some(
+    (p) => p.dimension === area.dimension && Math.hypot(p.x - cx, p.z - cz) <= radius
+  );
 }
 
 // ─── 仓库/容器定位（事件桥接过滤谓词，零 MC 依赖） ─────────
