@@ -1,6 +1,7 @@
 // ─── ir:create 建仓 ─────────────────────────────────────
 import { system } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
+import { chat } from "../ui/uiColor";
 import { regionCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 
@@ -15,10 +16,10 @@ export function registerCreate(registry: Parameters<typeof defineCommand>[0], de
     system.runTimeout(() => {
       const result = deps.warehouses.createWarehouse(name, player.id, area);
       if (!result.ok) {
-        player.sendMessage(`§c${result.error}`);
+        player.sendMessage(`${chat.error}${result.error}`);
         return;
       }
-      player.sendMessage(`§a仓库 "${result.warehouse.displayName}" 创建成功！可 /ir:rescan 扫描容器`);
+      player.sendMessage(`${chat.success}仓库 "${result.warehouse.displayName}" 创建成功！可 /ir:rescan 扫描容器`);
       deps.bus.visualEffect.trigger({
         type: "visual-effect",
         kind: "boundary-glow",

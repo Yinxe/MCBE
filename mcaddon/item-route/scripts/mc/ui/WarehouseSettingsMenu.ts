@@ -7,6 +7,7 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import { showContainerRoleMenu } from "./ContainerRoleMenu";
 import { showMemberMenu } from "./MemberMenu";
 import { showStatsUI } from "./StatsUI";
+import * as uiColor from "./uiColor";
 
 const SPEED_OPTIONS = [4, 8, 16, 20, 30, 40];
 
@@ -14,19 +15,20 @@ export async function showWarehouseSettingsMenu(player: Player, deps: CommandDep
   const isOwner = requireRole(deps.members, warehouse, player.id, "owner");
   const isMember = requireRole(deps.members, warehouse, player.id, "member");
 
+  // 按钮文字一律深色（ActionForm 浅灰按钮背景，见 uiColor.btn）
   const form = new ActionFormBuilder()
-    .title(`§9${warehouse.displayName}`)
-    .body(`§7成员：${warehouse.members.map((m) => m.playerId).join("、") || "无"}\n§7容器：${warehouse.containers.size}`)
-    .button("§a仓库设置", () => void showSettingsForm(player, deps, warehouse))
-    .button("§d容器角色", () => void showContainerRoleMenu(player, deps, warehouse));
+    .title(`${uiColor.form.title}${warehouse.displayName}`)
+    .body(`${uiColor.form.body}成员：${warehouse.members.map((m) => m.playerId).join("、") || "无"}\n容器：${warehouse.containers.size}`)
+    .button(`${uiColor.btn.primary}仓库设置`, () => void showSettingsForm(player, deps, warehouse))
+    .button(`${uiColor.btn.nav}容器角色`, () => void showContainerRoleMenu(player, deps, warehouse));
 
   if (isMember) {
-    form.button("§b刷新容器", () => void refreshContainers(player, deps, warehouse));
+    form.button(`${uiColor.btn.info}刷新容器`, () => void refreshContainers(player, deps, warehouse));
   }
   if (isOwner) {
-    form.button("§6成员管理", () => void showMemberMenu(player, deps, warehouse));
-    form.button("§2统计", () => void showStatsUI(player, deps, warehouse));
-    form.button("§c删除仓库", () => void confirmDelete(player, deps, warehouse));
+    form.button(`${uiColor.btn.nav}成员管理`, () => void showMemberMenu(player, deps, warehouse));
+    form.button(`${uiColor.btn.accent}统计`, () => void showStatsUI(player, deps, warehouse));
+    form.button(`${uiColor.btn.danger}删除仓库`, () => void confirmDelete(player, deps, warehouse));
   }
   await form.show(player);
 }
@@ -34,7 +36,7 @@ export async function showWarehouseSettingsMenu(player: Player, deps: CommandDep
 async function showSettingsForm(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   const speedIndex = Math.max(0, SPEED_OPTIONS.indexOf(warehouse.settings.processingSpeed));
   const form = new ModalFormBuilder()
-    .title("§a仓库设置")
+    .title(`${uiColor.form.title}仓库设置`)
     .textField("name", "名称", { defaultValue: warehouse.displayName })
     .toggle("sortingEnabled", "自动分拣", { defaultValue: warehouse.settings.sortingEnabled })
     .dropdown(
@@ -54,7 +56,7 @@ async function showSettingsForm(player: Player, deps: CommandDeps, warehouse: Wa
     sortingEnabled: values.sortingEnabled as boolean,
     processingSpeed: SPEED_OPTIONS[values.speed as number] ?? 8,
   });
-  player.sendMessage("§a仓库设置已保存");
+  player.sendMessage(`${uiColor.chat.success}仓库设置已保存`);
 }
 
 function refreshContainers(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
@@ -66,17 +68,17 @@ function refreshContainers(player: Player, deps: CommandDeps, warehouse: Warehou
     }
   }
   deps.persistContainers(warehouse);
-  player.sendMessage(`§a容器刷新完成：${before} → ${warehouse.containers.size}`);
+  player.sendMessage(`${uiColor.chat.success}容器刷新完成：${before} → ${warehouse.containers.size}`);
 }
 
 async function confirmDelete(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   const form = new ActionFormBuilder()
-    .title("§c确认删除")
-    .body(`§7确定删除仓库 §f${warehouse.displayName}§7 吗？此操作不可恢复。`)
-    .button("§c确认删除", () => {
+    .title(`${uiColor.form.error}确认删除`)
+    .body(`${uiColor.form.body}确定删除仓库 ${warehouse.displayName} 吗？此操作不可恢复。`)
+    .button(`${uiColor.btn.danger}确认删除`, () => {
       deps.warehouses.deleteWarehouse(warehouse.id);
-      player.sendMessage(`§a仓库 ${warehouse.displayName} 已删除`);
+      player.sendMessage(`${uiColor.chat.success}仓库 ${warehouse.displayName} 已删除`);
     })
-    .button("取消", () => undefined);
+    .button(`${uiColor.btn.info}取消`, () => undefined);
   await form.show(player);
 }

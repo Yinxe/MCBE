@@ -3,21 +3,23 @@ import { type Player } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { TOKEN_OPTIONS } from "../storage/McModConfig";
+import * as uiColor from "./uiColor";
 
 const SPEED_OPTIONS = [4, 8, 16, 20, 30, 40];
 
 export async function showConfigUI(player: Player, deps: CommandDeps): Promise<void> {
+  // 按钮文字深色（ActionForm 浅灰按钮背景）
   const form = new ActionFormBuilder()
-    .title("§e模组配置")
+    .title(`${uiColor.form.title}模组配置`)
     .body(
       [
-        `§7全局分拣：§f${deps.config.globalEnabled ? "§a开启" : "§c关闭"}`,
-        `§7速度上限：§f${deps.config.globalSpeedLimit} tick/槽`,
-        `§7信物：§f${deps.config.tokenItemId}`,
+        `${uiColor.form.muted}全局分拣：${deps.config.globalEnabled ? uiColor.form.success + "开启" : uiColor.form.error + "关闭"}`,
+        `${uiColor.form.muted}速度上限：${uiColor.form.body}${deps.config.globalSpeedLimit} tick/槽`,
+        `${uiColor.form.muted}信物：${uiColor.form.body}${deps.config.tokenItemId}`,
       ].join("\n")
     )
-    .button("§f修改设置", () => void editConfig(player, deps))
-    .button("§f全服统计", () => void serverStats(player, deps));
+    .button(`${uiColor.btn.primary}修改设置`, () => void editConfig(player, deps))
+    .button(`${uiColor.btn.info}全服统计`, () => void serverStats(player, deps));
   await form.show(player);
 }
 
@@ -25,7 +27,7 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   const tokenIndex = Math.max(0, TOKEN_OPTIONS.indexOf(deps.config.tokenItemId));
   const speedIndex = Math.max(0, SPEED_OPTIONS.indexOf(deps.config.globalSpeedLimit));
   const form = new ModalFormBuilder()
-    .title("修改配置")
+    .title(`${uiColor.form.title}修改配置`)
     .toggle("globalEnabled", "全局分拣", { defaultValue: deps.config.globalEnabled })
     .dropdown("token", "信物", TOKEN_OPTIONS, { defaultValueIndex: tokenIndex })
     .dropdown(
@@ -39,7 +41,7 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   deps.route.setGlobalEnabled(values.globalEnabled as boolean);
   deps.config.setGlobalSpeedLimit(SPEED_OPTIONS[values.speed as number] ?? 20);
   deps.config.setTokenItemId(TOKEN_OPTIONS[values.token as number] ?? TOKEN_OPTIONS[0]!);
-  player.sendMessage("§a配置已保存");
+  player.sendMessage(`${uiColor.chat.success}配置已保存`);
 }
 
 function serverStats(player: Player, deps: CommandDeps): void {
@@ -51,5 +53,7 @@ function serverStats(player: Player, deps: CommandDeps): void {
     containerCount += s.containerCount;
     totalItems += s.totalItems;
   }
-  player.sendMessage(`§e全服统计：§f${warehouses.length}§7 仓库 · §f${containerCount}§7 容器 · §f${totalItems}§7 物品`);
+  player.sendMessage(
+    `${uiColor.chat.warn}全服统计：${uiColor.chat.info}${warehouses.length}${uiColor.chat.muted} 仓库 · ${uiColor.chat.info}${containerCount}${uiColor.chat.muted} 容器 · ${uiColor.chat.info}${totalItems}${uiColor.chat.muted} 物品`
+  );
 }

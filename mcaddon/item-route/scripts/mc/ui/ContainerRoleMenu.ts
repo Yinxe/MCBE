@@ -8,14 +8,15 @@ import { ROLE_LABELS } from "../../core/model/Container";
 import type { ContainerRole } from "../../core/model/Container";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
+import * as uiColor from "./uiColor";
 
 export async function showContainerRoleMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   const form = new ActionFormBuilder()
-    .title(`§d容器角色 · ${warehouse.displayName}`)
-    .body("选择容器（漏斗为强制 input）：");
+    .title(`${uiColor.form.title}容器角色 · ${warehouse.displayName}`)
+    .body(`${uiColor.form.body}选择容器（漏斗为强制 input）：`);
   for (const container of warehouse.containers.values()) {
     const roleLabel = ROLE_LABELS[container.role] ?? container.role;
-    form.button(`§f${container.id} §7[${roleLabel}]`, () =>
+    form.button(`${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]`, () =>
       void showContainerEdit(player, deps, warehouse, container)
     );
   }
@@ -33,7 +34,7 @@ async function showContainerEdit(
 
   const roleOptions = [ROLE_LABELS.input, ROLE_LABELS.single, ROLE_LABELS.multi, ROLE_LABELS.misc];
   const form = new ModalFormBuilder()
-    .title(`容器 ${container.id}`)
+    .title(`${uiColor.form.title}容器 ${container.id}`)
     .dropdown(
       "role",
       "角色",
@@ -45,7 +46,7 @@ async function showContainerEdit(
   const values = await form.show(player);
   if (!values) return;
   if (!isMember) {
-    player.sendMessage("§c需要 member 及以上权限");
+    player.sendMessage(`${uiColor.chat.error}需要 member 及以上权限`);
     return;
   }
   const role = Object.keys(ROLE_LABELS)[values.role as number] as ContainerRole;
@@ -54,5 +55,5 @@ async function showContainerEdit(
   deps.index.onContainerChanged(container);
   deps.stats.invalidate(container.id);
   deps.persistContainers(warehouse);
-  player.sendMessage(`§a容器 ${container.id} 已更新${forced ? "（漏斗强制 input）" : ""}`);
+  player.sendMessage(`${uiColor.chat.success}容器 ${container.id} 已更新${forced ? "（漏斗强制 input）" : ""}`);
 }

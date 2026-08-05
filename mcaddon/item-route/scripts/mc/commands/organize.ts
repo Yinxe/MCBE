@@ -1,6 +1,7 @@
 // ─── ir:organize 整理当前所在仓库 ────────────────────────
 import { system } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
+import { chat } from "../ui/uiColor";
 import { noParamCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 import { findWarehouseAt } from "../../core/model/Area";
@@ -15,11 +16,11 @@ export function registerOrganize(registry: Parameters<typeof defineCommand>[0], 
         z: Math.floor(player.location.z),
       });
       if (warehouse === undefined) {
-        player.sendMessage("§c你不在任何仓库区域内");
+        player.sendMessage(`${chat.error}你不在任何仓库区域内`);
         return;
       }
       const ok = deps.organize.organize(warehouse, new MoveJournal());
-      player.sendMessage(ok ? "§a整理完成" : "§c整理失败");
+      player.sendMessage(ok ? `${chat.success}整理完成` : `${chat.error}整理失败`);
     });
   });
 }

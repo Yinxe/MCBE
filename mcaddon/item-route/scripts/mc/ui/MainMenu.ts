@@ -9,6 +9,7 @@ import { showWarehouseCreateForm } from "./WarehouseCreateFlow";
 import { showConfigUI } from "./ConfigUI";
 import { showHelpGuide } from "./HelpGuide";
 import { canRunCommand } from "../commands/auth";
+import { btn } from "./uiColor";
 
 export async function showMainMenu(player: Player, deps: CommandDeps): Promise<void> {
   await tryShowNewPlayerGuide(player, deps.config);
@@ -16,16 +17,17 @@ export async function showMainMenu(player: Player, deps: CommandDeps): Promise<v
   const isAdmin = canRunCommand(deps.members, undefined, player.id, "delete");
   const canManage = isAdmin; // 管理员包含 owner（delete=owner 权限）
 
+  // 按钮文字用深色（ActionForm 浅灰按钮背景，见 uiColor.btn）
   const form = new ActionFormBuilder()
-    .title("§b物品路由")
+    .title("物品路由")
     .body("选择一个操作")
-    .button("§d容器搜索", () => void showSearchUI(player, deps))
-    .button("§9仓库列表", () => void showWarehouseManageMenu(player, deps))
-    .button("§a创建仓库", () => void showWarehouseCreateForm(player, deps))
-    .button("§e❓ 帮助", () => void showHelpGuide(player));
+    .button(`${btn.nav}容器搜索`, () => void showSearchUI(player, deps))
+    .button(`${btn.nav}仓库列表`, () => void showWarehouseManageMenu(player, deps))
+    .button(`${btn.primary}创建仓库`, () => void showWarehouseCreateForm(player, deps))
+    .button(`${btn.info}帮助`, () => void showHelpGuide(player));
 
   if (canManage) {
-    form.button("§e⚙ 模组配置", () => void showConfigUI(player, deps));
+    form.button(`${btn.accent}模组配置`, () => void showConfigUI(player, deps));
   }
 
   await form.show(player);

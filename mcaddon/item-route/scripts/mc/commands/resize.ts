@@ -1,6 +1,7 @@
 // ─── ir:resize 调整区域（owner） ─────────────────────────
 import { system } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
+import { chat } from "../ui/uiColor";
 import { regionCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 import { resolveWarehouseByName, requireRole } from "./auth";
@@ -9,11 +10,11 @@ export function registerResize(registry: Parameters<typeof defineCommand>[0], de
   defineCommand(registry, regionCommand("ir:resize", "调整仓库区域（owner）"), ({ player, params }) => {
     const warehouse = resolveWarehouseByName(deps.loadedWarehouses(), params.name as string);
     if (warehouse === undefined) {
-      player.sendMessage("§c仓库不存在");
+      player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
     if (!requireRole(deps.members, warehouse, player.id, "owner")) {
-      player.sendMessage("§c需要 owner 权限");
+      player.sendMessage(`${chat.error}需要 owner 权限`);
       return;
     }
     const area = {
@@ -23,7 +24,7 @@ export function registerResize(registry: Parameters<typeof defineCommand>[0], de
     };
     system.runTimeout(() => {
       deps.warehouses.updateArea(warehouse, area);
-      player.sendMessage(`§a仓库 "${warehouse.displayName}" 区域已调整`);
+      player.sendMessage(`${chat.success}仓库 "${warehouse.displayName}" 区域已调整`);
       deps.bus.visualEffect.trigger({ type: "visual-effect", kind: "boundary-glow", warehouseId: warehouse.id });
     });
   });

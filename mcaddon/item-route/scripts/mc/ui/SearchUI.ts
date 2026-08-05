@@ -4,6 +4,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { searchItems, getChineseName } from "../../core/data/ItemNameMap";
 import { locationKey, type Location } from "../../core/model/types";
+import * as uiColor from "./uiColor";
 
 const PARTICLE_INTERVAL = 20;       // 粒子刷新的 tick 间隔
 const DEFAULT_DURATION = 15 * 20;   // 标记持续 15 秒
@@ -19,7 +20,7 @@ export interface SearchResultLine {
 
 export async function showSearchUI(player: Player, deps: CommandDeps): Promise<void> {
   const form = new ModalFormBuilder()
-    .title("§d容器搜索")
+    .title(`${uiColor.form.title}容器搜索`)
     .textField("query", "搜索关键词", { defaultValue: "" });
   const values = await form.show(player);
   if (!values) return;
@@ -28,12 +29,12 @@ export async function showSearchUI(player: Player, deps: CommandDeps): Promise<v
 
   const lines = runSearch(deps, query);
   if (lines.length === 0) {
-    player.sendMessage("§7未找到匹配物品");
+    player.sendMessage(`${uiColor.chat.muted}未找到匹配物品`);
     return;
   }
-  player.sendMessage(`§d━━ 搜索结果：${lines.length} 种 ━━`);
+  player.sendMessage(`${uiColor.chat.highlight}━━ 搜索结果：${lines.length} 种 ━━`);
   for (const line of lines) {
-    player.sendMessage(`§f${line.name}§7 ×${line.count} §8[${line.containerIds.join(", ")}]`);
+    player.sendMessage(`${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${line.containerIds.join(", ")}]`);
   }
 }
 

@@ -1,8 +1,11 @@
 // ─── 帮助手册：分节展示命令与用法 ──────────────────────────
+// 分节正文走聊天栏（透明/灰背景 → chat.* 语义色）；菜单标题/按钮为
+// ActionForm（标题深色头 → form 浅色；按钮浅灰 → btn 深色）。
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder } from "@yinxe/toolkit";
+import { chat, form, btn } from "./uiColor";
 
-/** 帮助章节列表（§12 手册结构） */
+/** 帮助章节列表（设计 §12 手册结构） */
 export const HELP_SECTIONS: string[] = [
   "快速上手",
   "命令一览",
@@ -11,62 +14,62 @@ export const HELP_SECTIONS: string[] = [
   "仓库管理",
 ];
 
-/** 分节正文 */
+/** 分节正文（聊天栏消息） */
 function sectionBody(index: number): string {
   switch (index) {
     case 0:
       return [
-        "§e快速上手",
-        "1. /ir:create 名称 x1 y1 z1 x2 y2 z2 建仓",
-        "2. 区域内放箱子/漏斗（自动注册为 single/input）",
-        "3. 手持信物右键容器设置角色",
-        "4. 往 input 放物品，自动路由到 single/multi",
+        `${chat.warn}快速上手`,
+        `${chat.info}1. /ir:create 名称 x1 y1 z1 x2 y2 z2 建仓`,
+        `${chat.info}2. 区域内放箱子/漏斗（自动注册为 single/input）`,
+        `${chat.info}3. 手持信物右键容器设置角色`,
+        `${chat.info}4. 往 input 放物品，自动路由到 single/multi`,
       ].join("\n");
     case 1:
       return [
-        "§e命令一览（9 条）",
-        "§f/ir:create§7 建仓（任意）",
-        "§f/ir:resize§7 调整区域（owner）",
-        "§f/ir:rescan§7 重扫容器（member+）",
-        "§f/ir:rescan_preview§7 预览重扫（member+）",
-        "§f/ir:delete§7 删除仓库（owner）",
-        "§f/ir:menu§7 主菜单（visitor+）",
-        "§f/ir:search§7 搜索物品（visitor+）",
-        "§f/ir:organize§7 整理（任意）",
-        "§f/ir:help§7 帮助（任意）",
+        `${chat.warn}命令一览（9 条）`,
+        `${chat.info}/ir:create${chat.muted} 建仓（任意）`,
+        `${chat.info}/ir:resize${chat.muted} 调整区域（owner）`,
+        `${chat.info}/ir:rescan${chat.muted} 重扫容器（member+）`,
+        `${chat.info}/ir:rescan_preview${chat.muted} 预览重扫（member+）`,
+        `${chat.info}/ir:delete${chat.muted} 删除仓库（owner）`,
+        `${chat.info}/ir:menu${chat.muted} 主菜单（visitor+）`,
+        `${chat.info}/ir:search${chat.muted} 搜索物品（visitor+）`,
+        `${chat.info}/ir:organize${chat.muted} 整理（任意）`,
+        `${chat.info}/ir:help${chat.muted} 帮助（任意）`,
       ].join("\n");
     case 2:
       return [
-        "§e容器角色",
-        "§6input§7 输入（漏斗默认）",
-        "§a§asingle§7 单物（绑定首槽类型）",
-        "§9multi§7 多物（放同类型）",
-        "§dmisc§7 杂项（兜底）",
+        `${chat.warn}容器角色`,
+        `${chat.highlight}input${chat.muted} 输入（漏斗默认）`,
+        `${chat.success}single${chat.muted} 单物（绑定首槽类型）`,
+        `${chat.info}multi${chat.muted} 多物（放同类型）`,
+        `${chat.accent}misc${chat.muted} 杂项（兜底）`,
       ].join("\n");
     case 3:
       return [
-        "§e成员与权限",
-        "§eowner§7 全权限（建仓者）",
-        "§amember§7 管理（重扫/角色）",
-        "§7visitor§7 只读（菜单/搜索）",
+        `${chat.warn}成员与权限`,
+        `${chat.warn}owner${chat.muted} 全权限（建仓者）`,
+        `${chat.success}member${chat.muted} 管理（重扫/角色）`,
+        `${chat.muted}visitor${chat.muted} 只读（菜单/搜索）`,
       ].join("\n");
     default:
       return [
-        "§e仓库管理",
-        "§f/ir:menu§7 → 仓库列表 → 设置",
-        "可：改名/改角色/成员/删除/统计",
+        `${chat.warn}仓库管理`,
+        `${chat.info}/ir:menu${chat.muted} → 仓库列表 → 设置`,
+        `${chat.muted}可：改名/改角色/成员/删除/统计`,
       ].join("\n");
   }
 }
 
 export function showHelpSection(player: Player, index: number): void {
-  player.sendMessage(`§7━━ ${HELP_SECTIONS[index] ?? "帮助"} ━━\n${sectionBody(index)}`);
+  player.sendMessage(`${chat.muted}━━ ${HELP_SECTIONS[index] ?? "帮助"} ━━\n${sectionBody(index)}`);
 }
 
 export async function showHelpGuide(player: Player): Promise<void> {
-  const form = new ActionFormBuilder().title("§e物品路由 · 帮助手册").body("选择一个章节：");
-  HELP_SECTIONS.forEach((section, i) => {
-    form.button(section, () => showHelpSection(player, i));
+  const dlg = new ActionFormBuilder().title(`${form.title}物品路由 · 帮助手册`).body(`${form.body}选择一个章节：`);
+  HELP_SECTIONS.forEach((section) => {
+    dlg.button(`${btn.nav}${section}`, () => showHelpSection(player, HELP_SECTIONS.indexOf(section)));
   });
-  await form.show(player);
+  await dlg.show(player);
 }

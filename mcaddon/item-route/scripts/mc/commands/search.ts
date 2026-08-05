@@ -1,6 +1,7 @@
 // ─── ir:search 搜索物品（visitor+） ─────────────────────
 import { system } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
+import { chat } from "../ui/uiColor";
 import { queryCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 import { runSearch, startMarkerParticles } from "../ui/SearchUI";
@@ -11,13 +12,13 @@ export function registerSearch(registry: Parameters<typeof defineCommand>[0], de
     system.runTimeout(() => {
       const lines = runSearch(deps, params.query as string);
       if (lines.length === 0) {
-        player.sendMessage("§7未找到匹配物品");
+        player.sendMessage(`${chat.muted}未找到匹配物品`);
         return;
       }
-      player.sendMessage(`§d━━ 搜索结果：${lines.length} 种 ━━`);
+      player.sendMessage(`${chat.highlight}━━ 搜索结果：${lines.length} 种 ━━`);
       const locs: Location[] = [];
       for (const line of lines) {
-        player.sendMessage(`§f${line.name}§7 ×${line.count} §8[${line.containerIds.join(", ")}]`);
+        player.sendMessage(`${chat.info}${line.name}${chat.muted} ×${line.count} [${line.containerIds.join(", ")}]`);
         for (const id of line.containerIds) {
           for (const w of deps.loadedWarehouses()) {
             const c = w.containers.get(id);

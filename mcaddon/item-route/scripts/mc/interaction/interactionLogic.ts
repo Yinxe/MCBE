@@ -11,6 +11,7 @@ import type { Location } from "../../core/model/types";
 import type { WarehouseService } from "../../core/services/WarehouseService";
 import type { EventBus } from "../../core/events/DomainEvents";
 import type { SelectionSessionStore } from "./SelectionSessionStore";
+import { chat } from "../ui/uiColor";
 
 /** 两点归一化为区域（角点乱序自动纠正） */
 export function areaFromPoints(dimension: string, p1: Location, p2: Location): WarehouseArea {
@@ -58,20 +59,20 @@ export function handleCornerClick(
   if (session === undefined) return "";
   if (session.corner1 === undefined) {
     ctx.session.set(playerId, { ...session, corner1: clicked });
-    return "§a已记录第一个对角点，请手持信物右键对角方块完成选区";
+    return `${chat.success}已记录第一个对角点，请手持信物右键对角方块完成选区`;
   }
   const area = areaFromPoints(dimension, session.corner1, clicked);
   ctx.session.clear(playerId);
   if (session.kind === "createWarehouse") {
     const result = ctx.warehouses.createWarehouse(session.name, playerId, area);
-    if (!result.ok) return `§c${result.error}`;
+    if (!result.ok) return `${chat.error}${result.error}`;
     glow(ctx, result.warehouse.id);
-    return `§a仓库 "${result.warehouse.displayName}" 创建成功！区域内容器自动注册`;
+    return `${chat.success}仓库 "${result.warehouse.displayName}" 创建成功！区域内容器自动注册`;
   }
   // resize
   const wh = ctx.resolveWarehouse(session.warehouseId);
-  if (wh === undefined) return "§c仓库不存在或未加载";
+  if (wh === undefined) return `${chat.error}仓库不存在或未加载`;
   ctx.warehouses.updateArea(wh, area);
   glow(ctx, wh.id);
-  return `§a仓库 "${wh.displayName}" 区域已调整`;
+  return `${chat.success}仓库 "${wh.displayName}" 区域已调整`;
 }

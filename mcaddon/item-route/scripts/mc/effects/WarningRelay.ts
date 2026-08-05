@@ -2,14 +2,15 @@
 import { world } from "@minecraft/server";
 import type { EventBus, WarningEvent, WarningLevel } from "../../core/events/DomainEvents";
 import type { Warehouse } from "../../core/model/Warehouse";
+import { color } from "../ui/uiColor";
 
 /** 预警消息只发给距仓库中心 8 格内玩家（v1 CapacityWarningService 口径） */
 export const WARNING_MARGIN = 8;
 
 const LEVEL_TEXT: Record<WarningLevel, string> = {
-  yellow: "§e黄色",
-  red: "§c红色",
-  "deep-red": "§4深红",
+  yellow: `${color.warn}黄色`,
+  red: `${color.error}红色`,
+  "deep-red": `${color.darkRed}深红`,
 };
 
 /** 距仓库中心 XZ 距离是否在范围内 */
@@ -29,7 +30,7 @@ export function registerWarningRelay(bus: EventBus, warehouses: () => Warehouse[
       if (warehouse === undefined) return;
       const text = LEVEL_TEXT[e.level] ?? e.level;
       const containerInfo = e.containerId !== undefined ? `（容器 ${e.containerId}）` : "";
-      const message = `§c[容量预警] 仓库 "${warehouse.displayName}"${containerInfo}：${text} 预警`;
+      const message = `${color.error}[容量预警] 仓库 "${warehouse.displayName}"${containerInfo}：${text} 预警`;
       for (const p of world.getAllPlayers()) {
         if (near(warehouse, { dimension: p.dimension.id, x: p.location.x, z: p.location.z }, WARNING_MARGIN)) {
           p.sendMessage(message);

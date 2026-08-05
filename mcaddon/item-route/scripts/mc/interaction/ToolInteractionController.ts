@@ -14,6 +14,7 @@ import { handleCornerClick } from "./interactionLogic";
 import { showContainerRoleMenu } from "../ui/ContainerRoleMenu";
 import { showMainMenu } from "../ui/MainMenu";
 import { MoveJournal } from "../../core/routing/Move";
+import { chat } from "../ui/uiColor";
 
 /** 防抖：同 tick 双击只处理一次 */
 const DEBOUNCE_MS = 250;
@@ -49,7 +50,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
         const hit = findContainerAt(deps.loadedWarehouses(), e.block.dimension.id, loc);
         if (hit) {
           const ok = deps.organize.organize(hit.warehouse, new MoveJournal());
-          player.sendMessage(ok ? "§a整理完成" : "§c整理失败");
+          player.sendMessage(ok ? `${chat.success}整理完成` : `${chat.error}整理失败`);
         }
         return;
       }
