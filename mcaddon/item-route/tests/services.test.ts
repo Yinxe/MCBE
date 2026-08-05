@@ -98,6 +98,35 @@ test("WarehouseService: 删除/重命名/成员管理", () => {
   assert.equal(svc.loadAll().length, 0);
 });
 
+test("WarehouseService: setMemberRole 拒绝提升为 owner（防提权口径不一）", () => {
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
+  const r = svc.createWarehouse("仓", "p1", { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } });
+  assert.equal(r.ok, true);
+  svc.addMember(r.warehouse, "p2", "member");
+  const err = svc.setMemberRole(r.warehouse, "p2", "owner");
+  assert.match(err ?? "", /转让/);
+  assert.equal(r.warehouse.members.find((m) => m.playerId === "p2")?.role, "member"); // 未被提权
+});
+
+test("WarehouseService: updateArea 校验体积/重叠/间距（resize 与 create 同口径）", () => {
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
+  const a = svc.createWarehouse("仓A", "p1", { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } });
+  assert.equal(a.ok, true);
+  // 扩到与自身重叠（排除自身）→ 允许
+  assert.equal(
+    svc.updateArea(a.warehouse, { dimension: "overworld", corner1: { x: -5, y: 0, z: -5 }, corner2: { x: 15, y: 10, z: 15 } }),
+    undefined
+  );
+  const b = svc.createWarehouse("仓B", "p2", { dimension: "overworld", corner1: { x: 100, y: 0, z: 100 }, corner2: { x: 110, y: 10, z: 110 } });
+  assert.equal(b.ok, true);
+  // 与另一仓库重叠 → 拒绝
+  const errOverlap = svc.updateArea(a.warehouse, { dimension: "overworld", corner1: { x: 105, y: 0, z: 105 }, corner2: { x: 120, y: 10, z: 120 } });
+  assert.match(errOverlap ?? "", /重叠/);
+  // 超体积 → 拒绝
+  const errBig = svc.updateArea(a.warehouse, { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 500, y: 500, z: 500 } });
+  assert.match(errBig ?? "", /体积|边长/);
+});
+
 // ── Task 22: RouteService ────────────────────────────────
 import { RouteService } from "../scripts/core/services/RouteService";
 import { Scheduler } from "../scripts/core/scheduling/Scheduler";

@@ -54,11 +54,13 @@ async function showSettingsForm(player: Player, deps: CommandDeps, warehouse: Wa
   if (name.length > 0 && name !== warehouse.displayName) {
     deps.warehouses.rename(warehouse, name);
   }
+  const newSpeed = SPEED_OPTIONS[values.speed as number] ?? 8;
   deps.warehouses.updateSettings(warehouse, {
     routingEnabled: values.routingEnabled as boolean,
     sortingEnabled: values.sortingEnabled as boolean,
-    processingSpeed: SPEED_OPTIONS[values.speed as number] ?? 8,
+    processingSpeed: newSpeed,
   });
+  deps.route.setProcessingSpeed(warehouse.id, newSpeed); // 已激活仓库立即按新速度重建 interval
   player.sendMessage(`${uiColor.chat.success}仓库设置已保存`);
 }
 

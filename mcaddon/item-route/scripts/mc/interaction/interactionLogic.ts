@@ -72,7 +72,8 @@ export function handleCornerClick(
   // resize
   const wh = ctx.resolveWarehouse(session.warehouseId);
   if (wh === undefined) return `${chat.error}仓库不存在或未加载`;
-  ctx.warehouses.updateArea(wh, area);
+  const err = ctx.warehouses.updateArea(wh, area);
+  if (err !== undefined) return `${chat.error}${err}`;
   glow(ctx, wh.id);
   return `${chat.success}仓库 "${wh.displayName}" 区域已调整`;
 }

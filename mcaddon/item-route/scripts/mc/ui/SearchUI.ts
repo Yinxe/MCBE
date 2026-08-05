@@ -52,7 +52,7 @@ export async function showSearchUI(player: Player, deps: CommandDeps): Promise<v
   }
 }
 
-/** 纯逻辑搜索：在指定仓库内 query → typeIds → 该仓索引 lookup 聚合（可单测） */
+/** 纯逻辑搜索：在指定仓库内 query → typeIds → 索引定位候选 + 逐槽按 typeId 精确计数（可单测） */
 export function runSearch(deps: CommandDeps, warehouse: Warehouse, query: string): SearchResultLine[] {
   const typeIds = searchItems(query);
   const index = deps.resolveIndex(warehouse.id); // 该仓库自己的索引（隔离）
@@ -60,17 +60,22 @@ export function runSearch(deps: CommandDeps, warehouse: Warehouse, query: string
   for (const typeId of typeIds) {
     let count = 0;
     const containerIds: string[] = [];
-    if (index !== undefined) {
-      const hits = index.lookup(typeId);
-      for (const id of [...hits.single, ...hits.multi]) {
-        if (containerIds.includes(id)) continue;
-        containerIds.push(id);
-        const container = warehouse.containers.get(id);
-        if (container === undefined) continue;
-        for (let i = 0; i < container.capacity; i++) {
-          count += container.getItem(i)?.amount ?? 0;
-        }
+    // 候选容器：优先索引定位；索引未加载（仓库未激活）时兜底全仓扫描，避免假报"未找到"
+    const candidates =
+      index !== undefined
+        ? [...index.lookup(typeId).single, ...index.lookup(typeId).multi]
+        : [...warehouse.containers.keys()];
+    for (const id of candidates) {
+      const container = warehouse.containers.get(id);
+      if (container === undefined) continue;
+      let found = false;
+      for (let i = 0; i < container.capacity; i++) {
+        const item = container.getItem(i);
+        if (item?.itemId !== typeId) continue;
+        count += item.amount; // 仅统计该类型（multi 混放不虚高）
+        found = true;
       }
+      if (found) containerIds.push(id);
     }
     if (count > 0) out.push({ typeId, name: getChineseName(typeId), count, containerIds });
   }

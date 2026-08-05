@@ -8,14 +8,15 @@ import { showWarehouseManageMenu } from "./WarehouseManageMenu";
 import { showWarehouseCreateForm } from "./WarehouseCreateFlow";
 import { showConfigUI } from "./ConfigUI";
 import { showHelpGuide } from "./HelpGuide";
-import { canRunCommand } from "../commands/auth";
 import { btn } from "./uiColor";
 
 export async function showMainMenu(player: Player, deps: CommandDeps): Promise<void> {
   await tryShowNewPlayerGuide(player, deps.config);
 
-  const isAdmin = canRunCommand(deps.members, undefined, player.id, "delete");
-  const canManage = isAdmin; // 管理员包含 owner（delete=owner 权限）
+  // 管理员入口：拥有任意仓库（与 WarehouseManageMenu 口径一致）
+  // 不能用 canRunCommand(undefined) —— 无仓库上下文时 requireRole 恒 false，入口永不可达
+  const isAdmin = deps.loadedWarehouses().some((w) => w.ownerId === player.id);
+  const canManage = isAdmin;
 
   // 按钮文字用深色（ActionForm 浅灰按钮背景，见 uiColor.btn）
   const form = new ActionFormBuilder()

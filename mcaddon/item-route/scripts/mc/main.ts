@@ -164,6 +164,14 @@ bus.itemRouted.subscribe((e) => {
 bus.itemRouted.subscribe((e) => {
   bus.visualEffect.trigger({ type: "visual-effect", kind: "route-flash", warehouseId: e.warehouseId, containerId: e.to });
 });
+// ⑤ 仓库删除：清内存（loaded 剔除 + 停调度 + 卸载索引）+ 清持久化键，杜绝删后仍分拣/残影
+bus.warehouseDeleted.subscribe((e) => {
+  const i = loaded.findIndex((w) => w.id === e.warehouseId);
+  if (i >= 0) loaded.splice(i, 1);
+  scheduler.unregisterWarehouse(e.warehouseId); // 停 interval + indexLifecycle.unload（unload 会把活索引 markDirty）
+  indexStore.remove(e.warehouseId);             // 清 dirty + 持久索引键（不复活）
+  statsStore.remove(e.warehouseId);
+});
 
 // 容器注册表持久化钩子（事件桥接 → DP）
 const persistContainers = (warehouse: Warehouse): void => {

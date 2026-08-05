@@ -25,7 +25,11 @@ export function registerResize(registry: Parameters<typeof defineCommand>[0], de
       corner2: { x: Math.floor(p2.x), y: Math.floor(p2.y), z: Math.floor(p2.z) },
     };
     system.runTimeout(() => {
-      deps.warehouses.updateArea(warehouse, area);
+      const err = deps.warehouses.updateArea(warehouse, area);
+      if (err !== undefined) {
+        player.sendMessage(`${chat.error}${err}`);
+        return;
+      }
       player.sendMessage(`${chat.success}仓库 "${warehouse.displayName}" 区域已调整`);
       deps.bus.visualEffect.trigger({ type: "visual-effect", kind: "boundary-glow", warehouseId: warehouse.id });
     });

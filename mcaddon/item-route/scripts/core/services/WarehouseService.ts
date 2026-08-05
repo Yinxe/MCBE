@@ -150,6 +150,7 @@ export class WarehouseService {
 
   setMemberRole(warehouse: Warehouse, playerId: PlayerId, role: MemberRole): string | undefined {
     if (playerId === warehouse.ownerId) return "不能修改 owner 的角色";
+    if (role === "owner") return "owner 只能通过转让设置"; // 与 addMember 一致，防提权口径不一
     const member = warehouse.members.find((m) => m.playerId === playerId);
     if (!member) return "该玩家不是成员";
     member.role = role;
@@ -173,12 +174,22 @@ export class WarehouseService {
 
   /**
    * 调整仓库区域（resize 命令）。
+   * 与 createWarehouse 同样跑建仓限制校验（体积/重叠/间距，排除自身），失败返回中文错误。
    * 仓库 ID 编码初始区域 → resize 会重算 ID；若变化则**迁移**：
    *   1) 先发 onRebase(oldId,newId)（mc 层迁移索引/统计/容器注册表键 + 调度器重注册）
    *   2) 用新 id 持久化 meta，3) 移除旧 id meta。
    * 容器/索引等"随区域变脏"由 onRebase + 后续 rescan 收敛。
    */
-  updateArea(warehouse: Warehouse, area: WarehouseArea): void {
+  updateArea(warehouse: Warehouse, area: WarehouseArea): string | undefined {
+    const limitError = areaExceedsLimits(area, this.limits);
+    if (limitError !== undefined) return limitError;
+    for (const other of this.store.list()) {
+      if (other.id === warehouse.id) continue; // 排除自身
+      if (areaOverlaps(area, other.area)) return "区域与已有仓库重叠";
+      if (areaTooClose(area, other.area, this.limits.minSpacing)) {
+        return `区域与其他仓库过于接近（最小间距 ${this.limits.minSpacing} 格）`;
+      }
+    }
     const newId = warehouseIdOf(area);
     warehouse.area = { ...area };
     if (newId !== warehouse.id) {
@@ -191,6 +202,7 @@ export class WarehouseService {
       this.persist(warehouse);
     }
     this.bus.warehouseAreaChanged.trigger({ type: "warehouse-area-changed", warehouseId: warehouse.id });
+    return undefined;
   }
 
   persist(warehouse: Warehouse): void {

@@ -151,6 +151,9 @@ export class McEventBridge {
             stats.invalidate(container.id);
             this.deps.onContainerRegistered?.(warehouse, container);
           }
+        } else {
+          // 副半拆：几何变化但 ID 不变 → 仍需持久化注册表（否则重启按旧 locations 占用已消失坐标）
+          this.deps.onContainerRegistered?.(warehouse, container);
         }
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
         if (index !== undefined) indexStore.markDirty(warehouse.id, index.serialize());

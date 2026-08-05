@@ -40,6 +40,7 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   if (!values) return;
   deps.route.setGlobalEnabled(values.globalEnabled as boolean);
   deps.config.setGlobalSpeedLimit(SPEED_OPTIONS[values.speed as number] ?? 20);
+  deps.route.setGlobalSpeedLimit(SPEED_OPTIONS[values.speed as number] ?? 20); // 运行时立即生效
   deps.config.setTokenItemId(TOKEN_OPTIONS[values.token as number] ?? TOKEN_OPTIONS[0]!);
   player.sendMessage(`${uiColor.chat.success}配置已保存`);
 }

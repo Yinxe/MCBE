@@ -83,11 +83,22 @@ export class Scheduler {
     private readonly intervals: IntervalScheduler,
     private readonly proximity: ProximityChecker,
     private readonly bus: EventBus,
-    private readonly globalSpeedLimit = 20,
+    private globalSpeedLimit = 20,
     private readonly deactivateDelayTicks = 40,
     private readonly options: SchedulerOptions = {}
   ) {
     this.now = options.now ?? Date.now;
+  }
+
+  /** 运行时改全局速度上限：同时重建 active/deactivating 仓的 interval（立即生效） */
+  setGlobalSpeedLimit(limit: number): void {
+    this.globalSpeedLimit = limit;
+    for (const rt of this.runtimes.values()) {
+      if ((rt.lifecycle === "active" || rt.lifecycle === "deactivating") && rt.handle) {
+        rt.handle.stop();
+        rt.handle = this.createInterval(rt);
+      }
+    }
   }
 
   registerWarehouse(warehouse: Warehouse): void {
@@ -128,8 +139,9 @@ export class Scheduler {
     const rt = this.runtimes.get(warehouseId);
     if (!rt) return;
     rt.warehouse.settings.processingSpeed = this.clampSpeed(speed);
-    if (rt.lifecycle === "active") {
-      rt.handle?.stop();
+    // active 与 deactivating（interval 仍在跑）都立即重建，避免中途改速静默失效
+    if ((rt.lifecycle === "active" || rt.lifecycle === "deactivating") && rt.handle) {
+      rt.handle.stop();
       rt.handle = this.createInterval(rt);
     }
   }

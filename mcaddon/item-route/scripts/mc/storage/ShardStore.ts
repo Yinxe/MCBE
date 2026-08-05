@@ -66,6 +66,9 @@ export class ShardStore {
         this.kv.write(dataKey(key, gen, i), this.envelope(chunks[i] as string));
       }
       if (!this.verify(key, gen, chunks.length)) {
+        // 两次验签仍失败：hdr 已切到坏新世代 → 还原旧 hdr，让读取回退到旧完整世代
+        // （保住"新完整或旧完整，绝无半截"的崩溃安全承诺）
+        if (old) this.kv.write(hdrKey(key), old);
         console.warn(`[ItemRoute] 分片写后验失败：${key}`);
         return false;
       }

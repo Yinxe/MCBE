@@ -131,3 +131,15 @@ test("StatsService: getWarehouseStats 写穿透持久化容器统计快照", () 
   assert.equal(cs.totalItems, 10);
   assert.equal(cs.usedSlots, 1);
 });
+
+test("StatsService: isWarning 实时按当前 warningThreshold 判定（改阈值无需 invalidate）", () => {
+  const { warehouse, containers } = makeWarehouse();
+  const c = new InMemoryContainer("m1", "multi", 4);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 1, 64)); // 1/4 槽 = 25%
+  containers.set("m1", c);
+  const svc = new StatsService(new InMemoryStatsStore(), new EventBus());
+  warehouse.settings.warningThreshold = 0.9;
+  assert.equal(svc.getContainerStats(warehouse, c).isWarning, false);
+  warehouse.settings.warningThreshold = 0.1; // 只改阈值，不 invalidate
+  assert.equal(svc.getContainerStats(warehouse, c).isWarning, true); // 缓存命中但实时重算
+});

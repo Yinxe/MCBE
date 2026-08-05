@@ -13,6 +13,11 @@ export class RouteService {
     this.scheduler.setGlobalEnabled(enabled);
   }
 
+  /** 设置全局速度上限（clamp 生效），并让已激活仓库立即按新上限重建 interval */
+  setGlobalSpeedLimit(limit: number): void {
+    this.scheduler.setGlobalSpeedLimit(limit);
+  }
+
   /** 设置单仓处理速度（tick 间隔），会被全局限制 clamp */
   setProcessingSpeed(warehouseId: string, speed: number): void {
     this.scheduler.setProcessingSpeed(warehouseId, speed);
