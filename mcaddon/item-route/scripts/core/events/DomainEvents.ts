@@ -67,7 +67,32 @@ export interface LifecycleChangedEvent {
   to: string;
 }
 
-/** 领域事件总线：core 发事件 → 适配层订阅（视觉反馈/统计联动/成员通知） */
+// ── 仓库 CRUD 领域事件（集成测试可订阅观察，mc 层也可据此联动） ──
+export interface WarehouseCreatedEvent {
+  type: "warehouse-created";
+  warehouseId: WarehouseId;
+  displayName: string;
+}
+export interface WarehouseDeletedEvent {
+  type: "warehouse-deleted";
+  warehouseId: WarehouseId;
+}
+export interface WarehouseRenamedEvent {
+  type: "warehouse-renamed";
+  warehouseId: WarehouseId;
+  displayName: string;
+}
+export interface WarehouseAreaChangedEvent {
+  type: "warehouse-area-changed";
+  warehouseId: WarehouseId;
+}
+export interface OrganizeCompletedEvent {
+  type: "organize-completed";
+  warehouseId: WarehouseId;
+  moves: number;
+}
+
+/** 领域事件总线：core 发事件 → 适配层订阅（视觉反馈/统计联动/成员通知/集成测试观测） */
 export class EventBus {
   readonly itemRouted = new EventSignal<ItemRoutedEvent>();
   readonly containerChanged = new EventSignal<ContainerChangedEvent>();
@@ -76,4 +101,9 @@ export class EventBus {
   readonly warning = new EventSignal<WarningEvent>();
   readonly visualEffect = new EventSignal<VisualEffectEvent>();
   readonly lifecycleChanged = new EventSignal<LifecycleChangedEvent>();
+  readonly warehouseCreated = new EventSignal<WarehouseCreatedEvent>();
+  readonly warehouseDeleted = new EventSignal<WarehouseDeletedEvent>();
+  readonly warehouseRenamed = new EventSignal<WarehouseRenamedEvent>();
+  readonly warehouseAreaChanged = new EventSignal<WarehouseAreaChangedEvent>();
+  readonly organizeCompleted = new EventSignal<OrganizeCompletedEvent>();
 }

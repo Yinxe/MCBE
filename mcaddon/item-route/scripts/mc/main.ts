@@ -68,13 +68,31 @@ const warehouseStore = new McWarehouseStore(shards);
 const indexStore = new McIndexStore(shards);
 const members = new MemberService();
 const config = McModConfig.load(shards);
+const statsStore = new McStatsStore(shards); // 供 resize 迁移统计键
 // 建仓限制：来自模组配置（v1 口径：体积 32×32×16、每玩家 1 仓）
-const warehouses = new WarehouseService(warehouseStore, bus, {
-  maxEdgeLength: 64,
-  minSpacing: 4,
-  maxVolume: config.maxWarehouseVolume,
-  maxWarehousesPerPlayer: config.maxWarehousesPerPlayer,
-});
+const warehouses = new WarehouseService(
+  warehouseStore,
+  bus,
+  {
+    maxEdgeLength: 64,
+    minSpacing: 4,
+    maxVolume: config.maxWarehouseVolume,
+    maxWarehousesPerPlayer: config.maxWarehousesPerPlayer,
+  },
+  // resize 改变区域 → 仓库 ID 重算 → 迁移所有按 id 存储的键 + 调度器重注册
+  (wh, oldId, newId) => {
+    const idx = indexStore.load(oldId);
+    if (idx !== undefined) indexStore.save(newId, idx);
+    indexStore.remove(oldId);
+    const st = statsStore.load(oldId);
+    if (st !== undefined) statsStore.save(newId, st);
+    statsStore.remove(oldId);
+    const entries = warehouseStore.loadContainers(oldId);
+    if (entries !== undefined) warehouseStore.saveContainers(newId, entries);
+    scheduler.unregisterWarehouse(oldId);
+    scheduler.registerWarehouse(wh);
+  }
+);
 const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));
 const organizer = new Organizer(new DefaultCandidateSorter());
@@ -114,7 +132,7 @@ const scheduler = new Scheduler(
     indexLifecycle,
   }
 );
-const stats = new StatsService(new McStatsStore(shards), bus);
+const stats = new StatsService(statsStore, bus);
 const route = new RouteService(scheduler);
 route.setGlobalEnabled(config.globalEnabled);
 // 整理服务：按仓库解析索引（取该仓当前加载的，未激活则跳过索引联动）

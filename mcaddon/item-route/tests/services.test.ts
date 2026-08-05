@@ -244,3 +244,45 @@ test("createWarehouse: 每玩家数量上限", () => {
   assert.equal(fourth.ok, false);
   assert.match((fourth as { error: string }).error, /最多/);
 });
+
+// ── 领域事件（集成测试可订阅观察） ──────────────────────
+test("WarehouseService: 仓库 CRUD 触发领域事件", () => {
+  const bus = new EventBus();
+  const events: string[] = [];
+  bus.warehouseCreated.subscribe((e) => events.push(`create:${e.warehouseId}:${e.displayName}`));
+  bus.warehouseRenamed.subscribe((e) => events.push(`rename:${e.displayName}`));
+  bus.warehouseDeleted.subscribe((e) => events.push(`delete:${e.warehouseId}`));
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), bus);
+  const r = svc.createWarehouse("仓A", "p1", area1);
+  if (!r.ok) return;
+  svc.rename(r.warehouse, "新名");
+  svc.deleteWarehouse(r.warehouse.id);
+  assert.deepEqual(events, [
+    `create:${r.warehouse.id}:仓A`,
+    "rename:新名",
+    `delete:${r.warehouse.id}`,
+  ]);
+});
+
+test("OrganizeService: 整理成功触发 organize-completed", () => {
+  const bus = new EventBus();
+  const index = new ItemIndex();
+  const organizer = new Organizer(new DefaultCandidateSorter());
+  const svc = new OrganizeService(organizer, () => index, bus);
+  const moves: number[] = [];
+  bus.organizeCompleted.subscribe((e) => moves.push(e.moves));
+  const misc = new InMemoryContainer("x", "misc", 4);
+  misc.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const multi = new InMemoryContainer("m1", "multi", 4);
+  multi.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  index.onContainerAdded(misc);
+  index.onContainerAdded(multi);
+  const warehouse = {
+    id: "w1", displayName: "w", ownerId: "p1", members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(),
+    containers: new Map([[misc.id, misc], [multi.id, multi]]),
+  };
+  assert.equal(svc.organize(warehouse, new MoveJournal()), true);
+  assert.deepEqual(moves, [1]); // 一次移动
+});

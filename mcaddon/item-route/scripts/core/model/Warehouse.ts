@@ -44,7 +44,12 @@ export function createDefaultSettings(): WarehouseSettings {
 
 /** 概念级仓库 */
 export interface Warehouse {
-  readonly id: WarehouseId;
+  /**
+   * 仓库 ID（`w@(min)-(max)@维度`）。**可迁移**：resize 改变区域时由
+   * WarehouseService.updateArea 重算并迁移（见 onRebase）。以此区分"生成即定死"
+   * 的纯身份——此 ID 是定位式/可读式，随区域变化而更新是设计意图。
+   */
+  id: WarehouseId;
   displayName: string;
   ownerId: PlayerId;
   members: Member[];

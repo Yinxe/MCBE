@@ -79,7 +79,9 @@ export class WarehouseService {
   constructor(
     private readonly store: WarehouseStore,
     private readonly bus: EventBus,
-    private readonly limits: WarehouseLimits = DEFAULT_WAREHOUSE_LIMITS
+    private readonly limits: WarehouseLimits = DEFAULT_WAREHOUSE_LIMITS,
+    /** resize 使仓库 ID 迁移时的钩子（mc 层：迁移索引/统计/容器注册表 DP 键 + 调度器重注册） */
+    private readonly onRebase?: (warehouse: Warehouse, oldId: WarehouseId, newId: WarehouseId) => void
   ) {}
 
   /** 启动加载全部仓库（容器由 mc 层按 containerIds 补注册） */
@@ -116,11 +118,13 @@ export class WarehouseService {
       containers: new Map(),
     };
     this.persist(warehouse);
+    this.bus.warehouseCreated.trigger({ type: "warehouse-created", warehouseId: warehouse.id, displayName: name });
     return { ok: true, warehouse };
   }
 
   deleteWarehouse(id: WarehouseId): void {
     this.store.remove(id);
+    this.bus.warehouseDeleted.trigger({ type: "warehouse-deleted", warehouseId: id });
   }
 
   rename(warehouse: Warehouse, newName: string): string | undefined {
@@ -131,6 +135,7 @@ export class WarehouseService {
     }
     warehouse.displayName = name;
     this.persist(warehouse);
+    this.bus.warehouseRenamed.trigger({ type: "warehouse-renamed", warehouseId: warehouse.id, displayName: name });
     return undefined;
   }
 
@@ -165,10 +170,26 @@ export class WarehouseService {
     this.persist(warehouse);
   }
 
-  /** 调整仓库区域（resize 命令）：改区域并持久化 */
+  /**
+   * 调整仓库区域（resize 命令）。
+   * 仓库 ID 编码初始区域 → resize 会重算 ID；若变化则**迁移**：
+   *   1) 先发 onRebase(oldId,newId)（mc 层迁移索引/统计/容器注册表键 + 调度器重注册）
+   *   2) 用新 id 持久化 meta，3) 移除旧 id meta。
+   * 容器/索引等"随区域变脏"由 onRebase + 后续 rescan 收敛。
+   */
   updateArea(warehouse: Warehouse, area: WarehouseArea): void {
+    const newId = warehouseIdOf(area);
     warehouse.area = { ...area };
-    this.persist(warehouse);
+    if (newId !== warehouse.id) {
+      const oldId = warehouse.id;
+      warehouse.id = newId;
+      this.onRebase?.(warehouse, oldId, newId);
+      this.persist(warehouse);
+      this.store.remove(oldId);
+    } else {
+      this.persist(warehouse);
+    }
+    this.bus.warehouseAreaChanged.trigger({ type: "warehouse-area-changed", warehouseId: warehouse.id });
   }
 
   persist(warehouse: Warehouse): void {

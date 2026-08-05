@@ -22,6 +22,7 @@ export class OrganizeService {
     if (plan.actions.length === 0) return true;
     const ok = this.organizer.apply(warehouse, plan, journal);
     if (!ok) return false;
+    this.bus.organizeCompleted.trigger({ type: "organize-completed", warehouseId: warehouse.id, moves: plan.actions.length });
     const index = this.resolveIndex(warehouse);
     if (index === undefined) return true;
     const touched = new Set<string>();
