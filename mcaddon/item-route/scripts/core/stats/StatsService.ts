@@ -9,11 +9,11 @@
 //   装配层必须定期调 `tick()`（mc 层主循环已接线，见 McEventBridge）递减冷却，
 //   否则预警只触发一次、永不复发。
 // ⚠️ 持久化（审查）：
-//   统计是**活容器内容的派生**（权威源 = 游戏容器），读取必须实时重算才正确；
-//   内存 cache 只避免会话内重复扫描。存储为**每容器一条键**（v1 方案，容器 ID 全局唯一）：
+//   统计是**活容器内容的派生**（权威源 = 游戏容器）。存储为**每容器一条键**（v1 方案）：
 //   · 路由热路径 `updateFromScan` 仅驻内存 + 标记脏（零 DP 写）
-//   · `flush()`（装配层 100 tick / 玩家离开）批量落盘脏容器；冷读/查看汇总也写穿
-//   读取不 warm 持久化副本（warm 会过期，还要再验 = 白扫）；落盘为持久记录/还原参考。
+//   · `flush()`（装配层 100 tick / 玩家离开）批量落盘脏容器
+//   · 冷读 `getContainerStats` 先**懒加载持久化**（v1 getOrCompute 方案：有就 warm、结构不符/缺失才重算+写穿）；
+//     内容陈旧（崩溃窗口）由后续路由/交互信号自愈，与索引惰性校验同思路。
 import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";
@@ -90,8 +90,31 @@ export class StatsService {
       if (cached.isWarning !== isWarning) cached.isWarning = isWarning;
       return cached;
     }
-    // 冷读：计算 + 写穿透单容器键
+    // 冷读：实时重算（不懒加载持久化——否则 invalidate 的"下次读重算"语义会被陈旧 warm 击败）
     return this.buildStats(container, scanContainer(container), warehouse.settings.warningThreshold, true);
+  }
+
+  /**
+   * 仓库激活时加载持久化统计作 warm 缓存（与索引同生命周期点，见 indexLifecycle.load）。
+   * 只在此刻加载一次；之后缓存由路由 updateFromScan / invalidate 维持，冷读仍实时重算。
+   * 结构不符（角色/容量变）跳过该容器。内容陈旧（崩溃窗口）由后续变更信号自愈。
+   */
+  warm(warehouse: Warehouse): void {
+    for (const container of warehouse.containers.values()) {
+      if (this.cache.has(container.id)) continue;
+      const loaded = this.store.loadContainer(container.id);
+      if (loaded === undefined || loaded.totalSlots !== container.capacity || loaded.role !== container.role) continue;
+      this.cache.set(container.id, {
+        containerId: container.id,
+        role: container.role,
+        totalSlots: loaded.totalSlots,
+        usedSlots: loaded.usedSlots,
+        totalItems: loaded.totalItems,
+        uniqueTypes: loaded.uniqueTypes,
+        isWarning: false, // 阈值实时判，见 getContainerStats 缓存命中分支
+        byType: loaded.byType,
+      });
+    }
   }
 
   /**

@@ -189,6 +189,27 @@ test("StatsService: flush 批量落盘路由热路径增量统计", () => {
   assert.equal(store.loadContainer("m1")?.usedSlots, 1);
 });
 
+test("StatsService: warm 在激活时加载持久化缓存（invalidate 后冷读仍重算）", () => {
+  const { warehouse, containers } = makeWarehouse();
+  const c = new InMemoryContainer("m1", "multi", 4);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  containers.set("m1", c);
+  const store = new InMemoryStatsStore();
+  const svc = new StatsService(store, new EventBus());
+  svc.getContainerStats(warehouse, c); // 计算 + 写穿
+  // 模拟重载：新 StatsService 实例（同 store），仓库容器内容已变化
+  const c2 = new InMemoryContainer("m1", "multi", 4);
+  c2.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  c2.setItem(1, new SimpleItemStack("minecraft:dirt", 5, 64));
+  containers.set("m1", c2);
+  const svc2 = new StatsService(store, new EventBus());
+  svc2.warm(warehouse); // 激活时 warm → 缓存持久化旧值（usedSlots 1）
+  assert.equal(svc2.getContainerStats(warehouse, c2).usedSlots, 1);
+  // invalidate 后冷读 → 实时重算（不 warm 旧值）
+  svc2.invalidate(c2.id);
+  assert.equal(svc2.getContainerStats(warehouse, c2).usedSlots, 2);
+});
+
 test("StatsService: isWarning 实时按当前 warningThreshold 判定（改阈值无需 invalidate）", () => {
   const { warehouse, containers } = makeWarehouse();
   const c = new InMemoryContainer("m1", "multi", 4);

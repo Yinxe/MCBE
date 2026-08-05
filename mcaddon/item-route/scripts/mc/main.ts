@@ -103,10 +103,11 @@ const indexLifecycle: IndexLifecycle = {
     const snap = indexStore.load(warehouse.id);
     if (snap !== undefined && idx.restore(snap)) {
       console.warn(`[ItemRoute] 索引加载 ${warehouse.id}`);
-      return idx;
+    } else {
+      for (const c of warehouse.containers.values()) idx.onContainerAdded(c);
+      console.warn(`[ItemRoute] 索引重建 ${warehouse.id}`);
     }
-    for (const c of warehouse.containers.values()) idx.onContainerAdded(c);
-    console.warn(`[ItemRoute] 索引重建 ${warehouse.id}`);
+    stats.warm(warehouse); // 激活时同一生命周期点 warm 持久化统计缓存（此后冷读仍实时重算）
     return idx;
   },
   unload: (warehouse, idx) => {
