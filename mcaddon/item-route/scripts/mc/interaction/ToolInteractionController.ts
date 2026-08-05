@@ -1,4 +1,11 @@
 // ─── 信物交互总控：右键容器/空地 → 角色菜单/主菜单/选区 ──
+// 事件分层（v1 防抖经验，审查重点）：
+//   · playerInteractWithBlock —— 右键方块（持信物）：潜行→快速整理；有选区会话→
+//     记录角点；无会话且命中容器→角色菜单
+//   · itemUse（对空右键）—— 兜底入口：无会话→主菜单；有会话且已记第一角→完成
+//   · DEBOUNCE_MS=250 防抖——玩家点击方块时 MC 常同时触发 interact+itemUse，
+//     防抖确保一次右键只走一个分支，避免误弹主菜单/重复选点
+// 一切回调整体 try-catch（单事件崩溃不影响其他事件），日志 `[item-route]` 前缀。
 import { world, type Player } from "@minecraft/server";
 import type { CommandDeps } from "../commands/deps";
 import { findContainerAt } from "../../core/model/Area";

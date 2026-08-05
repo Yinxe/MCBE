@@ -1,4 +1,15 @@
-// ─── 索引仓储：脏标记批量落盘 + 1MB 降级（overwrite + hash 写后验） ──
+// ─── 索引仓储：脏标记批量落盘（overwrite + hash 写后验） ──
+// 路由热路径的"写放大"消除层（v1「批量落盘避免每路由一写放大 DP IO」）：
+//   · `markDirty(id, snapshot)` —— 只把最新索引快照放进内存 dirty Map（零 DP 写）。
+//     路由每移动一次就 markDirty 一次，但只覆盖同一 key，不产生多次 DP 写。
+//   · `flush()` —— 把全部脏项一次性落盘；成功后清脏。
+//   · 落盘时机由装配层驱动：玩家离开 + 每 100 tick（McEventBridge）。
+// 索引数据量可能较大（byItem/containerItems/singleBindings），ShardStore 会分包，
+// 单 key 不超限；总量随存档无限制。
+//
+// 崩溃安全性：只 markDirty 不回写时，崩溃丢的是"本次会话的增量"；
+// 启动时若版本不符/缺失由 ItemIndex 从容器全量重建（verifyCandidate 惰性兜底），
+// 不产生持久损坏。
 import type { ShardStore } from "./ShardStore";
 import type { IndexSnapshotData, IndexStore } from "../../core/storage/Stores";
 import type { WarehouseId } from "../../core/model/types";

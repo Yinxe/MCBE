@@ -1,4 +1,11 @@
 // ─── 路由编排：单槽路由，策略升序 + 候选排序 + 原子移动 ──
+// 每轮处理**一个输入容器的非空 slot**（由 Scheduler 驱动，见 processOnce）。
+// 流程：策略按 priority 升序（single→multi→misc）逐个找候选 → 候选经排序器
+// （满箱跳过/优先级/使用率）→ 逐个尝试 transfer，第一个发生移动即返回。
+// 关键设计：
+//   · 依赖注入 IndexGateway（结构类型）而非直接引 ItemIndex —— 隔离 index 模块，
+//     可单测用 stub 替身（tests/routing.test.ts 的 makeIndexStub）。
+//   · 全部候选失败返回 undefined，物品留在源 —— 单槽原子性，不产生半成品。
 import { transfer } from "./Move";
 import type { CandidateContainer, RouteStrategy } from "./RouteStrategy";
 import type { CandidateSorter } from "./CandidateSorter";

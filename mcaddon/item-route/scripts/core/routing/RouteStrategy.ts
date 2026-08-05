@@ -1,4 +1,13 @@
 // ─── 路由策略（可插拔，数字优先级越小越快） ────────────────
+// 三个内置策略构成 5 级路由的 3 段骨架：
+//   SingleItem(10)：候选 = 索引中该 typeId 的单物容器（且绑定匹配）→ 单物优先
+//   MultiItem(20) ：候选 = 索引中该 typeId 的多物容器 → 同型聚集
+//   Misc(30)      ：兜底，候选 = 全部启用 misc 容器（索引不含 misc，直接全量取）
+// 设计要点（审查）：
+//   · 候选来自**索引**而非全仓扫描 —— 索引是本模块的性能底座（O(1) 定位）。
+//   · 空 multi 容器不是候选（索引只登记"已含该物品"的容器）—— 见 ItemIndex。
+//   · `verifyCandidate` 注入自 Router → 索引惰性校验（三层兜底之第二层）。
+//   · 漏斗在工厂层强制 input，永不进入本路由的目标侧。
 import type { Container } from "../model/Container";
 import type { ItemStack } from "../model/ItemStack";
 import type { Warehouse } from "../model/Warehouse";

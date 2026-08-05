@@ -1,4 +1,13 @@
 // ─── 统计系统：容器/仓库统计 + 三级预警（冷却） ────────────
+// 两职责：
+//   1. 统计聚合（getContainerStats/getWarehouseStats）——按类型/按物品双视图，
+//      供 StatsUI 展示；容器级结果带内存缓存（invalidate 失效）。
+//   2. 三级容量预警（evaluateWarnings）——yellow：任一容器占用 ≥ warningThreshold；
+//      red：某非 input 角色组全满；deep-red：全仓（除 input）全满。
+//      触发后置冷却（warningCooldownTicks），冷却内不再发，避免刷屏。
+// ⚠️ 冷却递减由谁驱动（审查）：
+//   装配层必须定期调 `tick()`（mc 层主循环已接线，见 McEventBridge）递减冷却，
+//   否则预警只触发一次、永不复发。
 import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";

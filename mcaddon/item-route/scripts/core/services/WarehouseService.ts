@@ -1,4 +1,12 @@
-// ─── 仓库服务：CRUD/成员/设置（经 store 持久化） ──────────
+// ─── 仓库服务：CRUD/成员/设置/建仓限制（经 store 持久化） ──
+// 仓库生命周期管理中枢。`loadAll()` 返回的 Warehouse 仅含元数据与空容器表
+// （容器适配器由 mc 层按 containerIds 重建/事件注册，见 main.ts Phase 4）。
+//
+// 建仓限制（v1 沉淀，`WarehouseLimits` 构造注入）：
+//   · 单轴边长 ≤ maxEdgeLength、体积 ≤ maxVolume —— 防超大区域拖垮扫描
+//   · 与其他仓库间距 ≥ minSpacing（areaTooClose：外扩后相交判定）
+//   · 每玩家仓库数 ≤ maxWarehousesPerPlayer —— 防刷仓
+// 以上任一不满足 → 返回中文错误（CreateResult.ok=false）。
 import type { Warehouse, WarehouseArea, WarehouseSettings, MemberRole } from "../model/Warehouse";
 import { createDefaultSettings } from "../model/Warehouse";
 import type { PlayerId, WarehouseId } from "../model/types";

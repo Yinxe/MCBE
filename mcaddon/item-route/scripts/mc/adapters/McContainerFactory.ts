@@ -1,4 +1,11 @@
 // ─── 容器工厂：Block → McContainerAdapter（双箱 SafeProbe 探测/漏斗约束/安全访问） ──
+// 方块 → 概念容器的唯二入口（容器注册/重扫/启动重建都经它）。
+// 要点（审查）：
+//   · 双箱合并用 SafeProbe 探针**确认共享同一库存**，而非依赖 mc 容器实例同一性
+//     （MC 不保证两半共享同一 Container 实例；v1 已踩过此坑）。
+//   · 白名单：非受支持容器类型直接返回 undefined（isSupportedContainerType）。
+//   · 漏斗强制 finalRole=input（不可改角色），其余按传入 role。
+//   · 容器 ID = `c@x,y,z`（笛卡尔坐标定位，维度由仓库承载）。
 import type { Block } from "@minecraft/server";
 import { isChestType, isHopperType, isSupportedContainerType } from "../../core/model/ContainerTypes";
 import type { ContainerRole } from "../../core/model/Container";

@@ -1,4 +1,14 @@
 // ─── 事件桥接：MC 世界事件 → 领域事件 + 索引增量维护 + 落盘时机 ──
+// 这是"MC 无容器内容事件"问题的解法落点（设计 §5 三层兜底之第一层 代理信号）：
+//   · playerInteractWithBlock —— 玩家手动改箱的"代理信号"→ verifyCandidate 惰性
+//     校验索引 + 统计失效 + 标记索引脏（把索引收敛交给下一次候选命中/下一次落盘）
+//   · playerPlaceBlock —— 区域内放容器 → 工厂创建适配器 + 注册进仓库/索引 + 持久化容器注册表
+//   · playerBreakBlock / blockExplode —— 拆容器 → 注销（双箱半拆：occupiedLocations 过滤）
+//   · itemRouted（领域事件）—— 路由移动后 → markDirty 索引 + 统计失效（写穿透闭环）
+//   · playerLeave —— 立即 flush（防丢会话增量）
+//   · 主循环（每 5 tick）—— scheduler.tick() 驱动生命周期 + stats.tick() 递减预警冷却
+//   · 批量落盘（每 100 tick）—— indexStore.flush()
+// 关键：索引**实时内存准确 + 批量落盘**，玩家离开必 flush，崩溃丢量由重建兜底。
 import { world, system, type Block } from "@minecraft/server";
 import type { EventBus } from "../../core/events/DomainEvents";
 import type { ItemIndex } from "../../core/index/ItemIndex";

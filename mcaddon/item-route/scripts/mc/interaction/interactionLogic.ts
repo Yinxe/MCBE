@@ -1,4 +1,10 @@
 // ─── 选区流程纯逻辑：两点 → 区域 + 建仓/调整完成（可单测） ──
+// 信物"选点建仓/调整区域"的状态机核心，抽成纯函数供 node 单测
+// （tests/interaction.test.ts），ToolInteractionController 注入真实 deps 调用。
+// 流程：session 无 corner1 → 记录第一个对角点；已有 corner1 → 用当前点击完成，
+// 归一化两点为区域（areaFromPoints 自动纠正角点乱序），走 WarehouseService
+// createWarehouse / updateArea，成功后清会话 + 触发 boundary-glow 视觉事件。
+// 失败返回中文错误消息，会话保持在下一角点前可重试。
 import type { WarehouseArea } from "../../core/model/Warehouse";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";

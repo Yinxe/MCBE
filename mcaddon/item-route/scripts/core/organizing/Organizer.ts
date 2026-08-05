@@ -1,4 +1,14 @@
-// ─── 概念化整理器：混乱度评分 + analyze/apply/回滚 + 自动阈值 ──
+// ─── 概念化整理器：混乱度评分 + analyze/apply + 事务回滚 ──
+// 三段式（v1 SlotOrganizer 思路的简化版）：
+//   analyze （只读） ：算出"把哪些槽位的物品挪到哪个容器"的整理计划 + 混乱度前后对比
+//   apply   （写入） ：逐 action 用 transfer 原子移动（MoveJournal 包事务）
+// 设计要点（审查）：
+//   · 混乱度 chaosScore = 容器内不同 typeId 数 - 1（0 = 纯净），供自动整理阈值
+//     shouldAutoSort（`>` threshold 才整）。
+//   · 多物容器间合并用 **id 升序单方向**（container.id < picked.id 才发动作），
+//     避免 a→b 与 b→a 互逆死锁（见 analyzing 里 multi 分支）。
+//   · apply 三态语义：目标失效/异常 → 整体回滚 false；**未移动（满/不同 NBT 不可堆叠）
+//     → 跳过该动作继续**（不因一个不可堆叠对让整次整理失败）。
 import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId } from "../model/types";

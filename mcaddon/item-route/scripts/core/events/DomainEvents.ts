@@ -1,4 +1,16 @@
 // ─── 领域事件类型与事件总线 ──────────────────────────────
+// core 与 mc 之间的"失联通讯"。core 只负责触发（生产者在 core 内部），
+// mc 适配层订阅（消费者），实现「core 无状态、适配层做副作用」的六边形边界。
+//
+// 各事件生产者/消费者（审查对照）：
+//   · itemRouted    —— Router 路由成功后触发；McEventBridge 订阅 → 标记索引脏 + 统计失效
+//   · containerChanged —— 容器内容/注册变化触发；索引/统计联动
+//   · indexUpdated  —— 预留（当前未消费，为搜索/展示留口）
+//   · statsChanged  —— 预留（统计联动）
+//   · warning       —— StatsService.evaluateWarnings 触发；WarningRelay 订阅 → 播报附近玩家
+//   · visualEffect  —— 装配层（命令/交互）触发；SortEffects/BoundaryDisplay 订阅 → 播放
+// 关键约束：事件负载只用可序列化的 string/number，不携带 mc 对象——保证 core 纯净、
+// 且事件可安全穿越适配层边界。
 import { EventSignal } from "./EventSignal";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";
 

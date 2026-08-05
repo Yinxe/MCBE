@@ -1,4 +1,12 @@
 // ─── 容器适配器：概念 Container ← mc.Container（委托 + 安全访问） ──
+// core 的 Container 契约在此对接真实 mc.Container。三件事（审查）：
+//   · 安全访问——getItem/setItem/addItem 全部 try-catch，区块未加载/容器失效
+//     静默返回（undefined/原堆），绝不把异常抛进 core 引擎。
+//   · 写权威委托——`addItem` 直接调 `mc.addItem`（原生 NBT 级堆叠判定），
+//     经 `item.toMc` 还原的堆（携带源引用、保留组件）放入。这正是"同型不同 NBT
+//     不错误合并"的保证（见 McItemAdapter 的 SOURCE symbol）。
+//   · O(1) 属性——capacity/emptySlotsCount/usedSlots 直接读 mc 容器，零遍历。
+// 注意：本文件依赖 @minecraft/server，仅编译检查 + 游戏内冒烟，不进 node 测试构建。
 import type { Container as McContainer } from "@minecraft/server";
 import type { Container, ContainerRole } from "../../core/model/Container";
 import type { ItemStack } from "../../core/model/ItemStack";

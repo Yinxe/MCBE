@@ -1,4 +1,16 @@
-// ─── item-route 入口：4 Phase 启动装配（DI） ──
+// ─── item-route 入口：4 Phase 启动装配（DI 组合根） ──
+// 本文件是唯一的"组合根"：把 core 纯引擎 + mc 适配层按依赖方向手工装配，
+// 顺序体现依赖关系（审查时先看这里建立全局心智模型）：
+//   Phase 1 无状态基础设施 —— DP 后端 → ShardStore → McItemAdapter → McContainerFactory
+//            → McIntervalScheduler
+//   Phase 2 有状态业务 —— EventBus → ItemIndex → Router（策略+sorter）→ 三仓储
+//            → WarehouseService（注入建仓限制）→ Scheduler（注入 onAutoSort）→ Stats
+//            → Organizer/OrganizeService → RouteService
+//   Phase 3 注册副作用 —— McEventBridge（世界事件→索引/统计/落盘）+ 信物交互
+//            + 视觉订阅（SortEffects/BoundaryDisplay/WarningRelay）+ startup 注册 9 命令
+//   Phase 4 延迟启动 —— world 完全加载后：从 DP 恢复仓库/容器/索引，注册调度，
+//            未加载区块的容器留待事件/verifyCandidate 惰性补注册
+// 依赖注入贯穿始终：各模块以构造函数/回调收依赖，不自行 new 外部服务（可测性）。
 import { world, system } from "@minecraft/server";
 
 // ── core ──

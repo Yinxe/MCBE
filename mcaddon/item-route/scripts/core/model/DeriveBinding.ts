@@ -1,4 +1,8 @@
 // ─── 单物绑定推导（core 纯函数，可单测） ──────────────────
+// 单物容器（single）的"绑定类型" = 首个非空槽位的物品类型。
+// 玩家可能拿走/替换首个非空槽 → 绑定被破坏；索引层（ItemIndex）每次候选命中
+// 都会用此函数重算并修复绑定（惰性自愈，配合 ItemIndex.verifyCandidate 三层兜底）。
+// 之所以拆成独立文件：让"绑定"语义有且仅有一个权威实现，可单独单测。
 import type { Container } from "./Container";
 import type { ItemId } from "./types";
 

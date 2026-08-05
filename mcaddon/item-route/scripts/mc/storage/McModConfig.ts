@@ -1,4 +1,9 @@
-// ─── 模组全局配置：速度上限/全局开关/信物/引导标记（overwrite + hash） ──
+// ─── 模组全局配置：速度上限/全局开关/信物/建仓限制/引导标记 ──
+// 单键 `ir2:modcfg`（overwrite + hash）存 ModConfigData，内存缓存一份副本；
+// setter 写穿透落盘。引导标记走独立 per-player 键 `ir2:guide_seen:{playerId}`
+// （v1 口径：每个玩家各自看一次新手引导）。
+// 建仓限制（maxWarehouseVolume/maxWarehousesPerPlayer）在装配时喂给
+// WarehouseService.limits，作为建仓时的边界校验（见 services/WarehouseService）。
 import type { ShardStore } from "./ShardStore";
 
 const CONFIG_KEY = "ir2:modcfg";

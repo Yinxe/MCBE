@@ -1,4 +1,9 @@
 // ─── 区域包含与邻近判定（纯函数，零 MC 依赖，可单测） ──────
+// 两处消费者：
+//   · McProximityChecker —— 调度激活：仓库中心 16 格内有玩家 → 激活分拣
+//   · McEventBridge —— 事件过滤：方块坐标 → 所属仓库/容器
+// 注意 `isPlayerNearby` 以**区域中心**为圆心（非最近棱），是简化判定；
+// 调度激活只需"玩家是否大致在场"，无需精确到边界距离。
 import type { WarehouseArea } from "./Warehouse";
 import type { Warehouse } from "./Warehouse";
 import type { Container } from "./Container";

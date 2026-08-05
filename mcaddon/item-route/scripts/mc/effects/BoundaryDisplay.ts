@@ -1,4 +1,10 @@
 // ─── 边界显示：12 棱线框，粒子网格绘制（不破坏方块/无需还原） ──
+// 建仓/调整区域后的视觉反馈：沿仓库区域 12 条棱撒粒子（spawnParticle），
+// 每 REFRESH_INTERVAL 刷新一轮，TEMP_DURATION_TICKS 后自动停。
+// 关键点（审查）：
+//   · 纯粒子方案（用户定案）：不放置/还原临时方块，无副作用，区块无需写。
+//   · 无玩家在场不播放（省资源，玩家回来自动恢复）。
+//   · 采样点由 core 纯几何 edgePoints 生成（去重后撒点），本文件只做 mc 侧驱动。
 import { world, system } from "@minecraft/server";
 import type { EventBus, VisualEffectEvent } from "../../core/events/DomainEvents";
 import { edgePoints, STEP } from "../../core/model/BoundaryGeometry";

@@ -1,4 +1,7 @@
 // ─── 邻近检查器：ProximityChecker 实现（玩家位置轮询，按维度过滤） ──
+// 调度激活的依据：仓库区域中心 16 格内是否有玩家（isPlayerNearby 纯函数）。
+// 采用"调用时实时读 world.getAllPlayers() 过滤"（而非 v1 的每 tick 全量缓存重建，
+// 因调度每 5 tick 才调一次，量级可接受且实现更简单）。
 import { world, type Player } from "@minecraft/server";
 import type { ProximityChecker } from "../../core/scheduling/Scheduler";
 import type { WarehouseId } from "../../core/model/types";

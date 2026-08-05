@@ -1,4 +1,11 @@
 // ─── 仓库/索引/统计仓储接口（core 定义，mc 层实现 DP 分片） ──
+// 这是持久化边界：core 只定义**可序列化快照结构 + 接口**（零 MC 依赖），
+// mc 层（scripts/mc/storage/）用 DP 实现。
+//   · WarehouseStore —— 仓库快照（meta + containerIds 引用）
+//   · IndexStore     —— 索引快照（IndexSnapshotData，对应 ItemIndex.serialize）
+//   · StatsStore     —— 统计快照
+// 快照必须是纯 JSON（无函数/Map/Set），才能进出 DP（JSON.stringify/parse）。
+// InMemory*Store 供 node 单测；真实 DP 版见 McWarehouseStore/McIndexStore/McStatsStore。
 import { InMemoryKeyValueStore, type KeyValueStore } from "./KeyValueStore";
 import type { ContainerId, PlayerId, WarehouseId } from "../model/types";
 import type { Member, WarehouseArea, WarehouseSettings } from "../model/Warehouse";

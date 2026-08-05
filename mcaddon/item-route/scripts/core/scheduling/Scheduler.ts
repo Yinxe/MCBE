@@ -1,4 +1,19 @@
-// ─── 调度器：5 tick 全局主任务 + 仓库级独立 interval ──
+// ─── 调度器：生命周期状态机 + 每轮单槽处理 ────────────────
+// mc 层每 5 tick 调一次 `tick()` 驱动"玩家邻近 → 激活/停用"；
+// 激活的仓库拥有独立 interval（间隔 = processingSpeed tick），每轮处理一个 input slot。
+//
+// 生命周期（审查）：
+//   inactive →（玩家在 16 格内）→ active（创建 interval）
+//   active   →（玩家离开）→ deactivating（宽限期 40 次 tick，interval 仍运行）
+//   deactivating →（玩家回来）→ active（interval 未停，恢复）
+//                  →（宽限期结束）→ inactive（停 interval）
+// 设计要点：
+//   · deactivating 是"优雅宽限"，宽限期内仍继续分拣，避免玩家短暂离开就中断。
+//   · 激活时创建 interval 若抛错 → 保持 inactive 下次重试（不吃死在半激活态）。
+//   · `globalSpeedLimit` 把单仓速度 clamp 到上限；`setGlobalEnabled(false)` 立即
+//     停全部 interval 并回到 inactive（全局开关）。
+//   · `onAutoSort` 钩子：路由成功放入后，若目标混乱度超 autoSortThreshold 即整理
+//     （v1 onDeposit 行为；由装配层接线到 OrganizeService）。
 import type { Router } from "../routing/Router";
 import type { IntervalHandle, IntervalScheduler } from "./IntervalScheduler";
 import type { Warehouse } from "../model/Warehouse";
@@ -6,7 +21,7 @@ import type { Container } from "../model/Container";
 import type { ContainerId, WarehouseId } from "../model/types";
 import type { EventBus } from "../events/DomainEvents";
 
-export type WarehouseLifecycle = "inactive" | "activating" | "active" | "deactivating";
+export type WarehouseLifecycle = "inactive" | "active" | "deactivating";
 
 /** 邻近检测（mc 层实现：玩家位置轮询结果） */
 export interface ProximityChecker {

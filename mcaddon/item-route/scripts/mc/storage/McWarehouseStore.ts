@@ -1,4 +1,10 @@
-// ─── 仓库仓储：注册表 + 世代分片元数据 + 容器注册表（全量重写） ──
+// ─── 仓库仓储：注册表 + 世代元数据 + 容器注册表（全量重写） ──
+// 三个数据面，全部经 ShardStore：
+//   · `ir2:registry`（overwrite）—— 仓库 ID 列表，快照清单枚举用
+//   · `ir2:wh:{id}:meta`（generation）—— WarehouseSnapshot（含 containerIds，不含容器几何）
+//   · `ir2:wh:{id}:containers`（generation）—— ContainerEntry[]，补 core 快照缺失的
+//     容器几何（id/role/occupiedLocations/enabled/priority），重启时重建适配器
+// 用 generation 模式：整体重写容器注册表时旧世代作废，由 ShardStore 清理，防崩溃半截。
 import type { ShardStore } from "./ShardStore";
 import type { ContainerId, Location, WarehouseId } from "../../core/model/types";
 import type { ContainerRole } from "../../core/model/Container";

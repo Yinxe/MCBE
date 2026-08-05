@@ -1,4 +1,7 @@
 // ─── DP 后端：KeyValueStore 的 world 实现（薄，无业务逻辑） ──
+// 唯一 import @minecraft/server 的存储文件。只做"字符串键 ↔ world.get/setDynamicProperty"
+// 的 JSON 序列化包装，无任何分片/校验逻辑——那些由上层 ShardStore 负责。
+// 因此本文件不进 node 测试构建（tsconfig.test.json exclude），仅编译检查 + 游戏内冒烟。
 import { world } from "@minecraft/server";
 import type { KeyValueStore } from "../../core/storage/KeyValueStore";
 

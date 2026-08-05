@@ -1,4 +1,17 @@
 // ─── O(1) 物品索引：查询/增量维护/惰性校验/持久化快照 ──
+// 本模块是"路由只查索引、不做全仓扫描"的底座。三张表（内存 Map）：
+//   · byItem         typeId → { single[], multi[] } 候选容器 ID（O(1) 定位）
+//   · containerItems 容器 ID → 其含有的 typeId 集合（增量维护用）
+//   · singleBindings 单物容器 ID → 绑定类型（由 deriveBinding 推导）
+//
+// ⚠️ 索引漂移与"三层兜底"（设计 §5，审查必读）：
+// MC 没有容器内容变化事件（玩家手动改箱无法被监听）→ 索引必然可能过期。
+// 收敛机制：① 代理信号（玩家交互/放置/破坏 → onContainerChanged/Added/Removed）
+//            ② 惰性校验（路由命中候选时 verifyCandidate：实际不含该型 → 移除返回
+//               false；单物绑定漂移 → 修复；非单物空箱 → 全量清条目）
+//            ③ 空箱重绑（玩家取走唯一物 → 空 → 移除；再来物由 proxy 信号重建）
+// 另：`onItemMoved` 是"路由自身移动"后的轻量更新（只改目标侧 containerItems；
+// 来源侧条目留待惰性校验清理）——避免每路由一次全量重算。
 import type { Container, ContainerRole } from "../model/Container";
 import { deriveBinding } from "../model/DeriveBinding";
 import type { ContainerId, ItemId } from "../model/types";

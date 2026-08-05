@@ -1,4 +1,9 @@
 // ─── 视觉反馈：路由闪光/存入效果（角色颜色粒子） ─────────────
+// 订阅领域事件 `visualEffect`（route-flash/particle）→ 在命中容器坐标播放粒子。
+// 关键约束（v1「无玩家在场不播放」）：先检查维度内 `getPlayers().length === 0`
+// 则跳过——避免玩家不在场时空耗粒子。
+// 坐标解析经注入的 EffectLocator（装配层以 loaded warehouses 反查），本模块不持
+// 仓库引用，保持薄订阅者角色。RP 粒子 identifier：itemroute:sort / itemroute:deposit。
 import { type Dimension } from "@minecraft/server";
 import type { EventBus, VisualEffectEvent } from "../../core/events/DomainEvents";
 import type { ContainerRole } from "../../core/model/Container";

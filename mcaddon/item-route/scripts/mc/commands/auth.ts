@@ -1,4 +1,8 @@
 // ─── 命令权限封装（纯逻辑，可单测） ──────────────────────────
+// 命令 → 所需最小角色的声明式映射（COMMAND_MIN_ROLE），配合 core MemberService
+// 实现统一权限矩阵（design §3.3），替代 v1 的 OP 二元判断。
+// 用法：命令回调里 `requireRole(deps.members, warehouse, player.id, X)`；
+// 或直接用 `canRunCommand` 按命令名取权限（create/organize/help=any 等）。
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { MemberRole } from "../../core/model/Warehouse";
 import type { PlayerId } from "../../core/model/types";

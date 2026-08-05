@@ -1,4 +1,6 @@
 // ─── 路由服务：全局开关/单仓速度/容器开关 ─────────────────
+// 对调度器的薄门面，供命令/UI（ConfigUI 全局开关、settings 速度）调用，
+// 避免外部直接触达 Scheduler 内部细节。
 import type { Scheduler } from "../scheduling/Scheduler";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId } from "../model/types";
