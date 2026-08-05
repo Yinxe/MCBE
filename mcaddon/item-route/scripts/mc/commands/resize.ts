@@ -17,10 +17,12 @@ export function registerResize(registry: Parameters<typeof defineCommand>[0], de
       player.sendMessage(`${chat.error}需要 owner 权限`);
       return;
     }
+    const p1 = params.pos1 as { x: number; y: number; z: number };
+    const p2 = params.pos2 as { x: number; y: number; z: number };
     const area = {
       dimension: player.dimension.id,
-      corner1: { x: params.x1 as number, y: params.y1 as number, z: params.z1 as number },
-      corner2: { x: params.x2 as number, y: params.y2 as number, z: params.z2 as number },
+      corner1: { x: Math.floor(p1.x), y: Math.floor(p1.y), z: Math.floor(p1.z) },
+      corner2: { x: Math.floor(p2.x), y: Math.floor(p2.y), z: Math.floor(p2.z) },
     };
     system.runTimeout(() => {
       deps.warehouses.updateArea(warehouse, area);

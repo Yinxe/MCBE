@@ -1,7 +1,7 @@
 // ─── 自定义命令配置构建器（defineCommand 的 CustomCommand 入参） ──
 import { CommandPermissionLevel, CustomCommandParamType, type CustomCommand } from "@minecraft/server";
 
-/** 区域命令：ir:xxx <名称> <x1> <y1> <z1> <x2> <y2> <z2> */
+/** 区域命令：ir:xxx <名称> <pos1> <pos2>（pos 用 Location 参数，玩家可输坐标或望准方块） */
 export function regionCommand(name: string, description: string): CustomCommand {
   return {
     name,
@@ -10,12 +10,8 @@ export function regionCommand(name: string, description: string): CustomCommand 
     cheatsRequired: false,
     mandatoryParameters: [
       { name: "name", type: CustomCommandParamType.String },
-      { name: "x1", type: CustomCommandParamType.Integer },
-      { name: "y1", type: CustomCommandParamType.Integer },
-      { name: "z1", type: CustomCommandParamType.Integer },
-      { name: "x2", type: CustomCommandParamType.Integer },
-      { name: "y2", type: CustomCommandParamType.Integer },
-      { name: "z2", type: CustomCommandParamType.Integer },
+      { name: "pos1", type: CustomCommandParamType.Location },
+      { name: "pos2", type: CustomCommandParamType.Location },
     ],
   };
 }
