@@ -217,3 +217,28 @@ test("Scheduler: 每仓库索引隔离（激活加载/空闲卸载/各仓独立�
   assert.equal(scheduler.getIndex("w1") !== undefined, true);
   assert.deepEqual(loadedIds, ["w1", "w1"]);
 });
+
+test("Scheduler: 生命周期迁移触发 lifecycle-changed 事件", () => {
+  const w = makeWorld();
+  const events: string[] = [];
+  // 直接订阅调度器内部用的 bus：makeWorld 未暴露，这里用 scheduler 里的事件总线下发一份
+  const probe = new EventBus();
+  probe.lifecycleChanged.subscribe((e) => events.push(`${e.from}->${e.to}`));
+  // 用 makeWorld 的 scheduler，但其 bus 未导出 → 改为重新构造一个带探针 bus 的调度器
+  const intervals2 = new MemoryIntervalScheduler();
+  const proximity2 = new StubProximity();
+  const router2 = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    probe
+  );
+  const scheduler2 = new Scheduler(router2, intervals2, proximity2, probe);
+  const warehouse = { ...w.warehouse };
+  scheduler2.registerWarehouse(warehouse);
+  proximity2.setNearby("w1", true);
+  scheduler2.tick();
+  assert.deepEqual(events, ["inactive->active"]);
+  proximity2.setNearby("w1", false);
+  scheduler2.tick();
+  assert.deepEqual(events, ["inactive->active", "active->deactivating"]);
+});

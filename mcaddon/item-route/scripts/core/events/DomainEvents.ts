@@ -59,7 +59,15 @@ export interface VisualEffectEvent {
   containerId?: ContainerId;
 }
 
-/** 领域事件总线：core 发事件 → 适配层订阅（视觉反馈/统计联动） */
+/** 仓库生命周期变更（Scheduler 在状态机迁移时触发；供附近成员通知） */
+export interface LifecycleChangedEvent {
+  type: "lifecycle-changed";
+  warehouseId: WarehouseId;
+  from: string;
+  to: string;
+}
+
+/** 领域事件总线：core 发事件 → 适配层订阅（视觉反馈/统计联动/成员通知） */
 export class EventBus {
   readonly itemRouted = new EventSignal<ItemRoutedEvent>();
   readonly containerChanged = new EventSignal<ContainerChangedEvent>();
@@ -67,4 +75,5 @@ export class EventBus {
   readonly statsChanged = new EventSignal<StatsChangedEvent>();
   readonly warning = new EventSignal<WarningEvent>();
   readonly visualEffect = new EventSignal<VisualEffectEvent>();
+  readonly lifecycleChanged = new EventSignal<LifecycleChangedEvent>();
 }

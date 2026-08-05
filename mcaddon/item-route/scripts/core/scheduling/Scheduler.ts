@@ -158,6 +158,7 @@ export class Scheduler {
               rt.handle = this.createInterval(rt);
               rt.idleTicks = 0;
               rt.lifecycle = "active";
+              this.emitLifecycle(rt, "inactive", "active");
             } catch {
               rt.handle = undefined;
               rt.lifecycle = "inactive";
@@ -177,17 +178,20 @@ export class Scheduler {
           if (!nearby) {
             rt.lifecycle = "deactivating";
             rt.deactivateCounter = this.deactivateDelayTicks;
+            this.emitLifecycle(rt, "active", "deactivating");
           }
           break;
         case "deactivating":
           if (nearby) {
             rt.lifecycle = "active"; // 玩家回来：取消停用（interval 未停）
+            this.emitLifecycle(rt, "deactivating", "active");
           } else {
             rt.deactivateCounter--;
             if (rt.deactivateCounter <= 0) {
               rt.handle?.stop();
               rt.handle = undefined;
               rt.lifecycle = "inactive";
+              this.emitLifecycle(rt, "deactivating", "inactive");
             }
           }
           break;
@@ -196,6 +200,11 @@ export class Scheduler {
   }
 
   // ── 私有方法 ───────────────────────────────────────────
+  /** 生命周期迁移事件（供 mc 层通知附近成员） */
+  private emitLifecycle(rt: Runtime, from: WarehouseLifecycle, to: WarehouseLifecycle): void {
+    this.bus.lifecycleChanged.trigger({ type: "lifecycle-changed", warehouseId: rt.warehouse.id, from, to });
+  }
+
   /** 解析该仓库的索引：优先生命周期加载；否则回退共享实例 */
   private resolveIndex(warehouse: Warehouse): ItemIndex | undefined {
     return this.options.indexLifecycle?.load(warehouse) ?? this.options.fallbackIndex;

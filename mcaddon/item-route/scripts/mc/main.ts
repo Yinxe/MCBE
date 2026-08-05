@@ -47,6 +47,7 @@ import { registerAllCommands, type CommandDeps } from "./commands/index";
 import { registerSortEffects } from "./effects/SortEffects";
 import { registerBoundaryDisplay } from "./effects/BoundaryDisplay";
 import { registerWarningRelay } from "./effects/WarningRelay";
+import { registerNotifyRelay } from "./effects/NotifyRelay";
 import { MoveJournal } from "../core/routing/Move";
 
 // Phase 1: 无状态基础设施
@@ -183,6 +184,7 @@ registerBoundaryDisplay(bus, (whId) => {
   return w === undefined ? undefined : { dimensionId: w.area.dimension, area: w.area };
 });
 registerWarningRelay(bus, () => loaded);
+registerNotifyRelay(bus, () => loaded);
 
 // Phase 3 续：startup 事件注册 9 命令
 system.beforeEvents.startup.subscribe((event) => {
