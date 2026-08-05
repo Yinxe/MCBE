@@ -100,6 +100,8 @@ export class McEventBridge {
             index?.onContainerRemoved(existing);
             const oldId = existing.id;
             existing.occupiedLocations.push({ x: loc.x, y: loc.y, z: loc.z });
+            // 重绑定到合并后共享库存句柄（工厂新建 adapter 持有最新 mc，覆盖 existing 旧单箱引用）
+            (existing as McContainerAdapter).rebindMc((container as McContainerAdapter).getMc());
             (existing as McContainerAdapter).rebaseId(containerIdOf(primaryLocationOf(existing.occupiedLocations)!, warehouse.area.dimension));
             rebaseContainer(warehouse, oldId, existing);
             index?.onContainerAdded(existing);

@@ -44,8 +44,9 @@ export function scanWarehouseArea(
       for (let x = minX; x <= maxX; x++) {
         const block = dimension.getBlock({ x, y, z });
         if (block === undefined || !isSupportedContainerType(block.typeId)) continue;
-        const container = factory.create(block as Parameters<McContainerFactory["create"]>[0], "single");
+        const container = factory.create(block as Parameters<McContainerFactory["create"]>[0], warehouse.settings.defaultContainerRole);
         if (container === undefined) continue;
+        container.enabled = warehouse.settings.defaultContainerEnabled; // 与放置路径口径一致
         if (warehouse.containers.has(container.id)) continue;
         registerContainer(warehouse, container);
         index?.onContainerAdded(container);

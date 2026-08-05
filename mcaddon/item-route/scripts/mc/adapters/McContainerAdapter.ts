@@ -136,4 +136,18 @@ export class McContainerAdapter implements Container {
   rebaseId(newId: ContainerId): void {
     (this as { id: ContainerId }).id = newId;
   }
+
+  /** 返回当前持有的 mc.Container（双箱合并时迁移句柄用） */
+  getMc(): McContainer {
+    return this.mc;
+  }
+
+  /**
+   * 双箱合并后重绑定到**合并后共享库存**的 mc.Container 句柄。
+   * MC 不保证旧 Container 实例在两箱合并后仍指向扩容后的共享库存，
+   * 故合并路径用工厂新建适配器（持有最新库存句柄）的 mc 覆盖 existing 的旧引用。
+   */
+  rebindMc(mc: McContainer): void {
+    (this as unknown as { mc: McContainer }).mc = mc;
+  }
 }

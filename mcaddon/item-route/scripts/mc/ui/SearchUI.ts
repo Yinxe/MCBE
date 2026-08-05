@@ -41,7 +41,7 @@ export async function showSearchUI(player: Player, deps: CommandDeps): Promise<v
   const query = (values.query as string).trim();
   if (!query) return;
 
-  const lines = runSearch(deps, warehouse, query);
+  const lines = runSearch(warehouse, query);
   if (lines.length === 0) {
     player.sendMessage(`${uiColor.chat.muted}未找到匹配物品`);
     return;
@@ -52,22 +52,17 @@ export async function showSearchUI(player: Player, deps: CommandDeps): Promise<v
   }
 }
 
-/** 纯逻辑搜索：在指定仓库内 query → typeIds → 索引定位候选 + 逐槽按 typeId 精确计数（可单测） */
-export function runSearch(deps: CommandDeps, warehouse: Warehouse, query: string): SearchResultLine[] {
+/** 纯逻辑搜索：在指定仓库内 query → typeIds → 逐容器按 typeId 精确计数（可单测） */
+export function runSearch(warehouse: Warehouse, query: string): SearchResultLine[] {
   const typeIds = searchItems(query);
-  const index = deps.resolveIndex(warehouse.id); // 该仓库自己的索引（隔离）
+  // 只搜存储容器（single/multi/misc），排除在途输入仓（input 不落库、且索引不含 misc，
+  // 直接扫全量非 input 保证"索引加载与否"两种状态结果一致，对齐 v1 SearchService 逐容器扫描）
+  const containers = [...warehouse.containers.values()].filter((c) => c.role !== "input");
   const out: SearchResultLine[] = [];
   for (const typeId of typeIds) {
     let count = 0;
     const containerIds: string[] = [];
-    // 候选容器：优先索引定位；索引未加载（仓库未激活）时兜底全仓扫描，避免假报"未找到"
-    const candidates =
-      index !== undefined
-        ? [...index.lookup(typeId).single, ...index.lookup(typeId).multi]
-        : [...warehouse.containers.keys()];
-    for (const id of candidates) {
-      const container = warehouse.containers.get(id);
-      if (container === undefined) continue;
+    for (const container of containers) {
       let found = false;
       for (let i = 0; i < container.capacity; i++) {
         const item = container.getItem(i);
@@ -75,7 +70,7 @@ export function runSearch(deps: CommandDeps, warehouse: Warehouse, query: string
         count += item.amount; // 仅统计该类型（multi 混放不虚高）
         found = true;
       }
-      if (found) containerIds.push(id);
+      if (found) containerIds.push(container.id);
     }
     if (count > 0) out.push({ typeId, name: getChineseName(typeId), count, containerIds });
   }

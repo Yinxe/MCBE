@@ -23,7 +23,7 @@ export function registerSearch(registry: Parameters<typeof defineCommand>[0], de
         player.sendMessage(`${chat.error}附近没有你有权限（成员）的仓库`);
         return;
       }
-      const lines = runSearch(deps, warehouse, params.query as string);
+      const lines = runSearch(warehouse, params.query as string);
       if (lines.length === 0) {
         player.sendMessage(`${chat.muted}未找到匹配物品`);
         return;

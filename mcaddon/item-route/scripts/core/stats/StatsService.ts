@@ -69,9 +69,11 @@ export class StatsService {
   getContainerStats(warehouse: Warehouse, container: Container): ContainerStats {
     const cached = this.cache.get(container.id);
     if (cached) {
-      // 阈值可能已变：isWarning 实时按当前 warningThreshold 重算（usedSlots 已缓存，零扫描）
+      // 阈值可能已变：isWarning 实时按当前 warningThreshold 重算（usedSlots 已缓存，零扫描），
+      // 并回写缓存本体，使 persistWarehouse 落盘快照带实时阈值
       const isWarning = container.capacity > 0 && cached.usedSlots / container.capacity >= warehouse.settings.warningThreshold;
-      return isWarning === cached.isWarning ? cached : { ...cached, isWarning };
+      if (cached.isWarning !== isWarning) cached.isWarning = isWarning;
+      return cached;
     }
     return this.buildStats(container, scanContainer(container), warehouse.settings.warningThreshold);
   }

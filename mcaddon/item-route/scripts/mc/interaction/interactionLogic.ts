@@ -62,13 +62,13 @@ export function handleCornerClick(
     return `${chat.success}已记录第一个对角点，请手持信物右键对角方块完成选区`;
   }
   const area = areaFromPoints(dimension, session.corner1, clicked);
-  ctx.session.clear(playerId);
   if (session.kind === "createWarehouse") {
     const result = ctx.warehouses.createWarehouse(session.name, playerId, area, {
       role: session.defaultRole,
       enabled: session.defaultEnabled,
     });
-    if (!result.ok) return `${chat.error}${result.error}`;
+    if (!result.ok) return `${chat.error}${result.error}`; // 失败保留会话，可换对角重试
+    ctx.session.clear(playerId);
     glow(ctx, result.warehouse.id);
     return `${chat.success}仓库 "${result.warehouse.displayName}" 创建成功！区域内容器自动注册`;
   }
@@ -76,7 +76,8 @@ export function handleCornerClick(
   const wh = ctx.resolveWarehouse(session.warehouseId);
   if (wh === undefined) return `${chat.error}仓库不存在或未加载`;
   const err = ctx.warehouses.updateArea(wh, area);
-  if (err !== undefined) return `${chat.error}${err}`;
+  if (err !== undefined) return `${chat.error}${err}`; // 失败保留会话，可换对角重试
+  ctx.session.clear(playerId);
   glow(ctx, wh.id);
   return `${chat.success}仓库 "${wh.displayName}" 区域已调整`;
 }
