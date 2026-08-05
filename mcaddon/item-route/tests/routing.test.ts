@@ -129,9 +129,13 @@ function makeIndexStub() {
     moved: [] as string[],
     verified: [] as string[],
     verifyResult: true,
+    lookups: 0,
   };
   const stub = {
-    lookup: (typeId: string) => state.byItem.get(typeId) ?? { single: [], multi: [] },
+    lookup: (typeId: string) => {
+      state.lookups++;
+      return state.byItem.get(typeId) ?? { single: [], multi: [] };
+    },
     verifyCandidate: (c: unknown) => {
       state.verified.push((c as { id: string }).id);
       return state.verifyResult;
@@ -234,4 +238,22 @@ test("Router: verifyCandidate 漂移 → 候选被跳过", () => {
   const result = router.routeFrom(input, 0, wh, index);
   assert.equal(result, undefined);
   assert.deepEqual(index.state.verified, ["m1"]);
+});
+
+test("Router: 同一次路由招索引 lookup 只调用一次（缓存）", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  add(new InMemoryContainer("s1", "single", 3)).setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  add(new InMemoryContainer("m1", "multi", 3)).setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  const index = makeIndexStub();
+  index.state.byItem.set("minecraft:stone", { single: ["s1"], multi: ["m1"] });
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  router.routeFrom(input, 0, wh, index);
+  // single + multi 两个策略都查同一 itemId，但一次路由只真正 look up 一次
+  assert.equal(index.state.lookups, 1);
 });

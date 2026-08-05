@@ -47,10 +47,19 @@ export class Router {
     const stack = input.getItem(slot);
     if (stack === undefined) return undefined;
     const originalAmount = stack.amount;
+    // 索引查询惰性缓存：各策略都查同一 itemId，一次路由只真正 look up 一次（索引在内存）
+    const itemId = stack.itemId;
+    let cached: { single: ContainerId[]; multi: ContainerId[] } | undefined;
     const ctx = {
       item: stack,
       warehouse,
-      lookupIndex: (typeId: ItemId) => index.lookup(typeId),
+      lookupIndex: (typeId: ItemId) => {
+        if (typeId === itemId) {
+          if (cached === undefined) cached = index.lookup(typeId);
+          return cached;
+        }
+        return index.lookup(typeId);
+      },
       verifyCandidate: (c: Container) => index.verifyCandidate(c),
     };
     const ordered = [...this.strategies].sort((a, b) => a.priority - b.priority);
