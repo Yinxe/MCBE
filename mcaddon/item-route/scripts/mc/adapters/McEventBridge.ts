@@ -18,8 +18,10 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
 import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
 import { locationKey, type Location } from "../../core/model/types";
+import { containerIdOf, primaryLocationOf, containerIdPointsTo } from "../../core/model/ContainerId";
 import type { McIndexStore } from "../storage/McIndexStore";
 import type { McContainerFactory } from "./McContainerFactory";
+import type { McContainerAdapter } from "./McContainerAdapter";
 
 export interface EventBridgeDeps {
   bus: EventBus;
@@ -70,6 +72,8 @@ export class McEventBridge {
     });
 
     // 放置容器方块 → 注册（默认 single，漏斗强制 input 由工厂处理）
+    // 若新块与已注册容器合并成双箱 → 合并进已有容器（扩展 occupied + 重定主 id），
+    // 避免已注册单箱与新合并双箱共存/撞 id。
     world.afterEvents.playerPlaceBlock.subscribe((e) => {
       try {
         const dim = e.block.dimension.id;
@@ -78,6 +82,27 @@ export class McEventBridge {
         if (warehouse === undefined) return;
         const container = factory.create(e.block, "single");
         if (container === undefined) return;
+
+        if (container.occupiedLocations.length > 1) {
+          // 双箱：找伙伴块是否已是注册容器
+          const partnerLoc = container.occupiedLocations.find((l) => locationKey(l) !== locationKey(loc))!;
+          const hit = findContainerAt(this.deps.warehouses(), dim, partnerLoc);
+          if (hit !== undefined && hit.container.id !== container.id) {
+            const existing = hit.container;
+            // 拆旧 id 索引条目 + map 旧键 → 并入新格并重定主 id → 放回新键 → 重建索引
+            index.onContainerRemoved(existing);
+            warehouse.containers.delete(existing.id);
+            existing.occupiedLocations.push({ x: loc.x, y: loc.y, z: loc.z });
+            (existing as McContainerAdapter).rebaseId(containerIdOf(primaryLocationOf(existing.occupiedLocations)!));
+            warehouse.containers.set(existing.id, existing);
+            index.onContainerAdded(existing);
+            stats.invalidate(existing.id);
+            bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: existing.id });
+            indexStore.markDirty(warehouse.id, index.serialize());
+            this.deps.onContainerRegistered?.(warehouse, existing);
+            return;
+          }
+        }
         warehouse.containers.set(container.id, container);
         index.onContainerAdded(container);
         stats.invalidate(container.id);
@@ -89,7 +114,7 @@ export class McEventBridge {
       }
     });
 
-    // 破坏/爆炸移除容器方块 → 注销（双箱半拆：occupiedLocations 过滤）
+    // 破坏/爆炸移除容器方块 → 注销（双箱半拆：occupiedLocations 过滤 + 主坐标重定）
     const unregister = (block: Block): void => {
       try {
         const hit = this.locate(block);
@@ -99,10 +124,24 @@ export class McEventBridge {
         const idx = container.occupiedLocations.findIndex((l) => locationKey(l) === locationKey(loc));
         if (idx >= 0) container.occupiedLocations.splice(idx, 1);
         if (container.occupiedLocations.length === 0) {
+          // 完全拆除
           warehouse.containers.delete(container.id);
           index.onContainerRemoved(container);
           stats.invalidate(container.id);
           this.deps.onContainerUnregistered?.(warehouse, container);
+        } else if (containerIdPointsTo(container.id, loc)) {
+          // 半拆且拆的是主坐标（id 承载位）：重定 id 到幸存主坐标，
+          // 否则 ID 悬空 + 后续在原主坐标新放容器会撞 ID
+          const newId = containerIdOf(primaryLocationOf(container.occupiedLocations)!);
+          if (newId !== container.id) {
+            index.onContainerRemoved(container);
+            warehouse.containers.delete(container.id);
+            (container as McContainerAdapter).rebaseId(newId);
+            warehouse.containers.set(newId, container);
+            index.onContainerAdded(container);
+            stats.invalidate(container.id);
+            this.deps.onContainerRegistered?.(warehouse, container);
+          }
         }
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
         indexStore.markDirty(warehouse.id, index.serialize());

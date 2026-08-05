@@ -68,4 +68,15 @@ export class McContainerAdapter implements Container {
   getDedicatedItemId(): string | undefined {
     return deriveBinding(this);
   }
+
+  /**
+   * 合并/拆箱时重定容器 ID（主坐标迁移）。
+   * 概念接口将 id 标为 readonly（语义上 identity），但双箱拆主半后 id 必须跟随
+   * 幸存主坐标迁移，否则会导致 ID 悬空、与新放容器撞 ID（见 McEventBridge）。
+   * 仅适配层内部用；调用方需同步：按旧 id 从 map 删除 → rebase → 按新 id 放回，
+   * 并重建索引条目。
+   */
+  rebaseId(newId: ContainerId): void {
+    (this as { id: ContainerId }).id = newId;
+  }
 }

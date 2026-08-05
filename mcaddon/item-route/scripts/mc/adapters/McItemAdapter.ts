@@ -14,17 +14,23 @@ interface DomainStack extends ItemStack {
   [SOURCE]?: McItemStack;
 }
 
-/** 构造概念 ItemStack（含接口要求的方法 + 源引用） */
+/**
+ * 构造概念 ItemStack（工厂函数，每次调用产生**独立新对象**）。
+ * `clone()` 也走本工厂（透传 source）→ 得到一份彼此独立、但共享同一只读
+ * source 引用的新堆。**这不是递归**：本函数体从不调用自身，`clone` 只是
+ * 一个"再调一次工厂"的惰性回调（仅在被调用时才执行，无无限循环）。
+ * 之所以必须经工厂而非浅拷贝：接口要求 clone 是独立对象（改 amount 不影响原堆），
+ * 且 clone 后 amount 可能被 core 调整，仍需能回到 source（toMc 用）。
+ */
 function domainStack(itemId: string, amount: number, maxStackSize: number, source?: McItemStack): ItemStack {
-  // clone 时透传 source，保证 transfer 的 clone().amount 调整后仍可回源
-  const self = (): ItemStack => domainStack(itemId, amount, maxStackSize, source);
   const obj: DomainStack = {
     itemId,
     amount,
     maxStackSize,
     isStackableWith: (other) => other.itemId === itemId,
     equals: (other) => other.itemId === itemId && other.amount === amount && other.maxStackSize === maxStackSize,
-    clone: self,
+    // clone = 再调一次工厂（新对象、同 source 引用）；非递归，见上方说明
+    clone: () => domainStack(itemId, amount, maxStackSize, source),
   };
   if (source !== undefined) obj[SOURCE] = source;
   return obj;

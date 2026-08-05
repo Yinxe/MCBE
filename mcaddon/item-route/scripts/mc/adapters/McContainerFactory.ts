@@ -3,13 +3,15 @@
 // 要点（审查）：
 //   · 双箱合并用 SafeProbe 探针**确认共享同一库存**，而非依赖 mc 容器实例同一性
 //     （MC 不保证两半共享同一 Container 实例；v1 已踩过此坑）。
+//   · 容器 ID = 主坐标（双箱取两半 (x,y,z) 最小者）→ 无论从哪半开始创建 ID 都稳定，
+//     且拆主半后能重定到幸存半（见 ContainerId/primaryLocationOf）。
 //   · 白名单：非受支持容器类型直接返回 undefined（isSupportedContainerType）。
 //   · 漏斗强制 finalRole=input（不可改角色），其余按传入 role。
-//   · 容器 ID = `c@x,y,z`（笛卡尔坐标定位，维度由仓库承载）。
 import type { Block } from "@minecraft/server";
 import { isChestType, isHopperType, isSupportedContainerType } from "../../core/model/ContainerTypes";
 import type { ContainerRole } from "../../core/model/Container";
 import type { Location } from "../../core/model/types";
+import { containerIdOf, primaryLocationOf } from "../../core/model/ContainerId";
 import { McContainerAdapter } from "./McContainerAdapter";
 import { probeDoubleChestSafely } from "./SafeProbe";
 import type { McItemAdapter } from "./McItemAdapter";
@@ -43,7 +45,9 @@ export class McContainerFactory {
       }
 
       const finalRole: ContainerRole = isHopperType(typeId) ? "input" : role;
-      const id = `c@${loc.x},${loc.y},${loc.z}`;
+      // ID 用主坐标（双箱取两半 (x,y,z) 最小者）——稳定、且拆主半后可重定
+      const primary = primaryLocationOf(occupied)!;
+      const id = containerIdOf(primary);
       return new McContainerAdapter(id, finalRole, inv, this.item, occupied, typeId);
     } catch {
       return undefined;
