@@ -28,10 +28,16 @@ export interface IndexSnapshotData {
   singleBindings: Record<ContainerId, string>;
 }
 
-/** 统计快照（每仓库一条 DP key；containers 值 = ContainerStats 纯 JSON） */
-export interface StatsSnapshotData {
-  warehouseId: WarehouseId;
-  containers: Record<ContainerId, unknown>;
+/** 容器统计快照（纯 JSON；与 ContainerStats 结构兼容，供 DP 存取） */
+export interface ContainerStatsData {
+  containerId: ContainerId;
+  role: string;
+  totalSlots: number;
+  usedSlots: number;
+  totalItems: number;
+  uniqueTypes: number;
+  isWarning: boolean;
+  byType: Record<string, number>;
 }
 
 export interface WarehouseStore {
@@ -47,10 +53,11 @@ export interface IndexStore {
   remove(id: WarehouseId): void;
 }
 
+/** 统计存储：**每容器一条**（v1 方案；容器 ID 全局唯一，键无需仓库前缀） */
 export interface StatsStore {
-  load(id: WarehouseId): StatsSnapshotData | undefined;
-  save(id: WarehouseId, snapshot: StatsSnapshotData): void;
-  remove(id: WarehouseId): void;
+  loadContainer(containerId: ContainerId): ContainerStatsData | undefined;
+  saveContainer(containerId: ContainerId, stats: ContainerStatsData): void;
+  removeContainer(containerId: ContainerId): void;
 }
 
 // ── 内存实现（测试用） ───────────────────────────────────
@@ -99,15 +106,15 @@ export class InMemoryIndexStore implements IndexStore {
 export class InMemoryStatsStore implements StatsStore {
   constructor(private kv: KeyValueStore = new InMemoryKeyValueStore()) {}
 
-  load(id: WarehouseId): StatsSnapshotData | undefined {
-    return this.kv.read(key("stats", id));
+  loadContainer(containerId: ContainerId): ContainerStatsData | undefined {
+    return this.kv.read(key("cstats", containerId));
   }
 
-  save(id: WarehouseId, snapshot: StatsSnapshotData): void {
-    this.kv.write(key("stats", id), snapshot);
+  saveContainer(containerId: ContainerId, stats: ContainerStatsData): void {
+    this.kv.write(key("cstats", containerId), stats);
   }
 
-  remove(id: WarehouseId): void {
-    this.kv.remove(key("stats", id));
+  removeContainer(containerId: ContainerId): void {
+    this.kv.remove(key("cstats", containerId));
   }
 }

@@ -70,7 +70,7 @@ const warehouseStore = new McWarehouseStore(shards);
 const indexStore = new McIndexStore(shards);
 const members = new MemberService();
 const config = McModConfig.load(shards);
-const statsStore = new McStatsStore(shards); // 供 resize 迁移统计键
+const statsStore = new McStatsStore(shards); // 每容器一条统计键，StatsService 写穿/清除
 // 建仓限制：来自模组配置（v1 口径：体积 32×32×16、每玩家 1 仓）
 const warehouses = new WarehouseService(
   warehouseStore,
@@ -86,9 +86,7 @@ const warehouses = new WarehouseService(
     const idx = indexStore.load(oldId);
     if (idx !== undefined) indexStore.save(newId, idx);
     indexStore.remove(oldId);
-    const st = statsStore.load(oldId);
-    if (st !== undefined) statsStore.save(newId, st);
-    statsStore.remove(oldId);
+    // 统计键是**每容器一条**（`ir2:cst:{containerId}`），仓库 resize 不改变容器 ID → 无需迁移
     const entries = warehouseStore.loadContainers(oldId);
     if (entries !== undefined) warehouseStore.saveContainers(newId, entries);
     scheduler.unregisterWarehouse(oldId);
@@ -166,11 +164,14 @@ bus.itemRouted.subscribe((e) => {
 });
 // ⑤ 仓库删除：清内存（loaded 剔除 + 停调度 + 卸载索引）+ 清持久化键，杜绝删后仍分拣/残影
 bus.warehouseDeleted.subscribe((e) => {
+  const wh = loaded.find((w) => w.id === e.warehouseId);
   const i = loaded.findIndex((w) => w.id === e.warehouseId);
   if (i >= 0) loaded.splice(i, 1);
   scheduler.unregisterWarehouse(e.warehouseId); // 停 interval + indexLifecycle.unload（unload 会把活索引 markDirty）
   indexStore.remove(e.warehouseId);             // 清 dirty + 持久索引键（不复活）
-  statsStore.remove(e.warehouseId);
+  if (wh !== undefined) {
+    for (const c of wh.containers.keys()) stats.discard(c); // 清该仓各容器统计键（每容器一条）
+  }
 });
 
 // 容器注册表持久化钩子（事件桥接 → DP）

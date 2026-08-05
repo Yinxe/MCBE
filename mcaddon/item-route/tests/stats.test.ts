@@ -156,7 +156,7 @@ test("StatsService: updateFromScan 用外部扫描维护缓存（免二次扫描
   assert.equal(svc.getContainerStats(warehouse, c).byType["minecraft:stone"], 13);
 });
 
-test("StatsService: getWarehouseStats 写穿透持久化容器统计快照", () => {
+test("StatsService: getWarehouseStats 查看时写穿透每容器统计键", () => {
   const { warehouse, containers } = makeWarehouse();
   const c = new InMemoryContainer("m1", "multi", 4);
   c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
@@ -164,12 +164,10 @@ test("StatsService: getWarehouseStats 写穿透持久化容器统计快照", () 
   const store = new InMemoryStatsStore();
   const svc = new StatsService(store, new EventBus());
   svc.getWarehouseStats(warehouse); // 查看汇总 → 落盘
-  const saved = store.load("w1");
+  const saved = store.loadContainer("m1"); // 每容器一条键
   assert.ok(saved !== undefined);
-  assert.equal(saved.warehouseId, "w1");
-  const cs = saved.containers["m1"] as { totalItems: number; usedSlots: number };
-  assert.equal(cs.totalItems, 10);
-  assert.equal(cs.usedSlots, 1);
+  assert.equal(saved.totalItems, 10);
+  assert.equal(saved.usedSlots, 1);
 });
 
 test("StatsService: isWarning 实时按当前 warningThreshold 判定（改阈值无需 invalidate）", () => {

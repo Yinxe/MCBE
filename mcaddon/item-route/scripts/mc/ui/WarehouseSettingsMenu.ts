@@ -70,6 +70,7 @@ function refreshContainers(player: Player, deps: CommandDeps, warehouse: Warehou
     if (c.occupiedLocations.length === 0) {
       unregisterContainer(warehouse, c.id);
       deps.resolveIndex(warehouse.id)?.onContainerRemoved(c);
+      deps.stats.discard(c.id); // 容器移除 → 清其统计键（每容器一条）
     }
   }
   deps.persistContainers(warehouse);

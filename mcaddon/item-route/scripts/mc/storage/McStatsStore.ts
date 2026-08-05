@@ -1,23 +1,25 @@
-// ─── 统计仓储：写穿透（overwrite + hash） ──
-// 统计快照小（聚合数字），overwrite 单键覆盖即可；每仓库一 key `ir2:st:{id}`。
+// ─── 统计仓储：每容器一条（v1 方案，overwrite + hash） ──
+// 统计按**容器 ID** 分键：`ir2:cst:{containerId}`（容器 ID 全局唯一 `c@(x,y,z)@维度`，
+// 无需仓库前缀；仓库 resize 不改变容器 ID → 统计键无需迁移）。
+// overwrite 单键覆盖即可（快照小、聚合数字）；写后验由 ShardStore 兜底。
 import type { ShardStore } from "./ShardStore";
-import type { StatsSnapshotData, StatsStore } from "../../core/storage/Stores";
-import type { WarehouseId } from "../../core/model/types";
+import type { ContainerStatsData, StatsStore } from "../../core/storage/Stores";
+import type { ContainerId } from "../../core/model/types";
 
-const statsKey = (id: WarehouseId): string => `ir2:st:${id}`;
+const cstatsKey = (containerId: ContainerId): string => `ir2:cst:${containerId}`;
 
 export class McStatsStore implements StatsStore {
   constructor(private readonly shards: ShardStore) {}
 
-  load(id: WarehouseId): StatsSnapshotData | undefined {
-    return this.shards.read<StatsSnapshotData>(statsKey(id));
+  loadContainer(containerId: ContainerId): ContainerStatsData | undefined {
+    return this.shards.read<ContainerStatsData>(cstatsKey(containerId));
   }
 
-  save(id: WarehouseId, snapshot: StatsSnapshotData): void {
-    this.shards.write(statsKey(id), snapshot, "overwrite");
+  saveContainer(containerId: ContainerId, stats: ContainerStatsData): void {
+    this.shards.write(cstatsKey(containerId), stats, "overwrite");
   }
 
-  remove(id: WarehouseId): void {
-    this.shards.remove(statsKey(id));
+  removeContainer(containerId: ContainerId): void {
+    this.shards.remove(cstatsKey(containerId));
   }
 }

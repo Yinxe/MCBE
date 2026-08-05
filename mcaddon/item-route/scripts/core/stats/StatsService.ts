@@ -1,18 +1,23 @@
-// ─── 统计系统：容器/仓库统计 + 三级预警（冷却） ────────────
+// ─── 统计系统：容器/仓库统计 + 容量预警（两级，冷却） ────────
 // 两职责：
 //   1. 统计聚合（getContainerStats/getWarehouseStats）——按类型/按物品双视图，
 //      供 StatsUI 展示；容器级结果带内存缓存（invalidate 失效）。
-//   2. 三级容量预警（evaluateWarnings）——yellow：任一容器占用 ≥ warningThreshold；
-//      red：某非 input 角色组全满；deep-red：全仓（除 input）全满。
+//   2. 容量预警（evaluateWarnings）——warning：某容器占用 ≥ warningThreshold（容器级）；
+//      full：全仓库（除 input）满仓（仅目标容器满时 gated 全仓判定）。
 //      触发后置冷却（warningCooldownTicks），冷却内不再发，避免刷屏。
 // ⚠️ 冷却递减由谁驱动（审查）：
 //   装配层必须定期调 `tick()`（mc 层主循环已接线，见 McEventBridge）递减冷却，
 //   否则预警只触发一次、永不复发。
+// ⚠️ 持久化（审查）：
+//   统计是**活容器内容的派生**（权威源 = 游戏容器），读取必须实时重算才正确；
+//   内存 cache 只避免会话内重复扫描。`getWarehouseStats`（查看汇总）写穿透
+//   McStatsStore 落盘最新快照作持久记录（路由热路径 updateFromScan 仅驻内存，
+//   不写 DP）。读取不 warm 持久化副本（warm 会过期，还要再验 = 白扫）。
 import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";
 import { scanContainer, type ContainerScanResult } from "../model/ContainerScan";
-import type { StatsStore, StatsSnapshotData } from "../storage/Stores";
+import type { StatsStore } from "../storage/Stores";
 import type { EventBus, WarningLevel } from "../events/DomainEvents";
 
 export interface ContainerStats {
@@ -61,33 +66,41 @@ export class StatsService {
     private readonly warningCooldownTicks = 100
   ) {}
 
-  /** 容器内容变化后失效缓存 */
+  /** 容器内容变化后失效缓存（仅内存；热路径安全——路由每轮 invalidate 不写 DP） */
   invalidate(containerId: ContainerId): void {
     this.cache.delete(containerId);
+  }
+
+  /** 容器移除时丢弃统计（内存 + 持久化键）；结构变更路径（拆除/重定/删仓）用 */
+  discard(containerId: ContainerId): void {
+    this.cache.delete(containerId);
+    this.store.removeContainer(containerId);
   }
 
   getContainerStats(warehouse: Warehouse, container: Container): ContainerStats {
     const cached = this.cache.get(container.id);
     if (cached) {
       // 阈值可能已变：isWarning 实时按当前 warningThreshold 重算（usedSlots 已缓存，零扫描），
-      // 并回写缓存本体，使 persistWarehouse 落盘快照带实时阈值
+      // 并回写缓存本体，使落盘快照带实时阈值
       const isWarning = container.capacity > 0 && cached.usedSlots / container.capacity >= warehouse.settings.warningThreshold;
       if (cached.isWarning !== isWarning) cached.isWarning = isWarning;
       return cached;
     }
-    return this.buildStats(container, scanContainer(container), warehouse.settings.warningThreshold);
+    // 冷读：计算 + 写穿透单容器键
+    return this.buildStats(container, scanContainer(container), warehouse.settings.warningThreshold, true);
   }
 
   /**
    * 用外部提供的扫描结果直接维护缓存（免二次扫描）。
    * 配合路由成功后混乱度检查的同一趟 scanContainer 扫描，趁机增量维护容器统计。
+   * **仅驻内存**（路由热路径不写 DP，落盘由查看汇总/冷读写穿承担）。
    */
   updateFromScan(container: Container, scan: ContainerScanResult, warningThreshold: number): ContainerStats {
-    return this.buildStats(container, scan, warningThreshold);
+    return this.buildStats(container, scan, warningThreshold, false);
   }
 
-  /** 由扫描结果构造并缓存容器统计 */
-  private buildStats(container: Container, scan: ContainerScanResult, warningThreshold: number): ContainerStats {
+  /** 由扫描结果构造并缓存容器统计；persist=true 时写穿透单容器键（冷读/查看） */
+  private buildStats(container: Container, scan: ContainerScanResult, warningThreshold: number, persist: boolean): ContainerStats {
     const byType = scan.byType;
     const usedSlots = scan.usedSlots;
     const totalItems = scan.totalItems;
@@ -103,6 +116,7 @@ export class StatsService {
       byType,
     };
     this.cache.set(container.id, stats);
+    if (persist) this.store.saveContainer(container.id, stats);
     return stats;
   }
 
@@ -135,10 +149,10 @@ export class StatsService {
         byItem[itemId] = itemStat;
       }
     }
-    // 持久化（写穿透）：统计在"查看汇总"时落盘。路由热路径的容器统计更新
-    // （updateFromScan / 冷计算）仅驻内存，因统计是活容器内容的派生，读取仍需实时
-    // 重算；落盘的是经过查看/计算的最新快照，作为持久记录供未来 warm-load 或还原。
-    this.persistWarehouse(warehouse);
+    // 持久化（写穿透）：统计在"查看汇总"时逐容器落盘（每容器一条键）。
+    // 路由热路径的容器统计增量（updateFromScan）仅驻内存；落盘的是经过查看/计算的最新快照，
+    // 作为持久记录供未来 warm-load 或还原。
+    this.persistAll(warehouse);
     return {
       warehouseId: warehouse.id,
       containerCount,
@@ -152,14 +166,12 @@ export class StatsService {
     };
   }
 
-  /** 写穿透整仓容器统计快照（每仓库一条 DP key，覆盖写） */
-  private persistWarehouse(warehouse: Warehouse): void {
-    const snap: StatsSnapshotData = { warehouseId: warehouse.id, containers: {} };
+  /** 写穿透：查看汇总时把当前缓存逐容器落盘（每容器一条键）；路由热路径增量仅驻内存 */
+  private persistAll(warehouse: Warehouse): void {
     for (const container of warehouse.containers.values()) {
       const stat = this.cache.get(container.id);
-      if (stat !== undefined) snap.containers[container.id] = stat;
+      if (stat !== undefined) this.store.saveContainer(container.id, stat);
     }
-    this.store.save(warehouse.id, snap);
   }
 
 /**

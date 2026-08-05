@@ -3,13 +3,27 @@ import assert from "node:assert/strict";
 import { ShardStore } from "../scripts/mc/storage/ShardStore";
 import { McStatsStore } from "../scripts/mc/storage/McStatsStore";
 import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
-import type { StatsSnapshotData } from "../scripts/core/storage/Stores";
+import type { ContainerStatsData } from "../scripts/core/storage/Stores";
 
-test("McStatsStore: 写穿透 save/load/remove", () => {
+const stats = (containerId: string): ContainerStatsData => ({
+  containerId,
+  role: "multi",
+  totalSlots: 4,
+  usedSlots: 2,
+  totalItems: 10,
+  uniqueTypes: 1,
+  isWarning: false,
+  byType: { "minecraft:stone": 10 },
+});
+
+test("McStatsStore: 每容器一条 saveContainer/loadContainer/removeContainer", () => {
   const store = new McStatsStore(new ShardStore(new InMemoryKeyValueStore()));
-  const snap: StatsSnapshotData = { warehouseId: "w1", containers: { c1: { usedSlots: 2 } } };
-  store.save("w1", snap);
-  assert.deepEqual(store.load("w1"), snap);
-  store.remove("w1");
-  assert.equal(store.load("w1"), undefined);
+  store.saveContainer("c1", stats("c1"));
+  store.saveContainer("c2", stats("c2"));
+  assert.equal(store.loadContainer("c1")?.byType["minecraft:stone"], 10);
+  assert.equal(store.loadContainer("c2")?.containerId, "c2");
+  // 互不影响（每容器独立键）
+  store.removeContainer("c1");
+  assert.equal(store.loadContainer("c1"), undefined);
+  assert.equal(store.loadContainer("c2")?.containerId, "c2");
 });

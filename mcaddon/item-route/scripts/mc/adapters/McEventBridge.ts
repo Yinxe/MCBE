@@ -99,6 +99,7 @@ export class McEventBridge {
             // 拆旧 id 索引条目 + 旧键 → 并入新格并重定主 id → 迁移两 map 键 → 重建索引
             index?.onContainerRemoved(existing);
             const oldId = existing.id;
+            stats.discard(oldId); // 合并后容器重定 id → 旧 id 统计键失效
             existing.occupiedLocations.push({ x: loc.x, y: loc.y, z: loc.z });
             // 重绑定到合并后共享库存句柄（工厂新建 adapter 持有最新 mc，覆盖 existing 旧单箱引用）
             (existing as McContainerAdapter).rebindMc((container as McContainerAdapter).getMc());
@@ -139,7 +140,7 @@ export class McEventBridge {
           // 完全拆除
           unregisterContainer(warehouse, container.id);
           index?.onContainerRemoved(container);
-          stats.invalidate(container.id);
+          stats.discard(container.id); // 容器已移除 → 清其统计键（每容器一条）
           bus.containerRemoved.trigger({ type: "container-removed", warehouseId: warehouse.id, containerId: container.id });
           this.deps.onContainerUnregistered?.(warehouse, container);
         } else if (containerIdPointsTo(container.id, loc, warehouse.area.dimension)) {
@@ -149,6 +150,7 @@ export class McEventBridge {
           if (newId !== container.id) {
             index?.onContainerRemoved(container);
             const oldId = container.id;
+            stats.discard(oldId); // 旧 id 统计键失效（容器已重定 id）
             (container as McContainerAdapter).rebaseId(newId);
             rebaseContainer(warehouse, oldId, container);
             index?.onContainerAdded(container);
