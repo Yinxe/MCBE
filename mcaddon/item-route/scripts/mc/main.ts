@@ -9,13 +9,14 @@
 //   Phase 3 注册副作用 —— McEventBridge（世界事件→索引/统计/落盘）+ 信物交互
 //            + 视觉订阅（SortEffects/BoundaryDisplay/WarningRelay）+ startup 注册 9 命令
 //   Phase 4 延迟启动 —— world 完全加载后：从 DP 恢复仓库/容器/索引，注册调度，
-//            未加载区块的容器留待事件/verifyCandidate 惰性补注册
+//            未加载区块的容器留待事件/策略侧 reconcile 惰性补注册
 // 依赖注入贯穿始终：各模块以构造函数/回调收依赖，不自行 new 外部服务（可测性）。
 import { world, system } from "@minecraft/server";
 
 // ── core ──
 import { EventBus } from "../core/events/DomainEvents";
 import { ItemIndex } from "../core/index/ItemIndex";
+import { scanContainer } from "../core/model/ContainerScan";
 import { Router } from "../core/routing/Router";
 import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
@@ -28,6 +29,7 @@ import { MemberService } from "../core/services/MemberService";
 import { RouteService } from "../core/services/RouteService";
 import type { Warehouse } from "../core/model/Warehouse";
 import type { Container } from "../core/model/Container";
+import { registerContainer } from "../core/model/ContainerRegistry";
 
 // ── mc ──
 import { DynamicPropertyStore } from "./storage/DynamicPropertyStore";
@@ -122,12 +124,6 @@ const scheduler = new Scheduler(
   config.globalSpeedLimit,
   undefined,
   {
-    // 自动整理（v1 onDeposit）：目标容器混乱度超阈值即整理该仓
-    onAutoSort: (wh, target) => {
-      if (organizer.shouldAutoSort(target, wh.settings.autoSortThreshold)) {
-        organize.organize(wh, new MoveJournal());
-      }
-    },
     // 每仓库索引隔离：激活加载/空闲卸载
     indexLifecycle,
   }
@@ -135,8 +131,34 @@ const scheduler = new Scheduler(
 const stats = new StatsService(statsStore, bus);
 const route = new RouteService(scheduler);
 route.setGlobalEnabled(config.globalEnabled);
-// 整理服务：按仓库解析索引（取该仓当前加载的，未激活则跳过索引联动）
-const organize = new OrganizeService(organizer, (wh) => scheduler.getIndex(wh.id), bus);
+// 整理服务：只发事件，不重建索引（候选过期由策略侧惰性校验自愈）
+const organize = new OrganizeService(organizer, bus);
+
+// 路由成功副作用：itemRouted 多个订阅者依次处理（EventSignal 隔离各订阅者异常）
+// ① 容器/容量统计增量失效（源 + 目标）
+bus.itemRouted.subscribe((e) => {
+  stats.invalidate(e.from);
+  stats.invalidate(e.to);
+});
+// ② 混乱度检查 → 阈值自动整理；同一次 scanContainer 扫描趁机维护目标容器统计（免二次扫描）
+bus.itemRouted.subscribe((e) => {
+  const wh = loaded.find((x) => x.id === e.warehouseId);
+  if (wh === undefined || !wh.settings.sortingEnabled) return;
+  const target = wh.containers.get(e.to);
+  if (target === undefined) return;
+  const scan = scanContainer(target);
+  if (organizer.shouldAutoSortFromScan(scan, wh.settings.autoSortThreshold)) {
+    const res = organize.organize(wh, new MoveJournal());
+    for (const cid of res.touched) stats.invalidate(cid); // 整理又移动物品 → 失效涉及容器统计
+  } else {
+    stats.updateFromScan(target, scan, wh.settings.warningThreshold); // 趁机增量维护统计
+  }
+});
+// ③ 容量增量：路由后目标容量变化 → 重评三级预警（冷却内抑制重复播报）
+bus.itemRouted.subscribe((e) => {
+  const wh = loaded.find((x) => x.id === e.warehouseId);
+  if (wh !== undefined) stats.evaluateWarnings(wh);
+});
 
 // 容器注册表持久化钩子（事件桥接 → DP）
 const persistContainers = (warehouse: Warehouse): void => {
@@ -221,6 +243,7 @@ system.run(() => {
       area: snapshot.area,
       settings: snapshot.settings,
       containers: new Map<string, Container>(),
+      inputs: new Map<string, Container>(),
     };
     loaded.push(warehouse);
 
@@ -235,7 +258,7 @@ system.run(() => {
         container.occupiedLocations.splice(0, container.occupiedLocations.length, ...entry.locations);
         container.enabled = entry.enabled;
         container.priority = entry.priority;
-        warehouse.containers.set(container.id, container);
+        registerContainer(warehouse, container);
       } catch {
         // 区块未加载等：跳过，事件补注册
       }

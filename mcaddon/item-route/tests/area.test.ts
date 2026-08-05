@@ -52,6 +52,7 @@ function makeWarehouse(containers: Container[]): Warehouse {
     area: area2,
     settings: createDefaultSettings(),
     containers: new Map(containers.map((c) => [c.id, c])),
+    inputs: new Map(),
   };
 }
 
@@ -60,7 +61,7 @@ const chest: Container = {
   capacity: 27, emptySlotsCount: 27, usedSlots: 0,
   occupiedLocations: [{ x: 5, y: 5, z: 5 }],
   getItem: () => undefined, setItem: () => undefined, addItem: (s) => s, getDedicatedItemId: () => undefined,
-  firstItem: () => undefined, firstEmptySlot: () => 0, contains: () => false, find: () => undefined, findLast: () => undefined,
+  firstNoEmptyItem: () => undefined, lastNoEmptyItem: () => undefined, firstEmptySlot: () => 0, contains: () => false, find: () => undefined, findLast: () => undefined,
 };
 
 test("findWarehouseAt: 区域内命中 / 区域外 undefined / 维度不匹配 undefined", () => {

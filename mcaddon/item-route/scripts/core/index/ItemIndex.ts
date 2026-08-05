@@ -6,9 +6,9 @@
 //
 // ⚠️ 索引漂移与"三层兜底"（设计 §5，审查必读）：
 // MC 没有容器内容变化事件（玩家手动改箱无法被监听）→ 索引必然可能过期。
-// 收敛机制：① 代理信号（玩家交互/放置/破坏 → onContainerChanged/Added/Removed）
-//            ② 惰性校验（路由命中候选时 verifyCandidate：实际不含该型 → 移除返回
-//               false；单物绑定漂移 → 修复；非单物空箱 → 全量清条目）
+// 收敛机制：① 代理信号（玩家交互/放置/破坏 → reconcile/onContainerChanged/Added/Removed）
+//            ② 策略侧惰性校验（候选命中时各策略自行校验：单物查绑定、多物查 contains，
+//               不匹配 → reconcile 按真实内容重建条目——见 RouteStrategy）
 //            ③ 空箱重绑（玩家取走唯一物 → 空 → 移除；再来物由 proxy 信号重建）
 // 另：`onItemMoved` 是"路由自身移动"后的轻量更新（只改目标侧 containerItems；
 // 来源侧条目留待惰性校验清理）——避免每路由一次全量重算。
@@ -73,44 +73,12 @@ export class ItemIndex {
   }
 
   /**
-   * 惰性校验（路由命中候选时调用）：
-   * - 容器实际不含该类型 → 移除索引条目，返回 false（候选失效）
-   * - 单物绑定漂移 → 修复绑定与条目，返回 true（候选仍有效）
+   * 按容器**真实内容**重建其索引条目（remove + rebuild）。
+   * 由策略侧惰性校验在候选命中时调用（单物绑定漂移/容器清空 → 修复或移除过期候选）。
+   * 等价于 onContainerChanged 全量重算，是"三层兜底之第二层"的落地。
    */
-  verifyCandidate(container: Container): boolean {
-    if (container.role === "single") {
-      const binding = deriveBinding(container);
-      if (binding === undefined) {
-        // 空箱：索引中若有该容器条目则移除
-        const existing = this.getBinding(container.id);
-        if (existing !== undefined) {
-          this.byItem.get(existing)?.single.delete(container.id);
-          this.singleBindings.delete(container.id);
-          this.containerItems.delete(container.id);
-        }
-        return false;
-      }
-      const existing = this.getBinding(container.id);
-      if (existing !== binding) {
-        if (existing !== undefined) {
-          this.byItem.get(existing)?.single.delete(container.id);
-        }
-        this.singleBindings.set(container.id, binding);
-        const entry = this.ensureEntry(binding);
-        entry.single.add(container.id);
-        const items = this.containerItems.get(container.id) ?? new Set<ItemId>();
-        items.add(binding);
-        this.containerItems.set(container.id, items);
-      }
-      return true;
-    }
-    // 非单物：校验容器内是否还有该类型（调用方传 container，这里全量扫）
-    const hasAny = this.containerHasItems(container);
-    if (!hasAny) {
-      this.removeContainerEntries(container.id);
-      return false;
-    }
-    return true;
+  reconcile(container: Container): void {
+    this.onContainerChanged(container);
   }
 
   serialize(): IndexSnapshot {
@@ -197,12 +165,5 @@ export class ItemIndex {
       }
     }
     this.containerItems.delete(containerId);
-  }
-
-  private containerHasItems(container: Container): boolean {
-    for (let i = 0; i < container.capacity; i++) {
-      if (container.getItem(i) !== undefined) return true;
-    }
-    return false;
   }
 }

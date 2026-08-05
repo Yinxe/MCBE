@@ -18,7 +18,8 @@ import type { EventBus } from "../events/DomainEvents";
 /** 索引能力接口（结构类型，Router 不依赖 index 模块） */
 export interface IndexGateway {
   lookup(typeId: ItemId): { single: ContainerId[]; multi: ContainerId[] };
-  verifyCandidate(container: Container): boolean;
+  /** 候选漂移时按容器真实内容重建索引条目（各策略自持校验后调用） */
+  reconcile(container: Container): void;
   onItemMoved(from: ContainerId, to: ContainerId, itemId: ItemId): void;
 }
 
@@ -60,7 +61,7 @@ export class Router {
         }
         return index.lookup(typeId);
       },
-      verifyCandidate: (c: Container) => index.verifyCandidate(c),
+      reconcile: (c: Container) => index.reconcile(c),
     };
     const ordered = [...this.strategies].sort((a, b) => a.priority - b.priority);
     for (const strategy of ordered) {

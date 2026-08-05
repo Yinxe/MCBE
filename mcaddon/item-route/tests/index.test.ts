@@ -45,22 +45,22 @@ test("ItemIndex: onContainerRemoved 清理全部条目", () => {
   assert.deepEqual(index.lookup("minecraft:stone"), { single: [], multi: [] });
 });
 
-test("ItemIndex: verifyCandidate 容器实际为空 → 移除条目返回 false", () => {
+test("ItemIndex: reconcile 容器实际为空 → 移除全部条目", () => {
   const index = new ItemIndex();
   const c = stoneMulti();
   index.onContainerAdded(c);
   c.setItem(0, undefined); // 玩家手动清空（无事件）
-  assert.equal(index.verifyCandidate(c), false);
+  index.reconcile(c); // 按真实内容重建：空 → 条目清空
   assert.deepEqual(index.lookup("minecraft:stone").multi, []);
 });
 
-test("ItemIndex: verifyCandidate 单物绑定漂移 → 修复并返回 true", () => {
+test("ItemIndex: reconcile 单物绑定漂移 → 修复", () => {
   const index = new ItemIndex();
   const single = new InMemoryContainer("s1", "single", 3);
   single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
   index.onContainerAdded(single);
   single.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64)); // 首槽被替换
-  assert.equal(index.verifyCandidate(single), true); // 绑定修复（stone 已无 → 移除；dirt 加入）
+  index.reconcile(single); // 绑定修复（stone 已无 → 移除；dirt 加入）
   assert.deepEqual(index.lookup("minecraft:stone").single, []);
   assert.deepEqual(index.lookup("minecraft:dirt").single, ["s1"]);
   assert.equal(index.getBinding("s1"), "minecraft:dirt");

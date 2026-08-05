@@ -6,6 +6,7 @@ import { noParamCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 import { findWarehouseAt } from "../../core/model/Area";
 import { MoveJournal } from "../../core/routing/Move";
+import { formatOrganizeResult } from "../ui/OrganizeFormatter";
 
 export function registerOrganize(registry: Parameters<typeof defineCommand>[0], deps: CommandDeps): void {
   defineCommand(registry, noParamCommand("ir:organize", "整理玩家所在仓库"), ({ player }) => {
@@ -19,8 +20,10 @@ export function registerOrganize(registry: Parameters<typeof defineCommand>[0], 
         player.sendMessage(`${chat.error}你不在任何仓库区域内`);
         return;
       }
-      const ok = deps.organize.organize(warehouse, new MoveJournal());
-      player.sendMessage(ok ? `${chat.success}整理完成` : `${chat.error}整理失败`);
+      const res = deps.organize.organize(warehouse, new MoveJournal());
+      for (const line of formatOrganizeResult(res, warehouse.displayName)) {
+        player.sendMessage(line);
+      }
     });
   });
 }

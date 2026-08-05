@@ -63,10 +63,11 @@ test("InMemoryContainer: addItem 返回剩余", () => {
 
 test("createDefaultSettings: 默认值", () => {
   const s = createDefaultSettings();
+  assert.equal(s.routingEnabled, true);
   assert.equal(s.sortingEnabled, true);
   assert.equal(s.processingSpeed, 8);
   assert.equal(s.warningThreshold, 0.9);
-  assert.equal(s.autoSortThreshold, 3);
+  assert.equal(s.autoSortThreshold, 0.4); // v1 混乱度阈值（0-1）
 });
 
 test("deriveBinding: 由首个非空 slot 推导", () => {
@@ -80,18 +81,28 @@ test("deriveBinding: 由首个非空 slot 推导", () => {
   assert.equal(deriveBinding(c), "minecraft:stone");
 });
 
-test("Container 便捷搜索: firstItem/firstEmptySlot/contains/find/findLast", () => {
+test("Container 便捷搜索: firstNoEmptyItem/lastNoEmptyItem/firstEmptySlot/contains/find/findLast", () => {
   const c = new InMemoryContainer("c1", "multi", 4);
   c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
   c.setItem(2, new SimpleItemStack("minecraft:dirt", 3, 64));
-  assert.equal(c.firstItem(), 0);
+  assert.equal(c.firstNoEmptyItem(), 0);
+  assert.equal(c.lastNoEmptyItem(), 2);
   assert.equal(c.firstEmptySlot(), 1);
   assert.equal(c.contains(new SimpleItemStack("minecraft:stone", 1, 64)), true);
   assert.equal(c.contains(new SimpleItemStack("minecraft:wood", 1, 64)), false);
   assert.equal(c.find(new SimpleItemStack("minecraft:dirt", 1, 64)), 2);
   assert.equal(c.findLast(new SimpleItemStack("minecraft:dirt", 1, 64)), 2);
+  // 末个非空槽跟随后槽变化
+  c.setItem(3, new SimpleItemStack("minecraft:stone", 1, 64));
+  assert.equal(c.lastNoEmptyItem(), 3);
   // 两个同型堆 → findLast 返回更大槽
   c.setItem(2, new SimpleItemStack("minecraft:dirt", 3, 64));
   c.setItem(3, new SimpleItemStack("minecraft:dirt", 1, 64));
   assert.equal(c.findLast(new SimpleItemStack("minecraft:dirt", 1, 64)), 3);
+  // 清空后无首/末非空槽
+  c.setItem(0, undefined);
+  assert.equal(c.firstNoEmptyItem(), 2);
+  for (let i = 0; i < c.capacity; i++) c.setItem(i, undefined);
+  assert.equal(c.firstNoEmptyItem(), undefined);
+  assert.equal(c.lastNoEmptyItem(), undefined);
 });

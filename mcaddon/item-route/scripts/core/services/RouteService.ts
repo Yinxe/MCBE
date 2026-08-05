@@ -4,6 +4,7 @@
 import type { Scheduler } from "../scheduling/Scheduler";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId } from "../model/types";
+import { refreshInputMembership } from "../model/ContainerRegistry";
 
 export class RouteService {
   constructor(private readonly scheduler: Scheduler) {}
@@ -19,6 +20,10 @@ export class RouteService {
 
   setContainerEnabled(warehouse: Warehouse, containerId: ContainerId, enabled: boolean): void {
     const container = warehouse.containers.get(containerId);
-    if (container) container.enabled = enabled;
+    if (container) {
+      container.enabled = enabled;
+      // 启用开关影响 inputs 成员资格（输入容器禁/启 → 进出 inputs 镜像）
+      refreshInputMembership(warehouse, container);
+    }
   }
 }

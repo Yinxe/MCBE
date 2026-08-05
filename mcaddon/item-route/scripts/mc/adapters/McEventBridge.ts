@@ -1,6 +1,6 @@
 // ─── 事件桥接：MC 世界事件 → 领域事件 + 索引增量维护 + 落盘时机 ──
 // 这是"MC 无容器内容事件"问题的解法落点（设计 §5 三层兜底之第一层 代理信号）：
-//   · playerInteractWithBlock —— 玩家手动改箱的"代理信号"→ verifyCandidate 惰性
+//   · playerInteractWithBlock —— 玩家手动改箱的"代理信号"→ reconcile 惰性
 //     校验索引 + 统计失效 + 标记索引脏（把索引收敛交给下一次候选命中/下一次落盘）
 //   · playerPlaceBlock —— 区域内放容器 → 工厂创建适配器 + 注册进仓库/索引 + 持久化容器注册表
 //   · playerBreakBlock / blockExplode —— 拆容器 → 注销（双箱半拆：occupiedLocations 过滤）
@@ -19,6 +19,7 @@ import type { Container } from "../../core/model/Container";
 import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
 import { locationKey, type Location, type WarehouseId } from "../../core/model/types";
 import { containerIdOf, primaryLocationOf, containerIdPointsTo } from "../../core/model/ContainerId";
+import { registerContainer, unregisterContainer, rebaseContainer } from "../../core/model/ContainerRegistry";
 import type { McIndexStore } from "../storage/McIndexStore";
 import type { McContainerFactory } from "./McContainerFactory";
 import type { McContainerAdapter } from "./McContainerAdapter";
@@ -47,24 +48,24 @@ export class McEventBridge {
   start(): void {
     const { bus, stats, scheduler, indexStore, factory } = this.deps;
 
-    // 路由移动物品 → 标记该仓库索引脏 + 统计失效（写穿透闭环，批量落盘）
+    // 路由移动物品 → 标记该仓库索引脏（写穿透闭环，批量落盘）
+    // （统计增量失效已由 main.ts 的 itemRouted 订阅者负责，此处只管索引持久化）
     bus.itemRouted.subscribe((e) => {
       try {
         const index = this.deps.resolveIndex(e.warehouseId);
         if (index !== undefined) indexStore.markDirty(e.warehouseId, index.serialize());
-        stats.invalidate(e.to);
       } catch (err) {
         console.warn(`[ItemRoute] 路由副作用失败: ${err}`);
       }
     });
 
-    // 代理信号：玩家交互带容器方块 → 三层兜底第二层（verifyCandidate 惰性校验）
+    // 代理信号：玩家交互带容器方块 → 三层兜底第二层（reconcile 惰性校验）
     world.afterEvents.playerInteractWithBlock.subscribe((e) => {
       try {
         if (!e.isFirstEvent) return;
         const hit = this.locate(e.block);
         if (!hit) return;
-        this.deps.resolveIndex(hit.warehouse.id)?.verifyCandidate(hit.container);
+        this.deps.resolveIndex(hit.warehouse.id)?.reconcile(hit.container);
         stats.invalidate(hit.container.id);
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: hit.warehouse.id, containerId: hit.container.id });
         const index = this.deps.resolveIndex(hit.warehouse.id);
@@ -93,12 +94,12 @@ export class McEventBridge {
           if (hit !== undefined && hit.container.id !== container.id) {
             const existing = hit.container;
             const index = this.deps.resolveIndex(warehouse.id);
-            // 拆旧 id 索引条目 + map 旧键 → 并入新格并重定主 id → 放回新键 → 重建索引
+            // 拆旧 id 索引条目 + 旧键 → 并入新格并重定主 id → 迁移两 map 键 → 重建索引
             index?.onContainerRemoved(existing);
-            warehouse.containers.delete(existing.id);
+            const oldId = existing.id;
             existing.occupiedLocations.push({ x: loc.x, y: loc.y, z: loc.z });
             (existing as McContainerAdapter).rebaseId(containerIdOf(primaryLocationOf(existing.occupiedLocations)!, warehouse.area.dimension));
-            warehouse.containers.set(existing.id, existing);
+            rebaseContainer(warehouse, oldId, existing);
             index?.onContainerAdded(existing);
             stats.invalidate(existing.id);
             bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: existing.id });
@@ -107,11 +108,12 @@ export class McEventBridge {
             return;
           }
         }
-        warehouse.containers.set(container.id, container);
+        registerContainer(warehouse, container);
         const index = this.deps.resolveIndex(warehouse.id);
         index?.onContainerAdded(container);
         stats.invalidate(container.id);
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
+        bus.containerAdded.trigger({ type: "container-added", warehouseId: warehouse.id, containerId: container.id, role: container.role });
         if (index !== undefined) indexStore.markDirty(warehouse.id, index.serialize());
         this.deps.onContainerRegistered?.(warehouse, container);
       } catch (err) {
@@ -131,9 +133,10 @@ export class McEventBridge {
         const index = this.deps.resolveIndex(warehouse.id);
         if (container.occupiedLocations.length === 0) {
           // 完全拆除
-          warehouse.containers.delete(container.id);
+          unregisterContainer(warehouse, container.id);
           index?.onContainerRemoved(container);
           stats.invalidate(container.id);
+          bus.containerRemoved.trigger({ type: "container-removed", warehouseId: warehouse.id, containerId: container.id });
           this.deps.onContainerUnregistered?.(warehouse, container);
         } else if (containerIdPointsTo(container.id, loc, warehouse.area.dimension)) {
           // 半拆且拆的是主坐标（id 承载位）：重定 id 到幸存主坐标，
@@ -141,9 +144,9 @@ export class McEventBridge {
           const newId = containerIdOf(primaryLocationOf(container.occupiedLocations)!, warehouse.area.dimension);
           if (newId !== container.id) {
             index?.onContainerRemoved(container);
-            warehouse.containers.delete(container.id);
+            const oldId = container.id;
             (container as McContainerAdapter).rebaseId(newId);
-            warehouse.containers.set(newId, container);
+            rebaseContainer(warehouse, oldId, container);
             index?.onContainerAdded(container);
             stats.invalidate(container.id);
             this.deps.onContainerRegistered?.(warehouse, container);

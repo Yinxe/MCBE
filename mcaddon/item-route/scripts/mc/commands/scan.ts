@@ -1,5 +1,6 @@
 // ─── 区域容器扫描（rescan：遍历仓库区域补注册容器） ─────────
 import { isSupportedContainerType } from "../../core/model/ContainerTypes";
+import { registerContainer } from "../../core/model/ContainerRegistry";
 import type { WarehouseArea } from "../../core/model/Warehouse";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { ItemIndex } from "../../core/index/ItemIndex";
@@ -46,7 +47,7 @@ export function scanWarehouseArea(
         const container = factory.create(block as Parameters<McContainerFactory["create"]>[0], "single");
         if (container === undefined) continue;
         if (warehouse.containers.has(container.id)) continue;
-        warehouse.containers.set(container.id, container);
+        registerContainer(warehouse, container);
         index?.onContainerAdded(container);
         registered++;
       }

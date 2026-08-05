@@ -65,9 +65,16 @@ export class InMemoryContainer implements Container {
     return undefined;
   }
 
-  // ── 便捷搜索（与 mc.Container 同语义；测试容器用线性扫描模拟） ──
-  firstItem(): number | undefined {
+  // ── 便捷搜索（与 mc 适配层同语义；测试容器用线性扫描实现） ──
+  firstNoEmptyItem(): number | undefined {
     for (let i = 0; i < this.capacity; i++) {
+      if (this.slots[i] !== undefined) return i;
+    }
+    return undefined;
+  }
+
+  lastNoEmptyItem(): number | undefined {
+    for (let i = this.capacity - 1; i >= 0; i--) {
       if (this.slots[i] !== undefined) return i;
     }
     return undefined;

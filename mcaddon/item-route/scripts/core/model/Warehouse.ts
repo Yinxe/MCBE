@@ -24,21 +24,25 @@ export interface WarehouseArea {
 
 /** 仓库设置 */
 export interface WarehouseSettings {
+  /** 仓库运转开关：false 时该仓完全停运（interval 不再处理任何输入槽） */
+  routingEnabled: boolean;
+  /** 自动整理开关：仅路由成功放入后、目标混乱度超 autoSortThreshold 才触发整理 */
   sortingEnabled: boolean;
   /** 单仓处理速度（tick 间隔） */
   processingSpeed: number;
   /** 容量预警黄色阈值 */
   warningThreshold: number;
-  /** 自动整理触发阈值（容器混乱度超过即触发） */
+  /** 自动整理触发阈值（0-1，v1 混乱度模型；超过即触发） */
   autoSortThreshold: number;
 }
 
 export function createDefaultSettings(): WarehouseSettings {
   return {
+    routingEnabled: true,
     sortingEnabled: true,
     processingSpeed: 8,
     warningThreshold: 0.9,
-    autoSortThreshold: 3,
+    autoSortThreshold: 0.4,
   };
 }
 
@@ -56,4 +60,8 @@ export interface Warehouse {
   area: WarehouseArea;
   settings: WarehouseSettings;
   readonly containers: Map<string, Container>;
+  /** 启用输入容器（role=input 且 enabled）的维护镜像。
+   * 由 ContainerRegistry 各函数与 `containers` 同写同删，Scheduler 每轮取输入零过滤
+   * （输入通常仅 1~3 个，不遍历全仓容器）。 */
+  readonly inputs: Map<string, Container>;
 }

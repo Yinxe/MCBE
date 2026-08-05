@@ -18,14 +18,15 @@ function makeCtx(containers: InMemoryContainer[], lookup: (typeId: string) => { 
     ownerId: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: { sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 3 },
+    settings: { routingEnabled: true, sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 0.4 },
     containers: new Map(containers.map((c) => [c.id, c])),
+    inputs: new Map(),
   };
   return {
     item: new SimpleItemStack("minecraft:stone", 10, 64),
     warehouse,
     lookupIndex: lookup,
-    verifyCandidate: () => true,
+    reconcile: () => {},
   };
 }
 
@@ -46,8 +47,9 @@ test("SingleItemStrategy: 绑定不匹配则不返回（索引与实际绑定一
   assert.equal(got.length, 0); // stone 与 dirt 不匹配
 });
 
-test("MultiItemStrategy / MiscStrategy: 按索引返回", () => {
+test("MultiItemStrategy / MiscStrategy: 按索引返回（多物须实际含该型）", () => {
   const multi = new InMemoryContainer("m1", "multi", 3);
+  multi.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64)); // 空多物不是候选
   const misc = new InMemoryContainer("x1", "misc", 3);
   const ctx = makeCtx([multi, misc], () => ({ single: [], multi: ["m1"] }));
   assert.deepEqual(new MultiItemStrategy().findCandidates(ctx).map((c) => c.container.id), ["m1"]);
@@ -122,13 +124,12 @@ function cand(id: string, priority: number, usage: number, full = false): Candid
 import { Router } from "../scripts/core/routing/Router";
 import { EventBus } from "../scripts/core/events/DomainEvents";
 
-// 可编程索引 stub：lookup 返回固定结果，verifyCandidate 可编程
+// 可编程索引 stub：lookup 返回固定结果，reconcile 记录调用
 function makeIndexStub() {
   const state = {
     byItem: new Map<string, { single: string[]; multi: string[] }>(),
     moved: [] as string[],
-    verified: [] as string[],
-    verifyResult: true,
+    reconciled: [] as string[],
     lookups: 0,
   };
   const stub = {
@@ -136,9 +137,8 @@ function makeIndexStub() {
       state.lookups++;
       return state.byItem.get(typeId) ?? { single: [], multi: [] };
     },
-    verifyCandidate: (c: unknown) => {
-      state.verified.push((c as { id: string }).id);
-      return state.verifyResult;
+    reconcile: (c: unknown) => {
+      state.reconciled.push((c as { id: string }).id);
     },
     onItemMoved: (from: string, to: string, itemId: string) => {
       state.moved.push(`${from}->${to}:${itemId}`);
@@ -156,8 +156,9 @@ function makeWarehouse() {
     ownerId: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: { sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 3 },
+    settings: { routingEnabled: true, sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 0.4 },
     containers,
+    inputs: new Map<string, InMemoryContainer>(),
   };
   const add = (c: InMemoryContainer) => {
     containers.set(c.id, c);
@@ -194,8 +195,10 @@ test("Router: 优先级/使用率排序决定目标（priority 5 先于 10）", 
   const input = add(new InMemoryContainer("in", "input", 3));
   input.setItem(0, new SimpleItemStack("minecraft:dirt", 10, 64));
   const a = add(new InMemoryContainer("a", "multi", 3));
+  a.setItem(0, new SimpleItemStack("minecraft:dirt", 1, 64));
   a.priority = 5;
   const b = add(new InMemoryContainer("b", "multi", 3));
+  b.setItem(0, new SimpleItemStack("minecraft:dirt", 1, 64));
   const index = makeIndexStub();
   index.state.byItem.set("minecraft:dirt", { single: [], multi: ["a", "b"] });
   const router = new Router(
@@ -222,22 +225,21 @@ test("Router: 全部候选失败 → 物品留在源", () => {
   assert.equal(input2.getItem(0)?.amount, 10);
 });
 
-test("Router: verifyCandidate 漂移 → 候选被跳过", () => {
+test("Router: 候选容器已不含该类型（漂移）→ 策略重建条目并跳过", () => {
   const { wh, add } = makeWarehouse();
   const input = add(new InMemoryContainer("in", "input", 3));
   input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
-  add(new InMemoryContainer("m1", "multi", 3));
+  add(new InMemoryContainer("m1", "multi", 3)); // 空多物：无 stone（索引过期）
   const index = makeIndexStub();
   index.state.byItem.set("minecraft:stone", { single: [], multi: ["m1"] });
-  index.state.verifyResult = false; // 漂移：容器实际为空
   const router = new Router(
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
     new EventBus()
   );
   const result = router.routeFrom(input, 0, wh, index);
-  assert.equal(result, undefined);
-  assert.deepEqual(index.state.verified, ["m1"]);
+  assert.equal(result, undefined); // 过期候选被跳过，物品留在源
+  assert.deepEqual(index.state.reconciled, ["m1"]); // 策略自持校验 → reconcile 重建条目
 });
 
 test("Router: 同一次路由招索引 lookup 只调用一次（缓存）", () => {

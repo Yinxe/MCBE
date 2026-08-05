@@ -3,6 +3,7 @@ import { type Player } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../commands/auth";
+import { unregisterContainer } from "../../core/model/ContainerRegistry";
 import type { Warehouse } from "../../core/model/Warehouse";
 import { showContainerRoleMenu } from "./ContainerRoleMenu";
 import { showMemberMenu } from "./MemberMenu";
@@ -38,7 +39,8 @@ async function showSettingsForm(player: Player, deps: CommandDeps, warehouse: Wa
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}仓库设置`)
     .textField("name", "名称", { defaultValue: warehouse.displayName })
-    .toggle("sortingEnabled", "自动分拣", { defaultValue: warehouse.settings.sortingEnabled })
+    .toggle("routingEnabled", "仓库运转", { defaultValue: warehouse.settings.routingEnabled })
+    .toggle("sortingEnabled", "自动整理", { defaultValue: warehouse.settings.sortingEnabled })
     .dropdown(
       "speed",
       "处理速度（tick 间隔）",
@@ -53,6 +55,7 @@ async function showSettingsForm(player: Player, deps: CommandDeps, warehouse: Wa
     deps.warehouses.rename(warehouse, name);
   }
   deps.warehouses.updateSettings(warehouse, {
+    routingEnabled: values.routingEnabled as boolean,
     sortingEnabled: values.sortingEnabled as boolean,
     processingSpeed: SPEED_OPTIONS[values.speed as number] ?? 8,
   });
@@ -63,7 +66,7 @@ function refreshContainers(player: Player, deps: CommandDeps, warehouse: Warehou
   const before = warehouse.containers.size;
   for (const c of [...warehouse.containers.values()]) {
     if (c.occupiedLocations.length === 0) {
-      warehouse.containers.delete(c.id);
+      unregisterContainer(warehouse, c.id);
       deps.resolveIndex(warehouse.id)?.onContainerRemoved(c);
     }
   }

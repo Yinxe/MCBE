@@ -5,6 +5,7 @@ import { InMemoryStatsStore } from "../scripts/core/storage/Stores";
 import { EventBus } from "../scripts/core/events/DomainEvents";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
 import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+import { scanContainer } from "../scripts/core/model/ContainerScan";
 import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 
 function makeWarehouse() {
@@ -17,6 +18,7 @@ function makeWarehouse() {
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
     containers,
+    inputs: new Map<string, InMemoryContainer>(),
   };
   return { warehouse, containers };
 }
@@ -93,4 +95,23 @@ test("StatsService: invalidate 清缓存", () => {
   const fresh = svc.getContainerStats(warehouse, c);
   assert.equal(fresh.usedSlots, 2);
   assert.notEqual(before, undefined);
+});
+
+test("StatsService: updateFromScan 用外部扫描维护缓存（免二次扫描）", () => {
+  const { warehouse, containers } = makeWarehouse();
+  const c = new InMemoryContainer("m1", "multi", 4);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  c.setItem(2, new SimpleItemStack("minecraft:stone", 3, 64)); // 同型两堆
+  c.setItem(3, new SimpleItemStack("minecraft:dirt", 5, 64));
+  containers.set("m1", c);
+  const svc = new StatsService(new InMemoryStatsStore(), new EventBus());
+  // 用混乱度检查的同一趟扫描喂给统计缓存（含 byType 明细 + 容量指标）
+  const scan = scanContainer(c);
+  const s = svc.updateFromScan(c, scan, warehouse.settings.warningThreshold);
+  assert.equal(s.usedSlots, 3);
+  assert.equal(s.totalItems, 18);
+  assert.equal(s.uniqueTypes, 2);
+  assert.equal(s.byType["minecraft:stone"], 13);
+  // 缓存已维护：后续 getContainerStats 直接命中，不再扫描
+  assert.equal(svc.getContainerStats(warehouse, c).byType["minecraft:stone"], 13);
 });

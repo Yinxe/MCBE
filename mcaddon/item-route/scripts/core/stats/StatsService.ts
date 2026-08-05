@@ -11,6 +11,7 @@
 import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";
+import { scanContainer, type ContainerScanResult } from "../model/ContainerScan";
 import type { StatsStore } from "../storage/Stores";
 import type { EventBus, WarningLevel } from "../events/DomainEvents";
 
@@ -68,16 +69,22 @@ export class StatsService {
   getContainerStats(warehouse: Warehouse, container: Container): ContainerStats {
     const cached = this.cache.get(container.id);
     if (cached) return cached;
-    let totalItems = 0;
-    let usedSlots = 0;
-    const byType: Record<ItemId, number> = {};
-    for (let i = 0; i < container.capacity; i++) {
-      const item = container.getItem(i);
-      if (item === undefined) continue;
-      usedSlots++;
-      totalItems += item.amount;
-      byType[item.itemId] = (byType[item.itemId] ?? 0) + item.amount;
-    }
+    return this.buildStats(container, scanContainer(container), warehouse.settings.warningThreshold);
+  }
+
+  /**
+   * 用外部提供的扫描结果直接维护缓存（免二次扫描）。
+   * 配合路由成功后混乱度检查的同一趟 scanContainer 扫描，趁机增量维护容器统计。
+   */
+  updateFromScan(container: Container, scan: ContainerScanResult, warningThreshold: number): ContainerStats {
+    return this.buildStats(container, scan, warningThreshold);
+  }
+
+  /** 由扫描结果构造并缓存容器统计 */
+  private buildStats(container: Container, scan: ContainerScanResult, warningThreshold: number): ContainerStats {
+    const byType = scan.byType;
+    const usedSlots = scan.usedSlots;
+    const totalItems = scan.totalItems;
     const uniqueTypes = Object.keys(byType).length;
     const stats: ContainerStats = {
       containerId: container.id,
@@ -86,7 +93,7 @@ export class StatsService {
       usedSlots,
       totalItems,
       uniqueTypes,
-      isWarning: container.capacity > 0 && usedSlots / container.capacity >= warehouse.settings.warningThreshold,
+      isWarning: container.capacity > 0 && usedSlots / container.capacity >= warningThreshold,
       byType,
     };
     this.cache.set(container.id, stats);

@@ -6,7 +6,9 @@
 // 设计要点（审查）：
 //   · 候选来自**索引**而非全仓扫描 —— 索引是本模块的性能底座（O(1) 定位）。
 //   · 空 multi 容器不是候选（索引只登记"已含该物品"的容器）—— 见 ItemIndex。
-//   · `verifyCandidate` 注入自 Router → 索引惰性校验（三层兜底之第二层）。
+//   · 惰性校验为**策略自持**（不共享一条按 role 分支的索引校验）：SingleItem 查绑定、
+//     MultiItem 查 contains，候选命中时若漂移则调 ctx.reconcile 按真实内容重建索引条目
+//     （三层兜底之第二层，见 ItemIndex.reconcile）。
 //   · 漏斗在工厂层强制 input，永不进入本路由的目标侧。
 import type { Container } from "../model/Container";
 import type { ItemStack } from "../model/ItemStack";
@@ -24,8 +26,8 @@ export interface RouteContext {
   item: ItemStack;
   warehouse: Warehouse;
   lookupIndex(typeId: ItemId): IndexLookupResult;
-  /** 惰性校验候选容器，返回 false 表示索引漂移已修复（该候选失效） */
-  verifyCandidate(container: Container): boolean;
+  /** 候选漂移时按容器真实内容重建索引条目（策略自行校验后调用，修复/移除过期候选） */
+  reconcile(container: Container): void;
 }
 
 /** 候选容器（含排序所需信息） */
@@ -52,10 +54,11 @@ export class SingleItemStrategy implements RouteStrategy {
     for (const id of ids) {
       const container = ctx.warehouse.containers.get(id);
       if (!container || container.role !== "single") continue;
-      if (!ctx.verifyCandidate(container)) continue;
-      const binding = container.getDedicatedItemId();
-      if (binding !== ctx.item.itemId) continue; // 绑定漂移且未在 verify 修复
-      out.push(toCandidate(container));
+      if (container.getDedicatedItemId() !== ctx.item.itemId) {
+        // 单物绑定漂移/空箱 → 按真实内容重建条目（修复绑定或移除过期），再复查
+        ctx.reconcile(container);
+      }
+      if (container.getDedicatedItemId() === ctx.item.itemId) out.push(toCandidate(container));
     }
     return out;
   }
@@ -71,8 +74,11 @@ export class MultiItemStrategy implements RouteStrategy {
     for (const id of ids) {
       const container = ctx.warehouse.containers.get(id);
       if (!container || container.role !== "multi") continue;
-      if (!ctx.verifyCandidate(container)) continue;
-      out.push(toCandidate(container));
+      if (!container.contains(ctx.item)) {
+        // 索引漂移：容器已不含该类型（被清/换走）→ 重建条目移除过期候选，再复查
+        ctx.reconcile(container);
+      }
+      if (container.contains(ctx.item)) out.push(toCandidate(container));
     }
     return out;
   }

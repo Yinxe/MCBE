@@ -14,6 +14,7 @@ function makeWarehouse(members: { playerId: string; role: "owner" | "member" | "
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } },
     settings: createDefaultSettings(),
     containers: new Map(),
+    inputs: new Map(),
   };
 }
 

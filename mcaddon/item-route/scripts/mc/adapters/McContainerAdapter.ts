@@ -12,7 +12,8 @@
 //         getSlot、firstEmptySlot(供 SafeProbe)
 //   · 知而不引：moveItem/transferItem/swapItems 是原生"移动/交换"原语，正确性高，
 //     但概念层 transfer/Organizer 已通过 addItem(+源引用) 达成等价且不绕过抽象边界；
-//     contains/find/findLast/firstItem 为线性搜索，索引已在 ItemIndex 缓存，无需。
+//     contains/find/findLast 委托原生（索引已在 ItemIndex 缓存，仅交互/校验兜底用），
+//     firstNoEmptyItem/lastNoEmptyItem 为手封装线性扫描（见下方实现）。
 // 注意：本文件依赖 @minecraft/server，仅编译检查 + 游戏内冒烟，不进 node 测试构建。
 import type { Container as McContainer } from "@minecraft/server";
 import type { Container, ContainerRole } from "../../core/model/Container";
@@ -77,13 +78,20 @@ export class McContainerAdapter implements Container {
     return deriveBinding(this);
   }
 
-  // ── 便捷搜索：直接委托 mc.Container 原生方法（零遍历，官方语义） ──
-  firstItem(): number | undefined {
-    try {
-      return this.mc.firstItem();
-    } catch {
-      return undefined;
+  // ── 便捷搜索：first/last 手封装线性扫描（复用 getItem 的安全访问，不依赖官方
+  //    firstItem 的槽 0 歧义）；firstEmptySlot/contains/find/findLast 委托 mc 原生 ──
+  firstNoEmptyItem(): number | undefined {
+    for (let i = 0; i < this.mc.size; i++) {
+      if (this.getItem(i) !== undefined) return i;
     }
+    return undefined;
+  }
+
+  lastNoEmptyItem(): number | undefined {
+    for (let i = this.mc.size - 1; i >= 0; i--) {
+      if (this.getItem(i) !== undefined) return i;
+    }
+    return undefined;
   }
 
   firstEmptySlot(): number | undefined {

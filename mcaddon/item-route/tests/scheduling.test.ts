@@ -29,6 +29,7 @@ test("MemoryIntervalScheduler: 多 interval 独立", () => {
 
 // ── Task 17: Scheduler ─────────────────────────────────
 import { Scheduler, type IndexLifecycle } from "../scripts/core/scheduling/Scheduler";
+import { registerContainer } from "../scripts/core/model/ContainerRegistry";
 import { Router } from "../scripts/core/routing/Router";
 import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
@@ -69,8 +70,9 @@ function makeWorld() {
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
     containers,
+    inputs: new Map<string, InMemoryContainer>(),
   };
-  return { intervals, proximity, index, router, scheduler, warehouse, containers };
+  return { intervals, proximity, index, router, scheduler, warehouse, containers, bus };
 }
 
 test("Scheduler: 生命周期 inactive → active → inactive", () => {
@@ -94,8 +96,8 @@ test("Scheduler: 激活后 interval 按 processingSpeed 处理单槽", () => {
   // 目标多物容器需已含 stone 才成为索引候选（设计 §4.2：候选来自索引 + misc 兜底）
   const target = new InMemoryContainer("m1", "multi", 3);
   target.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
-  w.containers.set("in", input);
-  w.containers.set("m1", target);
+  registerContainer(w.warehouse, input);
+  registerContainer(w.warehouse, target);
   w.index.onContainerAdded(input);
   w.index.onContainerAdded(target);
   w.scheduler.registerWarehouse(w.warehouse);
@@ -163,7 +165,7 @@ test("Scheduler: 激活创建 interval 失败 → 保持 inactive 且可重试",
   const warehouse = {
     id: "w1", displayName: "w", ownerId: "p1", members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: createDefaultSettings(), containers: new Map<string, InMemoryContainer>(),
+    settings: createDefaultSettings(), containers: new Map<string, InMemoryContainer>(), inputs: new Map<string, InMemoryContainer>(),
   };
   scheduler.registerWarehouse(warehouse);
   proximity.setNearby("w1", true);
@@ -196,7 +198,7 @@ test("Scheduler: 每仓库索引隔离（激活加载/空闲卸载/各仓独立�
   const mk = (id: string) => ({
     id, displayName: id, ownerId: "p1", members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: createDefaultSettings(), containers: new Map<string, InMemoryContainer>(),
+    settings: createDefaultSettings(), containers: new Map<string, InMemoryContainer>(), inputs: new Map<string, InMemoryContainer>(),
   });
   const w1 = mk("w1");
   const w2 = mk("w2");
@@ -248,4 +250,127 @@ test("Scheduler: 生命周期迁移触发 lifecycle-changed 事件", () => {
   proximity2.setNearby("w1", false);
   scheduler2.tick();
   assert.deepEqual(events, ["inactive->active", "active->deactivating"]);
+});
+
+// ── 去游标后：只扫输入 + 优先级排序 + 运转开关 ─────────────────
+test("Scheduler: routingEnabled=false 停运该仓，重新开启恢复处理", () => {
+  const w = makeWorld();
+  const input = new InMemoryContainer("in", "input", 3);
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const target = new InMemoryContainer("m1", "multi", 3);
+  target.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  registerContainer(w.warehouse, input);
+  registerContainer(w.warehouse, target);
+  w.index.onContainerAdded(input);
+  w.index.onContainerAdded(target);
+  w.warehouse.settings.routingEnabled = false; // 运转关闭
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(8);
+  assert.equal(input.getItem(0)?.itemId, "minecraft:stone"); // 停运：未移动
+  w.warehouse.settings.routingEnabled = true;
+  w.intervals.advance(8);
+  assert.equal(input.getItem(0), undefined); // 恢复：已路由
+});
+
+test("Scheduler: 高优先输入不可路由 → 强制阻塞，不落到次优先", () => {
+  const w = makeWorld();
+  const high = new InMemoryContainer("inHigh", "input", 3);
+  high.priority = 5;
+  high.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64)); // stone 无任何候选 → 路由失败
+  const low = new InMemoryContainer("inLow", "input", 3);
+  low.priority = 20;
+  low.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64)); // dirt 有 multi 候选
+  const target = new InMemoryContainer("m1", "multi", 3);
+  target.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64));
+  registerContainer(w.warehouse, high);
+  registerContainer(w.warehouse, low);
+  registerContainer(w.warehouse, target);
+  for (const c of [high, low, target]) w.index.onContainerAdded(c);
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(8); // 处理 1 槽
+  assert.equal(high.getItem(0)?.itemId, "minecraft:stone"); // 高优先卡住
+  assert.equal(low.getItem(0)?.itemId, "minecraft:dirt"); // 阻塞：次优先不被处理（拥堵暴露给玩家）
+  assert.equal(target.getItem(0)?.amount, 5); // 未被路由
+  // 高优先物品疏通后（给 stone 补个可路由目标），次优先才被放行
+  const m2 = new InMemoryContainer("m2", "multi", 3);
+  m2.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  registerContainer(w.warehouse, m2);
+  w.index.onContainerAdded(m2);
+  w.intervals.advance(8); // 高优先 stone → m2
+  assert.equal(high.getItem(0), undefined);
+  w.intervals.advance(8); // 高优先空 → 次优先 dirt → m1
+  assert.equal(low.getItem(0), undefined);
+  assert.equal(target.getItem(0)?.amount, 10);
+});
+
+test("Scheduler: 输入按 priority 升序（都可路由时高优先先处理）", () => {
+  const w = makeWorld();
+  const high = new InMemoryContainer("inHigh", "input", 3);
+  high.priority = 5;
+  high.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  const low = new InMemoryContainer("inLow", "input", 3);
+  low.priority = 20;
+  low.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64));
+  const mStone = new InMemoryContainer("mS", "multi", 3);
+  mStone.setItem(0, new SimpleItemStack("minecraft:stone", 1, 64));
+  const mDirt = new InMemoryContainer("mD", "multi", 3);
+  mDirt.setItem(0, new SimpleItemStack("minecraft:dirt", 1, 64));
+  registerContainer(w.warehouse, high);
+  registerContainer(w.warehouse, low);
+  registerContainer(w.warehouse, mStone);
+  registerContainer(w.warehouse, mDirt);
+  for (const c of [high, low, mStone, mDirt]) w.index.onContainerAdded(c);
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(8); // 第一轮：高优先 stone 先路由
+  assert.equal(high.getItem(0), undefined);
+  assert.equal(low.getItem(0)?.itemId, "minecraft:dirt"); // 低优先等下一轮
+  w.intervals.advance(8); // 第二轮：高优先空 → 低优先 dirt
+  assert.equal(low.getItem(0), undefined);
+});
+
+test("Scheduler: 路由失败发 input-blocked 事件（防抖通知的数据源）", () => {
+  const w = makeWorld();
+  const blocks: string[] = [];
+  w.bus.inputBlocked.subscribe((e) => blocks.push(`${e.containerId}:${e.itemId}:${e.amount}`));
+  const input = new InMemoryContainer("in", "input", 3);
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64)); // stone 无候选 → 阻塞
+  const target = new InMemoryContainer("m1", "multi", 3);
+  target.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64));
+  registerContainer(w.warehouse, input);
+  registerContainer(w.warehouse, target);
+  for (const c of [input, target]) w.index.onContainerAdded(c);
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(8);
+  assert.deepEqual(blocks, ["in:minecraft:stone:10"]);
+  // 疏通后（给 stone 补目标）路由成功 → 不再发 input-blocked
+  const m2 = new InMemoryContainer("m2", "multi", 3);
+  m2.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  registerContainer(w.warehouse, m2);
+  w.index.onContainerAdded(m2);
+  w.intervals.advance(8);
+  assert.equal(input.getItem(0), undefined); // 已路由
+  assert.equal(blocks.length, 1); // 无新阻塞事件
+});
+
+test("Scheduler: 输入全空 → 无事可作（不产生移动）", () => {
+  const w = makeWorld();
+  const input = new InMemoryContainer("in", "input", 3);
+  const target = new InMemoryContainer("m1", "multi", 3);
+  registerContainer(w.warehouse, input);
+  registerContainer(w.warehouse, target);
+  w.index.onContainerAdded(input);
+  w.index.onContainerAdded(target);
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(16);
+  assert.equal(target.getItem(0), undefined);
 });

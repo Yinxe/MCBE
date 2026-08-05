@@ -116,6 +116,7 @@ export class WarehouseService {
       area,
       settings: createDefaultSettings(),
       containers: new Map(),
+      inputs: new Map(),
     };
     this.persist(warehouse);
     this.bus.warehouseCreated.trigger({ type: "warehouse-created", warehouseId: warehouse.id, displayName: name });
@@ -218,6 +219,7 @@ export class WarehouseService {
       area: { ...snapshot.area },
       settings: { ...snapshot.settings },
       containers: new Map(),
+      inputs: new Map(),
     };
   }
 }

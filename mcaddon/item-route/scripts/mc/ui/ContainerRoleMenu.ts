@@ -5,6 +5,7 @@ import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../commands/auth";
 import { isHopperType } from "../../core/model/ContainerTypes";
 import { ROLE_LABELS } from "../../core/model/Container";
+import { refreshInputMembership } from "../../core/model/ContainerRegistry";
 import type { ContainerRole } from "../../core/model/Container";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
@@ -52,8 +53,10 @@ async function showContainerEdit(
   const role = Object.keys(ROLE_LABELS)[values.role as number] as ContainerRole;
   if (!forced) container.role = role;
   container.enabled = values.enabled as boolean;
+  refreshInputMembership(warehouse, container); // 角色/启用变更 → 刷新 inputs 成员资格
   deps.resolveIndex(warehouse.id)?.onContainerChanged(container); // 该仓自己的索引
   deps.stats.invalidate(container.id);
   deps.persistContainers(warehouse);
+  deps.bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
   player.sendMessage(`${uiColor.chat.success}容器 ${container.id} 已更新${forced ? "（漏斗强制 input）" : ""}`);
 }

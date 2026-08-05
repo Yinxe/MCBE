@@ -8,7 +8,7 @@
 // 单 key 不超限；总量随存档无限制。
 //
 // 崩溃安全性：只 markDirty 不回写时，崩溃丢的是"本次会话的增量"；
-// 启动时若版本不符/缺失由 ItemIndex 从容器全量重建（verifyCandidate 惰性兜底），
+// 启动时若版本不符/缺失由 ItemIndex 从容器全量重建（候选过期由策略侧 reconcile 惰性兜底），
 // 不产生持久损坏。
 import type { ShardStore } from "./ShardStore";
 import type { IndexSnapshotData, IndexStore } from "../../core/storage/Stores";

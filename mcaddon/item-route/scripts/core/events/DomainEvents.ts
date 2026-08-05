@@ -4,7 +4,10 @@
 //
 // 各事件生产者/消费者（审查对照）：
 //   · itemRouted    —— Router 路由成功后触发；McEventBridge 订阅 → 标记索引脏 + 统计失效
-//   · containerChanged —— 容器内容/注册变化触发；索引/统计联动
+//   · inputBlocked  —— 输入容器物品无法路由时触发；NotifyRelay 订阅 → 防抖提醒附近成员
+//   · containerChanged —— 容器内容/注册变化触发；索引/统计联动；
+//     OrganizeService 整理后也逐容器触发（整理造成的索引重建对外信号）
+//   · containerAdded/containerRemoved —— 容器 CRUD：mc 层注册/完全拆除处触发
 //   · indexUpdated  —— 预留（当前未消费，为搜索/展示留口）
 //   · statsChanged  —— 预留（统计联动）
 //   · warning       —— StatsService.evaluateWarnings 触发；WarningRelay 订阅 → 播报附近玩家
@@ -13,6 +16,7 @@
 // 且事件可安全穿越适配层边界。
 import { EventSignal } from "./EventSignal";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";
+import type { ContainerRole } from "../model/Container";
 
 // ── 事件负载 ─────────────────────────────────────────────
 export interface ItemRoutedEvent {
@@ -24,8 +28,32 @@ export interface ItemRoutedEvent {
   amount: number;
 }
 
+/** 输入容器物品无法路由（被阻塞）——Scheduler.processOnce 路由失败时触发；通知层防抖提醒 */
+export interface InputBlockedEvent {
+  type: "input-blocked";
+  warehouseId: WarehouseId;
+  containerId: ContainerId;
+  itemId: ItemId;
+  amount: number;
+}
+
 export interface ContainerChangedEvent {
   type: "container-changed";
+  warehouseId: WarehouseId;
+  containerId: ContainerId;
+}
+
+/** 容器注册入仓（放置新容器/双箱合并重建后）；mc 层在注册点触发 */
+export interface ContainerAddedEvent {
+  type: "container-added";
+  warehouseId: WarehouseId;
+  containerId: ContainerId;
+  role: ContainerRole;
+}
+
+/** 容器完全拆除移除（半拆主坐标迁移不触发，仅 containerChanged） */
+export interface ContainerRemovedEvent {
+  type: "container-removed";
   warehouseId: WarehouseId;
   containerId: ContainerId;
 }
@@ -95,7 +123,10 @@ export interface OrganizeCompletedEvent {
 /** 领域事件总线：core 发事件 → 适配层订阅（视觉反馈/统计联动/成员通知/集成测试观测） */
 export class EventBus {
   readonly itemRouted = new EventSignal<ItemRoutedEvent>();
+  readonly inputBlocked = new EventSignal<InputBlockedEvent>();
   readonly containerChanged = new EventSignal<ContainerChangedEvent>();
+  readonly containerAdded = new EventSignal<ContainerAddedEvent>();
+  readonly containerRemoved = new EventSignal<ContainerRemovedEvent>();
   readonly indexUpdated = new EventSignal<IndexUpdatedEvent>();
   readonly statsChanged = new EventSignal<StatsChangedEvent>();
   readonly warning = new EventSignal<WarningEvent>();

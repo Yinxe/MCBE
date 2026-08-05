@@ -41,9 +41,13 @@ export interface Container {
   addItem(stack: ItemStack): ItemStack | undefined;
   /** 单物绑定：由首个非空 slot 物品推导（core 纯函数 deriveBinding 实现） */
   getDedicatedItemId(): ItemId | undefined;
-  // ── 便捷搜索（委托 mc.Container 原生方法，避免 core 手写遍历） ──
-  /** 首个非空槽索引（无则 undefined）——调度轮询省一层 for */
-  firstItem(): number | undefined;
+  // ── 便捷搜索 ──
+  // firstNoEmptyItem/lastNoEmptyItem 为**手封装线性扫描**（不依赖官方 firstItem 的
+  // 槽 0 歧义，且 last 向无原生对应）；firstEmptySlot/contains/find/findLast 委托原生。
+  /** 首个非空槽索引（无则 undefined）——调度轮询取源 */
+  firstNoEmptyItem(): number | undefined;
+  /** 末个非空槽索引（无则 undefined）——整理/取货侧可用 */
+  lastNoEmptyItem(): number | undefined;
   /** 首个空槽索引（无则 undefined） */
   firstEmptySlot(): number | undefined;
   /** 是否包含给定物品（按 mc 语义：类型+组件相等，非仅 itemId） */

@@ -50,3 +50,24 @@ test("EventBus: 各领域事件独立派发", () => {
   bus.warning.trigger({ type: "warning", warehouseId: "w1", level: "yellow", containerId: "c1" });
   assert.deepEqual(routed, ["c1->c2:5"]);
 });
+
+test("EventBus: 容器 CRUD 事件独立派发（added/removed）", () => {
+  const bus = new EventBus();
+  const added: string[] = [];
+  bus.containerAdded.subscribe((e) => added.push(`${e.containerId}:${e.role}`));
+  bus.containerAdded.trigger({ type: "container-added", warehouseId: "w1", containerId: "c1", role: "input" });
+  bus.containerAdded.trigger({ type: "container-added", warehouseId: "w1", containerId: "c2", role: "single" });
+  const removed: string[] = [];
+  bus.containerRemoved.subscribe((e) => removed.push(e.containerId));
+  bus.containerRemoved.trigger({ type: "container-removed", warehouseId: "w1", containerId: "c1" });
+  assert.deepEqual(added, ["c1:input", "c2:single"]);
+  assert.deepEqual(removed, ["c1"]);
+});
+
+test("EventBus: input-blocked 事件独立派发", () => {
+  const bus = new EventBus();
+  const blocks: string[] = [];
+  bus.inputBlocked.subscribe((e) => blocks.push(`${e.containerId}:${e.itemId}:${e.amount}`));
+  bus.inputBlocked.trigger({ type: "input-blocked", warehouseId: "w1", containerId: "in", itemId: "minecraft:stone", amount: 10 });
+  assert.deepEqual(blocks, ["in:minecraft:stone:10"]);
+});

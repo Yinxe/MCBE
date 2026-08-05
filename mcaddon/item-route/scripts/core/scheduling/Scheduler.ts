@@ -20,11 +20,14 @@
 //   · 激活时创建 interval 若抛错 → 保持 inactive 下次重试（不吃死在半激活态）。
 //   · `globalSpeedLimit` 把单仓速度 clamp 到上限；`setGlobalEnabled(false)` 立即
 //     停全部 interval 并回到 inactive（全局开关）。
-//   · `onAutoSort` 钩子：路由成功放入后，若目标混乱度超 autoSortThreshold 即整理。
+//   · **强制阻塞**：每轮只处理第一个非空输入的首个物品，路由失败即阻塞（不落到
+//     低优先输入）——堵住才让玩家发现并扩容/加分类。路由成功的副作用（统计增量/
+//     混乱度→自动整理/容量预警）由 itemRouted 事件的多个订阅者驱动，Scheduler 不再内联。
+//   · 运转开关三级：全局 globalEnabled > 每仓 settings.routingEnabled > 每容器 enabled。
+//     routingEnabled=false 时该仓 processOnce 直接返回（完全停运）。
 import type { Router, IndexGateway } from "../routing/Router";
 import type { IntervalHandle, IntervalScheduler } from "./IntervalScheduler";
 import type { Warehouse } from "../model/Warehouse";
-import type { Container } from "../model/Container";
 import type { WarehouseId } from "../model/types";
 import type { EventBus } from "../events/DomainEvents";
 import type { ItemIndex } from "../index/ItemIndex";
@@ -46,8 +49,6 @@ export interface IndexLifecycle {
 
 /** 调度器可选配置（全部可选，默认值见下） */
 export interface SchedulerOptions {
-  /** 路由成功放入后的自动整理钩子（v1 onDeposit） */
-  onAutoSort?: (warehouse: Warehouse, target: Container) => void;
   /** 每仓库索引生命周期（未提供时用 fallbackIndex 共享实例） */
   indexLifecycle?: IndexLifecycle;
   /** 空闲卸载阈值（**墙钟毫秒**，与调度 tick 节奏解耦；默认 30 分钟） */
@@ -65,7 +66,6 @@ interface Runtime {
   warehouse: Warehouse;
   lifecycle: WarehouseLifecycle;
   handle?: IntervalHandle;
-  inputCursor: number;
   deactivateCounter: number;
   /** 激活时加载的仓库级索引（空闲超时卸载置 undefined） */
   index?: ItemIndex;
@@ -95,7 +95,6 @@ export class Scheduler {
     this.runtimes.set(warehouse.id, {
       warehouse,
       lifecycle: "inactive",
-      inputCursor: 0,
       deactivateCounter: 0,
     });
   }
@@ -221,26 +220,37 @@ export class Scheduler {
     return this.intervals.createInterval(() => this.processOnce(rt), this.clampSpeed(rt.warehouse.settings.processingSpeed));
   }
 
-  /** 每轮：处理一个输入容器的非空 slot（用该仓库自己的索引路由） */
+  /**
+   * 每轮：只处理**该仓启用的输入容器**（`warehouse.inputs` 维护镜像，零全仓过滤），
+   * 按 priority 升序（数字小优先）取第一个非空输入。
+   * - 空判定用 O(1) `usedSlots`，仅对真正要路由的容器做 firstNoEmptyItem 扫描。
+   * - **强制阻塞**：路由成功 → 完成本轮；路由失败（目标满/无候选/禁用）→ 同样结束本轮，
+   *   不落到低优先输入——物品留在输入容器，拥堵暴露给玩家，及时扩容/加分类。
+   * - 路由成功的副作用（统计增量/混乱度→自动整理/容量预警）由 itemRouted 事件订阅者驱动。
+   */
   private processOnce(rt: Runtime): void {
-    if (!rt.warehouse.settings.sortingEnabled) return;
+    if (!rt.warehouse.settings.routingEnabled) return;
     const index = rt.index; // 该仓库激活时加载的索引（隔离）
     if (index === undefined) return;
-    const ids = [...rt.warehouse.containers.keys()];
-    if (ids.length === 0) return;
-    for (let step = 0; step < ids.length; step++) {
-      const id = ids[rt.inputCursor % ids.length]!;
-      rt.inputCursor++;
-      const container = rt.warehouse.containers.get(id);
-      if (!container || container.role !== "input" || !container.enabled) continue;
-      const slot = container.firstItem(); // 首个非空槽（委托原生，省去内部 for）
+    const inputs = [...rt.warehouse.inputs.values()]
+      .sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    for (const container of inputs) {
+      if (container.usedSlots === 0) continue; // 空输入跳过（无物可堵）
+      const slot = container.firstNoEmptyItem(); // 首个非空槽（手封装线性扫描）
       if (slot === undefined) continue;
       const routed = this.router.routeFrom(container, slot, rt.warehouse, index);
-      if (routed !== undefined && this.options.onAutoSort !== undefined) {
-        const target = rt.warehouse.containers.get(routed.to);
-        if (target !== undefined) this.options.onAutoSort(rt.warehouse, target);
+      if (routed === undefined) {
+        // 输入阻塞：物品无法路由（目标满/无候选/禁用）→ 独立事件，通知层防抖提醒
+        const stack = container.getItem(slot);
+        this.bus.inputBlocked.trigger({
+          type: "input-blocked",
+          warehouseId: rt.warehouse.id,
+          containerId: container.id,
+          itemId: stack?.itemId ?? "",
+          amount: stack?.amount ?? 0,
+        });
       }
-      return; // 本轮只处理一个 slot
+      return; // 无论成败，本轮到此为止；失败即阻塞该输入，不处理低优先输入
     }
   }
 }
