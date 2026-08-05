@@ -37,7 +37,7 @@ export const COMMAND_MIN_ROLE: Record<string, CommandAccess> = {
   rescan_preview: "member",
   delete: "owner",
   menu: "visitor",
-  search: "visitor",
+  search: "member", // 容器搜索：仅仓库成员（就近需有权限），v1 语义
   organize: "any",
   help: "any",
 };

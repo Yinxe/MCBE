@@ -61,6 +61,31 @@ export function findWarehouseAt(
   return warehouses.find((w) => containsLocation(w.area, dimension, loc));
 }
 
+/**
+ * 距玩家最近、且玩家具备指定权限的仓库（同维度，按区域中心直线距离）。
+ * 用于搜索等"就近 + 权限"业务：只对玩家有权限的仓库操作。
+ */
+export function nearestWarehouseByPermission(
+  warehouses: Warehouse[],
+  dimension: string,
+  playerPos: { x: number; z: number },
+  authorized: (w: Warehouse) => boolean
+): Warehouse | undefined {
+  let best: Warehouse | undefined;
+  let bestDist = Infinity;
+  for (const w of warehouses) {
+    if (w.area.dimension !== dimension || !authorized(w)) continue;
+    const cx = (Math.min(w.area.corner1.x, w.area.corner2.x) + Math.max(w.area.corner1.x, w.area.corner2.x)) / 2;
+    const cz = (Math.min(w.area.corner1.z, w.area.corner2.z) + Math.max(w.area.corner1.z, w.area.corner2.z)) / 2;
+    const dist = Math.hypot(playerPos.x - cx, playerPos.z - cz);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = w;
+    }
+  }
+  return best;
+}
+
 /** 维度 + 坐标 → 仓库 + 逻辑容器（occupiedLocations 匹配，含双箱任一半） */
 export function findContainerAt(
   warehouses: Warehouse[],

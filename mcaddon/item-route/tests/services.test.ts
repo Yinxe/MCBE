@@ -107,7 +107,7 @@ import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter"
 import { ItemIndex } from "../scripts/core/index/ItemIndex";
 import { MemoryIntervalScheduler } from "../scripts/core/scheduling/IntervalScheduler";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
-import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+import { SimpleItemStack, type ItemStack } from "../scripts/core/model/ItemStack";
 
 function makeRouteService() {
   const intervals = new MemoryIntervalScheduler();
@@ -174,17 +174,16 @@ import { Organizer } from "../scripts/core/organizing/Organizer";
 import { MoveJournal } from "../scripts/core/routing/Move";
 import { registerContainer } from "../scripts/core/model/ContainerRegistry";
 
-test("OrganizeService: organize 合并物品但不重建索引，发 container-changed", () => {
+test("OrganizeService: organizeContainer 单容器合并可堆叠堆并排序，发 container-changed", () => {
   const bus = new EventBus();
-  const organizer = new Organizer(new DefaultCandidateSorter());
+  const organizer = new Organizer();
   const svc = new OrganizeService(organizer, bus);
   const changed: string[] = [];
   bus.containerChanged.subscribe((e) => changed.push(e.containerId));
-  const misc = new InMemoryContainer("x", "misc", 4);
-  misc.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
-  const multi = new InMemoryContainer("m1", "multi", 4);
-  multi.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
-  const containers = new Map([[misc.id, misc], [multi.id, multi]]);
+  const c = new InMemoryContainer("c1", "multi", 4);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  c.setItem(2, new SimpleItemStack("minecraft:stone", 5, 64)); // 同型两堆 → 合并
+  c.setItem(3, new SimpleItemStack("minecraft:dirt", 7, 64));
   const warehouse = {
     id: "w1",
     displayName: "w",
@@ -192,23 +191,77 @@ test("OrganizeService: organize 合并物品但不重建索引，发 container-c
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
-    containers,
+    containers: new Map([["c1", c]]),
     inputs: new Map<string, InMemoryContainer>(),
   };
-  const res = svc.organize(warehouse, new MoveJournal());
+  const res = svc.organizeContainer(warehouse, c, new MoveJournal());
   assert.equal(res.ok, true);
-  assert.equal(res.moves, 1); // misc stone 归入 multi
-  assert.equal(res.skipped, 0);
-  assert.equal(misc.getItem(0), undefined);
-  assert.equal(multi.getItem(0)?.amount, 15);
-  // 整理后全仓汇总（v1 风格明细）：stone 合为一堆 15 个
-  assert.deepEqual(res.perType, { "minecraft:stone": { stacks: 1, total: 15 } });
-  assert.equal(res.totalSlots, 8); // misc 4 + multi 4
-  assert.equal(res.usedSlots, 1);
-  assert.equal(res.beforeTypes, 1);
-  assert.equal(res.afterTypes, 1);
-  // 整理不重建索引（misc 本非多物候选）；但涉及容器逐一发 container-changed
-  assert.deepEqual([...new Set(changed)].sort(), ["m1", "x"]);
+  assert.equal(res.moves, 1); // stone 2 堆 → 1 堆
+  assert.equal(res.beforeStacks, 3);
+  assert.equal(res.afterStacks, 2);
+  assert.equal(res.beforeTypes, 2);
+  assert.equal(res.afterTypes, 2); // 种类守恒（就地整理不跨容器）
+  assert.equal(res.totalSlots, 4);
+  assert.equal(res.usedSlots, 2);
+  assert.deepEqual(res.perType["minecraft:stone"], { stacks: 1, total: 15 });
+  assert.deepEqual(res.perType["minecraft:dirt"], { stacks: 1, total: 7 });
+  // 数据一致性：清空+重放后数量守恒（不丢失/不重复）
+  assert.equal(c.getItem(0)!.amount + c.getItem(1)!.amount, 10 + 5 + 7);
+  // 排序重放：dirt 先于 stone（typeId 升序）
+  assert.equal(c.getItem(0)?.itemId, "minecraft:dirt");
+  assert.equal(c.getItem(1)?.itemId, "minecraft:stone");
+  assert.equal(c.getItem(1)?.amount, 15);
+  assert.deepEqual(changed, ["c1"]); // 单容器 container-changed
+});
+
+test("OrganizeService: 空/已整齐容器 → 无需整理（moves=0）", () => {
+  const bus = new EventBus();
+  const svc = new OrganizeService(new Organizer(), bus);
+  const warehouse = {
+    id: "w1", displayName: "w", ownerId: "p1", members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(),
+    containers: new Map<string, InMemoryContainer>(),
+    inputs: new Map<string, InMemoryContainer>(),
+  };
+  const empty = new InMemoryContainer("e", "multi", 4);
+  const r1 = svc.organizeContainer(warehouse, empty, new MoveJournal());
+  assert.equal(r1.ok, true);
+  assert.equal(r1.moves, 0);
+  assert.equal(r1.messiness.total, 0);
+  const single = new InMemoryContainer("s", "multi", 4);
+  single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  const r2 = svc.organizeContainer(warehouse, single, new MoveJournal());
+  assert.equal(r2.ok, true);
+  assert.equal(r2.moves, 0);
+  assert.equal(single.getItem(0)?.amount, 5); // 未变
+});
+
+// 模拟生产适配器"清空槽位静默失败"（setItem(undefined) 被吞掉）→ 必须回滚而非重复物品
+class FailingClearContainer extends InMemoryContainer {
+  setItem(slot: number, item?: ItemStack): void {
+    if (item === undefined) return; // 清空失败：不清除该槽
+    super.setItem(slot, item);
+  }
+}
+
+test("OrganizeService: 清空失败 → 回滚且不整理（数据一致性）", () => {
+  const bus = new EventBus();
+  const svc = new OrganizeService(new Organizer(), bus);
+  const c = new FailingClearContainer("c1", "multi", 4);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  c.setItem(2, new SimpleItemStack("minecraft:stone", 5, 64));
+  const warehouse = {
+    id: "w1", displayName: "w", ownerId: "p1", members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(),
+    containers: new Map([["c1", c]]),
+    inputs: new Map<string, InMemoryContainer>(),
+  };
+  const res = svc.organizeContainer(warehouse, c, new MoveJournal());
+  assert.equal(res.ok, false); // 清空校验失败 → 整体回滚
+  assert.equal(c.getItem(0)?.amount, 10); // 回滚：恢复整理前
+  assert.equal(c.getItem(2)?.amount, 5);
 });
 // ── 建仓限制（v1 沉淀：边界/间距/体积/每玩家数量） ─────────
 test("areaSize: 归一化尺寸与体积", () => {
@@ -276,26 +329,22 @@ test("WarehouseService: 仓库 CRUD 触发领域事件", () => {
 
 test("OrganizeService: 整理成功触发 organize-completed", () => {
   const bus = new EventBus();
-  const index = new ItemIndex();
-  const organizer = new Organizer(new DefaultCandidateSorter());
+  const organizer = new Organizer();
   const svc = new OrganizeService(organizer, bus);
   const moves: number[] = [];
   bus.organizeCompleted.subscribe((e) => moves.push(e.moves));
-  const misc = new InMemoryContainer("x", "misc", 4);
-  misc.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
-  const multi = new InMemoryContainer("m1", "multi", 4);
-  multi.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
-  index.onContainerAdded(misc);
-  index.onContainerAdded(multi);
+  const c = new InMemoryContainer("c1", "multi", 4);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  c.setItem(2, new SimpleItemStack("minecraft:stone", 5, 64)); // 两堆 → 合并 1 组
   const warehouse = {
     id: "w1", displayName: "w", ownerId: "p1", members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
-    containers: new Map([[misc.id, misc], [multi.id, multi]]),
-    inputs: new Map(),
+    containers: new Map([["c1", c]]),
+    inputs: new Map<string, InMemoryContainer>(),
   };
-  const res = svc.organize(warehouse, new MoveJournal());
+  const res = svc.organizeContainer(warehouse, c, new MoveJournal());
   assert.equal(res.ok, true);
   assert.equal(res.moves, 1);
-  assert.deepEqual(moves, [1]); // organize-completed 报实际移动数
+  assert.deepEqual(moves, [1]); // organize-completed 报合并数
 });

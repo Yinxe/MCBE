@@ -56,7 +56,7 @@ test("COMMAND_MIN_ROLE: 矩阵映射正确", () => {
   assert.equal(COMMAND_MIN_ROLE["rescan"], "member");
   assert.equal(COMMAND_MIN_ROLE["rescan_preview"], "member");
   assert.equal(COMMAND_MIN_ROLE["menu"], "visitor");
-  assert.equal(COMMAND_MIN_ROLE["search"], "visitor");
+  assert.equal(COMMAND_MIN_ROLE["search"], "member");
   assert.equal(COMMAND_MIN_ROLE["organize"], "any");
   assert.equal(COMMAND_MIN_ROLE["help"], "any");
 });
@@ -73,5 +73,6 @@ test("canRunCommand: 权限贯穿（owner 可 delete，member 可 rescan，visit
   assert.equal(canRunCommand(members, wh, "m", "rescan"), true);
   assert.equal(canRunCommand(members, wh, "v", "rescan"), false);
   assert.equal(canRunCommand(members, wh, "v", "menu"), true);
-  assert.equal(canRunCommand(members, wh, "v", "search"), true); // search 需要仓库，但矩阵允许 visitor
+  assert.equal(canRunCommand(members, wh, "m", "search"), true); // search：member+（就近需有权限）
+  assert.equal(canRunCommand(members, wh, "v", "search"), false); // visitor 不可搜
 });

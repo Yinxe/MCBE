@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { containsLocation, isPlayerNearby, findWarehouseAt, findContainerAt } from "../scripts/core/model/Area";
+import { containsLocation, isPlayerNearby, findWarehouseAt, findContainerAt, nearestWarehouseByPermission } from "../scripts/core/model/Area";
 import type { WarehouseArea } from "../scripts/core/model/Warehouse";
 import type { Warehouse } from "../scripts/core/model/Warehouse";
 import type { Container } from "../scripts/core/model/Container";
@@ -75,6 +75,26 @@ test("findContainerAt: 容器坐标命中 / 未注册坐标 undefined", () => {
   const ws = [makeWarehouse([chest])];
   assert.equal(findContainerAt(ws, "overworld", { x: 5, y: 5, z: 5 })?.container.id, "c1");
   assert.equal(findContainerAt(ws, "overworld", { x: 6, y: 5, z: 5 }), undefined);
+});
+
+test("nearestWarehouseByPermission: 就近 + 权限过滤", () => {
+  const mk = (id: string, cx: number, cz: number): Warehouse => ({
+    id, displayName: id, ownerId: "p1", members: [],
+    area: { dimension: "overworld", corner1: { x: cx, y: 0, z: cz }, corner2: { x: cx + 10, y: 10, z: cz + 10 } },
+    settings: createDefaultSettings(),
+    containers: new Map<string, Container>(),
+    inputs: new Map<string, Container>(),
+  });
+  const far = mk("far", 100, 100);
+  const nearNotAllowed = mk("nearNo", 0, 0);          // 近但无权限
+  const nearAllowed = mk("nearYes", 20, 0);           // 近且有权限
+  const ws = [far, nearNotAllowed, nearAllowed];
+  const authorized = (w: Warehouse) => w.id === "nearYes";
+  // 玩家在 (0,0)：最近的**有权限**仓是 nearYes（nearNo 被权限过滤）
+  const got = nearestWarehouseByPermission(ws, "overworld", { x: 0, z: 0 }, authorized);
+  assert.equal(got?.id, "nearYes");
+  // 无任何有权限仓库 → undefined
+  assert.equal(nearestWarehouseByPermission(ws, "overworld", { x: 0, z: 0 }, () => false), undefined);
 });
 // ── Task 24/20: 外接圆半径 + 大仓库中心直线距离（margin） ──
 import { areaCircumradius } from "../scripts/core/model/Area";

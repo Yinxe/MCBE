@@ -12,7 +12,7 @@ import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";
 import { scanContainer, type ContainerScanResult } from "../model/ContainerScan";
-import type { StatsStore } from "../storage/Stores";
+import type { StatsStore, StatsSnapshotData } from "../storage/Stores";
 import type { EventBus, WarningLevel } from "../events/DomainEvents";
 
 export interface ContainerStats {
@@ -129,6 +129,10 @@ export class StatsService {
         byItem[itemId] = itemStat;
       }
     }
+    // 持久化（写穿透）：统计在"查看汇总"时落盘。路由热路径的容器统计更新
+    // （updateFromScan / 冷计算）仅驻内存，因统计是活容器内容的派生，读取仍需实时
+    // 重算；落盘的是经过查看/计算的最新快照，作为持久记录供未来 warm-load 或还原。
+    this.persistWarehouse(warehouse);
     return {
       warehouseId: warehouse.id,
       containerCount,
@@ -140,6 +144,16 @@ export class StatsService {
       byType,
       byItem,
     };
+  }
+
+  /** 写穿透整仓容器统计快照（每仓库一条 DP key，覆盖写） */
+  private persistWarehouse(warehouse: Warehouse): void {
+    const snap: StatsSnapshotData = { warehouseId: warehouse.id, containers: {} };
+    for (const container of warehouse.containers.values()) {
+      const stat = this.cache.get(container.id);
+      if (stat !== undefined) snap.containers[container.id] = stat;
+    }
+    this.store.save(warehouse.id, snap);
   }
 
   /**

@@ -7,7 +7,7 @@ import type { StatsSnapshotData } from "../scripts/core/storage/Stores";
 
 test("McStatsStore: 写穿透 save/load/remove", () => {
   const store = new McStatsStore(new ShardStore(new InMemoryKeyValueStore()));
-  const snap: StatsSnapshotData = { warehouseId: "w1", containers: { c1: { usedSlots: 2 } }, warehouse: { totalItems: 5 } };
+  const snap: StatsSnapshotData = { warehouseId: "w1", containers: { c1: { usedSlots: 2 } } };
   store.save("w1", snap);
   assert.deepEqual(store.load("w1"), snap);
   store.remove("w1");

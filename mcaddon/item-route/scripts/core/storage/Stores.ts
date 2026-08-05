@@ -28,10 +28,10 @@ export interface IndexSnapshotData {
   singleBindings: Record<ContainerId, string>;
 }
 
+/** 统计快照（每仓库一条 DP key；containers 值 = ContainerStats 纯 JSON） */
 export interface StatsSnapshotData {
   warehouseId: WarehouseId;
   containers: Record<ContainerId, unknown>;
-  warehouse: unknown;
 }
 
 export interface WarehouseStore {

@@ -46,11 +46,16 @@ export function registerToolInteraction(deps: CommandDeps): void {
       const session = deps.session.get(player.id);
 
       if (player.isSneaking) {
-        // 潜行右键：快速整理所在仓库
+        // 潜行右键：快速整理该容器（单容器就地整理）
         const hit = findContainerAt(deps.loadedWarehouses(), e.block.dimension.id, loc);
         if (hit) {
-          const ok = deps.organize.organize(hit.warehouse, new MoveJournal());
-          player.sendMessage(ok ? `${chat.success}整理完成` : `${chat.error}整理失败`);
+          const res = deps.organize.organizeContainer(hit.warehouse, hit.container, new MoveJournal());
+          const name = hit.container.id.split("@")[1] ?? hit.container.id;
+          player.sendMessage(
+            res.ok
+              ? `${chat.success}${name} 整理完成${res.moves > 0 ? `（合并 ${res.moves} 组）` : "（已整齐）"}`
+              : `${chat.error}${name} 整理失败`
+          );
         }
         return;
       }

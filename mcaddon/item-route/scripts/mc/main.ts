@@ -97,7 +97,7 @@ const warehouses = new WarehouseService(
 );
 const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));
-const organizer = new Organizer(new DefaultCandidateSorter());
+const organizer = new Organizer();
 // 每仓库索引生命周期（隔离）：激活时从 McIndexStore 加载/恢复，空闲卸载时落盘
 const indexLifecycle: IndexLifecycle = {
   load: (warehouse) => {
@@ -140,7 +140,8 @@ bus.itemRouted.subscribe((e) => {
   stats.invalidate(e.from);
   stats.invalidate(e.to);
 });
-// ② 混乱度检查 → 阈值自动整理；同一次 scanContainer 扫描趁机维护目标容器统计（免二次扫描）
+// ② 混乱度检查 → 阈值自动整理（**单容器整理**目标容器，v1 onDeposit 语义）；
+//    同一次 scanContainer 扫描趁机维护目标容器统计（免二次扫描）
 bus.itemRouted.subscribe((e) => {
   const wh = loaded.find((x) => x.id === e.warehouseId);
   if (wh === undefined || !wh.settings.sortingEnabled) return;
@@ -148,8 +149,8 @@ bus.itemRouted.subscribe((e) => {
   if (target === undefined) return;
   const scan = scanContainer(target);
   if (organizer.shouldAutoSortFromScan(scan, wh.settings.autoSortThreshold)) {
-    const res = organize.organize(wh, new MoveJournal());
-    for (const cid of res.touched) stats.invalidate(cid); // 整理又移动物品 → 失效涉及容器统计
+    organize.organizeContainer(wh, target, new MoveJournal()); // 就地整理该容器
+    stats.invalidate(e.to); // 整理改变了目标内容
   } else {
     stats.updateFromScan(target, scan, wh.settings.warningThreshold); // 趁机增量维护统计
   }
@@ -158,6 +159,10 @@ bus.itemRouted.subscribe((e) => {
 bus.itemRouted.subscribe((e) => {
   const wh = loaded.find((x) => x.id === e.warehouseId);
   if (wh !== undefined) stats.evaluateWarnings(wh);
+});
+// ④ 路由成功视觉反馈：目标容器闪光（v1 同款：放入物品即播放粒子）
+bus.itemRouted.subscribe((e) => {
+  bus.visualEffect.trigger({ type: "visual-effect", kind: "route-flash", warehouseId: e.warehouseId, containerId: e.to });
 });
 
 // 容器注册表持久化钩子（事件桥接 → DP）

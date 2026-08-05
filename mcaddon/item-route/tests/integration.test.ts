@@ -33,7 +33,7 @@ function bootstrap() {
   const proximity = { hasNearbyPlayer: () => true };
   const scheduler = new Scheduler(router, intervals, proximity, bus, 20, 40, { fallbackIndex: index });
   const stats = new StatsService(new InMemoryStatsStore(), bus);
-  const organizer = new Organizer(new DefaultCandidateSorter());
+  const organizer = new Organizer();
   const organize = new OrganizeService(organizer, bus);
   const warehouses = new WarehouseService(new InMemoryWarehouseStore(), bus);
   const members = new MemberService();
@@ -123,27 +123,27 @@ test("集成: 杂项兜底 + 统计预警", () => {
   assert.deepEqual(warnings, []); // 3 槽用 1 槽，无预警
 });
 
-test("集成: 整理器闭环（misc 归入 multi）", () => {
+test("集成: 整理器闭环（单容器合并可堆叠堆，不跨容器）", () => {
   const { app, warehouse, add } = makeWorld();
-  const misc = add(new InMemoryContainer("x1", "misc", 4));
-  misc.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
-  add(new InMemoryContainer("m1", "multi", 4)).setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
-  assert.equal(app.organize.organize(warehouse, new MoveJournal()).ok, true);
-  assert.equal(misc.getItem(0), undefined);
-  assert.equal(warehouse.containers.get("m1")?.getItem(0)?.amount, 15);
+  const c = add(new InMemoryContainer("c1", "multi", 4));
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  c.setItem(2, new SimpleItemStack("minecraft:stone", 5, 64)); // 同型两堆 → 合并
+  const res = app.organize.organizeContainer(warehouse, c, new MoveJournal());
+  assert.equal(res.ok, true);
+  assert.equal(res.moves, 1);
+  assert.equal(c.getItem(0)?.amount, 15); // 合并为一堆
+  assert.equal(c.getItem(1), undefined);
 });
 
-test("集成: 整理后对涉及容器逐一发 container-changed 事件（索引更新对外信号）", () => {
+test("集成: 单容器整理后发 container-changed 事件（索引更新对外信号）", () => {
   const { app, warehouse, add } = makeWorld();
   const changed: string[] = [];
   app.bus.containerChanged.subscribe((e) => changed.push(e.containerId));
-  const misc = add(new InMemoryContainer("x1", "misc", 4));
-  misc.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
-  add(new InMemoryContainer("m1", "multi", 4)).setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
-  app.organize.organize(warehouse, new MoveJournal());
-  assert.ok(changed.includes("x1")); // 源容器
-  assert.ok(changed.includes("m1")); // 目标容器
-  assert.deepEqual([...new Set(changed)].sort(), ["m1", "x1"]);
+  const c = add(new InMemoryContainer("c1", "multi", 4));
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  c.setItem(2, new SimpleItemStack("minecraft:stone", 5, 64));
+  app.organize.organizeContainer(warehouse, c, new MoveJournal());
+  assert.deepEqual(changed, ["c1"]);
 });
 
 test("集成: 成员权限贯穿", () => {
