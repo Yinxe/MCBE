@@ -4,7 +4,9 @@
 // （否则 overworld 与 nether 的容器在全局统计缓存等以 ID 为键处会串味）。
 // 容器主坐标 = 双箱合并时两半 (x,y,z) 最小者：保证同双箱不论从哪半开始创建 ID 一致，
 // 拆主半后能重定到幸存半（见 McEventBridge 拆箱重定）；维度取仓库所属维度。
-// 仓库 ID 由**初始归一化区域**生成（角点乱序自动纠正、稳定不可变；resize 保留原 ID）。
+// 仓库 ID 由**初始归一化区域**生成（角点乱序自动纠正）。⚠️ 随 resize 迁移：
+// updateArea 改变区域后重算并迁移（见 WarehouseService.updateArea / onRebase），
+// 非"生成即定死"——是定位式/可读式 ID，随区域变化更新为设计意图。
 import type { ContainerId, WarehouseId, Location } from "./types";
 import type { WarehouseArea } from "./Warehouse";
 

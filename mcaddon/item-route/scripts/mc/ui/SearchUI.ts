@@ -3,7 +3,6 @@ import { world, system, type Player } from "@minecraft/server";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { searchItems, getChineseName } from "../../core/data/ItemNameMap";
-import { nearestWarehouseByPermission } from "../../core/model/Area";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";
 import * as uiColor from "./uiColor";
@@ -22,34 +21,59 @@ export interface SearchResultLine {
   containerIds: string[];
 }
 
+/** 玩家到仓库中心 XZ 直线距离 */
+function warehouseDistance(warehouse: Warehouse, player: Player): number {
+  const cx = (Math.min(warehouse.area.corner1.x, warehouse.area.corner2.x) + Math.max(warehouse.area.corner1.x, warehouse.area.corner2.x)) / 2;
+  const cz = (Math.min(warehouse.area.corner1.z, warehouse.area.corner2.z) + Math.max(warehouse.area.corner1.z, warehouse.area.corner2.z)) / 2;
+  return Math.hypot(player.location.x - cx, player.location.z - cz);
+}
+
 export async function showSearchUI(player: Player, deps: CommandDeps): Promise<void> {
-  const warehouse = nearestWarehouseByPermission(
-    deps.loadedWarehouses(),
-    player.dimension.id,
-    { x: player.location.x, z: player.location.z },
-    (w) => deps.members.can(w, player.id, "member")
-  );
-  if (warehouse === undefined) {
-    player.sendMessage(`${uiColor.chat.error}附近没有你有权限（成员）的仓库`);
+  // 有权（member+）且同维度的仓库，按距玩家距离排序（v1 同款：可选择仓库，但须自己有权限）
+  const accessible = deps
+    .loadedWarehouses()
+    .filter((w) => w.area.dimension === player.dimension.id && deps.members.can(w, player.id, "member"))
+    .map((w) => ({ warehouse: w, dist: warehouseDistance(w, player) }))
+    .sort((a, b) => a.dist - b.dist);
+  if (accessible.length === 0) {
+    player.sendMessage(`${uiColor.chat.error}当前维度没有你有权限（成员）的仓库`);
     return;
   }
   const form = new ModalFormBuilder()
-    .title(`${uiColor.form.title}容器搜索 · ${uiColor.form.accent}${warehouse.displayName}`)
+    .title(`${uiColor.form.title}容器搜索`)
+    .dropdown(
+      "warehouse",
+      "选择仓库",
+      accessible.map((a) => `${a.warehouse.displayName} ${uiColor.form.muted}(${Math.round(a.dist)} 格)`),
+      { defaultValueIndex: 0 } // 默认最近的
+    )
     .textField("query", "搜索关键词", { defaultValue: "" });
   const values = await form.show(player);
   if (!values) return;
   const query = (values.query as string).trim();
   if (!query) return;
+  const selected = accessible[values.warehouse as number]?.warehouse;
+  if (selected === undefined) return;
+  runSearchAndDisplay(player, deps, selected, query);
+}
 
+/** 搜索指定仓库并展示结果 + 标记粒子（命令与 UI 共用） */
+export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse: Warehouse, query: string): void {
   const lines = runSearch(warehouse, query);
   if (lines.length === 0) {
     player.sendMessage(`${uiColor.chat.muted}未找到匹配物品`);
     return;
   }
-  player.sendMessage(`${uiColor.chat.highlight}━━ 搜索结果：${lines.length} 种 ━━`);
+  player.sendMessage(`${uiColor.chat.highlight}━━ ${warehouse.displayName} 搜索结果：${lines.length} 种 ━━`);
+  const locs: Location[] = [];
   for (const line of lines) {
     player.sendMessage(`${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${line.containerIds.join(", ")}]`);
+    for (const id of line.containerIds) {
+      const c = warehouse.containers.get(id);
+      if (c) locs.push(...c.occupiedLocations);
+    }
   }
+  if (locs.length > 0) startMarkerParticles(player, player.dimension.id, locs, (t) => deps.config.isToken(t));
 }
 
 /** 纯逻辑搜索：在指定仓库内 query → typeIds → 逐容器按 typeId 精确计数（可单测） */

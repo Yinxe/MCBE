@@ -350,14 +350,21 @@ test("Scheduler: 路由失败发 input-blocked 事件（防抖通知的数据源
   w.scheduler.tick();
   w.intervals.advance(8);
   assert.deepEqual(blocks, ["in:minecraft:stone:10"]);
-  // 疏通后（给 stone 补目标）路由成功 → 不再发 input-blocked
+  // 持续阻塞：下一轮不再重复触发（状态迁移语义）
+  w.intervals.advance(8);
+  assert.deepEqual(blocks, ["in:minecraft:stone:10"]); // 未新增
+  // 疏通后（给 stone 补目标）路由成功 → 解除阻塞态
   const m2 = new InMemoryContainer("m2", "multi", 3);
   m2.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
   registerContainer(w.warehouse, m2);
   w.index.onContainerAdded(m2);
   w.intervals.advance(8);
   assert.equal(input.getItem(0), undefined); // 已路由
-  assert.equal(blocks.length, 1); // 无新阻塞事件
+  assert.equal(blocks.length, 1);
+  // 再次放入不可路由物品 → 重新进入阻塞态（重新触发）；wood 无任何候选（m1 只存 dirt）
+  input.setItem(0, new SimpleItemStack("minecraft:wood", 5, 64));
+  w.intervals.advance(8);
+  assert.deepEqual(blocks, ["in:minecraft:stone:10", "in:minecraft:wood:5"]);
 });
 
 test("Scheduler: 输入全空 → 无事可作（不产生移动）", () => {

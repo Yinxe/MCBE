@@ -71,6 +71,8 @@ interface Runtime {
   index?: ItemIndex;
   /** 该仓库进入 inactive 的时间戳（Date.now 墙钟）；未 inactive 为 undefined */
   inactiveSince?: number;
+  /** 当前处于阻塞态的输入容器 id（inputBlocked 事件仅在"进入阻塞"时触发一次，防每 tick 刷事件） */
+  blockedInputs: Set<string>;
 }
 
 export class Scheduler {
@@ -107,6 +109,7 @@ export class Scheduler {
       warehouse,
       lifecycle: "inactive",
       deactivateCounter: 0,
+      blockedInputs: new Set(),
     });
   }
 
@@ -252,15 +255,20 @@ export class Scheduler {
       if (slot === undefined) continue;
       const routed = this.router.routeFrom(container, slot, rt.warehouse, index);
       if (routed === undefined) {
-        // 输入阻塞：物品无法路由（目标满/无候选/禁用）→ 独立事件，通知层防抖提醒
-        const stack = container.getItem(slot);
-        this.bus.inputBlocked.trigger({
-          type: "input-blocked",
-          warehouseId: rt.warehouse.id,
-          containerId: container.id,
-          itemId: stack?.itemId ?? "",
-          amount: stack?.amount ?? 0,
-        });
+        // 输入阻塞：仅在"进入阻塞态"时触发一次（防每 tick 刷事件），通知层再防抖提醒
+        if (!rt.blockedInputs.has(container.id)) {
+          rt.blockedInputs.add(container.id);
+          const stack = container.getItem(slot);
+          this.bus.inputBlocked.trigger({
+            type: "input-blocked",
+            warehouseId: rt.warehouse.id,
+            containerId: container.id,
+            itemId: stack?.itemId ?? "",
+            amount: stack?.amount ?? 0,
+          });
+        }
+      } else {
+        rt.blockedInputs.delete(container.id); // 疏通 → 解除阻塞态（下次再堵时重新触发）
       }
       return; // 无论成败，本轮到此为止；失败即阻塞该输入，不处理低优先输入
     }
