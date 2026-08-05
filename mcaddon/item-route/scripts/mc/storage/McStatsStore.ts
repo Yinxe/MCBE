@@ -15,8 +15,8 @@ export class McStatsStore implements StatsStore {
     return this.shards.read<ContainerStatsData>(cstatsKey(containerId));
   }
 
-  saveContainer(containerId: ContainerId, stats: ContainerStatsData): void {
-    this.shards.write(cstatsKey(containerId), stats, "overwrite");
+  saveContainer(containerId: ContainerId, stats: ContainerStatsData): boolean {
+    return this.shards.write(cstatsKey(containerId), stats, "overwrite");
   }
 
   removeContainer(containerId: ContainerId): void {

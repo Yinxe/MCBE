@@ -175,7 +175,12 @@ export class McEventBridge {
       try {
         indexStore.flush();
       } catch (err) {
-        console.warn(`[ItemRoute] flush 失败: ${err}`);
+        console.warn(`[ItemRoute] 索引 flush 失败: ${err}`);
+      }
+      try {
+        stats.flush(); // 路由热路径增量统计同批落盘
+      } catch (err) {
+        console.warn(`[ItemRoute] 统计 flush 失败: ${err}`);
       }
     });
 
@@ -197,6 +202,11 @@ export class McEventBridge {
         indexStore.flush();
       } catch (err) {
         console.warn(`[ItemRoute] flush 失败: ${err}`);
+      }
+      try {
+        stats.flush(); // 路由热路径增量统计批量落盘
+      } catch (err) {
+        console.warn(`[ItemRoute] 统计 flush 失败: ${err}`);
       }
     }, FLUSH_INTERVAL);
   }

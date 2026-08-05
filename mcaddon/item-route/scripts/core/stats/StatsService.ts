@@ -10,9 +10,10 @@
 //   否则预警只触发一次、永不复发。
 // ⚠️ 持久化（审查）：
 //   统计是**活容器内容的派生**（权威源 = 游戏容器），读取必须实时重算才正确；
-//   内存 cache 只避免会话内重复扫描。`getWarehouseStats`（查看汇总）写穿透
-//   McStatsStore 落盘最新快照作持久记录（路由热路径 updateFromScan 仅驻内存，
-//   不写 DP）。读取不 warm 持久化副本（warm 会过期，还要再验 = 白扫）。
+//   内存 cache 只避免会话内重复扫描。存储为**每容器一条键**（v1 方案，容器 ID 全局唯一）：
+//   · 路由热路径 `updateFromScan` 仅驻内存 + 标记脏（零 DP 写）
+//   · `flush()`（装配层 100 tick / 玩家离开）批量落盘脏容器；冷读/查看汇总也写穿
+//   读取不 warm 持久化副本（warm 会过期，还要再验 = 白扫）；落盘为持久记录/还原参考。
 import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";
@@ -59,6 +60,8 @@ export interface WarehouseStats {
 export class StatsService {
   private cache = new Map<ContainerId, ContainerStats>();
   private cooldowns = new Map<WarehouseId, number>();
+  /** 统计已变、待批量落盘的容器（路由热路径增量，flush 时逐容器写穿） */
+  private dirty = new Set<ContainerId>();
 
   constructor(
     private readonly store: StatsStore,
@@ -71,9 +74,10 @@ export class StatsService {
     this.cache.delete(containerId);
   }
 
-  /** 容器移除时丢弃统计（内存 + 持久化键）；结构变更路径（拆除/重定/删仓）用 */
+  /** 容器移除时丢弃统计（内存 + 持久化键 + 脏标记）；结构变更路径（拆除/重定/删仓）用 */
   discard(containerId: ContainerId): void {
     this.cache.delete(containerId);
+    this.dirty.delete(containerId);
     this.store.removeContainer(containerId);
   }
 
@@ -99,7 +103,7 @@ export class StatsService {
     return this.buildStats(container, scan, warningThreshold, false);
   }
 
-  /** 由扫描结果构造并缓存容器统计；persist=true 时写穿透单容器键（冷读/查看） */
+  /** 由扫描结果构造并缓存容器统计；persist=true 时立即写穿单容器键（冷读），否则仅驻内存 + 标记脏待 flush */
   private buildStats(container: Container, scan: ContainerScanResult, warningThreshold: number, persist: boolean): ContainerStats {
     const byType = scan.byType;
     const usedSlots = scan.usedSlots;
@@ -116,8 +120,30 @@ export class StatsService {
       byType,
     };
     this.cache.set(container.id, stats);
-    if (persist) this.store.saveContainer(container.id, stats);
+    this.dirty.add(container.id); // 待 flush 落盘（路由增量）
+    if (persist) this.store.saveContainer(container.id, stats); // 冷读立即写穿
     return stats;
+  }
+
+  /**
+   * 批量落盘脏容器统计（路由热路径增量，由装配层每 100 tick / 玩家离开时调用）。
+   * 失败项保留脏标记，下次 flush 自动重试；返回失败数。
+   */
+  flush(): number {
+    let failed = 0;
+    for (const id of [...this.dirty]) {
+      const stat = this.cache.get(id);
+      if (stat === undefined) {
+        this.dirty.delete(id); // 缓存已失效 → 无可写，清脏标记
+        continue;
+      }
+      if (this.store.saveContainer(id, stat)) {
+        this.dirty.delete(id);
+      } else {
+        failed++;
+      }
+    }
+    return failed;
   }
 
   getWarehouseStats(warehouse: Warehouse): WarehouseStats {

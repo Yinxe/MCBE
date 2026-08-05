@@ -170,6 +170,25 @@ test("StatsService: getWarehouseStats 查看时写穿透每容器统计键", () 
   assert.equal(saved.usedSlots, 1);
 });
 
+test("StatsService: flush 批量落盘路由热路径增量统计", () => {
+  const { warehouse, containers } = makeWarehouse();
+  const c = new InMemoryContainer("m1", "multi", 4);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  containers.set("m1", c);
+  const store = new InMemoryStatsStore();
+  const svc = new StatsService(store, new EventBus());
+  // 路由热路径：updateFromScan 仅标记脏（不写 DP）
+  svc.updateFromScan(c, scanContainer(c), warehouse.settings.warningThreshold);
+  assert.equal(store.loadContainer("m1"), undefined); // 未落盘
+  svc.flush(); // 装配层 100tick/离开时调用
+  const saved = store.loadContainer("m1");
+  assert.ok(saved !== undefined);
+  assert.equal(saved.usedSlots, 1);
+  // 已 flush → 脏标记清除，再次 flush 无副作用
+  svc.flush();
+  assert.equal(store.loadContainer("m1")?.usedSlots, 1);
+});
+
 test("StatsService: isWarning 实时按当前 warningThreshold 判定（改阈值无需 invalidate）", () => {
   const { warehouse, containers } = makeWarehouse();
   const c = new InMemoryContainer("m1", "multi", 4);

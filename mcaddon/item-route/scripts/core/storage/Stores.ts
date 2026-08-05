@@ -56,7 +56,8 @@ export interface IndexStore {
 /** 统计存储：**每容器一条**（v1 方案；容器 ID 全局唯一，键无需仓库前缀） */
 export interface StatsStore {
   loadContainer(containerId: ContainerId): ContainerStatsData | undefined;
-  saveContainer(containerId: ContainerId, stats: ContainerStatsData): void;
+  /** 返回是否写入成功（供 flush 失败重试） */
+  saveContainer(containerId: ContainerId, stats: ContainerStatsData): boolean;
   removeContainer(containerId: ContainerId): void;
 }
 
@@ -110,8 +111,9 @@ export class InMemoryStatsStore implements StatsStore {
     return this.kv.read(key("cstats", containerId));
   }
 
-  saveContainer(containerId: ContainerId, stats: ContainerStatsData): void {
+  saveContainer(containerId: ContainerId, stats: ContainerStatsData): boolean {
     this.kv.write(key("cstats", containerId), stats);
+    return true;
   }
 
   removeContainer(containerId: ContainerId): void {
