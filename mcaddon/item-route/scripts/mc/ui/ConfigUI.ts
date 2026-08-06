@@ -9,6 +9,8 @@ import * as uiColor from "./uiColor";
 
 /** 全局速度上限可选项（tick/槽）；默认 index 3 = 20 tick */
 const SPEED_OPTIONS: number[] = [4, 8, 16, 20, 30, 40];
+/** 单仓最大体积可选项（v1 ConfigUI 同款：4096/9216/16384推荐/36864） */
+const VOLUME_OPTIONS: number[] = [4096, 9216, 16_384, 36_864];
 
 /**
  * 展示模组配置面板（管理员专属）：当前状态总览 + 修改 + 全服统计。
@@ -32,10 +34,11 @@ export async function showConfigUI(player: Player, deps: CommandDeps): Promise<v
   await form.show(player);
 }
 
-/** 修改全局配置的表单：全局开关 / 更换信物 / 速度上限；保存即写穿 + 运行时生效 */
+/** 修改全局配置的表单：全局开关 / 更换信物 / 速度上限 / 建仓限制；保存即写穿 + 运行时生效 */
 async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   const tokenIndex = Math.max(0, TOKEN_OPTIONS.indexOf(deps.config.tokenItemId));
   const speedIndex = Math.max(0, SPEED_OPTIONS.indexOf(deps.config.globalSpeedLimit));
+  const volumeIndex = Math.max(0, VOLUME_OPTIONS.indexOf(deps.config.maxWarehouseVolume));
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}修改配置`)
     .toggle("globalEnabled", "全局分拣", { defaultValue: deps.config.globalEnabled })
@@ -45,13 +48,29 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
       "全局速度上限",
       SPEED_OPTIONS.map((s) => `${s} tick`),
       { defaultValueIndex: speedIndex >= 0 ? speedIndex : 3 }
-    );
+    )
+    .dropdown(
+      "maxVolume",
+      "单仓最大体积",
+      VOLUME_OPTIONS.map((v) => `${v} 格`),
+      { defaultValueIndex: volumeIndex >= 0 ? volumeIndex : 2, tooltip: "限制单个仓库最大体积（方块数）" }
+    )
+    .slider("maxWarehouses", "每玩家最多仓库数", 1, 5, {
+      defaultValue: deps.config.maxWarehousesPerPlayer,
+      valueStep: 1,
+      tooltip: "限制玩家可创建的仓库数量",
+    });
   const values = await form.show(player);
   if (!values) return;
+  const maxVolume = VOLUME_OPTIONS[values.maxVolume as number] ?? 16_384;
+  const maxWarehouses = values.maxWarehouses as number;
   deps.route.setGlobalEnabled(values.globalEnabled as boolean);
   deps.config.setGlobalSpeedLimit(SPEED_OPTIONS[values.speed as number] ?? 20);
   deps.route.setGlobalSpeedLimit(SPEED_OPTIONS[values.speed as number] ?? 20); // 运行时立即生效
   deps.config.setTokenItemId(TOKEN_OPTIONS[values.token as number] ?? TOKEN_OPTIONS[0]!);
+  deps.config.setMaxWarehouseVolume(maxVolume);
+  deps.config.setMaxWarehousesPerPlayer(maxWarehouses);
+  deps.warehouses.setLimits({ maxVolume, maxWarehousesPerPlayer: maxWarehouses }); // 建仓限制立即生效
   player.sendMessage(`${uiColor.chat.success}配置已保存`);
 }
 

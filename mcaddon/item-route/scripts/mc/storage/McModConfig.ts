@@ -119,6 +119,18 @@ export class McModConfig {
     this.save();
   }
 
+  /** 修改单仓最大体积（格，v1 ConfigUI 下拉可配） */
+  setMaxWarehouseVolume(volume: number): void {
+    this.data.maxWarehouseVolume = volume;
+    this.save();
+  }
+
+  /** 修改每玩家最多仓库数（v1 ConfigUI slider 可配） */
+  setMaxWarehousesPerPlayer(count: number): void {
+    this.data.maxWarehousesPerPlayer = count;
+    this.save();
+  }
+
   /** 是否信物物品 */
   isToken(itemTypeId: string): boolean {
     return itemTypeId === this.data.tokenItemId;

@@ -436,6 +436,41 @@ test("createWarehouse: 每玩家数量上限", () => {
   assert.match((fourth as { error: string }).error, /最多/);
 });
 
+test("WarehouseService: setLimits 运行时更新建仓限制（ConfigUI/Phase 4 重应用）", () => {
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus(), {
+    ...DEFAULT_WAREHOUSE_LIMITS,
+    maxWarehousesPerPlayer: 1,
+  });
+  svc.createWarehouse("仓A", "p1", {
+    dimension: "overworld",
+    corner1: { x: 0, y: 0, z: 0 },
+    corner2: { x: 10, y: 10, z: 10 },
+  });
+  // 上限 1 → 第二个被拒
+  const blocked = svc.createWarehouse("仓B", "p1", {
+    dimension: "overworld",
+    corner1: { x: 50, y: 0, z: 0 },
+    corner2: { x: 60, y: 10, z: 10 },
+  });
+  assert.equal(blocked.ok, false);
+  // 放宽上限 → 允许
+  svc.setLimits({ maxWarehousesPerPlayer: 2 });
+  const allowed = svc.createWarehouse("仓B", "p1", {
+    dimension: "overworld",
+    corner1: { x: 50, y: 0, z: 0 },
+    corner2: { x: 60, y: 10, z: 10 },
+  });
+  assert.equal(allowed.ok, true);
+  // 缩小体积限制 → 超限被拒（覆盖原限制而非叠加）
+  svc.setLimits({ maxVolume: 100 });
+  const oversized = svc.createWarehouse("仓C", "p2", {
+    dimension: "overworld",
+    corner1: { x: 100, y: 0, z: 0 },
+    corner2: { x: 200, y: 10, z: 10 },
+  });
+  assert.equal(oversized.ok, false);
+});
+
 // ── 领域事件（集成测试可订阅观察） ──────────────────────
 test("WarehouseService: 仓库 CRUD 触发领域事件", () => {
   const bus = new EventBus();

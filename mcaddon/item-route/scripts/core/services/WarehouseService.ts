@@ -86,12 +86,21 @@ export class WarehouseService {
   constructor(
     private readonly store: WarehouseStore,
     private readonly bus: EventBus,
-    private readonly limits: WarehouseLimits = DEFAULT_WAREHOUSE_LIMITS
+    private limits: WarehouseLimits = DEFAULT_WAREHOUSE_LIMITS
   ) {}
 
   /** 启动加载全部仓库（容器由 mc 层按 containerIds 补注册） */
   loadAll(): Warehouse[] {
     return this.store.list().map((s) => this.buildWarehouse(s));
+  }
+
+  /**
+   * 运行时更新建仓限制（ConfigUI 改 maxVolume/maxWarehousesPerPlayer 后调用）。
+   * Phase 4 config.refresh() 读持久化值后也应重应用——服务在 Phase 2 用 config 默认值构造，
+   * 持久化值须刷新后覆盖（否则启动后建仓仍按默认值校验）。
+   */
+  setLimits(partial: Partial<WarehouseLimits>): void {
+    this.limits = { ...this.limits, ...partial };
   }
 
   /**

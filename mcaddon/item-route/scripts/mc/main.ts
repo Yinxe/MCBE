@@ -274,6 +274,11 @@ system.run(() => {
   config.refresh();
   route.setGlobalEnabled(config.globalEnabled);
   route.setGlobalSpeedLimit(config.globalSpeedLimit);
+  // 建仓限制用持久化值覆盖 Phase 2 构造时的默认值（否则启动后建仓仍按默认限制校验）
+  warehouses.setLimits({
+    maxVolume: config.maxWarehouseVolume,
+    maxWarehousesPerPlayer: config.maxWarehousesPerPlayer,
+  });
   for (const snapshot of warehouseStore.list()) {
     // 重建仓库（core 快照不含容器适配器）
     const warehouse: Warehouse = {
