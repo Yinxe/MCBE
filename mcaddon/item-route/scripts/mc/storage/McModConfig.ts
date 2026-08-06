@@ -33,15 +33,20 @@ export const DEFAULT_MOD_CONFIG: ModConfigData = {
   maxContainers: 100,
 };
 
-/** 信物可选列表（ConfigUI 下拉） */
+/** 信物可选列表（ConfigUI 下拉；对齐 v1 smartwarehouse ModConfigStore.TOKEN_OPTIONS 的物品清单） */
 export const TOKEN_OPTIONS = [
   "minecraft:wooden_hoe",
   "minecraft:stick",
   "minecraft:parrot_spawn_egg",
   "minecraft:nautilus_shell",
-  "minecraft:music_disc_11",
+  "minecraft:disc_fragment_5",
   "minecraft:nether_star",
   "minecraft:blaze_powder",
+  "minecraft:feather",
+  "minecraft:flint",
+  "minecraft:blaze_rod",
+  "minecraft:breeze_rod",
+  "minecraft:arrow",
 ];
 
 /**

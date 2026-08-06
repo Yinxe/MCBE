@@ -12,15 +12,16 @@ test("BoundaryGeometry: STEP 常量", () => {
   assert.equal(STEP, 0.6);
 });
 
-test("BoundaryGeometry: edgePoints 生成 12 棱线框以平铺立方体", () => {
+test("BoundaryGeometry: edgePoints 生成边界点（坐标落在块外表面范围）", () => {
   const pts = edgePoints({ corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 0, y: 0, z: 0 } });
   assert.ok(pts.length > 0);
-  // 体积 = 1（退化单点）至少覆盖自身
-  assert.ok(pts.length >= 1);
+  // 退化单块：边界坐标应落在 [0,1]（块外表面，item 2.2 补 x+1/y+1/z+1；含内角点 0,0,0）
+  const keys = new Set(pts.map((p) => `${p.x},${p.y},${p.z}`));
+  assert.ok(keys.has("0,0,0"), "应含内角点 0,0,0");
   for (const p of pts) {
-    assert.equal(p.x, 0);
-    assert.equal(p.y, 0);
-    assert.equal(p.z, 0);
+    assert.ok(p.x === 0 || p.x === 1, `x 应为边界 0/1，实际 ${p.x}`);
+    assert.ok(p.y === 0 || p.y === 1, `y 应为边界 0/1，实际 ${p.y}`);
+    assert.ok(p.z === 0 || p.z === 1, `z 应为边界 0/1，实际 ${p.z}`);
   }
 });
 

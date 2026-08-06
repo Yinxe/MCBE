@@ -68,13 +68,13 @@ test("MultiItemStrategy / MiscStrategy: 按索引返回（多物须实际含该�
   assert.equal(new MiscStrategy().findCandidates(ctx).length, 1); // misc 兜底：全量取 enabled misc 容器
 });
 
-test("DefaultCandidateSorter: 满箱跳过 → 优先级升序 → 使用率降序", () => {
+test("DefaultCandidateSorter: 未满优先 → 优先级升序 → 使用率降序（满箱靠后作极限堆叠兜底）", () => {
   const sorter = new DefaultCandidateSorter();
   const input = [cand("a", 10, 0.3), cand("full", 10, 1.0, true), cand("b", 5, 0.2), cand("c", 10, 0.9)];
   const sorted = sorter.sort(input);
   assert.deepEqual(
     sorted.map((c) => c.container.id),
-    ["b", "c", "a"]
+    ["b", "c", "a", "full"] // 满箱不跳过，排在最后（仍可并进未满堆叠槽）
   );
 });
 
@@ -260,6 +260,28 @@ test("Router: 全部候选失败 → 物品留在源", () => {
   const result = router.routeFrom(input2, 0, wh2.wh, index);
   assert.equal(result, undefined);
   assert.equal(input2.getItem(0)?.amount, 10);
+});
+
+test("Router: 满箱容器仍可极限堆叠部分（item 4.6：目标无空槽但同类槽未满）", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 64, 64));
+  // 目标多物容器 1 格已占满（满箱），但该格是 stone 64/64 未满总量？不——构造：容量 1 满但 stone 未满
+  // 用容量 1 的容器：slot0 已有 stone 60/64 → 无空槽（isFull）但可并进 4 个
+  const full = add(new InMemoryContainer("full", "multi", 1));
+  full.setItem(0, new SimpleItemStack("minecraft:stone", 60, 64));
+  const index = makeIndexStub();
+  index.state.byItem.set("minecraft:stone", { single: [], multi: ["full"] });
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  const result = router.routeFrom(input, 0, wh, index);
+  assert.equal(result?.routed, true);
+  assert.equal(result?.amount, 4); // 只移走可堆叠的 4 个
+  assert.equal(input.getItem(0)?.amount, 60); // 剩余留在源槽（极限堆叠，不再被误判为整仓堵塞）
+  assert.equal(full.getItem(0)?.amount, 64);
 });
 
 test("Router: 候选容器已不含该类型（漂移）→ 策略重建条目并跳过", () => {

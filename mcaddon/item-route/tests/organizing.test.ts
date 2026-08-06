@@ -71,3 +71,17 @@ test("Organizer: 空槽参与顺序计算——空槽在物品中间视为错位
   // 对比：空槽前置/中置 的混乱度 > 尾随空槽（验证"空位理想顺序在末尾"）
   assert.ok(organizer.chaosScore(leading) > organizer.chaosScore(trailing));
 });
+
+test("Organizer: 单物品但空槽前置 → 混乱度非 0（item 6：空应排最后）", () => {
+  const organizer = new Organizer();
+  // [空, 钻石]：理想顺序是钻石在首、空在尾 → 空>钻石 逆序 1/1 × 0.7 = 0.7
+  const frontEmpty = new InMemoryContainer("fe", "multi", 4);
+  frontEmpty.setItem(1, new SimpleItemStack("minecraft:diamond", 12, 64));
+  assert.equal(organizer.chaosScore(frontEmpty), 0.7);
+  // [钻石, 空]：物品在首、空在尾（理想）→ 0
+  const trailing = new InMemoryContainer("tr", "multi", 4);
+  trailing.setItem(0, new SimpleItemStack("minecraft:diamond", 12, 64));
+  assert.equal(organizer.chaosScore(trailing), 0);
+  // 空容器 → 0
+  assert.equal(organizer.chaosScore(new InMemoryContainer("e", "multi", 4)), 0);
+});

@@ -110,14 +110,16 @@ route.setGlobalEnabled(config.globalEnabled);
 const organize = new OrganizeService(organizer, bus);
 
 // ── 装配模块（业务抽离）：持久边界控制 / 背包整理 / 效果注册 ──
+// 选区会话存储（建仓/调整区域流程；HUD 显示会话状态也读它）
+const sessionStore = new SelectionSessionStore();
 // 持久边界光幕控制（showBoundary 设置启停；菜单/命令经 deps.boundary 调用）+ 生命周期订阅
 const boundary = setupPersistentBoundaryControl({ bus, config, loaded });
 // 背包整理（潜行点非容器）：主栏包装成 core Container 就地整理，结果与容器整理同格式
 const organizeInventory = createInventoryOrganizer(organize, item);
 // 视觉/播报效果：路由闪光（角色颜色粒子）+ 临时边界 + 容量预警 + 成员通知
 registerRenderEffects(bus, loaded);
-// 仓库状态 HUD：物品栏上方 actionbar 显示附近仓库的路由/工作状态（成员可见）
-registerWarehouseHUD(scheduler, loaded, members);
+// 仓库/会话状态 HUD：物品栏上方 actionbar（选区会话优先，其次附近仓库路由/工作状态）
+registerWarehouseHUD(scheduler, loaded, members, sessionStore);
 
 // ── 容器逐容器持久化（注册表/索引/统计每容器一条键，事件驱动最小单位）收进 persistence/Persistence ──
 const persistence = createContainerPersistence({ warehouseStore, indexStore, scheduler, stats });
@@ -151,7 +153,6 @@ const bridge = new McEventBridge({
 bridge.start();
 
 // 交互层：选区会话 + 命令 deps + 信物交互
-const sessionStore = new SelectionSessionStore();
 // 玩家离开：清该玩家选区会话 + 搜索标记渲染（防下线残留，重连误完成选区/重叠渲染）
 world.afterEvents.playerLeave.subscribe((e) => {
   sessionStore.clear(e.playerName);

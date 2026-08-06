@@ -94,7 +94,8 @@ export class Scheduler {
     private readonly proximity: ProximityChecker,
     private readonly bus: EventBus,
     private globalSpeedLimit = 20,
-    private readonly deactivateDelayTicks = 40,
+    /** 停用宽限（**scheduler.tick() 次数**；主循环每 5 game-tick 调一次 tick → 默认 4 ≈ 1 秒） */
+    private readonly deactivateDelayTicks = 4,
     private readonly options: SchedulerOptions = {}
   ) {
     this.now = options.now ?? Date.now;
@@ -144,6 +145,11 @@ export class Scheduler {
   /** 全局分拣开关状态（HUD 展示用） */
   get isGlobalEnabled(): boolean {
     return this.globalEnabled;
+  }
+
+  /** 当前处于阻塞态（进入阻塞后未疏通）的输入容器数（HUD 展示用） */
+  blockedInputCount(warehouseId: WarehouseId): number {
+    return this.runtimes.get(warehouseId)?.blockedInputs.size ?? 0;
   }
 
   /** 测试辅助：当前 interval 间隔（undefined = 未激活） */
@@ -208,18 +214,26 @@ export class Scheduler {
           if (!nearby) {
             rt.lifecycle = "deactivating";
             rt.deactivateCounter = this.deactivateDelayTicks;
+            // ⚠️ 立即停止 interval（不继续分拣）：玩家已离开，仓库所在区块可能很快卸载，
+            //    继续访问未加载区块的方块容器有数据风险（不冒险）。deactivating 仅作短暂
+            //    通知过渡（玩家若很快回来则恢复）。
+            rt.handle?.stop();
+            rt.handle = undefined;
             this.emitLifecycle(rt, "active", "deactivating");
           }
           break;
         case "deactivating":
           if (nearby) {
-            rt.lifecycle = "active"; // 玩家回来：取消停用（interval 未停）
-            this.emitLifecycle(rt, "deactivating", "active");
+            rt.lifecycle = "active"; // 玩家回来：重新创建 interval（此前已停）
+            try {
+              rt.handle = this.createInterval(rt);
+              this.emitLifecycle(rt, "deactivating", "active");
+            } catch {
+              rt.lifecycle = "deactivating"; // interval 创建失败 → 保持停用态重试
+            }
           } else {
             rt.deactivateCounter--;
             if (rt.deactivateCounter <= 0) {
-              rt.handle?.stop();
-              rt.handle = undefined;
               rt.lifecycle = "inactive";
               rt.inactiveSince = this.now(); // 从此进入空闲计时（墙钟）
               this.emitLifecycle(rt, "deactivating", "inactive");

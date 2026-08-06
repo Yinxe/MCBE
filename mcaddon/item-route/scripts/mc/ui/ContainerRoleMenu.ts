@@ -50,7 +50,8 @@ function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container:
     `${uiColor.form.muted}混乱度 ${uiColor.form.body}${(messiness * 100).toFixed(0)}%\n` +
     `${uiColor.form.muted}容器ID ${uiColor.form.body}${container.id}\n` +
     `${uiColor.form.muted}状态 ${container.enabled ? uiColor.form.success + "已启用" : uiColor.form.error + "已禁用"}\n` +
-    `${uiColor.form.muted}角色 ${uiColor.form.accent}${roleLabel}`
+    `${uiColor.form.muted}角色 ${uiColor.form.accent}${roleLabel}\n` +
+    `${uiColor.form.muted}优先级 ${uiColor.form.body}${container.priority}`
   );
 }
 
@@ -113,7 +114,16 @@ export async function showContainerConfigMenu(
     );
   }
 
-  form.toggle("organize", `${uiColor.form.success}立即整理（就地排序合并堆叠）`);
+  // 路由优先级（1-100，数字小先处理；默认 10）
+  form.slider("priority", `${uiColor.form.muted}路由优先级（1-100，小者先）`, 1, 100, {
+    defaultValue: container.priority,
+    valueStep: 1,
+    tooltip: "决定路由处理先后（输入容器按优先级升序处理；默认 10）",
+  });
+
+  form.toggle("organize", `${uiColor.form.success}立即整理（就地排序合并堆叠）`, {
+    tooltip: "忽略混乱度强制就地整理：清空→按类型排序→合并可堆叠堆",
+  });
 
   form.toggle("warnThis", `${uiColor.form.warn}该容器容量预警`, {
     defaultValue: container.warningEnabled,
@@ -131,10 +141,14 @@ export async function showContainerConfigMenu(
     return;
   }
 
-  // 提交角色/启用/预警变更
+  // 提交角色/启用/预警/优先级变更
   const newRole = forced ? container.role : (ROLE_OPTIONS[values.role as number] ?? container.role);
+  const newPriority = values.priority as number;
   const changed =
-    newRole !== container.role || values.enabled !== container.enabled || values.warnThis !== container.warningEnabled;
+    newRole !== container.role ||
+    values.enabled !== container.enabled ||
+    values.warnThis !== container.warningEnabled ||
+    newPriority !== container.priority;
   if (!changed) {
     player.sendMessage(`${uiColor.chat.muted}容器设置未变化`);
     return;
@@ -142,6 +156,7 @@ export async function showContainerConfigMenu(
   container.role = newRole;
   container.enabled = values.enabled as boolean;
   container.warningEnabled = values.warnThis === true;
+  container.priority = newPriority;
   refreshInputMembership(warehouse, container); // 角色/启用变更 → 刷新 inputs 成员资格
   deps.resolveIndex(warehouse.id)?.onContainerChanged(container); // 该仓自己的索引
   deps.stats.invalidate(container.id);
@@ -158,6 +173,7 @@ export async function showContainerConfigMenu(
       `${uiColor.chat.success}容器 ${shortName} 配置已更新`,
       `${uiColor.chat.muted}角色: ${uiColor.chat.info}${ROLE_LABELS[container.role]}${forced ? "（漏斗强制输入容器）" : ""}`,
       `${uiColor.chat.muted}启用: ${uiColor.chat.info}${container.enabled ? "开启" : "关闭"}${uiColor.chat.muted}  ·  容量预警: ${uiColor.chat.info}${container.warningEnabled ? "开启" : "关闭"}`,
+      `${uiColor.chat.muted}优先级: ${uiColor.chat.info}${container.priority}`,
     ].join("\n")
   );
 }

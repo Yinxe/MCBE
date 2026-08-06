@@ -2,7 +2,9 @@
 // 两种形态（v1 BoundaryDisplay 口径）：
 //   · **临时边界**（boundary-glow 事件）：建仓/调整区域后的视觉反馈，TEMP_DURATION_TICKS 自动停。
 //   · **持久边界**（showBoundary 设置）：持续显示，仅当 guard() 为真（附近玩家持信物）才绘制；
-//     随设置开关启停。同仓库两种形态互斥（start 一律先 stop，防旧 timeout 停新边界）。
+//     随设置开关启停。
+// ⚠️ 临时/持久**各自独立跟踪**（item 9.7 修复）：临时边界（建仓/调区 glow）不得顶掉持久边界——
+//    否则 showBoundary 开启的仓库经一次建仓/调区后，持久边界被临时边界 stop，临时结束即消失。
 // 关键点（审查）：
 //   · 纯粒子方案（用户定案）：不放置/还原临时方块，无副作用，区块无需写。
 //   · 无玩家在场不播放（省资源，玩家回来自动恢复）；持久边界额外要求**附近玩家持信物**
@@ -34,7 +36,9 @@ interface ActiveBoundary {
   timeout?: number;
 }
 
-const activeBoundaries = new Map<string, ActiveBoundary>();
+/** 临时边界（boundary-glow）与持久边界（showBoundary）**独立跟踪**，互不覆盖 */
+const tempBoundaries = new Map<string, ActiveBoundary>();
+const persistentBoundaries = new Map<string, ActiveBoundary>();
 
 /** 去重棱线采样点（角点被 3 条棱共享，避免粒子重叠） */
 function uniquePoints(area: BoundaryOptions["area"]): Array<{ x: number; y: number; z: number }> {
@@ -66,22 +70,36 @@ function drawOnce(dim: Dimension, pts: Array<{ x: number; y: number; z: number }
   }
 }
 
-/** 停止某仓库边界（临时/持久同 key，一并清 interval + 超时句柄） */
-export function stopBoundary(warehouseId: string): void {
-  const active = activeBoundaries.get(warehouseId);
+/** 停止某仓库的临时边界（不影响持久边界） */
+function stopTemp(warehouseId: string): void {
+  const active = tempBoundaries.get(warehouseId);
   if (active === undefined) return;
   system.clearRun(active.handle);
   if (active.timeout !== undefined) system.clearRun(active.timeout);
-  activeBoundaries.delete(warehouseId);
+  tempBoundaries.delete(warehouseId);
+}
+
+/** 停止某仓库的持久边界（不影响临时边界） */
+function stopPersistent(warehouseId: string): void {
+  const active = persistentBoundaries.get(warehouseId);
+  if (active === undefined) return;
+  system.clearRun(active.handle);
+  persistentBoundaries.delete(warehouseId);
+}
+
+/** 停止某仓库全部边界（临时 + 持久；删除仓库/showBoundary 关闭用） */
+export function stopBoundary(warehouseId: string): void {
+  stopTemp(warehouseId);
+  stopPersistent(warehouseId);
 }
 
 /**
  * 启动临时边界：在 12 条棱线上周期性（REFRESH_INTERVAL）循环撒粒子，
- * TEMP_DURATION_TICKS 后自动停止。同仓库先停旧的（含持久边界）。
+ * TEMP_DURATION_TICKS 后自动停止。只清同 key 旧临时边界（**不动持久边界**，item 9.7）。
  * 维度内无玩家在场时不播放（省资源，玩家回来自动恢复）。
  */
 export function startBoundary(warehouseId: string, options: BoundaryOptions): void {
-  stopBoundary(warehouseId);
+  stopTemp(warehouseId);
   const dim = world.getDimension(options.dimensionId);
   if (dim === undefined) return;
   const duration = options.durationTicks ?? TEMP_DURATION_TICKS;
@@ -93,19 +111,19 @@ export function startBoundary(warehouseId: string, options: BoundaryOptions): vo
     drawOnce(dim, pts, particle);
   }, REFRESH_INTERVAL);
 
-  activeBoundaries.set(warehouseId, {
+  tempBoundaries.set(warehouseId, {
     handle,
-    timeout: system.runTimeout(() => stopBoundary(warehouseId), duration),
+    timeout: system.runTimeout(() => stopTemp(warehouseId), duration),
   });
 }
 
 /**
  * 启动持久边界（showBoundary 设置）：周期性撒粒子，但**仅当 guard() 为真**
  * （附近玩家持信物）才绘制；不自动停止，由 setPersistentBoundary(false)/stopBoundary 关闭。
- * 同仓库先停旧的（含临时边界）。
+ * 只清同 key 旧持久边界（**不动临时边界**）。
  */
 export function startPersistentBoundary(warehouseId: string, options: BoundaryOptions, guard: () => boolean): void {
-  stopBoundary(warehouseId);
+  stopPersistent(warehouseId);
   const dim = world.getDimension(options.dimensionId);
   if (dim === undefined) return;
   const particle = options.particle ?? BOUNDARY_PARTICLE;
@@ -116,10 +134,10 @@ export function startPersistentBoundary(warehouseId: string, options: BoundaryOp
     drawOnce(dim, pts, particle);
   }, REFRESH_INTERVAL);
 
-  activeBoundaries.set(warehouseId, { handle });
+  persistentBoundaries.set(warehouseId, { handle });
 }
 
-/** 按 showBoundary 开关启停持久边界（enabled=true 启动，false 停止） */
+/** 按 showBoundary 开关启停持久边界（enabled=true 启动，false 仅停持久，临时 glow 不受影响） */
 export function setPersistentBoundary(
   warehouseId: string,
   options: BoundaryOptions,
@@ -127,7 +145,7 @@ export function setPersistentBoundary(
   guard: () => boolean
 ): void {
   if (enabled) startPersistentBoundary(warehouseId, options, guard);
-  else stopBoundary(warehouseId);
+  else stopPersistent(warehouseId);
 }
 
 /** 订阅领域事件 boundary-glow：显示临时粒子边界（建仓/调整区域后） */

@@ -53,8 +53,18 @@ export class Organizer {
     const items = scan.items;
     const nonEmptySlots = items.length;
     const effectiveSlots = scan.lastNonEmptySlot >= 0 ? scan.lastNonEmptySlot + 1 : 0;
-    if (nonEmptySlots <= 1) {
-      return { total: 0, order: 0, stack: 0, effectiveSlots, disorderSlots: 0, nonEmptySlots, suboptimalStacks: 0 };
+    // 空容器 → 0（无物品自然无混乱）；**单个物品也继续算顺序分**——空槽排在物品前/中间
+    // 即为错位（理想位置在末尾），故 [空, 钻石] 混乱度应 >0（item 6 修复）。
+    if (nonEmptySlots === 0) {
+      return {
+        total: 0,
+        order: 0,
+        stack: 0,
+        effectiveSlots: 0,
+        disorderSlots: 0,
+        nonEmptySlots: 0,
+        suboptimalStacks: 0,
+      };
     }
     // 顺序评分（70%）——**空槽也参与顺序计算**（v1 修正口径）：
     //   空槽的理想位置在容器末尾 → 空槽放在"物品之前/中间"即为错位。

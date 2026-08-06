@@ -98,6 +98,12 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
     const wh = resolveWh(e.warehouseId);
     if (wh !== undefined) stats.evaluateWarnings(wh, e.containerId);
   });
+  // 输入堵塞 → 也评估预警：仓库满仓时路由失败（无 containerScanned），只有此事件可触发
+  // warning/full 预警（item 10.1：满仓不再只表现为"输入被阻塞"）。无 containerId = 全仓判定。
+  bus.inputBlocked.subscribe((e) => {
+    const wh = resolveWh(e.warehouseId);
+    if (wh !== undefined) stats.evaluateWarnings(wh);
+  });
   // 路由成功视觉反馈：目标容器闪光
   bus.itemRouted.subscribe((e) => {
     bus.visualEffect.trigger({
@@ -172,16 +178,38 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
       );
     }
   });
-  // resize 使仓库 ID 迁移 → 迁移按仓 id 存储的键（cids 索引）+ 调度器重注册（替代构造回调 onRebase）
+  // resize 区域变更 → **容器/索引/统计全部失效并重扫新区域**（item 9.6）：
+  //   重新选区后区域内容器集合会变（新增/移除出范围），必须以新区域为真相源重建。
+  //   做法：清内存容器表 + 输入镜像 + 统计缓存，删每容器注册表/索引键（按 cids），
+  //   再 scanWarehouseArea 按新区域重注册（持久化新增 + 重建索引条目）。
+  //   ⚠️ 顺序关键：warehouseAreaChanged 在旧 meta 移除**前**触发（WarehouseService 已重排），
+  //   此处读到的是旧 cids 索引（需先枚举再删）。ID 未变时（e.oldId===warehouseId）同样失效重扫。
   bus.warehouseAreaChanged.subscribe((e) => {
-    if (e.oldId === undefined || e.oldId === e.warehouseId) return; // 非迁移（区域变但 ID 不变）
-    const cids = warehouseStore.loadContainerIds(e.oldId);
-    if (cids !== undefined) {
-      warehouseStore.saveContainerIds(e.warehouseId, cids);
-      warehouseStore.removeContainerIds(e.oldId);
-    }
-    scheduler.unregisterWarehouse(e.oldId);
     const wh = loaded.find((w) => w.id === e.warehouseId);
-    if (wh !== undefined) scheduler.registerWarehouse(wh);
+    if (wh === undefined) return;
+    const index = scheduler.getIndex(wh.id);
+    // 1) 枚举旧容器（cids 权威；ID 迁移时 cids 索引仍在旧 id 键下）→ 清内存/索引/统计/注册表键
+    const cidsSource = e.oldId !== undefined && e.oldId !== e.warehouseId ? e.oldId : wh.id;
+    const oldCids = warehouseStore.loadContainerIds(cidsSource) ?? [...wh.containers.keys()];
+    for (const cid of oldCids) {
+      const c = wh.containers.get(cid);
+      if (c !== undefined) index?.onContainerRemoved(c);
+      stats.discard(cid);
+      warehouseStore.removeContainer(cid);
+      indexStore.removeContainer(cid);
+    }
+    wh.containers.clear();
+    wh.inputs.clear();
+    if (e.oldId !== undefined && e.oldId !== e.warehouseId) {
+      // 仓库 ID 迁移：清旧 cids 索引键 + 调度器重注册（内存对象 id 已更新）
+      warehouseStore.removeContainerIds(e.oldId);
+      scheduler.unregisterWarehouse(e.oldId);
+      scheduler.registerWarehouse(wh);
+    }
+    // 2) 按新区域重扫 → 重新注册容器 + 重建索引条目 + 持久化（含 cids 索引）
+    const dim = world.getDimension(wh.area.dimension);
+    if (dim !== undefined) {
+      scanWarehouseArea(dim, wh.area, factory, index, wh, ctx.getMaxContainers(), ctx.persistScannedContainers);
+    }
   });
 }

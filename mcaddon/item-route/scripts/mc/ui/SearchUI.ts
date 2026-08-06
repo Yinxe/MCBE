@@ -35,6 +35,11 @@ function warehouseDistance(warehouse: Warehouse, player: Player): number {
   return Math.hypot(player.location.x - cx, player.location.z - cz);
 }
 
+/** 容器 ID → 可读短名（取坐标段，如 c@(1,2,3)@overworld → (1,2,3)） */
+function shortId(cid: string): string {
+  return cid.split("@")[1] ?? cid;
+}
+
 /**
  * 搜索入口（主菜单"容器搜索"）：列出当前维度内有权限（member+）的仓库（按距离排序），
  * 选仓 + 输入关键词 → runSearchAndDisplay。默认选中最近的仓库。
@@ -83,7 +88,7 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
   const locs: Location[] = [];
   for (const line of lines) {
     player.sendMessage(
-      `${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${line.containerIds.join(", ")}]`
+      `${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${line.containerIds.map(shortId).join(", ")}]`
     );
     for (const id of line.containerIds) {
       const c = warehouse.containers.get(id);

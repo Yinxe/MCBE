@@ -144,16 +144,30 @@ export async function showWarehouseSettingsMenu(
       valueStep: 20,
     })
     .label("opSep", "§8━━━ 操作（同时仅可一个）━━━")
-    .toggle("rescan", `${uiColor.form.success}刷新容器（重新扫描区域容器列表）`)
-    .toggle("repair", `${uiColor.form.accent}修复仓库（检查并修复数据完整性）`)
-    .toggle("containerRoles", `${uiColor.form.accent}容器角色（查看/编辑各容器）`);
+    .toggle("rescan", `${uiColor.form.success}刷新容器（重新扫描区域容器列表）`, {
+      tooltip: "剔除区域内已拆除的容器并补注册新放置的容器",
+    })
+    .toggle("repair", `${uiColor.form.accent}修复仓库（检查并修复数据完整性）`, {
+      tooltip: "重建索引 + 重置统计缓存 + 重扫区域，用于数据疑似不一致后完整修复",
+    })
+    .toggle("containerRoles", `${uiColor.form.accent}容器角色（查看/编辑各容器）`, {
+      tooltip: "列出仓库内容器，逐个配置角色/启用/容量预警/优先级/立即整理",
+    });
 
   if (isOwner) {
     form
-      .toggle("memberManage", `${uiColor.form.accent}成员管理（提交后打开）`)
-      .toggle("stats", `${uiColor.form.accent}统计`)
-      .toggle("resize", `${uiColor.form.accent}调整仓库区域（提交后需选新区域）`)
-      .toggle("delete", `${uiColor.form.error}删除此仓库（不可撤销）`);
+      .toggle("memberManage", `${uiColor.form.accent}成员管理（提交后打开）`, {
+        tooltip: "添加/调整/移除成员（owner 专属，不能改 owner 角色）",
+      })
+      .toggle("stats", `${uiColor.form.accent}统计`, {
+        tooltip: "查看仓库物品统计（物品名/数量/所在容器，按数量排序）",
+      })
+      .toggle("resize", `${uiColor.form.accent}调整仓库区域（提交后需选新区域）`, {
+        tooltip: "重新选区：容器/索引/统计将失效并重扫",
+      })
+      .toggle("delete", `${uiColor.form.error}删除此仓库（不可撤销）`, {
+        tooltip: "二次确认后删除仓库，清除其全部容器/索引/统计数据",
+      });
   }
 
   const vals = await form.show(player);

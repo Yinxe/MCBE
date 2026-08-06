@@ -1,12 +1,14 @@
-// ─── 仓库状态 HUD：玩家物品栏上方（actionbar）显示附近仓库状态 ──
-// 每 0.5 秒为每个玩家刷新一次 actionbar 一行：仓库名 + 路由状态（生命周期）+ 工作状态（待分拣）。
-// 只对"成员 + 在仓库附近（margin）"的玩家显示；不在任何仓库附近则清空 actionbar。
-// 路由状态取调度器实时生命周期（路由中/停用中/停用），并反映全局开关与每仓运转开关；
-// 工作状态 = 非空启用的输入容器数（待分拣格数）。全内存、无副作用。
+// ─── 仓库/会话状态 HUD：玩家物品栏上方（actionbar）显示 ──
+// 优先级：**选区会话 > 仓库状态**。每 0.5 秒为每个玩家刷新一次：
+//   · 选区会话（建仓/调整区域进行中）→ 显示会话流程/状态/选点情况（item 2.4）
+//   · 仓库状态（成员 + 附近）→ 仓库名 + 路由状态 + 工作状态（待分拣**物品总数** + 堵塞数）
+// 路由状态取调度器实时生命周期 + 全局/每仓开关；工作状态用容器 O(1) 属性（usedSlots）
+// 快速累加启用输入容器的待分拣物品数（item 13.1），并显示调度器的阻塞输入数（item 4）。
 import { world, system } from "@minecraft/server";
 import type { Scheduler } from "../../core/scheduling/Scheduler";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { MemberService } from "../../core/services/MemberService";
+import type { SelectionSessionStore, SelectionSession } from "../interaction/SelectionSessionStore";
 import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
 import { color } from "../ui/uiColor";
 
@@ -23,7 +25,19 @@ function distTo(w: Warehouse, pos: PlayerPosition): number {
   return Math.hypot(pos.x - cx, pos.z - cz);
 }
 
-/** 组装一行 HUD 文案：`[仓库名] 路由中 · 待分拣 3 格` */
+/** 选区会话 HUD 文案（建仓/调整区域流程状态） */
+function sessionLine(session: SelectionSession): string {
+  const corner = session.corner1;
+  const pos = corner === undefined ? "" : ` (${corner.x},${corner.y},${corner.z})`;
+  if (session.kind === "createWarehouse") {
+    const picked = corner === undefined ? `${color.warn}未选点` : `${color.success}已选 1 角${pos}`;
+    return `${color.gold}建仓「${session.name}」${picked} ${color.muted}· 请选对角方块完成`;
+  }
+  const picked = corner === undefined ? `${color.warn}未选点` : `${color.success}已选 1 角${pos}`;
+  return `${color.gold}调整区域 ${picked} ${color.muted}· 请选对角方块完成`;
+}
+
+/** 组装一行仓库状态 HUD 文案：`[仓库名] 路由中 · 待分拣 3 格` */
 function hudLine(scheduler: Scheduler, w: Warehouse): string {
   // 路由状态：全局关 > 每仓停运 > 生命周期
   const routeState = !scheduler.isGlobalEnabled
@@ -35,42 +49,61 @@ function hudLine(scheduler: Scheduler, w: Warehouse): string {
         : scheduler.getLifecycle(w.id) === "deactivating"
           ? `${color.warn}停用中`
           : `${color.muted}停用`;
-  // 工作状态：非空启用输入容器数（待分拣）
+  // 工作状态：待分拣**物品总数**（启用输入容器 usedSlots 累加，O(1) 属性，item 13.1）
   let pending = 0;
   for (const input of w.inputs.values()) {
-    if (input.enabled && input.usedSlots > 0) pending++;
+    if (input.enabled) pending += input.usedSlots;
   }
-  const work = pending > 0 ? `${color.info}待分拣 ${pending} 格` : `${color.muted}空闲`;
+  const blocked = scheduler.blockedInputCount(w.id);
+  let work: string;
+  if (blocked > 0) work = `${color.error}堵塞 ${blocked} 格`;
+  else if (pending > 0) work = `${color.info}待分拣 ${pending} 格`;
+  else work = `${color.muted}空闲`;
   return `${color.gold}[${w.displayName}] ${routeState}${color.muted} · ${work}`;
 }
 
 /**
- * 注册仓库状态 HUD：主循环 interval 定期为附近成员刷新 actionbar。
- * 只显示玩家有成员身份（member+）且在附近（margin）的最近仓库。
+ * 注册 HUD：主循环 interval 定期刷新。
+ * - 有选区会话（建仓/调整区域）→ 优先显示会话状态（选点进度）
+ * - 否则显示"成员 + 附近"的最近仓库状态；都不满足则清空 actionbar。
  *
- * @param scheduler - 调度器（读生命周期/全局开关）
+ * @param scheduler - 调度器（读生命周期/全局开关/阻塞态）
  * @param loaded    - 运行时仓库表
  * @param members   - 成员权限（过滤非成员仓库）
+ * @param sessions  - 选区会话存储（建仓/调整区域流程 HUD）
  */
-export function registerWarehouseHUD(scheduler: Scheduler, loaded: Warehouse[], members: MemberService): void {
+export function registerWarehouseHUD(
+  scheduler: Scheduler,
+  loaded: Warehouse[],
+  members: MemberService,
+  sessions: SelectionSessionStore
+): void {
   system.runInterval(() => {
     try {
       for (const p of world.getAllPlayers()) {
-        const pos: PlayerPosition = { dimension: p.dimension.id, x: p.location.x, z: p.location.z };
-        // 就近取"成员身份 + 在附近"的仓库（同一玩家多仓时只显示最近一仓，避免刷屏）
-        let best: Warehouse | undefined;
-        let bestDist = Infinity;
-        for (const w of loaded) {
-          if (!members.can(w, p.name, "member")) continue; // HUD 只给拥有/管理成员看
-          if (!isPlayerNearby(w.area, [pos], HUD_MARGIN)) continue;
-          const d = distTo(w, pos);
-          if (d < bestDist) {
-            bestDist = d;
-            best = w;
+        let text = "";
+        // 1) 选区会话优先（建仓/调整区域进行中，显示流程/选点/异常提示）
+        const session = sessions.get(p.name);
+        if (session !== undefined) {
+          text = sessionLine(session);
+        } else {
+          const pos: PlayerPosition = { dimension: p.dimension.id, x: p.location.x, z: p.location.z };
+          // 就近取"成员身份 + 在附近"的仓库（同一玩家多仓时只显示最近一仓，避免刷屏）
+          let best: Warehouse | undefined;
+          let bestDist = Infinity;
+          for (const w of loaded) {
+            if (!members.can(w, p.name, "member")) continue; // HUD 只给拥有/管理成员看
+            if (!isPlayerNearby(w.area, [pos], HUD_MARGIN)) continue;
+            const d = distTo(w, pos);
+            if (d < bestDist) {
+              bestDist = d;
+              best = w;
+            }
           }
+          if (best !== undefined) text = hudLine(scheduler, best);
         }
         try {
-          p.onScreenDisplay.setActionBar(best === undefined ? "" : hudLine(scheduler, best));
+          p.onScreenDisplay.setActionBar(text);
         } catch {
           /* 玩家离线/维度切换：忽略 */
         }

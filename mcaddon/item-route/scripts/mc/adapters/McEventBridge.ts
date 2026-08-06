@@ -89,7 +89,9 @@ export class McEventBridge {
           // 双箱：找伙伴块是否已是注册容器
           const partnerLoc = container.occupiedLocations.find((l) => locationKey(l) !== locationKey(loc))!;
           const hit = findContainerAt(this.deps.warehouses(), dim, partnerLoc);
-          if (hit !== undefined && hit.container.id !== container.id) {
+          // ⚠️ 不要求 id 不同：新块若为主坐标（更低坐标），其 id 恰与伙伴旧单箱相同——
+          //    此时也应**合并**（扩展 occupiedLocations），而非当作新容器注册（item 3.1 修复）。
+          if (hit !== undefined) {
             const existing = hit.container;
             const index = this.deps.resolveIndex(warehouse.id);
             // 拆旧 id 索引条目 → 并入新格并重定主 id → 迁移两 map 键 → 重建索引
@@ -179,15 +181,28 @@ export class McEventBridge {
               oldId,
               reason: "split",
             });
+          } else {
+            // 主半拆但重定后 id 未变（罕见）：仍按真实内容重建索引 + 失效统计
+            index?.reconcile(container);
+            stats.invalidate(container.id);
+            bus.containerRegistryChanged.trigger({
+              type: "container-registry-changed",
+              warehouseId: warehouse.id,
+              containerId: container.id,
+              reason: "split",
+            });
           }
         } else {
-          // 副半拆：几何变化但 ID 不变 → 仍需持久化注册表（否则重启按旧 locations 占用已消失坐标）
+          // 副半拆：几何变化但 ID 不变 → 持久化注册表（否则重启按旧 locations 占用已消失坐标）
+          // 并**重建索引 / 统计**（item 5：任何拆箱都按真实内容重建，防拆箱改变内容的残留条目）
           bus.containerRegistryChanged.trigger({
             type: "container-registry-changed",
             warehouseId: warehouse.id,
             containerId: container.id,
             reason: "split",
           });
+          index?.reconcile(container);
+          stats.invalidate(container.id);
         }
         bus.containerChanged.trigger({
           type: "container-changed",

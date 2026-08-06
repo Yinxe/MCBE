@@ -25,11 +25,12 @@ export function edgePoints(area: Box, step: number = STEP): Array<{ x: number; y
   const z1 = Math.min(area.corner1.z, area.corner2.z);
   const z2 = Math.max(area.corner1.z, area.corner2.z);
   const pts: Array<{ x: number; y: number; z: number }> = [];
-  // 沿一维 [a,b] 以 step 内插出采样值；浮点误差容差 1e-6，末值强制等于 b（含角点）
+  // 沿一维 [a,b] 以 step 内插出采样值；浮点误差容差 1e-6，末值强制等于 b（含角点）。
+  // ⚠️ 外边界取 **b+1**（方块在位置 b 占 [b, b+1)，边界光幕应框住最外层面，item 2.2 修复）。
   const lerp = (a: number, b: number): number[] => {
     const out: number[] = [];
-    for (let v = a; v <= b + 1e-6; v += step) out.push(Math.floor(v));
-    if (out[out.length - 1] !== b) out.push(b);
+    for (let v = a; v <= b + 1 + 1e-6; v += step) out.push(Math.floor(v));
+    if (out[out.length - 1] !== b + 1) out.push(b + 1);
     return out;
   };
   // 底面/顶面 4 条棱（X 方向 + Z 方向）
