@@ -20,6 +20,16 @@ import { chat } from "../ui/uiColor";
 /** 输入堵塞通知防抖窗口（tick；600 = 30 秒 @20tps） */
 const BLOCK_NOTIFY_COOLDOWN_TICKS = 600;
 
+/**
+ * 注册成员通知订阅（装配层调用一次）：
+ *  - container-changed → 所有在线成员
+ *  - input-blocked    → 附近成员，防抖 30 秒窗口（持续堵塞周期提醒而非刷屏）
+ *  - lifecycle-changed → 附近成员（激活/停用/停机）
+ * 基于事件驱动、不轮询；任何回调异常隔离（不影响其他订阅者）。
+ *
+ * @param bus        - 领域事件总线
+ * @param warehouses - 当前已加载仓库解析器（按 id 反查）
+ */
 export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]): void {
   // 输入堵塞防抖表：containerId → 上次通知 tick
   const lastBlockNotify = new Map<string, number>();
