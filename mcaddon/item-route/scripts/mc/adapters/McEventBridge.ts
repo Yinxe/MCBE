@@ -60,6 +60,8 @@ export class McEventBridge {
         const hit = this.locate(e.block);
         if (!hit) return;
         this.deps.resolveIndex(hit.warehouse.id)?.reconcile(hit.container);
+        // 玩家手动开箱/取物 → 立即解除该输入容器的阻塞态（HUD 不再残留"堵塞 N 格"）
+        this.deps.scheduler.unblockInput(hit.warehouse.id, hit.container.id);
         stats.invalidate(hit.container.id);
         bus.containerChanged.trigger({
           type: "container-changed",

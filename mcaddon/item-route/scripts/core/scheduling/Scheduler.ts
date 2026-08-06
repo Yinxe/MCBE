@@ -28,7 +28,7 @@
 import type { Router, IndexGateway } from "../routing/Router";
 import type { IntervalHandle, IntervalScheduler } from "./IntervalScheduler";
 import type { Warehouse } from "../model/Warehouse";
-import type { WarehouseId } from "../model/types";
+import type { WarehouseId, ContainerId } from "../model/types";
 import type { EventBus } from "../events/DomainEvents";
 import type { ItemIndex } from "../index/ItemIndex";
 
@@ -150,6 +150,11 @@ export class Scheduler {
   /** 当前处于阻塞态（进入阻塞后未疏通）的输入容器数（HUD 展示用） */
   blockedInputCount(warehouseId: WarehouseId): number {
     return this.runtimes.get(warehouseId)?.blockedInputs.size ?? 0;
+  }
+
+  /** 玩家手动改动某输入容器（取走被阻塞物品等）→ 立即解除其阻塞态（HUD/事件马上反映，不必等下个轮询） */
+  unblockInput(warehouseId: WarehouseId, containerId: ContainerId): void {
+    this.runtimes.get(warehouseId)?.blockedInputs.delete(containerId);
   }
 
   /** 测试辅助：当前 interval 间隔（undefined = 未激活） */

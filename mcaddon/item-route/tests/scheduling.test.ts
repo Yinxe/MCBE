@@ -409,6 +409,26 @@ test("Scheduler: 输入阻塞态在输入清空后解除（HUD 不残留堵塞�
   assert.equal(w.scheduler.blockedInputCount("w1"), 0); // 空输入清理阻塞标记（HUD 不再显示堵塞）
 });
 
+test("Scheduler: 玩家交互该输入容器 → unblockInput 立即解除阻塞态（不必等下个轮询）", () => {
+  const w = makeWorld();
+  const input = new InMemoryContainer("in", "input", 3);
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64)); // 无候选 → 阻塞
+  const target = new InMemoryContainer("m1", "multi", 3);
+  target.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64));
+  registerContainer(w.warehouse, input);
+  registerContainer(w.warehouse, target);
+  for (const c of [input, target]) w.index.onContainerAdded(c);
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(8);
+  assert.equal(w.scheduler.blockedInputCount("w1"), 1);
+  // 玩家手动取走物品（改箱代理信号）→ 不推进 interval，阻塞态应立即解除
+  input.setItem(0, undefined);
+  w.scheduler.unblockInput("w1", "in");
+  assert.equal(w.scheduler.blockedInputCount("w1"), 0); // 立即清除（HUD 马上反映）
+});
+
 test("Scheduler: 输入全空 → 无事可作（不产生移动）", () => {
   const w = makeWorld();
   const input = new InMemoryContainer("in", "input", 3);
