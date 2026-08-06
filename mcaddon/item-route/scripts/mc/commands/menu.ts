@@ -1,7 +1,6 @@
 // ─── ir:menu 打开主菜单命令 ──────────────────────────────
 // 纯入口：延迟一拍打开 MainMenu ActionForm（搜索/仓库列表/创建/帮助/配置管理员专属）。
 // 主菜单按钮的权限分级在 MainMenu 内部判定（OP canManage 显配置入口）。
-import { system } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { noParamCommand } from "./defs";
 import type { CommandDeps } from "./deps";
@@ -15,8 +14,6 @@ import { showMainMenu } from "../ui/MainMenu";
  */
 export function registerMenu(registry: Parameters<typeof defineCommand>[0], deps: CommandDeps): void {
   defineCommand(registry, noParamCommand("ir:menu", "打开主菜单"), ({ player }) => {
-    system.runTimeout(() => {
-      void showMainMenu(player, deps);
-    });
+    void showMainMenu(player, deps);
   });
 }

@@ -31,6 +31,7 @@ import type { Container } from "../core/model/Container";
 // ── mc ──
 import { DynamicPropertyStore } from "./storage/DynamicPropertyStore";
 import { ShardStore } from "./storage/ShardStore";
+import { DirectStore } from "./storage/DirectStore";
 import { McWarehouseStore } from "./storage/McWarehouseStore";
 import { McIndexStore } from "./storage/McIndexStore";
 import { McStatsStore } from "./storage/McStatsStore";
@@ -54,7 +55,9 @@ import { scanWarehouseArea } from "./commands/scan";
 
 // Phase 1: 无状态基础设施
 const dp = new DynamicPropertyStore();
-const shards = new ShardStore(dp);
+const shards = new ShardStore(dp); // 仍供 McModConfig（全局配置）+ 旧版整仓键迁移
+// 容器级数据（注册表/索引/统计）为单容器小值 → **普通 DP 直存**（无分片/hash/世代开销，更快）
+const direct = new DirectStore(dp);
 const item = new McItemAdapter();
 const factory = new McContainerFactory(item);
 const intervals = new McIntervalScheduler();
@@ -66,13 +69,14 @@ const router = new Router(
   new DefaultCandidateSorter(),
   bus
 );
-const warehouseStore = new McWarehouseStore(shards);
-const indexStore = new McIndexStore(shards);
+// legacyShards 仅供旧版整仓容器键（ShardStore 分包格式）一次性迁移读取
+const warehouseStore = new McWarehouseStore(direct, shards);
+const indexStore = new McIndexStore(direct);
 const members = new MemberService();
 // ⚠️ 早执行安全：create 只建默认值不读 DP（world.getDynamicProperty 早执行会报错）；
 // 持久化值在 Phase 4 system.run 里 config.refresh() 读取并重应用
 const config = McModConfig.create(shards);
-const statsStore = new McStatsStore(shards); // 每容器一条统计键，StatsService 写穿/清除
+const statsStore = new McStatsStore(direct); // 每容器一条统计键（普通 DP 直存），StatsService 写穿/清除
 // 建仓限制：来自模组配置（v1 口径：体积 32×32×16、每玩家 1 仓）
 const warehouses = new WarehouseService(
   warehouseStore,

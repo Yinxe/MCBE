@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ShardStore } from "../scripts/mc/storage/ShardStore";
+import { DirectStore } from "../scripts/mc/storage/DirectStore";
 import { McStatsStore } from "../scripts/mc/storage/McStatsStore";
 import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
 import type { ContainerStatsData } from "../scripts/core/storage/Stores";
@@ -16,8 +16,8 @@ const stats = (containerId: string): ContainerStatsData => ({
   byType: { "minecraft:stone": 10 },
 });
 
-test("McStatsStore: 每容器一条 saveContainer/loadContainer/removeContainer", () => {
-  const store = new McStatsStore(new ShardStore(new InMemoryKeyValueStore()));
+test("McStatsStore: 每容器一条 saveContainer/loadContainer/removeContainer（普通 DP 直存）", () => {
+  const store = new McStatsStore(new DirectStore(new InMemoryKeyValueStore()));
   store.saveContainer("c1", stats("c1"));
   store.saveContainer("c2", stats("c2"));
   assert.equal(store.loadContainer("c1")?.byType["minecraft:stone"], 10);

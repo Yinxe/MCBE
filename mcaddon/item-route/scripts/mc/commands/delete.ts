@@ -2,7 +2,6 @@
 // 按显示名解析仓库 → 校验 owner 权限 → 延迟一拍执行 WarehouseService.deleteWarehouse。
 // 删除的副作用（loaded 剔除 / 停调度 / 清索引+统计+容器注册表键）全部由领域事件
 // warehouseDeleted 的订阅者完成（events/Subscriptions.ts），本命令只负责触发删除。
-import { system } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { chat } from "../ui/uiColor";
 import { nameCommand } from "./defs";
@@ -27,9 +26,7 @@ export function registerDelete(registry: Parameters<typeof defineCommand>[0], de
       player.sendMessage(`${chat.error}需要 owner 权限`);
       return;
     }
-    system.runTimeout(() => {
-      deps.warehouses.deleteWarehouse(warehouse.id);
-      player.sendMessage(`${chat.success}仓库 "${warehouse.displayName}" 已删除`);
-    });
+    deps.warehouses.deleteWarehouse(warehouse.id);
+    player.sendMessage(`${chat.success}仓库 "${warehouse.displayName}" 已删除`);
   });
 }

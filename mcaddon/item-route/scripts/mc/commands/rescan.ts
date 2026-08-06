@@ -2,7 +2,7 @@
 // 按名解析仓库 → member 校验 → 先 ensureContainersLoaded（以现有容器为准去重）→
 // scanWarehouseArea 遍历区域补注册新容器（最小单位：只持久化本次新增容器 + 一次索引同步）。
 // 超限（MAX_SCAN_VOLUME）跳过提示；结果播报扫描格数/新注册数/总容器数。
-import { world, system } from "@minecraft/server";
+import { world } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { chat } from "../ui/uiColor";
 import { nameCommand } from "./defs";
@@ -28,32 +28,30 @@ export function registerRescan(registry: Parameters<typeof defineCommand>[0], de
       player.sendMessage(`${chat.error}需要 member 及以上权限`);
       return;
     }
-    system.runTimeout(() => {
-      const dim = world.getDimension(warehouse.area.dimension);
-      if (dim === undefined) {
-        player.sendMessage(`${chat.error}维度加载失败`);
-        return;
+    const dim = world.getDimension(warehouse.area.dimension);
+    if (dim === undefined) {
+      player.sendMessage(`${chat.error}维度加载失败`);
+      return;
+    }
+    deps.ensureContainersLoaded(warehouse); // 扫描以现有容器为准去重 → 先按需加载
+    const result = scanWarehouseArea(
+      dim,
+      warehouse.area,
+      deps.factory,
+      deps.resolveIndex(warehouse.id),
+      warehouse,
+      (wh, added) => {
+        // 最小单位：只持久化本次新增的容器 + 一次索引同步
+        for (const c of added) deps.persistContainer(wh, c);
+        deps.persistContainerIds(wh);
       }
-      deps.ensureContainersLoaded(warehouse); // 扫描以现有容器为准去重 → 先按需加载
-      const result = scanWarehouseArea(
-        dim,
-        warehouse.area,
-        deps.factory,
-        deps.resolveIndex(warehouse.id),
-        warehouse,
-        (wh, added) => {
-          // 最小单位：只持久化本次新增的容器 + 一次索引同步
-          for (const c of added) deps.persistContainer(wh, c);
-          deps.persistContainerIds(wh);
-        }
-      );
-      if (result.skipped) {
-        player.sendMessage(`${chat.warn}区域过大（>${40_000} 格）已跳过，请缩小区域或手动放置注册`);
-        return;
-      }
-      player.sendMessage(
-        `${chat.success}扫描完成：${result.scanned} 格，新注册 ${result.registered} 容器（共 ${warehouse.containers.size}）`
-      );
-    });
+    );
+    if (result.skipped) {
+      player.sendMessage(`${chat.warn}区域过大（>${40_000} 格）已跳过，请缩小区域或手动放置注册`);
+      return;
+    }
+    player.sendMessage(
+      `${chat.success}扫描完成：${result.scanned} 格，新注册 ${result.registered} 容器（共 ${warehouse.containers.size}）`
+    );
   });
 }

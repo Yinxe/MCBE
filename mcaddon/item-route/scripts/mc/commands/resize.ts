@@ -3,7 +3,6 @@
 // 区域变化使仓库 ID 重算时（ID 编码初始区域），迁移由 warehouseAreaChanged 事件订阅者
 // 处理（cids 索引 old→new + 调度器重注册，见 events/Subscriptions.ts）；新区域内的容器
 // 由后续 /ir:rescan 或放块/惰性补注册收敛。
-import { system } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { chat } from "../ui/uiColor";
 import { regionCommand } from "./defs";
@@ -35,14 +34,12 @@ export function registerResize(registry: Parameters<typeof defineCommand>[0], de
       corner1: { x: Math.floor(p1.x), y: Math.floor(p1.y), z: Math.floor(p1.z) },
       corner2: { x: Math.floor(p2.x), y: Math.floor(p2.y), z: Math.floor(p2.z) },
     };
-    system.runTimeout(() => {
-      const err = deps.warehouses.updateArea(warehouse, area);
-      if (err !== undefined) {
-        player.sendMessage(`${chat.error}${err}`);
-        return;
-      }
-      player.sendMessage(`${chat.success}仓库 "${warehouse.displayName}" 区域已调整`);
-      deps.bus.visualEffect.trigger({ type: "visual-effect", kind: "boundary-glow", warehouseId: warehouse.id });
-    });
+    const err = deps.warehouses.updateArea(warehouse, area);
+    if (err !== undefined) {
+      player.sendMessage(`${chat.error}${err}`);
+      return;
+    }
+    player.sendMessage(`${chat.success}仓库 "${warehouse.displayName}" 区域已调整`);
+    deps.bus.visualEffect.trigger({ type: "visual-effect", kind: "boundary-glow", warehouseId: warehouse.id });
   });
 }

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ShardStore } from "../scripts/mc/storage/ShardStore";
+import { DirectStore } from "../scripts/mc/storage/DirectStore";
 import { McWarehouseStore } from "../scripts/mc/storage/McWarehouseStore";
 import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
@@ -17,8 +18,10 @@ const snapshot = (id: string): WarehouseSnapshot => ({
 
 function makeStore() {
   const kv = new InMemoryKeyValueStore();
+  // 常规数据走 DirectStore（普通 DP 直存）；legacyShards 仅供旧整仓键（ShardStore 分包格式）迁移
   const shards = new ShardStore(kv);
-  return { kv, shards, store: new McWarehouseStore(shards) };
+  const store = new McWarehouseStore(new DirectStore(kv), shards);
+  return { kv, shards, store };
 }
 
 /** 旧版整仓容器注册表键（仅迁移测试用，与 McWarehouseStore 内 legacy 键格式一致） */
