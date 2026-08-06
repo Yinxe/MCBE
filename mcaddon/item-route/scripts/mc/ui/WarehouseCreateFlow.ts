@@ -16,14 +16,20 @@ const DEFAULT_ROLE_INDEX = 1; // "multi"（多物）——用户期望的新容�
 export async function showWarehouseCreateForm(player: Player, deps: CommandDeps): Promise<void> {
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}创建仓库`) // ModalForm 深灰背景 → 浅色标题
-    .textField("name", "仓库名称", { defaultValue: "我的仓库" })
+    .textField("name", "仓库名称", {
+      defaultValue: "我的仓库",
+      tooltip: "给你的仓库取个名字，创建后可在设置中修改",
+    })
     .dropdown(
       "defaultRole",
       "默认容器角色",
       DEFAULT_ROLE_OPTIONS.map((r) => ROLE_LABELS[r]),
-      { defaultValueIndex: DEFAULT_ROLE_INDEX }
+      { defaultValueIndex: DEFAULT_ROLE_INDEX, tooltip: "新注册的容器默认分配的角色（漏斗始终为输入）" }
     )
-    .toggle("defaultEnabled", "容器默认启用", { defaultValue: true });
+    .toggle("defaultEnabled", "容器默认启用", {
+      defaultValue: true,
+      tooltip: "新注册容器默认是否参与分拣",
+    });
 
   const values = await form.show(player);
   if (!values) return;
