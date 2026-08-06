@@ -80,9 +80,7 @@ export class WarehouseService {
   constructor(
     private readonly store: WarehouseStore,
     private readonly bus: EventBus,
-    private readonly limits: WarehouseLimits = DEFAULT_WAREHOUSE_LIMITS,
-    /** resize 使仓库 ID 迁移时的钩子（mc 层：迁移索引/统计/容器注册表 DP 键 + 调度器重注册） */
-    private readonly onRebase?: (warehouse: Warehouse, oldId: WarehouseId, newId: WarehouseId) => void
+    private readonly limits: WarehouseLimits = DEFAULT_WAREHOUSE_LIMITS
   ) {}
 
   /** 启动加载全部仓库（容器由 mc 层按 containerIds 补注册） */
@@ -203,16 +201,18 @@ export class WarehouseService {
     }
     const newId = warehouseIdOf(area);
     warehouse.area = { ...area };
+    let oldId: WarehouseId | undefined;
     if (newId !== warehouse.id) {
-      const oldId = warehouse.id;
+      oldId = warehouse.id;
       warehouse.id = newId;
-      this.onRebase?.(warehouse, oldId, newId);
       this.persist(warehouse);
       this.store.remove(oldId);
     } else {
       this.persist(warehouse);
     }
-    this.bus.warehouseAreaChanged.trigger({ type: "warehouse-area-changed", warehouseId: warehouse.id });
+    // resize 使仓库 ID 迁移时携带 oldId——持久化迁移（cids 索引/调度器重注册）由 mc 层
+    // 订阅 warehouseAreaChanged 处理（事件驱动，与其它持久化统一，不再用构造回调）
+    this.bus.warehouseAreaChanged.trigger({ type: "warehouse-area-changed", warehouseId: warehouse.id, oldId });
     return undefined;
   }
 

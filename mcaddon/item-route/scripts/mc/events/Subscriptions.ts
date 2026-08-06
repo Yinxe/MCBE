@@ -158,4 +158,16 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
       scanWarehouseArea(dim, wh.area, factory, scheduler.getIndex(wh.id), wh, ctx.persistScannedContainers);
     }
   });
+  // resize 使仓库 ID 迁移 → 迁移按仓 id 存储的键（cids 索引）+ 调度器重注册（替代构造回调 onRebase）
+  bus.warehouseAreaChanged.subscribe((e) => {
+    if (e.oldId === undefined || e.oldId === e.warehouseId) return; // 非迁移（区域变但 ID 不变）
+    const cids = warehouseStore.loadContainerIds(e.oldId);
+    if (cids !== undefined) {
+      warehouseStore.saveContainerIds(e.warehouseId, cids);
+      warehouseStore.removeContainerIds(e.oldId);
+    }
+    scheduler.unregisterWarehouse(e.oldId);
+    const wh = loaded.find((w) => w.id === e.warehouseId);
+    if (wh !== undefined) scheduler.registerWarehouse(wh);
+  });
 }

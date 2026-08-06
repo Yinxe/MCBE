@@ -83,19 +83,9 @@ const warehouses = new WarehouseService(
     minSpacing: 4,
     maxVolume: config.maxWarehouseVolume,
     maxWarehousesPerPlayer: config.maxWarehousesPerPlayer,
-  },
-  // resize 改变区域 → 仓库 ID 重算 → 迁移按仓库 id 存储的键。容器注册表/索引/统计都是
-  // **每容器一条**（`ir2:c:{cid}`/`ir2:idx:{cid}`/`ir2:cst:{cid}`），容器 ID 全局唯一、
-  // 不随仓 ID 变化 → 无需迁移；只需把该仓容器 ID 索引 oldId→newId。
-  (wh, oldId, newId) => {
-    const cids = warehouseStore.loadContainerIds(oldId);
-    if (cids !== undefined) {
-      warehouseStore.saveContainerIds(newId, cids);
-      warehouseStore.removeContainerIds(oldId);
-    }
-    scheduler.unregisterWarehouse(oldId);
-    scheduler.registerWarehouse(wh);
   }
+  // resize 使仓库 ID 迁移的持久化迁移（cids 索引/调度器重注册）由 Subscriptions 订阅
+  // warehouseAreaChanged 处理（事件驱动，统一风格，不再用构造回调 onRebase）
 );
 const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));

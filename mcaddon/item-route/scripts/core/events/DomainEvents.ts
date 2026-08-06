@@ -147,7 +147,10 @@ export interface WarehouseRenamedEvent {
 }
 export interface WarehouseAreaChangedEvent {
   type: "warehouse-area-changed";
+  /** 新仓库 ID（resize 可能重算 ID） */
   warehouseId: WarehouseId;
+  /** 仅当 resize 使仓库 ID 迁移时提供旧 ID（否则 undefined）；持久化层据此迁移按仓 id 的键 */
+  oldId?: WarehouseId;
 }
 export interface OrganizeCompletedEvent {
   type: "organize-completed";
