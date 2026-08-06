@@ -63,6 +63,7 @@ export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]
     try {
       const wh = warehouses().find((w) => w.id === e.warehouseId);
       if (wh === undefined) return;
+      lastBlockNotify.delete(e.containerId); // 容器已移除 → 清其防抖时间戳（防 Map 无限累积）
       const msg = `${chat.warn}[容器] ${shortId(e.containerId)} 已移除`;
       for (const p of onlineMembers(wh)) p.sendMessage(msg);
     } catch (err) {

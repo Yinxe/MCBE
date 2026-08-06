@@ -78,6 +78,28 @@ test("WarehouseService: 创建/重载/重名拒绝", () => {
   assert.equal(reloaded[0]?.displayName, "主仓库");
 });
 
+test("WarehouseService: 仓库名去 § 格式码 + 长度上限（防格式注入/刷屏）", () => {
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
+  // § 格式码被剥离
+  const r1 = svc.createWarehouse("§c红色名§r", "p1", area1);
+  assert.equal(r1.ok, true);
+  if (r1.ok) assert.equal(r1.warehouse.displayName, "红色名");
+  // 超长被拒
+  const tooLong = svc.createWarehouse("啊".repeat(30), "p1", area2);
+  assert.equal(tooLong.ok, false);
+  assert.match((tooLong as { error: string }).error, /过长/);
+  // rename 同样清洗
+  const long2 = svc.createWarehouse("合法", "p1", area2);
+  assert.equal(long2.ok, true);
+  if (long2.ok) {
+    const err = svc.rename(long2.warehouse, "§b" + "超".repeat(30));
+    assert.match(err ?? "", /过长/);
+    const ok = svc.rename(long2.warehouse, "§a短名");
+    assert.equal(ok, undefined);
+    assert.equal(long2.warehouse.displayName, "短名");
+  }
+});
+
 test("WarehouseService: 区域重叠拒绝", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
   const r1 = svc.createWarehouse("仓A", "p1", area1);

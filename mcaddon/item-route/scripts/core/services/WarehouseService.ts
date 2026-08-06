@@ -40,6 +40,19 @@ export const DEFAULT_WAREHOUSE_LIMITS: WarehouseLimits = {
   maxWarehousesPerPlayer: 8,
 };
 
+/** 仓库名最大长度（防超长刷屏/占 DP） */
+export const MAX_WAREHOUSE_NAME_LENGTH = 24;
+
+/** 仓库名校验/清洗：去 § 格式码（防聊天格式注入）+ 去空白 + 长度上限 */
+function sanitizeName(raw: string): { ok: true; name: string } | { ok: false; error: string } {
+  const name = raw.replace(/§[0-9a-fk-or]/g, "").trim();
+  if (name.length === 0) return { ok: false, error: "仓库名不能为空" };
+  if (name.length > MAX_WAREHOUSE_NAME_LENGTH) {
+    return { ok: false, error: `仓库名过长（最多 ${MAX_WAREHOUSE_NAME_LENGTH} 字）` };
+  }
+  return { ok: true, name };
+}
+
 /** 区域尺寸（各轴归一化边长 + 体积） */
 export function areaSize(area: WarehouseArea): { x: number; y: number; z: number; volume: number } {
   const x = Math.abs(area.corner1.x - area.corner2.x) + 1;
@@ -116,8 +129,9 @@ export class WarehouseService {
     area: WarehouseArea,
     defaults?: { role: ContainerRole; enabled: boolean }
   ): CreateResult {
-    const name = displayName.trim();
-    if (name.length === 0) return { ok: false, error: "仓库名不能为空" };
+    const cleaned = sanitizeName(displayName);
+    if (!cleaned.ok) return { ok: false, error: cleaned.error };
+    const name = cleaned.name;
     const sizeLimitError = areaExceedsLimits(area, this.limits);
     if (sizeLimitError !== undefined) return { ok: false, error: sizeLimitError };
     const existing = this.store.list();
@@ -162,10 +176,11 @@ export class WarehouseService {
     this.store.remove(id);
   }
 
-  /** 改名：非空 + 全局唯一；成功落 meta + 触发 warehouse-renamed；失败返回中文错误 */
+  /** 改名：非空 + 全局唯一 + 长度/格式码校验；成功落 meta + 触发 warehouse-renamed；失败返回中文错误 */
   rename(warehouse: Warehouse, newName: string): string | undefined {
-    const name = newName.trim();
-    if (name.length === 0) return "仓库名不能为空";
+    const cleaned = sanitizeName(newName);
+    if (!cleaned.ok) return cleaned.error;
+    const name = cleaned.name;
     if (this.store.list().some((w) => w.id !== warehouse.id && w.displayName === name)) {
       return "存在同名仓库";
     }

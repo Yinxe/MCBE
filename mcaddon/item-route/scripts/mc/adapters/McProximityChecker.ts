@@ -3,8 +3,9 @@
 //   · **只统计在线成员**（owner + member，统称"成员"）——普通玩家/访客在场不激活。
 //   · 距离采用**到仓库中心的直线距离 ≤ 外接圆半径 + margin**（v1 口径），
 //     大仓库时玩家身处区域内也能正确激活（否则固定 16 格会漏）。
-// 采用"调用时实时读 world.getAllPlayers() 过滤"（调度每 5 tick 才调一次，量级可接受）。
-import { world, type Player } from "@minecraft/server";
+// ⚠️ 性能：调度每 tick 对**每个仓库**各调一次 hasNearbyPlayer → 若每次现拉 world.getAllPlayers()
+//   N 仓就 N 次全服玩家枚举（每 5 tick）。这里按 game tick 缓存一次玩家列表，同 tick 多仓共享。
+import { system, world, type Player } from "@minecraft/server";
 import type { ProximityChecker } from "../../core/scheduling/Scheduler";
 import type { WarehouseId } from "../../core/model/types";
 import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
@@ -23,10 +24,22 @@ export interface WarehouseRef {
 /** 邻近判定穿透 margin（叠加在外接圆半径外） */
 export const PROXIMITY_MARGIN = 8;
 
+// 每 game tick 缓存一次的玩家列表（避免对每仓重复 getAllPlayers）
+let cachedTick = -1;
+let cachedPlayers: Player[] = [];
+function playersThisTick(): Player[] {
+  const tick = system.currentTick;
+  if (tick !== cachedTick) {
+    cachedTick = tick;
+    cachedPlayers = world.getAllPlayers();
+  }
+  return cachedPlayers;
+}
+
 export class McProximityChecker implements ProximityChecker {
   constructor(
     private readonly findWarehouse: (id: WarehouseId) => WarehouseRef | undefined,
-    private readonly players: () => Player[] = () => world.getAllPlayers()
+    private readonly players: () => Player[] = playersThisTick
   ) {}
 
   hasNearbyPlayer(warehouseId: WarehouseId): boolean {

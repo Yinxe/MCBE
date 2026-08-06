@@ -101,7 +101,10 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
 
 /** 纯逻辑搜索：在指定仓库内 query → typeIds → 逐容器按 typeId 精确计数（可单测） */
 export function runSearch(warehouse: Warehouse, query: string): SearchResultLine[] {
-  const typeIds = searchItems(query);
+  // ⚠️ 性能：宽查询（如"石"/"a"）会命中数百 typeId，若对每个都全仓逐槽 getItem 会 O(N³) 卡顿。
+  //    限制对**前 MAX_TYPE_IDS 个**匹配类型扫描（按字母序），超出折叠提示，避免宽查询拖垮。
+  const MAX_TYPE_IDS = 40;
+  const typeIds = searchItems(query).slice(0, MAX_TYPE_IDS);
   // 只搜存储容器（single/multi/misc），排除在途输入仓（input 不落库、且索引不含 misc，
   // 直接扫全量非 input 保证"索引加载与否"两种状态结果一致，对齐 v1 SearchService 逐容器扫描）
   const containers = [...warehouse.containers.values()].filter((c) => c.role !== "input");
