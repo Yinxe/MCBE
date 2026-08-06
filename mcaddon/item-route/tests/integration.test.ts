@@ -20,7 +20,7 @@ import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 import type { Warehouse } from "../scripts/core/model/Warehouse";
 
-// ── 装配（对应 scripts/mc/main.ts 的 DI 组装，全部内存实现） ──────
+// ── 装配（对应 scripts/main.ts 的 DI 组装，全部内存实现） ──────
 function bootstrap() {
   const bus = new EventBus();
   const index = new ItemIndex();
