@@ -14,6 +14,13 @@ function shortName(id: string): string {
   return id.split("@")[1] ?? id;
 }
 
+/**
+ * 注册 `ir:organize`：整理**玩家所在仓库**（就地定位，非按名）的全部容器。
+ * 每个容器单容器就地整理：全程幂等、失败单项跳过、结果逐容器播报该容器名与合并数。
+ *
+ * @param registry - 自定义命令注册表
+ * @param deps     - 命令共享依赖门面（含 OrganizeService、ensureContainersLoaded）
+ */
 export function registerOrganize(registry: Parameters<typeof defineCommand>[0], deps: CommandDeps): void {
   defineCommand(registry, noParamCommand("ir:organize", "整理玩家所在仓库的全部容器"), ({ player }) => {
     system.runTimeout(() => {

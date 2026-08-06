@@ -36,7 +36,7 @@ export interface EventBridgeDeps {
   ensureContainersLoaded: (warehouse: Warehouse) => void;
 }
 
-const MAIN_TICK_INTERVAL = 5;   // 全局主任务：调度轮询（路由/生命周期，非持久化）
+const MAIN_TICK_INTERVAL = 5; // 全局主任务：调度轮询（路由/生命周期，非持久化）
 
 export class McEventBridge {
   constructor(private readonly deps: EventBridgeDeps) {}
@@ -52,7 +52,11 @@ export class McEventBridge {
         if (!hit) return;
         this.deps.resolveIndex(hit.warehouse.id)?.reconcile(hit.container);
         stats.invalidate(hit.container.id);
-        bus.containerChanged.trigger({ type: "container-changed", warehouseId: hit.warehouse.id, containerId: hit.container.id });
+        bus.containerChanged.trigger({
+          type: "container-changed",
+          warehouseId: hit.warehouse.id,
+          containerId: hit.container.id,
+        });
       } catch (err) {
         console.warn(`[ItemRoute] interact 事件处理失败: ${err}`);
       }
@@ -86,7 +90,9 @@ export class McEventBridge {
             existing.occupiedLocations.push({ x: loc.x, y: loc.y, z: loc.z });
             // 重绑定到合并后共享库存句柄（工厂新建 adapter 持有最新 mc，覆盖 existing 旧单箱引用）
             (existing as McContainerAdapter).rebindMc((container as McContainerAdapter).getMc());
-            (existing as McContainerAdapter).rebaseId(containerIdOf(primaryLocationOf(existing.occupiedLocations)!, warehouse.area.dimension));
+            (existing as McContainerAdapter).rebaseId(
+              containerIdOf(primaryLocationOf(existing.occupiedLocations)!, warehouse.area.dimension)
+            );
             rebaseContainer(warehouse, oldId, existing);
             index?.onContainerAdded(existing);
             stats.invalidate(existing.id);
@@ -104,7 +110,12 @@ export class McEventBridge {
         const index = this.deps.resolveIndex(warehouse.id);
         index?.onContainerAdded(container);
         stats.invalidate(container.id);
-        bus.containerAdded.trigger({ type: "container-added", warehouseId: warehouse.id, containerId: container.id, role: container.role });
+        bus.containerAdded.trigger({
+          type: "container-added",
+          warehouseId: warehouse.id,
+          containerId: container.id,
+          role: container.role,
+        });
       } catch (err) {
         console.warn(`[ItemRoute] place 事件处理失败: ${err}`);
       }
@@ -125,7 +136,11 @@ export class McEventBridge {
           unregisterContainer(warehouse, container.id);
           index?.onContainerRemoved(container);
           stats.discard(container.id); // 容器已移除 → 清其统计键（每容器一条）
-          bus.containerRemoved.trigger({ type: "container-removed", warehouseId: warehouse.id, containerId: container.id });
+          bus.containerRemoved.trigger({
+            type: "container-removed",
+            warehouseId: warehouse.id,
+            containerId: container.id,
+          });
         } else if (containerIdPointsTo(container.id, loc, warehouse.area.dimension)) {
           // 半拆且拆的是主坐标（id 承载位）：重定 id 到幸存主坐标，
           // 否则 ID 悬空 + 后续在原主坐标新放容器会撞 ID
@@ -153,7 +168,11 @@ export class McEventBridge {
             containerId: container.id,
           });
         }
-        bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
+        bus.containerChanged.trigger({
+          type: "container-changed",
+          warehouseId: warehouse.id,
+          containerId: container.id,
+        });
       } catch (err) {
         console.warn(`[ItemRoute] 移除事件处理失败: ${err}`);
       }

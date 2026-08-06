@@ -18,13 +18,19 @@ export async function showContainerRoleMenu(player: Player, deps: CommandDeps, w
     .body(`${uiColor.form.body}选择容器（漏斗为强制 input）：`);
   for (const container of warehouse.containers.values()) {
     const roleLabel = ROLE_LABELS[container.role] ?? container.role;
-    form.button(`${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]`, () =>
-      void showContainerEdit(player, deps, warehouse, container)
+    form.button(
+      `${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]`,
+      () => void showContainerEdit(player, deps, warehouse, container)
     );
   }
   await form.show(player);
 }
 
+/**
+ * 编辑单个容器：角色 + 启用（member+）。漏斗强制 input（角色不可改）。
+ * 变更 → 刷新 inputs 成员资格 + 更新该仓索引 + invalidate 统计 + 触发 containerRegistryChanged
+ * （持久化由中央订阅处理，单容器最小单位）。
+ */
 async function showContainerEdit(
   player: Player,
   deps: CommandDeps,
@@ -41,12 +47,9 @@ async function showContainerEdit(
   const roleOptions = [ROLE_LABELS.input, ROLE_LABELS.single, ROLE_LABELS.multi, ROLE_LABELS.misc];
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}容器 ${container.id}`)
-    .dropdown(
-      "role",
-      "角色",
-      roleOptions,
-      { defaultValueIndex: ["input", "single", "multi", "misc"].indexOf(container.role) }
-    )
+    .dropdown("role", "角色", roleOptions, {
+      defaultValueIndex: ["input", "single", "multi", "misc"].indexOf(container.role),
+    })
     .toggle("enabled", "启用", { defaultValue: container.enabled });
 
   const values = await form.show(player);

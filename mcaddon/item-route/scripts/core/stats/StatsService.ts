@@ -83,7 +83,8 @@ export class StatsService {
     if (cached) {
       // 阈值可能已变：isWarning 实时按当前 warningThreshold 重算（usedSlots 已缓存，零扫描），
       // 并回写缓存本体，使落盘快照带实时阈值
-      const isWarning = container.capacity > 0 && cached.usedSlots / container.capacity >= warehouse.settings.warningThreshold;
+      const isWarning =
+        container.capacity > 0 && cached.usedSlots / container.capacity >= warehouse.settings.warningThreshold;
       if (cached.isWarning !== isWarning) cached.isWarning = isWarning;
       return cached;
     }
@@ -183,7 +184,7 @@ export class StatsService {
     }
   }
 
-/**
+  /**
    * 容量预警（带仓库级冷却，冷却内返回 []，避免每路由刷屏）——两级：
    *   · warning：某容器容量超阈值（**容器级**，携带最满容器 id 供定位）
    *   · full   ：全仓库（除 input）**满仓**
@@ -195,9 +196,7 @@ export class StatsService {
     const cd = this.cooldowns.get(warehouse.id) ?? 0;
     if (cd > 0) return [];
     const targets = (
-      containerId !== undefined
-        ? [warehouse.containers.get(containerId)]
-        : [...warehouse.containers.values()]
+      containerId !== undefined ? [warehouse.containers.get(containerId)] : [...warehouse.containers.values()]
     ).filter((c): c is Container => c !== undefined && c.role !== "input");
     if (targets.length === 0) return [];
 

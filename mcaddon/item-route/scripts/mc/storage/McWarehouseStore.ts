@@ -22,7 +22,9 @@ const containerIdsKey = (wid: WarehouseId): string => `ir2:wh:${wid}:cids`;
 /** 旧版整仓容器注册表键（v2 前一版）：仅迁移读取用 */
 const legacyContainersKey = (wid: WarehouseId): string => `ir2:wh:${wid}:containers`;
 
-interface Registry { warehouses: WarehouseId[]; }
+interface Registry {
+  warehouses: WarehouseId[];
+}
 
 /** 持久化容器条目：重启重建适配器的几何/属性信息 */
 export interface ContainerEntry {

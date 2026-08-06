@@ -10,7 +10,7 @@ import type { EventBus, VisualEffectEvent } from "../../core/events/DomainEvents
 import { edgePoints, STEP } from "../../core/model/BoundaryGeometry";
 
 export { edgePoints, STEP };
-export const REFRESH_INTERVAL = 40;   // 粒子刷新间隔 tick
+export const REFRESH_INTERVAL = 40; // 粒子刷新间隔 tick
 export const TEMP_DURATION_TICKS = 200;
 export const PROXIMITY_MARGIN = 8;
 /** 边界棱线粒子（默认亮蓝 sparkle；可在不影响功能前提下替换） */

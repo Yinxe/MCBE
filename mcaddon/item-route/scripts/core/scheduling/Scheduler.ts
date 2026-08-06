@@ -232,7 +232,10 @@ export class Scheduler {
   }
 
   private createInterval(rt: Runtime): IntervalHandle {
-    return this.intervals.createInterval(() => this.processOnce(rt), this.clampSpeed(rt.warehouse.settings.processingSpeed));
+    return this.intervals.createInterval(
+      () => this.processOnce(rt),
+      this.clampSpeed(rt.warehouse.settings.processingSpeed)
+    );
   }
 
   /**
@@ -247,8 +250,9 @@ export class Scheduler {
     if (!rt.warehouse.settings.routingEnabled) return;
     const index = rt.index; // 该仓库激活时加载的索引（隔离）
     if (index === undefined) return;
-    const inputs = [...rt.warehouse.inputs.values()]
-      .sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const inputs = [...rt.warehouse.inputs.values()].sort(
+      (a, b) => a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+    );
     for (const container of inputs) {
       if (container.usedSlots === 0) continue; // 空输入跳过（无物可堵）
       const slot = container.firstNoEmptyItem(); // 首个非空槽（手封装线性扫描）

@@ -38,14 +38,14 @@ export const color = {
   italic: "§o",
   reset: "§r",
   // 语义别名
-  success: "§a",      // 成功/开启/在线
-  warn: "§e",         // 警告/注意
-  error: "§c",        // 错误/危险
-  accent: "§b",       // 强调/青色
-  highlight: "§d",    // 醒目/浅紫
-  muted: "§7",        // 辅助/次要
-  info: "§f",         // 信息/白色
-  playerName: "§e",   // 假人名/黄色
+  success: "§a", // 成功/开启/在线
+  warn: "§e", // 警告/注意
+  error: "§c", // 错误/危险
+  accent: "§b", // 强调/青色
+  highlight: "§d", // 醒目/浅紫
+  muted: "§7", // 辅助/次要
+  info: "§f", // 信息/白色
+  playerName: "§e", // 假人名/黄色
 } as const;
 
 /** ActionForm 按钮文字（浅灰背景 → 深色前景） */

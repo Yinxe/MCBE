@@ -7,6 +7,14 @@ import { getChineseName } from "../../core/data/ItemNameMap";
 import { Table } from "./Table";
 import * as uiColor from "./uiColor";
 
+/**
+ * 展示仓库统计菜单：总览 + 按类型 / 按物品两个视图。统计是容器内容的派生，
+ * 故先 ensureContainersLoaded（仓库可能未激活）。
+ *
+ * @param player    - 打开统计的玩家
+ * @param deps      - 命令共享依赖门面
+ * @param warehouse - 目标仓库
+ */
 export async function showStatsUI(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（统计是容器内容的派生）
   const stats = deps.stats.getWarehouseStats(warehouse);
@@ -21,6 +29,7 @@ export async function showStatsUI(player: Player, deps: CommandDeps, warehouse: 
   await form.show(player);
 }
 
+/** 按物品种类汇总（数量降序），中文名展示 */
 function showByType(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
   const stats = deps.stats.getWarehouseStats(warehouse);
   const table = new Table().header("物品", "数量");
@@ -30,11 +39,17 @@ function showByType(player: Player, deps: CommandDeps, warehouse: Warehouse): vo
   player.sendMessage(`${uiColor.chat.warn}按类型统计（${warehouse.displayName}）\n${table.render() || "空"}`);
 }
 
+/** 按物品种类汇总（数量/堆叠数/所在容器 ID），中文名展示 */
 function showByItem(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
   const stats = deps.stats.getWarehouseStats(warehouse);
   const table = new Table().header("物品", "数量", "堆叠", "所在容器");
   for (const [typeId, itemStat] of Object.entries(stats.byItem)) {
-    table.row(getChineseName(typeId), String(itemStat.count), String(itemStat.stacks), itemStat.containerIds.join("、"));
+    table.row(
+      getChineseName(typeId),
+      String(itemStat.count),
+      String(itemStat.stacks),
+      itemStat.containerIds.join("、")
+    );
   }
   player.sendMessage(`${uiColor.chat.warn}按物品统计（${warehouse.displayName}）\n${table.render() || "空"}`);
 }

@@ -81,11 +81,21 @@ export class McModConfig {
     };
   }
 
-  get globalEnabled(): boolean { return this.data.globalEnabled; }
-  get globalSpeedLimit(): number { return this.data.globalSpeedLimit; }
-  get tokenItemId(): string { return this.data.tokenItemId; }
-  get maxWarehouseVolume(): number { return this.data.maxWarehouseVolume; }
-  get maxWarehousesPerPlayer(): number { return this.data.maxWarehousesPerPlayer; }
+  get globalEnabled(): boolean {
+    return this.data.globalEnabled;
+  }
+  get globalSpeedLimit(): number {
+    return this.data.globalSpeedLimit;
+  }
+  get tokenItemId(): string {
+    return this.data.tokenItemId;
+  }
+  get maxWarehouseVolume(): number {
+    return this.data.maxWarehouseVolume;
+  }
+  get maxWarehousesPerPlayer(): number {
+    return this.data.maxWarehousesPerPlayer;
+  }
 
   setGlobalEnabled(enabled: boolean): void {
     this.data.globalEnabled = enabled;

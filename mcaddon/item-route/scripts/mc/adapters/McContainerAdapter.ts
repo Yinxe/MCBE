@@ -45,9 +45,15 @@ export class McContainerAdapter implements Container {
     this.blockType = blockType;
   }
 
-  get capacity(): number { return this.mc.size; }
-  get emptySlotsCount(): number { return this.mc.emptySlotsCount; }
-  get usedSlots(): number { return this.capacity - this.emptySlotsCount; }
+  get capacity(): number {
+    return this.mc.size;
+  }
+  get emptySlotsCount(): number {
+    return this.mc.emptySlotsCount;
+  }
+  get usedSlots(): number {
+    return this.capacity - this.emptySlotsCount;
+  }
 
   getItem(slot: number): ItemStack | undefined {
     try {

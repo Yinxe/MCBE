@@ -7,10 +7,10 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";
 import * as uiColor from "./uiColor";
 
-const PARTICLE_INTERVAL = 20;       // 粒子刷新的 tick 间隔
-const DEFAULT_DURATION = 15 * 20;   // 松手后标记持续 15 秒
-const GRACE_DURATION = 3 * 20;      // 超时宽限期 3 秒（宽限期内拾信物可续时）
-const MARKER_OFFSET_H = 0.455;      // 粒子贴方块面偏移（v1 同款）
+const PARTICLE_INTERVAL = 20; // 粒子刷新的 tick 间隔
+const DEFAULT_DURATION = 15 * 20; // 松手后标记持续 15 秒
+const GRACE_DURATION = 3 * 20; // 超时宽限期 3 秒（宽限期内拾信物可续时）
+const MARKER_OFFSET_H = 0.455; // 粒子贴方块面偏移（v1 同款）
 /** 每玩家活跃标记会话（playerId → interval handle） */
 const activeMarkerHandles = new Map<string, number>();
 
@@ -23,11 +23,24 @@ export interface SearchResultLine {
 
 /** 玩家到仓库中心 XZ 直线距离 */
 function warehouseDistance(warehouse: Warehouse, player: Player): number {
-  const cx = (Math.min(warehouse.area.corner1.x, warehouse.area.corner2.x) + Math.max(warehouse.area.corner1.x, warehouse.area.corner2.x)) / 2;
-  const cz = (Math.min(warehouse.area.corner1.z, warehouse.area.corner2.z) + Math.max(warehouse.area.corner1.z, warehouse.area.corner2.z)) / 2;
+  const cx =
+    (Math.min(warehouse.area.corner1.x, warehouse.area.corner2.x) +
+      Math.max(warehouse.area.corner1.x, warehouse.area.corner2.x)) /
+    2;
+  const cz =
+    (Math.min(warehouse.area.corner1.z, warehouse.area.corner2.z) +
+      Math.max(warehouse.area.corner1.z, warehouse.area.corner2.z)) /
+    2;
   return Math.hypot(player.location.x - cx, player.location.z - cz);
 }
 
+/**
+ * 搜索入口（主菜单"容器搜索"）：列出当前维度内有权限（member+）的仓库（按距离排序），
+ * 选仓 + 输入关键词 → runSearchAndDisplay。默认选中最近的仓库。
+ *
+ * @param player - 打开搜索的玩家
+ * @param deps   - 命令共享依赖门面
+ */
 export async function showSearchUI(player: Player, deps: CommandDeps): Promise<void> {
   // 有权（member+）且同维度的仓库，按距玩家距离排序（v1 同款：可选择仓库，但须自己有权限）
   const accessible = deps
@@ -68,7 +81,9 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
   player.sendMessage(`${uiColor.chat.highlight}━━ ${warehouse.displayName} 搜索结果：${lines.length} 种 ━━`);
   const locs: Location[] = [];
   for (const line of lines) {
-    player.sendMessage(`${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${line.containerIds.join(", ")}]`);
+    player.sendMessage(
+      `${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${line.containerIds.join(", ")}]`
+    );
     for (const id of line.containerIds) {
       const c = warehouse.containers.get(id);
       if (c) locs.push(...c.occupiedLocations);
@@ -113,8 +128,8 @@ export function startMarkerParticles(
   const oldHandle = activeMarkerHandles.get(player.id);
   if (oldHandle !== undefined) system.clearRun(oldHandle);
 
-  let elapsed = 0;        // 松手后经过 tick
-  let graceElapsed = 0;   // 宽限期内经过 tick
+  let elapsed = 0; // 松手后经过 tick
+  let graceElapsed = 0; // 宽限期内经过 tick
   let phase: "active" | "grace" | "done" = "active";
   let graceNotified = false;
   player.sendMessage(`${uiColor.chat.info}紫标记已标记容器位置（持续 15 秒，手持信物可持续续时）`);
@@ -151,7 +166,8 @@ export function startMarkerParticles(
     }
 
     if (phase === "active") {
-      if (holdingToken) elapsed = 0; // 持信物 → 一直续时
+      if (holdingToken)
+        elapsed = 0; // 持信物 → 一直续时
       else elapsed += PARTICLE_INTERVAL;
       if (elapsed >= DEFAULT_DURATION) {
         phase = "grace";

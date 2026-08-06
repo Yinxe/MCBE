@@ -125,8 +125,16 @@ export class OrganizeService {
     }
     const chaosAfter = this.organizer.messinessFromScan(afterScan).total;
     const afterStacks = afterScan.usedSlots;
-    this.bus.organizeCompleted.trigger({ type: "organize-completed", warehouseId: warehouse.id, moves: beforeStacks - afterStacks });
-    this.bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
+    this.bus.organizeCompleted.trigger({
+      type: "organize-completed",
+      warehouseId: warehouse.id,
+      moves: beforeStacks - afterStacks,
+    });
+    this.bus.containerChanged.trigger({
+      type: "container-changed",
+      warehouseId: warehouse.id,
+      containerId: container.id,
+    });
     return {
       ok: true,
       moves: beforeStacks - afterStacks,

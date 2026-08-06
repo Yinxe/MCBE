@@ -17,13 +17,19 @@ export async function showWarehouseCreateForm(player: Player, deps: CommandDeps)
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}创建仓库`) // ModalForm 深灰背景 → 浅色标题
     .textField("name", "仓库名称", { defaultValue: "我的仓库" })
-    .dropdown("defaultRole", "默认容器角色", DEFAULT_ROLE_OPTIONS.map((r) => ROLE_LABELS[r]), { defaultValueIndex: DEFAULT_ROLE_INDEX })
+    .dropdown(
+      "defaultRole",
+      "默认容器角色",
+      DEFAULT_ROLE_OPTIONS.map((r) => ROLE_LABELS[r]),
+      { defaultValueIndex: DEFAULT_ROLE_INDEX }
+    )
     .toggle("defaultEnabled", "容器默认启用", { defaultValue: true });
 
   const values = await form.show(player);
   if (!values) return;
   const name = (values.name as string).trim();
-  const defaultRole = (DEFAULT_ROLE_OPTIONS[(values.defaultRole as number) ?? DEFAULT_ROLE_INDEX] ?? "multi") as ContainerRole;
+  const defaultRole = (DEFAULT_ROLE_OPTIONS[(values.defaultRole as number) ?? DEFAULT_ROLE_INDEX] ??
+    "multi") as ContainerRole;
   const defaultEnabled = values.defaultEnabled as boolean;
   if (name.length === 0) {
     player.sendMessage(`${uiColor.chat.error}仓库名称不能为空`);

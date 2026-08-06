@@ -45,19 +45,13 @@ export function isPlayerNearby(area: WarehouseArea, players: PlayerPosition[], m
   const cx = (Math.min(area.corner1.x, area.corner2.x) + Math.max(area.corner1.x, area.corner2.x)) / 2;
   const cz = (Math.min(area.corner1.z, area.corner2.z) + Math.max(area.corner1.z, area.corner2.z)) / 2;
   const radius = areaCircumradius(area) + margin;
-  return players.some(
-    (p) => p.dimension === area.dimension && Math.hypot(p.x - cx, p.z - cz) <= radius
-  );
+  return players.some((p) => p.dimension === area.dimension && Math.hypot(p.x - cx, p.z - cz) <= radius);
 }
 
 // ─── 仓库/容器定位（事件桥接过滤谓词，零 MC 依赖） ─────────
 
 /** 维度 + 坐标 → 所属仓库（仅区域判定，容器未注册也能命中） */
-export function findWarehouseAt(
-  warehouses: Warehouse[],
-  dimension: string,
-  loc: Location
-): Warehouse | undefined {
+export function findWarehouseAt(warehouses: Warehouse[], dimension: string, loc: Location): Warehouse | undefined {
   return warehouses.find((w) => containsLocation(w.area, dimension, loc));
 }
 

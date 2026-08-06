@@ -11,7 +11,11 @@ import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
 
 /** 邻近判定参考（与 core Warehouse 结构对齐，main.ts 可直接喂 loaded 仓库） */
 export interface WarehouseRef {
-  area: { dimension: string; corner1: { x: number; y: number; z: number }; corner2: { x: number; y: number; z: number } };
+  area: {
+    dimension: string;
+    corner1: { x: number; y: number; z: number };
+    corner2: { x: number; y: number; z: number };
+  };
   ownerId: string;
   members: { playerId: string }[];
 }

@@ -25,16 +25,25 @@ export function registerRescan(registry: Parameters<typeof defineCommand>[0], de
         return;
       }
       deps.ensureContainersLoaded(warehouse); // 扫描以现有容器为准去重 → 先按需加载
-      const result = scanWarehouseArea(dim, warehouse.area, deps.factory, deps.resolveIndex(warehouse.id), warehouse, (wh, added) => {
-        // 最小单位：只持久化本次新增的容器 + 一次索引同步
-        for (const c of added) deps.persistContainer(wh, c);
-        deps.persistContainerIds(wh);
-      });
+      const result = scanWarehouseArea(
+        dim,
+        warehouse.area,
+        deps.factory,
+        deps.resolveIndex(warehouse.id),
+        warehouse,
+        (wh, added) => {
+          // 最小单位：只持久化本次新增的容器 + 一次索引同步
+          for (const c of added) deps.persistContainer(wh, c);
+          deps.persistContainerIds(wh);
+        }
+      );
       if (result.skipped) {
         player.sendMessage(`${chat.warn}区域过大（>${40_000} 格）已跳过，请缩小区域或手动放置注册`);
         return;
       }
-      player.sendMessage(`${chat.success}扫描完成：${result.scanned} 格，新注册 ${result.registered} 容器（共 ${warehouse.containers.size}）`);
+      player.sendMessage(
+        `${chat.success}扫描完成：${result.scanned} 格，新注册 ${result.registered} 容器（共 ${warehouse.containers.size}）`
+      );
     });
   });
 }

@@ -1,4 +1,7 @@
-// ─── ir:rescan_preview 预览重扫（member+，不写索引） ─────
+// ─── ir:rescan_preview 预览重扫命令（member+，只读不写） ──
+// 与 ir:rescan 同口径遍历区域，但**只列出**当前区域内的受支持容器坐标/类型，
+// 不注册、不写索引、不改持久化——供玩家在真正 rescan 前确认范围。
+// 直接扫区块方块（不经 warehouse.containers），故无需 ensureContainersLoaded。
 import { world, system } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { nameCommand } from "./defs";
@@ -9,6 +12,13 @@ import { isSupportedContainerType } from "../../core/model/ContainerTypes";
 import { Table } from "../ui/Table";
 import { chat } from "../ui/uiColor";
 
+/**
+ * 注册 `ir:rescan_preview <名称>`：只读预览区域内容器清单（member+，不写任何状态）。
+ * 超限（MAX_SCAN_VOLUME）跳过；空区域提示；结果以表格输出坐标/类型。
+ *
+ * @param registry - 自定义命令注册表
+ * @param deps     - 命令共享依赖门面（成员权限判定用）
+ */
 export function registerRescanPreview(registry: Parameters<typeof defineCommand>[0], deps: CommandDeps): void {
   defineCommand(registry, nameCommand("ir:rescan_preview", "预览重扫容器清单（member+）"), ({ player, params }) => {
     const warehouse = resolveWarehouseByName(deps.loadedWarehouses(), params.name as string);

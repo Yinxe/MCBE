@@ -49,12 +49,7 @@ function glow(ctx: CornerContext, warehouseId: string): void {
  * - 无已记角 → 记录 corner1，等待对角
  * - 已有 corner1 → 建仓/调整区域完成，清会话，返回玩家提示
  */
-export function handleCornerClick(
-  ctx: CornerContext,
-  playerId: string,
-  clicked: Location,
-  dimension: string
-): string {
+export function handleCornerClick(ctx: CornerContext, playerId: string, clicked: Location, dimension: string): string {
   const session = ctx.session.get(playerId);
   if (session === undefined) return "";
   if (session.corner1 === undefined) {

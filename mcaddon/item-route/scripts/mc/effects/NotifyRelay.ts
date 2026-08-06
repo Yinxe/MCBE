@@ -5,7 +5,12 @@
 //   · input-blocked —— 输入堵塞无法分拣 → 附近成员**防抖**提醒（30 秒窗口，避免每 tick 刷屏）
 // "成员" = owner + member（访客/普通玩家不打扰）。
 import { world, system } from "@minecraft/server";
-import type { EventBus, ContainerChangedEvent, LifecycleChangedEvent, InputBlockedEvent } from "../../core/events/DomainEvents";
+import type {
+  EventBus,
+  ContainerChangedEvent,
+  LifecycleChangedEvent,
+  InputBlockedEvent,
+} from "../../core/events/DomainEvents";
 import type { Warehouse } from "../../core/model/Warehouse";
 import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
 import { getChineseName } from "../../core/data/ItemNameMap";

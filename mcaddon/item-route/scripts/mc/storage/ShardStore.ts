@@ -30,9 +30,16 @@ export function fnv1a(str: string): string {
 }
 
 /** 分片信封：h = fnv1a(v)，读回时校验 */
-interface Envelope { h: string; v: string; }
+interface Envelope {
+  h: string;
+  v: string;
+}
 /** 头部：单一 hdr 键指向"当前该读哪些分片"（mode/gen/count） */
-interface Header { mode: "overwrite" | "generation"; gen: number; count: number; }
+interface Header {
+  mode: "overwrite" | "generation";
+  gen: number;
+  count: number;
+}
 
 const hdrKey = (key: string): string => `${key}:hdr`;
 const dataKey = (key: string, gen: number, i: number): string => `${key}:data:${gen}:${i}`;

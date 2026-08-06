@@ -98,7 +98,12 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
   });
   // 路由成功视觉反馈：目标容器闪光
   bus.itemRouted.subscribe((e) => {
-    bus.visualEffect.trigger({ type: "visual-effect", kind: "route-flash", warehouseId: e.warehouseId, containerId: e.to });
+    bus.visualEffect.trigger({
+      type: "visual-effect",
+      kind: "route-flash",
+      warehouseId: e.warehouseId,
+      containerId: e.to,
+    });
   });
 
   // ── 容器结构/属性变更 → 逐容器持久化（cold；替代命令式 onContainerRegistered 钩子） ──

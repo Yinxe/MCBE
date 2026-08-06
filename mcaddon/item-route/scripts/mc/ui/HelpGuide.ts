@@ -6,13 +6,7 @@ import { ActionFormBuilder } from "@yinxe/toolkit";
 import { chat, form, btn } from "./uiColor";
 
 /** 帮助章节列表（设计 §12 手册结构） */
-export const HELP_SECTIONS: string[] = [
-  "快速上手",
-  "命令一览",
-  "容器角色",
-  "成员与权限",
-  "仓库管理",
-];
+export const HELP_SECTIONS: string[] = ["快速上手", "命令一览", "容器角色", "成员与权限", "仓库管理"];
 
 /** 分节正文（聊天栏消息） */
 function sectionBody(index: number): string {
@@ -62,10 +56,21 @@ function sectionBody(index: number): string {
   }
 }
 
+/**
+ * 发送某一章节的帮助正文（聊天栏）。index 越界回退到末章（仓库管理）。
+ *
+ * @param player - 接收玩家
+ * @param index  - HELP_SECTIONS 下标
+ */
 export function showHelpSection(player: Player, index: number): void {
   player.sendMessage(`${chat.muted}━━ ${HELP_SECTIONS[index] ?? "帮助"} ━━\n${sectionBody(index)}`);
 }
 
+/**
+ * 打开帮助手册菜单：章节列表 → 点选章节 → 聊天栏输出正文。
+ *
+ * @param player - 打开手册的玩家
+ */
 export async function showHelpGuide(player: Player): Promise<void> {
   const dlg = new ActionFormBuilder().title(`${form.title}物品路由 · 帮助手册`).body(`${form.body}选择一个章节：`);
   HELP_SECTIONS.forEach((section) => {

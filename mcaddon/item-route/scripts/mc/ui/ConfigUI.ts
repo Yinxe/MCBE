@@ -1,12 +1,21 @@
-// ─── 模组配置：信物/全局开关/速度上限（仅管理员） ─────────
+// ─── 模组配置 UI：信物/全局开关/速度上限/全服统计（仅管理员可进） ──
+// 由 MainMenu 的 OP（canManage）入口打开。全局配置写穿 McModConfig（单键 ir2:modcfg），
+// 运行时立即应用到 RouteService（setGlobalEnabled/setGlobalSpeedLimit）。
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { TOKEN_OPTIONS } from "../storage/McModConfig";
 import * as uiColor from "./uiColor";
 
-const SPEED_OPTIONS = [4, 8, 16, 20, 30, 40];
+/** 全局速度上限可选项（tick/槽）；默认 index 3 = 20 tick */
+const SPEED_OPTIONS: number[] = [4, 8, 16, 20, 30, 40];
 
+/**
+ * 展示模组配置面板（管理员专属）：当前状态总览 + 修改 + 全服统计。
+ *
+ * @param player - 打开面板的玩家
+ * @param deps   - 命令共享依赖门面
+ */
 export async function showConfigUI(player: Player, deps: CommandDeps): Promise<void> {
   // 按钮文字深色（ActionForm 浅灰按钮背景）
   const form = new ActionFormBuilder()
@@ -23,6 +32,7 @@ export async function showConfigUI(player: Player, deps: CommandDeps): Promise<v
   await form.show(player);
 }
 
+/** 修改全局配置的表单：全局开关 / 更换信物 / 速度上限；保存即写穿 + 运行时生效 */
 async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   const tokenIndex = Math.max(0, TOKEN_OPTIONS.indexOf(deps.config.tokenItemId));
   const speedIndex = Math.max(0, SPEED_OPTIONS.indexOf(deps.config.globalSpeedLimit));
@@ -45,11 +55,13 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   player.sendMessage(`${uiColor.chat.success}配置已保存`);
 }
 
+/** 全服统计汇总（仓库数/容器数/物品数）：统计是容器内容派生 → 先逐仓按需加载容器 */
 function serverStats(player: Player, deps: CommandDeps): void {
   const warehouses = deps.loadedWarehouses();
   let containerCount = 0;
   let totalItems = 0;
   for (const w of warehouses) {
+    deps.ensureContainersLoaded(w); // 仓库可能未激活 → 容器按需加载后统计才准确
     const s = deps.stats.getWarehouseStats(w);
     containerCount += s.containerCount;
     totalItems += s.totalItems;
