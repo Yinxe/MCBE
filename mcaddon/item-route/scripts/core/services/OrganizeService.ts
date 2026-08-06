@@ -62,6 +62,39 @@ export class OrganizeService {
 
   /** 单容器整理（就地排序 + 合并可堆叠堆）；warehouse 仅供事件定位 */
   organizeContainer(warehouse: Warehouse, container: Container, journal: MoveJournal): OrganizeResult {
+    const { result, didWork } = this.runOrganize(container, journal);
+    // 仅"实际清空+重放"的整理发事件（空/已整齐的 no-op 不打扰下游，与 v1 onDeposit 一致）
+    if (didWork && result.ok) {
+      this.bus.organizeCompleted.trigger({
+        type: "organize-completed",
+        warehouseId: warehouse.id,
+        moves: result.moves,
+      });
+      this.bus.containerChanged.trigger({
+        type: "container-changed",
+        warehouseId: warehouse.id,
+        containerId: container.id,
+      });
+    }
+    return result;
+  }
+
+  /**
+   * 独立整理（不关联仓库、不发领域事件）：对任意满足 core Container 契约的对象就地整理，
+   * 返回与 organizeContainer 相同的 OrganizeResult。用于**玩家背包整理**（PlayerInventoryContainer
+   * 包装背包槽位，见 mc/adapters/PlayerInventoryContainer.ts）——背包不属于任何仓库，不该触发
+   * 容器统计/索引事件。
+   */
+  organizeStandalone(container: Container, journal: MoveJournal): OrganizeResult {
+    return this.runOrganize(container, journal).result;
+  }
+
+  /**
+   * 整理核心：取出全部物品 → 清空 → 按 typeId 排序 → 逐堆 addItem 重放（合并权委托适配器，
+   * 概念层不感知 NBT）。返回结果 + 是否实际执行了"清空+重放"（didWork=false = 空/已整齐 no-op）。
+   * 写失败/数量不守恒 → MoveJournal 回滚（不吞物不复制）。
+   */
+  private runOrganize(container: Container, journal: MoveJournal): { result: OrganizeResult; didWork: boolean } {
     // 取出全部物品 + 整理前统计（保留 ItemStack 引用，重放时经适配器保 NBT）
     const items: ItemStack[] = [];
     const beforeByType: Record<ItemId, OrganizeTypeStat> = {};
@@ -90,8 +123,8 @@ export class OrganizeService {
       chaosAfter: messiness.total,
       perType: beforeByType,
     });
-    // 空 / 已整齐 → 无需整理
-    if (beforeStacks <= 1 || messiness.total < 0.05) return tidy();
+    // 空 / 已整齐 → 无需整理（didWork=false，不发事件）
+    if (beforeStacks <= 1 || messiness.total < 0.05) return { result: tidy(), didWork: false };
 
     const beforeTotal = items.reduce((s, i) => s + i.amount, 0);
 
@@ -102,7 +135,7 @@ export class OrganizeService {
     for (let i = 0; i < container.capacity; i++) {
       if (container.getItem(i) !== undefined) {
         journal.rollback();
-        return { ...tidy(), ok: false };
+        return { result: { ...tidy(), ok: false }, didWork: true };
       }
     }
     items.sort((a, b) => a.itemId.localeCompare(b.itemId));
@@ -110,7 +143,7 @@ export class OrganizeService {
       const remaining = container.addItem(item);
       if (remaining !== undefined) {
         journal.rollback(); // 放不下（适配器异常等）→ 恢复整理前
-        return { ...tidy(), ok: false };
+        return { result: { ...tidy(), ok: false }, didWork: true };
       }
     }
 
@@ -120,7 +153,7 @@ export class OrganizeService {
     const afterTotal = afterScan.items.reduce((s, i) => s + i.amount, 0);
     if (afterTotal !== beforeTotal) {
       journal.rollback();
-      return { ...tidy(), ok: false };
+      return { result: { ...tidy(), ok: false }, didWork: true };
     }
     const afterByType: Record<ItemId, OrganizeTypeStat> = {};
     for (const item of afterScan.items) {
@@ -131,28 +164,21 @@ export class OrganizeService {
     }
     const chaosAfter = this.organizer.messinessFromScan(afterScan).total;
     const afterStacks = afterScan.usedSlots;
-    this.bus.organizeCompleted.trigger({
-      type: "organize-completed",
-      warehouseId: warehouse.id,
-      moves: beforeStacks - afterStacks,
-    });
-    this.bus.containerChanged.trigger({
-      type: "container-changed",
-      warehouseId: warehouse.id,
-      containerId: container.id,
-    });
     return {
-      ok: true,
-      moves: beforeStacks - afterStacks,
-      beforeStacks,
-      afterStacks,
-      beforeTypes,
-      afterTypes: Object.keys(afterByType).length,
-      totalSlots: container.capacity,
-      usedSlots: afterStacks,
-      messiness,
-      chaosAfter,
-      perType: afterByType,
+      didWork: true,
+      result: {
+        ok: true,
+        moves: beforeStacks - afterStacks,
+        beforeStacks,
+        afterStacks,
+        beforeTypes,
+        afterTypes: Object.keys(afterByType).length,
+        totalSlots: container.capacity,
+        usedSlots: afterStacks,
+        messiness,
+        chaosAfter,
+        perType: afterByType,
+      },
     };
   }
 }

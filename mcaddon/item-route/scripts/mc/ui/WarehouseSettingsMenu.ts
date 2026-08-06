@@ -87,6 +87,10 @@ export async function showWarehouseSettingsMenu(
       defaultValue: settings.sortingEnabled,
       tooltip: "路由成功且混乱度过高时自动整理",
     })
+    .toggle("showBoundary", `${uiColor.form.accent}显示边界光幕`, {
+      defaultValue: settings.showBoundary,
+      tooltip: "在仓库区域边缘持续显示粒子边界（附近玩家手持信物时可见；v1 同款）",
+    })
     .slider("autoSortThreshold", `${uiColor.form.muted}自动整理阈值（0-100，推荐 40）`, 0, 100, {
       defaultValue: Math.round(settings.autoSortThreshold * 100),
       valueStep: 20,
@@ -113,10 +117,11 @@ export async function showWarehouseSettingsMenu(
     return;
   }
 
-  // 保存属性变更（名称/默认角色/默认启用/速度/运转/整理/阈值）
+  // 保存属性变更（名称/默认角色/默认启用/速度/运转/整理/阈值/边界光幕）
   const newName = (vals.name as string).trim();
   if (newName && newName !== warehouse.displayName) deps.warehouses.rename(warehouse, newName);
   const newSpeed = SPEED_OPTIONS[vals.speed as number] ?? settings.processingSpeed;
+  const newShowBoundary = vals.showBoundary === true;
   deps.warehouses.updateSettings(warehouse, {
     defaultContainerRole: DEFAULT_ROLE_OPTIONS[vals.defaultRole as number] ?? settings.defaultContainerRole,
     defaultContainerEnabled: vals.defaultEnabled === 0,
@@ -124,8 +129,10 @@ export async function showWarehouseSettingsMenu(
     routingEnabled: vals.routingEnabled === true,
     sortingEnabled: vals.sortingEnabled === true,
     autoSortThreshold: (vals.autoSortThreshold as number) / 100,
+    showBoundary: newShowBoundary,
   });
   deps.route.setProcessingSpeed(warehouse.id, newSpeed); // 已激活仓库立即重建 interval
+  deps.boundary.setEnabled(warehouse, newShowBoundary); // 持久边界光幕随开关启停
   player.sendMessage(`${uiColor.chat.success}仓库配置已保存`);
 
   // 执行唯一选择的动作

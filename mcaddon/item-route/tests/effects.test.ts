@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SORT_PARTICLE, DEPOSIT_PARTICLE } from "../scripts/mc/effects/SortEffects";
+import { SORT_PARTICLE, DEPOSIT_PARTICLE } from "../scripts/mc/effects/ParticleIds";
 import { STEP, edgePoints } from "../scripts/core/model/BoundaryGeometry";
 
 test("SortEffects: 粒子 identifier 常量", () => {

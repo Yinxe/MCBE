@@ -48,6 +48,19 @@ export class McItemAdapter {
   }
 
   /**
+   * NBT 级可堆叠判定：两堆都带源（来自真实槽位）→ 走原生 mc.ItemStack.isStackableWith
+   * （同型不同 NBT 如附魔/耐久/药水不合并）；任一无源 → 退化为类型级同 itemId。
+   * 供 PlayerInventoryContainer 的 addItem/find 用（背包整理不委托 mc.addItem，
+   * 因 mc.addItem 会从槽 0 开始填快捷栏；此处显式按 NBT 判定合并）。
+   */
+  isStackableWith(a: ItemStack, b: ItemStack): boolean {
+    const sa = (a as DomainStack)[SOURCE];
+    const sb = (b as DomainStack)[SOURCE];
+    if (sa !== undefined && sb !== undefined) return sa.isStackableWith(sb);
+    return a.itemId === b.itemId;
+  }
+
+  /**
    * 还原为 mc.ItemStack：若域堆携带源（来自真实槽位），
    * clone 源以保留全部组件，仅调整数量；否则重建（新物品无源）。
    */

@@ -475,3 +475,27 @@ test("OrganizeService: 整理成功触发 organize-completed", () => {
   assert.equal(res.moves, 1);
   assert.deepEqual(moves, [1]); // organize-completed 报合并数
 });
+
+test("OrganizeService: organizeStandalone 就地整理但不发任何领域事件（背包整理用）", () => {
+  const bus = new EventBus();
+  const events: string[] = [];
+  bus.containerChanged.subscribe((e) => events.push(`changed:${e.containerId}`));
+  bus.organizeCompleted.subscribe((e) => events.push(`completed:${e.moves}`));
+  const svc = new OrganizeService(new Organizer(), bus);
+
+  const c = new InMemoryContainer("c1", "misc", 6);
+  c.setItem(0, new SimpleItemStack("minecraft:dirt", 3, 64));
+  c.setItem(2, new SimpleItemStack("minecraft:stone", 10, 64));
+  c.setItem(4, new SimpleItemStack("minecraft:stone", 5, 64)); // 与槽2同型可合并
+  const res = svc.organizeStandalone(c, new MoveJournal());
+
+  assert.equal(res.ok, true);
+  assert.equal(res.moves, 1); // 两堆 stone → 合并 1 组
+  assert.deepEqual(events, []); // 无事件（背包不属于任何仓库）
+  // 数量守恒 + 排序：dirt 在前、stone 合并为 15
+  const items = [0, 1, 2, 3, 4, 5].map((i) => c.getItem(i)).filter((s) => s !== undefined);
+  assert.equal(items.length, 2);
+  assert.equal(items[0]!.itemId, "minecraft:dirt");
+  assert.equal(items[1]!.itemId, "minecraft:stone");
+  assert.equal(items[1]!.amount, 15);
+});

@@ -1,9 +1,10 @@
 // ─── 命令依赖（DI 装配注入）：命令回调访问的服务与数据 ──
+import type { Player } from "@minecraft/server";
 import type { WarehouseService } from "../../core/services/WarehouseService";
 import type { MemberService } from "../../core/services/MemberService";
 import type { StatsService } from "../../core/stats/StatsService";
 import type { RouteService } from "../../core/services/RouteService";
-import type { OrganizeService } from "../../core/services/OrganizeService";
+import type { OrganizeService, OrganizeResult } from "../../core/services/OrganizeService";
 import type { ItemIndex } from "../../core/index/ItemIndex";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
@@ -12,6 +13,11 @@ import type { McModConfig } from "../storage/McModConfig";
 import type { McContainerFactory } from "../adapters/McContainerFactory";
 import type { SelectionSessionStore } from "../interaction/SelectionSessionStore";
 import type { EventBus } from "../../core/events/DomainEvents";
+
+/** 持久边界控制门面（showBoundary 设置启停；装配层实例化为 PersistentBoundary + 玩家持信物守卫） */
+export interface BoundaryControl {
+  setEnabled(warehouse: Warehouse, enabled: boolean): void;
+}
 
 export interface CommandDeps {
   bus: EventBus;
@@ -36,4 +42,8 @@ export interface CommandDeps {
   persistContainerIds: (warehouse: Warehouse) => void;
   /** 按需加载该仓容器（启动不预载，菜单/命令/交互访问前调用；已加载幂等返回） */
   ensureContainersLoaded: (warehouse: Warehouse) => void;
+  /** 持久边界光幕控制（showBoundary 设置启停；装配层注入 guard=附近玩家持信物） */
+  boundary: BoundaryControl;
+  /** 背包整理：把玩家主栏（槽 9~35）就地排序合并，返回 OrganizeResult（与容器整理同格式） */
+  organizeInventory: (player: Player) => OrganizeResult;
 }

@@ -11,7 +11,7 @@
 //   Phase 4 延迟启动 —— world 加载后：恢复仓库**meta**（容器**不预载**，避免启动载 1 万容器），
 //            注册调度；容器/索引/统计统一在仓库激活时按需加载、闲置卸载
 // 依赖注入贯穿始终：各模块以构造函数/回调收依赖，不自行 new 外部服务（可测性）。
-import { world, system } from "@minecraft/server";
+import { world, system, type Player } from "@minecraft/server";
 
 // ── core ──
 import { EventBus } from "../core/events/DomainEvents";
@@ -21,10 +21,12 @@ import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
 import { Scheduler } from "../core/scheduling/Scheduler";
 import { StatsService } from "../core/stats/StatsService";
 import { Organizer } from "../core/organizing/Organizer";
-import { OrganizeService } from "../core/services/OrganizeService";
+import { OrganizeService, type OrganizeResult } from "../core/services/OrganizeService";
 import { WarehouseService } from "../core/services/WarehouseService";
 import { MemberService } from "../core/services/MemberService";
 import { RouteService } from "../core/services/RouteService";
+import { MoveJournal } from "../core/routing/Move";
+import { isPlayerNearby } from "../core/model/Area";
 import type { Warehouse } from "../core/model/Warehouse";
 import type { Container } from "../core/model/Container";
 
@@ -41,11 +43,17 @@ import { McContainerFactory } from "./adapters/McContainerFactory";
 import { McProximityChecker } from "./adapters/McProximityChecker";
 import { McIntervalScheduler } from "./adapters/McIntervalScheduler";
 import { McEventBridge } from "./adapters/McEventBridge";
+import { PlayerInventoryContainer } from "./adapters/PlayerInventoryContainer";
 import { SelectionSessionStore } from "./interaction/SelectionSessionStore";
 import { registerToolInteraction } from "./interaction/ToolInteractionController";
 import { registerAllCommands, type CommandDeps } from "./commands/index";
 import { registerSortEffects } from "./effects/SortEffects";
-import { registerBoundaryDisplay } from "./effects/BoundaryDisplay";
+import {
+  registerBoundaryDisplay,
+  startPersistentBoundary,
+  stopBoundary,
+  PROXIMITY_MARGIN,
+} from "./effects/BoundaryDisplay";
 import { registerWarningRelay } from "./effects/WarningRelay";
 import { registerNotifyRelay } from "./effects/NotifyRelay";
 import { registerSubscriptions } from "./events/Subscriptions";
@@ -106,6 +114,73 @@ route.setGlobalEnabled(config.globalEnabled);
 // 整理服务：只发事件，不重建索引（候选过期由策略侧惰性校验自愈）
 const organize = new OrganizeService(organizer, bus);
 
+// ── 持久边界守卫：附近玩家持信物才显示（v1 BoundaryDisplay requireHoe 口径） ──
+const boundaryGuard =
+  (wh: Warehouse): (() => boolean) =>
+  () => {
+    for (const p of world.getAllPlayers()) {
+      if (p.dimension.id !== wh.area.dimension) continue;
+      let holdingToken = false;
+      try {
+        const held = p.getComponent("inventory")?.container?.getItem(p.selectedSlotIndex);
+        holdingToken = config.isToken(held?.typeId ?? "");
+      } catch {
+        /* 读取失败视为未持信物 */
+      }
+      if (!holdingToken) continue;
+      if (
+        isPlayerNearby(wh.area, [{ dimension: p.dimension.id, x: p.location.x, z: p.location.z }], PROXIMITY_MARGIN)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+// 持久边界光幕控制（showBoundary 设置启停；装配层持有，菜单/命令经 deps.boundary 调用）
+const boundaryControl = {
+  setEnabled: (wh: Warehouse, enabled: boolean): void => {
+    if (enabled) startPersistentBoundary(wh.id, { dimensionId: wh.area.dimension, area: wh.area }, boundaryGuard(wh));
+    else stopBoundary(wh.id);
+  },
+};
+// 持久边界生命周期：删仓停；resize 迁移后按新区域重启（showBoundary 开启时）
+bus.warehouseDeleted.subscribe((e) => stopBoundary(e.warehouseId));
+bus.warehouseAreaChanged.subscribe((e) => {
+  if (e.oldId !== undefined) stopBoundary(e.oldId);
+  const wh = loaded.find((w) => w.id === e.warehouseId);
+  if (wh !== undefined && wh.settings.showBoundary) boundaryControl.setEnabled(wh, true);
+});
+
+// ── 背包整理（潜行点非容器）：把背包主栏包装成 core Container 就地整理，结果与容器整理同格式 ──
+const organizeInventory = (player: Player): OrganizeResult => {
+  const inv = player.getComponent("inventory")?.container;
+  if (inv === undefined) {
+    return {
+      ok: false,
+      moves: 0,
+      beforeStacks: 0,
+      afterStacks: 0,
+      beforeTypes: 0,
+      afterTypes: 0,
+      totalSlots: 0,
+      usedSlots: 0,
+      messiness: {
+        total: 0,
+        order: 0,
+        stack: 0,
+        effectiveSlots: 0,
+        disorderSlots: 0,
+        nonEmptySlots: 0,
+        suboptimalStacks: 0,
+      },
+      chaosAfter: 0,
+      perType: {},
+    };
+  }
+  const adapter = new PlayerInventoryContainer(`player:${player.name}`, inv, item);
+  return organize.organizeStandalone(adapter, new MoveJournal());
+};
+
 // ── 容器逐容器持久化（注册表/索引/统计每容器一条键，事件驱动最小单位）收进 persistence/Persistence ──
 const persistence = createContainerPersistence({ warehouseStore, indexStore, scheduler, stats });
 
@@ -157,6 +232,8 @@ const commandDeps: CommandDeps = {
   removeContainer: persistence.removeContainer,
   persistContainerIds: persistence.persistContainerIds,
   ensureContainersLoaded: (wh) => ensureContainersLoaded(wh, containerLoader),
+  boundary: boundaryControl,
+  organizeInventory,
 };
 registerToolInteraction(commandDeps);
 registerSortEffects(bus, {
@@ -164,12 +241,16 @@ registerSortEffects(bus, {
     const w = loaded.find((x) => x.id === whId);
     return w === undefined ? undefined : world.getDimension(w.area.dimension);
   },
-  containerCenter: (containerId) => {
+  // 定位命中容器 → 坐标 + 角色（颜色）+ 方块类型（粒子尺寸），供角色颜色粒子/音效对齐 v1
+  targetOf: (containerId) => {
     for (const w of loaded) {
       const c = w.containers.get(containerId);
-      if (c && c.occupiedLocations.length > 0) {
-        const l = c.occupiedLocations[0]!;
-        return { x: l.x + 0.5, y: l.y + 0.5, z: l.z + 0.5 };
+      if (c !== undefined && c.occupiedLocations.length > 0) {
+        return {
+          occupiedLocations: c.occupiedLocations,
+          role: c.role,
+          blockType: (c as { blockType?: string }).blockType ?? "",
+        };
       }
     }
     return undefined;
@@ -211,6 +292,9 @@ system.run(() => {
     // 容器在首次激活（ensure, 见 indexLifecycle.load）或菜单/命令访问（ensureContainersLoaded）时才加载。
     scheduler.registerWarehouse(warehouse);
     warehouses.loadAll(); // 触发 core 侧缓存（如有）
+
+    // 持久边界光幕（showBoundary 设置）：启动时恢复（守卫=附近玩家持信物）
+    if (warehouse.settings.showBoundary) boundaryControl.setEnabled(warehouse, true);
   }
   console.warn(`[ItemRoute] 启动完成：${loaded.length} 仓库`);
 });

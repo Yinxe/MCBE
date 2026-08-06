@@ -3,7 +3,7 @@
 //   · beforeEvents.playerInteractWithBlock —— 持信物右键方块：
 //       · 点击（isFirstEvent=true）：
 //           - 潜行 + 容器 → **单容器整理**（详细分析报告，v1 同款）
-//           - 潜行 + 非容器 → 忽略（v1 为背包整理，v2 暂不实现）
+//           - 潜行 + 非容器 → **背包整理**（v1 同款：只整理主栏 27 格，不动快捷栏/盔甲/副手）
 //           - 非潜行 + 容器 → 打开该容器的**管理菜单**（ContainerRoleMenu）
 //           - 非潜行 + 非容器 → 选区模式（有会话）/ **仓库菜单模式**（按点位找仓 → 打开其设置；
 //              无仓则提示"当前位置不是仓库"）
@@ -63,13 +63,24 @@ export function registerToolInteraction(deps: CommandDeps): void {
     });
   };
   // 潜行点击容器 → 单容器整理 + 详细分析报告
-  const quickOrganizeContainer = (player: import("@minecraft/server").Player, dimensionId: string, loc: Location): void => {
+  const quickOrganizeContainer = (
+    player: import("@minecraft/server").Player,
+    dimensionId: string,
+    loc: Location
+  ): void => {
     system.run(() => {
       const hit = hitLoaded(dimensionId, loc);
       if (hit === undefined) return;
       const res = deps.organize.organizeContainer(hit.warehouse, hit.container, new MoveJournal());
       const name = hit.container.id.split("@")[1] ?? hit.container.id;
       for (const line of formatOrganizeResult(res, name)) player.sendMessage(line);
+    });
+  };
+  // 潜行点击非容器 → 背包整理（v1 同款：只整理主栏 27 格，不动快捷栏/盔甲/副手）
+  const organizePlayerInventory = (player: import("@minecraft/server").Player): void => {
+    system.run(() => {
+      const res = deps.organizeInventory(player);
+      for (const line of formatOrganizeResult(res, "背包")) player.sendMessage(line);
     });
   };
 
@@ -105,8 +116,9 @@ export function registerToolInteraction(deps: CommandDeps): void {
       pressState.set(player.name, { start: now, handled: false });
 
       if (player.isSneaking) {
-        // 潜行点击：容器 → 单容器整理；非容器 → 忽略
+        // 潜行点击：容器 → 单容器整理；非容器 → 背包整理（v1 同款，不再忽略）
         if (isSupportedContainerType(e.block.typeId)) quickOrganizeContainer(player, dimensionId, loc);
+        else organizePlayerInventory(player);
         return;
       }
 

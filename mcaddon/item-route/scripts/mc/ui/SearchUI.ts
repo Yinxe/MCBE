@@ -5,6 +5,7 @@ import type { CommandDeps } from "../commands/deps";
 import { searchItems, getChineseName } from "../../core/data/ItemNameMap";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";
+import { searchMarkerMolang } from "../effects/SortEffects";
 import * as uiColor from "./uiColor";
 
 const PARTICLE_INTERVAL = 20; // 粒子刷新的 tick 间隔
@@ -148,16 +149,17 @@ export function startMarkerParticles(
       /* 玩家离线：holdingToken 保持 false */
     }
 
-    // 刷粒子：跳过未加载区块（getBlock 抛错 → 跳过该坐标）
+    // 刷粒子：跳过未加载区块（getBlock 抛错 → 跳过该坐标）；紫色标记（v1 playSearchEffect 同款）
     try {
       if (dim !== undefined) {
+        const molang = searchMarkerMolang();
         for (const loc of locations) {
           try {
             dim.getBlock({ x: loc.x, y: loc.y, z: loc.z });
           } catch {
             continue;
           }
-          dim.spawnParticle("itemroute:sort", { x: loc.x + 0.5, y: loc.y + MARKER_OFFSET_H, z: loc.z + 0.5 });
+          dim.spawnParticle("itemroute:sort", { x: loc.x + 0.5, y: loc.y + MARKER_OFFSET_H, z: loc.z + 0.5 }, molang);
         }
       }
     } catch {
