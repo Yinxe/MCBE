@@ -42,10 +42,10 @@ function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container:
           : uiColor.form.success;
   const warnMark =
     container.capacity > 0 && usage >= Math.round(warehouse.settings.warningThreshold * 100) ? ` ${usageColor}⚠` : "";
-  const capacityLine = `${uiColor.form.muted}容量 ${uiColor.form.body}${scan.usedSlots}${uiColor.form.muted}/${uiColor.form.body}${container.capacity}[${usageColor}${usage}%${uiColor.form.muted}]  ${uiColor.form.body}${scan.totalItems}${uiColor.form.muted} items  ${uiColor.form.body}${Object.keys(scan.byType).length}${uiColor.form.muted} types${warnMark}`;
+  const capacityLine = `${uiColor.form.muted}容量 ${uiColor.form.body}${scan.usedSlots}${uiColor.form.muted}/${uiColor.form.body}${container.capacity}[${usageColor}${usage}%${uiColor.form.muted}]  ${uiColor.form.body}${scan.totalItems}${uiColor.form.muted} 个物品  ${uiColor.form.body}${Object.keys(scan.byType).length}${uiColor.form.muted} 种类型${warnMark}`;
   return (
     `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
-    `${uiColor.form.muted}类型 ${uiColor.form.body}${blockType}${isHopperType(blockType) ? "（漏斗→input）" : ""}\n` +
+    `${uiColor.form.muted}类型 ${uiColor.form.body}${blockType}${isHopperType(blockType) ? "（漏斗→输入容器）" : ""}\n` +
     `${capacityLine}\n` +
     `${uiColor.form.muted}混乱度 ${uiColor.form.body}${(messiness * 100).toFixed(0)}%\n` +
     `${uiColor.form.muted}容器ID ${uiColor.form.body}${container.id}\n` +
@@ -61,7 +61,7 @@ export async function showContainerRoleMenu(player: Player, deps: CommandDeps, w
   deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（列表才有容器可编辑）
   const form = new ActionFormBuilder()
     .title(`${uiColor.form.title}容器角色 · ${warehouse.displayName}`)
-    .body(`${uiColor.form.body}选择容器（漏斗为强制 input）：`);
+    .body(`${uiColor.form.body}选择容器（漏斗为强制输入容器）：`);
   for (const container of warehouse.containers.values()) {
     const roleLabel = ROLE_LABELS[container.role] ?? container.role;
     form.button(
@@ -84,7 +84,7 @@ export async function showContainerConfigMenu(
   container: Container
 ): Promise<void> {
   if (!requireRole(deps.members, warehouse, player.name, "member")) {
-    player.sendMessage(`${uiColor.chat.error}需要 member 及以上权限`);
+    player.sendMessage(`${uiColor.chat.error}需要成员及以上权限`);
     return;
   }
   const forced = isHopperType((container as { blockType?: string }).blockType ?? "");
@@ -95,7 +95,7 @@ export async function showContainerConfigMenu(
     .label("info", info)
     .toggle("enabled", `${uiColor.form.accent}启用容器`, {
       defaultValue: container.enabled,
-      tooltip: "开启后参与分拣，关闭则跳过",
+      tooltip: "开启后参与路由，关闭则跳过",
     });
 
   if (forced) {
@@ -108,12 +108,17 @@ export async function showContainerConfigMenu(
       ROLE_OPTIONS.map((r) => ROLE_LABELS[r]),
       {
         defaultValueIndex: roleIndex >= 0 ? roleIndex : 1,
-        tooltip: "角色决定路由去向：输入→单物→多物→杂项",
+        tooltip: "角色决定路由去向：输入→单物→多物→其他",
       }
     );
   }
 
   form.toggle("organize", `${uiColor.form.success}立即整理（就地排序合并堆叠）`);
+
+  form.toggle("warnThis", `${uiColor.form.warn}该容器容量预警`, {
+    defaultValue: container.warningEnabled,
+    tooltip: "关闭后该容器不再触发容量预警",
+  });
 
   const values = await form.show(player);
   if (!values) return;
@@ -126,15 +131,17 @@ export async function showContainerConfigMenu(
     return;
   }
 
-  // 提交角色/启用变更
+  // 提交角色/启用/预警变更
   const newRole = forced ? container.role : (ROLE_OPTIONS[values.role as number] ?? container.role);
-  const changed = newRole !== container.role || values.enabled !== container.enabled;
+  const changed =
+    newRole !== container.role || values.enabled !== container.enabled || values.warnThis !== container.warningEnabled;
   if (!changed) {
     player.sendMessage(`${uiColor.chat.muted}容器设置未变化`);
     return;
   }
   container.role = newRole;
   container.enabled = values.enabled as boolean;
+  container.warningEnabled = values.warnThis === true;
   refreshInputMembership(warehouse, container); // 角色/启用变更 → 刷新 inputs 成员资格
   deps.resolveIndex(warehouse.id)?.onContainerChanged(container); // 该仓自己的索引
   deps.stats.invalidate(container.id);
@@ -144,5 +151,13 @@ export async function showContainerConfigMenu(
     warehouseId: warehouse.id,
     containerId: container.id,
   });
-  player.sendMessage(`${uiColor.chat.success}容器 ${container.id} 已更新${forced ? "（漏斗强制 input）" : ""}`);
+  // 配置更新通知打印 layout 信息（v1 风格，避免仅"已更新"）
+  const shortName = container.id.split("@")[1] ?? container.id;
+  player.sendMessage(
+    [
+      `${uiColor.chat.success}容器 ${shortName} 配置已更新`,
+      `${uiColor.chat.muted}角色: ${uiColor.chat.info}${ROLE_LABELS[container.role]}${forced ? "（漏斗强制输入容器）" : ""}`,
+      `${uiColor.chat.muted}启用: ${uiColor.chat.info}${container.enabled ? "开启" : "关闭"}${uiColor.chat.muted}  ·  容量预警: ${uiColor.chat.info}${container.warningEnabled ? "开启" : "关闭"}`,
+    ].join("\n")
+  );
 }

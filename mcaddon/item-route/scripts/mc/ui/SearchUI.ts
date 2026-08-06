@@ -118,22 +118,27 @@ export function runSearch(warehouse: Warehouse, query: string): SearchResultLine
   return out;
 }
 
-/** 在容器坐标持续播放标记粒子（v1 状态机：持信物续时 / 松手倒计时 / 宽限期重拾恢复） */
+/** 在容器坐标持续播放标记粒子（v1 状态机：正常 15 秒 / 超时手持续时 / 松手 3 秒宽限） */
 export function startMarkerParticles(
   player: Player,
   dimensionId: string,
   locations: Location[],
   isToken: (itemTypeId: string) => boolean
 ): void {
-  // 每玩家独立会话：同一玩家重复搜索 → 清旧会话并重新计时（结果刷新）
+  // 每玩家独立会话：同一玩家重复搜索（含换仓）→ 清旧会话再重启（结果刷新、不重叠）
   const oldHandle = activeMarkerHandles.get(player.name);
   if (oldHandle !== undefined) system.clearRun(oldHandle);
 
-  let elapsed = 0; // 松手后经过 tick
-  let graceElapsed = 0; // 宽限期内经过 tick
-  let phase: "active" | "grace" | "done" = "active";
+  // 状态机（v1 修正口径，需求第 11 条）：
+  //   active —— 正常 15 秒窗口：**手持信物不暂停倒计时**（耗尽正常时间），
+  //             15 秒到：手持 → held（续时）；否则 → 结束（15 秒后自动消失）。
+  //   held   —— 信物续时：手持持续显示；松手 → grace。
+  //   grace  —— 3 秒宽限期：切回手持 → held（续时）；3 秒到 → 结束。
+  let elapsed = 0; // active 阶段经过 tick（15 秒正常窗口）
+  let graceElapsed = 0; // grace 阶段经过 tick
+  let phase: "active" | "held" | "grace" | "done" = "active";
   let graceNotified = false;
-  player.sendMessage(`${uiColor.chat.info}紫标记已标记容器位置（持续 15 秒，手持信物可持续续时）`);
+  player.sendMessage(`${uiColor.chat.info}紫标记已标记容器位置（默认 15 秒，之后手持信物可持续显示）`);
 
   const dim = world.getDimension(dimensionId);
   const handle = system.runInterval(() => {
@@ -168,22 +173,27 @@ export function startMarkerParticles(
     }
 
     if (phase === "active") {
-      if (holdingToken)
-        elapsed = 0; // 持信物 → 一直续时
-      else elapsed += PARTICLE_INTERVAL;
+      // 正常 15 秒窗口：手持信物**不**重置计时，正常耗尽；15 秒到按是否手持分流
+      elapsed += PARTICLE_INTERVAL;
       if (elapsed >= DEFAULT_DURATION) {
+        if (holdingToken) phase = "held";
+        else cleanup(); // 未手持 → 15 秒后自动消失（不再叠 3 秒宽限）
+      }
+      return;
+    }
+    if (phase === "held") {
+      // 信物续时：手持持续显示；松手进入 3 秒宽限
+      if (!holdingToken) {
         phase = "grace";
         graceElapsed = 0;
         graceNotified = false;
       }
+      return;
     }
-
     if (phase === "grace") {
       if (holdingToken) {
-        // 宽限期内拾起信物 → 续时恢复
-        phase = "active";
-        elapsed = 0;
-        graceElapsed = 0;
+        // 宽限期内拾起信物 → 续时恢复（回到 held，不重开 15 秒）
+        phase = "held";
         return;
       }
       if (!graceNotified) {
@@ -213,10 +223,19 @@ export function startMarkerParticles(
   }
 }
 
-/** 清理全部标记会话（玩家离开等） */
+/** 清理全部标记会话（服务器停止等） */
 export function stopMarkerParticles(): void {
   for (const [, handle] of activeMarkerHandles) {
     system.clearRun(handle);
   }
   activeMarkerHandles.clear();
+}
+
+/** 清理指定玩家的标记会话（玩家离开时调用，防下线残留渲染） */
+export function stopMarkerParticlesFor(playerName: string): void {
+  const handle = activeMarkerHandles.get(playerName);
+  if (handle !== undefined) {
+    system.clearRun(handle);
+    activeMarkerHandles.delete(playerName);
+  }
 }

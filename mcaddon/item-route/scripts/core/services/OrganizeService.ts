@@ -123,8 +123,9 @@ export class OrganizeService {
       chaosAfter: messiness.total,
       perType: beforeByType,
     });
-    // 空 / 已整齐 → 无需整理（didWork=false，不发事件）
-    if (beforeStacks <= 1 || messiness.total < 0.05) return { result: tidy(), didWork: false };
+    // 空 / **完全归零**（messiness === 0，而非 < 0.05）→ 无需整理（didWork=false，不发事件）。
+    // 手动整理是**强制整理**：无视任何非 0 混乱度（低混乱度也照样清空重排），只有归 0 才算整齐。
+    if (beforeStacks <= 1 || messiness.total === 0) return { result: tidy(), didWork: false };
 
     const beforeTotal = items.reduce((s, i) => s + i.amount, 0);
 

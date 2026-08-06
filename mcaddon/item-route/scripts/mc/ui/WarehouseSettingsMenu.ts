@@ -110,8 +110,9 @@ export async function showWarehouseSettingsMenu(
         tooltip: "后续新增容器的默认角色（漏斗始终为 input）",
       }
     )
-    .dropdown("defaultEnabled", "新容器默认启用", ["是", "否"], {
-      defaultValueIndex: settings.defaultContainerEnabled ? 0 : 1,
+    .toggle("defaultEnabled", "新容器默认启用", {
+      defaultValue: settings.defaultContainerEnabled,
+      tooltip: "新注册容器默认是否参与路由",
     })
     .dropdown(
       "speed",
@@ -119,12 +120,12 @@ export async function showWarehouseSettingsMenu(
       allowedSpeeds.map((s) => `${s} tick`),
       {
         defaultValueIndex: speedIndex >= 0 ? speedIndex : 0,
-        tooltip: "分拣间隔，越小越快（不能快于管理员全局最快速度限制）",
+        tooltip: "路由间隔，越小越快（不能快于管理员全局最快速度限制）",
       }
     )
     .toggle("routingEnabled", `${uiColor.form.accent}仓库运转`, {
       defaultValue: settings.routingEnabled,
-      tooltip: "关闭后该仓暂停分拣",
+      tooltip: "关闭后该仓暂停路由",
     })
     .toggle("sortingEnabled", "自动整理", {
       defaultValue: settings.sortingEnabled,
@@ -133,6 +134,10 @@ export async function showWarehouseSettingsMenu(
     .toggle("showBoundary", `${uiColor.form.accent}显示边界光幕`, {
       defaultValue: settings.showBoundary,
       tooltip: "在仓库区域边缘持续显示粒子边界（附近玩家手持信物时可见；v1 同款）",
+    })
+    .toggle("warningEnabled", `${uiColor.form.warn}容量预警`, {
+      defaultValue: settings.warningEnabled,
+      tooltip: "仓库级预警全局开关：关闭后该仓库不再触发任何容量预警消息",
     })
     .slider("autoSortThreshold", `${uiColor.form.muted}自动整理阈值（0-100，推荐 40）`, 0, 100, {
       defaultValue: Math.round(settings.autoSortThreshold * 100),
@@ -170,16 +175,29 @@ export async function showWarehouseSettingsMenu(
   const newShowBoundary = vals.showBoundary === true;
   deps.warehouses.updateSettings(warehouse, {
     defaultContainerRole: DEFAULT_ROLE_OPTIONS[vals.defaultRole as number] ?? settings.defaultContainerRole,
-    defaultContainerEnabled: vals.defaultEnabled === 0,
+    defaultContainerEnabled: vals.defaultEnabled === true,
     processingSpeed: newSpeed,
     routingEnabled: vals.routingEnabled === true,
     sortingEnabled: vals.sortingEnabled === true,
     autoSortThreshold: (vals.autoSortThreshold as number) / 100,
     showBoundary: newShowBoundary,
+    warningEnabled: vals.warningEnabled === true,
   });
   deps.route.setProcessingSpeed(warehouse.id, newSpeed); // 已激活仓库立即重建 interval
   deps.boundary.setEnabled(warehouse, newShowBoundary); // 持久边界光幕随开关启停
-  player.sendMessage(`${uiColor.chat.success}仓库配置已保存`);
+  // 配置更新通知打印完整 layout（v1 风格，避免仅"已更新"）
+  const s2 = warehouse.settings;
+  player.sendMessage(
+    [
+      `${uiColor.chat.success}仓库配置已保存`,
+      `${uiColor.chat.muted}名称: ${uiColor.chat.info}${warehouse.displayName}`,
+      `${uiColor.chat.muted}默认容器: ${uiColor.chat.info}${ROLE_LABELS[s2.defaultContainerRole]}${uiColor.chat.muted} ${s2.defaultContainerEnabled ? "启用" : "禁用"}`,
+      `${uiColor.chat.muted}处理速度: ${uiColor.chat.info}${s2.processingSpeed} tick/槽`,
+      `${uiColor.chat.muted}运转: ${uiColor.chat.info}${s2.routingEnabled ? "开启" : "关闭"}${uiColor.chat.muted}  ·  自动整理: ${uiColor.chat.info}${s2.sortingEnabled ? "开启" : "关闭"}${uiColor.chat.muted}（阈值 ${Math.round(s2.autoSortThreshold * 100)}%）`,
+      `${uiColor.chat.muted}边界光幕: ${uiColor.chat.info}${s2.showBoundary ? "开启" : "关闭"}`,
+      `${uiColor.chat.muted}容量预警: ${uiColor.chat.info}${s2.warningEnabled ? "开启" : "关闭"}`,
+    ].join("\n")
+  );
 
   // 执行唯一选择的动作
   const chosen = ops[0];

@@ -15,9 +15,9 @@ function sectionBody(index: number): string {
       return [
         `${chat.warn}快速上手`,
         `${chat.info}1. /ir:create 名称 x1 y1 z1 x2 y2 z2 建仓`,
-        `${chat.info}2. 区域内放箱子/漏斗（自动注册为 single/input）`,
+        `${chat.info}2. 区域内放箱子/漏斗（自动注册为容器）`,
         `${chat.info}3. 手持信物右键容器设置角色`,
-        `${chat.info}4. 往 input 放物品，自动路由到 single/multi`,
+        `${chat.info}4. 往输入容器放物品，自动路由`,
       ].join("\n");
     case 1:
       return [
@@ -27,7 +27,7 @@ function sectionBody(index: number): string {
         `${chat.info}/ir:rescan${chat.muted} 重扫容器（member+）`,
         `${chat.info}/ir:rescan_preview${chat.muted} 预览重扫（member+）`,
         `${chat.info}/ir:delete${chat.muted} 删除仓库（owner）`,
-        `${chat.info}/ir:menu${chat.muted} 主菜单（visitor+）`,
+        `${chat.info}/ir:menu${chat.muted} 主菜单（访客+）`,
         `${chat.info}/ir:search${chat.muted} 在你有权限的最近仓库搜索物品（member+）`,
         `${chat.info}/ir:organize${chat.muted} 整理（任意）`,
         `${chat.info}/ir:help${chat.muted} 帮助（任意）`,
@@ -35,17 +35,17 @@ function sectionBody(index: number): string {
     case 2:
       return [
         `${chat.warn}容器角色`,
-        `${chat.highlight}input${chat.muted} 输入（漏斗默认）`,
-        `${chat.success}single${chat.muted} 单物（绑定首槽类型）`,
-        `${chat.info}multi${chat.muted} 多物（放同类型）`,
-        `${chat.accent}misc${chat.muted} 杂项（兜底）`,
+        `${chat.highlight}输入容器${chat.muted}（input，漏斗默认）`,
+        `${chat.success}单物容器${chat.muted}（single，绑定首槽类型）`,
+        `${chat.info}多物容器${chat.muted}（multi，放同类型）`,
+        `${chat.accent}其他容器${chat.muted}（misc，兜底）`,
       ].join("\n");
     case 3:
       return [
         `${chat.warn}成员与权限`,
-        `${chat.warn}owner${chat.muted} 全权限（建仓者）`,
-        `${chat.success}member${chat.muted} 管理（重扫/角色）`,
-        `${chat.muted}visitor${chat.muted} 只读（菜单/搜索）`,
+        `${chat.warn}拥有者${chat.muted} 全权限（建仓者）`,
+        `${chat.success}成员${chat.muted} 管理（重扫/角色）`,
+        `${chat.muted}访客${chat.muted} 只读（菜单/搜索）`,
       ].join("\n");
     default:
       return [

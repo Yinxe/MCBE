@@ -51,6 +51,8 @@ function uniquePoints(area: BoundaryOptions["area"]): Array<{ x: number; y: numb
 
 /**
  * 单轮绘制：对每个采样点撒粒子（逐坐标 getBlock 跳过未加载区块）。
+ * 粒子撒在**方块边界**（原始整数坐标 = 方块网格棱线），而非方块正中心（+0.5）——
+ * v1 口径：边界光幕从方块边界开始显示、框住整个仓库区域（内部都是仓库区域）。
  * 维度/区块异常 → 跳过本轮（不终止 interval，玩家回来自动恢复）。
  */
 function drawOnce(dim: Dimension, pts: Array<{ x: number; y: number; z: number }>, particle: string): void {
@@ -60,7 +62,7 @@ function drawOnce(dim: Dimension, pts: Array<{ x: number; y: number; z: number }
     } catch {
       continue; // 未加载区块：该坐标跳过
     }
-    dim.spawnParticle(particle, { x: p.x + 0.5, y: p.y + 0.5, z: p.z + 0.5 });
+    dim.spawnParticle(particle, { x: p.x, y: p.y, z: p.z });
   }
 }
 

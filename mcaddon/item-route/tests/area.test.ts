@@ -71,6 +71,7 @@ const chest: Container = {
   warehouseId: "w1",
   role: "single",
   enabled: true,
+  warningEnabled: true,
   priority: 10,
   capacity: 27,
   emptySlotsCount: 27,

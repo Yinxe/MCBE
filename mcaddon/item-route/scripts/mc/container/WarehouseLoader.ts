@@ -34,6 +34,7 @@ export function ensureContainersLoaded(warehouse: Warehouse, deps: WarehouseLoad
       if (container === undefined) continue;
       container.enabled = entry.enabled;
       container.priority = entry.priority;
+      container.warningEnabled = entry.warningEnabled ?? true; // 旧档缺字段 → 默认开
       registerContainer(warehouse, container);
     } catch {
       // 区块未加载等：跳过

@@ -46,6 +46,8 @@ import { McEventBridge } from "./mc/adapters/McEventBridge";
 import { SelectionSessionStore } from "./mc/interaction/SelectionSessionStore";
 import { registerToolInteraction } from "./mc/interaction/ToolInteractionController";
 import { registerAllCommands, type CommandDeps } from "./mc/commands/index";
+import { registerWarehouseHUD } from "./mc/effects/WarehouseHUD";
+import { stopMarkerParticlesFor } from "./mc/ui/SearchUI";
 
 // ── mc：装配模块（业务逻辑抽离处，本文件只调） ──
 import { setupPersistentBoundaryControl } from "./mc/bootstrap/persistentBoundary";
@@ -114,6 +116,8 @@ const boundary = setupPersistentBoundaryControl({ bus, config, loaded });
 const organizeInventory = createInventoryOrganizer(organize, item);
 // 视觉/播报效果：路由闪光（角色颜色粒子）+ 临时边界 + 容量预警 + 成员通知
 registerRenderEffects(bus, loaded);
+// 仓库状态 HUD：物品栏上方 actionbar 显示附近仓库的路由/工作状态（成员可见）
+registerWarehouseHUD(scheduler, loaded, members);
 
 // ── 容器逐容器持久化（注册表/索引/统计每容器一条键，事件驱动最小单位）收进 persistence/Persistence ──
 const persistence = createContainerPersistence({ warehouseStore, indexStore, scheduler, stats });
@@ -148,9 +152,10 @@ bridge.start();
 
 // 交互层：选区会话 + 命令 deps + 信物交互
 const sessionStore = new SelectionSessionStore();
-// 玩家离开：清该玩家选区会话（防下线残留，重连误完成选区）
+// 玩家离开：清该玩家选区会话 + 搜索标记渲染（防下线残留，重连误完成选区/重叠渲染）
 world.afterEvents.playerLeave.subscribe((e) => {
   sessionStore.clear(e.playerName);
+  stopMarkerParticlesFor(e.playerName);
 });
 const commandDeps: CommandDeps = {
   bus,

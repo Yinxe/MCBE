@@ -36,7 +36,8 @@ export function registerOrganize(registry: Parameters<typeof defineCommand>[0], 
     let totalMoves = 0;
     for (const container of warehouse.containers.values()) {
       const res = deps.organize.organizeContainer(warehouse, container, new MoveJournal());
-      if (!res.ok || res.moves === 0) continue; // 失败/已整齐 → 不展示
+      // 失败或**完全整齐**（messiness 归 0）→ 不展示；手动整理是强制整理，非 0 混乱度即使 0 合并也展示
+      if (!res.ok || (res.moves === 0 && res.messiness.total === 0)) continue;
       organized++;
       totalMoves += res.moves;
       for (const line of formatOrganizeResult(res, shortName(container.id))) {

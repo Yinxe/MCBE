@@ -9,7 +9,7 @@
 //   · route-flash 播 `random.orb` 音效（pitch 0.65 / volume 0.35）
 // 坐标/角色/方块类型经注入的 EffectLocator（装配层以 loaded warehouses 反查），本模块不持
 // 仓库引用，保持薄订阅者角色。RP 粒子 identifier：itemroute:sort / itemroute:deposit。
-import { MolangVariableMap, type Dimension } from "@minecraft/server";
+import { MolangVariableMap, type Dimension, type Vector3 } from "@minecraft/server";
 import type { ContainerRole } from "../../core/model/Container";
 import type { Location } from "../../core/model/types";
 import type { EventBus, VisualEffectEvent } from "../../core/events/DomainEvents";
@@ -21,10 +21,12 @@ export { SORT_PARTICLE, DEPOSIT_PARTICLE };
 const SORT_SOUND = "random.orb";
 const SORT_PITCH = 0.65;
 const SORT_VOLUME = 0.35;
+/** 音效可闻半径（格）：向该范围内玩家显式播报，确保附近玩家能听到（v1 口径） */
+const SOUND_RANGE = 16;
 
-/** 箱子类型（非完整方块）的粒子尺寸 */
-const CHEST_SIZE = 0.96;
-/** 完整方块（木桶、潜影盒）的粒子尺寸——更大让光效贴满面、超边可见 */
+/** 箱子类型（非完整方块）的粒子尺寸（v1 同款：1×1） */
+const CHEST_SIZE = 1.0;
+/** 完整方块（木桶、潜影盒）的粒子尺寸——略大于 1（v1 同款），让光效贴满面、超边可见 */
 const FULL_BLOCK_SIZE = 1.08;
 /** 完整方块的粒子高度偏移（让光效居中可见） */
 const FULL_BLOCK_OFF_H = -0.52;
@@ -100,7 +102,7 @@ export interface EffectLocator {
   targetOf(containerId: string): EffectTarget | undefined;
 }
 
-/** 单坐标播一次粒子（跳过未加载区块：getBlock 抛错则该坐标跳过） */
+/** 单坐标播一次粒子 + 音效（跳过未加载区块：getBlock 抛错则该坐标跳过） */
 function playAt(
   dimension: Dimension,
   loc: Location,
@@ -113,9 +115,22 @@ function playAt(
   } catch {
     return; // 未加载区块：跳过
   }
-  const center = { x: loc.x + 0.5, y: loc.y + PARTICLE_Y, z: loc.z + 0.5 };
+  const center: Vector3 = { x: loc.x + 0.5, y: loc.y + PARTICLE_Y, z: loc.z + 0.5 };
   dimension.spawnParticle(particleId, center, molang);
-  if (sound !== undefined) dimension.playSound(sound, center, { pitch: SORT_PITCH, volume: SORT_VOLUME });
+  if (sound !== undefined) playSoundNearby(dimension, center);
+}
+
+/** 向粒子坐标附近玩家显式播放音效（`player.playSound` 带位置；半径内玩家都能听到） */
+function playSoundNearby(dim: Dimension, center: Vector3): void {
+  for (const p of dim.getPlayers()) {
+    const d = Math.hypot(p.location.x - center.x, p.location.y - center.y, p.location.z - center.z);
+    if (d > SOUND_RANGE) continue;
+    try {
+      p.playSound(SORT_SOUND, { location: center, pitch: SORT_PITCH, volume: SORT_VOLUME });
+    } catch {
+      /* 玩家离线/维度切换：忽略 */
+    }
+  }
 }
 
 /** 订阅领域事件 visualEffect：route-flash 播放角色颜色粒子+音效；维度内无玩家跳过 */

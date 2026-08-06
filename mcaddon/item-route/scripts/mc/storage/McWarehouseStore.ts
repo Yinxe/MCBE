@@ -36,6 +36,8 @@ export interface ContainerEntry {
   locations: Location[];
   enabled: boolean;
   priority: number;
+  /** 该容器容量预警开关（容器级；关闭后该容器不预警） */
+  warningEnabled: boolean;
 }
 
 /**

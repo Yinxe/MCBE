@@ -154,10 +154,12 @@ export class WarehouseService {
     return { ok: true, warehouse };
   }
 
-  /** 删除仓库：清 meta/注册表键（store.remove），并触发 warehouse-deleted（mc 层清索引/统计键 + 停调度） */
+  /** 删除仓库：**先触发 warehouse-deleted（mc 层清索引/统计键 + 停调度，需 cids 索引仍在）**，再移除 meta/注册表键 */
   deleteWarehouse(id: WarehouseId): void {
-    this.store.remove(id);
+    // ⚠️ 顺序关键：warehouseDeleted 订阅者要用 cids 索引枚举容器清索引/统计键，
+    //    必须先发事件（store.remove 会删 cids 索引键，导致订阅者读不到）。
     this.bus.warehouseDeleted.trigger({ type: "warehouse-deleted", warehouseId: id });
+    this.store.remove(id);
   }
 
   /** 改名：非空 + 全局唯一；成功落 meta + 触发 warehouse-renamed；失败返回中文错误 */
@@ -233,14 +235,19 @@ export class WarehouseService {
     if (newId !== warehouse.id) {
       oldId = warehouse.id;
       warehouse.id = newId;
+      // ⚠️ 顺序关键：warehouseAreaChanged 订阅者要把旧 cids 索引迁移到新 id，
+      //    必须先发事件（store.remove(oldId) 会删旧 cids 索引键，导致迁移读不到）。
+      this.bus.warehouseAreaChanged.trigger({ type: "warehouse-area-changed", warehouseId: warehouse.id, oldId });
       this.persist(warehouse);
       this.store.remove(oldId);
     } else {
       this.persist(warehouse);
+      this.bus.warehouseAreaChanged.trigger({
+        type: "warehouse-area-changed",
+        warehouseId: warehouse.id,
+        oldId: undefined,
+      });
     }
-    // resize 使仓库 ID 迁移时携带 oldId——持久化迁移（cids 索引/调度器重注册）由 mc 层
-    // 订阅 warehouseAreaChanged 处理（事件驱动，与其它持久化统一，不再用构造回调）
-    this.bus.warehouseAreaChanged.trigger({ type: "warehouse-area-changed", warehouseId: warehouse.id, oldId });
     return undefined;
   }
 

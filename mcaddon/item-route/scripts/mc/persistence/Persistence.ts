@@ -82,6 +82,7 @@ export function createContainerPersistence(deps: ContainerPersistenceDeps): Cont
     locations: c.occupiedLocations,
     enabled: c.enabled,
     priority: c.priority,
+    warningEnabled: c.warningEnabled,
   });
 
   const persistContainer = (warehouse: Warehouse, container: Container, oldId?: ContainerId): void => {

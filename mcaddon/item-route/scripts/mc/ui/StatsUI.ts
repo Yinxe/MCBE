@@ -1,14 +1,23 @@
-// ─── 统计页：按类型 / 按物品 双视图（Table 渲染） ─────────
+// ─── 统计页：单一物品视图（物品名/数量/所在容器，按数量排序 + 单位化数量） ──
+// 需求对齐：只保留"按物品统计"**单一视图**（"按类型"与"按物品"本是同一信息，去除冗余）。
+// 每行展示：物品中文名 | 单位化数量（234 / 4k / 123k / 999k / 1M / 2.3M） | 所在容器
+// （多容器只显示 1 个容器短 id + "和其他 n 个容器"），按数量降序。
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import type { Warehouse } from "../../core/model/Warehouse";
 import { getChineseName } from "../../core/data/ItemNameMap";
-import { Table } from "./Table";
+import { formatCount } from "../../core/utils/formatCount";
+import { Table, Cell } from "./Table";
 import * as uiColor from "./uiColor";
 
+/** 容器 ID → 可读短名（取坐标段，如 c@(1,2,3)@overworld → (1,2,3)） */
+function shortId(cid: string): string {
+  return cid.split("@")[1] ?? cid;
+}
+
 /**
- * 展示仓库统计菜单：总览 + 按类型 / 按物品两个视图。统计是容器内容的派生，
+ * 展示仓库统计菜单：总览 + 单一"查看物品统计"入口。统计是容器内容的派生，
  * 故先 ensureContainersLoaded（仓库可能未激活）。
  *
  * @param player    - 打开统计的玩家
@@ -22,34 +31,22 @@ export async function showStatsUI(player: Player, deps: CommandDeps, warehouse: 
   const form = new ActionFormBuilder()
     .title(`${uiColor.form.title}统计 · ${warehouse.displayName}`)
     .body(
-      `${uiColor.form.muted}容器 ${uiColor.form.body}${stats.containerCount} ${uiColor.form.muted}| 槽位 ${uiColor.form.body}${stats.usedSlots}/${stats.totalSlots} ${uiColor.form.muted}| 物品 ${uiColor.form.body}${stats.totalItems} ${uiColor.form.muted}| 种类 ${uiColor.form.body}${stats.uniqueTypes}`
+      `${uiColor.form.muted}容器 ${uiColor.form.body}${stats.containerCount} ${uiColor.form.muted}| 槽位 ${uiColor.form.body}${stats.usedSlots}/${stats.totalSlots} ${uiColor.form.muted}| 物品 ${uiColor.form.body}${formatCount(stats.totalItems)} ${uiColor.form.muted}| 种类 ${uiColor.form.body}${stats.uniqueTypes}`
     )
-    .button(`${uiColor.btn.nav}按类型查看`, () => void showByType(player, deps, warehouse))
-    .button(`${uiColor.btn.nav}按物品查看`, () => void showByItem(player, deps, warehouse));
+    .button(`${uiColor.btn.nav}查看物品统计`, () => void showItemStats(player, deps, warehouse));
   await form.show(player);
 }
 
-/** 按物品种类汇总（数量降序），中文名展示 */
-function showByType(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
+/** 单一物品统计视图：物品名/单位化数量/所在容器（按数量降序） */
+function showItemStats(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
   const stats = deps.stats.getWarehouseStats(warehouse);
-  const table = new Table().header("物品", "数量");
-  for (const [typeId, count] of Object.entries(stats.byType).sort((a, b) => b[1] - a[1])) {
-    table.row(getChineseName(typeId), String(count));
+  const table = new Table().header(Cell.left("物品"), Cell.right("数量"), Cell.left("所在容器"));
+  const rows = Object.entries(stats.byItem).sort((a, b) => b[1].count - a[1].count);
+  for (const [typeId, itemStat] of rows) {
+    const first = itemStat.containerIds[0] !== undefined ? shortId(itemStat.containerIds[0]) : "—";
+    const more =
+      itemStat.containerIds.length > 1 ? ` ${uiColor.chat.muted}和其他 ${itemStat.containerIds.length - 1} 个容器` : "";
+    table.row(getChineseName(typeId), Cell.right(formatCount(itemStat.count)), `${first}${more}`);
   }
-  player.sendMessage(`${uiColor.chat.warn}按类型统计（${warehouse.displayName}）\n${table.render() || "空"}`);
-}
-
-/** 按物品种类汇总（数量/堆叠数/所在容器 ID），中文名展示 */
-function showByItem(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
-  const stats = deps.stats.getWarehouseStats(warehouse);
-  const table = new Table().header("物品", "数量", "堆叠", "所在容器");
-  for (const [typeId, itemStat] of Object.entries(stats.byItem)) {
-    table.row(
-      getChineseName(typeId),
-      String(itemStat.count),
-      String(itemStat.stacks),
-      itemStat.containerIds.join("、")
-    );
-  }
-  player.sendMessage(`${uiColor.chat.warn}按物品统计（${warehouse.displayName}）\n${table.render() || "空"}`);
+  player.sendMessage(`${uiColor.chat.warn}物品统计（${warehouse.displayName}）\n${table.render(1, [1, 2]) || "空"}`);
 }

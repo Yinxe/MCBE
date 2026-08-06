@@ -18,21 +18,27 @@ export interface ContainerScanResult {
   totalItems: number;
   /** 最后一个非空槽索引（无一非空为 -1） */
   lastNonEmptySlot: number;
+  /** 空槽索引列表（混乱度顺序计算需要：空槽理想位置在容器末尾） */
+  emptySlots: number[];
 }
 
 /** 单趟扫描容器全部槽位；读失败槽位静默跳过（与适配层安全访问语义一致） */
 export function scanContainer(container: Container): ContainerScanResult {
   const items: ItemStack[] = [];
   const byType: Record<ItemId, number> = {};
+  const emptySlots: number[] = [];
   let totalItems = 0;
   let lastNonEmptySlot = -1;
   for (let i = 0; i < container.capacity; i++) {
     const item = container.getItem(i);
-    if (item === undefined) continue;
+    if (item === undefined) {
+      emptySlots.push(i);
+      continue;
+    }
     items.push(item);
     lastNonEmptySlot = i;
     totalItems += item.amount;
     byType[item.itemId] = (byType[item.itemId] ?? 0) + item.amount;
   }
-  return { items, byType, usedSlots: items.length, totalItems, lastNonEmptySlot };
+  return { items, byType, usedSlots: items.length, totalItems, lastNonEmptySlot, emptySlots };
 }

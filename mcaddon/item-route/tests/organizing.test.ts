@@ -50,3 +50,24 @@ test("Organizer: shouldAutoSortFromScan 与 messinessFromScan 吃同一趟扫描
   assert.equal(organizer.shouldAutoSortFromScan(scan, 0.4), true); // total 0.7 > 0.4
   assert.equal(organizer.messinessFromScan(scan).total, 0.7);
 });
+
+test("Organizer: 空槽参与顺序计算——空槽在物品中间视为错位（理想位置在末尾）", () => {
+  const organizer = new Organizer();
+  // [stone, 空, dirt]：空槽放在物品中间 → 空>dirt 逆序 1/2 × 0.7 = 0.35
+  const hole = new InMemoryContainer("h", "multi", 4);
+  hole.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  hole.setItem(2, new SimpleItemStack("minecraft:dirt", 5, 64));
+  assert.equal(organizer.chaosScore(hole), 0.35);
+  // [空, dirt, wood]：空槽在首位（理想应在末尾）→ 空>dirt 逆序 1/2 × 0.7 = 0.35
+  const leading = new InMemoryContainer("l", "multi", 4);
+  leading.setItem(1, new SimpleItemStack("minecraft:dirt", 5, 64));
+  leading.setItem(2, new SimpleItemStack("minecraft:wood", 5, 64));
+  assert.equal(organizer.chaosScore(leading), 0.35);
+  // [dirt, wood, 空]：尾随空槽是理想位置 → 不额外计逆序 → 0（干净）
+  const trailing = new InMemoryContainer("t", "multi", 4);
+  trailing.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64));
+  trailing.setItem(1, new SimpleItemStack("minecraft:wood", 5, 64));
+  assert.equal(organizer.chaosScore(trailing), 0);
+  // 对比：空槽前置/中置 的混乱度 > 尾随空槽（验证"空位理想顺序在末尾"）
+  assert.ok(organizer.chaosScore(leading) > organizer.chaosScore(trailing));
+});

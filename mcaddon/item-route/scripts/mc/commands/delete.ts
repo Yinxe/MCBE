@@ -23,7 +23,7 @@ export function registerDelete(registry: Parameters<typeof defineCommand>[0], de
       return;
     }
     if (!requireRole(deps.members, warehouse, player.name, "owner")) {
-      player.sendMessage(`${chat.error}需要 owner 权限`);
+      player.sendMessage(`${chat.error}需要拥有者权限`);
       return;
     }
     deps.warehouses.deleteWarehouse(warehouse.id);

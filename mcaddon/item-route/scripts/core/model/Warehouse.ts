@@ -37,6 +37,8 @@ export interface WarehouseSettings {
   autoSortThreshold: number;
   /** 持久边界光幕：区域 12 棱持续显示粒子线框（附近玩家持信物可见；v1 showBoundary 口径） */
   showBoundary: boolean;
+  /** 容量预警全局开关（默认开；关闭后该仓不再触发任何预警消息） */
+  warningEnabled: boolean;
   /** 新放置容器的默认角色（漏斗仍强制 input） */
   defaultContainerRole: ContainerRole;
   /** 新放置容器的默认启用 */
@@ -51,6 +53,7 @@ export function createDefaultSettings(): WarehouseSettings {
     warningThreshold: 0.9,
     autoSortThreshold: 0.4,
     showBoundary: false,
+    warningEnabled: true,
     defaultContainerRole: "single",
     defaultContainerEnabled: true,
   };

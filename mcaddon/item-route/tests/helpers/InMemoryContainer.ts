@@ -9,6 +9,7 @@ export class InMemoryContainer implements Container {
   warehouseId!: WarehouseId;
   role: ContainerRole;
   enabled = true;
+  warningEnabled = true;
   priority = 10;
   readonly capacity: number;
   readonly occupiedLocations: Location[];

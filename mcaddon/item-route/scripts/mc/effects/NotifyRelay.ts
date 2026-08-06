@@ -22,8 +22,10 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import type { ContainerId } from "../../core/model/types";
 import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
 import { getChineseName } from "../../core/data/ItemNameMap";
+import { containerRoleName } from "../../core/model/Container";
 import { PROXIMITY_MARGIN } from "../adapters/McProximityChecker";
 import { chat } from "../ui/uiColor";
+import { LIFECYCLE_ACTIONS } from "../ui/Labels";
 
 /** 输入堵塞通知防抖窗口（tick；600 = 30 秒 @20tps） */
 const BLOCK_NOTIFY_COOLDOWN_TICKS = 600;
@@ -43,12 +45,12 @@ function shortId(containerId: ContainerId): string {
 export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]): void {
   const lastBlockNotify = new Map<string, number>();
 
-  // 新容器注册（放置/扫描） → 所有在线成员
+  // 新容器注册（放置/扫描） → 所有在线成员（中文语义：输入容器/单物容器/多物容器/其他容器）
   bus.containerAdded.subscribe((e: ContainerAddedEvent) => {
     try {
       const wh = warehouses().find((w) => w.id === e.warehouseId);
       if (wh === undefined) return;
-      const msg = `${chat.success}[容器] ${shortId(e.containerId)} 新注册`;
+      const msg = `${chat.success}[容器] ${shortId(e.containerId)} 新注册（${containerRoleName(e.role)}）`;
       for (const p of onlineMembers(wh)) p.sendMessage(msg);
     } catch (err) {
       console.warn(`[item-route] 容器注册通知失败: ${err}`);
@@ -95,19 +97,19 @@ export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]
       if (now - last < BLOCK_NOTIFY_COOLDOWN_TICKS) return;
       lastBlockNotify.set(e.containerId, now);
       const name = getChineseName(e.itemId);
-      const msg = `${chat.warn}[输入堵塞] ${shortId(e.containerId)} 有 ${e.amount} 个${name}无法分拣（目标满/无匹配分类），请扩容或调整容器`;
+      const msg = `${chat.warn}[输入堵塞] ${shortId(e.containerId)} 有 ${e.amount} 个${name}无法路由（目标满/无匹配分类），请扩容或调整容器`;
       for (const p of nearbyMembers(wh)) p.sendMessage(msg);
     } catch (err) {
       console.warn(`[item-route] 输入堵塞通知失败: ${err}`);
     }
   });
 
-  // 生命周期 → **所有在线成员**（激活/停用/停机）
+  // 生命周期 → **所有在线成员**（启动路由/停止路由/停用中——中文语义，杜绝 deactivating 等英文）
   bus.lifecycleChanged.subscribe((e: LifecycleChangedEvent) => {
     try {
       const wh = warehouses().find((w) => w.id === e.warehouseId);
       if (wh === undefined) return;
-      const action = e.to === "active" ? "已激活分拣" : e.to === "inactive" ? "已停用" : `进入 ${e.to}`;
+      const action = LIFECYCLE_ACTIONS[e.to as keyof typeof LIFECYCLE_ACTIONS] ?? e.to;
       const msg = `${chat.warn}[仓库] "${wh.displayName}" ${action}`;
       for (const p of onlineMembers(wh)) p.sendMessage(msg);
     } catch (err) {

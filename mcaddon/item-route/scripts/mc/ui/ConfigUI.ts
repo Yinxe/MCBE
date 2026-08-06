@@ -5,17 +5,18 @@ import { type Player } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import type { WarehouseSpec } from "../../core/services/WarehouseService";
+import { getChineseName } from "../../core/data/ItemNameMap";
 import { TOKEN_OPTIONS } from "../storage/McModConfig";
 import * as uiColor from "./uiColor";
 
 /** 全局速度上限可选项（tick/槽）；默认 index 1 = 8 tick */
 const SPEED_OPTIONS: number[] = [4, 8, 16, 20, 30, 40];
 /** 单仓最大规格预置项（v1 口径：各轴最大边长**规格**，非体积格数；默认 index 1 = 32×16×32） */
+// ⚠️ 刻意不含 64×64 大规格：v1 商定规格经模拟距离思考，过大区域可能超出模拟距离导致扫描/路由失效。
 const SPEC_OPTIONS: WarehouseSpec[] = [
   { x: 16, y: 8, z: 16 },
   { x: 32, y: 16, z: 32 },
   { x: 48, y: 16, z: 48 },
-  { x: 64, y: 32, z: 64 },
 ];
 /** 单仓最大容器数可选项（v1 ConfigUI 同款：50/100推荐/200/512） */
 const CONTAINER_OPTIONS: number[] = [50, 100, 200, 512];
@@ -32,7 +33,7 @@ export async function showConfigUI(player: Player, deps: CommandDeps): Promise<v
     .title(`${uiColor.form.title}模组配置`)
     .body(
       [
-        `${uiColor.form.muted}全局分拣：${deps.config.globalEnabled ? uiColor.form.success + "开启" : uiColor.form.error + "关闭"}`,
+        `${uiColor.form.muted}全局路由：${deps.config.globalEnabled ? uiColor.form.success + "开启" : uiColor.form.error + "关闭"}`,
         `${uiColor.form.muted}速度上限：${uiColor.form.body}${deps.config.globalSpeedLimit} tick/槽`,
         `${uiColor.form.muted}信物：${uiColor.form.body}${deps.config.tokenItemId}`,
       ].join("\n")
@@ -53,15 +54,21 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   );
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}修改配置`)
-    .toggle("globalEnabled", "全局分拣", { defaultValue: deps.config.globalEnabled })
-    .dropdown("token", "信物", TOKEN_OPTIONS, { defaultValueIndex: tokenIndex })
+    .toggle("globalEnabled", "全局路由", { defaultValue: deps.config.globalEnabled })
+    // 信物下拉：优先 name-maps 中文名，未覆盖的物品回退游戏 id（v1 同款中文展示）
+    .dropdown(
+      "token",
+      "信物",
+      TOKEN_OPTIONS.map((id) => `${getChineseName(id)}（${id}）`),
+      { defaultValueIndex: tokenIndex }
+    )
     .dropdown(
       "speed",
       "全局最快速度限制",
       SPEED_OPTIONS.map((s) => `最快 ${s} tick`),
       {
         defaultValueIndex: speedIndex >= 0 ? speedIndex : 1,
-        tooltip: "全服最快分拣速度：快于该值（tick 更小）的仓库将被强制降到此速度，合规仓库不动",
+        tooltip: "全服最快路由速度：快于该值（tick 更小）的仓库将被强制降到此速度，合规仓库不动",
       }
     )
     .dropdown(

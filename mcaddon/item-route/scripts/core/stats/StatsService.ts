@@ -203,11 +203,14 @@ export class StatsService {
    * - 手动/全览：不传 containerId → 遍历容器。
    */
   evaluateWarnings(warehouse: Warehouse, containerId?: ContainerId): WarningLevel[] {
+    // 仓库级预警全局开关：关闭后该仓不再触发任何预警
+    if (!warehouse.settings.warningEnabled) return [];
     const cd = this.cooldowns.get(warehouse.id) ?? 0;
     if (cd > 0) return [];
+    // 容器级预警开关：关闭的容器既不参与 warning 判定、也不参与 full 判定
     const targets = (
       containerId !== undefined ? [warehouse.containers.get(containerId)] : [...warehouse.containers.values()]
-    ).filter((c): c is Container => c !== undefined && c.role !== "input");
+    ).filter((c): c is Container => c !== undefined && c.role !== "input" && c.warningEnabled !== false);
     if (targets.length === 0) return [];
 
     // warning：最满的超阈值容器（容器级）
@@ -240,12 +243,12 @@ export class StatsService {
     return emitted;
   }
 
-  /** 全仓库（除 input）是否满仓（非空且所有非 input 容器 usedSlots>0 且无空槽） */
+  /** 全仓库（除 input）是否满仓（非空且所有非 input 容器 usedSlots>0 且无空槽）；预警关闭容器不参与 */
   private warehouseFullStocked(warehouse: Warehouse): boolean {
     let nonInputCount = 0;
     let nonInputFull = 0;
     for (const c of warehouse.containers.values()) {
-      if (c.role === "input") continue;
+      if (c.role === "input" || c.warningEnabled === false) continue;
       nonInputCount++;
       if (c.usedSlots > 0 && c.emptySlotsCount === 0) nonInputFull++;
     }

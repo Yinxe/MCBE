@@ -34,6 +34,8 @@ export class McContainerAdapter implements Container {
   warehouseId!: WarehouseId;
   role: ContainerRole;
   enabled = true;
+  /** 该容器容量预警开关（默认开；菜单可关闭该容器预警） */
+  warningEnabled = true;
   priority = 10;
   readonly occupiedLocations: Location[];
   /** 源方块类型 ID（漏斗强制 input 判定用） */

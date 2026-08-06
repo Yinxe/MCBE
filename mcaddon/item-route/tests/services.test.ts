@@ -311,6 +311,38 @@ test("OrganizeService: 空/已整齐容器 → 无需整理（moves=0）", () =>
   assert.equal(single.getItem(0)?.amount, 5); // 未变
 });
 
+test("OrganizeService: 手动整理强制——低混乱度（>0 但 <0.05）也清空重排，仅归 0 才跳过", () => {
+  const bus = new EventBus();
+  const svc = new OrganizeService(new Organizer(), bus);
+  const changed: string[] = [];
+  bus.containerChanged.subscribe((e) => changed.push(e.containerId));
+  const warehouse = {
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(),
+    containers: new Map<string, InMemoryContainer>(),
+    inputs: new Map<string, InMemoryContainer>(),
+  };
+  // 16 个不同种类 + 1 处相邻逆序（g/f 互换）→ 顺序分 1/15×0.7≈0.047（>0 且 <0.05，旧阈值会跳过）
+  const c = new InMemoryContainer("c", "multi", 40);
+  const types = "abcdefghijklmnop".split("").map((ch) => `minecraft:${ch}`);
+  for (let i = 0; i < types.length; i++) c.setItem(i, new SimpleItemStack(types[i]!, 1, 64));
+  c.setItem(5, new SimpleItemStack("minecraft:g", 1, 64)); // 第 6 个字母
+  c.setItem(6, new SimpleItemStack("minecraft:f", 1, 64)); // 第 5 个字母（相邻逆序）
+  const before = new Organizer().chaosScore(c);
+  assert.ok(before > 0 && before < 0.05, `low messiness, got ${before}`);
+  const res = svc.organizeContainer(warehouse, c, new MoveJournal());
+  assert.equal(res.ok, true);
+  // 强制整理：即使混乱度 < 0.05 也清空重排 → 槽位按序、chaosAfter=0、触发 container-changed
+  assert.equal(c.getItem(5)?.itemId, "minecraft:f");
+  assert.equal(c.getItem(6)?.itemId, "minecraft:g");
+  assert.equal(res.chaosAfter, 0);
+  assert.equal(changed.length, 1); // 强制执行（非跳过）
+});
+
 // 模拟生产适配器"清空槽位静默失败"（setItem(undefined) 被吞掉）→ 必须回滚而非重复物品
 class FailingClearContainer extends InMemoryContainer {
   setItem(slot: number, item?: ItemStack): void {
@@ -484,6 +516,44 @@ test("WarehouseService: 仓库 CRUD 触发领域事件", () => {
   svc.rename(r.warehouse, "新名");
   svc.deleteWarehouse(r.warehouse.id);
   assert.deepEqual(events, [`create:${r.warehouse.id}:仓A`, "rename:新名", `delete:${r.warehouse.id}`]);
+});
+
+test("WarehouseService: 删除事件在 meta 移除**前**触发（订阅者仍可读 cids/注册表做清理）", () => {
+  const bus = new EventBus();
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), bus);
+  const r = svc.createWarehouse("仓A", "p1", area1);
+  if (!r.ok) return;
+  let storeStillHasIt = false;
+  // 订阅者（mc 层清索引/统计键）需要在该事件回调里读到仓库（cids 索引仍存在）
+  bus.warehouseDeleted.subscribe((e) => {
+    storeStillHasIt = svc.loadAll().some((w) => w.id === e.warehouseId);
+  });
+  svc.deleteWarehouse(r.warehouse.id);
+  assert.equal(storeStillHasIt, true); // 事件先于 store.remove → 订阅者可枚举容器清理
+  assert.equal(svc.loadAll().length, 0); // 最终 meta 已移除
+});
+
+test("WarehouseService: resize 迁移时 area-changed 事件在旧 meta 移除前触发（订阅者可迁移 cids）", () => {
+  const bus = new EventBus();
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), bus);
+  const r = svc.createWarehouse("仓A", "p1", area1);
+  if (!r.ok) return;
+  const oldId = r.warehouse.id;
+  let newIdAtEvent: string | undefined;
+  let oldMetaStillPresent = false;
+  bus.warehouseAreaChanged.subscribe((e) => {
+    newIdAtEvent = e.warehouseId;
+    oldMetaStillPresent = svc.loadAll().some((w) => w.id === e.oldId);
+  });
+  const changed = svc.updateArea(r.warehouse, {
+    dimension: "overworld",
+    corner1: { x: 200, y: 0, z: 200 },
+    corner2: { x: 210, y: 10, z: 210 },
+  });
+  assert.equal(changed, undefined);
+  assert.equal(newIdAtEvent, r.warehouse.id); // 新 id 已在事件时可见
+  assert.equal(oldMetaStillPresent, true); // 旧 meta 尚未移除 → 订阅者可迁移旧 cids 键
+  assert.notEqual(r.warehouse.id, oldId);
 });
 
 test("OrganizeService: 整理成功触发 organize-completed", () => {

@@ -101,6 +101,38 @@ test("StatsService: 满仓预警（全仓非 input 全满才报 full）", () => 
   assert.deepEqual(svc2.evaluateWarnings(wh2.warehouse), ["warning"]); // 无 full
 });
 
+test("StatsService: 仓库级预警开关关闭 → 不再触发任何预警", () => {
+  const { warehouse, containers } = makeWarehouse();
+  const c = new InMemoryContainer("m1", "multi", 10);
+  for (let i = 0; i < 9; i++) c.setItem(i, new SimpleItemStack(`minecraft:item${i}`, 1, 64)); // 90%
+  containers.set("m1", c);
+  const bus = new EventBus();
+  const warnings: string[] = [];
+  bus.warning.subscribe((e) => warnings.push(e.level));
+  const svc = new StatsService(new InMemoryStatsStore(), bus);
+  warehouse.settings.warningEnabled = false; // 仓库级全局关
+  assert.deepEqual(svc.evaluateWarnings(warehouse), []);
+  assert.deepEqual(warnings, []);
+  warehouse.settings.warningEnabled = true; // 恢复 → 正常预警
+  assert.deepEqual(svc.evaluateWarnings(warehouse), ["warning"]);
+});
+
+test("StatsService: 容器级预警开关关闭 → 该容器不预警（warning 与 full 均排除）", () => {
+  const { warehouse, containers } = makeWarehouse();
+  const over = new InMemoryContainer("over", "multi", 10);
+  for (let i = 0; i < 9; i++) over.setItem(i, new SimpleItemStack(`minecraft:o${i}`, 1, 64)); // 90%
+  over.warningEnabled = false; // 容器级关
+  const under = new InMemoryContainer("under", "multi", 10);
+  under.setItem(0, new SimpleItemStack("minecraft:stone", 1, 64));
+  containers.set("over", over);
+  containers.set("under", under);
+  const svc = new StatsService(new InMemoryStatsStore(), new EventBus());
+  // 容器级关 → 即使 90% 也不报 warning；另一未超阈值容器也不报
+  assert.deepEqual(svc.evaluateWarnings(warehouse), []);
+  // 全仓满仓判定也排除预警关闭容器：over 满 90% 未满；under 空 → 不 full
+  assert.deepEqual(svc.evaluateWarnings(warehouse), []);
+});
+
 test("StatsService: 仓库统计汇总", () => {
   const { warehouse, containers } = makeWarehouse();
   const input = new InMemoryContainer("in", "input", 3);

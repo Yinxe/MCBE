@@ -28,7 +28,7 @@ export async function showWarehouseCreateForm(player: Player, deps: CommandDeps)
     )
     .toggle("defaultEnabled", "容器默认启用", {
       defaultValue: true,
-      tooltip: "新注册容器默认是否参与分拣",
+      tooltip: "新注册容器默认是否参与路由",
     });
 
   const values = await form.show(player);

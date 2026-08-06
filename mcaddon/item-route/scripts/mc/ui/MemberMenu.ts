@@ -6,14 +6,11 @@ import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { MemberRole } from "../../core/model/Warehouse";
+import { MEMBER_ROLE_LABELS } from "./Labels";
 import * as uiColor from "./uiColor";
 
-/** 成员角色中文标签（dropdown 选项 + 列表展示） */
-const ROLE_LABELS: Record<MemberRole, string> = {
-  owner: "owner",
-  member: "member",
-  visitor: "visitor",
-};
+/** 成员角色中文标签（来自 Labels 中心，dropdown 选项 + 列表展示） */
+const ROLE_LABELS: Record<MemberRole, string> = MEMBER_ROLE_LABELS;
 /** 可新增/授予的角色（owner 只能通过转让设置，见 WarehouseService.addMember） */
 const ASSIGNABLE_ROLES: MemberRole[] = ["member", "visitor"];
 
@@ -47,7 +44,12 @@ async function addMemberForm(player: Player, deps: CommandDeps, warehouse: Wareh
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}添加成员`)
     .textField("playerName", "玩家 ID", { defaultValue: "" })
-    .dropdown("role", "角色", ASSIGNABLE_ROLES, { defaultValueIndex: 0 });
+    .dropdown(
+      "role",
+      "角色",
+      ASSIGNABLE_ROLES.map((r) => ROLE_LABELS[r]),
+      { defaultValueIndex: 0 }
+    );
   const values = await form.show(player);
   if (!values) return;
   const pid = (values.playerName as string).trim();
@@ -79,7 +81,9 @@ async function changeRoleForm(player: Player, deps: CommandDeps, warehouse: Ware
   if (!pid) return;
   const role = (Object.keys(ROLE_LABELS) as MemberRole[])[values.role as number] ?? "visitor";
   const err = deps.warehouses.setMemberRole(warehouse, pid, role);
-  player.sendMessage(err ? `${uiColor.chat.error}${err}` : `${uiColor.chat.success}${pid} 角色已设为 ${role}`);
+  player.sendMessage(
+    err ? `${uiColor.chat.error}${err}` : `${uiColor.chat.success}${pid} 角色已设为 ${ROLE_LABELS[role]}`
+  );
 }
 
 /** 移除成员表单：排除 owner（owner 不可被移除，见 WarehouseService.removeMember） */

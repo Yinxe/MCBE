@@ -141,6 +141,11 @@ export class Scheduler {
     return this.runtimes.get(warehouseId)?.index;
   }
 
+  /** 全局分拣开关状态（HUD 展示用） */
+  get isGlobalEnabled(): boolean {
+    return this.globalEnabled;
+  }
+
   /** 测试辅助：当前 interval 间隔（undefined = 未激活） */
   getIntervalTicks(warehouseId: WarehouseId): number | undefined {
     const rt = this.runtimes.get(warehouseId);

@@ -28,6 +28,7 @@ export class PlayerInventoryContainer implements Container {
   warehouseId: WarehouseId = "";
   role: ContainerRole = "misc";
   enabled = true;
+  warningEnabled = true;
   priority = 0;
   readonly capacity = MAIN_SLOTS;
   readonly occupiedLocations: Location[] = [];

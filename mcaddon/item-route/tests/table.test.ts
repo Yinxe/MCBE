@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Table, Cell } from "../scripts/mc/ui/Table";
+import { formatCount } from "../scripts/core/utils/formatCount";
 
 test("Table: 多列对齐（left/center/right）", () => {
   const t = new Table()
@@ -34,4 +35,18 @@ test("Table: 单列正常", () => {
 test("Table: Cell.visualLen 剥离全部颜色码", () => {
   assert.equal(Cell.visualLen("§a§l钻石"), 2);
   assert.equal(Cell.visualLen("§0§1§2§3§4§5§6§7§8§9§a§b§c§d§e§f§k§l§m§n§o§r纯文本"), 3);
+});
+
+test("formatCount: 数量单位化（234 / 4k / 5.4k / 123k / 999k / 1M / 2.3M）", () => {
+  assert.equal(formatCount(0), "0");
+  assert.equal(formatCount(234), "234");
+  assert.equal(formatCount(999), "999");
+  assert.equal(formatCount(1000), "1k");
+  assert.equal(formatCount(4000), "4k");
+  assert.equal(formatCount(5423), "5.4k");
+  assert.equal(formatCount(123000), "123k");
+  assert.equal(formatCount(999000), "999k");
+  assert.equal(formatCount(1000000), "1M");
+  assert.equal(formatCount(2300000), "2.3M");
+  assert.equal(formatCount(1234567), "1.2M");
 });

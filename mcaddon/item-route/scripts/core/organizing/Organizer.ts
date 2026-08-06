@@ -56,13 +56,23 @@ export class Organizer {
     if (nonEmptySlots <= 1) {
       return { total: 0, order: 0, stack: 0, effectiveSlots, disorderSlots: 0, nonEmptySlots, suboptimalStacks: 0 };
     }
-    // 顺序评分（70%）——相邻逆序对，一个错位只影响相邻关系，不级联拉满
-    // 例：[A,C,B,D] → 仅 C>B 一对逆序 → 1/3 × 0.7 = 0.23
-    let inversions = 0;
-    for (let i = 0; i < items.length - 1; i++) {
-      if (items[i]!.itemId.localeCompare(items[i + 1]!.itemId) > 0) inversions++;
+    // 顺序评分（70%）——**空槽也参与顺序计算**（v1 修正口径）：
+    //   空槽的理想位置在容器末尾 → 空槽放在"物品之前/中间"即为错位。
+    //   做法：把 [0, lastNonEmptySlot] 内每个槽映射为一个"顺序键"——非空槽=itemId，
+    //   空槽=最高位哨兵（排在所有 itemId 之后）；相邻逆序对（键降序）计入 disorder。
+    //   尾随空槽（lastNonEmptySlot 之后）本就是理想位置，不参与（正确）。
+    //   例：[stone, 空, dirt] → stone<空 非逆序，空>dirt 逆序 → 1/2 × 0.7 = 0.35。
+    const emptySet = new Set(scan.emptySlots);
+    const seq: string[] = [];
+    let itemPtr = 0;
+    for (let i = 0; i < effectiveSlots; i++) {
+      seq.push(emptySet.has(i) ? "" : items[itemPtr++]!.itemId);
     }
-    const maxInversions = Math.max(1, items.length - 1);
+    let inversions = 0;
+    for (let i = 0; i < seq.length - 1; i++) {
+      if (seqGreater(seq[i]!, seq[i + 1]!)) inversions++;
+    }
+    const maxInversions = Math.max(1, seq.length - 1);
     const order = (inversions / maxInversions) * 0.7;
     // 堆叠评分（30%）——同种 ≥2 组未满堆叠记入未优化
     const groups = new Map<ItemId, { stacks: number; nonFull: number }>();
@@ -94,4 +104,15 @@ export class Organizer {
   shouldAutoSortFromScan(scan: ContainerScanResult, threshold: number): boolean {
     return this.messinessFromScan(scan).total > threshold;
   }
+}
+
+/**
+ * 顺序逆序判定（空槽参与）：
+ *  - 空槽哨兵（""）排在**所有** itemId 之后（理想位置在容器末尾）→ 空槽 > 任意物品；
+ *  - 物品-物品沿用 localeCompare（与原算法一致）。
+ */
+function seqGreater(a: string, b: string): boolean {
+  if (a === "") return b !== "";
+  if (b === "") return false;
+  return a.localeCompare(b) > 0;
 }

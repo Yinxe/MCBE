@@ -58,6 +58,7 @@ test("McWarehouseStore: 单容器键写/读/删（最小单位）", () => {
     locations: [{ x: 1, y: 2, z: 3 }],
     enabled: true,
     priority: 10,
+    warningEnabled: true,
   };
   store.saveContainer("c1", entry);
   assert.deepEqual(store.loadContainer("c1"), entry);
@@ -70,8 +71,24 @@ test("McWarehouseStore: 单容器键写/读/删（最小单位）", () => {
 
 test("McWarehouseStore: 索引维护 + loadAllContainers 按索引组装", () => {
   const { store } = makeStore();
-  const c1 = { id: "c1", warehouseId: "w1", role: "input" as const, locations: [], enabled: true, priority: 10 };
-  const c2 = { id: "c2", warehouseId: "w1", role: "single" as const, locations: [], enabled: true, priority: 10 };
+  const c1 = {
+    id: "c1",
+    warehouseId: "w1",
+    role: "input" as const,
+    locations: [],
+    enabled: true,
+    priority: 10,
+    warningEnabled: true,
+  };
+  const c2 = {
+    id: "c2",
+    warehouseId: "w1",
+    role: "single" as const,
+    locations: [],
+    enabled: true,
+    priority: 10,
+    warningEnabled: true,
+  };
   // 模拟装配层"注册容器 + 同步索引"
   store.saveContainer(c1.id, c1);
   store.saveContainer(c2.id, c2);
@@ -92,8 +109,24 @@ test("McWarehouseStore: 索引维护 + loadAllContainers 按索引组装", () =>
 test("McWarehouseStore: 旧整仓键自动迁移为每容器键", () => {
   const { shards, store } = makeStore();
   const entries = [
-    { id: "c1", warehouseId: "w1", role: "input" as const, locations: [], enabled: true, priority: 10 },
-    { id: "c2", warehouseId: "w1", role: "single" as const, locations: [], enabled: true, priority: 10 },
+    {
+      id: "c1",
+      warehouseId: "w1",
+      role: "input" as const,
+      locations: [],
+      enabled: true,
+      priority: 10,
+      warningEnabled: true,
+    },
+    {
+      id: "c2",
+      warehouseId: "w1",
+      role: "single" as const,
+      locations: [],
+      enabled: true,
+      priority: 10,
+      warningEnabled: true,
+    },
   ];
   // 模拟旧版：整仓键（generation 写入）
   shards.write(legacyContainersKey("w1"), entries, "generation");
@@ -115,8 +148,24 @@ test("McWarehouseStore: 旧整仓键自动迁移为每容器键", () => {
 
 test("McWarehouseStore: remove 清索引 + 每个容器键", () => {
   const { store } = makeStore();
-  const c1 = { id: "c1", warehouseId: "w1", role: "input" as const, locations: [], enabled: true, priority: 10 };
-  const c2 = { id: "c2", warehouseId: "w1", role: "single" as const, locations: [], enabled: true, priority: 10 };
+  const c1 = {
+    id: "c1",
+    warehouseId: "w1",
+    role: "input" as const,
+    locations: [],
+    enabled: true,
+    priority: 10,
+    warningEnabled: true,
+  };
+  const c2 = {
+    id: "c2",
+    warehouseId: "w1",
+    role: "single" as const,
+    locations: [],
+    enabled: true,
+    priority: 10,
+    warningEnabled: true,
+  };
   store.saveContainer("c1", c1);
   store.saveContainer("c2", c2);
   store.saveContainerIds("w1", ["c1", "c2"]);

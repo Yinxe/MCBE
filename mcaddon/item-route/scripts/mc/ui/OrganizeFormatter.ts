@@ -20,7 +20,8 @@ export function formatOrganizeResult(result: OrganizeResult, containerName: stri
     lines.push(`${chat.info}${containerName} 空的，无需整理`);
     return lines;
   }
-  if (result.moves === 0 && result.messiness.total < 0.05) {
+  // 手动整理为强制整理：只有混乱度**归 0** 才提示整齐（非 0 但整理不出合并也如实展示）
+  if (result.moves === 0 && result.messiness.total === 0) {
     lines.push(`${chat.info}${containerName} 已经很整齐了，无需整理`);
     return lines;
   }

@@ -4,14 +4,15 @@ import { world } from "@minecraft/server";
 import type { EventBus, WarningEvent, WarningLevel } from "../../core/events/DomainEvents";
 import type { Warehouse } from "../../core/model/Warehouse";
 import { ROLE_LABELS } from "../../core/model/Container";
+import { WARNING_LEVEL_LABELS } from "../ui/Labels";
 import { color } from "../ui/uiColor";
 
 /** 预警消息只发给距仓库中心 8 格内玩家（v1 CapacityWarningService 口径） */
 export const WARNING_MARGIN = 8;
 
 const LEVEL_TEXT: Record<WarningLevel, string> = {
-  warning: `${color.warn}警告`,
-  full: `${color.error}满箱`,
+  warning: `${color.warn}${WARNING_LEVEL_LABELS.warning}`,
+  full: `${color.error}${WARNING_LEVEL_LABELS.full}`,
 };
 
 /** 距仓库中心 XZ 距离是否在范围内 */

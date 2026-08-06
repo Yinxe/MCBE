@@ -19,8 +19,13 @@ export const ROLE_LABELS: Record<ContainerRole, string> = {
   input: "输入",
   single: "单物",
   multi: "多物",
-  misc: "杂项",
+  misc: "其他",
 };
+
+/** 容器角色中文语义（通知/注册消息用）：输入容器/单物容器/多物容器/其他容器 */
+export function containerRoleName(role: ContainerRole): string {
+  return `${ROLE_LABELS[role]}容器`;
+}
 
 /** 概念级容器：不感知 MC，由适配层实现 */
 export interface Container {
@@ -29,6 +34,8 @@ export interface Container {
   warehouseId: WarehouseId;
   role: ContainerRole;
   enabled: boolean;
+  /** 该容器容量预警开关（默认开；关闭后该容器不再触发 warning/full 预警） */
+  warningEnabled: boolean;
   /** 路由排序优先级，数字越小越先（默认 10） */
   priority: number;
   readonly capacity: number;

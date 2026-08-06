@@ -27,7 +27,7 @@ export function registerRescanPreview(registry: Parameters<typeof defineCommand>
       return;
     }
     if (!requireRole(deps.members, warehouse, player.name, "member")) {
-      player.sendMessage(`${chat.error}需要 member 及以上权限`);
+      player.sendMessage(`${chat.error}需要成员及以上权限`);
       return;
     }
     const dim = world.getDimension(warehouse.area.dimension);
