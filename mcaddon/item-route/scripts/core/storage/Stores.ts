@@ -7,7 +7,7 @@
 // 快照必须是纯 JSON（无函数/Map/Set），才能进出 DP（JSON.stringify/parse）。
 // InMemory*Store 供 node 单测；真实 DP 版见 McWarehouseStore/McIndexStore/McStatsStore。
 import { InMemoryKeyValueStore, type KeyValueStore } from "./KeyValueStore";
-import type { ContainerId, PlayerId, WarehouseId } from "../model/types";
+import type { ContainerId, PlayerName, WarehouseId } from "../model/types";
 import type { Member, WarehouseArea, WarehouseSettings } from "../model/Warehouse";
 
 // ── 快照结构（可序列化） ─────────────────────────────────
@@ -18,7 +18,7 @@ export interface WarehouseSnapshot {
   /** 显示名（唯一） */
   displayName: string;
   /** 所有者玩家 ID */
-  ownerId: PlayerId;
+  ownerName: PlayerName;
   /** 成员列表（owner 固定首项） */
   members: Member[];
   /** 区域（两对角点） */

@@ -11,7 +11,7 @@ const PARTICLE_INTERVAL = 20; // 粒子刷新的 tick 间隔
 const DEFAULT_DURATION = 15 * 20; // 松手后标记持续 15 秒
 const GRACE_DURATION = 3 * 20; // 超时宽限期 3 秒（宽限期内拾信物可续时）
 const MARKER_OFFSET_H = 0.455; // 粒子贴方块面偏移（v1 同款）
-/** 每玩家活跃标记会话（playerId → interval handle） */
+/** 每玩家活跃标记会话（playerName → interval handle） */
 const activeMarkerHandles = new Map<string, number>();
 
 export interface SearchResultLine {
@@ -45,7 +45,7 @@ export async function showSearchUI(player: Player, deps: CommandDeps): Promise<v
   // 有权（member+）且同维度的仓库，按距玩家距离排序（v1 同款：可选择仓库，但须自己有权限）
   const accessible = deps
     .loadedWarehouses()
-    .filter((w) => w.area.dimension === player.dimension.id && deps.members.can(w, player.id, "member"))
+    .filter((w) => w.area.dimension === player.dimension.id && deps.members.can(w, player.name, "member"))
     .map((w) => ({ warehouse: w, dist: warehouseDistance(w, player) }))
     .sort((a, b) => a.dist - b.dist);
   if (accessible.length === 0) {
@@ -125,7 +125,7 @@ export function startMarkerParticles(
   isToken: (itemTypeId: string) => boolean
 ): void {
   // 每玩家独立会话：同一玩家重复搜索 → 清旧会话并重新计时（结果刷新）
-  const oldHandle = activeMarkerHandles.get(player.id);
+  const oldHandle = activeMarkerHandles.get(player.name);
   if (oldHandle !== undefined) system.clearRun(oldHandle);
 
   let elapsed = 0; // 松手后经过 tick
@@ -197,12 +197,12 @@ export function startMarkerParticles(
     }
   }, PARTICLE_INTERVAL);
 
-  activeMarkerHandles.set(player.id, handle);
+  activeMarkerHandles.set(player.name, handle);
 
   function cleanup(): void {
     phase = "done";
     system.clearRun(handle);
-    activeMarkerHandles.delete(player.id);
+    activeMarkerHandles.delete(player.name);
     try {
       player.sendMessage(`${uiColor.chat.muted}容器标记已结束`);
     } catch {

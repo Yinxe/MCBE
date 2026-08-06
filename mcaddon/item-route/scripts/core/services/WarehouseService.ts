@@ -10,7 +10,7 @@
 import type { Warehouse, WarehouseArea, WarehouseSettings, MemberRole } from "../model/Warehouse";
 import { createDefaultSettings } from "../model/Warehouse";
 import type { ContainerRole } from "../model/Container";
-import type { PlayerId, WarehouseId } from "../model/types";
+import type { PlayerName, WarehouseId } from "../model/types";
 import type { WarehouseStore, WarehouseSnapshot } from "../storage/Stores";
 import type { EventBus } from "../events/DomainEvents";
 import { warehouseIdOf } from "../model/ContainerId";
@@ -101,7 +101,7 @@ export class WarehouseService {
    */
   createWarehouse(
     displayName: string,
-    ownerId: PlayerId,
+    ownerName: PlayerName,
     area: WarehouseArea,
     defaults?: { role: ContainerRole; enabled: boolean }
   ): CreateResult {
@@ -119,7 +119,7 @@ export class WarehouseService {
     if (existing.some((w) => areaTooClose(w.area, area, this.limits.minSpacing))) {
       return { ok: false, error: `区域与其他仓库过于接近（最小间距 ${this.limits.minSpacing} 格）` };
     }
-    const ownedCount = existing.filter((w) => w.ownerId === ownerId).length;
+    const ownedCount = existing.filter((w) => w.ownerName === ownerName).length;
     if (ownedCount >= this.limits.maxWarehousesPerPlayer) {
       return { ok: false, error: `每个玩家最多创建 ${this.limits.maxWarehousesPerPlayer} 个仓库` };
     }
@@ -131,8 +131,8 @@ export class WarehouseService {
     const warehouse: Warehouse = {
       id: warehouseIdOf(area),
       displayName: name,
-      ownerId,
-      members: [{ playerId: ownerId, role: "owner" }],
+      ownerName,
+      members: [{ playerName: ownerName, role: "owner" }],
       area,
       settings,
       containers: new Map(),
@@ -163,19 +163,19 @@ export class WarehouseService {
   }
 
   /** 添加成员：owner 只能通过转让设置（拒绝重复）；成功落盘，失败返回中文错误 */
-  addMember(warehouse: Warehouse, playerId: PlayerId, role: MemberRole): string | undefined {
+  addMember(warehouse: Warehouse, playerName: PlayerName, role: MemberRole): string | undefined {
     if (role === "owner") return "owner 只能通过转让设置";
-    if (warehouse.members.some((m) => m.playerId === playerId)) return "该玩家已是成员";
-    warehouse.members.push({ playerId, role });
+    if (warehouse.members.some((m) => m.playerName === playerName)) return "该玩家已是成员";
+    warehouse.members.push({ playerName, role });
     this.persist(warehouse);
     return undefined;
   }
 
   /** 改成员角色：owner 角色不可改/不可授让；member 可视需要降为 visitor 等。失败返回中文错误 */
-  setMemberRole(warehouse: Warehouse, playerId: PlayerId, role: MemberRole): string | undefined {
-    if (playerId === warehouse.ownerId) return "不能修改 owner 的角色";
+  setMemberRole(warehouse: Warehouse, playerName: PlayerName, role: MemberRole): string | undefined {
+    if (playerName === warehouse.ownerName) return "不能修改 owner 的角色";
     if (role === "owner") return "owner 只能通过转让设置"; // 与 addMember 一致，防提权口径不一
-    const member = warehouse.members.find((m) => m.playerId === playerId);
+    const member = warehouse.members.find((m) => m.playerName === playerName);
     if (!member) return "该玩家不是成员";
     member.role = role;
     this.persist(warehouse);
@@ -183,10 +183,10 @@ export class WarehouseService {
   }
 
   /** 移除成员：owner 不可移除；非成员返回错误；成功落盘 */
-  removeMember(warehouse: Warehouse, playerId: PlayerId): string | undefined {
-    if (playerId === warehouse.ownerId) return "不能移除 owner";
+  removeMember(warehouse: Warehouse, playerName: PlayerName): string | undefined {
+    if (playerName === warehouse.ownerName) return "不能移除 owner";
     const before = warehouse.members.length;
-    warehouse.members = warehouse.members.filter((m) => m.playerId !== playerId);
+    warehouse.members = warehouse.members.filter((m) => m.playerName !== playerName);
     if (warehouse.members.length === before) return "该玩家不是成员";
     this.persist(warehouse);
     return undefined;
@@ -245,7 +245,7 @@ export class WarehouseService {
     return {
       id: warehouse.id,
       displayName: warehouse.displayName,
-      ownerId: warehouse.ownerId,
+      ownerName: warehouse.ownerName,
       members: warehouse.members.map((m) => ({ ...m })),
       area: { ...warehouse.area },
       settings: { ...warehouse.settings },
@@ -256,7 +256,7 @@ export class WarehouseService {
     return {
       id: snapshot.id,
       displayName: snapshot.displayName,
-      ownerId: snapshot.ownerId,
+      ownerName: snapshot.ownerName,
       members: snapshot.members.map((m) => ({ ...m })),
       area: { ...snapshot.area },
       settings: { ...createDefaultSettings(), ...snapshot.settings }, // 旧档缺新字段 → 补默认值

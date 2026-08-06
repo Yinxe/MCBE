@@ -10,8 +10,8 @@ import type { WarehouseSnapshot } from "../scripts/core/storage/Stores";
 const snapshot = (id: string): WarehouseSnapshot => ({
   id,
   displayName: `仓库${id}`,
-  ownerId: "p1",
-  members: [{ playerId: "p1", role: "owner" as const }],
+  ownerName: "p1",
+  members: [{ playerName: "p1", role: "owner" as const }],
   area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } },
   settings: createDefaultSettings(),
 });
@@ -69,11 +69,17 @@ test("McWarehouseStore: 索引维护 + loadAllContainers 按索引组装", () =>
   store.saveContainer(c1.id, c1);
   store.saveContainer(c2.id, c2);
   store.saveContainerIds("w1", ["c1", "c2"]);
-  assert.deepEqual(store.loadAllContainers("w1").map((c) => c.id), ["c1", "c2"]);
+  assert.deepEqual(
+    store.loadAllContainers("w1").map((c) => c.id),
+    ["c1", "c2"]
+  );
   // 移除 c2 → 清键 + 索引同步 → 只剩 c1
   store.removeContainer("c2");
   store.saveContainerIds("w1", ["c1"]);
-  assert.deepEqual(store.loadAllContainers("w1").map((c) => c.id), ["c1"]);
+  assert.deepEqual(
+    store.loadAllContainers("w1").map((c) => c.id),
+    ["c1"]
+  );
 });
 
 test("McWarehouseStore: 旧整仓键自动迁移为每容器键", () => {
@@ -85,10 +91,16 @@ test("McWarehouseStore: 旧整仓键自动迁移为每容器键", () => {
   // 模拟旧版：整仓键（generation 写入）
   shards.write(legacyContainersKey("w1"), entries, "generation");
   // 首次 loadAllContainers → 就地迁移：拆单键 + 写索引 + 删旧键
-  assert.deepEqual(store.loadAllContainers("w1").map((c) => c.id), ["c1", "c2"]);
+  assert.deepEqual(
+    store.loadAllContainers("w1").map((c) => c.id),
+    ["c1", "c2"]
+  );
   // 旧键已删、索引就位 → 二次调用走索引（幂等）
   assert.equal(shards.read(legacyContainersKey("w1")), undefined);
-  assert.deepEqual(store.loadAllContainers("w1").map((c) => c.id), ["c1", "c2"]);
+  assert.deepEqual(
+    store.loadAllContainers("w1").map((c) => c.id),
+    ["c1", "c2"]
+  );
   // 每个容器已化为独立键
   assert.equal(store.loadContainer("c1")?.id, "c1");
   assert.equal(store.loadContainer("c2")?.id, "c2");

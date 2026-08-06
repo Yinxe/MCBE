@@ -63,7 +63,9 @@ test("handleCornerClick: 同名仓库建仓被拒（中文错误）", () => {
 test("handleCornerClick: resize 调整区域（仓库 ID 随区域重算迁移）", () => {
   const ctx = makeCtx();
   const created = ctx.warehouses.createWarehouse("仓A", "p1", {
-    dimension: "overworld", corner1: { x: 0, y: 60, z: 0 }, corner2: { x: 5, y: 64, z: 5 },
+    dimension: "overworld",
+    corner1: { x: 0, y: 60, z: 0 },
+    corner2: { x: 5, y: 64, z: 5 },
   });
   if (!created.ok) throw new Error("建仓失败");
   const oldId = created.warehouse.id;
@@ -72,7 +74,11 @@ test("handleCornerClick: resize 调整区域（仓库 ID 随区域重算迁移�
   const msg = handleCornerClick(ctx, "p1", { x: 9, y: 70, z: 9 }, "overworld");
   assert.match(msg, /已调整/);
   // 区域变化 → 仓库 ID 重算（w@(min)-(max)@dim），旧 id 不再存在
-  const newId = warehouseIdOf({ dimension: "overworld", corner1: { x: 1, y: 61, z: 1 }, corner2: { x: 9, y: 70, z: 9 } });
+  const newId = warehouseIdOf({
+    dimension: "overworld",
+    corner1: { x: 1, y: 61, z: 1 },
+    corner2: { x: 9, y: 70, z: 9 },
+  });
   assert.notEqual(newId, oldId);
   const wh = ctx.warehouses.loadAll().find((w) => w.id === newId);
   assert.equal(wh !== undefined, true);

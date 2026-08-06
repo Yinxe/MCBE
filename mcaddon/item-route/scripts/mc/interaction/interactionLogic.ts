@@ -49,21 +49,26 @@ function glow(ctx: CornerContext, warehouseId: string): void {
  * - 无已记角 → 记录 corner1，等待对角
  * - 已有 corner1 → 建仓/调整区域完成，清会话，返回玩家提示
  */
-export function handleCornerClick(ctx: CornerContext, playerId: string, clicked: Location, dimension: string): string {
-  const session = ctx.session.get(playerId);
+export function handleCornerClick(
+  ctx: CornerContext,
+  playerName: string,
+  clicked: Location,
+  dimension: string
+): string {
+  const session = ctx.session.get(playerName);
   if (session === undefined) return "";
   if (session.corner1 === undefined) {
-    ctx.session.set(playerId, { ...session, corner1: clicked });
+    ctx.session.set(playerName, { ...session, corner1: clicked });
     return `${chat.success}已记录第一个对角点，请手持信物右键对角方块完成选区`;
   }
   const area = areaFromPoints(dimension, session.corner1, clicked);
   if (session.kind === "createWarehouse") {
-    const result = ctx.warehouses.createWarehouse(session.name, playerId, area, {
+    const result = ctx.warehouses.createWarehouse(session.name, playerName, area, {
       role: session.defaultRole,
       enabled: session.defaultEnabled,
     });
     if (!result.ok) return `${chat.error}${result.error}`; // 失败保留会话，可换对角重试
-    ctx.session.clear(playerId);
+    ctx.session.clear(playerName);
     glow(ctx, result.warehouse.id);
     return `${chat.success}仓库 "${result.warehouse.displayName}" 创建成功！区域内容器自动注册`;
   }
@@ -72,7 +77,7 @@ export function handleCornerClick(ctx: CornerContext, playerId: string, clicked:
   if (wh === undefined) return `${chat.error}仓库不存在或未加载`;
   const err = ctx.warehouses.updateArea(wh, area);
   if (err !== undefined) return `${chat.error}${err}`; // 失败保留会话，可换对角重试
-  ctx.session.clear(playerId);
+  ctx.session.clear(playerName);
   glow(ctx, wh.id);
   return `${chat.success}仓库 "${wh.displayName}" 区域已调整`;
 }

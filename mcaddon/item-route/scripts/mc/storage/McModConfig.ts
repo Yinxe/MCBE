@@ -1,6 +1,6 @@
 // ─── 模组全局配置：速度上限/全局开关/信物/建仓限制/引导标记 ──
 // 单键 `ir2:modcfg`（overwrite + hash）存 ModConfigData，内存缓存一份副本；
-// setter 写穿透落盘。引导标记走独立 per-player 键 `ir2:guide_seen:{playerId}`
+// setter 写穿透落盘。引导标记走独立 per-player 键 `ir2:guide_seen:{playerName}`
 // （v1 口径：每个玩家各自看一次新手引导）。
 // 建仓限制（maxWarehouseVolume/maxWarehousesPerPlayer）在装配时喂给
 // WarehouseService.limits，作为建仓时的边界校验（见 services/WarehouseService）。
@@ -42,7 +42,7 @@ export const TOKEN_OPTIONS = [
 
 /**
  * 模组全局配置：单键 `ir2:modcfg`（overwrite + hash）存 ModConfigData，内存缓存一份副本；
- * setter 写穿透落盘；getter 读内存。引导标记走独立 per-player 键 `ir2:guide_seen:{playerId}`。
+ * setter 写穿透落盘；getter 读内存。引导标记走独立 per-player 键 `ir2:guide_seen:{playerName}`。
  * ⚠️ 早执行安全：`create()` 只建默认值不读 DP（Phase 2 顶层用）；持久化值须 Phase 4 `refresh()` 读取。
  * 建仓限制（maxWarehouseVolume/maxWarehousesPerPlayer）装配时喂给 WarehouseService.limits。
  */
@@ -125,12 +125,12 @@ export class McModConfig {
   }
 
   /** 新手引导是否已看过（按玩家独立 DP 键，v1 口径） */
-  hasSeenGuide(playerId: string): boolean {
-    return this.shards.read<boolean>(GUIDE_SEEN_KEY + playerId) ?? false;
+  hasSeenGuide(playerName: string): boolean {
+    return this.shards.read<boolean>(GUIDE_SEEN_KEY + playerName) ?? false;
   }
 
-  markSeenGuide(playerId: string): void {
-    this.shards.write(GUIDE_SEEN_KEY + playerId, true, "overwrite");
+  markSeenGuide(playerName: string): void {
+    this.shards.write(GUIDE_SEEN_KEY + playerName, true, "overwrite");
   }
 
   private static clamp(speed: number): number {

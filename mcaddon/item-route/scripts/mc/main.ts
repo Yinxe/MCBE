@@ -139,7 +139,7 @@ bridge.start();
 const sessionStore = new SelectionSessionStore();
 // 玩家离开：清该玩家选区会话（防下线残留，重连误完成选区）
 world.afterEvents.playerLeave.subscribe((e) => {
-  sessionStore.clear(e.playerId);
+  sessionStore.clear(e.playerName);
 });
 const commandDeps: CommandDeps = {
   bus,
@@ -198,7 +198,7 @@ system.run(() => {
     const warehouse: Warehouse = {
       id: snapshot.id,
       displayName: snapshot.displayName,
-      ownerId: snapshot.ownerId,
+      ownerName: snapshot.ownerName,
       members: snapshot.members,
       area: snapshot.area,
       settings: snapshot.settings,

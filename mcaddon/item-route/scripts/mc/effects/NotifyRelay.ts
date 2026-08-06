@@ -1,13 +1,19 @@
-// ─── 成员通知：容器变更 / 生命周期事件 / 输入堵塞 → 在线成员（附近）播报 ──
-// 对应三条需求：
-//   · container-changed —— 容器注册/更新/移除 → 通知**owner + 所有在线成员**
-//   · lifecycle-changed —— 仓库激活/停用 → 只通知**附近**的在线成员（中心直线距离判定）
-//   · input-blocked —— 输入堵塞无法分拣 → 附近成员**防抖**提醒（30 秒窗口，避免每 tick 刷屏）
-// "成员" = owner + member（访客/普通玩家不打扰）。
+// ─── 成员通知：容器变更/注册/拆除/合并拆半/生命周期/输入堵塞 → 在线成员播报 ──
+// 通知渠道（"成员" = owner + member，访客/普通玩家不打扰）：
+//   · container-changed         —— 容器内容变更 → 通知**所有在线成员**
+//   · container-added           —— 新容器注册（放置/扫描） → 通知**所有在线成员**
+//   · container-removed         —— 容器拆除（完全拆箱） → 通知**所有在线成员**
+//   · container-registry-changed —— 合并（合箱）/半拆重定（拆箱）带 oldId；角色/几何变更不带 → 通知**所有在线成员**
+//   · lifecycle-changed         —— 仓库激活/停用/停机 → 通知**所有在线成员**
+//   · input-blocked             —— 输入堵塞无法分拣 → **附近**成员防抖提醒（30 秒窗口，避免每 tick 刷屏）
+// 全部事件驱动、不轮询；回调 try/catch 隔离（单事件崩溃不影响其他订阅者）。
 import { world, system } from "@minecraft/server";
 import type {
   EventBus,
   ContainerChangedEvent,
+  ContainerAddedEvent,
+  ContainerRemovedEvent,
+  ContainerRegistryChangedEvent,
   LifecycleChangedEvent,
   InputBlockedEvent,
 } from "../../core/events/DomainEvents";
@@ -21,20 +27,16 @@ import { chat } from "../ui/uiColor";
 const BLOCK_NOTIFY_COOLDOWN_TICKS = 600;
 
 /**
- * 注册成员通知订阅（装配层调用一次）：
- *  - container-changed → 所有在线成员
- *  - input-blocked    → 附近成员，防抖 30 秒窗口（持续堵塞周期提醒而非刷屏）
- *  - lifecycle-changed → 附近成员（激活/停用/停机）
+ * 注册成员通知订阅（装配层调用一次）：容器注册/拆除/合并拆半/生命周期/堵塞 → 在线成员播报。
  * 基于事件驱动、不轮询；任何回调异常隔离（不影响其他订阅者）。
  *
  * @param bus        - 领域事件总线
  * @param warehouses - 当前已加载仓库解析器（按 id 反查）
  */
 export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]): void {
-  // 输入堵塞防抖表：containerId → 上次通知 tick
   const lastBlockNotify = new Map<string, number>();
 
-  // 容器变更 → 所有在线成员
+  // 容器内容变更 → 所有在线成员
   bus.containerChanged.subscribe((e: ContainerChangedEvent) => {
     try {
       const wh = warehouses().find((w) => w.id === e.warehouseId);
@@ -43,6 +45,45 @@ export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]
       for (const p of onlineMembers(wh)) p.sendMessage(msg);
     } catch (err) {
       console.warn(`[item-route] 容器通知失败: ${err}`);
+    }
+  });
+
+  // 新容器注册（放置/扫描） → 所有在线成员
+  bus.containerAdded.subscribe((e: ContainerAddedEvent) => {
+    try {
+      const wh = warehouses().find((w) => w.id === e.warehouseId);
+      if (wh === undefined) return;
+      const msg = `${chat.success}[容器] 新注册 ${e.containerId}（${e.role}）`;
+      for (const p of onlineMembers(wh)) p.sendMessage(msg);
+    } catch (err) {
+      console.warn(`[item-route] 容器注册通知失败: ${err}`);
+    }
+  });
+
+  // 容器拆除（完全拆箱） → 所有在线成员
+  bus.containerRemoved.subscribe((e: ContainerRemovedEvent) => {
+    try {
+      const wh = warehouses().find((w) => w.id === e.warehouseId);
+      if (wh === undefined) return;
+      const msg = `${chat.warn}[容器] ${e.containerId} 已拆除`;
+      for (const p of onlineMembers(wh)) p.sendMessage(msg);
+    } catch (err) {
+      console.warn(`[item-route] 容器拆除通知失败: ${err}`);
+    }
+  });
+
+  // 合并（合箱）/半拆重定（拆箱）带 oldId；角色/几何变更不带 → 所有在线成员
+  bus.containerRegistryChanged.subscribe((e: ContainerRegistryChangedEvent) => {
+    try {
+      const wh = warehouses().find((w) => w.id === e.warehouseId);
+      if (wh === undefined) return;
+      const msg =
+        e.oldId !== undefined && e.oldId !== e.containerId
+          ? `${chat.warn}[容器] 已合并/拆半重定：${e.oldId} → ${e.containerId}`
+          : `${chat.info}[容器] ${e.containerId} 已更新（角色/几何）`;
+      for (const p of onlineMembers(wh)) p.sendMessage(msg);
+    } catch (err) {
+      console.warn(`[item-route] 容器合并/拆半通知失败: ${err}`);
     }
   });
 
@@ -63,14 +104,14 @@ export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]
     }
   });
 
-  // 生命周期 → 附近在线成员
+  // 生命周期 → **所有在线成员**（激活/停用/停机）
   bus.lifecycleChanged.subscribe((e: LifecycleChangedEvent) => {
     try {
       const wh = warehouses().find((w) => w.id === e.warehouseId);
       if (wh === undefined) return;
       const action = e.to === "active" ? "已激活分拣" : e.to === "inactive" ? "已停用" : `进入 ${e.to}`;
       const msg = `${chat.warn}[仓库] "${wh.displayName}" ${action}`;
-      for (const p of nearbyMembers(wh)) p.sendMessage(msg);
+      for (const p of onlineMembers(wh)) p.sendMessage(msg);
     } catch (err) {
       console.warn(`[item-route] 生命周期通知失败: ${err}`);
     }
@@ -79,8 +120,8 @@ export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]
 
 /** 在线成员（owner + member 的玩家对象） */
 function onlineMembers(warehouse: Warehouse): ReturnType<typeof world.getAllPlayers> {
-  const ids = new Set([warehouse.ownerId, ...warehouse.members.map((m) => m.playerId)]);
-  return world.getAllPlayers().filter((p) => ids.has(p.id));
+  const ids = new Set([warehouse.ownerName, ...warehouse.members.map((m) => m.playerName)]);
+  return world.getAllPlayers().filter((p) => ids.has(p.name));
 }
 
 /** 附近（中心直线距离 ≤ 外接圆半径 + margin）的在线成员 */

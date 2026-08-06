@@ -148,7 +148,7 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
     const wh: Warehouse = {
       id: snapshot.id,
       displayName: snapshot.displayName,
-      ownerId: snapshot.ownerId,
+      ownerName: snapshot.ownerName,
       members: snapshot.members,
       area: snapshot.area,
       settings: snapshot.settings,

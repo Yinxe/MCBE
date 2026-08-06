@@ -6,10 +6,18 @@ import type { KeyValueStore } from "../scripts/core/storage/KeyValueStore";
 /** 可枚举键的测试 KV（验证孤儿清理/覆盖写收缩） */
 class TestKV implements KeyValueStore {
   private map = new Map<string, unknown>();
-  read<T>(key: string): T | undefined { return this.map.get(key) as T | undefined; }
-  write<T>(key: string, value: T): void { this.map.set(key, value); }
-  remove(key: string): void { this.map.delete(key); }
-  keys(): string[] { return [...this.map.keys()]; }
+  read<T>(key: string): T | undefined {
+    return this.map.get(key) as T | undefined;
+  }
+  write<T>(key: string, value: T): void {
+    this.map.set(key, value);
+  }
+  remove(key: string): void {
+    this.map.delete(key);
+  }
+  keys(): string[] {
+    return [...this.map.keys()];
+  }
 }
 
 function makeStore(kv = new TestKV(), safeLength = SAFE_ENVELOPE_LENGTH) {

@@ -37,7 +37,7 @@ async function showContainerEdit(
   warehouse: Warehouse,
   container: Container
 ): Promise<void> {
-  const isMember = requireRole(deps.members, warehouse, player.id, "member");
+  const isMember = requireRole(deps.members, warehouse, player.name, "member");
   if (!isMember) {
     player.sendMessage(`${uiColor.chat.error}需要 member 及以上权限`);
     return;

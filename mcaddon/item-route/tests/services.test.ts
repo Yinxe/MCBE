@@ -8,11 +8,11 @@ function makeWarehouse(): Warehouse {
   return {
     id: "w1",
     displayName: "w",
-    ownerId: "p1",
+    ownerName: "p1",
     members: [
-      { playerId: "p1", role: "owner" },
-      { playerId: "p2", role: "member" },
-      { playerId: "p3", role: "visitor" },
+      { playerName: "p1", role: "owner" },
+      { playerName: "p2", role: "member" },
+      { playerName: "p3", role: "visitor" },
     ],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
@@ -42,13 +42,27 @@ test("MemberService: 权限矩阵", () => {
 });
 
 // ── Task 21: WarehouseService ─────────────────────────────
-import { WarehouseService, areaSize, areaTooClose, areaExceedsLimits, DEFAULT_WAREHOUSE_LIMITS } from "../scripts/core/services/WarehouseService";
+import {
+  WarehouseService,
+  areaSize,
+  areaTooClose,
+  areaExceedsLimits,
+  DEFAULT_WAREHOUSE_LIMITS,
+} from "../scripts/core/services/WarehouseService";
 import { InMemoryWarehouseStore } from "../scripts/core/storage/Stores";
 import { EventBus } from "../scripts/core/events/DomainEvents";
 import type { WarehouseArea } from "../scripts/core/model/Warehouse";
 
-const area1: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
-const area2: WarehouseArea = { dimension: "overworld", corner1: { x: 20, y: 0, z: 0 }, corner2: { x: 30, y: 10, z: 10 } };
+const area1: WarehouseArea = {
+  dimension: "overworld",
+  corner1: { x: 0, y: 0, z: 0 },
+  corner2: { x: 10, y: 10, z: 10 },
+};
+const area2: WarehouseArea = {
+  dimension: "overworld",
+  corner1: { x: 20, y: 0, z: 0 },
+  corner2: { x: 30, y: 10, z: 10 },
+};
 
 test("WarehouseService: 创建/重载/重名拒绝", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
@@ -68,7 +82,11 @@ test("WarehouseService: 区域重叠拒绝", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
   const r1 = svc.createWarehouse("仓A", "p1", area1);
   assert.equal(r1.ok, true);
-  const overlap: WarehouseArea = { dimension: "overworld", corner1: { x: 5, y: 0, z: 5 }, corner2: { x: 15, y: 10, z: 15 } };
+  const overlap: WarehouseArea = {
+    dimension: "overworld",
+    corner1: { x: 5, y: 0, z: 5 },
+    corner2: { x: 15, y: 10, z: 15 },
+  };
   const r2 = svc.createWarehouse("仓B", "p1", overlap);
   assert.equal(r2.ok, false);
   assert.match((r2 as { error: string }).error, /重叠/);
@@ -91,7 +109,7 @@ test("WarehouseService: 删除/重命名/成员管理", () => {
   const dupMember = svc.addMember(wh, "p2", "member");
   assert.match(dupMember ?? "", /已是成员/);
   svc.setMemberRole(wh, "p2", "visitor");
-  assert.equal(wh.members.find((m) => m.playerId === "p2")?.role, "visitor");
+  assert.equal(wh.members.find((m) => m.playerName === "p2")?.role, "visitor");
   svc.removeMember(wh, "p2");
   assert.equal(wh.members.length, 1);
   svc.deleteWarehouse(wh.id);
@@ -100,30 +118,54 @@ test("WarehouseService: 删除/重命名/成员管理", () => {
 
 test("WarehouseService: setMemberRole 拒绝提升为 owner（防提权口径不一）", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
-  const r = svc.createWarehouse("仓", "p1", { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } });
+  const r = svc.createWarehouse("仓", "p1", {
+    dimension: "overworld",
+    corner1: { x: 0, y: 0, z: 0 },
+    corner2: { x: 10, y: 10, z: 10 },
+  });
   assert.equal(r.ok, true);
   svc.addMember(r.warehouse, "p2", "member");
   const err = svc.setMemberRole(r.warehouse, "p2", "owner");
   assert.match(err ?? "", /转让/);
-  assert.equal(r.warehouse.members.find((m) => m.playerId === "p2")?.role, "member"); // 未被提权
+  assert.equal(r.warehouse.members.find((m) => m.playerName === "p2")?.role, "member"); // 未被提权
 });
 
 test("WarehouseService: updateArea 校验体积/重叠/间距（resize 与 create 同口径）", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
-  const a = svc.createWarehouse("仓A", "p1", { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } });
+  const a = svc.createWarehouse("仓A", "p1", {
+    dimension: "overworld",
+    corner1: { x: 0, y: 0, z: 0 },
+    corner2: { x: 10, y: 10, z: 10 },
+  });
   assert.equal(a.ok, true);
   // 扩到与自身重叠（排除自身）→ 允许
   assert.equal(
-    svc.updateArea(a.warehouse, { dimension: "overworld", corner1: { x: -5, y: 0, z: -5 }, corner2: { x: 15, y: 10, z: 15 } }),
+    svc.updateArea(a.warehouse, {
+      dimension: "overworld",
+      corner1: { x: -5, y: 0, z: -5 },
+      corner2: { x: 15, y: 10, z: 15 },
+    }),
     undefined
   );
-  const b = svc.createWarehouse("仓B", "p2", { dimension: "overworld", corner1: { x: 100, y: 0, z: 100 }, corner2: { x: 110, y: 10, z: 110 } });
+  const b = svc.createWarehouse("仓B", "p2", {
+    dimension: "overworld",
+    corner1: { x: 100, y: 0, z: 100 },
+    corner2: { x: 110, y: 10, z: 110 },
+  });
   assert.equal(b.ok, true);
   // 与另一仓库重叠 → 拒绝
-  const errOverlap = svc.updateArea(a.warehouse, { dimension: "overworld", corner1: { x: 105, y: 0, z: 105 }, corner2: { x: 120, y: 10, z: 120 } });
+  const errOverlap = svc.updateArea(a.warehouse, {
+    dimension: "overworld",
+    corner1: { x: 105, y: 0, z: 105 },
+    corner2: { x: 120, y: 10, z: 120 },
+  });
   assert.match(errOverlap ?? "", /重叠/);
   // 超体积 → 拒绝
-  const errBig = svc.updateArea(a.warehouse, { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 500, y: 500, z: 500 } });
+  const errBig = svc.updateArea(a.warehouse, {
+    dimension: "overworld",
+    corner1: { x: 0, y: 0, z: 0 },
+    corner2: { x: 500, y: 500, z: 500 },
+  });
   assert.match(errBig ?? "", /体积|边长/);
 });
 
@@ -156,7 +198,7 @@ function makeRouteService() {
   const warehouse: Warehouse = {
     id: "w1",
     displayName: "w",
-    ownerId: "p1",
+    ownerName: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
@@ -216,7 +258,7 @@ test("OrganizeService: organizeContainer 单容器合并可堆叠堆并排序，
   const warehouse = {
     id: "w1",
     displayName: "w",
-    ownerId: "p1",
+    ownerName: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
@@ -247,7 +289,10 @@ test("OrganizeService: 空/已整齐容器 → 无需整理（moves=0）", () =>
   const bus = new EventBus();
   const svc = new OrganizeService(new Organizer(), bus);
   const warehouse = {
-    id: "w1", displayName: "w", ownerId: "p1", members: [],
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
     containers: new Map<string, InMemoryContainer>(),
@@ -281,7 +326,10 @@ test("OrganizeService: 清空失败 → 回滚且不整理（数据一致性）"
   c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
   c.setItem(2, new SimpleItemStack("minecraft:stone", 5, 64));
   const warehouse = {
-    id: "w1", displayName: "w", ownerId: "p1", members: [],
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
     containers: new Map([["c1", c]]),
@@ -294,22 +342,42 @@ test("OrganizeService: 清空失败 → 回滚且不整理（数据一致性）"
 });
 // ── 建仓限制（v1 沉淀：边界/间距/体积/每玩家数量） ─────────
 test("areaSize: 归一化尺寸与体积", () => {
-  const area: WarehouseArea = { dimension: "overworld", corner1: { x: 10, y: 10, z: 10 }, corner2: { x: 0, y: 0, z: 0 } };
+  const area: WarehouseArea = {
+    dimension: "overworld",
+    corner1: { x: 10, y: 10, z: 10 },
+    corner2: { x: 0, y: 0, z: 0 },
+  };
   const size = areaSize(area);
   assert.deepEqual(size, { x: 11, y: 11, z: 11, volume: 1331 });
 });
 
 test("areaExceedsLimits: 单轴边长超限 / 体积超限", () => {
-  const small: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
+  const small: WarehouseArea = {
+    dimension: "overworld",
+    corner1: { x: 0, y: 0, z: 0 },
+    corner2: { x: 10, y: 10, z: 10 },
+  };
   assert.equal(areaExceedsLimits(small, DEFAULT_WAREHOUSE_LIMITS), undefined);
-  const long: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 100, y: 5, z: 5 } };
+  const long: WarehouseArea = {
+    dimension: "overworld",
+    corner1: { x: 0, y: 0, z: 0 },
+    corner2: { x: 100, y: 5, z: 5 },
+  };
   assert.match(areaExceedsLimits(long, DEFAULT_WAREHOUSE_LIMITS) ?? "", /边长/);
 });
 
 test("areaTooClose: 间距不足判定", () => {
   const a: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
-  const close: WarehouseArea = { dimension: "overworld", corner1: { x: 12, y: 0, z: 0 }, corner2: { x: 15, y: 10, z: 10 } };
-  const far: WarehouseArea = { dimension: "overworld", corner1: { x: 30, y: 0, z: 0 }, corner2: { x: 40, y: 10, z: 10 } };
+  const close: WarehouseArea = {
+    dimension: "overworld",
+    corner1: { x: 12, y: 0, z: 0 },
+    corner2: { x: 15, y: 10, z: 10 },
+  };
+  const far: WarehouseArea = {
+    dimension: "overworld",
+    corner1: { x: 30, y: 0, z: 0 },
+    corner2: { x: 40, y: 10, z: 10 },
+  };
   assert.equal(areaTooClose(a, close, 4), true);
   assert.equal(areaTooClose(a, far, 4), false);
   assert.equal(areaTooClose(a, close, 0), false); // 零间距即仅重叠判定
@@ -317,22 +385,53 @@ test("areaTooClose: 间距不足判定", () => {
 
 test("createWarehouse: 超大区域被拒 / 过于接近被拒", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
-  const ok = svc.createWarehouse("仓A", "p1", { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } });
+  const ok = svc.createWarehouse("仓A", "p1", {
+    dimension: "overworld",
+    corner1: { x: 0, y: 0, z: 0 },
+    corner2: { x: 10, y: 10, z: 10 },
+  });
   assert.equal(ok.ok, true);
-  const huge = svc.createWarehouse("仓B", "p1", { dimension: "overworld", corner1: { x: 100, y: 0, z: 0 }, corner2: { x: 200, y: 10, z: 10 } });
+  const huge = svc.createWarehouse("仓B", "p1", {
+    dimension: "overworld",
+    corner1: { x: 100, y: 0, z: 0 },
+    corner2: { x: 200, y: 10, z: 10 },
+  });
   assert.equal(huge.ok, false);
   assert.match((huge as { error: string }).error, /边长|体积/);
-  const close = svc.createWarehouse("仓C", "p1", { dimension: "overworld", corner1: { x: 13, y: 0, z: 0 }, corner2: { x: 18, y: 10, z: 10 } });
+  const close = svc.createWarehouse("仓C", "p1", {
+    dimension: "overworld",
+    corner1: { x: 13, y: 0, z: 0 },
+    corner2: { x: 18, y: 10, z: 10 },
+  });
   assert.equal(close.ok, false);
   assert.match((close as { error: string }).error, /间距|接近/);
 });
 
 test("createWarehouse: 每玩家数量上限", () => {
-  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus(), { ...DEFAULT_WAREHOUSE_LIMITS, maxWarehousesPerPlayer: 2 });
-  svc.createWarehouse("仓1", "p1", { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } });
-  svc.createWarehouse("仓2", "p2", { dimension: "overworld", corner1: { x: 50, y: 0, z: 0 }, corner2: { x: 60, y: 10, z: 10 } }); // 不同玩家不受限
-  svc.createWarehouse("仓3", "p1", { dimension: "overworld", corner1: { x: 100, y: 0, z: 0 }, corner2: { x: 110, y: 10, z: 10 } }); // p1 第 2 个（达上限）
-  const fourth = svc.createWarehouse("仓4", "p1", { dimension: "overworld", corner1: { x: 150, y: 0, z: 0 }, corner2: { x: 160, y: 10, z: 10 } });
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus(), {
+    ...DEFAULT_WAREHOUSE_LIMITS,
+    maxWarehousesPerPlayer: 2,
+  });
+  svc.createWarehouse("仓1", "p1", {
+    dimension: "overworld",
+    corner1: { x: 0, y: 0, z: 0 },
+    corner2: { x: 10, y: 10, z: 10 },
+  });
+  svc.createWarehouse("仓2", "p2", {
+    dimension: "overworld",
+    corner1: { x: 50, y: 0, z: 0 },
+    corner2: { x: 60, y: 10, z: 10 },
+  }); // 不同玩家不受限
+  svc.createWarehouse("仓3", "p1", {
+    dimension: "overworld",
+    corner1: { x: 100, y: 0, z: 0 },
+    corner2: { x: 110, y: 10, z: 10 },
+  }); // p1 第 2 个（达上限）
+  const fourth = svc.createWarehouse("仓4", "p1", {
+    dimension: "overworld",
+    corner1: { x: 150, y: 0, z: 0 },
+    corner2: { x: 160, y: 10, z: 10 },
+  });
   assert.equal(fourth.ok, false);
   assert.match((fourth as { error: string }).error, /最多/);
 });
@@ -349,11 +448,7 @@ test("WarehouseService: 仓库 CRUD 触发领域事件", () => {
   if (!r.ok) return;
   svc.rename(r.warehouse, "新名");
   svc.deleteWarehouse(r.warehouse.id);
-  assert.deepEqual(events, [
-    `create:${r.warehouse.id}:仓A`,
-    "rename:新名",
-    `delete:${r.warehouse.id}`,
-  ]);
+  assert.deepEqual(events, [`create:${r.warehouse.id}:仓A`, "rename:新名", `delete:${r.warehouse.id}`]);
 });
 
 test("OrganizeService: 整理成功触发 organize-completed", () => {
@@ -366,7 +461,10 @@ test("OrganizeService: 整理成功触发 organize-completed", () => {
   c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
   c.setItem(2, new SimpleItemStack("minecraft:stone", 5, 64)); // 两堆 → 合并 1 组
   const warehouse = {
-    id: "w1", displayName: "w", ownerId: "p1", members: [],
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
     containers: new Map([["c1", c]]),

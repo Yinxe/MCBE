@@ -35,7 +35,7 @@ export async function showWarehouseCreateForm(player: Player, deps: CommandDeps)
     player.sendMessage(`${uiColor.chat.error}仓库名称不能为空`);
     return;
   }
-  deps.session.set(player.id, { kind: "createWarehouse", name, defaultRole, defaultEnabled });
+  deps.session.set(player.name, { kind: "createWarehouse", name, defaultRole, defaultEnabled });
   player.sendMessage(
     `${uiColor.chat.success}已进入建仓选区模式：请手持信物在两个对角普通方块上右键完成区域选择，区域内容器将自动扫描`
   );

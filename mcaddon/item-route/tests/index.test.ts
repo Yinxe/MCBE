@@ -92,5 +92,8 @@ test("ItemIndex: serialize/restore 往返一致", () => {
 
 test("ItemIndex: restore 版本不匹配返回 false", () => {
   const index = new ItemIndex();
-  assert.equal(index.restore({ version: INDEX_VERSION + 1, byItem: {}, containerItems: {}, singleBindings: {} }), false);
+  assert.equal(
+    index.restore({ version: INDEX_VERSION + 1, byItem: {}, containerItems: {}, singleBindings: {} }),
+    false
+  );
 });

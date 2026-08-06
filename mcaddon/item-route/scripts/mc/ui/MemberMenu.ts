@@ -18,8 +18,8 @@ const ROLE_LABELS: Record<MemberRole, string> = {
 const ASSIGNABLE_ROLES: MemberRole[] = ["member", "visitor"];
 
 /** 玩家 ID 短显示（UUID 尾 8 位，v1 口径，聊天友好） */
-function shortId(playerId: string): string {
-  return playerId.length > 10 ? playerId.slice(-8) : playerId;
+function shortId(playerName: string): string {
+  return playerName.length > 10 ? playerName.slice(-8) : playerName;
 }
 
 /**
@@ -34,7 +34,7 @@ export async function showMemberMenu(player: Player, deps: CommandDeps, warehous
   const form = new ActionFormBuilder()
     .title(`${uiColor.form.title}成员管理 · ${warehouse.displayName}`)
     .body(
-      `${uiColor.form.muted}成员：\n${warehouse.members.map((m) => `${uiColor.form.body}${shortId(m.playerId)} ${uiColor.form.muted}(${ROLE_LABELS[m.role]})`).join("\n")}`
+      `${uiColor.form.muted}成员：\n${warehouse.members.map((m) => `${uiColor.form.body}${shortId(m.playerName)} ${uiColor.form.muted}(${ROLE_LABELS[m.role]})`).join("\n")}`
     )
     .button(`${uiColor.btn.primary}添加成员`, () => void addMemberForm(player, deps, warehouse))
     .button(`${uiColor.btn.nav}调整角色`, () => void changeRoleForm(player, deps, warehouse))
@@ -46,11 +46,11 @@ export async function showMemberMenu(player: Player, deps: CommandDeps, warehous
 async function addMemberForm(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}添加成员`)
-    .textField("playerId", "玩家 ID", { defaultValue: "" })
+    .textField("playerName", "玩家 ID", { defaultValue: "" })
     .dropdown("role", "角色", ASSIGNABLE_ROLES, { defaultValueIndex: 0 });
   const values = await form.show(player);
   if (!values) return;
-  const pid = (values.playerId as string).trim();
+  const pid = (values.playerName as string).trim();
   if (!pid) return;
   const role = ASSIGNABLE_ROLES[values.role as number] ?? "visitor";
   const err = deps.warehouses.addMember(warehouse, pid, role);
@@ -59,7 +59,7 @@ async function addMemberForm(player: Player, deps: CommandDeps, warehouse: Wareh
 
 /** 调整角色表单：排除 owner，可选择任意新角色（含 owner→成员/visitor，visitor→member） */
 async function changeRoleForm(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
-  const nonOwner = warehouse.members.filter((m) => m.playerId !== warehouse.ownerId);
+  const nonOwner = warehouse.members.filter((m) => m.playerName !== warehouse.ownerName);
   if (nonOwner.length === 0) {
     player.sendMessage(`${uiColor.chat.muted}暂无其他成员可调整`);
     return;
@@ -67,15 +67,15 @@ async function changeRoleForm(player: Player, deps: CommandDeps, warehouse: Ware
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}调整角色`)
     .dropdown(
-      "playerId",
+      "playerName",
       "成员",
-      nonOwner.map((m) => m.playerId),
+      nonOwner.map((m) => m.playerName),
       { defaultValueIndex: 0 }
     )
     .dropdown("role", "新角色", Object.values(ROLE_LABELS), { defaultValueIndex: 1 });
   const values = await form.show(player);
   if (!values) return;
-  const pid = nonOwner[values.playerId as number]?.playerId;
+  const pid = nonOwner[values.playerName as number]?.playerName;
   if (!pid) return;
   const role = (Object.keys(ROLE_LABELS) as MemberRole[])[values.role as number] ?? "visitor";
   const err = deps.warehouses.setMemberRole(warehouse, pid, role);
@@ -84,20 +84,20 @@ async function changeRoleForm(player: Player, deps: CommandDeps, warehouse: Ware
 
 /** 移除成员表单：排除 owner（owner 不可被移除，见 WarehouseService.removeMember） */
 async function removeMemberForm(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
-  const nonOwner = warehouse.members.filter((m) => m.playerId !== warehouse.ownerId);
+  const nonOwner = warehouse.members.filter((m) => m.playerName !== warehouse.ownerName);
   if (nonOwner.length === 0) {
     player.sendMessage(`${uiColor.chat.muted}暂无其他成员可移除`);
     return;
   }
   const form = new ModalFormBuilder().title(`${uiColor.form.title}移除成员`).dropdown(
-    "playerId",
+    "playerName",
     "成员",
-    nonOwner.map((m) => m.playerId),
+    nonOwner.map((m) => m.playerName),
     { defaultValueIndex: 0 }
   );
   const values = await form.show(player);
   if (!values) return;
-  const pid = nonOwner[values.playerId as number]?.playerId;
+  const pid = nonOwner[values.playerName as number]?.playerName;
   if (!pid) return;
   const err = deps.warehouses.removeMember(warehouse, pid);
   player.sendMessage(err ? `${uiColor.chat.error}${err}` : `${uiColor.chat.success}已移除 ${pid}`);

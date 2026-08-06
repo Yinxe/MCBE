@@ -34,7 +34,7 @@ test("Organizer: shouldAutoSort v1 阈值（0-1）", () => {
   mixed.setItem(1, new SimpleItemStack("minecraft:dirt", 1, 64));
   // total = 0.7（stone>dirt 相邻逆序占满）
   assert.equal(organizer.shouldAutoSort(mixed, 0.8), false); // 阈值高于 0.7 → 不整
-  assert.equal(organizer.shouldAutoSort(mixed, 0.4), true);  // 阈值低于 0.7 → 整
+  assert.equal(organizer.shouldAutoSort(mixed, 0.4), true); // 阈值低于 0.7 → 整
   // 单堆/空容器 → total 0，永不因自动整理触发
   const clean = new InMemoryContainer("c", "multi", 4);
   clean.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));

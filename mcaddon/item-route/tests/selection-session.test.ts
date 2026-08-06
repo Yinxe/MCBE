@@ -12,7 +12,7 @@ test("SelectionSessionStore: set/get/clear/clearAll", () => {
   assert.equal(store.get("p1"), undefined);
 });
 
-test("SelectionSessionStore: 覆盖旧会话（同 playerId 二次 set 替换）", () => {
+test("SelectionSessionStore: 覆盖旧会话（同 playerName 二次 set 替换）", () => {
   const store = new SelectionSessionStore();
   store.set("p1", { kind: "createWarehouse", name: "仓A", defaultRole: "multi", defaultEnabled: true });
   store.set("p1", { kind: "resizeWarehouse", warehouseId: "w9" });

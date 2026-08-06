@@ -22,16 +22,16 @@ export type SelectionSession =
 export class SelectionSessionStore {
   private sessions = new Map<string, SelectionSession>();
 
-  set(playerId: string, session: SelectionSession): void {
-    this.sessions.set(playerId, session);
+  set(playerName: string, session: SelectionSession): void {
+    this.sessions.set(playerName, session);
   }
 
-  get(playerId: string): SelectionSession | undefined {
-    return this.sessions.get(playerId);
+  get(playerName: string): SelectionSession | undefined {
+    return this.sessions.get(playerName);
   }
 
-  clear(playerId: string): void {
-    this.sessions.delete(playerId);
+  clear(playerName: string): void {
+    this.sessions.delete(playerName);
   }
 
   clearAll(): void {

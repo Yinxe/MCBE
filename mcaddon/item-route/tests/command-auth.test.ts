@@ -5,11 +5,11 @@ import { MemberService } from "../scripts/core/services/MemberService";
 import { createDefaultSettings } from "../scripts/core/model/Warehouse";
 import type { Warehouse } from "../scripts/core/model/Warehouse";
 
-function makeWarehouse(members: { playerId: string; role: "owner" | "member" | "visitor" }[]): Warehouse {
+function makeWarehouse(members: { playerName: string; role: "owner" | "member" | "visitor" }[]): Warehouse {
   return {
     id: "w1",
     displayName: "主仓库",
-    ownerId: "p-owner",
+    ownerName: "p-owner",
     members,
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } },
     settings: createDefaultSettings(),
@@ -27,9 +27,9 @@ test("resolveWarehouseByName: 精确匹配显示名 / 无匹配 undefined", () =
 test("requireRole: 权限矩阵 owner>member>visitor", () => {
   const members = new MemberService();
   const wh = makeWarehouse([
-    { playerId: "o", role: "owner" },
-    { playerId: "m", role: "member" },
-    { playerId: "v", role: "visitor" },
+    { playerName: "o", role: "owner" },
+    { playerName: "m", role: "member" },
+    { playerName: "v", role: "visitor" },
   ]);
   // owner 满足一切
   assert.equal(requireRole(members, wh, "o", "owner"), true);
@@ -64,9 +64,9 @@ test("COMMAND_MIN_ROLE: 矩阵映射正确", () => {
 test("canRunCommand: 权限贯穿（owner 可 delete，member 可 rescan，visitor 可 menu 不可 rescan）", () => {
   const members = new MemberService();
   const wh = makeWarehouse([
-    { playerId: "o", role: "owner" },
-    { playerId: "m", role: "member" },
-    { playerId: "v", role: "visitor" },
+    { playerName: "o", role: "owner" },
+    { playerName: "m", role: "member" },
+    { playerName: "v", role: "visitor" },
   ]);
   assert.equal(canRunCommand(members, wh, "o", "delete"), true);
   assert.equal(canRunCommand(members, wh, "m", "delete"), false);

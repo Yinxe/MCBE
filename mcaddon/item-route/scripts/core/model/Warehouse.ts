@@ -6,13 +6,13 @@
 // 命令/UI 统一经 `MemberService.can()` 判定，替代 v1 的 OP 二元判断。
 import type { Container } from "./Container";
 import type { ContainerRole } from "./Container";
-import type { PlayerId, WarehouseId } from "./types";
+import type { PlayerName, WarehouseId } from "./types";
 
 /** 成员角色：owner 全权限 / member 管理 / visitor 只读 */
 export type MemberRole = "owner" | "member" | "visitor";
 
 export interface Member {
-  playerId: PlayerId;
+  playerName: PlayerName;
   role: MemberRole;
 }
 
@@ -62,7 +62,7 @@ export interface Warehouse {
    */
   id: WarehouseId;
   displayName: string;
-  ownerId: PlayerId;
+  ownerName: PlayerName;
   members: Member[];
   area: WarehouseArea;
   settings: WarehouseSettings;

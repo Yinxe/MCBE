@@ -65,7 +65,7 @@ function makeWorld() {
   const warehouse = {
     id: "w1",
     displayName: "w",
-    ownerId: "p1",
+    ownerName: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
@@ -149,7 +149,10 @@ test("Scheduler: 激活创建 interval 失败 → 保持 inactive 且可重试",
   let shouldThrow = true;
   const throwingIntervals: IntervalScheduler = {
     createInterval: (fn, t) => {
-      if (shouldThrow) { shouldThrow = false; throw new Error("激活失败"); }
+      if (shouldThrow) {
+        shouldThrow = false;
+        throw new Error("激活失败");
+      }
       return intervals.createInterval(fn, t);
     },
   };
@@ -163,9 +166,14 @@ test("Scheduler: 激活创建 interval 失败 → 保持 inactive 且可重试",
   );
   const scheduler = new Scheduler(router, throwingIntervals, proximity, bus);
   const warehouse = {
-    id: "w1", displayName: "w", ownerId: "p1", members: [],
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: createDefaultSettings(), containers: new Map<string, InMemoryContainer>(), inputs: new Map<string, InMemoryContainer>(),
+    settings: createDefaultSettings(),
+    containers: new Map<string, InMemoryContainer>(),
+    inputs: new Map<string, InMemoryContainer>(),
   };
   scheduler.registerWarehouse(warehouse);
   proximity.setNearby("w1", true);
@@ -186,8 +194,13 @@ test("Scheduler: 每仓库索引隔离（激活加载/空闲卸载/各仓独立�
   const loadedIds: string[] = [];
   const unloadedIds: string[] = [];
   const lifecycle: IndexLifecycle = {
-    load: (wh) => { loadedIds.push(wh.id); return new ItemIndex(); },
-    unload: (wh) => { unloadedIds.push(wh.id); },
+    load: (wh) => {
+      loadedIds.push(wh.id);
+      return new ItemIndex();
+    },
+    unload: (wh) => {
+      unloadedIds.push(wh.id);
+    },
   };
   let fakeNow = 0; // 可注入墙钟：把"空闲 30 分钟"压成可测试的毫秒窗口
   const scheduler = new Scheduler(router, intervals, proximity, new EventBus(), 20, 20, {
@@ -196,9 +209,14 @@ test("Scheduler: 每仓库索引隔离（激活加载/空闲卸载/各仓独立�
     now: () => fakeNow,
   });
   const mk = (id: string) => ({
-    id, displayName: id, ownerId: "p1", members: [],
+    id,
+    displayName: id,
+    ownerName: "p1",
+    members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: createDefaultSettings(), containers: new Map<string, InMemoryContainer>(), inputs: new Map<string, InMemoryContainer>(),
+    settings: createDefaultSettings(),
+    containers: new Map<string, InMemoryContainer>(),
+    inputs: new Map<string, InMemoryContainer>(),
   });
   const w1 = mk("w1");
   const w2 = mk("w2");

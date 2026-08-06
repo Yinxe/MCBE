@@ -68,6 +68,12 @@ test("EventBus: input-blocked 事件独立派发", () => {
   const bus = new EventBus();
   const blocks: string[] = [];
   bus.inputBlocked.subscribe((e) => blocks.push(`${e.containerId}:${e.itemId}:${e.amount}`));
-  bus.inputBlocked.trigger({ type: "input-blocked", warehouseId: "w1", containerId: "in", itemId: "minecraft:stone", amount: 10 });
+  bus.inputBlocked.trigger({
+    type: "input-blocked",
+    warehouseId: "w1",
+    containerId: "in",
+    itemId: "minecraft:stone",
+    amount: 10,
+  });
   assert.deepEqual(blocks, ["in:minecraft:stone:10"]);
 });

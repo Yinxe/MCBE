@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isChestType, isHopperType, isSupportedContainerType, SHULKER_BOX_IDS } from "../scripts/core/model/ContainerTypes";
+import {
+  isChestType,
+  isHopperType,
+  isSupportedContainerType,
+  SHULKER_BOX_IDS,
+} from "../scripts/core/model/ContainerTypes";
 
 test("ContainerTypes: 箱子/陷阱箱判定", () => {
   assert.equal(isChestType("minecraft:chest"), true);

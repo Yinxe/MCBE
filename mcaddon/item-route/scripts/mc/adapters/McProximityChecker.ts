@@ -16,8 +16,8 @@ export interface WarehouseRef {
     corner1: { x: number; y: number; z: number };
     corner2: { x: number; y: number; z: number };
   };
-  ownerId: string;
-  members: { playerId: string }[];
+  ownerName: string;
+  members: { playerName: string }[];
 }
 
 /** 邻近判定穿透 margin（叠加在外接圆半径外） */
@@ -32,11 +32,11 @@ export class McProximityChecker implements ProximityChecker {
   hasNearbyPlayer(warehouseId: WarehouseId): boolean {
     const warehouse = this.findWarehouse(warehouseId);
     if (warehouse === undefined) return false;
-    const memberIds = new Set<string>([warehouse.ownerId, ...warehouse.members.map((m) => m.playerId)]);
+    const memberNames = new Set<string>([warehouse.ownerName, ...warehouse.members.map((m) => m.playerName)]);
     const memberPositions: PlayerPosition[] = [];
     for (const p of this.players()) {
       if (p.dimension.id !== warehouse.area.dimension) continue;
-      if (!memberIds.has(p.id)) continue; // 只统计在线成员（owner/member）
+      if (!memberNames.has(p.name)) continue; // 只统计在线成员（owner/member）
       memberPositions.push({ dimension: warehouse.area.dimension, x: p.location.x, z: p.location.z });
     }
     return isPlayerNearby(warehouse.area, memberPositions, PROXIMITY_MARGIN);

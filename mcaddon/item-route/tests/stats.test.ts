@@ -13,7 +13,7 @@ function makeWarehouse() {
   const warehouse = {
     id: "w1",
     displayName: "w",
-    ownerId: "p1",
+    ownerName: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),

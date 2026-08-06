@@ -26,7 +26,7 @@ export function registerSearch(registry: Parameters<typeof defineCommand>[0], de
         deps.loadedWarehouses(),
         player.dimension.id,
         { x: player.location.x, z: player.location.z },
-        (w) => deps.members.can(w, player.id, "member")
+        (w) => deps.members.can(w, player.name, "member")
       );
       if (warehouse === undefined) {
         player.sendMessage(`${chat.error}附近没有你有权限（成员）的仓库`);

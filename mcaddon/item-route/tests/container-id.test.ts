@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { containerIdOf, primaryLocationOf, parseContainerId, containerIdPointsTo, warehouseIdOf } from "../scripts/core/model/ContainerId";
+import {
+  containerIdOf,
+  primaryLocationOf,
+  parseContainerId,
+  containerIdPointsTo,
+  warehouseIdOf,
+} from "../scripts/core/model/ContainerId";
 
 const DIM = "overworld";
 
@@ -14,7 +20,13 @@ test("primaryLocationOf: 双箱取 (x,y,z) 最小者（与创建顺序无关）"
   assert.deepEqual(primaryLocationOf([a, b]), a);
   assert.deepEqual(primaryLocationOf([b, a]), a); // 顺序无关
   // z 轴相邻：取 z 小者
-  assert.deepEqual(primaryLocationOf([{ x: 5, y: 64, z: 9 }, { x: 5, y: 64, z: 8 }]), { x: 5, y: 64, z: 8 });
+  assert.deepEqual(
+    primaryLocationOf([
+      { x: 5, y: 64, z: 9 },
+      { x: 5, y: 64, z: 8 },
+    ]),
+    { x: 5, y: 64, z: 8 }
+  );
   assert.equal(primaryLocationOf([]), undefined);
 });
 
@@ -32,7 +44,10 @@ test("containerId 跨维度不冲突：同坐标不同维度 ID 不同", () => {
 });
 
 test("containerIdOf/primaryLocationOf: 拆主半后重定到幸存半（同维度）", () => {
-  const both = [{ x: 10, y: 64, z: 3 }, { x: 11, y: 64, z: 3 }];
+  const both = [
+    { x: 10, y: 64, z: 3 },
+    { x: 11, y: 64, z: 3 },
+  ];
   assert.equal(containerIdOf(primaryLocationOf(both)!, DIM), "c@(10,64,3)@overworld");
   const survivor = primaryLocationOf([{ x: 11, y: 64, z: 3 }])!;
   assert.equal(containerIdOf(survivor, DIM), "c@(11,64,3)@overworld");

@@ -27,14 +27,14 @@ export async function showWarehouseSettingsMenu(
   warehouse: Warehouse
 ): Promise<void> {
   deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（显示容器数与后续操作）
-  const isOwner = requireRole(deps.members, warehouse, player.id, "owner");
-  const isMember = requireRole(deps.members, warehouse, player.id, "member");
+  const isOwner = requireRole(deps.members, warehouse, player.name, "owner");
+  const isMember = requireRole(deps.members, warehouse, player.name, "member");
 
   // 按钮文字一律深色（ActionForm 浅灰按钮背景，见 uiColor.btn）
   const form = new ActionFormBuilder()
     .title(`${uiColor.form.title}${warehouse.displayName}`)
     .body(
-      `${uiColor.form.body}成员：${warehouse.members.map((m) => m.playerId).join("、") || "无"}\n容器：${warehouse.containers.size}`
+      `${uiColor.form.body}成员：${warehouse.members.map((m) => m.playerName).join("、") || "无"}\n容器：${warehouse.containers.size}`
     )
     .button(`${uiColor.btn.primary}仓库设置`, () => void showSettingsForm(player, deps, warehouse))
     .button(`${uiColor.btn.nav}容器角色`, () => void showContainerRoleMenu(player, deps, warehouse));

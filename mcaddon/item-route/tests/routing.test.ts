@@ -1,24 +1,31 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  SingleItemStrategy,
-  MultiItemStrategy,
-  MiscStrategy,
-} from "../scripts/core/routing/RouteStrategy";
+import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
 import type { RouteContext, CandidateContainer } from "../scripts/core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
 import { transfer, MoveJournal } from "../scripts/core/routing/Move";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
 import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
-function makeCtx(containers: InMemoryContainer[], lookup: (typeId: string) => { single: string[]; multi: string[] }): RouteContext {
+function makeCtx(
+  containers: InMemoryContainer[],
+  lookup: (typeId: string) => { single: string[]; multi: string[] }
+): RouteContext {
   const warehouse = {
     id: "w1",
     displayName: "w",
-    ownerId: "p1",
+    ownerName: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: { routingEnabled: true, sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 0.4, defaultContainerRole: "single" as const, defaultContainerEnabled: true },
+    settings: {
+      routingEnabled: true,
+      sortingEnabled: true,
+      processingSpeed: 8,
+      warningThreshold: 0.9,
+      autoSortThreshold: 0.4,
+      defaultContainerRole: "single" as const,
+      defaultContainerEnabled: true,
+    },
     containers: new Map(containers.map((c) => [c.id, c])),
     inputs: new Map(),
   };
@@ -52,20 +59,21 @@ test("MultiItemStrategy / MiscStrategy: 按索引返回（多物须实际含该�
   multi.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64)); // 空多物不是候选
   const misc = new InMemoryContainer("x1", "misc", 3);
   const ctx = makeCtx([multi, misc], () => ({ single: [], multi: ["m1"] }));
-  assert.deepEqual(new MultiItemStrategy().findCandidates(ctx).map((c) => c.container.id), ["m1"]);
+  assert.deepEqual(
+    new MultiItemStrategy().findCandidates(ctx).map((c) => c.container.id),
+    ["m1"]
+  );
   assert.equal(new MiscStrategy().findCandidates(ctx).length, 1); // misc 兜底：全量取 enabled misc 容器
 });
 
 test("DefaultCandidateSorter: 满箱跳过 → 优先级升序 → 使用率降序", () => {
   const sorter = new DefaultCandidateSorter();
-  const input = [
-    cand("a", 10, 0.3),
-    cand("full", 10, 1.0, true),
-    cand("b", 5, 0.2),
-    cand("c", 10, 0.9),
-  ];
+  const input = [cand("a", 10, 0.3), cand("full", 10, 1.0, true), cand("b", 5, 0.2), cand("c", 10, 0.9)];
   const sorted = sorter.sort(input);
-  assert.deepEqual(sorted.map((c) => c.container.id), ["b", "c", "a"]);
+  assert.deepEqual(
+    sorted.map((c) => c.container.id),
+    ["b", "c", "a"]
+  );
 });
 
 test("transfer: 全部移走（源清空，目标放入）", () => {
@@ -153,10 +161,18 @@ function makeWarehouse() {
   const wh = {
     id: "w1",
     displayName: "w",
-    ownerId: "p1",
+    ownerName: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: { routingEnabled: true, sortingEnabled: true, processingSpeed: 8, warningThreshold: 0.9, autoSortThreshold: 0.4, defaultContainerRole: "single" as const, defaultContainerEnabled: true },
+    settings: {
+      routingEnabled: true,
+      sortingEnabled: true,
+      processingSpeed: 8,
+      warningThreshold: 0.9,
+      autoSortThreshold: 0.4,
+      defaultContainerRole: "single" as const,
+      defaultContainerEnabled: true,
+    },
     containers,
     inputs: new Map<string, InMemoryContainer>(),
   };

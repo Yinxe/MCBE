@@ -28,7 +28,7 @@ export function registerCreate(registry: Parameters<typeof defineCommand>[0], de
       corner1: { x: Math.floor(p1.x), y: Math.floor(p1.y), z: Math.floor(p1.z) },
       corner2: { x: Math.floor(p2.x), y: Math.floor(p2.y), z: Math.floor(p2.z) },
     };
-    const result = deps.warehouses.createWarehouse(name, player.id, area);
+    const result = deps.warehouses.createWarehouse(name, player.name, area);
     if (!result.ok) {
       player.sendMessage(`${chat.error}${result.error}`);
       return;

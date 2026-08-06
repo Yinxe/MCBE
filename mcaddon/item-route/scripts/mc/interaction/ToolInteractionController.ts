@@ -51,7 +51,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
       const player = e.player;
       if (player === undefined) return;
       if (e.itemStack === undefined || !deps.config.isToken(e.itemStack.typeId)) return;
-      recentBlockUse.set(player.id, Date.now());
+      recentBlockUse.set(player.name, Date.now());
       e.cancel = true; // 取消默认行为：不打开箱子界面、不锄地等
       const loc: Location = { x: e.block.location.x, y: e.block.location.y, z: e.block.location.z };
       const dimensionId = e.block.dimension.id;
@@ -85,14 +85,14 @@ export function registerToolInteraction(deps: CommandDeps): void {
         return;
       }
 
-      const session = deps.session.get(player.id);
+      const session = deps.session.get(player.name);
       if (session === undefined) {
         player.sendMessage(`${chat.info}请先对空右键信物打开菜单创建仓库`);
         return;
       }
       // 角点处理（建仓/调整可能触发视觉事件 → 延迟到 system.run）
       system.run(() => {
-        const msg = handleCornerClick(cornerCtx, player.id, loc, dimensionId);
+        const msg = handleCornerClick(cornerCtx, player.name, loc, dimensionId);
         if (msg) player.sendMessage(msg);
       });
     } catch (err) {
@@ -106,7 +106,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
       const player = e.source;
       if (player === undefined) return;
       if (e.itemStack === undefined || !deps.config.isToken(e.itemStack.typeId)) return;
-      const lastBlock = recentBlockUse.get(player.id);
+      const lastBlock = recentBlockUse.get(player.name);
       if (lastBlock !== undefined && Date.now() - lastBlock < DEBOUNCE_MS) return;
 
       // 视线指向容器（如潜影盒等可能不触发方块交互）→ 容器角色菜单
@@ -125,6 +125,6 @@ export function registerToolInteraction(deps: CommandDeps): void {
 
   // 玩家离开：清理防抖时间戳（v1 同款，防内存泄漏）
   world.afterEvents.playerLeave.subscribe((e) => {
-    recentBlockUse.delete(e.playerId);
+    recentBlockUse.delete(e.playerName);
   });
 }

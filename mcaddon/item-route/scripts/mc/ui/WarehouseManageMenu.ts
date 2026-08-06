@@ -16,9 +16,9 @@ import * as uiColor from "./uiColor";
  */
 export async function showWarehouseManageMenu(player: Player, deps: CommandDeps): Promise<void> {
   const all = deps.loadedWarehouses();
-  const ownsAny = all.some((w) => w.ownerId === player.id);
+  const ownsAny = all.some((w) => w.ownerName === player.name);
   const visible =
-    canManage(player) || ownsAny ? all : all.filter((w) => deps.members.getRole(w, player.id) !== undefined);
+    canManage(player) || ownsAny ? all : all.filter((w) => deps.members.getRole(w, player.name) !== undefined);
 
   if (visible.length === 0) {
     player.sendMessage(`${uiColor.chat.muted}没有可管理的仓库`);

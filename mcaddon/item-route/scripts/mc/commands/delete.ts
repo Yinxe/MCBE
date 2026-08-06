@@ -22,7 +22,7 @@ export function registerDelete(registry: Parameters<typeof defineCommand>[0], de
       player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
-    if (!requireRole(deps.members, warehouse, player.id, "owner")) {
+    if (!requireRole(deps.members, warehouse, player.name, "owner")) {
       player.sendMessage(`${chat.error}需要 owner 权限`);
       return;
     }

@@ -24,7 +24,7 @@ export function registerRescan(registry: Parameters<typeof defineCommand>[0], de
       player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
-    if (!requireRole(deps.members, warehouse, player.id, "member")) {
+    if (!requireRole(deps.members, warehouse, player.name, "member")) {
       player.sendMessage(`${chat.error}需要 member 及以上权限`);
       return;
     }

@@ -6,7 +6,7 @@ import { form, chat, btn } from "./uiColor";
 
 /** 首次使用主菜单时展示引导页；该玩家已看过则跳过 */
 export async function tryShowNewPlayerGuide(player: Player, config: McModConfig): Promise<boolean> {
-  if (config.hasSeenGuide(player.id)) return false;
+  if (config.hasSeenGuide(player.name)) return false;
   const dlg = new ActionFormBuilder()
     .title(`${form.success}物品路由 · 欢迎`)
     .body(
@@ -25,6 +25,6 @@ export async function tryShowNewPlayerGuide(player: Player, config: McModConfig)
     )
     .button(`${btn.primary}知道了`, () => undefined);
   await dlg.show(player);
-  config.markSeenGuide(player.id);
+  config.markSeenGuide(player.name);
   return true;
 }

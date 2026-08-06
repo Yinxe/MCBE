@@ -5,21 +5,21 @@
 // 命令→所需角色的映射见 mc/commands/auth.ts 的 COMMAND_MIN_ROLE。
 import type { Warehouse } from "../model/Warehouse";
 import type { MemberRole } from "../model/Warehouse";
-import type { PlayerId } from "../model/types";
+import type { PlayerName } from "../model/types";
 
 /**
  * 成员权限服务（无状态纯逻辑，可单测）：owner > member > visitor 的判定唯一权威。
  * 命令/UI 一律经 `can()` 矩阵（替代 v1 的 OP 二元判断）；getRole 解析具体角色。
  */
 export class MemberService {
-  getRole(warehouse: Warehouse, playerId: PlayerId): MemberRole | undefined {
-    if (warehouse.ownerId === playerId) return "owner";
-    return warehouse.members.find((m) => m.playerId === playerId)?.role;
+  getRole(warehouse: Warehouse, playerName: PlayerName): MemberRole | undefined {
+    if (warehouse.ownerName === playerName) return "owner";
+    return warehouse.members.find((m) => m.playerName === playerName)?.role;
   }
 
   /** 是否满足所需最低角色（owner 隐式满足 member/visitor） */
-  can(warehouse: Warehouse, playerId: PlayerId, required: MemberRole): boolean {
-    const role = this.getRole(warehouse, playerId);
+  can(warehouse: Warehouse, playerName: PlayerName, required: MemberRole): boolean {
+    const role = this.getRole(warehouse, playerName);
     if (role === undefined) return false;
     if (role === "owner") return true;
     if (required === "owner") return false;

@@ -1,11 +1,11 @@
 // ─── 命令权限封装（纯逻辑，可单测） ──────────────────────────
 // 命令 → 所需最小角色的声明式映射（COMMAND_MIN_ROLE），配合 core MemberService
 // 实现统一权限矩阵（design §3.3），替代 v1 的 OP 二元判断。
-// 用法：命令回调里 `requireRole(deps.members, warehouse, player.id, X)`；
+// 用法：命令回调里 `requireRole(deps.members, warehouse, player.name, X)`；
 // 或直接用 `canRunCommand` 按命令名取权限（create/organize/help=any 等）。
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { MemberRole } from "../../core/model/Warehouse";
-import type { PlayerId } from "../../core/model/types";
+import type { PlayerName } from "../../core/model/types";
 import type { MemberService } from "../../core/services/MemberService";
 
 /** 按显示名精确解析仓库；无匹配返回 undefined */
@@ -17,11 +17,11 @@ export function resolveWarehouseByName(warehouses: Warehouse[], name: string): W
 export function requireRole(
   members: MemberService,
   warehouse: Warehouse | undefined,
-  playerId: PlayerId,
+  playerName: PlayerName,
   role: MemberRole
 ): boolean {
   if (warehouse === undefined) return false;
-  return members.can(warehouse, playerId, role);
+  return members.can(warehouse, playerName, role);
 }
 
 /**
@@ -49,11 +49,11 @@ export const COMMAND_MIN_ROLE: Record<string, CommandAccess> = {
 export function canRunCommand(
   members: MemberService,
   warehouse: Warehouse | undefined,
-  playerId: PlayerId,
+  playerName: PlayerName,
   command: string
 ): boolean {
   const access = COMMAND_MIN_ROLE[command];
   if (access === undefined) return false;
   if (access === "any") return true;
-  return requireRole(members, warehouse, playerId, access);
+  return requireRole(members, warehouse, playerName, access);
 }

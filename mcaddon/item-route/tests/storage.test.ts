@@ -25,8 +25,8 @@ test("InMemoryWarehouseStore: 列表/加载/保存/删除", () => {
   const snapshot = {
     id: "w1",
     displayName: "主仓库",
-    ownerId: "p1",
-    members: [{ playerId: "p1", role: "owner" as const }],
+    ownerName: "p1",
+    members: [{ playerName: "p1", role: "owner" as const }],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } },
     settings: createDefaultSettings(),
   };
