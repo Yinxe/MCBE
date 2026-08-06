@@ -88,6 +88,11 @@ export class WarehouseService {
     return this.store.list().map((s) => this.buildWarehouse(s));
   }
 
+  /**
+   * 创建仓库：跑全部建仓限制（名非空/超限/同名/重叠/间距/每玩家上限），
+   * 通过则落 meta 并触发 warehouse-created（mc 层激活/扫描容器）。可选 defaults 覆盖默认容器角色/启用。
+   * 返回 discriminated union：`{ok:true, warehouse}` 或 `{ok:false, error}`（中文错误，调用方可直接播报）。
+   */
   createWarehouse(
     displayName: string,
     ownerId: PlayerId,
@@ -132,11 +137,13 @@ export class WarehouseService {
     return { ok: true, warehouse };
   }
 
+  /** 删除仓库：清 meta/注册表键（store.remove），并触发 warehouse-deleted（mc 层清索引/统计键 + 停调度） */
   deleteWarehouse(id: WarehouseId): void {
     this.store.remove(id);
     this.bus.warehouseDeleted.trigger({ type: "warehouse-deleted", warehouseId: id });
   }
 
+  /** 改名：非空 + 全局唯一；成功落 meta + 触发 warehouse-renamed；失败返回中文错误 */
   rename(warehouse: Warehouse, newName: string): string | undefined {
     const name = newName.trim();
     if (name.length === 0) return "仓库名不能为空";
@@ -149,6 +156,7 @@ export class WarehouseService {
     return undefined;
   }
 
+  /** 添加成员：owner 只能通过转让设置（拒绝重复）；成功落盘，失败返回中文错误 */
   addMember(warehouse: Warehouse, playerId: PlayerId, role: MemberRole): string | undefined {
     if (role === "owner") return "owner 只能通过转让设置";
     if (warehouse.members.some((m) => m.playerId === playerId)) return "该玩家已是成员";
@@ -157,6 +165,7 @@ export class WarehouseService {
     return undefined;
   }
 
+  /** 改成员角色：owner 角色不可改/不可授让；member 可视需要降为 visitor 等。失败返回中文错误 */
   setMemberRole(warehouse: Warehouse, playerId: PlayerId, role: MemberRole): string | undefined {
     if (playerId === warehouse.ownerId) return "不能修改 owner 的角色";
     if (role === "owner") return "owner 只能通过转让设置"; // 与 addMember 一致，防提权口径不一
@@ -167,6 +176,7 @@ export class WarehouseService {
     return undefined;
   }
 
+  /** 移除成员：owner 不可移除；非成员返回错误；成功落盘 */
   removeMember(warehouse: Warehouse, playerId: PlayerId): string | undefined {
     if (playerId === warehouse.ownerId) return "不能移除 owner";
     const before = warehouse.members.length;
@@ -176,6 +186,7 @@ export class WarehouseService {
     return undefined;
   }
 
+  /** 更新仓库设置（局部 patch 合并落 meta；最小粒度=单仓小 meta，事件既触发也即写） */
   updateSettings(warehouse: Warehouse, patch: Partial<WarehouseSettings>): void {
     warehouse.settings = { ...warehouse.settings, ...patch };
     this.persist(warehouse);
@@ -185,9 +196,9 @@ export class WarehouseService {
    * 调整仓库区域（resize 命令）。
    * 与 createWarehouse 同样跑建仓限制校验（体积/重叠/间距，排除自身），失败返回中文错误。
    * 仓库 ID 编码初始区域 → resize 会重算 ID；若变化则**迁移**：
-   *   1) 先发 onRebase(oldId,newId)（mc 层迁移索引/统计/容器注册表键 + 调度器重注册）
-   *   2) 用新 id 持久化 meta，3) 移除旧 id meta。
-   * 容器/索引等"随区域变脏"由 onRebase + 后续 rescan 收敛。
+   *   1) 用新 id 持久化 meta，2) 移除旧 id meta，3) 触发 warehouse-area-changed（带 oldId）。
+   * 按仓 id 存储的键（cids 索引）+ 调度器重注册由 mc 层订阅 warehouseAreaChanged 处理（事件驱动）。
+   * 容器/索引等"随区域变脏"由后续 rescan 收敛。
    */
   updateArea(warehouse: Warehouse, area: WarehouseArea): string | undefined {
     const limitError = areaExceedsLimits(area, this.limits);
@@ -216,6 +227,7 @@ export class WarehouseService {
     return undefined;
   }
 
+  /** 把仓库快照写盘（meta 单键 generation 模式；容器注册表另由 mc 层每容器一条键维护） */
   persist(warehouse: Warehouse): void {
     this.store.save(this.toSnapshot(warehouse));
   }
