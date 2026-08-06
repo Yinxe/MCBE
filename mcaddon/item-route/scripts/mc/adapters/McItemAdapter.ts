@@ -36,6 +36,11 @@ function domainStack(itemId: string, amount: number, maxStackSize: number, sourc
   return obj;
 }
 
+/**
+ * 物品适配器：MC ItemStack ↔ core ItemStack 的双向转换（纯映射，无状态）。
+ * toDomain 保留 maxAmount + 缓存组件属性，供 core 侧 addItem/contains 的 NBT 级判定；
+ * toMc 把 core 堆叠物转回 MC 物品。隔离核心概念层对 MC 类型的依赖。
+ */
 export class McItemAdapter {
   toDomain(stack: McItemStack | undefined): ItemStack | undefined {
     if (stack === undefined) return undefined;

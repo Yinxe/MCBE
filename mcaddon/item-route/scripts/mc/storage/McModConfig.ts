@@ -40,6 +40,12 @@ export const TOKEN_OPTIONS = [
   "minecraft:blaze_powder",
 ];
 
+/**
+ * 模组全局配置：单键 `ir2:modcfg`（overwrite + hash）存 ModConfigData，内存缓存一份副本；
+ * setter 写穿透落盘；getter 读内存。引导标记走独立 per-player 键 `ir2:guide_seen:{playerId}`。
+ * ⚠️ 早执行安全：`create()` 只建默认值不读 DP（Phase 2 顶层用）；持久化值须 Phase 4 `refresh()` 读取。
+ * 建仓限制（maxWarehouseVolume/maxWarehousesPerPlayer）装配时喂给 WarehouseService.limits。
+ */
 export class McModConfig {
   private data: ModConfigData;
 

@@ -75,6 +75,14 @@ interface Runtime {
   blockedInputs: Set<string>;
 }
 
+/**
+ * 调度器：每仓运行时（Runtime）按"邻近激活 / 空闲卸载"生命周期驱动路由 interval。
+ *  - tick()（mc 层每 5 tick 调）轮询邻近判定 → inactive↔active↔deactivating 状态机，
+ *    激活时经 indexLifecycle.load 加载索引（同刻容器按需加载）、卸载时逐容器落盘 + 卸载容器。
+ *  - processOnce() 取输入容器逐格路由，失败阻塞（强制可见）；input-blocked 事件触发通知。
+ *  - 全局开关（globalEnabled）/ 单仓速度（processingSpeed）在此统一口径。
+ * 可注入 { router, intervals, proximity, bus, indexLifecycle }，内存实现可测。
+ */
 export class Scheduler {
   private runtimes = new Map<WarehouseId, Runtime>();
   private globalEnabled = true;

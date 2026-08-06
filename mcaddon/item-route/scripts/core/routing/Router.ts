@@ -31,6 +31,12 @@ export interface RouteResult {
   amount: number;
 }
 
+/**
+ * 路由引擎：对候选容器按策略分拣，是"输入 → 目标容器"的决策中枢。
+ * 每次 routeFrom 逐候选按策略判定可放入性；成功移动物品 → 触发 item-routed 领域事件
+ * （统计/自动整理/预警/视觉由 Subscriptions 订阅驱动，本类不触达持久化）。
+ * 构造注入 { strategies, sorter, bus }，可插拔、可测。
+ */
 export class Router {
   constructor(
     private readonly strategies: RouteStrategy[],

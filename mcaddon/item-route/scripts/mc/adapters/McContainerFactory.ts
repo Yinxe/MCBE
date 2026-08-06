@@ -18,6 +18,12 @@ import type { McItemAdapter } from "./McItemAdapter";
 
 const INVENTORY_COMPONENT = "minecraft:inventory";
 
+/**
+ * 容器工厂：Block → McContainerAdapter 的**唯二入口**（容器注册/重扫/启动重建都经它）。
+ * - 双箱：SafeProbe 临时物探测确认共享同一库存（不依赖实例同一性）→ occupiedLocations 含两半
+ * - 白名单：非受支持容器类型返回 undefined；漏斗强制 finalRole=input（不可改角色）
+ * - 访问安全：任何失败（无库存组件/区块异常）静默返回 undefined，不抛崩溃
+ */
 export class McContainerFactory {
   constructor(private readonly item: McItemAdapter) {}
 

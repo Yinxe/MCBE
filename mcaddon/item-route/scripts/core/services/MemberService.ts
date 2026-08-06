@@ -7,6 +7,10 @@ import type { Warehouse } from "../model/Warehouse";
 import type { MemberRole } from "../model/Warehouse";
 import type { PlayerId } from "../model/types";
 
+/**
+ * 成员权限服务（无状态纯逻辑，可单测）：owner > member > visitor 的判定唯一权威。
+ * 命令/UI 一律经 `can()` 矩阵（替代 v1 的 OP 二元判断）；getRole 解析具体角色。
+ */
 export class MemberService {
   getRole(warehouse: Warehouse, playerId: PlayerId): MemberRole | undefined {
     if (warehouse.ownerId === playerId) return "owner";

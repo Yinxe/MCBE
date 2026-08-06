@@ -76,6 +76,12 @@ export function areaExceedsLimits(area: WarehouseArea, limits: WarehouseLimits):
   return undefined;
 }
 
+/**
+ * 仓库服务：仓库 CRUD / 成员 / 设置 / 建仓限制，是仓库生命周期管理中枢。
+ * 所有写操作经 store 持久化并触发领域事件（mc 层订阅做内存/存储副作用，见 events/Subscriptions.ts）。
+ * `loadAll()` 返回的 Warehouse 仅含元数据与空容器表（容器适配器由 mc 层按需加载，见 WarehouseLoader）。
+ * 实例化时注入 { store, bus, limits }，可测（InMemoryStore + 假 bus）。
+ */
 export class WarehouseService {
   constructor(
     private readonly store: WarehouseStore,

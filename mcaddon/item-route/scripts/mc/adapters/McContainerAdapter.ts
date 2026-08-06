@@ -22,6 +22,12 @@ import type { ContainerId, Location } from "../../core/model/types";
 import { deriveBinding } from "../../core/model/DeriveBinding";
 import type { McItemAdapter } from "./McItemAdapter";
 
+/**
+ * 容器适配器：实现 core `Container` 契约，委托真实 mc.Container。
+ *  - addItem/setItem/contains/find 全权委托 mc 原生（NBT 级堆叠判定，不吞不覆盖不刷）。
+ *  - occupiedLocations 承载双箱合并；rebindMc 在双箱合并时换绑最新库存句柄，rebaseId 重定主 id。
+ * 生产唯一容器实现（测试用 InMemoryContainer）。
+ */
 export class McContainerAdapter implements Container {
   readonly id: ContainerId;
   role: ContainerRole;

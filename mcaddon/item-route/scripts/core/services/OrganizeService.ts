@@ -48,6 +48,12 @@ export interface OrganizeResult {
   perType: Record<ItemId, OrganizeTypeStat>;
 }
 
+/**
+ * 整理服务：**单容器就地整理**（v1 SlotOrganizer 语义）——取出全部物品 → 清空 →
+ * 按 typeId 排序 → 逐堆重放（合并权委托适配器 addItem，概念层不感知 NBT）。不跨容器、不重建索引。
+ * 结果：同型可堆叠合并、槽位有序、混乱度归零；重放失败用 MoveJournal 回滚保证数量守恒。
+ * 触发点：/ir:organize、潜行右键、路由自动整理（container-scanned 订阅）。整理后发 container-changed。
+ */
 export class OrganizeService {
   constructor(
     private readonly organizer: Organizer,

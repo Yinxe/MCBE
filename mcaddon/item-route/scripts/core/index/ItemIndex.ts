@@ -25,6 +25,12 @@ export interface IndexSnapshot {
   singleBindings: Record<ContainerId, ItemId>;
 }
 
+/**
+ * O(1) 物品索引（每仓实例）：byItem(typeId→候选) / containerItems(容器→物品) / singleBindings(单物绑定)。
+ * 路由只查索引、不做全仓扫描；漂移由"三层兜底"（代理信号 reconcile + 策略惰性校验 + 空箱重绑）自愈。
+ * 持久化为**每容器一条条目**（serializeContainer/restoreFromEntries），与注册表/统计同风格。
+ * 此 class 为每仓隔离实例（Scheduler 激活/卸载加载），不进 MC 层，可单测。
+ */
 export class ItemIndex {
   private byItem = new Map<ItemId, { single: Set<ContainerId>; multi: Set<ContainerId> }>();
   private containerItems = new Map<ContainerId, Set<ItemId>>();

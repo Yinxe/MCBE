@@ -29,6 +29,12 @@ export interface MessinessScore {
   suboptimalStacks: number;
 }
 
+/**
+ * 混乱度模块：把容器内容量化为"顺、整、满"三项评分并聚合总分（0-1）。
+ * v1 smartwarehouse 模型：`messiness()` 总分 = 顺序相邻逆序对(70%) + 未满堆叠(30%)。
+ * 与统计共享 `scanContainer` 单趟扫描（messinessFromScan 吃扫描结果，免重复扫描）。
+ * 纯函数/无状态，可单测。
+ */
 export class Organizer {
   /**
    * 容器混乱度（v1 smartwarehouse 模型，总分 0-1）。

@@ -13,6 +13,10 @@ import type { ContainerId } from "../../core/model/types";
 
 const indexKey = (cid: ContainerId): string => `ir2:idx:${cid}`;
 
+/**
+ * 索引仓储：**每容器一条键** `ir2:idx:{cid}`（items + singleBinding）。事件驱动、容器粒度写入
+ * （结构事件/卸载/离仓时落盘），对齐注册表/统计风格；无 markDirty/flush/定时批量落盘。
+ */
 export class McIndexStore implements IndexStore {
   constructor(private readonly shards: ShardStore) {}
 

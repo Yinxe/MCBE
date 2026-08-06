@@ -38,6 +38,13 @@ export interface EventBridgeDeps {
 
 const MAIN_TICK_INTERVAL = 5; // 全局主任务：调度轮询（路由/生命周期，非持久化）
 
+/**
+ * 事件桥接：把 MC 世界事件（放置/拆除/交互/方块爆炸）翻译为领域事件 + 索引/统计内存联动。
+ *  - 放块 → 注册/双箱合并；拆块 → 注销/半拆重定；交互代理信号 → reconcile 惰性校验。
+ *  - 结构变更发 container-added / container-registry-changed / container-removed，
+ *    持久化由 Subscriptions 订阅者负责（本类不碰 DP、无定时 flush）。
+ *  - 主循环（每 5 tick）驱动 scheduler.tick() + stats.tick()。
+ */
 export class McEventBridge {
   constructor(private readonly deps: EventBridgeDeps) {}
 

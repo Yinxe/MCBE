@@ -57,6 +57,13 @@ export interface WarehouseStats {
   byItem: Record<ItemId, ItemStat>;
 }
 
+/**
+ * 统计服务：容器/仓库统计 + 两级容量预警（warning=某容器超阈值 / full=全仓满）。
+ *  - 统计是**活容器内容的派生**：内存缓存 + invalidate 失效；持久化每容器一条键（ir2:cst:{cid}），
+ *    事件驱动**写穿**（container-scanned 单容器增量 / 冷读重算 / 查看汇总逐容器），无定时 flush。
+ *  - 预警带仓库级冷却（tick() 递减），避免每路由刷屏。
+ * 注入 { store, bus, warningCooldownTicks }，InMemoryStatsStore 可测。
+ */
 export class StatsService {
   private cache = new Map<ContainerId, ContainerStats>();
   private cooldowns = new Map<WarehouseId, number>();

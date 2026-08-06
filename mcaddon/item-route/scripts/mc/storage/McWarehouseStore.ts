@@ -35,6 +35,13 @@ export interface ContainerEntry {
   priority: number;
 }
 
+/**
+ * 仓库仓储：meta 单键（generation）+ 容器注册表**每容器一条键**（ir2:c:{cid}）+ 每仓 cids 索引。
+ *  - meta：`ir2:wh:{id}:meta`（WarehouseSnapshot，不含容器——容器列表由 cids 索引权威）
+ *  - 注册表：`ir2:c:{cid}`（ContainerEntry：id/role/locations/enabled/priority）+ `ir2:wh:{id}:cids`
+ *  - loadAllContainers 若命中旧整仓键（ir2:wh:{id}:containers）则就地迁移拆为每容器单键（幂等）
+ * 删除仓库（remove）清理 meta + cids + 每个容器键，防残留。
+ */
 export class McWarehouseStore {
   constructor(private readonly shards: ShardStore) {}
 
