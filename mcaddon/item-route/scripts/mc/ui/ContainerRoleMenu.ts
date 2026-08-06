@@ -53,18 +53,18 @@ export async function showContainerRoleMenu(player: Player, deps: CommandDeps, w
     const roleLabel = ROLE_LABELS[container.role] ?? container.role;
     form.button(
       `${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]`,
-      () => void showContainerEdit(player, deps, warehouse, container)
+      () => void showContainerConfigMenu(player, deps, warehouse, container)
     );
   }
   await form.show(player);
 }
 
 /**
- * 容器配置模态（member+）：信息展示 + 启用/角色修改 + 立即整理动作。
+ * 单容器配置模态（member+，信物点击容器 / 容器列表项直通）：信息展示 + 启用/角色修改 + 立即整理动作。
  * 漏斗强制 input（角色不可改）。提交变更 → inputs 镜像 + 索引 + 统计失效 + containerRegistryChanged
  * （持久化由中央订阅处理，单容器最小单位）。
  */
-async function showContainerEdit(
+export async function showContainerConfigMenu(
   player: Player,
   deps: CommandDeps,
   warehouse: Warehouse,

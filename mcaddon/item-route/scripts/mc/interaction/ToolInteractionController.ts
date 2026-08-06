@@ -4,7 +4,7 @@
 //       · 点击（isFirstEvent=true）：
 //           - 潜行 + 容器 → **单容器整理**（详细分析报告，v1 同款）
 //           - 潜行 + 非容器 → **背包整理**（v1 同款：只整理主栏 27 格，不动快捷栏/盔甲/副手）
-//           - 非潜行 + 容器 → 打开该容器的**管理菜单**（ContainerRoleMenu）
+//           - 非潜行 + 容器 → 直通该容器的**配置模态**（ContainerRoleMenu.showContainerConfigMenu，v1 同款）
 //           - 非潜行 + 非容器 → 选区模式（有会话）/ **仓库菜单模式**（按点位找仓 → 打开其设置；
 //              无仓则提示"当前位置不是仓库"）
 //       · 长按（isFirstEvent=false，按住产生的重复事件）：
@@ -21,7 +21,7 @@ import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
 import { isSupportedContainerType } from "../../core/model/ContainerTypes";
 import type { Location } from "../../core/model/types";
 import { handleCornerClick } from "./interactionLogic";
-import { showContainerRoleMenu } from "../ui/ContainerRoleMenu";
+import { showContainerConfigMenu } from "../ui/ContainerRoleMenu";
 import { showWarehouseSettingsMenu } from "../ui/WarehouseSettingsMenu";
 import { showMainMenu } from "../ui/MainMenu";
 import { MoveJournal } from "../../core/routing/Move";
@@ -124,10 +124,10 @@ export function registerToolInteraction(deps: CommandDeps): void {
 
       // 非潜行点击
       if (isSupportedContainerType(e.block.typeId)) {
-        // 点击容器 → 该容器的管理菜单
+        // 点击容器 → 直通该容器的配置模态（v1 同款；不再先弹仓库容器列表）
         system.run(() => {
           const hit = hitLoaded(dimensionId, loc);
-          if (hit) void showContainerRoleMenu(player, deps, hit.warehouse);
+          if (hit) void showContainerConfigMenu(player, deps, hit.warehouse, hit.container);
           else player.sendMessage(`${chat.error}该容器不属于任何仓库`);
         });
         return;
@@ -157,12 +157,12 @@ export function registerToolInteraction(deps: CommandDeps): void {
       const lastBlock = recentBlockUse.get(player.name);
       if (lastBlock !== undefined && Date.now() - lastBlock < DEBOUNCE_MS) return;
 
-      // 视线指向容器（如潜影盒等可能不触发方块交互）→ 容器管理菜单
+      // 视线指向容器（如潜影盒等可能不触发方块交互）→ 直通该容器的配置模态
       const block = player.getBlockFromViewDirection({ maxDistance: 6 })?.block;
       if (block !== undefined && isSupportedContainerType(block.typeId)) {
         const loc: Location = { x: block.location.x, y: block.location.y, z: block.location.z };
         const hit = hitLoaded(block.dimension.id, loc);
-        if (hit) void showContainerRoleMenu(player, deps, hit.warehouse);
+        if (hit) void showContainerConfigMenu(player, deps, hit.warehouse, hit.container);
         return;
       }
       void showMainMenu(player, deps);
