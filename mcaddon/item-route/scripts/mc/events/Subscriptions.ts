@@ -89,8 +89,25 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
     const c = wh.containers.get(e.containerId);
     if (c === undefined) return;
     if (e.scan.messiness > wh.settings.autoSortThreshold) {
-      organize.organizeContainer(wh, c, new MoveJournal());
-      stats.invalidate(c.id); // 整理改变了目标内容
+      const res = organize.organizeContainer(wh, c, new MoveJournal());
+      // ⚠️ 触发容器整理后 **重扫并更新该容器统计**（item：满仓误报修复）：
+      // 整理腾出空槽后，统计缓存仍是整理前（满）的 usedSlots——后续预警/展示读到过期"满"。
+      // 用整理后的真实内容重算槽位占用，让预警/统计看到空余空间（updateFromSummary 覆盖缓存）。
+      if (res.ok) {
+        const after = scanContainer(c);
+        stats.updateFromSummary(
+          c,
+          {
+            capacity: c.capacity,
+            usedSlots: after.usedSlots,
+            totalItems: after.totalItems,
+            uniqueTypes: Object.keys(after.byType).length,
+            byType: after.byType,
+            messiness: organizer.messinessFromScan(after).total,
+          },
+          wh.settings.warningThreshold
+        );
+      }
     }
   });
   // 容量预警：目标容器容量变化 → 容器级预警（只查目标，O(1)；冷却抑制重复）

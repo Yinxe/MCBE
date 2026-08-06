@@ -176,6 +176,7 @@ export class Scheduler {
         rt.handle?.stop();
         rt.handle = undefined;
         rt.lifecycle = "inactive";
+        rt.blockedInputs.clear(); // 全局关 → 阻塞态清空（HUD/事件不残留）
         rt.inactiveSince = this.now(); // 全局关 → 立即开始空闲计时
       }
     }
@@ -235,6 +236,7 @@ export class Scheduler {
             rt.deactivateCounter--;
             if (rt.deactivateCounter <= 0) {
               rt.lifecycle = "inactive";
+              rt.blockedInputs.clear(); // 进入停用 → 阻塞态清空（HUD/事件不残留）
               rt.inactiveSince = this.now(); // 从此进入空闲计时（墙钟）
               this.emitLifecycle(rt, "deactivating", "inactive");
             }
@@ -284,7 +286,11 @@ export class Scheduler {
       (a, b) => a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
     );
     for (const container of inputs) {
-      if (container.usedSlots === 0) continue; // 空输入跳过（无物可堵）
+      if (container.usedSlots === 0) {
+        // 空输入：解除阻塞态（物品已清/路由走 → HUD 不再残留"堵塞 N 格"、防误报事件）
+        rt.blockedInputs.delete(container.id);
+        continue;
+      }
       const slot = container.firstNoEmptyItem(); // 首个非空槽（手封装线性扫描）
       if (slot === undefined) continue;
       const routed = this.router.routeFrom(container, slot, rt.warehouse, index);

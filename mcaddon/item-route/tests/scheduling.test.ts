@@ -389,6 +389,26 @@ test("Scheduler: 路由失败发 input-blocked 事件（防抖通知的数据源
   assert.deepEqual(blocks, ["in:minecraft:stone:10", "in:minecraft:wood:5"]);
 });
 
+test("Scheduler: 输入阻塞态在输入清空后解除（HUD 不残留堵塞标记，item HUD bug）", () => {
+  const w = makeWorld();
+  const input = new InMemoryContainer("in", "input", 3);
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64)); // stone 无候选 → 阻塞
+  const target = new InMemoryContainer("m1", "multi", 3);
+  target.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64));
+  registerContainer(w.warehouse, input);
+  registerContainer(w.warehouse, target);
+  for (const c of [input, target]) w.index.onContainerAdded(c);
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(8);
+  assert.equal(w.scheduler.blockedInputCount("w1"), 1); // 阻塞态 1
+  // 玩家手动清空输入（改箱）→ 该输入变空 → 阻塞态解除
+  input.setItem(0, undefined);
+  w.intervals.advance(8);
+  assert.equal(w.scheduler.blockedInputCount("w1"), 0); // 空输入清理阻塞标记（HUD 不再显示堵塞）
+});
+
 test("Scheduler: 输入全空 → 无事可作（不产生移动）", () => {
   const w = makeWorld();
   const input = new InMemoryContainer("in", "input", 3);
