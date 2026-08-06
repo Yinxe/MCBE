@@ -12,6 +12,7 @@ import type { CandidateContainer, RouteStrategy } from "./RouteStrategy";
 import type { CandidateSorter } from "./CandidateSorter";
 import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
+import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
 import type { EventBus } from "../events/DomainEvents";
 
@@ -21,6 +22,8 @@ export interface IndexGateway {
   /** 候选漂移时按容器真实内容重建索引条目（各策略自持校验后调用） */
   reconcile(container: Container): void;
   onItemMoved(from: ContainerId, to: ContainerId, itemId: ItemId): void;
+  /** 索引 miss 时全仓自愈：扫描存储容器找 hasItem 并重建条目（Router 在无候选时触发） */
+  selfHeal(item: ItemStack, containers: Iterable<Container>): void;
 }
 
 export interface RouteResult {
@@ -54,9 +57,16 @@ export class Router {
     const stack = input.getItem(slot);
     if (stack === undefined) return undefined;
     const originalAmount = stack.amount;
-    // 索引查询惰性缓存：各策略都查同一 itemId，一次路由只真正 look up 一次（索引在内存）
     const itemId = stack.itemId;
-    let cached: { single: ContainerId[]; multi: ContainerId[] } | undefined;
+    // 索引 miss → 全仓自愈兜底：用户手动向单物/多物放入该类型的存储容器被漏索引时，
+    // selfHeal 扫描全仓非 input/misc 容器找 hasItem 并重建条目，再查（罕见路径，不做每路由全扫）
+    let candidates = index.lookup(itemId);
+    if (candidates.single.length === 0 && candidates.multi.length === 0) {
+      index.selfHeal(stack, warehouse.containers.values());
+      candidates = index.lookup(itemId);
+    }
+    // 索引查询惰性缓存：各策略都查同一 itemId，一次路由只真正 look up 一次（索引在内存）
+    let cached: { single: ContainerId[]; multi: ContainerId[] } | undefined = candidates;
     const ctx = {
       item: stack,
       warehouse,

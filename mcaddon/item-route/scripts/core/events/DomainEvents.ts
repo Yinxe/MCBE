@@ -43,10 +43,14 @@ export interface ContainerChangedEvent {
   containerId: ContainerId;
 }
 
+/** 容器结构变更原因（供通知层区分合箱/拆箱/属性变更） */
+export type ContainerRegistryChangeReason = "merge" | "split" | "property";
+
 /**
  * 容器注册表（属性/结构）变更：角色/启用/优先级/几何/id 变化。
  * 与 containerChanged（**内容**变化：路由/整理/玩家手动改箱代理信号）严格分离——
  * 持久化层只订阅本事件写注册表，避免"每次投递内容变更也写注册表"。
+ * `reason` 供通知层区分 合箱(merge)/拆箱降级(split)/属性变更(property，默认)。
  */
 export interface ContainerRegistryChangedEvent {
   type: "container-registry-changed";
@@ -54,6 +58,8 @@ export interface ContainerRegistryChangedEvent {
   containerId: ContainerId;
   /** 重定 ID（双箱合并/半拆主坐标）时的旧 ID，供持久化层清旧键 */
   oldId?: ContainerId;
+  /** 结构变更原因（通知层区分合并/拆半/属性；缺省视为 property） */
+  reason?: ContainerRegistryChangeReason;
 }
 
 /** 容器扫描的可序列化摘要（路由成功后对目标容器扫描，或整理后触发） */

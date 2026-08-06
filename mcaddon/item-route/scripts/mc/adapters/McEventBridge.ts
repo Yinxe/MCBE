@@ -111,6 +111,7 @@ export class McEventBridge {
               warehouseId: warehouse.id,
               containerId: existing.id,
               oldId,
+              reason: "merge",
             });
             return;
           }
@@ -176,6 +177,7 @@ export class McEventBridge {
               warehouseId: warehouse.id,
               containerId: container.id,
               oldId,
+              reason: "split",
             });
           }
         } else {
@@ -184,6 +186,7 @@ export class McEventBridge {
             type: "container-registry-changed",
             warehouseId: warehouse.id,
             containerId: container.id,
+            reason: "split",
           });
         }
         bus.containerChanged.trigger({

@@ -133,12 +133,13 @@ function cand(id: string, priority: number, usage: number, full = false): Candid
 import { Router } from "../scripts/core/routing/Router";
 import { EventBus } from "../scripts/core/events/DomainEvents";
 
-// 可编程索引 stub：lookup 返回固定结果，reconcile 记录调用
+// 可编程索引 stub：lookup 返回固定结果，reconcile/selfHeal 记录调用（selfHeal 模拟全仓自愈）
 function makeIndexStub() {
   const state = {
     byItem: new Map<string, { single: string[]; multi: string[] }>(),
     moved: [] as string[],
     reconciled: [] as string[],
+    selfHealed: [] as string[],
     lookups: 0,
   };
   const stub = {
@@ -151,6 +152,22 @@ function makeIndexStub() {
     },
     onItemMoved: (from: string, to: string, itemId: string) => {
       state.moved.push(`${from}->${to}:${itemId}`);
+    },
+    // 自愈：扫描存储容器找 hasItem → 记录 + 把该容器加为候选（单物→single / 多物→multi）
+    selfHeal: (item: { itemId: string }, containers: Iterable<InMemoryContainer>) => {
+      state.selfHealed.push(item.itemId);
+      for (const c of containers) {
+        if (c.role === "input" || c.role === "misc") continue;
+        if (!c.contains(item as never)) continue;
+        state.reconciled.push(c.id);
+        const e = state.byItem.get(item.itemId) ?? { single: [] as string[], multi: [] as string[] };
+        if (c.role === "single") {
+          if (!e.single.includes(c.id)) e.single.push(c.id);
+        } else if (!e.multi.includes(c.id)) {
+          e.multi.push(c.id);
+        }
+        state.byItem.set(item.itemId, e);
+      }
     },
     state,
   };
@@ -276,4 +293,40 @@ test("Router: 同一次路由招索引 lookup 只调用一次（缓存）", () =
   router.routeFrom(input, 0, wh, index);
   // single + multi 两个策略都查同一 itemId，但一次路由只真正 look up 一次
   assert.equal(index.state.lookups, 1);
+});
+
+test("Router: 索引无候选 → selfHeal 全仓扫描自愈后路由到手动放入的容器", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:diamond", 5, 64));
+  // 用户手动向多物容器放入 diamond（索引不知情 → 该类型无候选）
+  add(new InMemoryContainer("m1", "multi", 3)).setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  const index = makeIndexStub(); // byItem 为空 → 索引 miss
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  const result = router.routeFrom(input, 0, wh, index);
+  assert.equal(result?.to, "m1"); // selfHeal 扫描到 m1 → 路由到它而非落 misc
+  assert.deepEqual(index.state.selfHealed, ["minecraft:diamond"]); // 触发了一次自愈
+  assert.ok(index.state.reconciled.includes("m1")); // 自愈重建了 m1 索引条目
+});
+
+test("Router: 索引有候选时**不**触发 selfHeal（仅 miss 兜底，不每路由全扫）", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const single = add(new InMemoryContainer("s1", "single", 3));
+  single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  const index = makeIndexStub();
+  index.state.byItem.set("minecraft:stone", { single: ["s1"], multi: [] });
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  const result = router.routeFrom(input, 0, wh, index);
+  assert.equal(result?.to, "s1");
+  assert.deepEqual(index.state.selfHealed, []); // 有候选 → 不扫描
 });

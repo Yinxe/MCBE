@@ -16,6 +16,8 @@ import { scanWarehouseArea } from "../commands/scan";
 import { showContainerRoleMenu } from "./ContainerRoleMenu";
 import { showMemberMenu } from "./MemberMenu";
 import { showStatsUI } from "./StatsUI";
+import { Table, Cell } from "./Table";
+import { areaSize } from "../../core/services/WarehouseService";
 import * as uiColor from "./uiColor";
 
 /** 处理速度可选项（tick 间隔）；默认 index 2 = 8 tick */
@@ -23,21 +25,57 @@ const SPEED_OPTIONS = [4, 8, 16, 20, 30, 40];
 /** 默认容器角色可选集（输入由漏斗/放置决定，不作为整仓默认；与建仓表单一致） */
 const DEFAULT_ROLE_OPTIONS: ContainerRole[] = ["single", "multi", "misc"];
 
-/** 仓库概览统计文本（容器/每角色/槽位/物品），供 info label 展示（ModalForm 深底 → 浅色） */
+/** 仓库概览：v1 WarehouseStats 风格表格（TYPES/ITEMS/STORAGE + 分角色行），供 info label（ModalForm 深底 → 浅色） */
 function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string {
   const s = deps.stats.getWarehouseStats(warehouse);
-  const byRole = Object.entries(s.byRole)
-    .map(
-      ([role, r]) =>
-        `${uiColor.form.accent}${ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}§f${r.containerCount}`
+  const warnPct = Math.round(warehouse.settings.warningThreshold * 100);
+  const uc = (p: number): string =>
+    p >= 100 ? uiColor.form.error : p >= 80 ? uiColor.form.warn : p >= 50 ? uiColor.form.accent : uiColor.form.success;
+  const tbl = new Table();
+  tbl.header(Cell.left("<>"), Cell.right("种类"), Cell.right("物品"), Cell.left("容量"));
+  const totPct = s.totalSlots > 0 ? Math.round((s.usedSlots / s.totalSlots) * 100) : 0;
+  const totWarn = s.totalSlots > 0 && totPct >= warnPct ? " ⚠" : "";
+  tbl.row(
+    `${uiColor.form.title}容器(${s.containerCount})`,
+    Cell.right(String(s.uniqueTypes)),
+    Cell.right(String(s.totalItems)),
+    Cell.left(
+      `${uiColor.form.title}${s.usedSlots}${uiColor.form.muted}/${uiColor.form.title}${s.totalSlots}${uc(totPct)}(${(totPct / 100).toFixed(2)})${uiColor.form.muted}${totWarn}`
     )
-    .join("  ");
+  );
+  const defs: { role: ContainerRole; c: string; l: string }[] = [
+    { role: "single", c: uiColor.form.success, l: ROLE_LABELS.single },
+    { role: "multi", c: uiColor.form.accent, l: ROLE_LABELS.multi },
+    { role: "misc", c: uiColor.form.warn, l: ROLE_LABELS.misc },
+    { role: "input", c: uiColor.form.title, l: ROLE_LABELS.input },
+  ];
+  for (const { role, c, l } of defs) {
+    const rs = s.byRole[role];
+    if (rs === undefined) continue;
+    const p = rs.totalSlots > 0 ? Math.round((rs.usedSlots / rs.totalSlots) * 100) : 0;
+    const warn = rs.totalSlots > 0 && p >= warnPct ? ` ${c}⚠` : "";
+    tbl.row(
+      `${c}${l}(${rs.containerCount})`,
+      Cell.right(String(rs.uniqueTypes)),
+      Cell.right(String(rs.totalItems)),
+      Cell.left(
+        `${c}${rs.usedSlots}${uiColor.form.muted}/${c}${rs.totalSlots}${uc(p)}(${(p / 100).toFixed(2)})${uiColor.form.muted}${warn}`
+      )
+    );
+  }
+  // 位置信息（维度 + 归一化区域 + 占地规格），对齐 v1 formatWarehouseStats
+  const a = warehouse.area;
+  const minX = Math.min(a.corner1.x, a.corner2.x);
+  const maxX = Math.max(a.corner1.x, a.corner2.x);
+  const minY = Math.min(a.corner1.y, a.corner2.y);
+  const maxY = Math.max(a.corner1.y, a.corner2.y);
+  const minZ = Math.min(a.corner1.z, a.corner2.z);
+  const maxZ = Math.max(a.corner1.z, a.corner2.z);
+  const size = areaSize(a);
   return (
-    `${uiColor.form.muted}容器 ${uiColor.form.body}${s.containerCount}` +
-    `  ${uiColor.form.muted}槽位 ${uiColor.form.body}${s.usedSlots}/${s.totalSlots}` +
-    `  ${uiColor.form.muted}物品 ${uiColor.form.body}${s.totalItems}` +
-    `  ${uiColor.form.muted}种类 ${uiColor.form.body}${s.uniqueTypes}` +
-    (byRole ? `\n${byRole}` : "")
+    `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
+    `${uiColor.form.muted}位置 ${uiColor.form.body}${a.dimension} [${minX},${minY},${minZ}]→[${maxX},${maxY},${maxZ}]  ${size.x}×${size.y}×${size.z}` +
+    `\n${tbl.render(0, [1, 1, 3])}`
   );
 }
 
@@ -54,7 +92,9 @@ export async function showWarehouseSettingsMenu(
   const isOwner = requireRole(deps.members, warehouse, player.name, "owner");
 
   const settings = warehouse.settings;
-  const speedIndex = Math.max(0, SPEED_OPTIONS.indexOf(settings.processingSpeed));
+  // 只能选 ≥ 全局最快速度限制 的档位（不得快于管理员上限；v1 getAvailableSpeeds 口径）
+  const allowedSpeeds = SPEED_OPTIONS.filter((s) => s >= deps.config.globalSpeedLimit);
+  const speedIndex = Math.max(0, allowedSpeeds.indexOf(settings.processingSpeed));
   const roleIndex = DEFAULT_ROLE_OPTIONS.indexOf(settings.defaultContainerRole);
 
   const form = new ModalFormBuilder()
@@ -76,8 +116,11 @@ export async function showWarehouseSettingsMenu(
     .dropdown(
       "speed",
       "处理速度（tick 间隔）",
-      SPEED_OPTIONS.map((s) => `${s} tick`),
-      { defaultValueIndex: speedIndex >= 0 ? speedIndex : 2, tooltip: "分拣间隔，越小越快" }
+      allowedSpeeds.map((s) => `${s} tick`),
+      {
+        defaultValueIndex: speedIndex >= 0 ? speedIndex : 0,
+        tooltip: "分拣间隔，越小越快（不能快于管理员全局最快速度限制）",
+      }
     )
     .toggle("routingEnabled", `${uiColor.form.accent}仓库运转`, {
       defaultValue: settings.routingEnabled,
@@ -123,7 +166,7 @@ export async function showWarehouseSettingsMenu(
   // 保存属性变更（名称/默认角色/默认启用/速度/运转/整理/阈值/边界光幕）
   const newName = (vals.name as string).trim();
   if (newName && newName !== warehouse.displayName) deps.warehouses.rename(warehouse, newName);
-  const newSpeed = SPEED_OPTIONS[vals.speed as number] ?? settings.processingSpeed;
+  const newSpeed = allowedSpeeds[vals.speed as number] ?? settings.processingSpeed;
   const newShowBoundary = vals.showBoundary === true;
   deps.warehouses.updateSettings(warehouse, {
     defaultContainerRole: DEFAULT_ROLE_OPTIONS[vals.defaultRole as number] ?? settings.defaultContainerRole,

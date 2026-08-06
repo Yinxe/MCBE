@@ -97,3 +97,30 @@ test("ItemIndex: restore 版本不匹配返回 false", () => {
     false
   );
 });
+
+test("ItemIndex: selfHeal 扫描存储容器找 hasItem 并重建条目（漏索引兜底）", () => {
+  const index = new ItemIndex();
+  const m1 = new InMemoryContainer("m1", "multi", 4);
+  m1.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  index.onContainerAdded(m1); // 索引只记录 stone
+  // 用户手动放入 diamond（无交互信号 → 索引不知情）
+  m1.setItem(1, new SimpleItemStack("minecraft:diamond", 2, 64));
+  assert.deepEqual(index.lookup("minecraft:diamond"), { single: [], multi: [] }); // miss
+  // 自愈：扫描存储容器找 diamond → 重建 m1 条目
+  index.selfHeal(new SimpleItemStack("minecraft:diamond", 2, 64), [m1]);
+  assert.deepEqual(index.lookup("minecraft:diamond"), { single: [], multi: ["m1"] }); // 自愈命中
+  // stone 条目不受影响
+  assert.deepEqual(index.lookup("minecraft:stone"), { single: [], multi: ["m1"] });
+});
+
+test("ItemIndex: selfHeal 跳过 input/misc 容器（非路由候选）", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 4);
+  input.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  const misc = new InMemoryContainer("mx", "misc", 4);
+  misc.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  index.onContainerAdded(input);
+  index.onContainerAdded(misc);
+  index.selfHeal(new SimpleItemStack("minecraft:diamond", 2, 64), [input, misc]);
+  assert.deepEqual(index.lookup("minecraft:diamond"), { single: [], multi: [] }); // 都跳过
+});

@@ -14,6 +14,7 @@
 // 来源侧条目留待惰性校验清理）——避免每路由一次全量重算。
 import type { Container, ContainerRole } from "../model/Container";
 import { deriveBinding } from "../model/DeriveBinding";
+import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
 
 export const INDEX_VERSION = 1;
@@ -85,6 +86,20 @@ export class ItemIndex {
    */
   reconcile(container: Container): void {
     this.onContainerChanged(container);
+  }
+
+  /**
+   * 索引自愈（漏索引兜底）：无候选时扫描给定**存储容器**集，凡 `contains(item)` 的
+   * 按真实内容重建条目（含 byItem 分组）。解决"用户手动向单物/多物放入某类型但索引未记录
+   * → 路由漏配该类型直接落 misc"。只扫描**非 input/非 misc**（misc 是兜底桶、input 是源，
+   * 都不作为路由候选）；仅索引 miss（罕见）时由 Router 触发，不做每路由全仓扫描。
+   */
+  selfHeal(item: ItemStack, containers: Iterable<Container>): void {
+    for (const container of containers) {
+      if (container.role === "input" || container.role === "misc") continue;
+      if (!container.contains(item)) continue;
+      this.reconcile(container);
+    }
   }
 
   serialize(): IndexSnapshot {
