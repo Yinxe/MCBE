@@ -160,13 +160,13 @@ test("WarehouseService: updateArea 校验体积/重叠/间距（resize 与 creat
     corner2: { x: 120, y: 10, z: 120 },
   });
   assert.match(errOverlap ?? "", /重叠/);
-  // 超体积 → 拒绝
+  // 超规格（任一轴超限）→ 拒绝
   const errBig = svc.updateArea(a.warehouse, {
     dimension: "overworld",
     corner1: { x: 0, y: 0, z: 0 },
     corner2: { x: 500, y: 500, z: 500 },
   });
-  assert.match(errBig ?? "", /体积|边长/);
+  assert.match(errBig ?? "", /规格/);
 });
 
 // ── Task 22: RouteService ────────────────────────────────
@@ -192,7 +192,7 @@ function makeRouteService() {
     new DefaultCandidateSorter(),
     bus
   );
-  const scheduler = new Scheduler(router, intervals, proximity, bus, 20, 40, { fallbackIndex: index });
+  const scheduler = new Scheduler(router, intervals, proximity, bus, 8, 40, { fallbackIndex: index });
   const service = new RouteService(scheduler);
   const containers = new Map<string, InMemoryContainer>();
   const warehouse: Warehouse = {
@@ -351,7 +351,7 @@ test("areaSize: 归一化尺寸与体积", () => {
   assert.deepEqual(size, { x: 11, y: 11, z: 11, volume: 1331 });
 });
 
-test("areaExceedsLimits: 单轴边长超限 / 体积超限", () => {
+test("areaExceedsLimits: 规格限制（任一轴边长超限）", () => {
   const small: WarehouseArea = {
     dimension: "overworld",
     corner1: { x: 0, y: 0, z: 0 },
@@ -363,7 +363,7 @@ test("areaExceedsLimits: 单轴边长超限 / 体积超限", () => {
     corner1: { x: 0, y: 0, z: 0 },
     corner2: { x: 100, y: 5, z: 5 },
   };
-  assert.match(areaExceedsLimits(long, DEFAULT_WAREHOUSE_LIMITS) ?? "", /边长/);
+  assert.match(areaExceedsLimits(long, DEFAULT_WAREHOUSE_LIMITS) ?? "", /规格/);
 });
 
 test("areaTooClose: 间距不足判定", () => {
@@ -397,7 +397,7 @@ test("createWarehouse: 超大区域被拒 / 过于接近被拒", () => {
     corner2: { x: 200, y: 10, z: 10 },
   });
   assert.equal(huge.ok, false);
-  assert.match((huge as { error: string }).error, /边长|体积/);
+  assert.match((huge as { error: string }).error, /规格/);
   const close = svc.createWarehouse("仓C", "p1", {
     dimension: "overworld",
     corner1: { x: 13, y: 0, z: 0 },
@@ -461,8 +461,8 @@ test("WarehouseService: setLimits 运行时更新建仓限制（ConfigUI/Phase 4
     corner2: { x: 60, y: 10, z: 10 },
   });
   assert.equal(allowed.ok, true);
-  // 缩小体积限制 → 超限被拒（覆盖原限制而非叠加）
-  svc.setLimits({ maxVolume: 100 });
+  // 缩小规格限制 → 超限被拒（覆盖原限制而非叠加）
+  svc.setLimits({ maxSpec: { x: 5, y: 5, z: 5 } });
   const oversized = svc.createWarehouse("仓C", "p2", {
     dimension: "overworld",
     corner1: { x: 100, y: 0, z: 0 },

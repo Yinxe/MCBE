@@ -100,10 +100,11 @@ export class Scheduler {
     this.now = options.now ?? Date.now;
   }
 
-  /** 运行时改全局速度上限：同时重建 active/deactivating 仓的 interval（立即生效） */
+  /** 运行时改全局速度上限（**最快速度**：tick 越小越快）：违规（快于上限）仓库速度提到上限，合规不动；重建 active/deactivating 仓 interval */
   setGlobalSpeedLimit(limit: number): void {
     this.globalSpeedLimit = limit;
     for (const rt of this.runtimes.values()) {
+      if (rt.warehouse.settings.processingSpeed < limit) rt.warehouse.settings.processingSpeed = limit;
       if ((rt.lifecycle === "active" || rt.lifecycle === "deactivating") && rt.handle) {
         rt.handle.stop();
         rt.handle = this.createInterval(rt);
@@ -236,7 +237,9 @@ export class Scheduler {
   }
 
   private clampSpeed(speed: number): number {
-    return Math.min(Math.max(1, speed), this.globalSpeedLimit);
+    // 全局"最快速度"下限（tick 越小越快）：仓库不得快于 globalSpeedLimit（v1 clampSpeed 口径），
+    // 慢于上限（合规）不动；上限 40（最慢）兜底。
+    return Math.max(this.globalSpeedLimit, Math.min(40, speed));
   }
 
   private createInterval(rt: Runtime): IntervalHandle {

@@ -4,13 +4,19 @@
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
+import type { WarehouseSpec } from "../../core/services/WarehouseService";
 import { TOKEN_OPTIONS } from "../storage/McModConfig";
 import * as uiColor from "./uiColor";
 
-/** 全局速度上限可选项（tick/槽）；默认 index 3 = 20 tick */
+/** 全局速度上限可选项（tick/槽）；默认 index 1 = 8 tick */
 const SPEED_OPTIONS: number[] = [4, 8, 16, 20, 30, 40];
-/** 单仓最大体积可选项（v1 ConfigUI 同款：4096/9216/16384推荐/36864） */
-const VOLUME_OPTIONS: number[] = [4096, 9216, 16_384, 36_864];
+/** 单仓最大规格预置项（v1 口径：各轴最大边长**规格**，非体积格数；默认 index 1 = 32×16×32） */
+const SPEC_OPTIONS: WarehouseSpec[] = [
+  { x: 16, y: 8, z: 16 },
+  { x: 32, y: 16, z: 32 },
+  { x: 48, y: 16, z: 48 },
+  { x: 64, y: 32, z: 64 },
+];
 /** 单仓最大容器数可选项（v1 ConfigUI 同款：50/100推荐/200/512） */
 const CONTAINER_OPTIONS: number[] = [50, 100, 200, 512];
 
@@ -40,22 +46,32 @@ export async function showConfigUI(player: Player, deps: CommandDeps): Promise<v
 async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   const tokenIndex = Math.max(0, TOKEN_OPTIONS.indexOf(deps.config.tokenItemId));
   const speedIndex = Math.max(0, SPEED_OPTIONS.indexOf(deps.config.globalSpeedLimit));
-  const volumeIndex = Math.max(0, VOLUME_OPTIONS.indexOf(deps.config.maxWarehouseVolume));
+  const spec = deps.config.maxWarehouseSpec;
+  const specIndex = Math.max(
+    0,
+    SPEC_OPTIONS.findIndex((s) => s.x === spec.x && s.y === spec.y && s.z === spec.z)
+  );
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}修改配置`)
     .toggle("globalEnabled", "全局分拣", { defaultValue: deps.config.globalEnabled })
     .dropdown("token", "信物", TOKEN_OPTIONS, { defaultValueIndex: tokenIndex })
     .dropdown(
       "speed",
-      "全局速度上限",
-      SPEED_OPTIONS.map((s) => `${s} tick`),
-      { defaultValueIndex: speedIndex >= 0 ? speedIndex : 3 }
+      "全局最快速度限制",
+      SPEED_OPTIONS.map((s) => `最快 ${s} tick`),
+      {
+        defaultValueIndex: speedIndex >= 0 ? speedIndex : 1,
+        tooltip: "全服最快分拣速度：快于该值（tick 更小）的仓库将被强制降到此速度，合规仓库不动",
+      }
     )
     .dropdown(
-      "maxVolume",
-      "单仓最大体积",
-      VOLUME_OPTIONS.map((v) => `${v} 格`),
-      { defaultValueIndex: volumeIndex >= 0 ? volumeIndex : 2, tooltip: "限制单个仓库最大体积（方块数）" }
+      "maxSpec",
+      "单仓最大规格",
+      SPEC_OPTIONS.map((s) => `${s.x}×${s.y}×${s.z}`),
+      {
+        defaultValueIndex: specIndex,
+        tooltip: "限制单个仓库最大规格（各轴最大边长 X×Y×Z，任一轴超限即拒绝）",
+      }
     )
     .dropdown(
       "maxContainers",
@@ -73,17 +89,23 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
     });
   const values = await form.show(player);
   if (!values) return;
-  const maxVolume = VOLUME_OPTIONS[values.maxVolume as number] ?? 16_384;
+  const maxSpec = SPEC_OPTIONS[values.maxSpec as number] ?? { x: 32, y: 16, z: 32 };
   const maxContainers = CONTAINER_OPTIONS[values.maxContainers as number] ?? 100;
   const maxWarehouses = values.maxWarehouses as number;
   deps.route.setGlobalEnabled(values.globalEnabled as boolean);
-  deps.config.setGlobalSpeedLimit(SPEED_OPTIONS[values.speed as number] ?? 20);
-  deps.route.setGlobalSpeedLimit(SPEED_OPTIONS[values.speed as number] ?? 20); // 运行时立即生效
+  const newSpeedLimit = SPEED_OPTIONS[values.speed as number] ?? deps.config.globalSpeedLimit;
+  deps.config.setGlobalSpeedLimit(newSpeedLimit);
+  deps.route.setGlobalSpeedLimit(newSpeedLimit); // 运行时立即生效（Scheduler 违规降速 + 重建 interval）
+  // 违规（快于新上限）的仓库速度降到上限并**持久化**（v1 同款：遍历已加载仓库整改）
+  for (const w of deps.loadedWarehouses()) {
+    if (w.settings.processingSpeed < newSpeedLimit)
+      deps.warehouses.updateSettings(w, { processingSpeed: newSpeedLimit });
+  }
   deps.config.setTokenItemId(TOKEN_OPTIONS[values.token as number] ?? TOKEN_OPTIONS[0]!);
-  deps.config.setMaxWarehouseVolume(maxVolume);
+  deps.config.setMaxWarehouseSpec(maxSpec);
   deps.config.setMaxWarehousesPerPlayer(maxWarehouses);
   deps.config.setMaxContainers(maxContainers);
-  deps.warehouses.setLimits({ maxVolume, maxWarehousesPerPlayer: maxWarehouses }); // 建仓限制立即生效
+  deps.warehouses.setLimits({ maxSpec, maxWarehousesPerPlayer: maxWarehouses }); // 建仓限制立即生效
   player.sendMessage(`${uiColor.chat.success}配置已保存`);
 }
 

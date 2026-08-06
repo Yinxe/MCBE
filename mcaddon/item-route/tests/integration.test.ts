@@ -31,7 +31,7 @@ function bootstrap() {
   );
   const intervals = new MemoryIntervalScheduler();
   const proximity = { hasNearbyPlayer: () => true };
-  const scheduler = new Scheduler(router, intervals, proximity, bus, 20, 40, { fallbackIndex: index });
+  const scheduler = new Scheduler(router, intervals, proximity, bus, 8, 40, { fallbackIndex: index });
   const stats = new StatsService(new InMemoryStatsStore(), bus);
   const organizer = new Organizer();
   const organize = new OrganizeService(organizer, bus);

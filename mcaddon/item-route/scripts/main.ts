@@ -84,9 +84,8 @@ const warehouses = new WarehouseService(
   warehouseStore,
   bus,
   {
-    maxEdgeLength: 64,
+    maxSpec: config.maxWarehouseSpec, // 各轴最大边长规格（v1 口径，默认 32×16×32）
     minSpacing: 4,
-    maxVolume: config.maxWarehouseVolume,
     maxWarehousesPerPlayer: config.maxWarehousesPerPlayer,
   }
   // resize 使仓库 ID 迁移的持久化迁移（cids 索引/调度器重注册）由 Subscriptions 订阅
@@ -187,7 +186,7 @@ system.run(() => {
   route.setGlobalSpeedLimit(config.globalSpeedLimit);
   // 建仓限制用持久化值覆盖 Phase 2 构造时的默认值（否则启动后建仓仍按默认限制校验）
   warehouses.setLimits({
-    maxVolume: config.maxWarehouseVolume,
+    maxSpec: config.maxWarehouseSpec,
     maxWarehousesPerPlayer: config.maxWarehousesPerPlayer,
   });
   for (const snapshot of warehouseStore.list()) {

@@ -37,6 +37,8 @@ export interface RoleStats {
   totalSlots: number;
   usedSlots: number;
   totalItems: number;
+  /** 该角色容器合计物品种类（各容器 uniqueTypes 累加；供 v1 风格表格 TYPES 列） */
+  uniqueTypes: number;
 }
 
 export interface ItemStat {
@@ -151,11 +153,12 @@ export class StatsService {
       totalSlots += cs.totalSlots;
       usedSlots += cs.usedSlots;
       totalItems += cs.totalItems;
-      const role = byRole[cs.role] ?? { containerCount: 0, totalSlots: 0, usedSlots: 0, totalItems: 0 };
+      const role = byRole[cs.role] ?? { containerCount: 0, totalSlots: 0, usedSlots: 0, totalItems: 0, uniqueTypes: 0 };
       role.containerCount++;
       role.totalSlots += cs.totalSlots;
       role.usedSlots += cs.usedSlots;
       role.totalItems += cs.totalItems;
+      role.uniqueTypes += cs.uniqueTypes;
       byRole[cs.role] = role;
       for (const [itemId, count] of Object.entries(cs.byType)) {
         byType[itemId] = (byType[itemId] ?? 0) + count;

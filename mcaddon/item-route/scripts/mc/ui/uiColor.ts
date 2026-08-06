@@ -74,6 +74,8 @@ export const form = {
   success: color.green,
   /** 错误提示 */
   error: color.red,
+  /** 警告（容量告急等；深底黄可读） */
+  warn: color.yellow,
   /** 次要说明（深底上 §7 偏弱，仅辅助用） */
   muted: color.gray,
 } as const;

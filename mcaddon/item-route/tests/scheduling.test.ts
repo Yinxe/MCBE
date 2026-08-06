@@ -60,7 +60,7 @@ function makeWorld() {
     new DefaultCandidateSorter(),
     bus
   );
-  const scheduler = new Scheduler(router, intervals, proximity, bus, 20, 40, { fallbackIndex: index });
+  const scheduler = new Scheduler(router, intervals, proximity, bus, 8, 40, { fallbackIndex: index });
   const containers = new Map<string, InMemoryContainer>();
   const warehouse = {
     id: "w1",
@@ -109,13 +109,17 @@ test("Scheduler: 激活后 interval 按 processingSpeed 处理单槽", () => {
   assert.equal(target.getItem(0)?.amount, 15); // 5 + 10 堆叠
 });
 
-test("Scheduler: 速度被全局限制 clamp", () => {
+test("Scheduler: 快于全局最快速度的仓库被 clamp 降速（v1 口径，合规不动）", () => {
   const w = makeWorld();
   w.scheduler.registerWarehouse(w.warehouse);
   w.proximity.setNearby("w1", true);
   w.scheduler.tick();
-  w.scheduler.setProcessingSpeed("w1", 40); // 超全局限制 20
+  w.scheduler.setProcessingSpeed("w1", 4); // 4 tick 快于默认最快 8 → clamp 到 8
+  assert.equal(w.scheduler.getIntervalTicks("w1"), 8);
+  w.scheduler.setGlobalSpeedLimit(20); // 管理员把最快速度提到 20 → 现速 8 也被降到 20
   assert.equal(w.scheduler.getIntervalTicks("w1"), 20);
+  w.scheduler.setProcessingSpeed("w1", 40); // 40 慢于 20，合规不动
+  assert.equal(w.scheduler.getIntervalTicks("w1"), 40);
 });
 
 test("Scheduler: unregister 无泄漏（interval 停止）", () => {

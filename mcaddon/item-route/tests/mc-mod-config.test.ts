@@ -7,7 +7,7 @@ import { InMemoryKeyValueStore } from "../scripts/core/storage/KeyValueStore";
 test("McModConfig: 缺失 → 默认值", () => {
   const cfg = McModConfig.load(new ShardStore(new InMemoryKeyValueStore()));
   assert.equal(cfg.globalEnabled, true);
-  assert.equal(cfg.globalSpeedLimit, 20);
+  assert.equal(cfg.globalSpeedLimit, 8); // 默认最快 8 tick（与仓库默认速度一致 → 默认不额外限速）
 });
 
 test("McModConfig: 设置持久化 + clamp", () => {
@@ -53,6 +53,6 @@ test("McModConfig: 引导标记按玩家独立 hasSeenGuide/markSeenGuide", () =
 
 test("McModConfig: 建仓限制字段默认值", () => {
   const cfg = McModConfig.load(new ShardStore(new InMemoryKeyValueStore()));
-  assert.equal(cfg.maxWarehouseVolume, 16384);
+  assert.deepEqual(cfg.maxWarehouseSpec, { x: 32, y: 16, z: 32 });
   assert.equal(cfg.maxWarehousesPerPlayer, 1);
 });

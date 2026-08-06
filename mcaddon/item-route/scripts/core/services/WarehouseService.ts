@@ -17,22 +17,26 @@ import { warehouseIdOf } from "../model/ContainerId";
 
 export type CreateResult = { ok: true; warehouse: Warehouse } | { ok: false; error: string };
 
+/** 仓库规格：各轴最大边长（v1 口径——用**规格限制**而非体积格数，如 32×16×32） */
+export interface WarehouseSpec {
+  x: number;
+  y: number;
+  z: number;
+}
+
 /** 建仓限制（v1 沉淀：防超大区域拖垮扫描/刷仓） */
 export interface WarehouseLimits {
-  /** 单轴最大边长 */
-  maxEdgeLength: number;
+  /** 最大仓库规格（各轴最大边长；**任一轴超限即拒绝**，不按体积计） */
+  maxSpec: WarehouseSpec;
   /** 与其他仓库最小间距 */
   minSpacing: number;
-  /** 最大体积（格数） */
-  maxVolume: number;
   /** 每玩家最多仓库数 */
   maxWarehousesPerPlayer: number;
 }
 
 export const DEFAULT_WAREHOUSE_LIMITS: WarehouseLimits = {
-  maxEdgeLength: 64,
+  maxSpec: { x: 32, y: 16, z: 32 },
   minSpacing: 4,
-  maxVolume: 262_144,
   maxWarehousesPerPlayer: 8,
 };
 
@@ -64,14 +68,12 @@ export function areaTooClose(a: WarehouseArea, b: WarehouseArea, minSpacing: num
   return areaOverlaps(expanded, b);
 }
 
-/** 区域是否超限；超限返回中文错误消息，否则 undefined */
+/** 区域是否超限（任一轴边长 > 规格对应最大值）；超限返回中文错误消息，否则 undefined */
 export function areaExceedsLimits(area: WarehouseArea, limits: WarehouseLimits): string | undefined {
   const size = areaSize(area);
-  if (size.x > limits.maxEdgeLength || size.y > limits.maxEdgeLength || size.z > limits.maxEdgeLength) {
-    return `区域单轴边长超限（最大 ${limits.maxEdgeLength} 格）`;
-  }
-  if (size.volume > limits.maxVolume) {
-    return `区域体积超限（最大 ${limits.maxVolume} 格）`;
+  const spec = limits.maxSpec;
+  if (size.x > spec.x || size.y > spec.y || size.z > spec.z) {
+    return `区域规格超限（最大 ${spec.x}×${spec.y}×${spec.z} 格/轴）`;
   }
   return undefined;
 }

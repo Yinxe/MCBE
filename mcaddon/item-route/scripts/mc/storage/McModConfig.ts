@@ -5,6 +5,7 @@
 // 建仓限制（maxWarehouseVolume/maxWarehousesPerPlayer）在装配时喂给
 // WarehouseService.limits，作为建仓时的边界校验（见 services/WarehouseService）。
 import type { ShardStore } from "./ShardStore";
+import type { WarehouseSpec } from "../../core/services/WarehouseService";
 
 const CONFIG_KEY = "ir2:modcfg";
 const GUIDE_SEEN_KEY = "ir2:guide_seen:"; // 每玩家独立（v1 按玩家标记）
@@ -15,8 +16,8 @@ export interface ModConfigData {
   globalEnabled: boolean;
   globalSpeedLimit: number;
   tokenItemId: string;
-  /** 单仓最大体积（格，v1 默认 32×32×16） */
-  maxWarehouseVolume: number;
+  /** 单仓最大规格（各轴最大边长，v1 口径：规格限制而非体积格数，默认 32×16×32） */
+  maxWarehouseSpec: WarehouseSpec;
   /** 每玩家最多仓库数（v1 默认 1） */
   maxWarehousesPerPlayer: number;
   /** 单仓最大容器数（v1 默认 100，建仓/重扫/放置注册时校验） */
@@ -25,9 +26,9 @@ export interface ModConfigData {
 
 export const DEFAULT_MOD_CONFIG: ModConfigData = {
   globalEnabled: true,
-  globalSpeedLimit: 20,
+  globalSpeedLimit: 8, // 全局"最快速度"下限（tick 越小越快）；默认与仓库默认速度 8 一致 → 默认不额外限速
   tokenItemId: "minecraft:wooden_hoe",
-  maxWarehouseVolume: 16_384,
+  maxWarehouseSpec: { x: 32, y: 16, z: 32 },
   maxWarehousesPerPlayer: 1,
   maxContainers: 100,
 };
@@ -85,7 +86,7 @@ export class McModConfig {
       globalEnabled: data?.globalEnabled ?? DEFAULT_MOD_CONFIG.globalEnabled,
       globalSpeedLimit: McModConfig.clamp(data?.globalSpeedLimit ?? DEFAULT_MOD_CONFIG.globalSpeedLimit),
       tokenItemId: data?.tokenItemId ?? DEFAULT_MOD_CONFIG.tokenItemId,
-      maxWarehouseVolume: data?.maxWarehouseVolume ?? DEFAULT_MOD_CONFIG.maxWarehouseVolume,
+      maxWarehouseSpec: data?.maxWarehouseSpec ?? DEFAULT_MOD_CONFIG.maxWarehouseSpec,
       maxWarehousesPerPlayer: data?.maxWarehousesPerPlayer ?? DEFAULT_MOD_CONFIG.maxWarehousesPerPlayer,
       maxContainers: data?.maxContainers ?? DEFAULT_MOD_CONFIG.maxContainers,
     };
@@ -100,8 +101,8 @@ export class McModConfig {
   get tokenItemId(): string {
     return this.data.tokenItemId;
   }
-  get maxWarehouseVolume(): number {
-    return this.data.maxWarehouseVolume;
+  get maxWarehouseSpec(): WarehouseSpec {
+    return this.data.maxWarehouseSpec;
   }
   get maxWarehousesPerPlayer(): number {
     return this.data.maxWarehousesPerPlayer;
@@ -126,9 +127,9 @@ export class McModConfig {
     this.save();
   }
 
-  /** 修改单仓最大体积（格，v1 ConfigUI 下拉可配） */
-  setMaxWarehouseVolume(volume: number): void {
-    this.data.maxWarehouseVolume = volume;
+  /** 修改单仓最大规格（各轴最大边长，v1 ConfigUI 下拉可配） */
+  setMaxWarehouseSpec(spec: WarehouseSpec): void {
+    this.data.maxWarehouseSpec = spec;
     this.save();
   }
 

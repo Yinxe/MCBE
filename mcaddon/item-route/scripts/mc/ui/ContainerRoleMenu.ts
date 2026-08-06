@@ -30,10 +30,23 @@ function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container:
   const scan = scanContainer(container);
   const messiness = new Organizer().messinessFromScan(scan).total;
   const roleLabel = ROLE_LABELS[container.role];
+  // 容量行对齐 v1 formatContainerCapacityLine：usage% 按档着色 + ⚠ 告急（≥ warningThreshold）
+  const usage = container.capacity > 0 ? Math.round((scan.usedSlots / container.capacity) * 100) : 0;
+  const usageColor =
+    usage >= 100
+      ? uiColor.form.error
+      : usage >= 80
+        ? uiColor.form.warn
+        : usage >= 50
+          ? uiColor.form.accent
+          : uiColor.form.success;
+  const warnMark =
+    container.capacity > 0 && usage >= Math.round(warehouse.settings.warningThreshold * 100) ? ` ${usageColor}⚠` : "";
+  const capacityLine = `${uiColor.form.muted}容量 ${uiColor.form.body}${scan.usedSlots}${uiColor.form.muted}/${uiColor.form.body}${container.capacity}[${usageColor}${usage}%${uiColor.form.muted}]  ${uiColor.form.body}${scan.totalItems}${uiColor.form.muted} items  ${uiColor.form.body}${Object.keys(scan.byType).length}${uiColor.form.muted} types${warnMark}`;
   return (
     `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
     `${uiColor.form.muted}类型 ${uiColor.form.body}${blockType}${isHopperType(blockType) ? "（漏斗→input）" : ""}\n` +
-    `${uiColor.form.muted}容量 ${uiColor.form.body}${scan.usedSlots}/${container.capacity}  ${scan.totalItems} 物 ${Object.keys(scan.byType).length} 种\n` +
+    `${capacityLine}\n` +
     `${uiColor.form.muted}混乱度 ${uiColor.form.body}${(messiness * 100).toFixed(0)}%\n` +
     `${uiColor.form.muted}容器ID ${uiColor.form.body}${container.id}\n` +
     `${uiColor.form.muted}状态 ${container.enabled ? uiColor.form.success + "已启用" : uiColor.form.error + "已禁用"}\n` +
