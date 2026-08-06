@@ -43,6 +43,38 @@ export interface ContainerChangedEvent {
   containerId: ContainerId;
 }
 
+/**
+ * 容器注册表（属性/结构）变更：角色/启用/优先级/几何/id 变化。
+ * 与 containerChanged（**内容**变化：路由/整理/玩家手动改箱代理信号）严格分离——
+ * 持久化层只订阅本事件写注册表，避免"每次投递内容变更也写注册表"。
+ */
+export interface ContainerRegistryChangedEvent {
+  type: "container-registry-changed";
+  warehouseId: WarehouseId;
+  containerId: ContainerId;
+  /** 重定 ID（双箱合并/半拆主坐标）时的旧 ID，供持久化层清旧键 */
+  oldId?: ContainerId;
+}
+
+/** 容器扫描的可序列化摘要（路由成功后对目标容器扫描，或整理后触发） */
+export interface ContainerScanSummary {
+  capacity: number;
+  usedSlots: number;
+  totalItems: number;
+  uniqueTypes: number;
+  byType: Record<ItemId, number>;
+  /** 混乱度（Organizer 计算，0-1；自动整理判定用） */
+  messiness?: number;
+}
+
+/** 容器扫描完成：携带摘要，统计/自动整理/预警监听做单容器增量（事件驱动、免重复扫描） */
+export interface ContainerScannedEvent {
+  type: "container-scanned";
+  warehouseId: WarehouseId;
+  containerId: ContainerId;
+  scan: ContainerScanSummary;
+}
+
 /** 容器注册入仓（放置新容器/双箱合并重建后）；mc 层在注册点触发 */
 export interface ContainerAddedEvent {
   type: "container-added";
@@ -128,6 +160,8 @@ export class EventBus {
   readonly itemRouted = new EventSignal<ItemRoutedEvent>();
   readonly inputBlocked = new EventSignal<InputBlockedEvent>();
   readonly containerChanged = new EventSignal<ContainerChangedEvent>();
+  readonly containerRegistryChanged = new EventSignal<ContainerRegistryChangedEvent>();
+  readonly containerScanned = new EventSignal<ContainerScannedEvent>();
   readonly containerAdded = new EventSignal<ContainerAddedEvent>();
   readonly containerRemoved = new EventSignal<ContainerRemovedEvent>();
   readonly indexUpdated = new EventSignal<IndexUpdatedEvent>();

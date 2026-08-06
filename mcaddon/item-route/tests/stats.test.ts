@@ -170,26 +170,27 @@ test("StatsService: getWarehouseStats 查看时写穿透每容器统计键", () 
   assert.equal(saved.usedSlots, 1);
 });
 
-test("StatsService: flush 批量落盘路由热路径增量统计", () => {
+test("StatsService: updateFromScan 事件驱动立即写穿单容器（最小单位）", () => {
   const { warehouse, containers } = makeWarehouse();
   const c = new InMemoryContainer("m1", "multi", 4);
   c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
   containers.set("m1", c);
   const store = new InMemoryStatsStore();
   const svc = new StatsService(store, new EventBus());
-  // 路由热路径：updateFromScan 仅标记脏（不写 DP）
+  // 路由扫描事件驱动：updateFromScan 立即写穿该容器自己的键（无脏集/无 flush）
   svc.updateFromScan(c, scanContainer(c), warehouse.settings.warningThreshold);
-  assert.equal(store.loadContainer("m1"), undefined); // 未落盘
-  svc.flush(); // 装配层 100tick/离开时调用
   const saved = store.loadContainer("m1");
   assert.ok(saved !== undefined);
   assert.equal(saved.usedSlots, 1);
-  // 已 flush → 脏标记清除，再次 flush 无副作用
-  svc.flush();
+  // 改另一个容器 → m1 键不受影响（单容器最小单位）
+  const cOther = new InMemoryContainer("m2", "multi", 4);
+  cOther.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64));
+  svc.updateFromScan(cOther, scanContainer(cOther), warehouse.settings.warningThreshold);
   assert.equal(store.loadContainer("m1")?.usedSlots, 1);
+  assert.equal(store.loadContainer("m2")?.usedSlots, 1);
 });
 
-test("StatsService: warm 在激活时加载持久化缓存（invalidate 后冷读仍重算）", () => {
+test("StatsService: 无 warm —— 新实例冷读按实时内容重算 + 写穿（最小加载）", () => {
   const { warehouse, containers } = makeWarehouse();
   const c = new InMemoryContainer("m1", "multi", 4);
   c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
@@ -197,17 +198,13 @@ test("StatsService: warm 在激活时加载持久化缓存（invalidate 后冷�
   const store = new InMemoryStatsStore();
   const svc = new StatsService(store, new EventBus());
   svc.getContainerStats(warehouse, c); // 计算 + 写穿
-  // 模拟重载：新 StatsService 实例（同 store），仓库容器内容已变化
+  // 模拟重载：新 StatsService（同 store），内容已变 → 冷读实时重算（不 warm 旧值）
   const c2 = new InMemoryContainer("m1", "multi", 4);
   c2.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
   c2.setItem(1, new SimpleItemStack("minecraft:dirt", 5, 64));
-  containers.set("m1", c2);
   const svc2 = new StatsService(store, new EventBus());
-  svc2.warm(warehouse); // 激活时 warm → 缓存持久化旧值（usedSlots 1）
-  assert.equal(svc2.getContainerStats(warehouse, c2).usedSlots, 1);
-  // invalidate 后冷读 → 实时重算（不 warm 旧值）
-  svc2.invalidate(c2.id);
-  assert.equal(svc2.getContainerStats(warehouse, c2).usedSlots, 2);
+  assert.equal(svc2.getContainerStats(warehouse, c2).usedSlots, 2); // 冷读实时重算，不加载旧持久化
+  assert.equal(store.loadContainer("m1")?.usedSlots, 2); // 写穿最新
 });
 
 test("StatsService: isWarning 实时按当前 warningThreshold 判定（改阈值无需 invalidate）", () => {

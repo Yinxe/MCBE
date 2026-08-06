@@ -16,7 +16,6 @@ import { world, system } from "@minecraft/server";
 // ── core ──
 import { EventBus } from "../core/events/DomainEvents";
 import { ItemIndex } from "../core/index/ItemIndex";
-import { scanContainer } from "../core/model/ContainerScan";
 import { Router } from "../core/routing/Router";
 import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
@@ -29,12 +28,13 @@ import { MemberService } from "../core/services/MemberService";
 import { RouteService } from "../core/services/RouteService";
 import type { Warehouse } from "../core/model/Warehouse";
 import type { Container } from "../core/model/Container";
+import type { ContainerId } from "../core/model/types";
 import { registerContainer } from "../core/model/ContainerRegistry";
 
 // ── mc ──
 import { DynamicPropertyStore } from "./storage/DynamicPropertyStore";
 import { ShardStore } from "./storage/ShardStore";
-import { McWarehouseStore, type ContainerEntry } from "./storage/McWarehouseStore";
+import { McWarehouseStore } from "./storage/McWarehouseStore";
 import { McIndexStore } from "./storage/McIndexStore";
 import { McStatsStore } from "./storage/McStatsStore";
 import { McModConfig } from "./storage/McModConfig";
@@ -50,7 +50,7 @@ import { registerSortEffects } from "./effects/SortEffects";
 import { registerBoundaryDisplay } from "./effects/BoundaryDisplay";
 import { registerWarningRelay } from "./effects/WarningRelay";
 import { registerNotifyRelay } from "./effects/NotifyRelay";
-import { MoveJournal } from "../core/routing/Move";
+import { registerSubscriptions } from "./events/Subscriptions";
 import { scanWarehouseArea } from "./commands/scan";
 
 // Phase 1: 无状态基础设施
@@ -84,14 +84,15 @@ const warehouses = new WarehouseService(
     maxVolume: config.maxWarehouseVolume,
     maxWarehousesPerPlayer: config.maxWarehousesPerPlayer,
   },
-  // resize 改变区域 → 仓库 ID 重算 → 迁移所有按 id 存储的键 + 调度器重注册
+  // resize 改变区域 → 仓库 ID 重算 → 迁移按仓库 id 存储的键。容器注册表/索引/统计都是
+  // **每容器一条**（`ir2:c:{cid}`/`ir2:idx:{cid}`/`ir2:cst:{cid}`），容器 ID 全局唯一、
+  // 不随仓 ID 变化 → 无需迁移；只需把该仓容器 ID 索引 oldId→newId。
   (wh, oldId, newId) => {
-    const idx = indexStore.load(oldId);
-    if (idx !== undefined) indexStore.save(newId, idx);
-    indexStore.remove(oldId);
-    // 统计键是**每容器一条**（`ir2:cst:{containerId}`），仓库 resize 不改变容器 ID → 无需迁移
-    const entries = warehouseStore.loadContainers(oldId);
-    if (entries !== undefined) warehouseStore.saveContainers(newId, entries);
+    const cids = warehouseStore.loadContainerIds(oldId);
+    if (cids !== undefined) {
+      warehouseStore.saveContainerIds(newId, cids);
+      warehouseStore.removeContainerIds(oldId);
+    }
     scheduler.unregisterWarehouse(oldId);
     scheduler.registerWarehouse(wh);
   }
@@ -99,23 +100,34 @@ const warehouses = new WarehouseService(
 const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));
 const organizer = new Organizer();
-// 每仓库索引生命周期（隔离）：激活时从 McIndexStore 加载/恢复，空闲卸载时落盘
+// 每仓库索引生命周期（隔离）：激活时按**每容器条目**恢复/重建，卸载时逐容器落盘（事件驱动）
 const indexLifecycle: IndexLifecycle = {
   load: (warehouse) => {
     const idx = new ItemIndex();
-    const snap = indexStore.load(warehouse.id);
-    if (snap !== undefined && idx.restore(snap)) {
+    // 读每容器索引条目，齐全则 restoreFromEntries（含角色反演），否则回退全扫重建
+    const entries = new Map<ContainerId, { items: string[]; singleBinding?: string }>();
+    let complete = true;
+    for (const c of warehouse.containers.values()) {
+      const entry = indexStore.loadContainer(c.id);
+      if (entry === undefined) {
+        complete = false;
+        break;
+      }
+      entries.set(c.id, entry);
+    }
+    if (complete && idx.restoreFromEntries(entries, warehouse.containers.values())) {
       console.warn(`[ItemRoute] 索引加载 ${warehouse.id}`);
     } else {
       for (const c of warehouse.containers.values()) idx.onContainerAdded(c);
       console.warn(`[ItemRoute] 索引重建 ${warehouse.id}`);
     }
-    stats.warm(warehouse); // 激活时同一生命周期点 warm 持久化统计缓存（此后冷读仍实时重算）
     return idx;
   },
   unload: (warehouse, idx) => {
-    // 落盘最新快照（实际写入由 100-tick / playerLeave flush 批量完成）
-    indexStore.markDirty(warehouse.id, idx);
+    // 事件驱动落盘（卸载/离仓）：写该仓全部容器的每容器条目；路由增量只内存、重载后惰性自愈
+    for (const c of warehouse.containers.values()) {
+      indexStore.saveContainer(c.id, idx.serializeContainer(c.id));
+    }
   },
 };
 const scheduler = new Scheduler(
@@ -136,98 +148,71 @@ route.setGlobalEnabled(config.globalEnabled);
 // 整理服务：只发事件，不重建索引（候选过期由策略侧惰性校验自愈）
 const organize = new OrganizeService(organizer, bus);
 
-// 路由成功副作用：itemRouted 多个订阅者依次处理（EventSignal 隔离各订阅者异常）
-// ① 容器/容量统计增量失效（源 + 目标）
-bus.itemRouted.subscribe((e) => {
-  stats.invalidate(e.from);
-  stats.invalidate(e.to);
-});
-// ② 混乱度检查 → 阈值自动整理（**单容器整理**目标容器，v1 onDeposit 语义）；
-//    同一次 scanContainer 扫描趁机维护目标容器统计（免二次扫描）
-bus.itemRouted.subscribe((e) => {
-  const wh = loaded.find((x) => x.id === e.warehouseId);
-  if (wh === undefined || !wh.settings.sortingEnabled) return;
-  const target = wh.containers.get(e.to);
-  if (target === undefined) return;
-  const scan = scanContainer(target);
-  if (organizer.shouldAutoSortFromScan(scan, wh.settings.autoSortThreshold)) {
-    organize.organizeContainer(wh, target, new MoveJournal()); // 就地整理该容器
-    stats.invalidate(e.to); // 整理改变了目标内容
-  } else {
-    stats.updateFromScan(target, scan, wh.settings.warningThreshold); // 趁机增量维护统计
-  }
-});
-// ③ 容量增量：路由后目标容器容量变化 → 容器级预警（只查目标，O(1) 无全仓扫描；冷却抑制重复）
-bus.itemRouted.subscribe((e) => {
-  const wh = loaded.find((x) => x.id === e.warehouseId);
-  if (wh !== undefined) stats.evaluateWarnings(wh, e.to);
-});
-// ④ 路由成功视觉反馈：目标容器闪光（v1 同款：放入物品即播放粒子）
-bus.itemRouted.subscribe((e) => {
-  bus.visualEffect.trigger({ type: "visual-effect", kind: "route-flash", warehouseId: e.warehouseId, containerId: e.to });
-});
-// ⑤ 仓库删除：清内存（loaded 剔除 + 停调度 + 卸载索引）+ 清持久化键，杜绝删后仍分拣/残影
-bus.warehouseDeleted.subscribe((e) => {
-  const wh = loaded.find((w) => w.id === e.warehouseId);
-  const i = loaded.findIndex((w) => w.id === e.warehouseId);
-  if (i >= 0) loaded.splice(i, 1);
-  scheduler.unregisterWarehouse(e.warehouseId); // 停 interval + indexLifecycle.unload（unload 会把活索引 markDirty）
-  indexStore.remove(e.warehouseId);             // 清 dirty + 持久索引键（不复活）
-  if (wh !== undefined) {
-    for (const c of wh.containers.keys()) stats.discard(c); // 清该仓各容器统计键（每容器一条）
-  }
-});
+// 领域事件订阅（路由副作用/容器持久化/仓库生命周期）统一收编在 events/Subscriptions.ts，
+// 由下方 registerSubscriptions 一次性注册。
 
-// ⑥ 运行时建仓：把新仓库纳入 loaded + 注册调度 + **立即扫描区域容器**（v1 创建时即扫，
-// 但这层是 mc 按自身持久化边界重建运行时对象，不持有 core 内部引用——低耦合）。
-// 这是"建仓后看不到边界 / 管理列表为空 / 容器不注册"的根因修复——此前只往 store 写、
-// 从未挂进内存 loaded，导致 visualEffect 的 resolveArea、菜单的 loadedWarehouses 都查不到。
-bus.warehouseCreated.subscribe((e) => {
-  const snapshot = warehouseStore.load(e.warehouseId);
-  if (snapshot === undefined) return; // 已删除/未落盘：忽略
-  const wh: Warehouse = {
-    id: snapshot.id,
-    displayName: snapshot.displayName,
-    ownerId: snapshot.ownerId,
-    members: snapshot.members,
-    area: snapshot.area,
-    settings: snapshot.settings,
-    containers: new Map<string, Container>(),
-    inputs: new Map<string, Container>(),
-  };
-  loaded.push(wh);
-  scheduler.registerWarehouse(wh);
-  // 新仓尚未被玩家邻近激活 → getIndex 为 undefined；scan 跳过索引增量，
-  // 容器经 registerContainer 就地填入 wh.containers/inputs，激活时索引按 containers 重建，天然正确。
-  const dim = world.getDimension(wh.area.dimension);
-  if (dim !== undefined) {
-    scanWarehouseArea(dim, wh.area, factory, scheduler.getIndex(wh.id), wh, persistContainers);
-  }
+// ── 容器持久化：每容器一条键（注册表 `ir2:c:{cid}` + 索引 `ir2:idx:{cid}`），事件驱动、最小单位 ──
+const entryOf = (c: Container) => ({
+  id: c.id,
+  role: c.role,
+  locations: c.occupiedLocations,
+  enabled: c.enabled,
+  priority: c.priority,
 });
-
-// 容器注册表持久化钩子（事件桥接 → DP）
-const persistContainers = (warehouse: Warehouse): void => {
-  const entries: ContainerEntry[] = [...warehouse.containers.values()].map((c) => ({
-    id: c.id,
-    role: c.role,
-    locations: c.occupiedLocations,
-    enabled: c.enabled,
-    priority: c.priority,
-  }));
-  warehouseStore.saveContainers(warehouse.id, entries);
+/**
+ * 单容器写穿：只写该容器自己的键（注册表 + 有活索引则索引条目）。oldId=重定 ID（双箱合并/半拆）
+ * 时清旧注册表键 + 旧索引键（防孤儿）。整仓不重写——改动写入放大从"全仓"降为"单容器"。
+ */
+const persistContainer = (warehouse: Warehouse, container: Container, oldId?: ContainerId): void => {
+  if (oldId !== undefined && oldId !== container.id) {
+    warehouseStore.removeContainer(oldId);
+    indexStore.removeContainer(oldId);
+  }
+  warehouseStore.saveContainer(container.id, entryOf(container));
+  const idx = scheduler.getIndex(warehouse.id);
+  if (idx !== undefined) indexStore.saveContainer(container.id, idx.serializeContainer(container.id));
+};
+/** 移除容器：清注册表键 + 索引条目键 + 统计键（每容器一条，各自幂等） */
+const removeContainer = (warehouse: Warehouse, containerId: ContainerId): void => {
+  warehouseStore.removeContainer(containerId);
+  indexStore.removeContainer(containerId);
+  stats.discard(containerId);
+};
+/** 同步该仓容器 ID 索引（容器新增/移除/重定 ID 后调用；枚举/清理/删除用） */
+const persistContainerIds = (warehouse: Warehouse): void => {
+  warehouseStore.saveContainerIds(warehouse.id, [...warehouse.containers.keys()]);
+};
+// 扫描补注册：只持久化本次新增的容器（最小单位）+ 一次索引同步
+const persistScannedContainers = (warehouse: Warehouse, added: Container[]): void => {
+  for (const c of added) persistContainer(warehouse, c);
+  persistContainerIds(warehouse);
 };
 
-// Phase 3: 注册事件
+// 领域事件订阅中央注册：路由副作用/容器持久化/仓库生命周期 统一在此一处（见 events/Subscriptions.ts）
+registerSubscriptions({
+  bus,
+  loaded,
+  stats,
+  organizer,
+  organize,
+  scheduler,
+  warehouseStore,
+  indexStore,
+  factory,
+  persistContainer,
+  removeContainer,
+  persistContainerIds,
+  persistScannedContainers,
+});
+
+// Phase 3: 注册事件（桥只管内存联动，持久化已由领域事件订阅者负责）
 const bridge = new McEventBridge({
   bus,
   resolveIndex: (id) => scheduler.getIndex(id),
   stats,
   scheduler,
-  indexStore,
   factory,
   warehouses: () => loaded,
-  onContainerRegistered: persistContainers,
-  onContainerUnregistered: persistContainers,
 });
 bridge.start();
 
@@ -249,7 +234,9 @@ const commandDeps: CommandDeps = {
   session: sessionStore,
   loadedWarehouses: () => loaded,
   factory,
-  persistContainers,
+  persistContainer,
+  removeContainer,
+  persistContainerIds,
 };
 registerToolInteraction(commandDeps);
 registerSortEffects(bus, {
@@ -301,7 +288,7 @@ system.run(() => {
     loaded.push(warehouse);
 
     // 容器重建：区块加载的按注册表恢复，未加载的由事件/惰性校验补注册
-    for (const entry of warehouseStore.loadContainers(snapshot.id) ?? []) {
+    for (const entry of warehouseStore.loadAllContainers(snapshot.id)) {
       try {
         const block = world.getDimension(snapshot.area.dimension).getBlock(entry.locations[0] ?? { x: 0, y: 0, z: 0 });
         if (block === undefined || block.isAir) continue;

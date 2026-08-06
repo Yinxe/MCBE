@@ -29,7 +29,6 @@ test("InMemoryWarehouseStore: 列表/加载/保存/删除", () => {
     members: [{ playerId: "p1", role: "owner" as const }],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } },
     settings: createDefaultSettings(),
-    containerIds: ["c1"],
   };
   store.save(snapshot);
   assert.equal(store.list().length, 1);

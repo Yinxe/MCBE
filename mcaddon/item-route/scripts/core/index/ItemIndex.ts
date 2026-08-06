@@ -118,6 +118,49 @@ export class ItemIndex {
     return true;
   }
 
+  /**
+   * 单容器索引条目（持久化**最小单位**）：该容器的物品集 + 单物绑定。
+   * 供 mc 层按容器粒度落盘（ir2:idx:{cid}），事件驱动、只写改动的那一个容器。
+   */
+  serializeContainer(containerId: ContainerId): { items: string[]; singleBinding?: string } {
+    const items = this.containerItems.get(containerId);
+    return {
+      items: items ? [...items] : [],
+      singleBinding: this.singleBindings.get(containerId),
+    };
+  }
+
+  /**
+   * 由**每容器条目**恢复索引（激活加载用）。条目来自 mc 层各容器键。
+   * 任一容器缺条目（结构变更后未落盘）→ 返回 false，调用方回退全容器扫描重建。
+   * byItem 由 items+role 反演（singleBinding 优先于 role 分组）。
+   */
+  restoreFromEntries(
+    entries: ReadonlyMap<ContainerId, { items: string[]; singleBinding?: string }>,
+    containers: Iterable<Container>
+  ): boolean {
+    this.byItem = new Map();
+    this.containerItems = new Map();
+    this.singleBindings = new Map();
+    for (const container of containers) {
+      const entry = entries.get(container.id);
+      if (entry === undefined) return false;
+      this.restoreContainerFromEntry(container, entry);
+    }
+    return true;
+  }
+
+  private restoreContainerFromEntry(container: Container, entry: { items: string[]; singleBinding?: string }): void {
+    this.containerItems.set(container.id, new Set(entry.items));
+    const binding = entry.singleBinding;
+    if (binding !== undefined) {
+      this.singleBindings.set(container.id, binding);
+      this.ensureEntry(binding).single.add(container.id);
+    } else if (container.role === "multi") {
+      for (const itemId of entry.items) this.ensureEntry(itemId).multi.add(container.id);
+    }
+  }
+
   // ── 私有方法 ───────────────────────────────────────────
   private ensureEntry(itemId: ItemId): { single: Set<ContainerId>; multi: Set<ContainerId> } {
     let entry = this.byItem.get(itemId);

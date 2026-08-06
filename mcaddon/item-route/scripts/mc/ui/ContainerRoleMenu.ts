@@ -56,7 +56,11 @@ async function showContainerEdit(
   refreshInputMembership(warehouse, container); // 角色/启用变更 → 刷新 inputs 成员资格
   deps.resolveIndex(warehouse.id)?.onContainerChanged(container); // 该仓自己的索引
   deps.stats.invalidate(container.id);
-  deps.persistContainers(warehouse);
-  deps.bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
+  // 持久化（注册表 + 索引条目）由中央订阅订阅 containerRegistryChanged 统一处理（单容器最小单位）
+  deps.bus.containerRegistryChanged.trigger({
+    type: "container-registry-changed",
+    warehouseId: warehouse.id,
+    containerId: container.id,
+  });
   player.sendMessage(`${uiColor.chat.success}容器 ${container.id} 已更新${forced ? "（漏斗强制 input）" : ""}`);
 }

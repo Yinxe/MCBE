@@ -221,6 +221,8 @@ export class WarehouseService {
   }
 
   // ── 私有方法 ───────────────────────────────────────────
+  // 快照不含 containerIds：容器注册表是**每容器一条键**（ir2:c:{cid}）+ 每仓索引
+  // （ir2:wh:{id}:cids，mc 层维护），meta 若带容器列表会随容器数增长而破坏"设置变更只写小 meta"。
   private toSnapshot(warehouse: Warehouse): WarehouseSnapshot {
     return {
       id: warehouse.id,
@@ -229,7 +231,6 @@ export class WarehouseService {
       members: warehouse.members.map((m) => ({ ...m })),
       area: { ...warehouse.area },
       settings: { ...warehouse.settings },
-      containerIds: [...warehouse.containers.keys()],
     };
   }
 

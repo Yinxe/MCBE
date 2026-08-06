@@ -3,6 +3,7 @@ import { isSupportedContainerType } from "../../core/model/ContainerTypes";
 import { registerContainer } from "../../core/model/ContainerRegistry";
 import type { WarehouseArea } from "../../core/model/Warehouse";
 import type { Warehouse } from "../../core/model/Warehouse";
+import type { Container } from "../../core/model/Container";
 import type { ItemIndex } from "../../core/index/ItemIndex";
 import type { McContainerFactory } from "../adapters/McContainerFactory";
 
@@ -27,7 +28,8 @@ export function scanWarehouseArea(
   factory: McContainerFactory,
   index: ItemIndex | undefined,
   warehouse: Warehouse,
-  persist: (warehouse: Warehouse) => void
+  /** 持久化本次**新增**的容器（最小单位：只写新增容器 + 同步索引），added 为本次注册列表 */
+  persist: (warehouse: Warehouse, added: Container[]) => void
 ): RescanResult {
   const minX = Math.min(area.corner1.x, area.corner2.x);
   const maxX = Math.max(area.corner1.x, area.corner2.x);
@@ -38,6 +40,7 @@ export function scanWarehouseArea(
   const volume = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
   if (volume > MAX_SCAN_VOLUME) return { scanned: 0, registered: 0, skipped: true };
 
+  const added: Container[] = [];
   let registered = 0;
   for (let y = minY; y <= maxY; y++) {
     for (let z = minZ; z <= maxZ; z++) {
@@ -50,10 +53,11 @@ export function scanWarehouseArea(
         if (warehouse.containers.has(container.id)) continue;
         registerContainer(warehouse, container);
         index?.onContainerAdded(container);
+        added.push(container);
         registered++;
       }
     }
   }
-  if (registered > 0) persist(warehouse);
+  if (added.length > 0) persist(warehouse, added);
   return { scanned: volume, registered, skipped: false };
 }

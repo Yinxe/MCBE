@@ -19,7 +19,7 @@ import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId, WarehouseId } from "../model/types";
 import { scanContainer, type ContainerScanResult } from "../model/ContainerScan";
 import type { StatsStore } from "../storage/Stores";
-import type { EventBus, WarningLevel } from "../events/DomainEvents";
+import type { EventBus, WarningLevel, ContainerScanSummary } from "../events/DomainEvents";
 
 export interface ContainerStats {
   containerId: ContainerId;
@@ -60,8 +60,6 @@ export interface WarehouseStats {
 export class StatsService {
   private cache = new Map<ContainerId, ContainerStats>();
   private cooldowns = new Map<WarehouseId, number>();
-  /** 统计已变、待批量落盘的容器（路由热路径增量，flush 时逐容器写穿） */
-  private dirty = new Set<ContainerId>();
 
   constructor(
     private readonly store: StatsStore,
@@ -69,15 +67,14 @@ export class StatsService {
     private readonly warningCooldownTicks = 100
   ) {}
 
-  /** 容器内容变化后失效缓存（仅内存；热路径安全——路由每轮 invalidate 不写 DP） */
+  /** 容器内容变化后失效缓存（仅内存；热路径安全——下次读/扫描重算+写穿） */
   invalidate(containerId: ContainerId): void {
     this.cache.delete(containerId);
   }
 
-  /** 容器移除时丢弃统计（内存 + 持久化键 + 脏标记）；结构变更路径（拆除/重定/删仓）用 */
+  /** 容器移除时丢弃统计（内存 + 持久化键）；结构变更路径（拆除/重定/删仓）用 */
   discard(containerId: ContainerId): void {
     this.cache.delete(containerId);
-    this.dirty.delete(containerId);
     this.store.removeContainer(containerId);
   }
 
@@ -90,44 +87,29 @@ export class StatsService {
       if (cached.isWarning !== isWarning) cached.isWarning = isWarning;
       return cached;
     }
-    // 冷读：实时重算（不懒加载持久化——否则 invalidate 的"下次读重算"语义会被陈旧 warm 击败）
-    return this.buildStats(container, scanContainer(container), warehouse.settings.warningThreshold, true);
+    // 冷读：实时重算 + 每容器写穿（事件驱动最小单位；不再懒加载 warm 缓存）
+    return this.buildStats(container, scanContainer(container), warehouse.settings.warningThreshold);
   }
 
   /**
-   * 仓库激活时加载持久化统计作 warm 缓存（与索引同生命周期点，见 indexLifecycle.load）。
-   * 只在此刻加载一次；之后缓存由路由 updateFromScan / invalidate 维持，冷读仍实时重算。
-   * 结构不符（角色/容量变）跳过该容器。内容陈旧（崩溃窗口）由后续变更信号自愈。
-   */
-  warm(warehouse: Warehouse): void {
-    for (const container of warehouse.containers.values()) {
-      if (this.cache.has(container.id)) continue;
-      const loaded = this.store.loadContainer(container.id);
-      if (loaded === undefined || loaded.totalSlots !== container.capacity || loaded.role !== container.role) continue;
-      this.cache.set(container.id, {
-        containerId: container.id,
-        role: container.role,
-        totalSlots: loaded.totalSlots,
-        usedSlots: loaded.usedSlots,
-        totalItems: loaded.totalItems,
-        uniqueTypes: loaded.uniqueTypes,
-        isWarning: false, // 阈值实时判，见 getContainerStats 缓存命中分支
-        byType: loaded.byType,
-      });
-    }
-  }
-
-  /**
-   * 用外部提供的扫描结果直接维护缓存（免二次扫描）。
-   * 配合路由成功后混乱度检查的同一趟 scanContainer 扫描，趁机增量维护容器统计。
-   * **仅驻内存**（路由热路径不写 DP，落盘由查看汇总/冷读写穿承担）。
+   * 用外部提供的扫描结果维护容器统计 + **立即写穿单容器键**（事件驱动、单容器最小单位）。
+   * 配合路由成功/整理的同一趟扫描（containerScanned 事件）增量维护；无定时 flush、无脏集。
    */
   updateFromScan(container: Container, scan: ContainerScanResult, warningThreshold: number): ContainerStats {
-    return this.buildStats(container, scan, warningThreshold, false);
+    return this.buildStats(container, scan, warningThreshold);
   }
 
-  /** 由扫描结果构造并缓存容器统计；persist=true 时立即写穿单容器键（冷读），否则仅驻内存 + 标记脏待 flush */
-  private buildStats(container: Container, scan: ContainerScanResult, warningThreshold: number, persist: boolean): ContainerStats {
+  /** 按 ContainerScanSummary（containerScanned 事件负载）更新统计并写穿（免二次扫描） */
+  updateFromSummary(container: Container, summary: ContainerScanSummary, warningThreshold: number): ContainerStats {
+    return this.buildStats(container, summary, warningThreshold);
+  }
+
+  /** 由扫描结果构造并缓存容器统计，并**立即写穿**该容器自己的键（无脏集/无 flush） */
+  private buildStats(
+    container: Container,
+    scan: { byType: Record<ItemId, number>; usedSlots: number; totalItems: number },
+    warningThreshold: number
+  ): ContainerStats {
     const byType = scan.byType;
     const usedSlots = scan.usedSlots;
     const totalItems = scan.totalItems;
@@ -143,30 +125,8 @@ export class StatsService {
       byType,
     };
     this.cache.set(container.id, stats);
-    this.dirty.add(container.id); // 待 flush 落盘（路由增量）
-    if (persist) this.store.saveContainer(container.id, stats); // 冷读立即写穿
+    this.store.saveContainer(container.id, stats); // 每容器立即写穿（事件驱动，单容器最小单位）
     return stats;
-  }
-
-  /**
-   * 批量落盘脏容器统计（路由热路径增量，由装配层每 100 tick / 玩家离开时调用）。
-   * 失败项保留脏标记，下次 flush 自动重试；返回失败数。
-   */
-  flush(): number {
-    let failed = 0;
-    for (const id of [...this.dirty]) {
-      const stat = this.cache.get(id);
-      if (stat === undefined) {
-        this.dirty.delete(id); // 缓存已失效 → 无可写，清脏标记
-        continue;
-      }
-      if (this.store.saveContainer(id, stat)) {
-        this.dirty.delete(id);
-      } else {
-        failed++;
-      }
-    }
-    return failed;
   }
 
   getWarehouseStats(warehouse: Warehouse): WarehouseStats {

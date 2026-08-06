@@ -66,14 +66,18 @@ async function showSettingsForm(player: Player, deps: CommandDeps, warehouse: Wa
 
 function refreshContainers(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
   const before = warehouse.containers.size;
+  const removed: string[] = [];
   for (const c of [...warehouse.containers.values()]) {
     if (c.occupiedLocations.length === 0) {
       unregisterContainer(warehouse, c.id);
       deps.resolveIndex(warehouse.id)?.onContainerRemoved(c);
       deps.stats.discard(c.id); // 容器移除 → 清其统计键（每容器一条）
+      removed.push(c.id);
     }
   }
-  deps.persistContainers(warehouse);
+  // 最小单位：只清被移除容器的键 + 一次索引同步（其余容器键不动）
+  for (const cid of removed) deps.removeContainer(warehouse, cid);
+  deps.persistContainerIds(warehouse);
   player.sendMessage(`${uiColor.chat.success}容器刷新完成：${before} → ${warehouse.containers.size}`);
 }
 

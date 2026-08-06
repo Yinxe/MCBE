@@ -18,7 +18,6 @@ export interface WarehouseSnapshot {
   members: Member[];
   area: WarehouseArea;
   settings: WarehouseSettings;
-  containerIds: ContainerId[];
 }
 
 export interface IndexSnapshotData {
@@ -48,9 +47,16 @@ export interface WarehouseStore {
 }
 
 export interface IndexStore {
-  load(id: WarehouseId): IndexSnapshotData | undefined;
-  save(id: WarehouseId, snapshot: IndexSnapshotData): void;
-  remove(id: WarehouseId): void;
+  /** 单容器索引条目（最小单位：该容器的物品集 + 单物绑定），键 ir2:idx:{cid} */
+  saveContainer(cid: ContainerId, entry: ContainerIndexEntry): void;
+  loadContainer(cid: ContainerId): ContainerIndexEntry | undefined;
+  removeContainer(cid: ContainerId): void;
+}
+
+/** 索引单容器条目（持久化最小单位，与 ItemIndex.serializeContainer 对齐） */
+export interface ContainerIndexEntry {
+  items: string[];
+  singleBinding?: string;
 }
 
 /** 统计存储：**每容器一条**（v1 方案；容器 ID 全局唯一，键无需仓库前缀） */
@@ -91,16 +97,16 @@ export class InMemoryWarehouseStore implements WarehouseStore {
 export class InMemoryIndexStore implements IndexStore {
   constructor(private kv: KeyValueStore = new InMemoryKeyValueStore()) {}
 
-  load(id: WarehouseId): IndexSnapshotData | undefined {
-    return this.kv.read(key("index", id));
+  saveContainer(cid: ContainerId, entry: ContainerIndexEntry): void {
+    this.kv.write(key("idx", cid), entry);
   }
 
-  save(id: WarehouseId, snapshot: IndexSnapshotData): void {
-    this.kv.write(key("index", id), snapshot);
+  loadContainer(cid: ContainerId): ContainerIndexEntry | undefined {
+    return this.kv.read<ContainerIndexEntry>(key("idx", cid));
   }
 
-  remove(id: WarehouseId): void {
-    this.kv.remove(key("index", id));
+  removeContainer(cid: ContainerId): void {
+    this.kv.remove(key("idx", cid));
   }
 }
 

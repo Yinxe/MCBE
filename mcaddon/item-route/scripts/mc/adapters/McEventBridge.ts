@@ -1,14 +1,14 @@
-// ─── 事件桥接：MC 世界事件 → 领域事件 + 索引增量维护 + 落盘时机 ──
-// 这是"MC 无容器内容事件"问题的解法落点（设计 §5 三层兜底之第一层 代理信号）：
-//   · playerInteractWithBlock —— 玩家手动改箱的"代理信号"→ reconcile 惰性
-//     校验索引 + 统计失效 + 标记索引脏（把索引收敛交给下一次候选命中/下一次落盘）
-//   · playerPlaceBlock —— 区域内放容器 → 工厂创建适配器 + 注册进仓库/索引 + 持久化容器注册表
-//   · playerBreakBlock / blockExplode —— 拆容器 → 注销（双箱半拆：occupiedLocations 过滤）
-//   · itemRouted（领域事件）—— 路由移动后 → markDirty 索引 + 统计失效（写穿透闭环）
-//   · playerLeave —— 立即 flush（防丢会话增量）
-//   · 主循环（每 5 tick）—— scheduler.tick() 驱动生命周期 + stats.tick() 递减预警冷却
-//   · 批量落盘（每 100 tick）—— indexStore.flush()
-// 关键：索引**实时内存准确 + 批量落盘**，玩家离开必 flush，崩溃丢量由重建兜底。
+// ─── 事件桥接：MC 世界事件 → 领域事件 + 索引/统计内存联动 ──
+// 这是"MC 无容器内容事件"问题的解法落点（三层兜底之第一层 代理信号）：
+//   · playerInteractWithBlock —— 玩家手动改箱的"代理信号"→ reconcile 惰性校验索引 + 统计失效
+//   · playerPlaceBlock —— 区域内放容器 → 工厂创建适配器 + 注册进仓库/索引 + 发结构事件
+//   · playerBreakBlock / blockExplode —— 拆容器 → 注销（双箱半拆：occupiedLocations 过滤 + 主坐标重定）
+//   · 结构变更发 **containerAdded / containerRegistryChanged / containerRemoved**，
+//     持久化由 main.ts 的中央订阅订阅者负责（每容器一条键、事件驱动）——此处只管
+//     内存注册表/索引联动，不亲自写 DP、无 markDirty、无定时 flush。
+//   · 主循环（每 5 tick）—— scheduler.tick() 驱动路由/生命周期 + stats.tick() 递减预警冷却
+// 路由移动（itemRouted）的索引/统计：itemRouted → main.ts 扫描目标 → containerScanned
+// （统计单容器写穿）；索引 itemRouted 不落盘（卸载/离仓时按每容器条目落盘，重载后惰性自愈）。
 import { world, system, type Block } from "@minecraft/server";
 import type { EventBus } from "../../core/events/DomainEvents";
 import type { ItemIndex } from "../../core/index/ItemIndex";
@@ -17,10 +17,9 @@ import type { Scheduler } from "../../core/scheduling/Scheduler";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
 import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
-import { locationKey, type Location, type WarehouseId } from "../../core/model/types";
+import { locationKey, type ContainerId, type Location, type WarehouseId } from "../../core/model/types";
 import { containerIdOf, primaryLocationOf, containerIdPointsTo } from "../../core/model/ContainerId";
 import { registerContainer, unregisterContainer, rebaseContainer } from "../../core/model/ContainerRegistry";
-import type { McIndexStore } from "../storage/McIndexStore";
 import type { McContainerFactory } from "./McContainerFactory";
 import type { McContainerAdapter } from "./McContainerAdapter";
 
@@ -30,36 +29,20 @@ export interface EventBridgeDeps {
   resolveIndex: (warehouseId: WarehouseId) => ItemIndex | undefined;
   stats: StatsService;
   scheduler: Scheduler;
-  indexStore: McIndexStore;
   factory: McContainerFactory;
   /** 当前已加载仓库（Phase 4 填充） */
   warehouses: () => Warehouse[];
-  /** 容器注册/注销后的持久化钩子（main.ts 接线：更新容器注册表） */
-  onContainerRegistered?: (warehouse: Warehouse, container: Container) => void;
-  onContainerUnregistered?: (warehouse: Warehouse, container: Container) => void;
 }
 
-const MAIN_TICK_INTERVAL = 5;   // 全局主任务：调度轮询
-const FLUSH_INTERVAL = 100;     // 批量落盘间隔
+const MAIN_TICK_INTERVAL = 5;   // 全局主任务：调度轮询（路由/生命周期，非持久化）
 
 export class McEventBridge {
   constructor(private readonly deps: EventBridgeDeps) {}
 
   start(): void {
-    const { bus, stats, scheduler, indexStore, factory } = this.deps;
+    const { bus, stats, scheduler, factory } = this.deps;
 
-    // 路由移动物品 → 标记该仓库索引脏（写穿透闭环，批量落盘）
-    // （统计增量失效已由 main.ts 的 itemRouted 订阅者负责，此处只管索引持久化）
-    bus.itemRouted.subscribe((e) => {
-      try {
-        const index = this.deps.resolveIndex(e.warehouseId);
-        if (index !== undefined) indexStore.markDirty(e.warehouseId, index);
-      } catch (err) {
-        console.warn(`[ItemRoute] 路由副作用失败: ${err}`);
-      }
-    });
-
-    // 代理信号：玩家交互带容器方块 → 三层兜底第二层（reconcile 惰性校验）
+    // 代理信号：玩家交互带容器方块 → 三层兜底第二层（reconcile 惰性校验）+ 统计失效
     world.afterEvents.playerInteractWithBlock.subscribe((e) => {
       try {
         if (!e.isFirstEvent) return;
@@ -68,14 +51,12 @@ export class McEventBridge {
         this.deps.resolveIndex(hit.warehouse.id)?.reconcile(hit.container);
         stats.invalidate(hit.container.id);
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: hit.warehouse.id, containerId: hit.container.id });
-        const index = this.deps.resolveIndex(hit.warehouse.id);
-        if (index !== undefined) indexStore.markDirty(hit.warehouse.id, index);
       } catch (err) {
         console.warn(`[ItemRoute] interact 事件处理失败: ${err}`);
       }
     });
 
-    // 放置容器方块 → 注册（默认 single，漏斗强制 input 由工厂处理）
+    // 放置容器方块 → 注册（默认按仓库角色，漏斗强制 input 由工厂处理）
     // 若新块与已注册容器合并成双箱 → 合并进已有容器（扩展 occupied + 重定主 id），
     // 避免已注册单箱与新合并双箱共存/撞 id。
     world.afterEvents.playerPlaceBlock.subscribe((e) => {
@@ -96,7 +77,7 @@ export class McEventBridge {
           if (hit !== undefined && hit.container.id !== container.id) {
             const existing = hit.container;
             const index = this.deps.resolveIndex(warehouse.id);
-            // 拆旧 id 索引条目 + 旧键 → 并入新格并重定主 id → 迁移两 map 键 → 重建索引
+            // 拆旧 id 索引条目 → 并入新格并重定主 id → 迁移两 map 键 → 重建索引
             index?.onContainerRemoved(existing);
             const oldId = existing.id;
             stats.discard(oldId); // 合并后容器重定 id → 旧 id 统计键失效
@@ -107,9 +88,13 @@ export class McEventBridge {
             rebaseContainer(warehouse, oldId, existing);
             index?.onContainerAdded(existing);
             stats.invalidate(existing.id);
-            bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: existing.id });
-            if (index !== undefined) indexStore.markDirty(warehouse.id, index);
-            this.deps.onContainerRegistered?.(warehouse, existing);
+            // 持久化（注册表/索引/统计清旧键）由中央订阅订阅 containerRegistryChanged 负责
+            bus.containerRegistryChanged.trigger({
+              type: "container-registry-changed",
+              warehouseId: warehouse.id,
+              containerId: existing.id,
+              oldId,
+            });
             return;
           }
         }
@@ -117,10 +102,7 @@ export class McEventBridge {
         const index = this.deps.resolveIndex(warehouse.id);
         index?.onContainerAdded(container);
         stats.invalidate(container.id);
-        bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
         bus.containerAdded.trigger({ type: "container-added", warehouseId: warehouse.id, containerId: container.id, role: container.role });
-        if (index !== undefined) indexStore.markDirty(warehouse.id, index);
-        this.deps.onContainerRegistered?.(warehouse, container);
       } catch (err) {
         console.warn(`[ItemRoute] place 事件处理失败: ${err}`);
       }
@@ -142,7 +124,6 @@ export class McEventBridge {
           index?.onContainerRemoved(container);
           stats.discard(container.id); // 容器已移除 → 清其统计键（每容器一条）
           bus.containerRemoved.trigger({ type: "container-removed", warehouseId: warehouse.id, containerId: container.id });
-          this.deps.onContainerUnregistered?.(warehouse, container);
         } else if (containerIdPointsTo(container.id, loc, warehouse.area.dimension)) {
           // 半拆且拆的是主坐标（id 承载位）：重定 id 到幸存主坐标，
           // 否则 ID 悬空 + 后续在原主坐标新放容器会撞 ID
@@ -155,14 +136,22 @@ export class McEventBridge {
             rebaseContainer(warehouse, oldId, container);
             index?.onContainerAdded(container);
             stats.invalidate(container.id);
-            this.deps.onContainerRegistered?.(warehouse, container);
+            bus.containerRegistryChanged.trigger({
+              type: "container-registry-changed",
+              warehouseId: warehouse.id,
+              containerId: container.id,
+              oldId,
+            });
           }
         } else {
           // 副半拆：几何变化但 ID 不变 → 仍需持久化注册表（否则重启按旧 locations 占用已消失坐标）
-          this.deps.onContainerRegistered?.(warehouse, container);
+          bus.containerRegistryChanged.trigger({
+            type: "container-registry-changed",
+            warehouseId: warehouse.id,
+            containerId: container.id,
+          });
         }
         bus.containerChanged.trigger({ type: "container-changed", warehouseId: warehouse.id, containerId: container.id });
-        if (index !== undefined) indexStore.markDirty(warehouse.id, index);
       } catch (err) {
         console.warn(`[ItemRoute] 移除事件处理失败: ${err}`);
       }
@@ -170,21 +159,7 @@ export class McEventBridge {
     world.afterEvents.playerBreakBlock.subscribe((e) => unregister(e.block));
     world.afterEvents.blockExplode.subscribe((e) => unregister(e.block));
 
-    // 玩家离开：立即批量落盘（防丢数据）
-    world.afterEvents.playerLeave.subscribe(() => {
-      try {
-        indexStore.flush();
-      } catch (err) {
-        console.warn(`[ItemRoute] 索引 flush 失败: ${err}`);
-      }
-      try {
-        stats.flush(); // 路由热路径增量统计同批落盘
-      } catch (err) {
-        console.warn(`[ItemRoute] 统计 flush 失败: ${err}`);
-      }
-    });
-
-    // 主任务：5 tick 调度 + 预警冷却递减 + 100 tick 批量落盘
+    // 主任务：5 tick 调度 + 预警冷却递减（无持久化定时器——持久化全部事件驱动）
     system.runInterval(() => {
       try {
         scheduler.tick();
@@ -197,18 +172,6 @@ export class McEventBridge {
         console.warn(`[ItemRoute] 统计冷却异常: ${err}`);
       }
     }, MAIN_TICK_INTERVAL);
-    system.runInterval(() => {
-      try {
-        indexStore.flush();
-      } catch (err) {
-        console.warn(`[ItemRoute] flush 失败: ${err}`);
-      }
-      try {
-        stats.flush(); // 路由热路径增量统计批量落盘
-      } catch (err) {
-        console.warn(`[ItemRoute] 统计 flush 失败: ${err}`);
-      }
-    }, FLUSH_INTERVAL);
   }
 
   private locate(block: Block): { warehouse: Warehouse; container: Container } | undefined {
