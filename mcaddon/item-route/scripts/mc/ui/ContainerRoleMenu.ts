@@ -12,6 +12,7 @@ import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../commands/auth";
 import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
 import { isHopperType } from "../../core/model/ContainerTypes";
+import { containerShortName } from "../../core/model/ContainerId";
 import { scanContainer } from "../../core/model/ContainerScan";
 import { refreshInputMembership } from "../../core/model/ContainerRegistry";
 import type { Warehouse } from "../../core/model/Warehouse";
@@ -136,7 +137,7 @@ export async function showContainerConfigMenu(
   // 整理动作优先执行
   if (values.organize === true) {
     const res = deps.organize.organizeContainer(warehouse, container, new MoveJournal());
-    const name = container.id.split("@")[1] ?? container.id;
+    const name = containerShortName(container.id);
     for (const line of formatOrganizeResult(res, name)) player.sendMessage(line);
     return;
   }
@@ -167,7 +168,7 @@ export async function showContainerConfigMenu(
     containerId: container.id,
   });
   // 配置更新通知打印 layout 信息（v1 风格，避免仅"已更新"）
-  const shortName = container.id.split("@")[1] ?? container.id;
+  const shortName = containerShortName(container.id);
   player.sendMessage(
     [
       `${uiColor.chat.success}容器 ${shortName} 配置已更新`,

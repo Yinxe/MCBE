@@ -125,7 +125,9 @@ export class OrganizeService {
     });
     // 空 / **完全归零**（messiness === 0，而非 < 0.05）→ 无需整理（didWork=false，不发事件）。
     // 手动整理是**强制整理**：无视任何非 0 混乱度（低混乱度也照样清空重排），只有归 0 才算整齐。
-    if (beforeStacks <= 1 || messiness.total === 0) return { result: tidy(), didWork: false };
+    // ⚠️ 单物品也不算"无需整理"：若空槽前置导致混乱度>0（如 [空,钻石,空]），应整理把物品归到首位
+    // （`beforeStacks<=1` 短路会让混乱度恒不为 0 的单物品容器永不整理——item 单物品整理修复）。
+    if (messiness.total === 0) return { result: tidy(), didWork: false };
 
     const beforeTotal = items.reduce((s, i) => s + i.amount, 0);
 

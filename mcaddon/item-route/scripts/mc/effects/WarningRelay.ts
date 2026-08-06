@@ -4,6 +4,7 @@ import { world } from "@minecraft/server";
 import type { EventBus, WarningEvent, WarningLevel } from "../../core/events/DomainEvents";
 import type { Warehouse } from "../../core/model/Warehouse";
 import { ROLE_LABELS } from "../../core/model/Container";
+import { containerShortName } from "../../core/model/ContainerId";
 import { WARNING_LEVEL_LABELS } from "../ui/Labels";
 import { color } from "../ui/uiColor";
 
@@ -29,7 +30,7 @@ function containerDetail(warehouse: Warehouse, containerId: string): string {
   const c = warehouse.containers.get(containerId);
   if (c === undefined) return `容器 ${containerId}`;
   const pct = c.capacity > 0 ? Math.round((c.usedSlots / c.capacity) * 100) : 0;
-  const shortId = containerId.split("@")[1] ?? containerId;
+  const shortId = containerShortName(containerId);
   return `${ROLE_LABELS[c.role]} ${shortId.slice(-8)} 容量 ${c.usedSlots}/${c.capacity}（${pct}%）`;
 }
 

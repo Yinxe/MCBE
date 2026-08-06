@@ -23,6 +23,7 @@ import type { ContainerId } from "../../core/model/types";
 import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
 import { getChineseName } from "../../core/data/ItemNameMap";
 import { containerRoleName } from "../../core/model/Container";
+import { containerShortName } from "../../core/model/ContainerId";
 import { PROXIMITY_MARGIN } from "../adapters/McProximityChecker";
 import { chat } from "../ui/uiColor";
 import { LIFECYCLE_ACTIONS } from "../ui/Labels";
@@ -30,9 +31,9 @@ import { LIFECYCLE_ACTIONS } from "../ui/Labels";
 /** 输入堵塞通知防抖窗口（tick；600 = 30 秒 @20tps） */
 const BLOCK_NOTIFY_COOLDOWN_TICKS = 600;
 
-/** 容器短名（通知用）：`c@(x,y,z)@dim` → `(x,y,z)`，避免长 ID 刷屏 */
+/** 容器短名（通知用）：`c@(x,y,z)@overworld` → `(x,y,z)@overworld`，避免长 ID 刷屏 */
 function shortId(containerId: ContainerId): string {
-  return containerId.split("@")[1] ?? containerId;
+  return containerShortName(containerId);
 }
 
 /**

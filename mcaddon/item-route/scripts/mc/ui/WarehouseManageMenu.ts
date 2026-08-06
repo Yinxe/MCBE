@@ -7,6 +7,7 @@ import { ActionFormBuilder, canManage } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
 import { areaSize } from "../../core/services/WarehouseService";
+import { dimensionShort } from "../../core/model/ContainerId";
 import * as uiColor from "./uiColor";
 
 /**
@@ -33,7 +34,7 @@ export async function showWarehouseManageMenu(player: Player, deps: CommandDeps)
     const size = areaSize(w.area);
     const ownerTag = isAdmin && w.ownerName !== player.name ? ` (${w.ownerName})` : "";
     form.button(
-      `${uiColor.btn.nav}${w.displayName}${uiColor.btn.info}${ownerTag}  ${w.area.dimension} ${size.x}×${size.y}×${size.z}=${size.volume}格`,
+      `${uiColor.btn.nav}${w.displayName}${uiColor.btn.info}${ownerTag}  ${dimensionShort(w.area.dimension)} ${size.x}×${size.y}×${size.z}=${size.volume}格`,
       () => void showWarehouseSettingsMenu(player, deps, w)
     );
   }

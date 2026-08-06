@@ -7,13 +7,14 @@ import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import type { Warehouse } from "../../core/model/Warehouse";
 import { getChineseName } from "../../core/data/ItemNameMap";
+import { containerShortName } from "../../core/model/ContainerId";
 import { formatCount } from "../../core/utils/formatCount";
 import { Table, Cell } from "./Table";
 import * as uiColor from "./uiColor";
 
-/** 容器 ID → 可读短名（取坐标段，如 c@(1,2,3)@overworld → (1,2,3)） */
+/** 容器 ID → 可读短名（如 c@(1,2,3)@overworld → (1,2,3)@overworld） */
 function shortId(cid: string): string {
-  return cid.split("@")[1] ?? cid;
+  return containerShortName(cid);
 }
 
 /** 物品统计表最多展示行数（防止 ModalForm label 超长截断，超出折叠提示） */

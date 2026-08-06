@@ -16,6 +16,8 @@ import { scanWarehouseArea } from "../commands/scan";
 import { showContainerRoleMenu } from "./ContainerRoleMenu";
 import { showMemberMenu } from "./MemberMenu";
 import { showStatsUI } from "./StatsUI";
+import { formatCount } from "../../core/utils/formatCount";
+import { dimensionShort } from "../../core/model/ContainerId";
 import { Table, Cell } from "./Table";
 import { areaSize } from "../../core/services/WarehouseService";
 import * as uiColor from "./uiColor";
@@ -38,7 +40,7 @@ function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string
   tbl.row(
     `${uiColor.form.title}容器(${s.containerCount})`,
     Cell.right(String(s.uniqueTypes)),
-    Cell.right(String(s.totalItems)),
+    Cell.right(formatCount(s.totalItems)),
     Cell.left(
       `${uiColor.form.title}${s.usedSlots}${uiColor.form.muted}/${uiColor.form.title}${s.totalSlots}${uc(totPct)}(${(totPct / 100).toFixed(2)})${uiColor.form.muted}${totWarn}`
     )
@@ -57,7 +59,7 @@ function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string
     tbl.row(
       `${c}${l}(${rs.containerCount})`,
       Cell.right(String(rs.uniqueTypes)),
-      Cell.right(String(rs.totalItems)),
+      Cell.right(formatCount(rs.totalItems)),
       Cell.left(
         `${c}${rs.usedSlots}${uiColor.form.muted}/${c}${rs.totalSlots}${uc(p)}(${(p / 100).toFixed(2)})${uiColor.form.muted}${warn}`
       )
@@ -74,7 +76,7 @@ function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string
   const size = areaSize(a);
   return (
     `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
-    `${uiColor.form.muted}位置 ${uiColor.form.body}${a.dimension} [${minX},${minY},${minZ}]→[${maxX},${maxY},${maxZ}]  ${size.x}×${size.y}×${size.z}` +
+    `${uiColor.form.muted}位置 ${uiColor.form.body}${dimensionShort(a.dimension)} [${minX},${minY},${minZ}]→[${maxX},${maxY},${maxZ}]  ${size.x}×${size.y}×${size.z}` +
     `\n${tbl.render(0, [1, 1, 3])}`
   );
 }

@@ -6,12 +6,25 @@ import {
   parseContainerId,
   containerIdPointsTo,
   warehouseIdOf,
+  containerShortName,
+  dimensionShort,
 } from "../scripts/core/model/ContainerId";
 
 const DIM = "overworld";
 
 test("containerIdOf: 生成 c@x,y,z@维度", () => {
   assert.equal(containerIdOf({ x: 10, y: 64, z: 3 }, DIM), "c@(10,64,3)@overworld");
+});
+
+test("containerIdOf: 维度全名截成短名（minecraft:overworld → overworld），全名与原 ID 区分维度一致", () => {
+  assert.equal(dimensionShort("minecraft:overworld"), "overworld");
+  assert.equal(dimensionShort("minecraft:nether"), "nether");
+  assert.equal(dimensionShort("minecraft:the_end"), "the_end");
+  assert.equal(dimensionShort("overworld"), "overworld"); // 已短名不重复截
+  // 传入全名 → ID 存短名；比较用全名也匹配
+  assert.equal(containerIdOf({ x: 1, y: 2, z: 3 }, "minecraft:overworld"), "c@(1,2,3)@overworld");
+  assert.equal(containerIdPointsTo("c@(1,2,3)@overworld", { x: 1, y: 2, z: 3 }, "minecraft:overworld"), true);
+  assert.equal(containerShortName("c@(10,64,3)@overworld"), "(10,64,3)@overworld");
 });
 
 test("primaryLocationOf: 双箱取 (x,y,z) 最小者（与创建顺序无关）", () => {

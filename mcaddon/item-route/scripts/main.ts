@@ -59,7 +59,7 @@ import { ensureContainersLoaded } from "./mc/container/WarehouseLoader";
 
 // Phase 1: 无状态基础设施
 const dp = new DynamicPropertyStore();
-const shards = new ShardStore(dp); // 仍供 McModConfig（全局配置）+ 旧版整仓键迁移
+const shards = new ShardStore(dp); // 供 McModConfig（全局配置，单键 overwrite+hash）
 // 容器级数据（注册表/索引/统计）为单容器小值 → **普通 DP 直存**（无分片/hash/世代开销，更快）
 const direct = new DirectStore(dp);
 const item = new McItemAdapter();
@@ -73,8 +73,8 @@ const router = new Router(
   new DefaultCandidateSorter(),
   bus
 );
-// legacyShards 仅供旧版整仓容器键（ShardStore 分包格式）一次性迁移读取
-const warehouseStore = new McWarehouseStore(direct, shards);
+// 容器级数据（注册表/索引/统计每容器一条键）全部走 DirectStore（普通 DP 直存）
+const warehouseStore = new McWarehouseStore(direct);
 const indexStore = new McIndexStore(direct);
 const members = new MemberService();
 // ⚠️ 早执行安全：create 只建默认值不读 DP（world.getDynamicProperty 早执行会报错）；

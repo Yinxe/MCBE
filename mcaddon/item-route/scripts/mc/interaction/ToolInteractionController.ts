@@ -19,6 +19,7 @@ import { world, system } from "@minecraft/server";
 import type { CommandDeps } from "../commands/deps";
 import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
 import { isSupportedContainerType } from "../../core/model/ContainerTypes";
+import { containerShortName } from "../../core/model/ContainerId";
 import type { Location } from "../../core/model/types";
 import { handleCornerClick } from "./interactionLogic";
 import { showContainerConfigMenu } from "../ui/ContainerRoleMenu";
@@ -72,7 +73,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
       const hit = hitLoaded(dimensionId, loc);
       if (hit === undefined) return;
       const res = deps.organize.organizeContainer(hit.warehouse, hit.container, new MoveJournal());
-      const name = hit.container.id.split("@")[1] ?? hit.container.id;
+      const name = containerShortName(hit.container.id);
       for (const line of formatOrganizeResult(res, name)) player.sendMessage(line);
     });
   };

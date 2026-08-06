@@ -311,6 +311,34 @@ test("OrganizeService: 空/已整齐容器 → 无需整理（moves=0）", () =>
   assert.equal(single.getItem(0)?.amount, 5); // 未变
 });
 
+test("OrganizeService: 单物品但空槽前置 → 也强制整理归位（混乱度归 0，item 单物品整理修复）", () => {
+  const bus = new EventBus();
+  const svc = new OrganizeService(new Organizer(), bus);
+  const warehouse = {
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(),
+    containers: new Map<string, InMemoryContainer>(),
+    inputs: new Map<string, InMemoryContainer>(),
+  };
+  // [空, 钻石, 空, 空]：单物品但空槽前置 → 混乱度 >0（原 `beforeStacks<=1` 短路不整理）
+  const c = new InMemoryContainer("c", "multi", 4);
+  c.setItem(1, new SimpleItemStack("minecraft:diamond", 12, 64));
+  assert.ok(new Organizer().chaosScore(c) > 0); // 空槽错位 → 混乱度非 0
+  const res = svc.organizeContainer(warehouse, c, new MoveJournal());
+  assert.equal(res.ok, true);
+  assert.equal(c.getItem(0)?.itemId, "minecraft:diamond"); // 物品归位到首位
+  assert.equal(c.getItem(1), undefined);
+  assert.equal(res.chaosAfter, 0); // 混乱度归 0
+  // 已归位（混乱度 0）→ 再次整理为 no-op（不重复搬移）
+  const res2 = svc.organizeContainer(warehouse, c, new MoveJournal());
+  assert.equal(res2.chaosAfter, 0);
+  assert.equal(c.getItem(0)?.itemId, "minecraft:diamond");
+});
+
 test("OrganizeService: 手动整理强制——低混乱度（>0 但 <0.05）也清空重排，仅归 0 才跳过", () => {
   const bus = new EventBus();
   const svc = new OrganizeService(new Organizer(), bus);

@@ -5,12 +5,13 @@ import { chat } from "../ui/uiColor";
 import { noParamCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 import { findWarehouseAt } from "../../core/model/Area";
+import { containerShortName } from "../../core/model/ContainerId";
 import { MoveJournal } from "../../core/routing/Move";
 import { formatOrganizeResult } from "../ui/OrganizeFormatter";
 
-/** 容器 ID → 可读短名（取坐标段，如 c@(1,2,3)@overworld → (1,2,3)） */
+/** 容器 ID → 可读短名（如 c@(1,2,3)@overworld → (1,2,3)@overworld） */
 function shortName(id: string): string {
-  return id.split("@")[1] ?? id;
+  return containerShortName(id);
 }
 
 /**

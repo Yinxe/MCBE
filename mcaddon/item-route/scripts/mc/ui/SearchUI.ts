@@ -3,6 +3,7 @@ import { world, system, type Player } from "@minecraft/server";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { searchItems, getChineseName } from "../../core/data/ItemNameMap";
+import { containerShortName } from "../../core/model/ContainerId";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";
 import { searchMarkerMolang } from "../effects/SortEffects";
@@ -35,9 +36,9 @@ function warehouseDistance(warehouse: Warehouse, player: Player): number {
   return Math.hypot(player.location.x - cx, player.location.z - cz);
 }
 
-/** 容器 ID → 可读短名（取坐标段，如 c@(1,2,3)@overworld → (1,2,3)） */
+/** 容器 ID → 可读短名（如 c@(1,2,3)@overworld → (1,2,3)@overworld） */
 function shortId(cid: string): string {
-  return cid.split("@")[1] ?? cid;
+  return containerShortName(cid);
 }
 
 /**
