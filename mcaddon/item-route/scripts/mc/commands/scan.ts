@@ -28,6 +28,8 @@ export function scanWarehouseArea(
   factory: McContainerFactory,
   index: ItemIndex | undefined,
   warehouse: Warehouse,
+  /** 单仓最大容器数（v1 maxContainers 校验；超限停止注册新增） */
+  maxContainers: number,
   /** 持久化本次**新增**的容器（最小单位：只写新增容器 + 同步索引），added 为本次注册列表 */
   persist: (warehouse: Warehouse, added: Container[]) => void
 ): RescanResult {
@@ -45,6 +47,10 @@ export function scanWarehouseArea(
   for (let y = minY; y <= maxY; y++) {
     for (let z = minZ; z <= maxZ; z++) {
       for (let x = minX; x <= maxX; x++) {
+        // 容器数达上限 → 停止注册新增（v1 assertContainerCount 的扫描侧校验）
+        if (warehouse.containers.size + registered >= maxContainers) {
+          return { scanned: volume, registered, skipped: true };
+        }
         const block = dimension.getBlock({ x, y, z });
         if (block === undefined || !isSupportedContainerType(block.typeId)) continue;
         const container = factory.create(

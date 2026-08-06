@@ -40,6 +40,8 @@ export interface SubscriptionContext {
   persistContainerIds: (warehouse: Warehouse) => void;
   /** 扫描补注册持久化（只写新增容器 + 一次索引同步） */
   persistScannedContainers: (warehouse: Warehouse, added: Container[]) => void;
+  /** 单仓最大容器数（建仓扫描校验；来自模组配置） */
+  getMaxContainers: () => number;
 }
 
 /**
@@ -159,7 +161,15 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
     scheduler.registerWarehouse(wh);
     const dim = world.getDimension(wh.area.dimension);
     if (dim !== undefined) {
-      scanWarehouseArea(dim, wh.area, factory, scheduler.getIndex(wh.id), wh, ctx.persistScannedContainers);
+      scanWarehouseArea(
+        dim,
+        wh.area,
+        factory,
+        scheduler.getIndex(wh.id),
+        wh,
+        ctx.getMaxContainers(),
+        ctx.persistScannedContainers
+      );
     }
   });
   // resize 使仓库 ID 迁移 → 迁移按仓 id 存储的键（cids 索引）+ 调度器重注册（替代构造回调 onRebase）

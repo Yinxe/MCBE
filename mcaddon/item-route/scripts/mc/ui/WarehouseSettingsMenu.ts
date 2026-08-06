@@ -183,10 +183,18 @@ function rescanWarehouse(player: Player, deps: CommandDeps, warehouse: Warehouse
   // 2) 重扫区域补注册新容器（最小单位持久化）
   const dim = world.getDimension(warehouse.area.dimension);
   if (dim !== undefined) {
-    scanWarehouseArea(dim, warehouse.area, deps.factory, deps.resolveIndex(warehouse.id), warehouse, (wh, added) => {
-      for (const c of added) deps.persistContainer(wh, c);
-      deps.persistContainerIds(wh);
-    });
+    scanWarehouseArea(
+      dim,
+      warehouse.area,
+      deps.factory,
+      deps.resolveIndex(warehouse.id),
+      warehouse,
+      deps.config.maxContainers,
+      (wh, added) => {
+        for (const c of added) deps.persistContainer(wh, c);
+        deps.persistContainerIds(wh);
+      }
+    );
   }
   player.sendMessage(`${uiColor.chat.success}容器刷新完成（当前 ${warehouse.containers.size} 个）`);
 }

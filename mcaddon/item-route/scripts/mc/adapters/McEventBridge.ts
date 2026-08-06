@@ -34,6 +34,8 @@ export interface EventBridgeDeps {
   warehouses: () => Warehouse[];
   /** 命中容器前按需加载该仓（防启动即点/激活竞态；成员交互通常已激活，此处幂等兜底） */
   ensureContainersLoaded: (warehouse: Warehouse) => void;
+  /** 单仓最大容器数（放置注册校验；来自模组配置） */
+  getMaxContainers: () => number;
 }
 
 const MAIN_TICK_INTERVAL = 5; // 全局主任务：调度轮询（路由/生命周期，非持久化）
@@ -112,6 +114,15 @@ export class McEventBridge {
             });
             return;
           }
+        }
+        // 单仓容器数达上限 → 拒绝放置注册（v1 assertContainerCount 的放置侧校验）
+        if (warehouse.containers.size >= this.deps.getMaxContainers()) {
+          try {
+            e.player.sendMessage(`§c仓库容器已达上限（${this.deps.getMaxContainers()} 个），该容器未加入仓库`);
+          } catch {
+            /* 忽略 */
+          }
+          return;
         }
         registerContainer(warehouse, container);
         const index = this.deps.resolveIndex(warehouse.id);

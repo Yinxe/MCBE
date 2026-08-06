@@ -11,6 +11,8 @@ import * as uiColor from "./uiColor";
 const SPEED_OPTIONS: number[] = [4, 8, 16, 20, 30, 40];
 /** 单仓最大体积可选项（v1 ConfigUI 同款：4096/9216/16384推荐/36864） */
 const VOLUME_OPTIONS: number[] = [4096, 9216, 16_384, 36_864];
+/** 单仓最大容器数可选项（v1 ConfigUI 同款：50/100推荐/200/512） */
+const CONTAINER_OPTIONS: number[] = [50, 100, 200, 512];
 
 /**
  * 展示模组配置面板（管理员专属）：当前状态总览 + 修改 + 全服统计。
@@ -55,6 +57,15 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
       VOLUME_OPTIONS.map((v) => `${v} 格`),
       { defaultValueIndex: volumeIndex >= 0 ? volumeIndex : 2, tooltip: "限制单个仓库最大体积（方块数）" }
     )
+    .dropdown(
+      "maxContainers",
+      "单仓最大容器数",
+      CONTAINER_OPTIONS.map((c) => `${c} 个`),
+      {
+        defaultValueIndex: Math.max(0, CONTAINER_OPTIONS.indexOf(deps.config.maxContainers)),
+        tooltip: "限制每仓最多容器数（建仓/重扫/放置时校验）",
+      }
+    )
     .slider("maxWarehouses", "每玩家最多仓库数", 1, 5, {
       defaultValue: deps.config.maxWarehousesPerPlayer,
       valueStep: 1,
@@ -63,6 +74,7 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   const values = await form.show(player);
   if (!values) return;
   const maxVolume = VOLUME_OPTIONS[values.maxVolume as number] ?? 16_384;
+  const maxContainers = CONTAINER_OPTIONS[values.maxContainers as number] ?? 100;
   const maxWarehouses = values.maxWarehouses as number;
   deps.route.setGlobalEnabled(values.globalEnabled as boolean);
   deps.config.setGlobalSpeedLimit(SPEED_OPTIONS[values.speed as number] ?? 20);
@@ -70,6 +82,7 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   deps.config.setTokenItemId(TOKEN_OPTIONS[values.token as number] ?? TOKEN_OPTIONS[0]!);
   deps.config.setMaxWarehouseVolume(maxVolume);
   deps.config.setMaxWarehousesPerPlayer(maxWarehouses);
+  deps.config.setMaxContainers(maxContainers);
   deps.warehouses.setLimits({ maxVolume, maxWarehousesPerPlayer: maxWarehouses }); // 建仓限制立即生效
   player.sendMessage(`${uiColor.chat.success}配置已保存`);
 }

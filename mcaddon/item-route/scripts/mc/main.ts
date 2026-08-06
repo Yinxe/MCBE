@@ -195,6 +195,7 @@ registerSubscriptions({
   warehouseStore,
   indexStore,
   factory,
+  getMaxContainers: () => config.maxContainers, // 实时读（Phase 4 refresh 后自动生效）
   ...persistence,
 });
 
@@ -207,6 +208,7 @@ const bridge = new McEventBridge({
   factory,
   warehouses: () => loaded,
   ensureContainersLoaded: (wh) => ensureContainersLoaded(wh, containerLoader),
+  getMaxContainers: () => config.maxContainers,
 });
 bridge.start();
 

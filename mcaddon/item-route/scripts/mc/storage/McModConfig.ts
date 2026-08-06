@@ -19,6 +19,8 @@ export interface ModConfigData {
   maxWarehouseVolume: number;
   /** 每玩家最多仓库数（v1 默认 1） */
   maxWarehousesPerPlayer: number;
+  /** 单仓最大容器数（v1 默认 100，建仓/重扫/放置注册时校验） */
+  maxContainers: number;
 }
 
 export const DEFAULT_MOD_CONFIG: ModConfigData = {
@@ -27,6 +29,7 @@ export const DEFAULT_MOD_CONFIG: ModConfigData = {
   tokenItemId: "minecraft:wooden_hoe",
   maxWarehouseVolume: 16_384,
   maxWarehousesPerPlayer: 1,
+  maxContainers: 100,
 };
 
 /** 信物可选列表（ConfigUI 下拉） */
@@ -84,6 +87,7 @@ export class McModConfig {
       tokenItemId: data?.tokenItemId ?? DEFAULT_MOD_CONFIG.tokenItemId,
       maxWarehouseVolume: data?.maxWarehouseVolume ?? DEFAULT_MOD_CONFIG.maxWarehouseVolume,
       maxWarehousesPerPlayer: data?.maxWarehousesPerPlayer ?? DEFAULT_MOD_CONFIG.maxWarehousesPerPlayer,
+      maxContainers: data?.maxContainers ?? DEFAULT_MOD_CONFIG.maxContainers,
     };
   }
 
@@ -101,6 +105,9 @@ export class McModConfig {
   }
   get maxWarehousesPerPlayer(): number {
     return this.data.maxWarehousesPerPlayer;
+  }
+  get maxContainers(): number {
+    return this.data.maxContainers;
   }
 
   setGlobalEnabled(enabled: boolean): void {
@@ -128,6 +135,12 @@ export class McModConfig {
   /** 修改每玩家最多仓库数（v1 ConfigUI slider 可配） */
   setMaxWarehousesPerPlayer(count: number): void {
     this.data.maxWarehousesPerPlayer = count;
+    this.save();
+  }
+
+  /** 修改单仓最大容器数（v1 ConfigUI 下拉可配） */
+  setMaxContainers(count: number): void {
+    this.data.maxContainers = count;
     this.save();
   }
 
