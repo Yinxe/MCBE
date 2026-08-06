@@ -5,22 +5,32 @@ import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
 import type { CommandDeps } from "../commands/deps";
 import * as uiColor from "./uiColor";
 
+/**
+ * 建仓表单的默认容器角色可选集。
+ * 含 "input"（输入）——输入容器由漏斗/放置位置决定，整仓默认设成 input 会让
+ * 新建容器全部变成输入源而无可路由去向；故默认角色只允许 single/multi/misc。
+ */
+const DEFAULT_ROLE_OPTIONS: ContainerRole[] = ["single", "multi", "misc"];
+const DEFAULT_ROLE_INDEX = 1; // "multi"（多物）——用户期望的新容器默认为多物聚集
+
 export async function showWarehouseCreateForm(player: Player, deps: CommandDeps): Promise<void> {
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}创建仓库`) // ModalForm 深灰背景 → 浅色标题
     .textField("name", "仓库名称", { defaultValue: "我的仓库" })
-    .dropdown("defaultRole", "默认容器角色", [ROLE_LABELS.input, ROLE_LABELS.single, ROLE_LABELS.multi, ROLE_LABELS.misc], { defaultValueIndex: 1 })
+    .dropdown("defaultRole", "默认容器角色", DEFAULT_ROLE_OPTIONS.map((r) => ROLE_LABELS[r]), { defaultValueIndex: DEFAULT_ROLE_INDEX })
     .toggle("defaultEnabled", "容器默认启用", { defaultValue: true });
 
   const values = await form.show(player);
   if (!values) return;
   const name = (values.name as string).trim();
-  const defaultRole = (Object.keys(ROLE_LABELS)[(values.defaultRole as number) ?? 1] ?? "single") as ContainerRole;
+  const defaultRole = (DEFAULT_ROLE_OPTIONS[(values.defaultRole as number) ?? DEFAULT_ROLE_INDEX] ?? "multi") as ContainerRole;
   const defaultEnabled = values.defaultEnabled as boolean;
   if (name.length === 0) {
     player.sendMessage(`${uiColor.chat.error}仓库名称不能为空`);
     return;
   }
   deps.session.set(player.id, { kind: "createWarehouse", name, defaultRole, defaultEnabled });
-  player.sendMessage(`${uiColor.chat.success}已进入建仓选区模式：请手持信物右键两个对角方块完成区域选择`);
+  player.sendMessage(
+    `${uiColor.chat.success}已进入建仓选区模式：请手持信物在两个对角普通方块上右键完成区域选择，区域内容器将自动扫描`
+  );
 }

@@ -1,15 +1,15 @@
 // ─── 仓库列表：管理员全部 / 普通玩家成员身份 ────────────────
 import { type Player } from "@minecraft/server";
-import { ActionFormBuilder } from "@yinxe/toolkit";
+import { ActionFormBuilder, canManage } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
 import * as uiColor from "./uiColor";
 
 export async function showWarehouseManageMenu(player: Player, deps: CommandDeps): Promise<void> {
   const all = deps.loadedWarehouses();
-  // 拥有任一仓库视为管理员（管理列表：全部）；否则仅显示有成员身份的仓库
+  // 管理员（OP）或拥有任一仓库：可见全部；否则仅显示有成员身份的仓库（v1 管理员可管理所有）
   const ownsAny = all.some((w) => w.ownerId === player.id);
-  const visible = ownsAny
+  const visible = canManage(player) || ownsAny
     ? all
     : all.filter((w) => deps.members.getRole(w, player.id) !== undefined);
 

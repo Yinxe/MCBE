@@ -97,6 +97,8 @@ export interface LifecycleChangedEvent {
 }
 
 // ── 仓库 CRUD 领域事件（集成测试可订阅观察，mc 层也可据此联动） ──
+// 事件只携带 id/name（低耦合：core 只发事实，mc 层按其持久化边界自行重建运行时对象，
+// 不依赖 core 的内部对象引用——v1 把扫描/仓库/仓储全耦合进 createWarehouse，此处刻意解耦）。
 export interface WarehouseCreatedEvent {
   type: "warehouse-created";
   warehouseId: WarehouseId;

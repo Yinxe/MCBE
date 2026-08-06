@@ -51,6 +51,7 @@ import { registerBoundaryDisplay } from "./effects/BoundaryDisplay";
 import { registerWarningRelay } from "./effects/WarningRelay";
 import { registerNotifyRelay } from "./effects/NotifyRelay";
 import { MoveJournal } from "../core/routing/Move";
+import { scanWarehouseArea } from "./commands/scan";
 
 // Phase 1: 无状态基础设施
 const dp = new DynamicPropertyStore();
@@ -174,6 +175,33 @@ bus.warehouseDeleted.subscribe((e) => {
   indexStore.remove(e.warehouseId);             // 清 dirty + 持久索引键（不复活）
   if (wh !== undefined) {
     for (const c of wh.containers.keys()) stats.discard(c); // 清该仓各容器统计键（每容器一条）
+  }
+});
+
+// ⑥ 运行时建仓：把新仓库纳入 loaded + 注册调度 + **立即扫描区域容器**（v1 创建时即扫，
+// 但这层是 mc 按自身持久化边界重建运行时对象，不持有 core 内部引用——低耦合）。
+// 这是"建仓后看不到边界 / 管理列表为空 / 容器不注册"的根因修复——此前只往 store 写、
+// 从未挂进内存 loaded，导致 visualEffect 的 resolveArea、菜单的 loadedWarehouses 都查不到。
+bus.warehouseCreated.subscribe((e) => {
+  const snapshot = warehouseStore.load(e.warehouseId);
+  if (snapshot === undefined) return; // 已删除/未落盘：忽略
+  const wh: Warehouse = {
+    id: snapshot.id,
+    displayName: snapshot.displayName,
+    ownerId: snapshot.ownerId,
+    members: snapshot.members,
+    area: snapshot.area,
+    settings: snapshot.settings,
+    containers: new Map<string, Container>(),
+    inputs: new Map<string, Container>(),
+  };
+  loaded.push(wh);
+  scheduler.registerWarehouse(wh);
+  // 新仓尚未被玩家邻近激活 → getIndex 为 undefined；scan 跳过索引增量，
+  // 容器经 registerContainer 就地填入 wh.containers/inputs，激活时索引按 containers 重建，天然正确。
+  const dim = world.getDimension(wh.area.dimension);
+  if (dim !== undefined) {
+    scanWarehouseArea(dim, wh.area, factory, scheduler.getIndex(wh.id), wh, persistContainers);
   }
 });
 
