@@ -18,7 +18,7 @@
 import type { Container as McContainer } from "@minecraft/server";
 import type { Container, ContainerRole } from "../../core/model/Container";
 import type { ItemStack } from "../../core/model/ItemStack";
-import type { ContainerId, Location } from "../../core/model/types";
+import type { ContainerId, Location, WarehouseId } from "../../core/model/types";
 import { deriveBinding } from "../../core/model/DeriveBinding";
 import type { McItemAdapter } from "./McItemAdapter";
 
@@ -30,6 +30,8 @@ import type { McItemAdapter } from "./McItemAdapter";
  */
 export class McContainerAdapter implements Container {
   readonly id: ContainerId;
+  /** 所属仓库 ID（registerContainer 装配时写入，不自构造填） */
+  warehouseId!: WarehouseId;
   role: ContainerRole;
   enabled = true;
   priority = 10;

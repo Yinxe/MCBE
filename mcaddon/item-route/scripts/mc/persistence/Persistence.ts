@@ -77,6 +77,7 @@ export function createContainerPersistence(deps: ContainerPersistenceDeps): Cont
   const { warehouseStore, indexStore, scheduler, stats } = deps;
   const entryOf = (c: Container) => ({
     id: c.id,
+    warehouseId: c.warehouseId, // 直接归属解析（findContainerAt 不再逐仓扫）
     role: c.role,
     locations: c.occupiedLocations,
     enabled: c.enabled,

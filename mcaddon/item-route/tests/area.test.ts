@@ -68,6 +68,7 @@ function makeWarehouse(containers: Container[]): Warehouse {
 
 const chest: Container = {
   id: "c1",
+  warehouseId: "w1",
   role: "single",
   enabled: true,
   priority: 10,

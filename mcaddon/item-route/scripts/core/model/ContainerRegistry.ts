@@ -12,8 +12,9 @@ function isEnabledInput(container: Container): boolean {
   return container.role === "input" && container.enabled;
 }
 
-/** 注册容器（新容器入仓 / 区域重扫 / 启动重建） */
+/** 注册容器（新容器入仓 / 区域重扫 / 启动重建）：装配归属并写入仓库表 + 输入镜像 */
 export function registerContainer(warehouse: Warehouse, container: Container): void {
+  container.warehouseId = warehouse.id; // 容器自述归属（findContainerAt/持久化直接解析）
   warehouse.containers.set(container.id, container);
   if (isEnabledInput(container)) warehouse.inputs.set(container.id, container);
 }

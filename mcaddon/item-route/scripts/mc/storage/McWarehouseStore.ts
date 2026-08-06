@@ -27,9 +27,11 @@ interface Registry {
   warehouses: WarehouseId[];
 }
 
-/** 持久化容器条目：重启重建适配器的几何/属性信息 */
+/** 持久化容器条目：重启重建适配器的归属/几何/属性信息 */
 export interface ContainerEntry {
   id: ContainerId;
+  /** 所属仓库 ID（直接归属解析；findContainerAt 不必逐仓扫 containers） */
+  warehouseId: WarehouseId;
   role: ContainerRole;
   locations: Location[];
   enabled: boolean;

@@ -9,7 +9,7 @@
 //   · `addItem` 是核心写入原语：返回"剩余（未能放入）"，全部放入返回 undefined。
 //     生产实现把判定全权委托 mc.addItem（原生 NBT 级堆叠），保证不吞不覆盖不刷。
 import type { ItemStack } from "./ItemStack";
-import type { ContainerId, ItemId, Location } from "./types";
+import type { ContainerId, ItemId, Location, WarehouseId } from "./types";
 
 /** 容器角色 */
 export type ContainerRole = "input" | "single" | "multi" | "misc";
@@ -25,6 +25,8 @@ export const ROLE_LABELS: Record<ContainerRole, string> = {
 /** 概念级容器：不感知 MC，由适配层实现 */
 export interface Container {
   readonly id: ContainerId;
+  /** 所属仓库 ID（registerContainer 装配时写入；持久化在 ContainerEntry，用于直接归属解析） */
+  warehouseId: WarehouseId;
   role: ContainerRole;
   enabled: boolean;
   /** 路由排序优先级，数字越小越先（默认 10） */

@@ -1,10 +1,12 @@
 // 测试用概念容器实现（产品代码中由 mc 适配层提供真实实现）
 import type { Container, ContainerRole } from "../../scripts/core/model/Container";
 import type { ItemStack } from "../../scripts/core/model/ItemStack";
-import type { ContainerId, ItemId, Location } from "../../scripts/core/model/types";
+import type { ContainerId, ItemId, Location, WarehouseId } from "../../scripts/core/model/types";
 
 export class InMemoryContainer implements Container {
   readonly id: ContainerId;
+  /** 所属仓库 ID（registerContainer 装配时写入） */
+  warehouseId!: WarehouseId;
   role: ContainerRole;
   enabled = true;
   priority = 10;

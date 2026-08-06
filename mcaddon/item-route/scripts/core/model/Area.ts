@@ -80,18 +80,23 @@ export function nearestWarehouseByPermission(
   return best;
 }
 
-/** 维度 + 坐标 → 仓库 + 逻辑容器（occupiedLocations 匹配，含双箱任一半） */
+/**
+ * 维度 + 坐标 → 仓库 + 逻辑容器（occupiedLocations 匹配，含双箱任一半）。
+ * 基于"容器自述归属"（Container.warehouseId）：先按**区域**定位所属仓库（O(仓库数)），
+ * 再在该仓容器内按坐标命中；并校验容器自述 warehouseId 与区域仓库一致（防串仓）。
+ */
 export function findContainerAt(
   warehouses: Warehouse[],
   dimension: string,
   loc: Location
 ): { warehouse: Warehouse; container: Container } | undefined {
-  for (const w of warehouses) {
-    if (w.area.dimension !== dimension || !containsLocation(w.area, dimension, loc)) continue;
-    for (const c of w.containers.values()) {
-      if (c.occupiedLocations.some((l) => locationKey(l) === locationKey(loc))) {
-        return { warehouse: w, container: c };
-      }
+  const warehouse = findWarehouseAt(warehouses, dimension, loc);
+  if (warehouse === undefined) return undefined;
+  for (const c of warehouse.containers.values()) {
+    // 归属确认：容器自述 warehouseId 应与区域仓库一致（registerContainer 已装入，正常恒等）
+    if (c.warehouseId !== undefined && c.warehouseId !== warehouse.id) continue;
+    if (c.occupiedLocations.some((l) => locationKey(l) === locationKey(loc))) {
+      return { warehouse, container: c };
     }
   }
   return undefined;
