@@ -97,6 +97,7 @@ export async function showWarehouseSettingsMenu(
     })
     .label("opSep", "§8━━━ 操作（同时仅可一个）━━━")
     .toggle("rescan", `${uiColor.form.success}刷新容器（重新扫描区域容器列表）`)
+    .toggle("repair", `${uiColor.form.accent}修复仓库（检查并修复数据完整性）`)
     .toggle("containerRoles", `${uiColor.form.accent}容器角色（查看/编辑各容器）`);
 
   if (isOwner) {
@@ -111,7 +112,9 @@ export async function showWarehouseSettingsMenu(
   if (!vals) return;
 
   // 操作互斥：一次只允许选一个动作开关
-  const ops = ["rescan", "containerRoles", "memberManage", "stats", "resize", "delete"].filter((k) => vals[k] === true);
+  const ops = ["rescan", "repair", "containerRoles", "memberManage", "stats", "resize", "delete"].filter(
+    (k) => vals[k] === true
+  );
   if (ops.length > 1) {
     player.sendMessage(`${uiColor.chat.error}操作项只能同时开启一个，请重新选择`);
     return;
@@ -141,6 +144,10 @@ export async function showWarehouseSettingsMenu(
     rescanWarehouse(player, deps, warehouse);
     return;
   }
+  if (chosen === "repair") {
+    await confirmRepair(player, deps, warehouse);
+    return;
+  }
   if (chosen === "containerRoles") {
     await showContainerRoleMenu(player, deps, warehouse);
     return;
@@ -167,8 +174,9 @@ export async function showWarehouseSettingsMenu(
  * 刷新容器（member+）：先剔除几何为空的登记项（方块被拆），再重扫区域补注册新容器。
  * 最小单位：扫描只在回调里持久化新增容器 + 一次索引同步。（表单提交后已在正常上下文。）
  */
-function rescanWarehouse(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
-  // 1) 剔除空几何登记项
+/** 重扫区域核心（rescan/修复共用）：剔除空几何登记项 + 重扫补注册新容器（最小单位持久化） */
+function rescanArea(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
+  // 1) 剔除空几何登记项（方块被拆）
   const removed: string[] = [];
   for (const c of [...warehouse.containers.values()]) {
     if (c.occupiedLocations.length === 0) {
@@ -196,7 +204,43 @@ function rescanWarehouse(player: Player, deps: CommandDeps, warehouse: Warehouse
       }
     );
   }
+}
+
+/** 刷新容器（member+）：重扫区域 + 剔除空几何登记项 */
+function rescanWarehouse(player: Player, deps: CommandDeps, warehouse: Warehouse): void {
+  rescanArea(player, deps, warehouse);
   player.sendMessage(`${uiColor.chat.success}容器刷新完成（当前 ${warehouse.containers.size} 个）`);
+}
+
+/**
+ * 修复仓库（member+，v1 同款）：二次确认 → 重建索引（reconcile 惰性自愈）→ 重置统计缓存
+ * → 重扫区域。比"刷新容器"多"索引重建 + 统计重置"，用于数据疑似不一致后的完整修复。
+ */
+async function confirmRepair(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
+  await new ActionFormBuilder()
+    .title(`${uiColor.form.title}修复仓库`)
+    .body(
+      `${uiColor.form.body}确定要修复仓库 "${warehouse.displayName}" 吗？\n\n` +
+        `${uiColor.form.body}将执行以下修复步骤：\n` +
+        `${uiColor.form.body}1. 重新扫描所有容器方块\n` +
+        `${uiColor.form.body}2. 重建运行时索引\n` +
+        `${uiColor.form.body}3. 重置存储统计缓存\n` +
+        `${uiColor.form.body}4. 检查数据完整性`
+    )
+    .button(`${uiColor.btn.accent}确认修复`, () => {
+      // 1) 重建运行时索引：逐容器 reconcile（惰性校验/修复候选条目，索引未激活时激活重建兜底）
+      const index = deps.resolveIndex(warehouse.id);
+      if (index !== undefined) {
+        for (const c of warehouse.containers.values()) index.reconcile(c);
+      }
+      // 2) 重置统计缓存（该仓全部容器，冷读重算）
+      for (const cid of warehouse.containers.keys()) deps.stats.invalidate(cid);
+      // 3) 重扫区域（剔除空几何 + 补注册）
+      rescanArea(player, deps, warehouse);
+      player.sendMessage(`${uiColor.chat.success}仓库修复完成！共发现 ${warehouse.containers.size} 个容器，统计已重置`);
+    })
+    .button(`${uiColor.btn.info}取消`, () => undefined)
+    .show(player);
 }
 
 /** 删除确认：二次确认 → deleteWarehouse（副作用由 warehouseDeleted 事件订阅者清理） */

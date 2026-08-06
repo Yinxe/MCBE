@@ -87,18 +87,37 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   player.sendMessage(`${uiColor.chat.success}配置已保存`);
 }
 
-/** 全服统计汇总（仓库数/容器数/物品数）：统计是容器内容派生 → 先逐仓按需加载容器 */
+/** 全服统计汇总：仓库/容器/物品总数 + 按玩家排名（v1 ConfigUI 同款：名字: N仓 N箱） */
 function serverStats(player: Player, deps: CommandDeps): void {
   const warehouses = deps.loadedWarehouses();
-  let containerCount = 0;
+  // 按玩家聚合（ownerName → 仓数/箱数）；统计是容器内容派生 → 逐仓按需加载容器
+  const perPlayer = new Map<string, { name: string; warehouses: number; containers: number }>();
+  let totalContainers = 0;
   let totalItems = 0;
   for (const w of warehouses) {
     deps.ensureContainersLoaded(w); // 仓库可能未激活 → 容器按需加载后统计才准确
     const s = deps.stats.getWarehouseStats(w);
-    containerCount += s.containerCount;
+    totalContainers += s.containerCount;
     totalItems += s.totalItems;
+    const entry = perPlayer.get(w.ownerName) ?? { name: w.ownerName, warehouses: 0, containers: 0 };
+    entry.warehouses++;
+    entry.containers += s.containerCount;
+    perPlayer.set(w.ownerName, entry);
   }
-  player.sendMessage(
-    `${uiColor.chat.warn}全服统计：${uiColor.chat.info}${warehouses.length}${uiColor.chat.muted} 仓库 · ${uiColor.chat.info}${containerCount}${uiColor.chat.muted} 容器 · ${uiColor.chat.info}${totalItems}${uiColor.chat.muted} 物品`
-  );
+
+  const lines: string[] = [
+    `${uiColor.chat.warn}=== 全服统计 ===`,
+    `${uiColor.chat.muted}仓库总数: ${uiColor.chat.info}${warehouses.length}`,
+    `${uiColor.chat.muted}容器总数: ${uiColor.chat.info}${totalContainers}`,
+    `${uiColor.chat.muted}物品总数: ${uiColor.chat.info}${totalItems}`,
+    `${uiColor.chat.muted}玩家数: ${uiColor.chat.info}${perPlayer.size}`,
+    ``,
+    `${uiColor.chat.warn}玩家排名（按仓库数）:`,
+  ];
+  for (const p of [...perPlayer.values()].sort((a, b) => b.warehouses - a.warehouses)) {
+    lines.push(
+      `  ${uiColor.chat.muted}${p.name}: ${uiColor.chat.info}${p.warehouses}${uiColor.chat.muted}仓 ${uiColor.chat.info}${p.containers}${uiColor.chat.muted}箱`
+    );
+  }
+  player.sendMessage(lines.join("\n"));
 }
