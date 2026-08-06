@@ -15,11 +15,10 @@ import { world, system } from "@minecraft/server";
 
 // ── core ──
 import { EventBus } from "../core/events/DomainEvents";
-import { ItemIndex } from "../core/index/ItemIndex";
 import { Router } from "../core/routing/Router";
 import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../core/routing/CandidateSorter";
-import { Scheduler, type IndexLifecycle } from "../core/scheduling/Scheduler";
+import { Scheduler } from "../core/scheduling/Scheduler";
 import { StatsService } from "../core/stats/StatsService";
 import { Organizer } from "../core/organizing/Organizer";
 import { OrganizeService } from "../core/services/OrganizeService";
@@ -28,7 +27,6 @@ import { MemberService } from "../core/services/MemberService";
 import { RouteService } from "../core/services/RouteService";
 import type { Warehouse } from "../core/model/Warehouse";
 import type { Container } from "../core/model/Container";
-import type { ContainerId } from "../core/model/types";
 import { registerContainer } from "../core/model/ContainerRegistry";
 
 // ── mc ──
@@ -51,6 +49,7 @@ import { registerBoundaryDisplay } from "./effects/BoundaryDisplay";
 import { registerWarningRelay } from "./effects/WarningRelay";
 import { registerNotifyRelay } from "./effects/NotifyRelay";
 import { registerSubscriptions } from "./events/Subscriptions";
+import { createContainerPersistence, createIndexLifecycle } from "./persistence/Persistence";
 import { scanWarehouseArea } from "./commands/scan";
 
 // Phase 1: 无状态基础设施
@@ -90,93 +89,19 @@ const warehouses = new WarehouseService(
 const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));
 const organizer = new Organizer();
-// 每仓库索引生命周期（隔离）：激活时按**每容器条目**恢复/重建，卸载时逐容器落盘（事件驱动）
-const indexLifecycle: IndexLifecycle = {
-  load: (warehouse) => {
-    const idx = new ItemIndex();
-    // 读每容器索引条目，齐全则 restoreFromEntries（含角色反演），否则回退全扫重建
-    const entries = new Map<ContainerId, { items: string[]; singleBinding?: string }>();
-    let complete = true;
-    for (const c of warehouse.containers.values()) {
-      const entry = indexStore.loadContainer(c.id);
-      if (entry === undefined) {
-        complete = false;
-        break;
-      }
-      entries.set(c.id, entry);
-    }
-    if (complete && idx.restoreFromEntries(entries, warehouse.containers.values())) {
-      console.warn(`[ItemRoute] 索引加载 ${warehouse.id}`);
-    } else {
-      for (const c of warehouse.containers.values()) idx.onContainerAdded(c);
-      console.warn(`[ItemRoute] 索引重建 ${warehouse.id}`);
-    }
-    return idx;
-  },
-  unload: (warehouse, idx) => {
-    // 事件驱动落盘（卸载/离仓）：写该仓全部容器的每容器条目；路由增量只内存、重载后惰性自愈
-    for (const c of warehouse.containers.values()) {
-      indexStore.saveContainer(c.id, idx.serializeContainer(c.id));
-    }
-  },
-};
-const scheduler = new Scheduler(
-  router,
-  intervals,
-  proximity,
-  bus,
-  config.globalSpeedLimit,
-  undefined,
-  {
-    // 每仓库索引隔离：激活加载/空闲卸载
-    indexLifecycle,
-  }
-);
+// 索引生命周期（激活按每容器条目恢复/重建、卸载逐容器落盘）收进 persistence/Persistence
+const indexLifecycle = createIndexLifecycle(indexStore);
+const scheduler = new Scheduler(router, intervals, proximity, bus, config.globalSpeedLimit, undefined, {
+  indexLifecycle,
+});
 const stats = new StatsService(statsStore, bus);
 const route = new RouteService(scheduler);
 route.setGlobalEnabled(config.globalEnabled);
 // 整理服务：只发事件，不重建索引（候选过期由策略侧惰性校验自愈）
 const organize = new OrganizeService(organizer, bus);
 
-// 领域事件订阅（路由副作用/容器持久化/仓库生命周期）统一收编在 events/Subscriptions.ts，
-// 由下方 registerSubscriptions 一次性注册。
-
-// ── 容器持久化：每容器一条键（注册表 `ir2:c:{cid}` + 索引 `ir2:idx:{cid}`），事件驱动、最小单位 ──
-const entryOf = (c: Container) => ({
-  id: c.id,
-  role: c.role,
-  locations: c.occupiedLocations,
-  enabled: c.enabled,
-  priority: c.priority,
-});
-/**
- * 单容器写穿：只写该容器自己的键（注册表 + 有活索引则索引条目）。oldId=重定 ID（双箱合并/半拆）
- * 时清旧注册表键 + 旧索引键（防孤儿）。整仓不重写——改动写入放大从"全仓"降为"单容器"。
- */
-const persistContainer = (warehouse: Warehouse, container: Container, oldId?: ContainerId): void => {
-  if (oldId !== undefined && oldId !== container.id) {
-    warehouseStore.removeContainer(oldId);
-    indexStore.removeContainer(oldId);
-  }
-  warehouseStore.saveContainer(container.id, entryOf(container));
-  const idx = scheduler.getIndex(warehouse.id);
-  if (idx !== undefined) indexStore.saveContainer(container.id, idx.serializeContainer(container.id));
-};
-/** 移除容器：清注册表键 + 索引条目键 + 统计键（每容器一条，各自幂等） */
-const removeContainer = (warehouse: Warehouse, containerId: ContainerId): void => {
-  warehouseStore.removeContainer(containerId);
-  indexStore.removeContainer(containerId);
-  stats.discard(containerId);
-};
-/** 同步该仓容器 ID 索引（容器新增/移除/重定 ID 后调用；枚举/清理/删除用） */
-const persistContainerIds = (warehouse: Warehouse): void => {
-  warehouseStore.saveContainerIds(warehouse.id, [...warehouse.containers.keys()]);
-};
-// 扫描补注册：只持久化本次新增的容器（最小单位）+ 一次索引同步
-const persistScannedContainers = (warehouse: Warehouse, added: Container[]): void => {
-  for (const c of added) persistContainer(warehouse, c);
-  persistContainerIds(warehouse);
-};
+// ── 容器逐容器持久化（注册表/索引/统计每容器一条键，事件驱动最小单位）收进 persistence/Persistence ──
+const persistence = createContainerPersistence({ warehouseStore, indexStore, scheduler, stats });
 
 // 领域事件订阅中央注册：路由副作用/容器持久化/仓库生命周期 统一在此一处（见 events/Subscriptions.ts）
 registerSubscriptions({
@@ -189,10 +114,7 @@ registerSubscriptions({
   warehouseStore,
   indexStore,
   factory,
-  persistContainer,
-  removeContainer,
-  persistContainerIds,
-  persistScannedContainers,
+  ...persistence,
 });
 
 // Phase 3: 注册事件（桥只管内存联动，持久化已由领域事件订阅者负责）
@@ -224,9 +146,9 @@ const commandDeps: CommandDeps = {
   session: sessionStore,
   loadedWarehouses: () => loaded,
   factory,
-  persistContainer,
-  removeContainer,
-  persistContainerIds,
+  persistContainer: persistence.persistContainer,
+  removeContainer: persistence.removeContainer,
+  persistContainerIds: persistence.persistContainerIds,
 };
 registerToolInteraction(commandDeps);
 registerSortEffects(bus, {
