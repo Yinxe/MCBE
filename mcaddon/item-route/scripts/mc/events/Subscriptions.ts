@@ -124,17 +124,16 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
   });
 
   // ── 仓库生命周期（cold） ──
-  // 删除：清内存 + 停调度 + 清索引条目/统计键（注册表键由 core deleteWarehouse 的 store.remove 清理）
+  // 删除：清内存 + 停调度 + 清索引条目/统计键（注册表键由 core deleteWarehouse 的 store.remove 清理）。
+  // 容器可能**未加载**（启动不预载）→ 用 cids 索引枚举清键，而非依赖 warehouse.containers。
   bus.warehouseDeleted.subscribe((e) => {
-    const wh = resolveWh(e.warehouseId);
     const i = loaded.findIndex((w) => w.id === e.warehouseId);
     if (i >= 0) loaded.splice(i, 1);
-    scheduler.unregisterWarehouse(e.warehouseId); // 停 interval + indexLifecycle.unload（逐容器落盘）
-    if (wh !== undefined) {
-      for (const c of wh.containers.values()) {
-        indexStore.removeContainer(c.id);
-        stats.discard(c.id);
-      }
+    scheduler.unregisterWarehouse(e.warehouseId); // 停 interval + indexLifecycle.unload（若已加载则逐容器落盘）
+    const cids = warehouseStore.loadContainerIds(e.warehouseId) ?? [];
+    for (const cid of cids) {
+      indexStore.removeContainer(cid);
+      stats.discard(cid);
     }
   });
   // 创建：纳入 loaded + 注册调度 + 立即扫描区域容器（mc 按自身持久化边界重建运行时对象，低耦合）

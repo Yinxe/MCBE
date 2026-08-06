@@ -13,6 +13,7 @@ import * as uiColor from "./uiColor";
 const SPEED_OPTIONS = [4, 8, 16, 20, 30, 40];
 
 export async function showWarehouseSettingsMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
+  deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（显示容器数与后续操作）
   const isOwner = requireRole(deps.members, warehouse, player.id, "owner");
   const isMember = requireRole(deps.members, warehouse, player.id, "member");
 

@@ -26,6 +26,7 @@ export function registerOrganize(registry: Parameters<typeof defineCommand>[0], 
         player.sendMessage(`${chat.error}你不在任何仓库区域内`);
         return;
       }
+      deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载后再整理
       let organized = 0;
       let totalMoves = 0;
       for (const container of warehouse.containers.values()) {

@@ -4,12 +4,12 @@
 //   Phase 1 无状态基础设施 —— DP 后端 → ShardStore → McItemAdapter → McContainerFactory
 //            → McIntervalScheduler
 //   Phase 2 有状态业务 —— EventBus → ItemIndex → Router（策略+sorter）→ 三仓储
-//            → WarehouseService（注入建仓限制）→ Scheduler（注入 onAutoSort）→ Stats
-//            → Organizer/OrganizeService → RouteService
-//   Phase 3 注册副作用 —— McEventBridge（世界事件→索引/统计/落盘）+ 信物交互
-//            + 视觉订阅（SortEffects/BoundaryDisplay/WarningRelay）+ startup 注册 9 命令
-//   Phase 4 延迟启动 —— world 完全加载后：从 DP 恢复仓库/容器/索引，注册调度，
-//            未加载区块的容器留待事件/策略侧 reconcile 惰性补注册
+//            → WarehouseService（注入建仓限制）→ Stats → Scheduler（注入 indexLifecycle）
+//            → Organizer/OrganizeService → RouteService + 容器按需加载 loader
+//   Phase 3 注册副作用 —— central Subscriptions（领域事件→持久化/路由副作用/仓库生命周期）
+//            + McEventBridge（世界事件）+ 信物交互 + 视觉订阅 + startup 注册 9 命令
+//   Phase 4 延迟启动 —— world 加载后：恢复仓库**meta**（容器**不预载**，避免启动载 1 万容器），
+//            注册调度；容器/索引/统计统一在仓库激活时按需加载、闲置卸载
 // 依赖注入贯穿始终：各模块以构造函数/回调收依赖，不自行 new 外部服务（可测性）。
 import { world, system } from "@minecraft/server";
 
@@ -27,7 +27,6 @@ import { MemberService } from "../core/services/MemberService";
 import { RouteService } from "../core/services/RouteService";
 import type { Warehouse } from "../core/model/Warehouse";
 import type { Container } from "../core/model/Container";
-import { registerContainer } from "../core/model/ContainerRegistry";
 
 // ── mc ──
 import { DynamicPropertyStore } from "./storage/DynamicPropertyStore";
@@ -50,6 +49,7 @@ import { registerWarningRelay } from "./effects/WarningRelay";
 import { registerNotifyRelay } from "./effects/NotifyRelay";
 import { registerSubscriptions } from "./events/Subscriptions";
 import { createContainerPersistence, createIndexLifecycle } from "./persistence/Persistence";
+import { ensureContainersLoaded } from "./container/WarehouseLoader";
 import { scanWarehouseArea } from "./commands/scan";
 
 // Phase 1: 无状态基础设施
@@ -89,12 +89,14 @@ const warehouses = new WarehouseService(
 const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));
 const organizer = new Organizer();
-// 索引生命周期（激活按每容器条目恢复/重建、卸载逐容器落盘）收进 persistence/Persistence
-const indexLifecycle = createIndexLifecycle(indexStore);
+const stats = new StatsService(statsStore, bus);
+// 容器按需加载依赖（配置注册表/统计/索引随仓库生命周期统一，见 container/WarehouseLoader）
+const containerLoader = { warehouseStore, factory, stats };
+// 索引生命周期（激活 ensureContainersLoaded + 恢复/重建，卸载逐容器落盘 + unloadContainers）收进 persistence/Persistence
+const indexLifecycle = createIndexLifecycle(containerLoader, indexStore);
 const scheduler = new Scheduler(router, intervals, proximity, bus, config.globalSpeedLimit, undefined, {
   indexLifecycle,
 });
-const stats = new StatsService(statsStore, bus);
 const route = new RouteService(scheduler);
 route.setGlobalEnabled(config.globalEnabled);
 // 整理服务：只发事件，不重建索引（候选过期由策略侧惰性校验自愈）
@@ -125,6 +127,7 @@ const bridge = new McEventBridge({
   scheduler,
   factory,
   warehouses: () => loaded,
+  ensureContainersLoaded: (wh) => ensureContainersLoaded(wh, containerLoader),
 });
 bridge.start();
 
@@ -149,6 +152,7 @@ const commandDeps: CommandDeps = {
   persistContainer: persistence.persistContainer,
   removeContainer: persistence.removeContainer,
   persistContainerIds: persistence.persistContainerIds,
+  ensureContainersLoaded: (wh) => ensureContainersLoaded(wh, containerLoader),
 };
 registerToolInteraction(commandDeps);
 registerSortEffects(bus, {
@@ -199,25 +203,8 @@ system.run(() => {
     };
     loaded.push(warehouse);
 
-    // 容器重建：区块加载的按注册表恢复，未加载的由事件/惰性校验补注册
-    for (const entry of warehouseStore.loadAllContainers(snapshot.id)) {
-      try {
-        const block = world.getDimension(snapshot.area.dimension).getBlock(entry.locations[0] ?? { x: 0, y: 0, z: 0 });
-        if (block === undefined || block.isAir) continue;
-        const container = factory.create(block, entry.role);
-        if (container === undefined) continue;
-        // 以持久化几何为准（双箱合并状态可能已变化）
-        container.occupiedLocations.splice(0, container.occupiedLocations.length, ...entry.locations);
-        container.enabled = entry.enabled;
-        container.priority = entry.priority;
-        registerContainer(warehouse, container);
-      } catch {
-        // 区块未加载等：跳过，事件补注册
-      }
-    }
-
-    // 索引不在此预加载：每仓库索引改为"激活时加载/空闲卸载"（数据隔离），
-    // 由 Scheduler 经 indexLifecycle 在玩家邻近激活时从 McIndexStore 恢复/重建。
+    // 容器**不在此预载**（按需加载/卸载随仓库生命周期统一）：启动只载仓库 meta + 空容器表，
+    // 容器在首次激活（ensure, 见 indexLifecycle.load）或菜单/命令访问（ensureContainersLoaded）时才加载。
     scheduler.registerWarehouse(warehouse);
     warehouses.loadAll(); // 触发 core 侧缓存（如有）
   }

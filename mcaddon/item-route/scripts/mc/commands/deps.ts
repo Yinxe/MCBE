@@ -34,4 +34,6 @@ export interface CommandDeps {
   removeContainer: (warehouse: Warehouse, containerId: ContainerId) => void;
   /** 同步该仓容器 ID 索引（容器新增/移除/重定 ID 后调用；枚举/清理/删除用） */
   persistContainerIds: (warehouse: Warehouse) => void;
+  /** 按需加载该仓容器（启动不预载，菜单/命令/交互访问前调用；已加载幂等返回） */
+  ensureContainersLoaded: (warehouse: Warehouse) => void;
 }

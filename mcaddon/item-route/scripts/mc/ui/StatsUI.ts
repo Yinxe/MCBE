@@ -8,6 +8,7 @@ import { Table } from "./Table";
 import * as uiColor from "./uiColor";
 
 export async function showStatsUI(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
+  deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（统计是容器内容的派生）
   const stats = deps.stats.getWarehouseStats(warehouse);
   // 按钮文字深色（ActionForm 浅灰按钮背景）
   const form = new ActionFormBuilder()

@@ -9,7 +9,7 @@ export const WARNING_MARGIN = 8;
 
 const LEVEL_TEXT: Record<WarningLevel, string> = {
   warning: `${color.warn}警告`,
-  full: `${color.error}满仓`,
+  full: `${color.error}满箱`,
 };
 
 /** 距仓库中心 XZ 距离是否在范围内 */

@@ -12,6 +12,7 @@ import type { Container } from "../../core/model/Container";
 import * as uiColor from "./uiColor";
 
 export async function showContainerRoleMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
+  deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（列表才有容器可编辑）
   const form = new ActionFormBuilder()
     .title(`${uiColor.form.title}容器角色 · ${warehouse.displayName}`)
     .body(`${uiColor.form.body}选择容器（漏斗为强制 input）：`);

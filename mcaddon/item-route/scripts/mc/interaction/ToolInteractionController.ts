@@ -16,7 +16,7 @@
 // 一切回调整体 try-catch（单事件崩溃不影响其他事件），日志 `[item-route]` 前缀。
 import { world, system } from "@minecraft/server";
 import type { CommandDeps } from "../commands/deps";
-import { findContainerAt } from "../../core/model/Area";
+import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
 import { isSupportedContainerType } from "../../core/model/ContainerTypes";
 import type { Location } from "../../core/model/types";
 import { handleCornerClick } from "./interactionLogic";
@@ -37,6 +37,12 @@ export function registerToolInteraction(deps: CommandDeps): void {
     bus: deps.bus,
     resolveWarehouse: (id: string) => deps.loadedWarehouses().find((w) => w.id === id),
   };
+  // 命中容器前按需加载该仓（防"服务器启动即点/激活竞态"——成员交互通常已激活，这里幂等兜底）
+  const hitLoaded = (dimensionId: string, loc: Location): ReturnType<typeof findContainerAt> => {
+    const wh = findWarehouseAt(deps.loadedWarehouses(), dimensionId, loc);
+    if (wh !== undefined) deps.ensureContainersLoaded(wh);
+    return findContainerAt(deps.loadedWarehouses(), dimensionId, loc);
+  };
 
   // 右键方块（beforeEvents）：先触发、可取消默认行为、写防抖时间戳后处理
   world.beforeEvents.playerInteractWithBlock.subscribe((e) => {
@@ -53,7 +59,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
       if (player.isSneaking) {
         // 潜行右键：快速整理该容器（单容器就地整理，受限上下文 → 延迟到 system.run）
         system.run(() => {
-          const hit = findContainerAt(deps.loadedWarehouses(), dimensionId, loc);
+          const hit = hitLoaded(dimensionId, loc);
           if (hit === undefined) return;
           const res = deps.organize.organizeContainer(hit.warehouse, hit.container, new MoveJournal());
           const name = hit.container.id.split("@")[1] ?? hit.container.id;
@@ -69,7 +75,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
       // 容器方块 vs 非容器方块分区处理（v1 语义：选区角点只在非容器方块上标记）
       if (isSupportedContainerType(e.block.typeId)) {
         system.run(() => {
-          const hit = findContainerAt(deps.loadedWarehouses(), dimensionId, loc);
+          const hit = hitLoaded(dimensionId, loc);
           if (hit) {
             void showContainerRoleMenu(player, deps, hit.warehouse);
           } else {
@@ -107,7 +113,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
       const block = player.getBlockFromViewDirection({ maxDistance: 6 })?.block;
       if (block !== undefined && isSupportedContainerType(block.typeId)) {
         const loc: Location = { x: block.location.x, y: block.location.y, z: block.location.z };
-        const hit = findContainerAt(deps.loadedWarehouses(), block.dimension.id, loc);
+        const hit = hitLoaded(block.dimension.id, loc);
         if (hit) void showContainerRoleMenu(player, deps, hit.warehouse);
         return;
       }

@@ -12,15 +12,20 @@ import type { Container } from "../../core/model/Container";
 import type { ContainerId } from "../../core/model/types";
 import type { McWarehouseStore } from "../storage/McWarehouseStore";
 import type { McIndexStore } from "../storage/McIndexStore";
+import { ensureContainersLoaded, unloadContainers, type WarehouseLoaderDeps } from "../container/WarehouseLoader";
 
 // ── 索引生命周期 ─────────────────────────────────────────
 /**
- * 索引生命周期（Scheduler 激活/卸载时调用）：激活按**每容器条目**恢复（含角色反演），
- * 缺条目/版本不符回退全扫重建；卸载/离仓**逐容器落盘**（路由增量只内存、重载后惰性自愈）。
+ * 索引生命周期（Scheduler 激活/卸载时调用）。**容器与索引统一生命周期**：
+ *   · load —— 先 `ensureContainersLoaded`（激活按需加载容器），再按每容器条目恢复（含角色反演），
+ *     缺条目/版本不符回退全扫重建。
+ *   · unload —— 先逐容器落盘索引条目，再 `unloadContainers` 清内存（闲置/离仓释放）。
+ * loader 需 warehouseStore/factory/stats（见 container/WarehouseLoader）。
  */
-export function createIndexLifecycle(indexStore: McIndexStore): IndexLifecycle {
+export function createIndexLifecycle(loader: WarehouseLoaderDeps, indexStore: McIndexStore): IndexLifecycle {
   return {
     load: (warehouse) => {
+      ensureContainersLoaded(warehouse, loader); // 按需加载容器（此时 containers 才齐，供索引用）
       const idx = new ItemIndex();
       const entries = new Map<ContainerId, { items: string[]; singleBinding?: string }>();
       let complete = true;
@@ -44,6 +49,7 @@ export function createIndexLifecycle(indexStore: McIndexStore): IndexLifecycle {
       for (const c of warehouse.containers.values()) {
         indexStore.saveContainer(c.id, idx.serializeContainer(c.id));
       }
+      unloadContainers(warehouse, loader); // 索引落盘后卸载容器（配置/统计缓存一并释放）
     },
   };
 }

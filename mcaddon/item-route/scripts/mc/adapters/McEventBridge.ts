@@ -32,6 +32,8 @@ export interface EventBridgeDeps {
   factory: McContainerFactory;
   /** 当前已加载仓库（Phase 4 填充） */
   warehouses: () => Warehouse[];
+  /** 命中容器前按需加载该仓（防启动即点/激活竞态；成员交互通常已激活，此处幂等兜底） */
+  ensureContainersLoaded: (warehouse: Warehouse) => void;
 }
 
 const MAIN_TICK_INTERVAL = 5;   // 全局主任务：调度轮询（路由/生命周期，非持久化）
@@ -176,6 +178,8 @@ export class McEventBridge {
 
   private locate(block: Block): { warehouse: Warehouse; container: Container } | undefined {
     const loc: Location = { x: block.location.x, y: block.location.y, z: block.location.z };
+    const wh = findWarehouseAt(this.deps.warehouses(), block.dimension.id, loc);
+    if (wh !== undefined) this.deps.ensureContainersLoaded(wh); // 命中前按需加载（防激活竞态）
     return findContainerAt(this.deps.warehouses(), block.dimension.id, loc);
   }
 }

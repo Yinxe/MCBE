@@ -59,6 +59,7 @@ export async function showSearchUI(player: Player, deps: CommandDeps): Promise<v
 
 /** 搜索指定仓库并展示结果 + 标记粒子（命令与 UI 共用） */
 export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse: Warehouse, query: string): void {
+  deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（搜索扫容器内容）
   const lines = runSearch(warehouse, query);
   if (lines.length === 0) {
     player.sendMessage(`${uiColor.chat.muted}未找到匹配物品`);
