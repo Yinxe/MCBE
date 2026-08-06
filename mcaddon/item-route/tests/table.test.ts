@@ -37,16 +37,17 @@ test("Table: Cell.visualLen 剥离全部颜色码", () => {
   assert.equal(Cell.visualLen("§0§1§2§3§4§5§6§7§8§9§a§b§c§d§e§f§k§l§m§n§o§r纯文本"), 3);
 });
 
-test("formatCount: 数量单位化（234 / 4k / 5.4k / 123k / 999k / 1M / 2.3M）", () => {
+test("formatCount: 数量单位化（最多 2 位小数，整数干净）", () => {
   assert.equal(formatCount(0), "0");
   assert.equal(formatCount(234), "234");
   assert.equal(formatCount(999), "999");
   assert.equal(formatCount(1000), "1k");
   assert.equal(formatCount(4000), "4k");
-  assert.equal(formatCount(5423), "5.4k");
+  assert.equal(formatCount(5423), "5.42k");
+  assert.equal(formatCount(9999), "10k"); // 9.999 → 10.00 → 精简为 10k
   assert.equal(formatCount(123000), "123k");
-  assert.equal(formatCount(999000), "999k");
+  assert.equal(formatCount(999900), "999.9k"); // 999.90 → 去尾零
   assert.equal(formatCount(1000000), "1M");
-  assert.equal(formatCount(2300000), "2.3M");
-  assert.equal(formatCount(1234567), "1.2M");
+  assert.equal(formatCount(2300000), "2.3M"); // 2.30 → 去尾零
+  assert.equal(formatCount(1234567), "1.23M");
 });
