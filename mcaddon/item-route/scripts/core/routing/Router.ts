@@ -16,6 +16,9 @@ import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
 import type { EventBus } from "../events/DomainEvents";
 
+/** selfHeal 冷却时长（墙钟 ms）：同 type 在窗口内不再全仓自愈；配合滑动续期，持续无效流只扫首次。 */
+export const SELF_HEAL_COOLDOWN_MS = 5000;
+
 /** 索引能力接口（结构类型，Router 不依赖 index 模块） */
 export interface IndexGateway {
   lookup(typeId: ItemId): { single: ContainerId[]; multi: ContainerId[] };
@@ -41,11 +44,36 @@ export interface RouteResult {
  * 构造注入 { strategies, sorter, bus }，可插拔、可测。
  */
 export class Router {
+  /** selfHeal 冷却表：`仓库:typeId → 最近一次自愈时刻`（滑动续期，见 selfHealGate） */
+  private readonly selfHealCooldown = new Map<string, number>();
+
   constructor(
     private readonly strategies: RouteStrategy[],
     private readonly sorter: CandidateSorter,
-    private readonly bus: EventBus
+    private readonly bus: EventBus,
+    /** 时钟注入（默认 Date.now 墙钟；测试用假时钟） */
+    private readonly now: () => number = Date.now
   ) {}
+
+  /**
+   * selfHeal 冷却门控（滑动续期）。持续命中无效索引（item 进 misc）时压制全仓自愈，
+   * 避免"一大箱未分类物品每 tick 全扫一次"的瀑布流。
+   * 语义（滑动）：窗口内再次命中 → 跳过本次自愈并**续期**（把时间推到 now）→ 连续无效流
+   * 只扫首次、之后一直压着；流停后窗口到期，下一次同 type 才放一次全新扫描（此时可能已
+   * 手动放入持有容器，恰好重新感知）。
+   * @returns true = 本次应执行 selfHeal（已把时间记为 now，作为窗口起点/续期）；false = 冷却中，跳过。
+   */
+  private shouldScanSelfHeal(warehouseId: string, itemId: ItemId): boolean {
+    const key = `${warehouseId}:${itemId}`;
+    const now = this.now();
+    const last = this.selfHealCooldown.get(key);
+    if (last !== undefined && now - last < SELF_HEAL_COOLDOWN_MS) {
+      this.selfHealCooldown.set(key, now); // 续期：持续命中则一直抑制
+      return false;
+    }
+    this.selfHealCooldown.set(key, now);
+    return true;
+  }
 
   /**
    * 处理一个输入容器的非空 slot。
@@ -61,7 +89,10 @@ export class Router {
     // 索引 miss → 全仓自愈兜底：用户手动向单物/多物放入该类型的存储容器被漏索引时，
     // selfHeal 扫描全仓非 input/misc 容器找 hasItem 并重建条目，再查（罕见路径，不做每路由全扫）
     let candidates = index.lookup(itemId);
-    if (candidates.single.length === 0 && candidates.multi.length === 0) {
+    // ⚠️ 记录"初始是否已有候选"：只有初始**非空**（存在 stale 候选可能被拒）才在下方走 mid 自愈——
+    //   初始为空的 item，顶部 ① 已做全仓自愈且 round0 已见愈合后候选，无需 mid 再扫（避免逐 misc-item 全扫）。
+    const hadCandidates = candidates.single.length > 0 || candidates.multi.length > 0;
+    if (candidates.single.length === 0 && candidates.multi.length === 0 && this.shouldScanSelfHeal(warehouse.id, itemId)) {
       index.selfHeal(stack, warehouse.containers.values());
       candidates = index.lookup(itemId);
     }
@@ -80,27 +111,58 @@ export class Router {
       reconcile: (c: Container) => index.reconcile(c),
     };
     const ordered = [...this.strategies].sort((a, b) => a.priority - b.priority);
-    for (const strategy of ordered) {
-      const raw = strategy.findCandidates(ctx);
-      const candidates = this.sorter.sort(raw);
-      for (const candidate of candidates) {
-        const target = candidate.container;
-        if (!target.enabled) continue;
-        const remaining = transfer({ container: input, slot }, target);
-        if (remaining !== undefined && remaining.amount === originalAmount) continue; // 未移动
-        const moved = originalAmount - (remaining?.amount ?? 0);
-        index.onItemMoved(input.id, target.id, stack.itemId);
-        this.bus.itemRouted.trigger({
-          type: "item-routed",
-          warehouseId: warehouse.id,
-          from: input.id,
-          to: target.id,
-          itemId: stack.itemId,
-          amount: moved,
-        });
-        return { routed: true, from: input.id, to: target.id, itemId: stack.itemId, amount: moved };
+    const real = ordered.filter((s) => !s.isFallback); // single / multi（真实路由）
+    const fallback = ordered.filter((s) => s.isFallback); // misc（兜底）
+    const attempt = (strategies: RouteStrategy[]): RouteResult | undefined => {
+      for (const strategy of strategies) {
+        const raw = strategy.findCandidates(ctx);
+        const sorted = this.sorter.sort(raw);
+        for (const candidate of sorted) {
+          const target = candidate.container;
+          if (!target.enabled) continue;
+          const remaining = transfer({ container: input, slot }, target);
+          if (remaining !== undefined && remaining.amount === originalAmount) continue; // 未移动
+          const moved = originalAmount - (remaining?.amount ?? 0);
+          index.onItemMoved(input.id, target.id, stack.itemId);
+          this.bus.itemRouted.trigger({
+            type: "item-routed",
+            warehouseId: warehouse.id,
+            from: input.id,
+            to: target.id,
+            itemId: stack.itemId,
+            amount: moved,
+          });
+          return { routed: true, from: input.id, to: target.id, itemId: stack.itemId, amount: moved };
+        }
+      }
+      return undefined;
+    };
+    // 真实策略先试两轮，第二轮前 selfHeal 重扫一次。关键（item：stale 候选堵自愈）：
+    // 顶部 selfHeal 只在 lookup **完全为空**时触发——若索引残留一条 stale 候选（索引说某容器
+    // 装了该 item，实际已被手动清空、无内容事件删索引），lookup 非空 → ①被跳过 → 真实策略
+    // 全部校验判废 → 若不重扫会直接落 misc，漏掉"手动放入但未入索引"的真持有容器。
+    // ⚠️ 成本守卫：**仅当初始已有候选**（可能含 stale）才走 mid 自愈 + 第二轮；初始为空的 item
+    //    顶部 ① 已全仓自愈、无 stale 可恢复 → 直接走 misc 兜底，**不逐 misc-item 全扫**。
+    for (let round = 0; round < 2; round++) {
+      const r = attempt(real);
+      if (r !== undefined) return r;
+      if (!hadCandidates) break; // 初始无候选 → ①已处理，无需第二轮
+      if (round === 0) {
+        if (!this.shouldScanSelfHeal(warehouse.id, itemId)) break; // 冷却中：跳过自愈与第二轮
+        // ⚠️ 先快照再自愈：`cached` 与索引的 byItem 数组**同一引用**，selfHeal 就地扩容
+        //    会把 `cached` 一起改成愈合后内容 → 必须先把"愈合前"的候选 id 拷贝出来比较。
+        const beforeSingle = [...(cached?.single ?? [])];
+        const beforeMulti = [...(cached?.multi ?? [])];
+        index.selfHeal(stack, warehouse.containers.values());
+        const healed = index.lookup(itemId);
+        cached = healed;
+        const added =
+          healed.single.some((id) => !beforeSingle.includes(id)) ||
+          healed.multi.some((id) => !beforeMulti.includes(id));
+        if (!added) break;
       }
     }
-    return undefined;
+    // 兜底策略（misc）：真实策略两轮仍无果才执行
+    return attempt(fallback);
   }
 }

@@ -45,6 +45,8 @@ export interface CandidateContainer {
 /** 路由策略：按数字优先级升序执行 */
 export interface RouteStrategy {
   readonly priority: number;
+  /** 是否兜底策略（misc）：Router 在真实策略无有效候选、自愈重扫后仍无果时才执行 */
+  readonly isFallback?: boolean;
   findCandidates(ctx: RouteContext): CandidateContainer[];
 }
 
@@ -101,6 +103,7 @@ export class MultiItemStrategy implements RouteStrategy {
 /** 策略 3：杂项容器（兜底，索引不含 misc——直接全量取） */
 export class MiscStrategy implements RouteStrategy {
   readonly priority = 30;
+  readonly isFallback = true;
 
   findCandidates(ctx: RouteContext): CandidateContainer[] {
     const out: CandidateContainer[] = [];

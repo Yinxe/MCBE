@@ -247,6 +247,32 @@ test("Router: 优先级/使用率排序决定目标（priority 5 先于 10）", 
   assert.equal(result?.to, "a");
 });
 
+test("Router: stale 候选堵住顶部 selfHeal → 落 misc 前重扫把真持有容器纳入（盲区修复）", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:gold_ingot", 10, 64));
+  // m1：索引残留 stale 条目（声称装 gold，实际已空——手动清空无内容事件删索引）
+  add(new InMemoryContainer("m1", "multi", 3));
+  // m2：真持有 gold（玩家 GUI 预放），但索引不知道
+  const m2 = add(new InMemoryContainer("m2", "multi", 3));
+  m2.setItem(0, new SimpleItemStack("minecraft:gold_ingot", 5, 64));
+  const misc = add(new InMemoryContainer("x1", "misc", 3));
+  const index = makeIndexStub();
+  // 只给 stale 候选：lookup 非空 → 旧实现顶部 selfHeal 被跳过 → 直落 misc
+  index.state.byItem.set("minecraft:gold_ingot", { single: [], multi: ["m1"] });
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  const result = router.routeFrom(input, 0, wh, index);
+  // 期望：落 misc 前重扫发现 m2 真含 gold → 进 m2，而非 x1
+  assert.equal(result?.to, "m2");
+  assert.deepEqual(index.state.selfHealed, ["minecraft:gold_ingot"]);
+  assert.equal(m2.getItem(0)?.amount, 15); // 5 + 10 并进
+  assert.equal(misc.getItem(0), undefined);
+});
+
 test("Router: 全部候选失败 → 物品留在源", () => {
   const wh2 = makeWarehouse();
   const input2 = wh2.add(new InMemoryContainer("in", "input", 3));
@@ -299,6 +325,32 @@ test("Router: 候选容器已不含该类型（漂移）→ 策略重建条目�
   const result = router.routeFrom(input, 0, wh, index);
   assert.equal(result, undefined); // 过期候选被跳过，物品留在源
   assert.deepEqual(index.state.reconciled, ["m1"]); // 策略自持校验 → reconcile 重建条目
+});
+
+test("Router: selfHeal 冷却+滑动续期——持续无效流只扫首次，流停到期后恢复自愈", () => {
+  let t = 0;
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  add(new InMemoryContainer("x1", "misc", 3)); // 无 single/multi 候选 → 全进 misc
+  const index = makeIndexStub(); // 空索引 → lookup 全空，走顶部 selfHeal
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus(),
+    () => t // 假时钟
+  );
+  // 连续同 type 路由：第 1 次自愈，之后每次命中都**续期**压住（不重扫）
+  for (let i = 0; i < 5; i++) {
+    input.setItem(0, new SimpleItemStack("minecraft:dirt", 10, 64));
+    router.routeFrom(input, 0, wh, index);
+    t += 1000; // 每次隔 1s（< 5s 冷却）
+  }
+  assert.equal(index.state.selfHealed.length, 1); // 只扫了首次，续期压住后续 4 次
+  // 流停 → 冷却到期 → 下一个同 type 恢复自愈（此刻可能已手动放入持有容器，重新感知）
+  t += 6000; // 超过 5s 冷却
+  input.setItem(0, new SimpleItemStack("minecraft:dirt", 10, 64));
+  router.routeFrom(input, 0, wh, index);
+  assert.equal(index.state.selfHealed.length, 2);
 });
 
 test("Router: 同一次路由招索引 lookup 只调用一次（缓存）", () => {
