@@ -12,5 +12,9 @@ packages:
   - "server-plugin/*"
   # exclude test directories
   - "!**/test/**"
+# 全仓统一 Script API 版本：强制 @minecraft/server 收敛到一份 2.8.0，
+# 避免共享包 toolkit 与消费 addon 各自解析不同版本导致类型分裂（TS2345）。
+overrides:
+  "@minecraft/server": "2.8.0"
 allowBuilds:
   esbuild: true

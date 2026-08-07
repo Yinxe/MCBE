@@ -203,6 +203,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@minecraft/server': 2.8.0
+
 importers:
 
   .: {}
@@ -210,8 +213,8 @@ importers:
   mcaddon/auto-refill:
     dependencies:
       '@minecraft/server':
-        specifier: 2.0.0
-        version: 2.0.0(@minecraft/vanilla-data@1.26.20)
+        specifier: 2.8.0
+        version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
     devDependencies:
       '@minecraft/core-build-tasks':
         specifier: 5.5.0
@@ -259,8 +262,8 @@ importers:
   mcaddon/item-route:
     dependencies:
       '@minecraft/server':
-        specifier: ^2.6.0
-        version: 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
+        specifier: 2.8.0
+        version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
       '@minecraft/server-ui':
         specifier: ^2.0.0
         version: 2.0.0(@minecraft/vanilla-data@1.26.20)
@@ -305,8 +308,8 @@ importers:
   mcaddon/keepinventory:
     dependencies:
       '@minecraft/server':
-        specifier: 2.0.0
-        version: 2.0.0(@minecraft/vanilla-data@1.26.20)
+        specifier: 2.8.0
+        version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
     devDependencies:
       '@minecraft/core-build-tasks':
         specifier: 5.5.0
@@ -337,13 +340,13 @@ importers:
     dependencies:
       '@minecraft/math':
         specifier: 2.2.7
-        version: 2.2.7(@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
+        version: 2.2.7(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
       '@minecraft/server':
-        specifier: 2.6.0
-        version: 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
+        specifier: 2.8.0
+        version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
       '@minecraft/server-gametest':
         specifier: 1.0.0-beta.1.26.0-stable
-        version: 1.0.0-beta.1.26.0-stable(@minecraft/common@1.3.0)(@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
+        version: 1.0.0-beta.1.26.0-stable(@minecraft/common@1.3.0)(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
       '@minecraft/server-ui':
         specifier: 2.0.0
         version: 2.0.0(@minecraft/vanilla-data@1.26.20)
@@ -383,13 +386,13 @@ importers:
     dependencies:
       '@minecraft/math':
         specifier: 2.2.7
-        version: 2.2.7(@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
+        version: 2.2.7(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
       '@minecraft/server':
-        specifier: ^2.0.0
-        version: 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
+        specifier: 2.8.0
+        version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
       '@minecraft/server-ui':
         specifier: ^2.0.0
-        version: 2.1.0(@minecraft/common@1.3.0)(@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
+        version: 2.1.0(@minecraft/common@1.3.0)(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
     devDependencies:
       '@minecraft/core-build-tasks':
         specifier: 5.5.0
@@ -422,8 +425,8 @@ importers:
   mcaddon/teleporter:
     dependencies:
       '@minecraft/server':
-        specifier: 2.6.0
-        version: 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
+        specifier: 2.8.0
+        version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
       '@minecraft/server-ui':
         specifier: 2.0.0
         version: 2.0.0(@minecraft/vanilla-data@1.26.20)
@@ -459,7 +462,7 @@ importers:
   packages/item-matrix:
     dependencies:
       '@minecraft/server':
-        specifier: '>=2.6.0'
+        specifier: 2.8.0
         version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
     devDependencies:
       '@types/node':
@@ -469,11 +472,11 @@ importers:
   packages/toolkit:
     dependencies:
       '@minecraft/server':
-        specifier: '>=2.0.0'
-        version: 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
+        specifier: 2.8.0
+        version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
       '@minecraft/server-ui':
         specifier: '>=2.0.0'
-        version: 2.1.0(@minecraft/common@1.3.0)(@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
+        version: 2.1.0(@minecraft/common@1.3.0)(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
 
   packages/toolkit-build:
     dependencies:
@@ -735,13 +738,13 @@ packages:
   '@minecraft/math@2.2.7':
     resolution: {integrity: sha512-7olbdWXp9aCAIPrNNHcUAlG2MQx9X7qCanC6SSkpvi8uiOkPI/1mErndJfhA8gETTIGjvibCiTUsT6SJ5/qtmw==}
     peerDependencies:
-      '@minecraft/server': ^1.15.0 || ^2.0.0
+      '@minecraft/server': 2.8.0
 
   '@minecraft/server-gametest@1.0.0-beta.1.26.0-stable':
     resolution: {integrity: sha512-R9GC5Gha2xlA1ESE8T+hCVuw9OyYvHP+Y1z1Ty7Pu1VxYm7WCuN5MShLKkUTGPvhlyE0+2hXq+Cu5g8Lx5V3Tg==}
     peerDependencies:
       '@minecraft/common': ^1.0.0
-      '@minecraft/server': ^1.17.0 || ^2.0.0 || ^2.6.0-beta.1.26.0-stable
+      '@minecraft/server': 2.8.0
 
   '@minecraft/server-ui@2.0.0':
     resolution: {integrity: sha512-K1xFK1OEJSNfIgyRElaoxDTW/nbEqjBp1YnUdyPCs4kGDglwoXNyFz3wzMOkvT04CJXSifZGcTJeWda4C6OkXw==}
@@ -750,18 +753,7 @@ packages:
     resolution: {integrity: sha512-7zXyqK6HI62aH0RlfObLitBc7EldpoAH3AeC8JWOaI6CCNoCi2DG2U78ELdq+NrUIjvCE87Bix/I+hgXsQ5AdA==}
     peerDependencies:
       '@minecraft/common': ^1.0.0
-      '@minecraft/server': ^2.0.0
-
-  '@minecraft/server@2.0.0':
-    resolution: {integrity: sha512-X2LmT82eO0oCjOFaFgg6zoGenAUSyrG+YvIbe7/FSPj9hpMt4BtOIs7axoQUUvMx2NNbq8uEsnQadMMrDDBmUA==}
-    peerDependencies:
-      '@minecraft/vanilla-data': '>=1.20.70'
-
-  '@minecraft/server@2.6.0':
-    resolution: {integrity: sha512-/l1gbUHcTl/3gb3cB7Ilb8pfW1QytoAc+iMXUPSzvv8cxGluf6M635jl29P8Bid3iVmUB9hWyCUZtRUVVlk5ew==}
-    peerDependencies:
-      '@minecraft/common': ^1.2.0
-      '@minecraft/vanilla-data': '>=1.20.70'
+      '@minecraft/server': 2.8.0
 
   '@minecraft/server@2.8.0':
     resolution: {integrity: sha512-5VPlToP3IihUWrLHQJdNPSq++vPYnB+IZUVdO6kJ/VWVE29pN230f9SiCD28XU+Ujfh/EdjU3anktXG77pjWLA==}
@@ -2287,36 +2279,26 @@ snapshots:
       - tsx
       - yaml
 
-  '@minecraft/math@2.2.7(@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))':
+  '@minecraft/math@2.2.7(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))':
     dependencies:
-      '@minecraft/server': 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
+      '@minecraft/server': 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
 
-  '@minecraft/server-gametest@1.0.0-beta.1.26.0-stable(@minecraft/common@1.3.0)(@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))':
+  '@minecraft/server-gametest@1.0.0-beta.1.26.0-stable(@minecraft/common@1.3.0)(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))':
     dependencies:
       '@minecraft/common': 1.3.0
-      '@minecraft/server': 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
+      '@minecraft/server': 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
 
   '@minecraft/server-ui@2.0.0(@minecraft/vanilla-data@1.26.20)':
     dependencies:
       '@minecraft/common': 1.3.0
-      '@minecraft/server': 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
+      '@minecraft/server': 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
     transitivePeerDependencies:
       - '@minecraft/vanilla-data'
 
-  '@minecraft/server-ui@2.1.0(@minecraft/common@1.3.0)(@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))':
+  '@minecraft/server-ui@2.1.0(@minecraft/common@1.3.0)(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))':
     dependencies:
       '@minecraft/common': 1.3.0
-      '@minecraft/server': 2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
-
-  '@minecraft/server@2.0.0(@minecraft/vanilla-data@1.26.20)':
-    dependencies:
-      '@minecraft/common': 1.3.0
-      '@minecraft/vanilla-data': 1.26.20
-
-  '@minecraft/server@2.6.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)':
-    dependencies:
-      '@minecraft/common': 1.3.0
-      '@minecraft/vanilla-data': 1.26.20
+      '@minecraft/server': 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
 
   '@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)':
     dependencies:

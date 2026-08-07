@@ -1,6 +1,6 @@
 {
   "name": "item-route",
-  "version": "0.1.8",
+  "version": "0.1.10",
   "description": "物品路由仓库 — 自动分拣、容器整理、仓库统计、容量预警",
   "private": true,
   "devDependencies": {
@@ -26,7 +26,7 @@
     "pack": "just-scripts mcaddon"
   },
   "dependencies": {
-    "@minecraft/server": "^2.6.0",
+    "@minecraft/server": "^2.0.0",
     "@minecraft/server-ui": "^2.0.0"
   },
   "mcbe": {

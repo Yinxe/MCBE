@@ -41,6 +41,25 @@ export interface EventBridgeDeps {
 
 const MAIN_TICK_INTERVAL = 5; // 全局主任务：调度轮询（路由/生命周期，非持久化）
 
+// ── 容器 GUI 生命周期事件的结构类型（低版兼容） ──
+// blockContainerOpened/Closed 只存在于较新游戏（约 1.21.16x+）。当前 SDK 2.6.0 没有它们的
+// 类型定义，这里用**结构类型** + 运行时 `!== undefined` 特性检测订阅：
+//   · 编译期不依赖 2.8 类型 → 与共享 @yinxe/toolkit（2.6.0）类型一致，不产生跨包冲突
+//   · 运行期在新游戏（有该事件）→ 生效；老游戏（无该事件）→ world.afterEvents 上
+//     该属性为 undefined → 跳过订阅、不报错（优雅降级，由既有 interact 代理+惰性自愈兜底）
+interface ContainerAccessEvent {
+  block: Block;
+  openSource?: { entity?: { typeId?: string } };
+  closeSource?: { entity?: { typeId?: string } };
+}
+interface ContainerAccessSignal {
+  subscribe(cb: (e: ContainerAccessEvent) => void): void;
+}
+type ContainerAccessSignals = {
+  blockContainerOpened?: ContainerAccessSignal;
+  blockContainerClosed?: ContainerAccessSignal;
+};
+
 /**
  * 事件桥接：把 MC 世界事件（放置/拆除/交互/方块爆炸）翻译为领域事件 + 索引/统计内存联动。
  *  - 放块 → 注册/双箱合并；拆块 → 注销/半拆重定；交互代理信号 → reconcile 惰性校验。
@@ -49,6 +68,9 @@ const MAIN_TICK_INTERVAL = 5; // 全局主任务：调度轮询（路由/生命�
  *  - 主循环（每 5 tick）驱动 scheduler.tick() + stats.tick()。
  */
 export class McEventBridge {
+  /** 开箱时记录的容器"物品类型签名"（关箱对比用；仅玩家来源、受支持容器的当前会话） */
+  private readonly openSignatures = new Map<string, string>();
+
   constructor(private readonly deps: EventBridgeDeps) {}
 
   start(): void {
@@ -77,6 +99,48 @@ export class McEventBridge {
         console.warn(`[ItemRoute] interact 事件处理失败: ${err}`);
       }
     });
+
+    // ── 容器 GUI 生命周期：开箱记录类型、关箱对比变化才重建索引 ──
+    // 玩家"开箱→关箱"整段会话的手动改动没有逐格内容事件；interact（开箱瞬间）reconcile
+    // 时物品还没放=白扫。这里用 blockContainerOpened/Closed（新游戏才有的高级 API）：
+    //   · 开箱：记录该容器当前"物品类型集合"签名
+    //   · 关箱：重算签名，若与开箱时不同 → 重建索引 + 失效统计（一次收敛整段编辑会话）
+    //   类型集合没变（只点开/看、移动同类型）→ 跳过，不浪费重建。
+    // ⚠️ 低版兼容：blockContainerOpened/Closed 约 1.21.16x 游戏才有。cast 为可选签名（可能
+    //    undefined），运行时 `!== undefined` 特性检测——老游戏缺该事件 → 跳过订阅、不报错
+    //    （优雅降级，仍由既有 interact 代理 + 策略侧惰性校验兜底）。
+    const containerSignals = world.afterEvents as unknown as ContainerAccessSignals;
+    if (containerSignals.blockContainerOpened !== undefined && containerSignals.blockContainerClosed !== undefined) {
+      containerSignals.blockContainerOpened.subscribe((e) => {
+        try {
+          if (!isSupportedContainerType(e.block.typeId)) return;
+          if (e.openSource?.entity?.typeId !== "minecraft:player") return; // 排除漏斗/自动化
+          const hit = this.locate(e.block);
+          if (!hit) return;
+          const key = this.signatureKey(hit.warehouse.id, hit.container.id);
+          this.openSignatures.set(key, this.typeSignature(hit.container));
+        } catch (err) {
+          console.warn(`[ItemRoute] blockContainerOpened 处理失败: ${err}`);
+        }
+      });
+      containerSignals.blockContainerClosed.subscribe((e) => {
+        try {
+          if (!isSupportedContainerType(e.block.typeId)) return;
+          if (e.closeSource?.entity?.typeId !== "minecraft:player") return;
+          const hit = this.locate(e.block);
+          if (!hit) return;
+          const key = this.signatureKey(hit.warehouse.id, hit.container.id);
+          const prev = this.openSignatures.get(key);
+          this.openSignatures.delete(key); // 会话结束即清（防 Map 无限累积）
+          // 未记录开箱（脚本启动前已开/漏配）→ 保守视为变化；记录且类型集合没变 → 跳过重建
+          if (prev !== undefined && prev === this.typeSignature(hit.container)) return;
+          this.deps.resolveIndex(hit.warehouse.id)?.reconcile(hit.container); // 类型变化 → 收敛索引脏化
+          stats.invalidate(hit.container.id);
+        } catch (err) {
+          console.warn(`[ItemRoute] blockContainerClosed 处理失败: ${err}`);
+        }
+      });
+    }
 
     // 放置容器方块 → 注册（默认按仓库角色，漏斗强制 input 由工厂处理）
     // 若新块与已注册容器合并成双箱 → 合并进已有容器（扩展 occupied + 重定主 id），
@@ -244,6 +308,21 @@ export class McEventBridge {
         console.warn(`[ItemRoute] 统计冷却异常: ${err}`);
       }
     }, MAIN_TICK_INTERVAL);
+  }
+
+  /** 开箱/关箱会话签名键：仓库 ID + 容器 ID 唯一组成 */
+  private signatureKey(warehouseId: WarehouseId, containerId: ContainerId): string {
+    return `${warehouseId}:${containerId}`;
+  }
+
+  /** 该容器当前"物品类型集合"签名（类型级：去重排序；数量/落槽变化不计——索引只关心类型存在性） */
+  private typeSignature(container: Container): string {
+    const ids = new Set<string>();
+    for (let i = 0; i < container.capacity; i++) {
+      const id = container.getItem(i)?.itemId;
+      if (id !== undefined) ids.add(id);
+    }
+    return [...ids].sort().join("|");
   }
 
   private locate(block: Block): { warehouse: Warehouse; container: Container } | undefined {
