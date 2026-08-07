@@ -449,3 +449,25 @@ test("Scheduler: 输入全空 → 无事可作（不产生移动）", () => {
   w.intervals.advance(16);
   assert.equal(target.getItem(0), undefined);
 });
+
+test("Scheduler: 仓库设置缺 blacklist（旧档）→ 空值防护不崩，正常路由", () => {
+  const w = makeWorld();
+  // 模拟旧档：settings 缺 blacklist 键（undefined）→ 若直接 .includes 会崩整轮
+  const legacy = w.warehouse.settings as unknown as Record<string, unknown>;
+  delete legacy.blacklist;
+  const input = new InMemoryContainer("in", "input", 3);
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const target = new InMemoryContainer("m1", "multi", 3);
+  target.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  registerContainer(w.warehouse, input);
+  registerContainer(w.warehouse, target);
+  w.index.onContainerAdded(input);
+  w.index.onContainerAdded(target);
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(8);
+  // 不崩且有黑名单项正常路由（stone 到 m1 堆叠）
+  assert.equal(input.getItem(0), undefined);
+  assert.equal(target.getItem(0)?.amount, 15);
+});

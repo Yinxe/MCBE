@@ -18,7 +18,7 @@ export class MultiItemStrategy implements RouteStrategy {
       const container = ctx.warehouse.containers.get(id);
       if (!container || container.role !== "multi") continue;
       // 白名单声明命中 → 缺物也是候选（不 reconcile）；否则须实含该类型，仍漂移才重建
-      if (container.whitelist.includes(itemId)) {
+      if ((container.whitelist ?? []).includes(itemId)) {
         seen.add(id);
         out.push(toCandidate(container));
         continue;

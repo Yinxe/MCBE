@@ -72,7 +72,8 @@ export function createDefaultSettings(): WarehouseSettings {
  * 非空 → 仅列表内的族启用。见 WarehouseSettings.enabledFamilies 注释。
  */
 export function isFamilyEnabled(settings: WarehouseSettings, familyId: string): boolean {
-  return settings.enabledFamilies.length === 0 || settings.enabledFamilies.includes(familyId);
+  const enabled = settings.enabledFamilies ?? []; // 旧档缺字段 → 空哨兵 = 全开
+  return enabled.length === 0 || enabled.includes(familyId);
 }
 
 /** 概念级仓库 */

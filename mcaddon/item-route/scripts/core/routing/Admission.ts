@@ -18,7 +18,7 @@ import { toCandidate } from "./helpers";
  * Router.attempt 对每个候选统一调用，先于 transfer —— 覆盖单物/多物/同族/杂项所有层级。
  */
 export function containerAcceptsItem(container: Container, itemId: ItemId): boolean {
-  return !container.blacklist.includes(itemId);
+  return !(container.blacklist ?? []).includes(itemId); // `?? []` 防御旧数据缺字段
 }
 
 /**
@@ -36,7 +36,7 @@ export function collectWhitelistedCandidates(
 ): void {
   for (const c of ctx.warehouse.containers.values()) {
     if (!c.enabled || !roles.includes(c.role)) continue;
-    if (!c.whitelist.includes(itemId) || seen.has(c.id)) continue;
+    if (!(c.whitelist ?? []).includes(itemId) || seen.has(c.id)) continue;
     seen.add(c.id);
     out.push(toCandidate(c));
   }

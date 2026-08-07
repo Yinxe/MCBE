@@ -300,7 +300,8 @@ export class Scheduler {
       if (slot === undefined) continue;
       const stack = container.getItem(slot);
       // 仓库级黑名单：这些物品**永不进入本仓库**（也不索引路由）——遇必阻塞，直接终结本轮
-      if (stack !== undefined && rt.warehouse.settings.blacklist.includes(stack.itemId)) {
+      // ⚠️ `blacklist` 为空值防护：旧档仓库 meta 可能缺该字段 → `undefined.includes` 会崩掉整轮
+      if (stack !== undefined && (rt.warehouse.settings.blacklist ?? []).includes(stack.itemId)) {
         this.blockInput(rt, container, slot);
         return;
       }

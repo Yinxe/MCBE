@@ -24,7 +24,7 @@ export class FamilyStrategy implements RouteStrategy {
       const container = ctx.warehouse.containers.get(id);
       if (!container || !container.enabled || container.role !== "multi" || seen.has(id)) continue;
       // 白名单声明命中 → 缺物也是候选（不 reconcile）；否则须实含该族成员，仍漂移才重建
-      if (container.whitelist.includes(itemId)) {
+      if ((container.whitelist ?? []).includes(itemId)) {
         seen.add(id);
         out.push(toCandidate(container));
         continue;

@@ -233,3 +233,24 @@ test("族候选满箱（无空槽放新色）→ 转移失败跳过 → 降级 m
   assert.equal(res?.to, "x1"); // 满箱放不下新色 → 跳过 → 落杂项
   assert.equal(full.getItem(0)?.amount, 64); // 满箱原样
 });
+
+// ── 空值防护（旧档缺新字段不崩）────────────────────────────
+test("isFamilyEnabled 旧档缺 enabledFamilies → 空哨兵全开，不崩", () => {
+  const s = { routingEnabled: true } as unknown as Parameters<typeof isFamilyEnabled>[0]; // 无 enabledFamilies
+  assert.equal(isFamilyEnabled(s, "wool"), true); // 缺字段 → 全开
+});
+
+test("containerAcceptsItem 容器缺 blacklist/whitelist（旧数据）→ 不崩", () => {
+  const c = { id: "m1", blacklist: undefined, whitelist: undefined } as never;
+  assert.equal(containerAcceptsItem(c as never, "minecraft:stone"), true); // 无黑名单 → 收
+});
+
+test("白名单空箱（有配置）→ 允许进入（允许式，缺物也能进）", () => {
+  const w = makeWorld();
+  const box = new InMemoryContainer("m1", "multi", 3);
+  box.whitelist = ["minecraft:stone"]; // 空箱白名单配置 stone
+  w.add(box);
+  const res = w.route(r("minecraft:stone", 7));
+  assert.equal(res?.to, "m1"); // 空箱 + 白名单 → 能进（容器准入不拦截 + 白名单声明候选）
+  assert.equal(box.getItem(0)?.itemId, "minecraft:stone");
+});
