@@ -130,3 +130,68 @@ test("ItemIndex: selfHeal 跳过 input/misc 容器（非路由候选）", () => 
   index.selfHeal(new SimpleItemStack("minecraft:diamond", 2, 64), [input, misc]);
   assert.deepEqual(index.lookup("minecraft:diamond"), { single: [], multi: [] }); // 都跳过
 });
+
+// ── 同族索引（familyContainers）跟随触发点联动 ────────────────────
+function familyBox(): InMemoryContainer {
+  const c = new InMemoryContainer("mF", "multi", 3);
+  c.familyEnabled = true;
+  c.setItem(0, new SimpleItemStack("minecraft:white_wool", 5, 64));
+  return c;
+}
+
+test("ItemIndex: 族桶由内容派生——onContainerChanged 换族则桶迁移", () => {
+  const index = new ItemIndex();
+  const c = familyBox(); // 白羊毛 → 羊毛族桶
+  index.onContainerAdded(c);
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  // 手动改成红石（属于 redstone 族）→ reconcile 重建 → 族桶从 wool 迁到 redstone
+  c.setItem(0, new SimpleItemStack("minecraft:redstone", 3, 64));
+  index.onContainerChanged(c);
+  assert.deepEqual(index.lookupFamily("wool"), []);
+  assert.deepEqual(index.lookupFamily("redstone"), ["mF"]);
+});
+
+test("ItemIndex: 关闭启族开关 → 从族桶移除（onContainerChanged 重建）", () => {
+  const index = new ItemIndex();
+  const c = familyBox();
+  index.onContainerAdded(c);
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  c.familyEnabled = false;
+  index.onContainerChanged(c);
+  assert.deepEqual(index.lookupFamily("wool"), []);
+});
+
+test("ItemIndex: onContainerRemoved 清理族桶成员资格", () => {
+  const index = new ItemIndex();
+  const c = familyBox();
+  index.onContainerAdded(c);
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  index.onContainerRemoved(c);
+  assert.deepEqual(index.lookupFamily("wool"), []);
+});
+
+test("ItemIndex: restoreFromEntries 按条目重算族桶（激活加载路径）", () => {
+  const index = new ItemIndex();
+  const c = familyBox();
+  c.setItem(1, new SimpleItemStack("minecraft:white_carpet", 2, 64)); // 地毯族
+  const entries = new Map<string, { items: string[]; singleBinding?: string }>([
+    [c.id, { items: ["minecraft:white_wool", "minecraft:white_carpet"] }],
+  ]);
+  assert.equal(index.restoreFromEntries(entries, [c]), true);
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  assert.deepEqual(index.lookupFamily("carpet"), ["mF"]);
+});
+
+test("ItemIndex: onItemMoved 路由进启族多物容器 → 增补族桶（同族后续成员感知）", () => {
+  const index = new ItemIndex();
+  const target = familyBox(); // 已含白羊毛 → 羊毛桶
+  index.onContainerAdded(target);
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  // 路由把橙羊毛移动进目标（目标是多物启族容器）→ 族桶幂等
+  index.onItemMoved(input, target, "minecraft:orange_wool");
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  // 移动一个不同族物品（红石）进启族容器 → 新增 redstone 桶
+  index.onItemMoved(input, target, "minecraft:redstone");
+  assert.deepEqual(index.lookupFamily("redstone"), ["mF"]);
+});

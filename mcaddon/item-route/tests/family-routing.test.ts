@@ -194,3 +194,79 @@ test("Scheduler：仓库级黑名单物品 → 输入遇必阻塞，永不路由
   assert.equal(blocked, 1); // 进入阻塞态触发一次
   assert.ok([...scheduler.blockedInputIds("w1")].includes("in"));
 });
+// ── 黑白名单 × 同族/索引 交互（对准本期判定）────────────────────
+// A' 族箱黑名该色 → 准入覆盖族路由：不进族箱，落杂项
+test("黑名单 × 族：族箱黑名单含某色，同族仍拒收（准入覆盖族路由）", () => {
+  const w = makeRouterWorld();
+  const famBox = new InMemoryContainer("mF", "multi", 3);
+  famBox.familyEnabled = true;
+  famBox.setItem(0, r("minecraft:white_wool", 5)); // 羊毛族桶
+  famBox.blacklist = ["minecraft:black_wool"]; // 但黑名单剔掉黑色
+  w.add(famBox);
+  const out = new InMemoryContainer("m1", "misc", 3);
+  w.add(out);
+  const resWhite = w.route(r("minecraft:white_wool", 3)); // 同色（multi 直达）
+  assert.equal(resWhite?.to, "mF");
+  const resBlack = w.route(r("minecraft:black_wool", 8));
+  assert.equal(resBlack?.to, "m1"); // 黑名单命中 → 族桶候选被准入拒绝 → 落杂项
+  assert.equal(famBox.getItem(0)?.amount, 8); // 5 白 + 3 白，白色原样
+  assert.equal(famBox.getItem(1), undefined); // 黑色没进（新类型槽空）
+});
+
+// 单物箱被黑名单覆盖索引：钻石由内容绑定、索引是单物候选，但黑名单一票否决 → 不进
+test("黑名单 × 单物索引：单物箱黑名钻石，索引即使命中也不进（黑名单覆盖）", () => {
+  const w = makeRouterWorld();
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.blacklist = ["minecraft:diamond"];
+  single.setItem(0, r("minecraft:diamond", 3)); // 内容绑定钻石 → 索引单物候选
+  w.add(single);
+  const out = new InMemoryContainer("m1", "misc", 3);
+  w.add(out);
+  const res = w.route(r("minecraft:diamond", 5));
+  assert.equal(res?.to, "m1"); // 嫌它不是杂项
+  assert.equal(single.getItem(0)?.amount, 3); // 单物箱钻石原样
+});
+
+// 仓库黑名单持续命中某族物品 → Scheduler 遇必阻塞（族箱也进不了）
+test("Scheduler：仓库黑名单黑羊毛 → 输入持续阻塞，族箱也进不了", () => {
+  const intervals = new MemoryIntervalScheduler();
+  const proximity = { hasNearbyPlayer: () => true };
+  const index = new ItemIndex();
+  const bus = new EventBus();
+  const sorter = new DefaultCandidateSorter();
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new FamilyStrategy(), new MiscStrategy()],
+    sorter,
+    bus
+  );
+  const scheduler = new Scheduler(router, intervals, proximity, bus, 8, 40, { fallbackIndex: index });
+  const containers = new Map<string, InMemoryContainer>();
+  const warehouse: Warehouse = {
+    id: "w9",
+    displayName: "W9",
+    ownerName: "p1",
+    members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: { ...createDefaultSettings(), blacklist: ["minecraft:black_wool"] },
+    containers,
+    inputs: new Map<string, InMemoryContainer>(),
+  };
+  const input = new InMemoryContainer("in", "input", 3);
+  input.setItem(0, r("minecraft:black_wool", 4));
+  registerContainer(warehouse, input);
+  index.onContainerAdded(input);
+  // 一个启族箱（白羊毛 → 羊毛族桶）——仓库黑名单仍应一刀切阻塞，不让黑羊毛进库
+  const famBox = new InMemoryContainer("mF", "multi", 3);
+  famBox.familyEnabled = true;
+  famBox.setItem(0, r("minecraft:white_wool", 5));
+  registerContainer(warehouse, famBox);
+  index.onContainerAdded(famBox);
+  let blocked = 0;
+  bus.inputBlocked.subscribe(() => blocked++);
+  scheduler.registerWarehouse(warehouse);
+  scheduler.tick();
+  intervals.advance(40);
+  assert.equal(input.getItem(0)?.amount, 4); // 留在源
+  assert.equal(famBox.getItem(0)?.amount, 5); // 不会进族箱
+  assert.equal(blocked, 1);
+});
