@@ -6,6 +6,7 @@ import { toCandidate } from "./helpers";
 
 /** 策略 4：杂项容器（兜底，索引不含 misc——直接全量取） */
 export class MiscStrategy implements RouteStrategy {
+  readonly key = "misc";
   readonly priority = 40;
   readonly isFallback = true;
 

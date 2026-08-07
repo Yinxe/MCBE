@@ -10,6 +10,7 @@ import { containerHasFamilyMember, toCandidate } from "./helpers";
 
 /** 策略 3：同族路由。物品所属族启用，且启族多物容器**实含该族任一成员**（或白名单声明）→ 收族内任意物品 */
 export class FamilyStrategy implements RouteStrategy {
+  readonly key = "family";
   readonly priority = 30;
 
   findCandidates(ctx: RouteContext): CandidateContainer[] {

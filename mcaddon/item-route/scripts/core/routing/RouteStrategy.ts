@@ -38,6 +38,8 @@ export interface CandidateContainer {
 /** 路由策略：按数字优先级升序执行 */
 export interface RouteStrategy {
   readonly priority: number;
+  /** 策略标识（路由追踪/通知/统计用）：single / multi / family / misc */
+  readonly key: string;
   /** 是否兜底策略（misc）：Router 在真实策略无有效候选、自愈重扫后仍无果时才执行 */
   readonly isFallback?: boolean;
   findCandidates(ctx: RouteContext): CandidateContainer[];

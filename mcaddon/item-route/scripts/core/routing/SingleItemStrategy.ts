@@ -8,6 +8,7 @@ import { toCandidate } from "./helpers";
 
 /** 策略 1：单物容器 —— 绑定匹配（索引）或 白名单声明（允许缺物）。单物同样支持黑白名单 */
 export class SingleItemStrategy implements RouteStrategy {
+  readonly key = "single";
   readonly priority = 10;
 
   findCandidates(ctx: RouteContext): CandidateContainer[] {

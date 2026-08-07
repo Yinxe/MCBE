@@ -338,3 +338,46 @@ test("杂项容器黑名单：唯一杂项也黑名该品 → 无容身之所，
   assert.equal(res, undefined); // 唯一杂项也拒 → 留源
   assert.equal(x1.getItem(0), undefined);
 });
+
+// ── 路由追踪（strategy）────────────────────────────────────
+test("路由追踪：itemRouted/result 暴露命中策略 key（single/multi/family/misc）", () => {
+  const w = makeRouterWorld();
+  // single：单物箱绑钻石
+  const s1 = new InMemoryContainer("s1", "single", 3);
+  s1.setItem(0, r("minecraft:diamond", 3));
+  w.add(s1);
+  // multi：普通多物箱持 stone
+  const m1 = new InMemoryContainer("m1", "multi", 3);
+  m1.setItem(0, r("minecraft:stone", 5));
+  w.add(m1);
+  // family：启族箱持白羊毛
+  const famBox = new InMemoryContainer("mF", "multi", 3);
+  famBox.familyEnabled = true;
+  famBox.setItem(0, r("minecraft:white_wool", 3));
+  w.add(famBox);
+  // misc：兜底箱
+  const x1 = new InMemoryContainer("x1", "misc", 3);
+  w.add(x1);
+
+  assert.equal(w.route(r("minecraft:diamond", 2))?.strategy, "single");
+  assert.equal(w.route(r("minecraft:stone", 2))?.strategy, "multi");
+  assert.equal(w.route(r("minecraft:orange_wool", 2))?.strategy, "family");
+  assert.equal(w.route(r("minecraft:dirt", 2))?.strategy, "misc"); // 无 single/multi/family 实装 → 兜底
+});
+
+// ── 族路由后索引完整性：同型下次走多物索引 ───────────────────
+test("族路由成功后索引完整：同型从 byItem 增补，下次走 multi 而非再族推导", () => {
+  const w = makeRouterWorld();
+  const famBox = new InMemoryContainer("mF", "multi", 3);
+  famBox.familyEnabled = true;
+  famBox.setItem(0, r("minecraft:white_wool", 5));
+  w.add(famBox);
+  // 首次：orange 无多物候选 → 族路由
+  const first = w.route(r("minecraft:orange_wool", 3));
+  assert.equal(first?.strategy, "family");
+  // onItemMoved 已把 mF 增补进 byItem[orange].multi
+  assert.ok(w.index.lookup("minecraft:orange_wool").multi.includes("mF"));
+  // 第二次同型：走多物索引（O(1)），不再经族推导
+  const second = w.route(r("minecraft:orange_wool", 3));
+  assert.equal(second?.strategy, "multi");
+});

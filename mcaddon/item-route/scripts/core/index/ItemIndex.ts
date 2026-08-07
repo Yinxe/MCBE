@@ -84,14 +84,19 @@ export class ItemIndex {
 
   /**
    * 轻量更新：路由自身移动物品后只更新目标侧（来源侧留待惰性校验清理）。
-   * 额外维护**族桶**：物品路由进启族多物容器时新增族（from 恒为 input，非族桶候选，无需清理）。
-   * 需要目标容器对象以判 familyEnabled/role → 签名传 Container 而非仅 id。
+   * 额外维护**索引完整性**（item 修复）：
+   *   · 多物目标 → 补 `byItem[itemId].multi` —— 族/白名单首次把新类型放进多物箱后，该型
+   *     就应成为该箱的多物候选（下次同型走 O(1) 多物索引，而非再次族/白名单推导）。
+   *   · 族桶 → 物品路由进启族多物容器时若引入新族则增补族桶（幂等），供族内其他成员感知。
+   * 需要目标容器对象以判 role/familyEnabled → 签名传 Container 而非仅 id。
    */
   onItemMoved(from: Container, to: Container, itemId: ItemId): void {
     this.containerItems.get(from.id)?.delete(itemId);
     const toItems = this.containerItems.get(to.id);
     if (toItems) toItems.add(itemId);
-    // 同族：item 路由进启族多物容器 → 若引入新族则增补族桶（幂等），供后续族内其他成员感知
+    if (to.role === "multi") {
+      this.ensureEntry(itemId).multi.add(to.id);
+    }
     if (to.role === "multi" && to.familyEnabled) {
       const fam = familyOf(itemId);
       if (fam !== undefined) this.addContainerToFamily(to.id, fam);

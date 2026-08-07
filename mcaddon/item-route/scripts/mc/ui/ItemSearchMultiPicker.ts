@@ -11,8 +11,8 @@ import { searchItems, getChineseName } from "../../core/data/ItemNameMap";
 import type { CommandDeps } from "../commands/deps";
 import * as uiColor from "./uiColor";
 
-/** 搜索结果上限（一次展示的可选新增项数） */
-const SEARCH_LIMIT = 12;
+/** 搜索结果上限（一次展示的可选新增条数；超限在表单里提示细化关键词） */
+const SEARCH_LIMIT = 18;
 
 /** 多选器选项：读写当前名单 + 变化回调（持久化由调用方） */
 export interface ItemMultiPickerOptions {
@@ -63,20 +63,26 @@ export async function showItemSearchMultiPicker(
   }
 
   // 有搜索词：解析匹配（去重已保留项）
-  const matches = searchItems(q)
-    .filter((id) => !kept.includes(id))
-    .slice(0, SEARCH_LIMIT);
-  if (matches.length === 0) {
+  const allMatches = searchItems(q).filter((id) => !kept.includes(id));
+  if (allMatches.length === 0) {
     // 无搜索结果：不弹新窗，直接提交当前状态
     opts.setItems(kept);
     player.sendMessage(`${uiColor.chat.muted}未搜索到"${q}"，已提交当前保留项`);
     return;
   }
+  const matches = allMatches.slice(0, SEARCH_LIMIT);
+  const truncated = allMatches.length > matches.length;
 
   // ── 表单 2：搜索结果多选新增 ──
   const form2 = new ModalFormBuilder()
     .title(`${uiColor.form.title}搜索结果 · “${q}”`)
-    .label("info", `${uiColor.form.muted}勾选需新增到名单的物品（${matches.length} 条匹配）`);
+    .label(
+      "info",
+      `${uiColor.form.muted}勾选需新增到名单的物品（当前 ${matches.length} 条）` +
+        (truncated
+          ? `\n${uiColor.form.warn}共 ${allMatches.length} 条，仅显示前 ${SEARCH_LIMIT} 条——请输入更精确的关键词`
+          : "")
+    );
   for (let i = 0; i < matches.length; i++) {
     const id = matches[i]!;
     form2.toggle(`sel_${i}`, `${getChineseName(id)} ${uiColor.form.muted}${id}`, {

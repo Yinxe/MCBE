@@ -8,6 +8,7 @@ import { hasItemType, toCandidate } from "./helpers";
 
 /** 策略 2：多物容器 —— 同型聚集（实含该类型）或 白名单声明（缺物也能收） */
 export class MultiItemStrategy implements RouteStrategy {
+  readonly key = "multi";
   readonly priority = 20;
 
   findCandidates(ctx: RouteContext): CandidateContainer[] {

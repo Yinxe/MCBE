@@ -1,6 +1,6 @@
 {
   "name": "item-route",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "物品路由仓库 — 自动分拣、容器整理、仓库统计、容量预警",
   "private": true,
   "devDependencies": {
@@ -27,7 +27,8 @@
   },
   "dependencies": {
     "@minecraft/server": "^2.0.0",
-    "@minecraft/server-ui": "^2.0.0"
+    "@minecraft/server-ui": "^2.0.0",
+    "@minecraft/vanilla-data": "1.26.20"
   },
   "mcbe": {
     "packName": "物品路由",

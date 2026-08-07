@@ -26,6 +26,8 @@ export interface ItemRoutedEvent {
   to: ContainerId;
   itemId: ItemId;
   amount: number;
+  /** 路由追踪：本次命中的策略 key（single/multi/family/misc），供调试/通知/统计 */
+  strategy: string;
 }
 
 /** 输入容器物品无法路由（被阻塞）——Scheduler.processOnce 路由失败时触发；通知层防抖提醒 */

@@ -37,6 +37,8 @@ export interface RouteResult {
   to: ContainerId;
   itemId: ItemId;
   amount: number;
+  /** 路由追踪：本次命中的策略 key（single/multi/family/misc） */
+  strategy: string;
 }
 
 /**
@@ -143,8 +145,9 @@ export class Router {
             to: target.id,
             itemId: stack.itemId,
             amount: moved,
+            strategy: strategy.key,
           });
-          return { routed: true, from: input.id, to: target.id, itemId: stack.itemId, amount: moved };
+          return { routed: true, from: input.id, to: target.id, itemId: stack.itemId, amount: moved, strategy: strategy.key };
         }
       }
       return undefined;
