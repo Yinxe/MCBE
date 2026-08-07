@@ -152,10 +152,14 @@ export class McEventBridge {
     });
 
     // 破坏/爆炸移除容器方块 → 注销（双箱半拆：occupiedLocations 过滤 + 主坐标重定）
-    const unregister = (block: Block): void => {
+    // ⚠️ typeId 单独传入：break/explode afterEvent 触发时方块**已被破坏**，`block.typeId`
+    //    读的是该位置的现况（已变 air）——提前窄化必须用事件携带的
+    //    brokenBlockPermutation/explodedBlockPermutation 的 type.id，而不是 e.block.typeId，
+    //    否则所有拆箱都因"air 非容器"被跳过、容器滞留清不掉（stale handle 令菜单/扫描读容量抛错）。
+    const unregister = (block: Block, blockTypeId: string): void => {
       try {
         // ⚠️ 提前窄化：破坏/爆炸对全维度所有方块触发，只关心**受支持容器**——非容器方块不查仓库
-        if (!isSupportedContainerType(block.typeId)) return;
+        if (!isSupportedContainerType(blockTypeId)) return;
         const hit = this.locate(block);
         if (!hit) return;
         const { warehouse, container } = hit;
@@ -224,8 +228,8 @@ export class McEventBridge {
         console.warn(`[ItemRoute] 移除事件处理失败: ${err}`);
       }
     };
-    world.afterEvents.playerBreakBlock.subscribe((e) => unregister(e.block));
-    world.afterEvents.blockExplode.subscribe((e) => unregister(e.block));
+    world.afterEvents.playerBreakBlock.subscribe((e) => unregister(e.block, e.brokenBlockPermutation.type.id));
+    world.afterEvents.blockExplode.subscribe((e) => unregister(e.block, e.explodedBlockPermutation.type.id));
 
     // 主任务：5 tick 调度 + 预警冷却递减（无持久化定时器——持久化全部事件驱动）
     system.runInterval(() => {

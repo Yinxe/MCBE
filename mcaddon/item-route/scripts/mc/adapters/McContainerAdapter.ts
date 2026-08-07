@@ -56,10 +56,18 @@ export class McContainerAdapter implements Container {
   }
 
   get capacity(): number {
-    return this.mc.size;
+    try {
+      return this.mc.size;
+    } catch {
+      return 0; // 方块失效/区块未加载：按空容器处理，绝不让单点故障崩掉菜单/扫描
+    }
   }
   get emptySlotsCount(): number {
-    return this.mc.emptySlotsCount;
+    try {
+      return this.mc.emptySlotsCount;
+    } catch {
+      return 0;
+    }
   }
   get usedSlots(): number {
     return this.capacity - this.emptySlotsCount;
