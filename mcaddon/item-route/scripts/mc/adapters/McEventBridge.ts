@@ -60,8 +60,9 @@ export class McEventBridge {
         const hit = this.locate(e.block);
         if (!hit) return;
         this.deps.resolveIndex(hit.warehouse.id)?.reconcile(hit.container);
-        // 玩家手动开箱/取物 → 立即解除该输入容器的阻塞态（HUD 不再残留"堵塞 N 格"）
-        this.deps.scheduler.unblockInput(hit.warehouse.id, hit.container.id);
+        // ⚠️ 不在此解除输入阻塞态：玩家开箱不一定改动物品（只点开/看），
+        //    过早解除会让下个轮询重堵重报（更吵）。阻塞态交给 Scheduler.processOnce
+        //    下一次调度对"空输入"自检清除（取走物品→空 → 自动解除）。
         stats.invalidate(hit.container.id);
         bus.containerChanged.trigger({
           type: "container-changed",
