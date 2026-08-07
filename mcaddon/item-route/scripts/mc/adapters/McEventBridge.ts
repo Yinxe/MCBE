@@ -20,6 +20,7 @@ import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
 import { isSupportedContainerType } from "../../core/model/ContainerTypes";
 import { locationKey, type ContainerId, type Location, type WarehouseId } from "../../core/model/types";
 import { containerIdOf, primaryLocationOf, containerIdPointsTo } from "../../core/model/ContainerId";
+import { itemTypeSignature } from "../../core/model/ItemTypeSignature";
 import { registerContainer, unregisterContainer, rebaseContainer } from "../../core/model/ContainerRegistry";
 import type { McContainerFactory } from "./McContainerFactory";
 import type { McContainerAdapter } from "./McContainerAdapter";
@@ -118,7 +119,7 @@ export class McEventBridge {
           const hit = this.locate(e.block);
           if (!hit) return;
           const key = this.signatureKey(hit.warehouse.id, hit.container.id);
-          this.openSignatures.set(key, this.typeSignature(hit.container));
+          this.openSignatures.set(key, itemTypeSignature(hit.container));
         } catch (err) {
           console.warn(`[ItemRoute] blockContainerOpened 处理失败: ${err}`);
         }
@@ -133,7 +134,7 @@ export class McEventBridge {
           const prev = this.openSignatures.get(key);
           this.openSignatures.delete(key); // 会话结束即清（防 Map 无限累积）
           // 未记录开箱（脚本启动前已开/漏配）→ 保守视为变化；记录且类型集合没变 → 跳过重建
-          if (prev !== undefined && prev === this.typeSignature(hit.container)) return;
+          if (prev !== undefined && prev === itemTypeSignature(hit.container)) return;
           this.deps.resolveIndex(hit.warehouse.id)?.reconcile(hit.container); // 类型变化 → 收敛索引脏化
           stats.invalidate(hit.container.id);
         } catch (err) {
@@ -313,16 +314,6 @@ export class McEventBridge {
   /** 开箱/关箱会话签名键：仓库 ID + 容器 ID 唯一组成 */
   private signatureKey(warehouseId: WarehouseId, containerId: ContainerId): string {
     return `${warehouseId}:${containerId}`;
-  }
-
-  /** 该容器当前"物品类型集合"签名（类型级：去重排序；数量/落槽变化不计——索引只关心类型存在性） */
-  private typeSignature(container: Container): string {
-    const ids = new Set<string>();
-    for (let i = 0; i < container.capacity; i++) {
-      const id = container.getItem(i)?.itemId;
-      if (id !== undefined) ids.add(id);
-    }
-    return [...ids].sort().join("|");
   }
 
   private locate(block: Block): { warehouse: Warehouse; container: Container } | undefined {
