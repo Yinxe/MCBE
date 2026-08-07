@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "物品路由 v0.1.8",
-    "description": "物品路由仓库 - 自动分拣、容器整理、仓库统计、容量预警 v0.1.8",
+    "name": "物品路由 v0.1.10",
+    "description": "物品路由仓库 - 自动分拣、容器整理、仓库统计、容量预警 v0.1.10",
     "uuid": "746aab1e-dd00-4f24-bdbb-42bc411a3003",
     "version": [
       0,
       1,
-      8
+      10
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         0,
         1,
-        8
+        10
       ],
       "uuid": "795cb2a2-6886-45bb-b9fa-7f76d9b6eca5",
       "type": "data"
@@ -34,7 +34,7 @@
       "version": [
         0,
         1,
-        8
+        10
       ],
       "entry": "scripts/main.js"
     }
@@ -45,7 +45,7 @@
       "version": [
         0,
         1,
-        8
+        10
       ]
     },
     {
