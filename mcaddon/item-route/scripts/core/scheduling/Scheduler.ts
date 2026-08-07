@@ -152,6 +152,11 @@ export class Scheduler {
     return this.runtimes.get(warehouseId)?.blockedInputs.size ?? 0;
   }
 
+  /** 当前处于阻塞态的输入容器 id（只读视图，HUD 据此累加真实堵塞槽数）。 */
+  blockedInputIds(warehouseId: WarehouseId): Iterable<string> {
+    return this.runtimes.get(warehouseId)?.blockedInputs ?? [];
+  }
+
   /** 测试辅助：当前 interval 间隔（undefined = 未激活） */
   getIntervalTicks(warehouseId: WarehouseId): number | undefined {
     const rt = this.runtimes.get(warehouseId);

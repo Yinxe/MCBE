@@ -54,7 +54,14 @@ function hudLine(scheduler: Scheduler, w: Warehouse): string {
   for (const input of w.inputs.values()) {
     if (input.enabled) pending += input.usedSlots;
   }
-  const blocked = scheduler.blockedInputCount(w.id);
+  // 堵塞 = 处于阻塞态的输入容器**实际占用的槽数**（HUD bug 修复：`blockedInputs` 按容器 ID 记，
+  // size 是"容器数"而非槽数——满箱输入因首格路由失败被整箱阻塞时，旧口径恒显示"堵塞 1 格"，误导玩家；
+  // 现按 blockedInputIds 累加其 usedSlots，满 8 格即显示"堵塞 8 格"）
+  let blocked = 0;
+  for (const id of scheduler.blockedInputIds(w.id)) {
+    const input = w.inputs.get(id);
+    if (input !== undefined) blocked += input.usedSlots;
+  }
   let work: string;
   if (blocked > 0) work = `${color.error}堵塞 ${blocked} 格`;
   else if (pending > 0) work = `${color.info}待分拣 ${pending} 格`;

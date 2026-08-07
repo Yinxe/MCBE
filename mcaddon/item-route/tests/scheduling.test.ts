@@ -409,6 +409,32 @@ test("Scheduler: 输入阻塞态在输入清空后解除（HUD 不残留堵塞�
   assert.equal(w.scheduler.blockedInputCount("w1"), 0); // 空输入自检清理阻塞标记（HUD 不再显示堵塞）
 });
 
+test("Scheduler: HUD 堵塞数 = 被阻塞态输入的**真实占用格数**（非容器数，item HUD bug）", () => {
+  const w = makeWorld();
+  // 满 3 格输入，全为不可路由物品（stone 无候选）→ 整箱阻塞
+  const input = new InMemoryContainer("in", "input", 3);
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  input.setItem(1, new SimpleItemStack("minecraft:stone", 10, 64));
+  input.setItem(2, new SimpleItemStack("minecraft:stone", 10, 64));
+  const target = new InMemoryContainer("m1", "multi", 3);
+  target.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64));
+  registerContainer(w.warehouse, input);
+  registerContainer(w.warehouse, target);
+  for (const c of [input, target]) w.index.onContainerAdded(c);
+  w.scheduler.registerWarehouse(w.warehouse);
+  w.proximity.setNearby("w1", true);
+  w.scheduler.tick();
+  w.intervals.advance(8);
+  assert.equal(w.scheduler.blockedInputCount("w1"), 1); // 1 个阻塞容器
+  // HUD 口径：按 blockedInputIds 累加 usedSlots → 3 格（满箱如实显示，而非"1 格"）
+  let hudBlocked = 0;
+  for (const id of w.scheduler.blockedInputIds("w1")) {
+    const c = w.warehouse.containers.get(id);
+    if (c !== undefined) hudBlocked += c.usedSlots;
+  }
+  assert.equal(hudBlocked, 3);
+});
+
 test("Scheduler: 输入全空 → 无事可作（不产生移动）", () => {
   const w = makeWorld();
   const input = new InMemoryContainer("in", "input", 3);
