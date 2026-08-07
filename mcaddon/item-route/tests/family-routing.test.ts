@@ -397,3 +397,24 @@ test("白名单路由不入 byItem——仅 family 才增补多物候选", () =>
   const again = w.route(r("minecraft:stone", 3));
   assert.equal(again?.to, "m1"); // 仍能进（走白名单声明候选，非内容索引）
 });
+
+// ── 同族路由索引持久化往返（重启可按条目重建 byItem + 族桶）────────────────
+test("同族路由后 serialize/restore 往返保留多物候选（索引落盘生效）", () => {
+  const w = makeRouterWorld();
+  const famBox = new InMemoryContainer("mF", "multi", 3);
+  famBox.familyEnabled = true;
+  famBox.setItem(0, r("minecraft:white_wool", 5));
+  w.add(famBox);
+  const first = w.route(r("minecraft:orange_wool", 3));
+  assert.equal(first?.strategy, "family");
+  // 持久化：序列化该容器索引条目（含新型）
+  const entry = w.index.serializeContainer("mF");
+  assert.ok(entry.items.includes("minecraft:orange_wool"));
+  assert.ok(entry.items.includes("minecraft:white_wool"));
+  // 模拟重启：restoreFromEntries 按条目重建（多物候选 + 族桶）
+  const idx2 = new ItemIndex();
+  assert.equal(idx2.restoreFromEntries(new Map([["mF", entry]]), [famBox]), true);
+  assert.ok(idx2.lookup("minecraft:orange_wool").multi.includes("mF")); // 同族转多物候选落盘
+  assert.ok(idx2.lookup("minecraft:white_wool").multi.includes("mF"));
+  assert.deepEqual(idx2.lookupFamily("wool"), ["mF"]); // 族桶重建
+});
