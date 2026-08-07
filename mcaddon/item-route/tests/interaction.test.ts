@@ -49,7 +49,7 @@ test("handleCornerClick: 两个对角点完成建仓", () => {
   assert.equal(created[0]?.displayName, "仓A");
 });
 
-test("handleCornerClick: 同名仓库建仓被拒（中文错误）", () => {
+test("handleCornerClick: 同名仓库建仓被拒（中文错误）且会话被清除（流程结束）", () => {
   const ctx = makeCtx();
   ctx.session.set("p1", { kind: "createWarehouse", name: "仓A", defaultRole: "single", defaultEnabled: true });
   handleCornerClick(ctx, "p1", { x: 0, y: 64, z: 0 }, "overworld");
@@ -58,6 +58,38 @@ test("handleCornerClick: 同名仓库建仓被拒（中文错误）", () => {
   handleCornerClick(ctx, "p1", { x: 0, y: 64, z: 0 }, "overworld");
   const msg = handleCornerClick(ctx, "p1", { x: 20, y: 74, z: 20 }, "overworld");
   assert.match(msg, /同名/);
+  assert.equal(ctx.session.get("p1"), undefined); // 失败 → 会话结束（不再滞留选点模式）
+});
+
+test("handleCornerClick: 建仓失败（规格/数量等）→ 会话清除，流程结束", () => {
+  const ctx = makeCtx();
+  // 通过 setLimits 收紧建仓限制，制造必然失败
+  ctx.warehouses.setLimits({ maxSpec: { x: 8, y: 8, z: 8 } });
+  ctx.session.set("p1", { kind: "createWarehouse", name: "仓大", defaultRole: "single", defaultEnabled: true });
+  handleCornerClick(ctx, "p1", { x: 0, y: 64, z: 0 }, "overworld");
+  const msg = handleCornerClick(ctx, "p1", { x: 30, y: 70, z: 30 }, "overworld"); // 超规格 → 拒
+  assert.match(msg, /规格/);
+  assert.equal(ctx.session.get("p1"), undefined); // 失败 → 会话结束
+});
+
+test("handleCornerClick: 调区失败（重叠）→ 会话清除，流程结束", () => {
+  const ctx = makeCtx();
+  const a = ctx.warehouses.createWarehouse("仓A", "p1", {
+    dimension: "overworld",
+    corner1: { x: 0, y: 60, z: 0 },
+    corner2: { x: 5, y: 64, z: 5 },
+  });
+  ctx.warehouses.createWarehouse("仓B", "p1", {
+    dimension: "overworld",
+    corner1: { x: 100, y: 60, z: 100 },
+    corner2: { x: 105, y: 64, z: 105 },
+  });
+  if (!a.ok) throw new Error("建仓失败");
+  ctx.session.set("p1", { kind: "resizeWarehouse", warehouseId: a.warehouse.id });
+  handleCornerClick(ctx, "p1", { x: 98, y: 61, z: 98 }, "overworld");
+  const msg = handleCornerClick(ctx, "p1", { x: 110, y: 70, z: 110 }, "overworld"); // 与 B 重叠 → 拒
+  assert.match(msg, /重叠/);
+  assert.equal(ctx.session.get("p1"), undefined); // 失败 → 会话结束
 });
 
 test("handleCornerClick: resize 调整区域（仓库 ID 随区域重算迁移）", () => {

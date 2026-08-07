@@ -67,16 +67,28 @@ export function handleCornerClick(
       role: session.defaultRole,
       enabled: session.defaultEnabled,
     });
-    if (!result.ok) return `${chat.error}${result.error}`; // 失败保留会话，可换对角重试
+    if (!result.ok) {
+      // ⚠️ 流程失败 → **结束建仓会话**（仓库数限制/规格/间距/重名等，重选对角不必然能救，
+      //    且避免 HUD 永远滞留"请选对角"）。玩家想再建需重新发起建仓流程。
+      ctx.session.clear(playerName);
+      return `${chat.error}${result.error}`;
+    }
     ctx.session.clear(playerName);
     glow(ctx, result.warehouse.id);
     return `${chat.success}仓库 "${result.warehouse.displayName}" 创建成功！区域内容器自动注册`;
   }
   // resize
   const wh = ctx.resolveWarehouse(session.warehouseId);
-  if (wh === undefined) return `${chat.error}仓库不存在或未加载`;
+  if (wh === undefined) {
+    ctx.session.clear(playerName);
+    return `${chat.error}仓库不存在或未加载`;
+  }
   const err = ctx.warehouses.updateArea(wh, area);
-  if (err !== undefined) return `${chat.error}${err}`; // 失败保留会话，可换对角重试
+  if (err !== undefined) {
+    // 调区失败 → 也结束会话（间距/规格/重叠等限制）
+    ctx.session.clear(playerName);
+    return `${chat.error}${err}`;
+  }
   ctx.session.clear(playerName);
   glow(ctx, wh.id);
   return `${chat.success}仓库 "${wh.displayName}" 区域已调整`;
