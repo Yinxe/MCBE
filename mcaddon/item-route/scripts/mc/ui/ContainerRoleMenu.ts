@@ -89,6 +89,13 @@ export async function showContainerConfigMenu(
     player.sendMessage(`${uiColor.chat.error}需要成员及以上权限`);
     return;
   }
+  // 菜单打开即刷新该容器：重建索引 + 失效统计。MC 无内容变更事件，玩家手动放入某类型
+  // （如本会话坐标：A[1,2,3] B[2,3,4] C[3,4,5] D[] 手动放 3 进 D）后，下一次交互代理
+  // 信号只在**开箱瞬间** reconcile（物品尚未放入），路由始终看不到 D[3]。打开此配置菜单
+  // 是天然的重逢锚——formatContainerInfo 本就要 scanContainer 全读该容器，喂给索引零额外
+  // 成本，且这正是玩家期望"敏捷/机动"的落点：改优先级前路由就已把 D 当成候选中。
+  deps.resolveIndex(warehouse.id)?.reconcile(container);
+  deps.stats.invalidate(container.id);
   const forced = isHopperType((container as { blockType?: string }).blockType ?? "");
   const info = formatContainerInfo(deps, warehouse, container);
 
