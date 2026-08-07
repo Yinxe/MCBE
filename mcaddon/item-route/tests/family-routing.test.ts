@@ -270,3 +270,46 @@ test("Scheduler：仓库黑名单黑羊毛 → 输入持续阻塞，族箱也进
   assert.equal(famBox.getItem(0)?.amount, 5); // 不会进族箱
   assert.equal(blocked, 1);
 });
+
+// ── 容器级黑名单不触发输入阻塞：只拒该箱，物品继续他候选/降级 ──
+test("容器级黑名单只挡该箱：同型他箱仍接收（不阻塞输入）", () => {
+  const w = makeRouterWorld();
+  const a = new InMemoryContainer("m1", "multi", 3);
+  a.blacklist = ["minecraft:stone"];
+  a.setItem(0, r("minecraft:stone", 5));
+  w.add(a);
+  const b = new InMemoryContainer("m2", "multi", 3);
+  b.setItem(0, r("minecraft:stone", 5)); // 同型、未黑名单
+  w.add(b);
+  const res = w.route(r("minecraft:stone", 10));
+  assert.equal(res?.to, "m2"); // 黑名单箱被准入跳过 → 同型他箱收
+  assert.equal(a.getItem(0)?.amount, 5); // 黑名单箱保持原样
+  assert.equal(b.getItem(0)?.amount, 15);
+});
+
+test("容器级黑名单覆盖单物被跳过 → 降级多物他箱收（不阻塞）", () => {
+  const w = makeRouterWorld();
+  const s1 = new InMemoryContainer("s1", "single", 3);
+  s1.blacklist = ["minecraft:diamond"]; // 单物黑名单钻石
+  s1.setItem(0, r("minecraft:diamond", 3));
+  w.add(s1);
+  const m1 = new InMemoryContainer("m1", "multi", 3);
+  m1.setItem(0, r("minecraft:diamond", 2)); // 多物他箱未黑名单
+  w.add(m1);
+  const res = w.route(r("minecraft:diamond", 5));
+  assert.equal(res?.to, "m1"); // 单物被黑名单跳过后，降级到多物收
+  assert.equal(s1.getItem(0)?.amount, 3); // 单物箱钻石原样
+  assert.equal(m1.getItem(0)?.amount, 7);
+});
+
+test("容器级黑名单命中多条目标 → 该型无容身之所才真实阻塞（无 misc）", () => {
+  const w = makeRouterWorld();
+  const a = new InMemoryContainer("m1", "multi", 3);
+  a.blacklist = ["minecraft:gold_ingot"];
+  a.setItem(0, r("minecraft:gold_ingot", 5));
+  w.add(a);
+  // 无 misc、无其他 gold 候选 → 物品留在源（真实"毫无容身之所"）
+  const res = w.route(r("minecraft:gold_ingot", 7));
+  assert.equal(res, undefined);
+  assert.equal(a.getItem(0)?.amount, 5);
+});
