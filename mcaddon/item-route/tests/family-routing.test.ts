@@ -313,3 +313,28 @@ test("容器级黑名单命中多条目标 → 该型无容身之所才真实阻
   assert.equal(res, undefined);
   assert.equal(a.getItem(0)?.amount, 5);
 });
+
+// ── 杂项(其他)容器同样可配黑名单 ──
+test("杂项容器黑名单：黑名某物 → 落他杂项（也过容器级准入）", () => {
+  const w = makeRouterWorld();
+  // 无 single/multi/family 候选 → 只能落杂项
+  const x1 = new InMemoryContainer("x1", "misc", 3);
+  x1.blacklist = ["minecraft:dirt"];
+  w.add(x1);
+  const x2 = new InMemoryContainer("x2", "misc", 3);
+  w.add(x2);
+  const res = w.route(r("minecraft:dirt", 9));
+  assert.equal(res?.to, "x2"); // x1 被黑名单准入拒 → 落未黑名杂项
+  assert.equal(x1.getItem(0), undefined);
+  assert.equal(x2.getItem(0)?.amount, 9);
+});
+
+test("杂项容器黑名单：唯一杂项也黑名该品 → 无容身之所，真实阻塞", () => {
+  const w = makeRouterWorld();
+  const x1 = new InMemoryContainer("x1", "misc", 3);
+  x1.blacklist = ["minecraft:dirt"];
+  w.add(x1);
+  const res = w.route(r("minecraft:dirt", 9));
+  assert.equal(res, undefined); // 唯一杂项也拒 → 留源
+  assert.equal(x1.getItem(0), undefined);
+});
