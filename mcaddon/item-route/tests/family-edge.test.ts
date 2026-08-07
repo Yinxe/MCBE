@@ -1,0 +1,231 @@
+// 同族 + 黑白名单：边界与可能场景测试（对准机制的正确性）
+// 覆盖：族路由边界（无族/显式物化/多族成员/清空自愈/排序/角色变更/旧档缺省）、
+//       白名单限定（收紧实含类型/声明式预分配/空白名单不限）、
+//       黑名单优先于白名单、Router 不越权处理仓库黑名单。
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { Router } from "../scripts/core/routing/Router";
+import {
+  SingleItemStrategy,
+  MultiItemStrategy,
+  FamilyStrategy,
+  MiscStrategy,
+} from "../scripts/core/routing/RouteStrategy";
+import { containerAcceptsItem } from "../scripts/core/routing/Admission";
+import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
+import { ItemIndex } from "../scripts/core/index/ItemIndex";
+import { EventBus } from "../scripts/core/events/DomainEvents";
+import { InMemoryContainer } from "./helpers/InMemoryContainer";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+import {
+  createDefaultSettings,
+  isFamilyEnabled,
+  type Warehouse,
+} from "../scripts/core/model/Warehouse";
+import { ITEM_FAMILIES, familyOf } from "../scripts/core/data/item-families";
+
+function makeWorld() {
+  const containers = new Map<string, InMemoryContainer>();
+  const index = new ItemIndex();
+  const warehouse: Warehouse = {
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(),
+    containers,
+    inputs: new Map<string, InMemoryContainer>(),
+  };
+  const add = (c: InMemoryContainer): InMemoryContainer => {
+    containers.set(c.id, c);
+    index.onContainerAdded(c);
+    return c;
+  };
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new FamilyStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  const route = (stack: SimpleItemStack): Awaited<ReturnType<Router["routeFrom"]>> => {
+    const input = new InMemoryContainer("in", "input", 3);
+    containers.set(input.id, input);
+    index.onContainerAdded(input);
+    input.setItem(0, stack);
+    return router.routeFrom(input, 0, warehouse, index);
+  };
+  return { warehouse, add, route, index, containers };
+}
+
+function r(id: string, amount: number): SimpleItemStack {
+  return new SimpleItemStack(id, amount, 64);
+}
+
+function makeFamBox(id = "mF"): InMemoryContainer {
+  const c = new InMemoryContainer(id, "multi", 4);
+  c.familyEnabled = true;
+  return c;
+}
+
+// ── 准入（Admission）纯函数边界 ─────────────────────────────
+test("admission: 黑名单优先于白名单——同箱白名单含 X 但黑名单也含 X → 拒", () => {
+  const c = new InMemoryContainer("m1", "multi", 3);
+  c.whitelist = ["minecraft:redstone"];
+  c.blacklist = ["minecraft:redstone"];
+  assert.equal(containerAcceptsItem(c, "minecraft:redstone"), false); // 黑名单一票否决
+  c.blacklist = [];
+  assert.equal(containerAcceptsItem(c, "minecraft:redstone"), true); // 白名单含
+  assert.equal(containerAcceptsItem(c, "minecraft:stone"), false); // 白名单外拒
+});
+
+// ── 白名单限定（收紧）────────────────────────────────────
+test("白名单限定：多物箱实含 C 但白名单不含 C → C 仍被拒收（白名单收紧 over 索引）", () => {
+  const w = makeWorld();
+  const box = new InMemoryContainer("m1", "multi", 3);
+  box.whitelist = ["minecraft:stone"]; // 只收 stone
+  box.setItem(0, r("minecraft:dirt", 4)); // 实含 dirt（索引候选），但白名单不含
+  w.add(box);
+  const out = new InMemoryContainer("x1", "misc", 3);
+  w.add(out);
+  const res = w.route(r("minecraft:dirt", 9));
+  assert.equal(res?.to, "x1"); // dirt 在白名单外 → 拒 → 落杂项
+  assert.equal(box.getItem(0)?.amount, 4); // box 的 dirt 原样（不多收）
+});
+
+test("白名单 = 允许式（缺省）不影响未白名单容器：普通多物箱照常收同型", () => {
+  const w = makeWorld();
+  const box = new InMemoryContainer("m1", "multi", 3);
+  box.setItem(0, r("minecraft:stone", 5)); // whitelist 默认空 = 不限
+  w.add(box);
+  const res = w.route(r("minecraft:stone", 10));
+  assert.equal(res?.to, "m1");
+  assert.equal(box.getItem(0)?.amount, 15);
+});
+
+// ── 族路由边界 ─────────────────────────────────────────
+test("族路由：物品不在任何族（bedrock 被精简剔除）→ 无族候选直落 misc", () => {
+  assert.equal(familyOf("minecraft:bedrock"), undefined); // 精简后 bedrock 无族归属
+  const w = makeWorld();
+  const famBox = makeFamBox("mF");
+  famBox.setItem(0, r("minecraft:white_wool", 5)); // 羊毛族桶（与 bedrock 无关）
+  w.add(famBox);
+  const other = new InMemoryContainer("m1", "multi", 3);
+  other.setItem(0, r("minecraft:bedrock", 2)); // 装 bedrock 的普通多物箱（含 bedrock → 索引候选）
+  w.add(other);
+  const out = new InMemoryContainer("x1", "misc", 3);
+  w.add(out);
+  const res = w.route(r("minecraft:bedrock", 7));
+  assert.equal(res?.to, "m1"); // 多物有 bedrock 实箱 → 走多物（不落族，也不落 misc）
+});
+
+test("启用族类转显式：空哨兵=全开；禁用某族物化列表后该族失效", () => {
+  const s = createDefaultSettings();
+  assert.ok(isFamilyEnabled(s, "wool")); // 空 = 全开
+  s.enabledFamilies = ITEM_FAMILIES.map((f) => f.id).filter((id) => id !== "wool");
+  assert.equal(isFamilyEnabled(s, "wool"), false); // 显式剔除 wool
+  assert.ok(isFamilyEnabled(s, "carpet")); // 其余仍在
+});
+
+test("同族多候选按优先级排序（priority 小者先）", () => {
+  const w = makeWorld();
+  const fa = makeFamBox("fa");
+  fa.priority = 5;
+  fa.setItem(0, r("minecraft:white_wool", 5));
+  w.add(fa);
+  const fb = makeFamBox("fb");
+  fb.priority = 15;
+  fb.setItem(0, r("minecraft:red_wool", 5));
+  w.add(fb);
+  const res = w.route(r("minecraft:orange_wool", 10));
+  assert.equal(res?.to, "fa"); // 优先级 5 先收
+});
+
+test("族容器装两族成员（羊毛+地毯）→ 落两个族桶，各收各自族内新成员", () => {
+  const w = makeWorld();
+  const box = makeFamBox("mF");
+  box.setItem(0, r("minecraft:white_wool", 5));
+  box.setItem(1, r("minecraft:white_carpet", 5));
+  w.add(box);
+  assert.deepEqual(w.index.lookupFamily("wool"), ["mF"]);
+  assert.deepEqual(w.index.lookupFamily("carpet"), ["mF"]);
+  // 地毯族新色 → 仍入族箱
+  const res = w.route(r("minecraft:red_carpet", 6));
+  assert.equal(res?.to, "mF");
+  assert.equal(box.getItem(2)?.itemId, "minecraft:red_carpet");
+});
+
+test("族箱内容清空（reconcile 漂移自愈）→ 族桶移除，后续同族不再收", () => {
+  const w = makeWorld();
+  const box = makeFamBox("mF");
+  box.setItem(0, r("minecraft:white_wool", 5));
+  w.add(box);
+  assert.deepEqual(w.index.lookupFamily("wool"), ["mF"]);
+  box.setItem(0, undefined); // 玩家清空（无事件）
+  w.index.reconcile(box); // 三层兜底：按真实内容重建 → 族桶移除
+  assert.deepEqual(w.index.lookupFamily("wool"), []);
+  const out = new InMemoryContainer("x1", "misc", 3);
+  w.add(out);
+  const res = w.route(r("minecraft:orange_wool", 4));
+  assert.equal(res?.to, "x1"); // 不再被空族箱族收，落 misc
+});
+
+test("多物→单物角色变更 → 清族桶（familyEnabled 仅多物有意义）", () => {
+  const w = makeWorld();
+  const box = makeFamBox("mF");
+  box.setItem(0, r("minecraft:white_wool", 5));
+  w.add(box);
+  assert.deepEqual(w.index.lookupFamily("wool"), ["mF"]);
+  box.role = "single";
+  w.index.onContainerRoleChanged(box, "multi");
+  assert.deepEqual(w.index.lookupFamily("wool"), []);
+});
+
+// ── 族桶恢复（旧档缺省）────────────────────────────
+test("restoreFromEntries 旧档缺 familyEnabled → 默认关，不入族桶", () => {
+  const index = new ItemIndex();
+  const c = new InMemoryContainer("m", "multi", 3);
+  c.familyEnabled = false; // 旧档缺字段 → 载入默认为 false
+  c.setItem(0, r("minecraft:white_wool", 5));
+  assert.equal(
+    index.restoreFromEntries(new Map([[c.id, { items: ["minecraft:white_wool"] }]]), [c]),
+    true
+  );
+  assert.deepEqual(index.lookupFamily("wool"), []); // 未启族 → 不入族桶
+});
+
+// ── 白名单声明式 × 同族 ─────────────────────────────
+test("白名单声明：EMP队列族箱白名单含某族成员 → 空箱也能收（经多物层白名单）", () => {
+  const w = makeWorld();
+  const box = makeFamBox("mF");
+  box.whitelist = ["minecraft:orange_wool"]; // 空箱 whitelist 声明要橙羊毛
+  w.add(box); // 无内容 → 不在族桶，亦无索引
+  const res = w.route(r("minecraft:orange_wool", 8));
+  assert.equal(res?.to, "mF");
+  assert.equal(box.getItem(0)?.itemId, "minecraft:orange_wool");
+});
+
+// ── Router 不越权仓库黑名单 ───────────────────────────
+test("Router 不处理仓库黑名单（那是 Scheduler 职责）——路由照常进行", () => {
+  const w = makeWorld();
+  w.warehouse.settings.blacklist = ["minecraft:stone"]; // 仓库黑名单 stone
+  const box = new InMemoryContainer("m1", "multi", 3);
+  box.setItem(0, r("minecraft:stone", 5));
+  w.add(box);
+  // 若 Router 也拦，stone 将无处可去；正确地，仓库黑名单只在 Scheduler.processOnce 拦截
+  const res = w.route(r("minecraft:stone", 10));
+  assert.equal(res?.to, "m1");
+});
+// ── 族箱满态兜底 ───────────────────────────────────────
+test("族候选满箱（无空槽放新色）→ 转移失败跳过 → 降级 misc", () => {
+  const w = makeWorld();
+  const full = new InMemoryContainer("full", "multi", 1);
+  full.familyEnabled = true;
+  full.setItem(0, r("minecraft:white_wool", 64)); // 满、无空槽
+  w.containers.set(full.id, full);
+  w.index.onContainerAdded(full); // 白色 → 羊毛族桶
+  const out = new InMemoryContainer("x1", "misc", 3);
+  w.add(out);
+  const res = w.route(r("minecraft:orange_wool", 6));
+  assert.equal(res?.to, "x1"); // 满箱放不下新色 → 跳过 → 落杂项
+  assert.equal(full.getItem(0)?.amount, 64); // 满箱原样
+});
