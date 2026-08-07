@@ -7,14 +7,14 @@
 //     可单测用 stub 替身；且索引按**每次路由调用**传入（而非 Router 持有全局单例），
 //     支撑"每仓库独立索引、激活加载/空闲卸载"的隔离（见 Scheduler 的 processOnce）。
 //   · 全部候选失败返回 undefined，物品留在源 —— 单槽原子性，不产生半成品。
-import { transfer } from "./Move";
-import { containerAcceptsItem, type CandidateContainer, type RouteStrategy } from "./RouteStrategy";
-import type { CandidateSorter } from "./CandidateSorter";
+import type { EventBus } from "../events/DomainEvents";
 import type { Container } from "../model/Container";
-import type { Warehouse } from "../model/Warehouse";
 import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
-import type { EventBus } from "../events/DomainEvents";
+import type { Warehouse } from "../model/Warehouse";
+import type { CandidateSorter } from "./CandidateSorter";
+import { transfer } from "./Move";
+import { containerAcceptsItem, type RouteStrategy } from "./RouteStrategy";
 
 /** selfHeal 冷却时长（墙钟 ms）：同 type 在窗口内不再全仓自愈；配合滑动续期，持续无效流只扫首次。 */
 export const SELF_HEAL_COOLDOWN_MS = 5000;
