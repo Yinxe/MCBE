@@ -298,25 +298,34 @@ export class Scheduler {
       }
       const slot = container.firstNoEmptyItem(); // 首个非空槽（手封装线性扫描）
       if (slot === undefined) continue;
+      const stack = container.getItem(slot);
+      // 仓库级黑名单：这些物品**永不进入本仓库**（也不索引路由）——遇必阻塞，直接终结本轮
+      if (stack !== undefined && rt.warehouse.settings.blacklist.includes(stack.itemId)) {
+        this.blockInput(rt, container, slot);
+        return;
+      }
       const routed = this.router.routeFrom(container, slot, rt.warehouse, index);
       if (routed === undefined) {
-        // 输入阻塞：仅在"进入阻塞态"时触发一次（防每 tick 刷事件），通知层再防抖提醒
-        if (!rt.blockedInputs.has(container.id)) {
-          rt.blockedInputs.add(container.id);
-          const stack = container.getItem(slot);
-          this.bus.inputBlocked.trigger({
-            type: "input-blocked",
-            warehouseId: rt.warehouse.id,
-            containerId: container.id,
-            itemId: stack?.itemId ?? "",
-            amount: stack?.amount ?? 0,
-          });
-        }
+        this.blockInput(rt, container, slot);
       } else {
         rt.blockedInputs.delete(container.id); // 疏通 → 解除阻塞态（下次再堵时重新触发）
       }
       return; // 无论成败，本轮到此为止；失败即阻塞该输入，不处理低优先输入
     }
+  }
+
+  /** 输入阻塞落点：仅在"进入阻塞态"时触发一次（防每 tick 刷事件），通知层再防抖提醒 */
+  private blockInput(rt: Runtime, container: import("../model/Container").Container, slot: number): void {
+    if (rt.blockedInputs.has(container.id)) return;
+    rt.blockedInputs.add(container.id);
+    const stack = container.getItem(slot);
+    this.bus.inputBlocked.trigger({
+      type: "input-blocked",
+      warehouseId: rt.warehouse.id,
+      containerId: container.id,
+      itemId: stack?.itemId ?? "",
+      amount: stack?.amount ?? 0,
+    });
   }
 }
 

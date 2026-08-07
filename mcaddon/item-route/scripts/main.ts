@@ -18,7 +18,7 @@ import { world, system } from "@minecraft/server";
 // ── core ──
 import { EventBus } from "./core/events/DomainEvents";
 import { Router } from "./core/routing/Router";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "./core/routing/RouteStrategy";
+import { SingleItemStrategy, MultiItemStrategy, FamilyStrategy, MiscStrategy } from "./core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "./core/routing/CandidateSorter";
 import { Scheduler } from "./core/scheduling/Scheduler";
 import { StatsService } from "./core/stats/StatsService";
@@ -69,7 +69,7 @@ const intervals = new McIntervalScheduler();
 // Phase 2: 有状态业务逻辑
 const bus = new EventBus();
 const router = new Router(
-  [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+  [new SingleItemStrategy(), new MultiItemStrategy(), new FamilyStrategy(), new MiscStrategy()],
   new DefaultCandidateSorter(),
   bus
 );

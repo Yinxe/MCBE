@@ -20,6 +20,7 @@ import type { Container } from "../../core/model/Container";
 import { Organizer } from "../../core/organizing/Organizer";
 import { MoveJournal } from "../../core/routing/Move";
 import { formatOrganizeResult } from "./OrganizeFormatter";
+import { showItemListEditor } from "./ItemListEditor";
 import * as uiColor from "./uiColor";
 
 /** 容器角色下拉（漏斗强制 input，其余可选；v1 语义带说明） */
@@ -138,6 +139,23 @@ export async function showContainerConfigMenu(
     tooltip: "关闭后该容器不再触发容量预警",
   });
 
+  // 同族收纳：仅多物容器有意义（按内容派生：装某族任一 → 收全族）
+  if (container.role === "multi") {
+    form.toggle("familyEnabled", `${uiColor.form.accent}同族收纳（装某族任一 → 收全族）`, {
+      defaultValue: container.familyEnabled,
+      tooltip: "开启后按内容派生成族：装入白羊毛→也能收橙/红/黑…全羊毛。仅多物容器生效",
+    });
+  }
+
+  // 容器级黑白名单编辑入口（漏斗/单物/多物/其他 皆支持）
+  form
+    .toggle("editWhitelist", `${uiColor.form.success}编辑白名单（${container.whitelist.length}）`, {
+      tooltip: "白名单 = 允许（声明式）：名单内物品即使容器没装也能进（预分配）。空 = 不限制",
+    })
+    .toggle("editBlacklist", `${uiColor.form.warn}编辑黑名单（${container.blacklist.length}）`, {
+      tooltip: "黑名单内物品永不进入此容器",
+    });
+
   const values = await form.show(player);
   if (!values) return;
 
@@ -149,14 +167,52 @@ export async function showContainerConfigMenu(
     return;
   }
 
-  // 提交角色/启用/预警/优先级变更
+  // 黑白名单编辑（单容器最小单位：应用后重建索引 + 触发注册表持久化）
+  if (values.editWhitelist === true) {
+    await showItemListEditor(player, deps, {
+      title: "容器白名单",
+      hint: "白名单内物品即使容器未装也能进（预分配）；空 = 不限",
+      getItems: () => container.whitelist,
+      setItems: (next) => {
+        container.whitelist = next;
+        deps.resolveIndex(warehouse.id)?.onContainerChanged(container);
+        deps.bus.containerRegistryChanged.trigger({
+          type: "container-registry-changed",
+          warehouseId: warehouse.id,
+          containerId: container.id,
+        });
+      },
+    });
+    return;
+  }
+  if (values.editBlacklist === true) {
+    await showItemListEditor(player, deps, {
+      title: "容器黑名单",
+      hint: "黑名单内物品永不进入此容器",
+      getItems: () => container.blacklist,
+      setItems: (next) => {
+        container.blacklist = next;
+        deps.resolveIndex(warehouse.id)?.onContainerChanged(container);
+        deps.bus.containerRegistryChanged.trigger({
+          type: "container-registry-changed",
+          warehouseId: warehouse.id,
+          containerId: container.id,
+        });
+      },
+    });
+    return;
+  }
+
+  // 提交角色/启用/预警/优先级/同族变更
   const newRole = forced ? container.role : (ROLE_OPTIONS[values.role as number] ?? container.role);
   const newPriority = values.priority as number;
+  const newFamilyEnabled = container.role === "multi" ? values.familyEnabled === true : container.familyEnabled;
   const changed =
     newRole !== container.role ||
     values.enabled !== container.enabled ||
     values.warnThis !== container.warningEnabled ||
-    newPriority !== container.priority;
+    newPriority !== container.priority ||
+    newFamilyEnabled !== container.familyEnabled;
   if (!changed) {
     player.sendMessage(`${uiColor.chat.muted}容器设置未变化`);
     return;
@@ -165,8 +221,9 @@ export async function showContainerConfigMenu(
   container.enabled = values.enabled as boolean;
   container.warningEnabled = values.warnThis === true;
   container.priority = newPriority;
+  if (container.role === "multi") container.familyEnabled = newFamilyEnabled;
   refreshInputMembership(warehouse, container); // 角色/启用变更 → 刷新 inputs 成员资格
-  deps.resolveIndex(warehouse.id)?.onContainerChanged(container); // 该仓自己的索引
+  deps.resolveIndex(warehouse.id)?.onContainerChanged(container); // 该仓自己的索引（含族桶重算）
   deps.stats.invalidate(container.id);
   // 持久化（注册表 + 索引条目）由中央订阅订阅 containerRegistryChanged 统一处理（单容器最小单位）
   deps.bus.containerRegistryChanged.trigger({

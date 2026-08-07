@@ -8,7 +8,7 @@
 //     支撑"每仓库独立索引、激活加载/空闲卸载"的隔离（见 Scheduler 的 processOnce）。
 //   · 全部候选失败返回 undefined，物品留在源 —— 单槽原子性，不产生半成品。
 import { transfer } from "./Move";
-import type { CandidateContainer, RouteStrategy } from "./RouteStrategy";
+import { containerAcceptsItem, type CandidateContainer, type RouteStrategy } from "./RouteStrategy";
 import type { CandidateSorter } from "./CandidateSorter";
 import type { Container } from "../model/Container";
 import type { Warehouse } from "../model/Warehouse";
@@ -22,9 +22,11 @@ export const SELF_HEAL_COOLDOWN_MS = 5000;
 /** 索引能力接口（结构类型，Router 不依赖 index 模块） */
 export interface IndexGateway {
   lookup(typeId: ItemId): { single: ContainerId[]; multi: ContainerId[] };
+  /** 同族候选：familyId → 启族多物容器 ID[]（内容派生的族桶） */
+  lookupFamily(familyId: string): ContainerId[];
   /** 候选漂移时按容器真实内容重建索引条目（各策略自持校验后调用） */
   reconcile(container: Container): void;
-  onItemMoved(from: ContainerId, to: ContainerId, itemId: ItemId): void;
+  onItemMoved(from: Container, to: Container, itemId: ItemId): void;
   /** 索引 miss 时全仓自愈：扫描存储容器找 hasItem 并重建条目（Router 在无候选时触发） */
   selfHeal(item: ItemStack, containers: Iterable<Container>): void;
 }
@@ -108,6 +110,7 @@ export class Router {
         }
         return index.lookup(typeId);
       },
+      lookupFamily: (familyId: string) => index.lookupFamily(familyId),
       reconcile: (c: Container) => index.reconcile(c),
     };
     const ordered = [...this.strategies].sort((a, b) => a.priority - b.priority);
@@ -120,10 +123,12 @@ export class Router {
         for (const candidate of sorted) {
           const target = candidate.container;
           if (!target.enabled) continue;
+          // 容器级黑白名单通用准入：黑名单命中 / 白名单非空且不含 → 该容器永远不收此物品
+          if (!containerAcceptsItem(target, itemId)) continue;
           const remaining = transfer({ container: input, slot }, target);
           if (remaining !== undefined && remaining.amount === originalAmount) continue; // 未移动
           const moved = originalAmount - (remaining?.amount ?? 0);
-          index.onItemMoved(input.id, target.id, stack.itemId);
+          index.onItemMoved(input, target, stack.itemId);
           this.bus.itemRouted.trigger({
             type: "item-routed",
             warehouseId: warehouse.id,

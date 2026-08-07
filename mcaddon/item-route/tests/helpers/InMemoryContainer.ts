@@ -11,6 +11,12 @@ export class InMemoryContainer implements Container {
   enabled = true;
   warningEnabled = true;
   priority = 10;
+  /** 同族开关：多物容器开启后，装有某族任一成员即可收纳该族全部物品 */
+  familyEnabled = false;
+  /** 容器级白名单：非空时仅收纳列表内物品 */
+  whitelist: string[] = [];
+  /** 容器级黑名单：永不收纳这些物品 */
+  blacklist: string[] = [];
   readonly capacity: number;
   readonly occupiedLocations: Location[];
   private slots: (ItemStack | undefined)[];

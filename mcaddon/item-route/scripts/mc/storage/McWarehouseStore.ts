@@ -33,6 +33,12 @@ export interface ContainerEntry {
   priority: number;
   /** 该容器容量预警开关（容器级；关闭后该容器不预警） */
   warningEnabled: boolean;
+  /** 同族开关（多物容器；旧档缺字段默认关） */
+  familyEnabled?: boolean;
+  /** 容器级白名单 typeId[]（旧档缺字段默认空 = 不限制） */
+  whitelist?: string[];
+  /** 容器级黑名单 typeId[]（旧档缺字段默认空 = 不限制） */
+  blacklist?: string[];
 }
 
 /**

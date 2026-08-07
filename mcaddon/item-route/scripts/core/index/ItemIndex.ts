@@ -14,6 +14,7 @@
 // 来源侧条目留待惰性校验清理）——避免每路由一次全量重算。
 import type { Container, ContainerRole } from "../model/Container";
 import { deriveBinding } from "../model/DeriveBinding";
+import { familyOf } from "../data/item-families";
 import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
 
@@ -24,6 +25,8 @@ export interface IndexSnapshot {
   byItem: Record<ItemId, { single: ContainerId[]; multi: ContainerId[] }>;
   containerItems: Record<ContainerId, ItemId[]>;
   singleBindings: Record<ContainerId, ItemId>;
+  /** 派生族索引（familyId → 启族多物容器 ID[]），随全量快照卷走（serialize/restore） */
+  familyContainers: Record<string, ContainerId[]>;
 }
 
 /**
@@ -36,12 +39,21 @@ export class ItemIndex {
   private byItem = new Map<ItemId, { single: Set<ContainerId>; multi: Set<ContainerId> }>();
   private containerItems = new Map<ContainerId, Set<ItemId>>();
   private singleBindings = new Map<ContainerId, ItemId>();
+  /** 族 → 启族多物容器 ID（**内容派生的同族索引**：容器实含某族任一成员即入该族桶） */
+  private familyContainers = new Map<string, Set<ContainerId>>();
+  /** 容器 → 其覆盖的族集合（O(1) 幂等移除族桶的反向镜像） */
+  private containerFamilies = new Map<ContainerId, Set<string>>();
 
   /** O(1) 查询：typeId → 候选容器 ID（按角色分组） */
   lookup(typeId: ItemId): { single: ContainerId[]; multi: ContainerId[] } {
     const entry = this.byItem.get(typeId);
     if (!entry) return { single: [], multi: [] };
     return { single: [...entry.single], multi: [...entry.multi] };
+  }
+
+  /** O(1) 族查询：familyId → 启族多物容器 ID[]（同族路由候选，复用多物索引派生） */
+  lookupFamily(familyId: string): ContainerId[] {
+    return [...(this.familyContainers.get(familyId) ?? [])];
   }
 
   getBinding(containerId: ContainerId): ItemId | undefined {
@@ -72,11 +84,18 @@ export class ItemIndex {
 
   /**
    * 轻量更新：路由自身移动物品后只更新目标侧（来源侧留待惰性校验清理）。
+   * 额外维护**族桶**：物品路由进启族多物容器时新增族（from 恒为 input，非族桶候选，无需清理）。
+   * 需要目标容器对象以判 familyEnabled/role → 签名传 Container 而非仅 id。
    */
-  onItemMoved(from: ContainerId, to: ContainerId, itemId: ItemId): void {
-    this.containerItems.get(from)?.delete(itemId);
-    const toItems = this.containerItems.get(to);
+  onItemMoved(from: Container, to: Container, itemId: ItemId): void {
+    this.containerItems.get(from.id)?.delete(itemId);
+    const toItems = this.containerItems.get(to.id);
     if (toItems) toItems.add(itemId);
+    // 同族：item 路由进启族多物容器 → 若引入新族则增补族桶（幂等），供后续族内其他成员感知
+    if (to.role === "multi" && to.familyEnabled) {
+      const fam = familyOf(itemId);
+      if (fam !== undefined) this.addContainerToFamily(to.id, fam);
+    }
   }
 
   /**
@@ -115,7 +134,11 @@ export class ItemIndex {
     for (const [id, itemId] of this.singleBindings) {
       singleBindings[id] = itemId;
     }
-    return { version: INDEX_VERSION, byItem, containerItems, singleBindings };
+    const familyContainers: IndexSnapshot["familyContainers"] = {};
+    for (const [fam, set] of this.familyContainers) {
+      familyContainers[fam] = [...set];
+    }
+    return { version: INDEX_VERSION, byItem, containerItems, singleBindings, familyContainers };
   }
 
   /** 恢复快照；版本不匹配返回 false（调用方应重建） */
@@ -124,6 +147,8 @@ export class ItemIndex {
     this.byItem = new Map();
     this.containerItems = new Map();
     this.singleBindings = new Map();
+    this.familyContainers = new Map();
+    this.containerFamilies = new Map();
     for (const [itemId, entry] of Object.entries(snapshot.byItem)) {
       this.byItem.set(itemId, {
         single: new Set(entry.single),
@@ -135,6 +160,9 @@ export class ItemIndex {
     }
     for (const [id, itemId] of Object.entries(snapshot.singleBindings)) {
       this.singleBindings.set(id, itemId);
+    }
+    for (const [fam, ids] of Object.entries(snapshot.familyContainers)) {
+      this.familyContainers.set(fam, new Set(ids));
     }
     return true;
   }
@@ -163,6 +191,8 @@ export class ItemIndex {
     this.byItem = new Map();
     this.containerItems = new Map();
     this.singleBindings = new Map();
+    this.familyContainers = new Map();
+    this.containerFamilies = new Map();
     for (const container of containers) {
       const entry = entries.get(container.id);
       if (entry === undefined) return false;
@@ -179,6 +209,13 @@ export class ItemIndex {
       this.ensureEntry(binding).single.add(container.id);
     } else if (container.role === "multi") {
       for (const itemId of entry.items) this.ensureEntry(itemId).multi.add(container.id);
+      // 同族派生：启族多物容器按条目物品重算族桶（familyContainers 纯派生，不经每容器条目）
+      if (container.familyEnabled) {
+        for (const itemId of entry.items) {
+          const fam = familyOf(itemId);
+          if (fam !== undefined) this.addContainerToFamily(container.id, fam);
+        }
+      }
     }
   }
 
@@ -213,7 +250,36 @@ export class ItemIndex {
       for (const itemId of items) {
         this.ensureEntry(itemId).multi.add(container.id);
       }
+      // 同族索引：启族多物容器按**实际内容**派生所属族（存白羊毛 → 入羊毛族桶 → 可收全族羊毛）。
+      // 与多物索引同源（containerItems），是"复用多物索引派生族桶"的落地：先建好多物条目，
+      // 再由 FAMILY_BY_ITEM 投影出族桶，无需另查全仓。
+      this.rebuildContainerFamilies(container, items);
     }
+  }
+
+  /** 启族多物容器：按内容物品派生族桶（removeContainerEntries 已清旧 → 此处全量重建幂等） */
+  private rebuildContainerFamilies(container: Container, items: Set<ItemId>): void {
+    if (!container.familyEnabled) return;
+    for (const itemId of items) {
+      const fam = familyOf(itemId);
+      if (fam !== undefined) this.addContainerToFamily(container.id, fam);
+    }
+  }
+
+  /** 把容器放进某族桶 + 记入 containerFamilies 反向镜像（幂等，Set 去重） */
+  private addContainerToFamily(containerId: ContainerId, fam: string): void {
+    let bucket = this.familyContainers.get(fam);
+    if (!bucket) {
+      bucket = new Set();
+      this.familyContainers.set(fam, bucket);
+    }
+    bucket.add(containerId);
+    let cfam = this.containerFamilies.get(containerId);
+    if (!cfam) {
+      cfam = new Set();
+      this.containerFamilies.set(containerId, cfam);
+    }
+    cfam.add(fam);
   }
 
   private removeContainerEntries(containerId: ContainerId): void {
@@ -229,5 +295,11 @@ export class ItemIndex {
       }
     }
     this.containerItems.delete(containerId);
+    // 清该容器全部族桶成员资格（containerFamilies 镜像 O(1)，避免逐族全扫）
+    const fams = this.containerFamilies.get(containerId);
+    if (fams) {
+      for (const fam of fams) this.familyContainers.get(fam)?.delete(containerId);
+      this.containerFamilies.delete(containerId);
+    }
   }
 }

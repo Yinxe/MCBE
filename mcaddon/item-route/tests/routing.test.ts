@@ -27,6 +27,8 @@ function makeCtx(
       warningEnabled: true,
       defaultContainerRole: "single" as const,
       defaultContainerEnabled: true,
+      enabledFamilies: [],
+      blacklist: [],
     },
     containers: new Map(containers.map((c) => [c.id, c])),
     inputs: new Map(),
@@ -35,6 +37,7 @@ function makeCtx(
     item: new SimpleItemStack("minecraft:stone", 10, 64),
     warehouse,
     lookupIndex: lookup,
+    lookupFamily: () => [],
     reconcile: () => {},
   };
 }
@@ -138,6 +141,7 @@ import { EventBus } from "../scripts/core/events/DomainEvents";
 function makeIndexStub() {
   const state = {
     byItem: new Map<string, { single: string[]; multi: string[] }>(),
+    family: new Map<string, string[]>(),
     moved: [] as string[],
     reconciled: [] as string[],
     selfHealed: [] as string[],
@@ -148,11 +152,12 @@ function makeIndexStub() {
       state.lookups++;
       return state.byItem.get(typeId) ?? { single: [], multi: [] };
     },
+    lookupFamily: (familyId: string) => state.family.get(familyId) ?? [],
     reconcile: (c: unknown) => {
       state.reconciled.push((c as { id: string }).id);
     },
-    onItemMoved: (from: string, to: string, itemId: string) => {
-      state.moved.push(`${from}->${to}:${itemId}`);
+    onItemMoved: (from: unknown, to: unknown, itemId: string) => {
+      state.moved.push(`${(from as { id: string }).id}->${(to as { id: string }).id}:${itemId}`);
     },
     // 自愈：扫描存储容器找 hasItem → 记录 + 把该容器加为候选（单物→single / 多物→multi）
     selfHeal: (item: { itemId: string }, containers: Iterable<InMemoryContainer>) => {
@@ -193,6 +198,8 @@ function makeWarehouse() {
       warningEnabled: true,
       defaultContainerRole: "single" as const,
       defaultContainerEnabled: true,
+      enabledFamilies: [],
+      blacklist: [],
     },
     containers,
     inputs: new Map<string, InMemoryContainer>(),

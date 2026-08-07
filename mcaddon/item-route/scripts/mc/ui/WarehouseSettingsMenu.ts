@@ -16,6 +16,8 @@ import { scanWarehouseArea } from "../commands/scan";
 import { showContainerRoleMenu } from "./ContainerRoleMenu";
 import { showMemberMenu } from "./MemberMenu";
 import { showStatsUI } from "./StatsUI";
+import { showFamilyConfigMenu } from "./FamilyConfigMenu";
+import { showItemListEditor } from "./ItemListEditor";
 import { formatCount } from "../../core/utils/formatCount";
 import { dimensionShort } from "../../core/model/ContainerId";
 import { Table, Cell } from "./Table";
@@ -164,6 +166,12 @@ export async function showWarehouseSettingsMenu(
       .toggle("stats", `${uiColor.form.accent}统计`, {
         tooltip: "查看仓库物品统计（物品名/数量/所在容器，按数量排序）",
       })
+      .toggle("familyConfig", `${uiColor.form.accent}同族配置（一族一开关，族内同收）`, {
+        tooltip: "分页列出全部物品族：逐族启用/禁用 + 查看族内物品清单",
+      })
+      .toggle("blacklist", `${uiColor.form.warn}仓库黑名单（永不入库）`, {
+        tooltip: "名单内物品输入必阻塞，永不进入本仓库",
+      })
       .toggle("resize", `${uiColor.form.accent}调整仓库区域（提交后需选新区域）`, {
         tooltip: "重新选区：容器/索引/统计将失效并重扫",
       })
@@ -176,9 +184,17 @@ export async function showWarehouseSettingsMenu(
   if (!vals) return;
 
   // 操作互斥：一次只允许选一个动作开关
-  const ops = ["rescan", "repair", "containerRoles", "memberManage", "stats", "resize", "delete"].filter(
-    (k) => vals[k] === true
-  );
+  const ops = [
+    "rescan",
+    "repair",
+    "containerRoles",
+    "familyConfig",
+    "blacklist",
+    "memberManage",
+    "stats",
+    "resize",
+    "delete",
+  ].filter((k) => vals[k] === true);
   if (ops.length > 1) {
     player.sendMessage(`${uiColor.chat.error}操作项只能同时开启一个，请重新选择`);
     return;
@@ -227,6 +243,19 @@ export async function showWarehouseSettingsMenu(
   }
   if (chosen === "containerRoles") {
     await showContainerRoleMenu(player, deps, warehouse);
+    return;
+  }
+  if (chosen === "familyConfig" && isOwner) {
+    await showFamilyConfigMenu(player, deps, warehouse);
+    return;
+  }
+  if (chosen === "blacklist" && isOwner) {
+    await showItemListEditor(player, deps, {
+      title: "仓库黑名单",
+      hint: "清单内物品输入必阻塞，永不进入本仓库",
+      getItems: () => warehouse.settings.blacklist,
+      setItems: (next) => deps.warehouses.updateSettings(warehouse, { blacklist: next }),
+    });
     return;
   }
   if (chosen === "memberManage" && isOwner) {

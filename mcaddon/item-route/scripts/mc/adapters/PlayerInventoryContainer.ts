@@ -26,6 +26,9 @@ export class PlayerInventoryContainer implements Container {
   enabled = true;
   warningEnabled = true;
   priority = 0;
+  familyEnabled = false;
+  whitelist: string[] = [];
+  blacklist: string[] = [];
   readonly capacity: number;
   readonly occupiedLocations: Location[] = [];
 

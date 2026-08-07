@@ -38,6 +38,13 @@ export interface Container {
   warningEnabled: boolean;
   /** 路由排序优先级，数字越小越先（默认 10） */
   priority: number;
+  /** 同族开关：多物容器开启后，**只要装有某族的任一成员**，即可收纳该族全部物品（族路由）。
+   * 族成员关系由容器**实际内容**派生（存羊毛→即羊毛族容器），非手动绑定。 */
+  familyEnabled: boolean;
+  /** 容器级白名单 typeId[]：非空时仅收纳列表内物品；空 = 不限制（多物/族路由准入门槛） */
+  whitelist: string[];
+  /** 容器级黑名单 typeId[]：永不收纳这些物品（所有层级准入均拒绝）；空 = 不限制 */
+  blacklist: string[];
   readonly capacity: number;
   /** O(1) 空槽数（adapter 委托 MC 属性，零遍历） */
   readonly emptySlotsCount: number;

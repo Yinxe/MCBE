@@ -73,7 +73,7 @@ test("ItemIndex: onItemMoved 轻量更新目标侧", () => {
   const to = stoneMulti();
   index.onContainerAdded(from);
   index.onContainerAdded(to);
-  index.onItemMoved(from.id, to.id, "minecraft:stone");
+  index.onItemMoved(from, to, "minecraft:stone");
   assert.deepEqual(index.lookup("minecraft:stone").multi, ["m1"]);
 });
 
@@ -93,7 +93,13 @@ test("ItemIndex: serialize/restore 往返一致", () => {
 test("ItemIndex: restore 版本不匹配返回 false", () => {
   const index = new ItemIndex();
   assert.equal(
-    index.restore({ version: INDEX_VERSION + 1, byItem: {}, containerItems: {}, singleBindings: {} }),
+    index.restore({
+      version: INDEX_VERSION + 1,
+      byItem: {},
+      containerItems: {},
+      singleBindings: {},
+      familyContainers: {},
+    }),
     false
   );
 });

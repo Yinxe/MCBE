@@ -35,6 +35,9 @@ export function ensureContainersLoaded(warehouse: Warehouse, deps: WarehouseLoad
       container.enabled = entry.enabled;
       container.priority = entry.priority;
       container.warningEnabled = entry.warningEnabled ?? true; // 旧档缺字段 → 默认开
+      container.familyEnabled = entry.familyEnabled ?? false; // 旧档缺字段 → 默认关
+      container.whitelist = entry.whitelist ?? [];
+      container.blacklist = entry.blacklist ?? [];
       registerContainer(warehouse, container);
     } catch {
       // 区块未加载等：跳过
