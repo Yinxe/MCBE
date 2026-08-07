@@ -17,6 +17,7 @@ import type { Scheduler } from "../../core/scheduling/Scheduler";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
 import { findContainerAt, findWarehouseAt } from "../../core/model/Area";
+import { isSupportedContainerType } from "../../core/model/ContainerTypes";
 import { locationKey, type ContainerId, type Location, type WarehouseId } from "../../core/model/types";
 import { containerIdOf, primaryLocationOf, containerIdPointsTo } from "../../core/model/ContainerId";
 import { registerContainer, unregisterContainer, rebaseContainer } from "../../core/model/ContainerRegistry";
@@ -57,6 +58,9 @@ export class McEventBridge {
     world.afterEvents.playerInteractWithBlock.subscribe((e) => {
       try {
         if (!e.isFirstEvent) return;
+        // ⚠️ 提前窄化：本事件对全维度所有方块触发，只关心**受支持容器**——非容器方块
+        //    （绝大多数交互：草/土/门/……）不查仓库/容器，直接跳过（省 findWarehouseAt 遍历）
+        if (!isSupportedContainerType(e.block.typeId)) return;
         const hit = this.locate(e.block);
         if (!hit) return;
         this.deps.resolveIndex(hit.warehouse.id)?.reconcile(hit.container);
@@ -79,6 +83,8 @@ export class McEventBridge {
     // 避免已注册单箱与新合并双箱共存/撞 id。
     world.afterEvents.playerPlaceBlock.subscribe((e) => {
       try {
+        // ⚠️ 提前窄化：只关心放置**受支持容器**——非容器方块（绝大多数放置）不进 findWarehouseAt
+        if (!isSupportedContainerType(e.block.typeId)) return;
         const dim = e.block.dimension.id;
         const loc = e.block.location;
         const warehouse = findWarehouseAt(this.deps.warehouses(), dim, { x: loc.x, y: loc.y, z: loc.z });
@@ -148,6 +154,8 @@ export class McEventBridge {
     // 破坏/爆炸移除容器方块 → 注销（双箱半拆：occupiedLocations 过滤 + 主坐标重定）
     const unregister = (block: Block): void => {
       try {
+        // ⚠️ 提前窄化：破坏/爆炸对全维度所有方块触发，只关心**受支持容器**——非容器方块不查仓库
+        if (!isSupportedContainerType(block.typeId)) return;
         const hit = this.locate(block);
         if (!hit) return;
         const { warehouse, container } = hit;
