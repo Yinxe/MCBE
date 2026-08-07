@@ -147,7 +147,9 @@ export class StatsService {
     let totalSlots = 0;
     let usedSlots = 0;
     let totalItems = 0;
+    // ⚠️ input 容器是"在途源"（物品短暂驻留即被路由走），不是存储 → 不做统计数据（多余）
     for (const container of warehouse.containers.values()) {
+      if (container.role === "input") continue;
       containerCount++;
       const cs = this.getContainerStats(warehouse, container);
       totalSlots += cs.totalSlots;
@@ -189,6 +191,7 @@ export class StatsService {
   /** 写穿透：查看汇总时把当前缓存逐容器落盘（每容器一条键）；路由热路径增量仅驻内存 */
   private persistAll(warehouse: Warehouse): void {
     for (const container of warehouse.containers.values()) {
+      if (container.role === "input") continue; // 输入容器不做统计/不落盘
       const stat = this.cache.get(container.id);
       if (stat !== undefined) this.store.saveContainer(container.id, stat);
     }

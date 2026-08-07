@@ -133,7 +133,7 @@ test("StatsService: 容器级预警开关关闭 → 该容器不预警（warning
   assert.deepEqual(svc.evaluateWarnings(warehouse), []);
 });
 
-test("StatsService: 仓库统计汇总", () => {
+test("StatsService: 仓库统计汇总（排除 input 在途源）", () => {
   const { warehouse, containers } = makeWarehouse();
   const input = new InMemoryContainer("in", "input", 3);
   input.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
@@ -143,14 +143,17 @@ test("StatsService: 仓库统计汇总", () => {
   containers.set("m1", multi);
   const svc = new StatsService(new InMemoryStatsStore(), new EventBus());
   const stats = svc.getWarehouseStats(warehouse);
-  assert.equal(stats.containerCount, 2);
-  assert.equal(stats.totalSlots, 7);
-  assert.equal(stats.usedSlots, 2);
-  assert.equal(stats.totalItems, 15);
+  // input 容器是"在途源"，不做统计 → 不计入汇总
+  assert.equal(stats.containerCount, 1); // 仅 multi
+  assert.equal(stats.totalSlots, 4);
+  assert.equal(stats.usedSlots, 1);
+  assert.equal(stats.totalItems, 10);
   assert.equal(stats.uniqueTypes, 1);
-  assert.equal(stats.byType["minecraft:stone"], 15);
-  assert.equal(stats.byItem["minecraft:stone"]!.stacks, 2);
-  assert.deepEqual(stats.byItem["minecraft:stone"]!.containerIds.sort(), ["in", "m1"]);
+  assert.equal(stats.byType["minecraft:stone"], 10);
+  assert.equal(stats.byItem["minecraft:stone"]!.stacks, 1);
+  assert.deepEqual(stats.byItem["minecraft:stone"]!.containerIds.sort(), ["m1"]);
+  // 分角色统计不含 input 角色
+  assert.equal(stats.byRole["input"], undefined);
 });
 
 test("StatsService: invalidate 清缓存", () => {

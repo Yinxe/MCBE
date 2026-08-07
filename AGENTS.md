@@ -107,41 +107,14 @@ bump version (+0.01) → build → pack → commit → tag → push
 
 ## item-route 参考架构（新 TS addon 可借鉴）
 
-`mcaddon/item-route` 是六边形/分层架构的参考实现，业务逻辑与 MC 运行时解耦：
+`mcaddon/item-route` 是六边形/分层架构的参考实现：`core/`（纯领域，**零 @minecraft 依赖、可 node 单测**）与 `mc/`（适配层，只做持久化/视觉/通知副作用）通过 `EventBus` 领域事件解耦。完整架构树、`ir:*` 命令清单、权限矩阵、持久化键约定、交互/测试约定见 **`mcaddon/item-route/AGENTS.md`**（item-route 自有）。
 
-```
-scripts/
-├── main.ts          # 唯一 bundle 入口 + 4 Phase DI 组合根（只装配，不含业务）
-├── core/            # 纯领域逻辑（零 @minecraft 依赖，可 node 单测）
-│   ├── model/       # Container/Warehouse/ItemStack/ContainerId/Area/ContainerScan
-│   ├── routing/     # Router + RouteStrategy + CandidateSorter + Move（原子移动）
-│   ├── index/       # ItemIndex（O(1) 物品索引 + 三层兜底惰性校验）
-│   ├── scheduling/  # Scheduler（生命周期状态机 + 每仓索引隔离）
-│   ├── stats/       # StatsService（统计 + 两级容量预警）
-│   ├── organizing/  # Organizer（混乱度模型）
-│   ├── services/    # WarehouseService/RouteService/MemberService/OrganizeService
-│   ├── events/      # EventBus + 领域事件（core 触发，mc 订阅副作用）
-│   └── storage/     # 仓储接口 + InMemory 测试替身
-└── mc/              # MC 适配层（只做副作用/IO）
-    ├── adapters/    # 容器/物品/邻近/间隔调度/事件桥接/SafeProbe/背包容器
-    ├── bootstrap/   # 持久边界/背包整理/效果注册（业务抽离）
-    ├── commands/    # ir:* 命令（权限经 MemberService 矩阵）
-    ├── effects/     # 视觉/播报/HUD/边界/通知
-    ├── events/      # 中央订阅注册（Subscriptions.ts 单点收编领域事件）
-    ├── interaction/ # 信物交互 + 选区会话
-    ├── persistence/ # 索引生命周期 + 容器逐容器持久化
-    ├── storage/     # DP 直存实现（每容器一条键）
-    └── ui/          # ActionForm/ModalForm 菜单（中文）
-```
-
-**关键设计约定（新代码遵循）：**
-- **core 无副作用**：core 只发领域事件（EventBus），mc 层订阅做持久化/视觉/通知副作用。事件负载只用可序列化 string/number。
-- **按需加载 + 统一生命周期**：启动只载仓库 meta；容器在激活/菜单/命令访问时 `ensureContainersLoaded`，闲置卸载。配置注册表/统计/索引生命周期一致。
-- **持久化最小单位**：容器级数据每容器一条 DP 键（`ir2:c:{cid}` / `ir2:idx:{cid}` / `ir2:cst:{cid}`），事件驱动写穿，无定时 flush；meta 单键（`ir2:wh:{id}:meta`）+ cids 索引。
-- **维度短名**：ID 内维度用短名（`minecraft:overworld` → `overworld`），容器短名 `(x,y,z)@overworld`。
-- **不吞/不覆盖/不刷物**：概念 ItemStack 是缩减视图，写回用 `McItemAdapter` 携带源 mc.ItemStack（`clone()` 保留 NBT）；堆叠判定委托 `mc.addItem` 权威。
-- **区块安全**：所有方块/容器访问 try-catch；`beforeEvents` 回调受限上下文内不触世界操作（延迟到 `system.run`）。
-
+关键设计约定（新 TS addon 建议遵循）：
+- **core 无副作用**：core 只发领域事件，mc 层订阅做副作用；事件负载只用可序列化 string/number。
+- **按需加载 + 统一生命周期**：启动只载 meta；容器在激活/菜单/命令访问时按需加载，闲置卸载。
+- **持久化最小单位**：容器级数据每容器一条 DP 键（`ir2:c:{cid}` / `ir2:idx:{cid}` / `ir2:cst:{cid}`），事件驱动写穿、无定时 flush。
+- **不吞/不覆盖/不刷物**：概念 ItemStack 是缩减视图，写回经 `McItemAdapter` 携带源 mc.ItemStack 保留 NBT；堆叠判定委托 `mc.addItem` 权威。
+- **区块安全**：方块/容器访问 try-catch；`beforeEvents` 回调受限上下文内不触世界操作（延迟到 `system.run`）。
 ## 调试技巧
 
 - 日志通过 `console.warn` 输出，格式 `[前缀] 消息`
