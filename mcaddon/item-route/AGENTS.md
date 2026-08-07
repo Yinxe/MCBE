@@ -81,7 +81,7 @@ pnpm run test:core   # tsc -p tsconfig.test.json && node --test ".test-build/tes
 - 默认信物 `minecraft:wooden_hoe`（管理员可在 模组配置 换信物，下拉显示中文名）。
 - 手持信物右键（`beforeEvents.playerInteractWithBlock`）：
   - 点击容器 → 直通该容器配置模态；潜行点容器 → 单容器就地整理。
-  - 点击非容器 → 选区模式（建仓/调区会话）/ 仓库菜单模式；潜行点非容器 → 背包整理（主栏 27 格）。
+  - 点击非容器 → 选区模式（建仓/调区会话）/ 仓库菜单模式；潜行点非容器 → 背包整理（2 阶段：优先整理主栏 9-35，归零后再触发转清快捷栏 0-8，两区齐才完全干净）。
   - 不改变物品内容的交互（只点开盒）→ 依次走系统 run 延迟与系统 run（区块未加载则跳过）等。
 - 长按（isFirstEvent=false）→ 潜行长按打开仓库菜单（取玩家位置）。
 

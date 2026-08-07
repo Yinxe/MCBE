@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Organizer } from "../scripts/core/organizing/Organizer";
+import { pickInventoryPhase } from "../scripts/core/organizing/InventoryPhase";
 import { scanContainer } from "../scripts/core/model/ContainerScan";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
 import { SimpleItemStack } from "../scripts/core/model/ItemStack";
@@ -84,4 +85,14 @@ test("Organizer: 单物品但空槽前置 → 混乱度非 0（item 6：空应�
   assert.equal(organizer.chaosScore(trailing), 0);
   // 空容器 → 0
   assert.equal(organizer.chaosScore(new InMemoryContainer("e", "multi", 4)), 0);
+});
+
+test("InventoryPhase: 2 阶段整理决策——主栏优先，归零转快捷栏，两区齐才完全干净", () => {
+  // 主栏乱 → 只整理主栏（快捷栏待下次）
+  assert.deepEqual(pickInventoryPhase(0.3, 0), { region: "main", hotbarPending: false });
+  assert.deepEqual(pickInventoryPhase(0.3, 0.5), { region: "main", hotbarPending: true });
+  // 主栏归 0 → 本次整理快捷栏
+  assert.deepEqual(pickInventoryPhase(0, 0.5), { region: "hotbar" });
+  // 两区都归 0 → 完全整齐
+  assert.deepEqual(pickInventoryPhase(0, 0), { region: "clean" });
 });

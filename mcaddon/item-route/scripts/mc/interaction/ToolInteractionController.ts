@@ -77,11 +77,12 @@ export function registerToolInteraction(deps: CommandDeps): void {
       for (const line of formatOrganizeResult(res, name)) player.sendMessage(line);
     });
   };
-  // 潜行点击非容器 → 背包整理（v1 同款：只整理主栏 27 格，不动快捷栏/盔甲/副手）
+  // 潜行点击非容器 → 背包整理（v1 同款；2 阶段：优先主栏，归零后本次改整理快捷栏）
   const organizePlayerInventory = (player: import("@minecraft/server").Player): void => {
     system.run(() => {
-      const res = deps.organizeInventory(player);
-      for (const line of formatOrganizeResult(res, "背包")) player.sendMessage(line);
+      const { region, result, note } = deps.organizeInventory(player);
+      for (const line of formatOrganizeResult(result, region)) player.sendMessage(line);
+      if (note !== undefined) player.sendMessage(`${chat.muted}${note}`);
     });
   };
 

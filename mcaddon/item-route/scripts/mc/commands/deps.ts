@@ -19,6 +19,15 @@ export interface BoundaryControl {
   setEnabled(warehouse: Warehouse, enabled: boolean): void;
 }
 
+/** 背包整理结果：region 作为 formatOrganizeResult 的容器名；note 为阶段提示（可选） */
+export interface PlayerInventoryResult {
+  /** 本次整理的区间名：背包主栏 / 背包快捷栏 / 背包（两区已整齐） */
+  region: string;
+  result: OrganizeResult;
+  /** 阶段提示（如"快捷栏需再整理一次"）；无则空 */
+  note?: string;
+}
+
 export interface CommandDeps {
   bus: EventBus;
   members: MemberService;
@@ -44,6 +53,6 @@ export interface CommandDeps {
   ensureContainersLoaded: (warehouse: Warehouse) => void;
   /** 持久边界光幕控制（showBoundary 设置启停；装配层注入 guard=附近玩家持信物） */
   boundary: BoundaryControl;
-  /** 背包整理：把玩家主栏（槽 9~35）就地排序合并，返回 OrganizeResult（与容器整理同格式） */
-  organizeInventory: (player: Player) => OrganizeResult;
+  /** 背包整理（2 阶段：优先主栏 9-35，归零后转快捷栏 0-8；返回整理区间与阶段提示） */
+  organizeInventory: (player: Player) => PlayerInventoryResult;
 }
