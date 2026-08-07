@@ -68,28 +68,32 @@ function makeFamBox(id = "mF"): InMemoryContainer {
 }
 
 // ── 准入（Admission）纯函数边界 ─────────────────────────────
-test("admission: 黑名单优先于白名单——同箱白名单含 X 但黑名单也含 X → 拒", () => {
+test("admission: 黑名单优先——白名单是允许非限定，黑名单命中才拒", () => {
   const c = new InMemoryContainer("m1", "multi", 3);
   c.whitelist = ["minecraft:redstone"];
   c.blacklist = ["minecraft:redstone"];
-  assert.equal(containerAcceptsItem(c, "minecraft:redstone"), false); // 黑名单一票否决
+  assert.equal(containerAcceptsItem(c, "minecraft:redstone"), false); // 黑名单一票否决（即使白名单含）
   c.blacklist = [];
-  assert.equal(containerAcceptsItem(c, "minecraft:redstone"), true); // 白名单含
-  assert.equal(containerAcceptsItem(c, "minecraft:stone"), false); // 白名单外拒
+  assert.equal(containerAcceptsItem(c, "minecraft:redstone"), true); // 白名单含 → 允许
+  // 白名单是"允许"非"限定"：未白名单物品也不被白名单拒绝（仅黑名单拒）
+  assert.equal(containerAcceptsItem(c, "minecraft:stone"), true);
 });
 
-// ── 白名单限定（收紧）────────────────────────────────────
-test("白名单限定：多物箱实含 C 但白名单不含 C → C 仍被拒收（白名单收紧 over 索引）", () => {
+// ── 白名单 = 允许（加法，不收紧）────────────────────────────
+test("白名单 = 允许非限定：多物箱白名单 stone 仍收实装 dirt + 预分配 stone", () => {
   const w = makeWorld();
   const box = new InMemoryContainer("m1", "multi", 3);
-  box.whitelist = ["minecraft:stone"]; // 只收 stone
-  box.setItem(0, r("minecraft:dirt", 4)); // 实含 dirt（索引候选），但白名单不含
+  box.whitelist = ["minecraft:stone"]; // 声明允许 stone（即使空槽也能进）
+  box.setItem(0, r("minecraft:dirt", 4)); // 实含 dirt（索引候选）
   w.add(box);
-  const out = new InMemoryContainer("x1", "misc", 3);
-  w.add(out);
-  const res = w.route(r("minecraft:dirt", 9));
-  assert.equal(res?.to, "x1"); // dirt 在白名单外 → 拒 → 落杂项
-  assert.equal(box.getItem(0)?.amount, 4); // box 的 dirt 原样（不多收）
+  // dirt（实装内容）照常收——白名单不收紧实装类型
+  const resDirt = w.route(r("minecraft:dirt", 5));
+  assert.equal(resDirt?.to, "m1");
+  assert.equal(box.getItem(0)?.amount, 9);
+  // stone（白名单声明、空槽）→ 预分配收
+  const resStone = w.route(r("minecraft:stone", 3));
+  assert.equal(resStone?.to, "m1");
+  assert.equal(box.getItem(1)?.itemId, "minecraft:stone");
 });
 
 test("白名单 = 允许式（缺省）不影响未白名单容器：普通多物箱照常收同型", () => {

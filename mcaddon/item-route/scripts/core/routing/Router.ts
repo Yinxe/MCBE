@@ -48,14 +48,22 @@ export interface RouteResult {
 export class Router {
   /** selfHeal 冷却表：`仓库:typeId → 最近一次自愈时刻`（滑动续期，见 selfHealGate） */
   private readonly selfHealCooldown = new Map<string, number>();
+  /** 真实策略（single/multi/family，非兜底），构造时按 priority 排好（避免每路由重排） */
+  private readonly real: RouteStrategy[];
+  /** 兜底策略（misc） */
+  private readonly fallback: RouteStrategy[];
 
   constructor(
-    private readonly strategies: RouteStrategy[],
+    strategies: RouteStrategy[],
     private readonly sorter: CandidateSorter,
     private readonly bus: EventBus,
     /** 时钟注入（默认 Date.now 墙钟；测试用假时钟） */
     private readonly now: () => number = Date.now
-  ) {}
+  ) {
+    const ordered = [...strategies].sort((a, b) => a.priority - b.priority);
+    this.real = ordered.filter((s) => !s.isFallback);
+    this.fallback = ordered.filter((s) => s.isFallback);
+  }
 
   /**
    * selfHeal 冷却门控（滑动续期）。持续命中无效索引（item 进 misc）时压制全仓自愈，
@@ -113,9 +121,8 @@ export class Router {
       lookupFamily: (familyId: string) => index.lookupFamily(familyId),
       reconcile: (c: Container) => index.reconcile(c),
     };
-    const ordered = [...this.strategies].sort((a, b) => a.priority - b.priority);
-    const real = ordered.filter((s) => !s.isFallback); // single / multi（真实路由）
-    const fallback = ordered.filter((s) => s.isFallback); // misc（兜底）
+    const real = this.real;
+    const fallback = this.fallback;
     const attempt = (strategies: RouteStrategy[]): RouteResult | undefined => {
       for (const strategy of strategies) {
         const raw = strategy.findCandidates(ctx);
@@ -123,7 +130,7 @@ export class Router {
         for (const candidate of sorted) {
           const target = candidate.container;
           if (!target.enabled) continue;
-          // 容器级黑白名单通用准入：黑名单命中 / 白名单非空且不含 → 该容器永远不收此物品
+          // 容器级准入：黑名单命中 → 该容器永远不收此物品（覆盖索引/族桶/白名单一切候选）
           if (!containerAcceptsItem(target, itemId)) continue;
           const remaining = transfer({ container: input, slot }, target);
           if (remaining !== undefined && remaining.amount === originalAmount) continue; // 未移动
