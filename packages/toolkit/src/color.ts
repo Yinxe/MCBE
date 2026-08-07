@@ -10,7 +10,49 @@
 //   const warn = string("警告", color.yellow, color.bold);
 //   const err  = string(`错误: ${msg}`, color.red);
 //   const tag  = string(botName, color.playerName);      // 假人名着色
+/**
+ * §t 材质 青金石 material lapis
+ §u 材质 紫水晶 material amethyst
+ §v 材质 树脂 material resin
 
+ 其他格式化代码
+ §k 随机字符
+ §l 粗体
+ §m 删除线 仅java版
+ §n 下划线 仅Java版
+ §o 斜体
+ §r 重置样式
+
+ §d 亮紫色 light purple
+ §e 黄色 yellow
+ §f 白色 white
+
+ §0 黑色 black
+ §1 深蓝 dark blue
+ §2 深绿 dark green
+ §3 深湖绿 dark aqua
+ §4 深红 dark red
+ §5 深紫 dark purple
+ §6 金色 gold
+ §7 灰色 gray
+ §8 深灰 dark gray
+ §9 蓝色 blue
+ §a 绿色 green
+ §b 湖绿色
+ §c 红色 red
+
+ 以下内容仅基岩版可用！
+ §g minecoin金 minecoin gold
+ §h 材质 石英 material quartz
+ §i 材质 铁 material iron
+ §j 材质 下界合金 material netherite
+ §m 材质 红石 material redstone
+ §n 材质 铜 material copper
+ §p 材质 金 material gold
+ §q 材质 绿宝石 material emerald
+ §s 材质 钻石 material diamond
+
+ */
 const S = "§";
 
 // ─── 颜色 & 格式常量 ───────────────────────────────────
