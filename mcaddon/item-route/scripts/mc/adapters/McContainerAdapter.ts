@@ -36,7 +36,8 @@ export class McContainerAdapter implements Container {
   enabled = true;
   /** 该容器容量预警开关（默认开；菜单可关闭该容器预警） */
   warningEnabled = true;
-  priority = 10;
+  /** 路由优先级（1-100，数字小先处理；默认 50，中性档） */
+  priority = 50;
   readonly occupiedLocations: Location[];
   /** 源方块类型 ID（漏斗强制 input 判定用） */
   readonly blockType: string;

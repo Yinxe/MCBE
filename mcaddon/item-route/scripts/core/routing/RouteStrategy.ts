@@ -7,8 +7,12 @@
 //   · 候选来自**索引**而非全仓扫描 —— 索引是本模块的性能底座（O(1) 定位）。
 //   · 空 multi 容器不是候选（索引只登记"已含该物品"的容器）—— 见 ItemIndex。
 //   · 惰性校验为**策略自持**（不共享一条按 role 分支的索引校验）：SingleItem 查绑定、
-//     MultiItem 查 contains，候选命中时若漂移则调 ctx.reconcile 按真实内容重建索引条目
+//     MultiItem 查该类型槽存在，候选命中时若漂移则调 ctx.reconcile 按真实内容重建索引条目
 //     （三层兜底之第二层，见 ItemIndex.reconcile）。
+//   · 多物可行判定是**类型级**（同 ID 不同 NBT 视为同类，如命名剑/白板剑同收，各落槽不合并）；
+//     写回的 NBT 精确判定由 McContainerAdapter.addItem → mc.addItem 权威裁决（同型不同 NBT
+//     不错误堆叠）。这修正了旧实现用 mc.contains（NBT 精确）导致"装了白板剑的多物容器不收
+//     命名剑"的口径不一致——见 MultiItemStrategy。
 //   · 漏斗在工厂层强制 input，永不进入本路由的目标侧。
 import type { Container } from "../model/Container";
 import type { ItemStack } from "../model/ItemStack";
@@ -64,6 +68,14 @@ export class SingleItemStrategy implements RouteStrategy {
   }
 }
 
+/** 容器是否已存在给定**类型**的槽（typeId 级，非 NBT 精确——多物候选判定用） */
+function hasItemType(container: Container, itemId: ItemId): boolean {
+  for (let i = 0; i < container.capacity; i++) {
+    if (container.getItem(i)?.itemId === itemId) return true;
+  }
+  return false;
+}
+
 /** 策略 2：多物容器 */
 export class MultiItemStrategy implements RouteStrategy {
   readonly priority = 20;
@@ -74,11 +86,13 @@ export class MultiItemStrategy implements RouteStrategy {
     for (const id of ids) {
       const container = ctx.warehouse.containers.get(id);
       if (!container || container.role !== "multi") continue;
-      if (!container.contains(ctx.item)) {
-        // 索引漂移：容器已不含该类型（被清/换走）→ 重建条目移除过期候选，再复查
+      // 类型级可行：只要容器已含该 typeId（不管 NBT 变不变体）即收；异 NBT 各落槽不合并，
+      // 由 mc.addItem 权威裁决（详见文件头）。索引漂移（索引说含、实际已无该类型）→重建移除候选。
+      if (hasItemType(container, ctx.item.itemId)) {
+        out.push(toCandidate(container));
+      } else {
         ctx.reconcile(container);
       }
-      if (container.contains(ctx.item)) out.push(toCandidate(container));
     }
     return out;
   }

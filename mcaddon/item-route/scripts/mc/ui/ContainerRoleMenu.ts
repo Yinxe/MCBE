@@ -122,11 +122,11 @@ export async function showContainerConfigMenu(
     );
   }
 
-  // 路由优先级（1-100，数字小先处理；默认 10）
+  // 路由优先级（1-100，数字小先处理；默认 50）
   form.slider("priority", `${uiColor.form.muted}路由优先级（1-100，小者先）`, 1, 100, {
     defaultValue: container.priority,
     valueStep: 1,
-    tooltip: "决定路由处理先后（输入容器按优先级升序处理；默认 10）",
+    tooltip: "决定路由处理先后（输入容器按优先级升序处理；默认 50）",
   });
 
   form.toggle("organize", `${uiColor.form.success}立即整理（就地排序合并堆叠）`, {
