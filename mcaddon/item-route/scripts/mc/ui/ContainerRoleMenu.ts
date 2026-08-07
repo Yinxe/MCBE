@@ -20,7 +20,7 @@ import type { Container } from "../../core/model/Container";
 import { Organizer } from "../../core/organizing/Organizer";
 import { MoveJournal } from "../../core/routing/Move";
 import { formatOrganizeResult } from "./OrganizeFormatter";
-import { showItemListEditor } from "./ItemListEditor";
+import { showItemSearchMultiPicker } from "./ItemSearchMultiPicker";
 import * as uiColor from "./uiColor";
 
 /** 容器角色下拉（漏斗强制 input，其余可选；v1 语义带说明） */
@@ -169,7 +169,7 @@ export async function showContainerConfigMenu(
 
   // 黑白名单编辑（单容器最小单位：应用后重建索引 + 触发注册表持久化）
   if (values.editWhitelist === true) {
-    await showItemListEditor(player, deps, {
+    await showItemSearchMultiPicker(player, deps, {
       title: "容器白名单",
       hint: "白名单内物品即使容器未装也能进（预分配）；空 = 不限",
       getItems: () => container.whitelist,
@@ -186,7 +186,7 @@ export async function showContainerConfigMenu(
     return;
   }
   if (values.editBlacklist === true) {
-    await showItemListEditor(player, deps, {
+    await showItemSearchMultiPicker(player, deps, {
       title: "容器黑名单",
       hint: "黑名单内物品永不进入此容器",
       getItems: () => container.blacklist,

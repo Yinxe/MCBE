@@ -17,7 +17,9 @@ import { showContainerRoleMenu } from "./ContainerRoleMenu";
 import { showMemberMenu } from "./MemberMenu";
 import { showStatsUI } from "./StatsUI";
 import { showFamilyConfigMenu } from "./FamilyConfigMenu";
-import { showItemListEditor } from "./ItemListEditor";
+import { showItemSearchMultiPicker } from "./ItemSearchMultiPicker";
+import { ITEM_FAMILIES } from "../../core/data/item-families";
+import { isFamilyEnabled } from "../../core/model/Warehouse";
 import { formatCount } from "../../core/utils/formatCount";
 import { dimensionShort } from "../../core/model/ContainerId";
 import { Table, Cell } from "./Table";
@@ -76,11 +78,18 @@ function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string
   const minZ = Math.min(a.corner1.z, a.corner2.z);
   const maxZ = Math.max(a.corner1.z, a.corner2.z);
   const size = areaSize(a);
+  const enabledFamilyCount = countEnabledFamilies(warehouse);
   return (
     `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
-    `${uiColor.form.muted}位置 ${uiColor.form.body}${dimensionShort(a.dimension)} [${minX},${minY},${minZ}]→[${maxX},${maxY},${maxZ}]  ${size.x}×${size.y}×${size.z}` +
+    `${uiColor.form.muted}位置 ${uiColor.form.body}${dimensionShort(a.dimension)} [${minX},${minY},${minZ}]→[${maxX},${maxY},${maxZ}]  ${size.x}×${size.y}×${size.z}\n` +
+    `${uiColor.form.muted}已启用族类: ${uiColor.form.accent}${enabledFamilyCount} 族` +
     `\n${tbl.render(0, [1, 1, 3])}`
   );
+}
+
+/** 该仓已启用族数（默认全开 = 全部族） */
+function countEnabledFamilies(warehouse: Warehouse): number {
+  return ITEM_FAMILIES.filter((f) => isFamilyEnabled(warehouse.settings, f.id)).length;
 }
 
 /**
@@ -250,7 +259,7 @@ export async function showWarehouseSettingsMenu(
     return;
   }
   if (chosen === "blacklist" && isOwner) {
-    await showItemListEditor(player, deps, {
+    await showItemSearchMultiPicker(player, deps, {
       title: "仓库黑名单",
       hint: "清单内物品输入必阻塞，永不进入本仓库",
       getItems: () => warehouse.settings.blacklist,

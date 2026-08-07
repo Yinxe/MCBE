@@ -56,7 +56,7 @@ export async function showFamilyConfigMenu(
   render();
 }
 
-/** 族详情：启用开关 + 族内全部物品中文名列表；保存即落 enabledFamilies */
+/** 族详情：族名 + 族内全部物品（中文名，次要）在前，该族启用开关在最后；保存即落 enabledFamilies */
 function openDetail(
   player: Player,
   deps: CommandDeps,
@@ -67,11 +67,11 @@ function openDetail(
   const itemNames = family.items.map((id) => getChineseName(id)).join("、");
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}同族 · ${family.displayName}`)
+    .label("info", `${uiColor.form.muted}族员（${family.items.length} 项）\n${uiColor.form.body}${itemNames}`)
     .toggle("enable", `${uiColor.form.accent}启用该族收纳`, {
       defaultValue: isFamilyEnabled(warehouse.settings, family.id),
-      tooltip: "关闭后族内物品不再经同族层级路由进",
-    })
-    .label("items", `${uiColor.form.muted}族内物品（${family.items.length}）\n${uiColor.form.body}${itemNames}`);
+      tooltip: "关闭后族内物品不再经同族层级路由进入",
+    });
   void form.show(player).then((values) => {
     if (!values) return;
     const want = values.enable as boolean;
