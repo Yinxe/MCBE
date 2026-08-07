@@ -59,7 +59,7 @@ function makeRouterWorld(items?: (c: InMemoryContainer) => void) {
     ownerName: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: createDefaultSettings(),
+    settings: { ...createDefaultSettings(), enabledFamilies: ITEM_FAMILIES.map((f) => f.id) }, // 机制测试默认全族启用
     containers,
     inputs: new Map<string, InMemoryContainer>(),
   };

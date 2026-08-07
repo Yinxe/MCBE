@@ -41,13 +41,12 @@ export async function showFamilyConfigMenu(
   }
   const values = await form.show(player);
   if (!values) return;
-  // 逐族读取开关 → 启用列表；全部开 → 空哨兵（默认全开语义）
+  // 逐族读取开关 → 启用列表（默认全关：空 = 不启用任何族；玩家勾选即启用）
   const enabled: string[] = [];
   for (const f of ITEM_FAMILIES) {
     if (values[`fam_${f.id}`] === true) enabled.push(f.id);
   }
-  const enabledFamilies = enabled.length === ITEM_FAMILIES.length ? [] : enabled;
-  deps.warehouses.updateSettings(warehouse, { enabledFamilies });
+  deps.warehouses.updateSettings(warehouse, { enabledFamilies: enabled });
   player.sendMessage(
     `${uiColor.chat.success}同族配置已保存（启用 ${enabled.length}/${ITEM_FAMILIES.length} 族）`
   );

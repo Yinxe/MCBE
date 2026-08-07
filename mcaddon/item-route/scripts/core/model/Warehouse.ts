@@ -43,7 +43,7 @@ export interface WarehouseSettings {
   defaultContainerRole: ContainerRole;
   /** 新放置容器的默认启用 */
   defaultContainerEnabled: boolean;
-  /** 仓库级启用的同族族 ID[]（默认全开 = 全部族；FamilyConfigMenu 逐族开关落此） */
+  /** 仓库级启用的同族族 ID[]（**默认全关**：空 = 不启用任何族；FamilyConfigMenu 逐族开启落此） */
   enabledFamilies: string[];
   /** 仓库级黑名单 typeId[]：这些物品永不进入本仓库（输入遇必阻塞、不入索引路由）；空 = 不限 */
   blacklist: string[];
@@ -60,20 +60,19 @@ export function createDefaultSettings(): WarehouseSettings {
     warningEnabled: true,
     defaultContainerRole: "single",
     defaultContainerEnabled: true,
-    // 同族默认全开：`enabledFamilies` 空数组 = **全部族启用**（空哨兵语义，见 isFamilyEnabled）；
-    // 玩家在同族配置里逐族关闭 → 写具体算法；旧档/新仓缺字段合并后即空 = 全开。
+    // 同族默认全关：`enabledFamilies` 空数组 = **不启用任何族**；玩家在同族配置里逐族开启
+    // → 写具体启用的族列表；旧档/新仓缺字段合并后即空 = 全关（仓库同族需按需开启）。
     enabledFamilies: [],
     blacklist: [],
   };
 }
 
 /**
- * 是否启用某族：`enabledFamilies` 为空数组（默认哨兵）→ 全开；
- * 非空 → 仅列表内的族启用。见 WarehouseSettings.enabledFamilies 注释。
+ * 是否启用某族：`enabledFamilies` 含该族 → 启用；空/不含 → 禁用（**默认全关，按需开启**）。
+ * 见 WarehouseSettings.enabledFamilies 注释。
  */
 export function isFamilyEnabled(settings: WarehouseSettings, familyId: string): boolean {
-  const enabled = settings.enabledFamilies ?? []; // 旧档缺字段 → 空哨兵 = 全开
-  return enabled.length === 0 || enabled.includes(familyId);
+  return (settings.enabledFamilies ?? []).includes(familyId);
 }
 
 /** 概念级仓库 */

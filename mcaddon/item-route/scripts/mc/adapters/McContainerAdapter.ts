@@ -39,7 +39,7 @@ export class McContainerAdapter implements Container {
   /** 路由优先级（1-100，数字小先处理；默认 50，中性档） */
   priority = 50;
   /** 同族开关：多物容器开启后，装有某族任一成员即可收纳该族全部物品（内容派生，非手动绑定） */
-  familyEnabled = false;
+  familyEnabled = true;
   /** 容器级白名单 typeId[]：非空时仅收纳列表内物品 */
   whitelist: string[] = [];
   /** 容器级黑名单 typeId[]：永不收纳这些物品 */

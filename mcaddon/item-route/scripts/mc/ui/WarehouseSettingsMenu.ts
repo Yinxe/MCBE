@@ -178,7 +178,7 @@ export async function showWarehouseSettingsMenu(
       .toggle("familyConfig", `${uiColor.form.accent}同族配置（一族一开关，族内同收）`, {
         tooltip: "分页列出全部物品族：逐族启用/禁用 + 查看族内物品清单",
       })
-      .toggle("blacklist", `${uiColor.form.warn}仓库黑名单（永不入库）`, {
+      .toggle("blacklist", `${uiColor.form.warn}仓库黑名单[${warehouse.settings.blacklist.length}]（永不入库）`, {
         tooltip: "名单内物品输入必阻塞，永不进入本仓库",
       })
       .toggle("resize", `${uiColor.form.accent}调整仓库区域（提交后需选新区域）`, {

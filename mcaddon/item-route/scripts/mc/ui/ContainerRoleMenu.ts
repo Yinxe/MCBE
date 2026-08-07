@@ -149,10 +149,10 @@ export async function showContainerConfigMenu(
 
   // 容器级黑白名单编辑入口（漏斗/单物/多物/其他 皆支持）
   form
-    .toggle("editWhitelist", `${uiColor.form.success}编辑白名单（${container.whitelist.length}）`, {
+    .toggle("editWhitelist", `${uiColor.form.success}编辑白名单[${container.whitelist.length}]`, {
       tooltip: "白名单 = 允许（声明式）：名单内物品即使容器没装也能进（预分配）。空 = 不限制",
     })
-    .toggle("editBlacklist", `${uiColor.form.warn}编辑黑名单（${container.blacklist.length}）`, {
+    .toggle("editBlacklist", `${uiColor.form.warn}编辑黑名单[${container.blacklist.length}]`, {
       tooltip: "黑名单内物品永不进入此容器",
     });
 

@@ -33,7 +33,7 @@ function makeWorld() {
     ownerName: "p1",
     members: [],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
-    settings: createDefaultSettings(),
+    settings: { ...createDefaultSettings(), enabledFamilies: ITEM_FAMILIES.map((f) => f.id) }, // 机制测试默认全族启用
     containers,
     inputs: new Map<string, InMemoryContainer>(),
   };
@@ -122,12 +122,12 @@ test("族路由：物品不在任何族（bedrock 被精简剔除）→ 无族�
   assert.equal(res?.to, "m1"); // 多物有 bedrock 实箱 → 走多物（不落族，也不落 misc）
 });
 
-test("启用族类转显式：空哨兵=全开；禁用某族物化列表后该族失效", () => {
+test("启用族类：默认空=全关；写入某族后该族启用", () => {
   const s = createDefaultSettings();
-  assert.ok(isFamilyEnabled(s, "wool")); // 空 = 全开
-  s.enabledFamilies = ITEM_FAMILIES.map((f) => f.id).filter((id) => id !== "wool");
-  assert.equal(isFamilyEnabled(s, "wool"), false); // 显式剔除 wool
-  assert.ok(isFamilyEnabled(s, "carpet")); // 其余仍在
+  assert.equal(isFamilyEnabled(s, "wool"), false); // 空 = 全关（仓库同族默认禁用，按需开启）
+  s.enabledFamilies = ["wool"];
+  assert.equal(isFamilyEnabled(s, "wool"), true);
+  assert.equal(isFamilyEnabled(s, "carpet"), false); // 未写入 → 关
 });
 
 test("同族多候选按优先级排序（priority 小者先）", () => {
@@ -235,9 +235,9 @@ test("族候选满箱（无空槽放新色）→ 转移失败跳过 → 降级 m
 });
 
 // ── 空值防护（旧档缺新字段不崩）────────────────────────────
-test("isFamilyEnabled 旧档缺 enabledFamilies → 空哨兵全开，不崩", () => {
+test("isFamilyEnabled 旧档缺 enabledFamilies → 空=全关，不崩", () => {
   const s = { routingEnabled: true } as unknown as Parameters<typeof isFamilyEnabled>[0]; // 无 enabledFamilies
-  assert.equal(isFamilyEnabled(s, "wool"), true); // 缺字段 → 全开
+  assert.equal(isFamilyEnabled(s, "wool"), false); // 缺字段 → 空 = 全关
 });
 
 test("containerAcceptsItem 容器缺 blacklist/whitelist（旧数据）→ 不崩", () => {
