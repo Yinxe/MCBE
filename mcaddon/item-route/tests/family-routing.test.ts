@@ -381,3 +381,19 @@ test("族路由成功后索引完整：同型从 byItem 增补，下次走 multi
   const second = w.route(r("minecraft:orange_wool", 3));
   assert.equal(second?.strategy, "multi");
 });
+
+// ── 仅同族路由更新 byItem（白名单声明路由不入内容索引）────────────────
+test("白名单路由不入 byItem——仅 family 才增补多物候选", () => {
+  const w = makeRouterWorld();
+  const box = new InMemoryContainer("m1", "multi", 3);
+  box.whitelist = ["minecraft:stone"]; // 空箱白名单声明
+  w.add(box);
+  // 首次：stone 经白名单声明候选进入（由 MultiItemStrategy 产出候选 → strategy = multi）
+  const first = w.route(r("minecraft:stone", 5));
+  assert.equal(first?.strategy, "multi");
+  assert.equal(box.getItem(0)?.itemId, "minecraft:stone");
+  // 白名单路由不更新 byItem（只同族才补多物候选）——下次 stone 仍走白名单声明
+  assert.equal(w.index.lookup("minecraft:stone").multi.includes("m1"), false);
+  const again = w.route(r("minecraft:stone", 3));
+  assert.equal(again?.to, "m1"); // 仍能进（走白名单声明候选，非内容索引）
+});

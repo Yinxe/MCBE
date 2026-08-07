@@ -84,23 +84,28 @@ export class ItemIndex {
 
   /**
    * 轻量更新：路由自身移动物品后只更新目标侧（来源侧留待惰性校验清理）。
-   * 额外维护**索引完整性**（item 修复）：
-   *   · 多物目标 → 补 `byItem[itemId].multi` —— 族/白名单首次把新类型放进多物箱后，该型
-   *     就应成为该箱的多物候选（下次同型走 O(1) 多物索引，而非再次族/白名单推导）。
-   *   · 族桶 → 物品路由进启族多物容器时若引入新族则增补族桶（幂等），供族内其他成员感知。
-   * 需要目标容器对象以判 role/familyEnabled → 签名传 Container 而非仅 id。
+   * 通用簿记（与具体策略无关）：containerItems + 族桶。
+   *   · 族桶：任何路由进**启族多物容器**若引入新族则增补族桶（幂等）——容器真装了该族成员即族容器。
+   * 多物候选增补（byItem）不在本方法：**仅同族路由**由 Router 显式调 `onFamilyRouted`（见下）。
    */
   onItemMoved(from: Container, to: Container, itemId: ItemId): void {
     this.containerItems.get(from.id)?.delete(itemId);
     const toItems = this.containerItems.get(to.id);
     if (toItems) toItems.add(itemId);
-    if (to.role === "multi") {
-      this.ensureEntry(itemId).multi.add(to.id);
-    }
     if (to.role === "multi" && to.familyEnabled) {
       const fam = familyOf(itemId);
       if (fam !== undefined) this.addContainerToFamily(to.id, fam);
     }
+  }
+
+  /**
+   * 同族路由成功 → 把新类型补为多物候选（byItem）。
+   * 族路由把"新类型"首次带进多物箱，该型才应转为 O(1) 多物索引候选（下次同型走 multi 而非再族推导）；
+   * 多物/单物路由目标本已含该型（已在索引），白名单路由走"声明式候选"（不入内容索引），都不调用本方法。
+   * 由 Router 在命中策略为 family 时显式调用（strategy 本就在路由结果里，无需下钻到 onItemMoved 参数）。
+   */
+  onFamilyRouted(to: Container, itemId: ItemId): void {
+    if (to.role === "multi") this.ensureEntry(itemId).multi.add(to.id);
   }
 
   /**

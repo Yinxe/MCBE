@@ -74,6 +74,12 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
         messiness: organizer.messinessFromScan(scan).total,
       },
     });
+    // ③ 同族路由成功 → core 已把该型补为多物候选（byItem/containerItems）——
+    //    **立即持久化该容器索引条目**（item：重启后能按条目重建 byItem，而非靠惰性自愈）
+    if (e.strategy === "family") {
+      const idx = scheduler.getIndex(e.warehouseId);
+      if (idx !== undefined) indexStore.saveContainer(target.id, idx.serializeContainer(target.id));
+    }
   });
   // 统计：单容器增量 + 立即写穿该容器自己的键（事件驱动最小单位，无定时 flush）
   bus.containerScanned.subscribe((e) => {
