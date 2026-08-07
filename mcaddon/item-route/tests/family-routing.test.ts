@@ -362,7 +362,7 @@ test("路由追踪：itemRouted/result 暴露命中策略 key（single/multi/fam
   assert.equal(w.route(r("minecraft:diamond", 2))?.strategy, "single");
   assert.equal(w.route(r("minecraft:stone", 2))?.strategy, "multi");
   assert.equal(w.route(r("minecraft:orange_wool", 2))?.strategy, "family");
-  assert.equal(w.route(r("minecraft:dirt", 2))?.strategy, "misc"); // 无 single/multi/family 实装 → 兜底
+  assert.equal(w.route(r("minecraft:chest", 2))?.strategy, "misc"); // 未分类物品（人工合成物移除）无族/无索引候选 → 兜底
 });
 
 // ── 族路由后索引完整性：同型下次走多物索引 ───────────────────
