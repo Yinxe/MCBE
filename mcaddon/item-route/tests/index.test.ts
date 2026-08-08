@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ItemIndex, INDEX_VERSION } from "../scripts/core/index/ItemIndex";
+import { ItemIndex } from "../scripts/core/index/ItemIndex";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
 import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
@@ -77,33 +77,8 @@ test("ItemIndex: onItemMoved 轻量更新目标侧", () => {
   assert.deepEqual(index.lookup("minecraft:stone").multi, ["m1"]);
 });
 
-test("ItemIndex: serialize/restore 往返一致", () => {
-  const index = new ItemIndex();
-  const c = stoneMulti();
-  const single = new InMemoryContainer("s1", "single", 3);
-  single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
-  index.onContainerAdded(c);
-  index.onContainerAdded(single);
-  const snapshot = index.serialize();
-  const index2 = new ItemIndex();
-  assert.equal(index2.restore(snapshot), true);
-  assert.deepEqual(index2.lookup("minecraft:stone"), { single: ["s1"], multi: ["m1"] });
-});
-
-test("ItemIndex: restore 版本不匹配返回 false", () => {
-  const index = new ItemIndex();
-  assert.equal(
-    index.restore({
-      version: INDEX_VERSION + 1,
-      byItem: {},
-      containerItems: {},
-      singleBindings: {},
-      familyContainers: {},
-    }),
-    false
-  );
-});
-
+/** 纯运行时索引：不提供序列化——激活时按真实内容全量重建（见 createIndexRuntimeLifecycle），
+ *  此前的 serialize/restore 用例已随索引持久化一起移除。 */
 test("ItemIndex: selfHeal 扫描存储容器找 hasItem 并重建条目（漏索引兜底）", () => {
   const index = new ItemIndex();
   const m1 = new InMemoryContainer("m1", "multi", 4);
@@ -168,18 +143,6 @@ test("ItemIndex: onContainerRemoved 清理族桶成员资格", () => {
   assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
   index.onContainerRemoved(c);
   assert.deepEqual(index.lookupFamily("wool"), []);
-});
-
-test("ItemIndex: restoreFromEntries 按条目重算族桶（激活加载路径）", () => {
-  const index = new ItemIndex();
-  const c = familyBox();
-  c.setItem(1, new SimpleItemStack("minecraft:white_carpet", 2, 64)); // 地毯族
-  const entries = new Map<string, { items: string[]; singleBinding?: string }>([
-    [c.id, { items: ["minecraft:white_wool", "minecraft:white_carpet"] }],
-  ]);
-  assert.equal(index.restoreFromEntries(entries, [c]), true);
-  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
-  assert.deepEqual(index.lookupFamily("carpet"), ["mF"]);
 });
 
 test("ItemIndex: onItemMoved 路由进启族多物容器 → 增补族桶（同族后续成员感知）", () => {

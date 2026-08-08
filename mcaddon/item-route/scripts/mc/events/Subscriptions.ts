@@ -14,7 +14,6 @@ import type { Organizer } from "../../core/organizing/Organizer";
 import type { OrganizeService } from "../../core/services/OrganizeService";
 import type { Scheduler } from "../../core/scheduling/Scheduler";
 import type { McWarehouseStore } from "../storage/McWarehouseStore";
-import type { McIndexStore } from "../storage/McIndexStore";
 import type { McContainerFactory } from "../adapters/McContainerFactory";
 import { scanContainer } from "../../core/model/ContainerScan";
 import { scanWarehouseArea } from "../commands/scan";
@@ -30,7 +29,6 @@ export interface SubscriptionContext {
   organize: OrganizeService;
   scheduler: Scheduler;
   warehouseStore: McWarehouseStore;
-  indexStore: McIndexStore;
   factory: McContainerFactory;
   /** 单容器写穿（注册表 + 索引条目；oldId=重定 ID 清旧键） */
   persistContainer: (warehouse: Warehouse, container: Container, oldId?: ContainerId) => void;
@@ -49,7 +47,7 @@ export interface SubscriptionContext {
  * 订阅顺序即执行顺序（EventSignal 快照遍历，订阅者异常隔离）。
  */
 export function registerSubscriptions(ctx: SubscriptionContext): void {
-  const { bus, loaded, stats, organizer, organize, scheduler, warehouseStore, indexStore, factory } = ctx;
+  const { bus, loaded, stats, organizer, organize, scheduler, warehouseStore, factory } = ctx;
   const resolveWh = (id: string): Warehouse | undefined => loaded.find((w) => w.id === id);
 
   // ── 路由副作用（hot）：itemRouted → 扫描目标 → containerScanned ──
@@ -74,10 +72,7 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
         messiness: organizer.messinessFromScan(scan).total,
       },
     });
-    // ③ 路由成功后**立即落盘目标容器索引条目**（item：重启后能按条目重建 byItem，
-    //    含 misc/multi/misc 桶——不只 family；否则 misc 等路由增量靠惰性自愈兜不住搜索 miss）
-    const idx = scheduler.getIndex(e.warehouseId);
-    if (idx !== undefined) indexStore.saveContainer(target.id, idx.serializeContainer(target.id));
+    // ③ 索引纯运行时：路由成功不落盘（activate 全量重建），内存 byItem 桶由 onItemMoved 即时更新
   });
   // 统计：单容器增量 + 立即写穿该容器自己的键（事件驱动最小单位，无定时 flush）
   bus.containerScanned.subscribe((e) => {
@@ -165,10 +160,7 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
     if (i >= 0) loaded.splice(i, 1);
     scheduler.unregisterWarehouse(e.warehouseId); // 停 interval + indexLifecycle.unload（若已加载则逐容器落盘）
     const cids = warehouseStore.loadContainerIds(e.warehouseId) ?? [];
-    for (const cid of cids) {
-      indexStore.removeContainer(cid);
-      stats.discard(cid);
-    }
+    for (const cid of cids) stats.discard(cid);
   });
   // 创建：纳入 loaded + 注册调度 + 立即扫描区域容器（mc 按自身持久化边界重建运行时对象，低耦合）
   bus.warehouseCreated.subscribe((e) => {
@@ -217,7 +209,6 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
       if (c !== undefined) index?.onContainerRemoved(c);
       stats.discard(cid);
       warehouseStore.removeContainer(cid);
-      indexStore.removeContainer(cid);
     }
     wh.containers.clear();
     wh.inputs.clear();

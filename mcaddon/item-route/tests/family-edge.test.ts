@@ -201,16 +201,13 @@ test("多物→单物角色变更 → 清族桶（familyEnabled 仅多物有意�
   assert.deepEqual(w.index.lookupFamily("wool"), []);
 });
 
-// ── 族桶恢复（旧档缺省）────────────────────────────
-test("restoreFromEntries 旧档缺 familyEnabled → 默认关，不入族桶", () => {
+// ── 族桶重建（纯运行时全量重建路径：onContainerAdded 按容器字段判定） ──
+test("族桶重建（onContainerAdded）：familyEnabled=false → 不入族桶", () => {
   const index = new ItemIndex();
   const c = new InMemoryContainer("m", "multi", 3);
-  c.familyEnabled = false; // 旧档缺字段 → 载入默认为 false
+  c.familyEnabled = false; // 多物容器未启族 → 即使含族成员不派生成族桶
   c.setItem(0, r("minecraft:white_wool", 5));
-  assert.equal(
-    index.restoreFromEntries(new Map([[c.id, { items: ["minecraft:white_wool"] }]]), [c]),
-    true
-  );
+  index.onContainerAdded(c); // 重建 = 按容器真实内容 + 字段
   assert.deepEqual(index.lookupFamily("wool"), []); // 未启族 → 不入族桶
 });
 

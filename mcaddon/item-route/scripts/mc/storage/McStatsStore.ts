@@ -11,7 +11,7 @@ const cstatsKey = (containerId: ContainerId): string => `ir2:cst:${containerId}`
 
 /**
  * 统计仓储：**每容器一条键** `ir2:cst:{containerId}`（普通 DP 直存，无分片）。
- * 对齐注册表（ir2:c:{cid}）/索引（ir2:idx:{cid}）的"每容器一单位"风格，事件驱动单容器写穿。
+ * 对齐注册表（ir2:c:{cid}）的"每容器一单位"风格，事件驱动单容器写穿。
  */
 export class McStatsStore implements StatsStore {
   constructor(private readonly store: DirectStore) {}

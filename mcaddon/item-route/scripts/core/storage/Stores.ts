@@ -1,11 +1,7 @@
-// ─── 仓库/索引/统计仓储接口（core 定义，mc 层实现 DP 分片） ──
-// 这是持久化边界：core 只定义**可序列化快照结构 + 接口**（零 MC 依赖），
-// mc 层（scripts/mc/storage/）用 DP 实现。
-//   · WarehouseStore —— 仓库 meta 快照（单键 generation；容器注册表在 mc 层每容器一条键）
-//   · IndexStore     —— 索引**每容器一条**条目（ir2:idx:{cid}，与注册表/统计同一风格）
-//   · StatsStore     —— 统计**每容器一条**条目（ir2:cst:{cid}）
-// 快照必须是纯 JSON（无函数/Map/Set），才能进出 DP（JSON.stringify/parse）。
-// InMemory*Store 供 node 单测；真实 DP 版见 McWarehouseStore/McIndexStore/McStatsStore。
+// ─── 存储抽象（index 不再持久化）：仓库 meta / 容器注册表 / 统计 ──
+// 索引（byItem/族桶）是**纯运行时派生缓存**：权威源 = 容器真实内容，
+// **不落盘**（激活时全容积量扫描重建，卸载即弃）。故这里没有 IndexStore ——
+// 容器结构持久化仍走注册表（ir2:c），统计走 StatsStore（ir2:cst）。
 import { InMemoryKeyValueStore, type KeyValueStore } from "./KeyValueStore";
 import type { ContainerId, PlayerName, WarehouseId } from "../model/types";
 import type { Member, WarehouseArea, WarehouseSettings } from "../model/Warehouse";
@@ -13,26 +9,12 @@ import type { Member, WarehouseArea, WarehouseSettings } from "../model/Warehous
 // ── 快照结构（可序列化） ─────────────────────────────────
 /** 仓库 meta 快照：不含容器（容器注册表是每容器一条键 + 每仓 cids 索引，mc 层维护） */
 export interface WarehouseSnapshot {
-  /** 仓库 ID（`w@(min)-(max)@维度`；resize 时迁移） */
   id: WarehouseId;
-  /** 显示名（唯一） */
   displayName: string;
-  /** 所有者玩家 ID */
   ownerName: PlayerName;
-  /** 成员列表（owner 固定首项） */
   members: Member[];
-  /** 区域（两对角点） */
   area: WarehouseArea;
-  /** 仓库设置（默认容器角色/启用、运转/整理开关、速度、阈值） */
   settings: WarehouseSettings;
-}
-
-/** 索引单容器条目（持久化最小单位，与 ItemIndex.serializeContainer 对齐） */
-export interface ContainerIndexEntry {
-  /** 该容器含有的物品种类 ID 集合 */
-  items: string[];
-  /** 单物容器绑定类型（single 角色；无绑定省略） */
-  singleBinding?: string;
 }
 
 /** 容器统计快照（纯 JSON；与 ContainerStats 结构兼容，供 DP 存取） */
@@ -53,14 +35,6 @@ export interface WarehouseStore {
   load(id: WarehouseId): WarehouseSnapshot | undefined;
   save(snapshot: WarehouseSnapshot): void;
   remove(id: WarehouseId): void;
-}
-
-/** 索引仓储：**每容器一条**条目（路由加速缓存，事件驱动最小单位） */
-export interface IndexStore {
-  /** 单容器索引条目（最小单位：该容器的物品集 + 单物绑定），键 ir2:idx:{cid} */
-  saveContainer(cid: ContainerId, entry: ContainerIndexEntry): void;
-  loadContainer(cid: ContainerId): ContainerIndexEntry | undefined;
-  removeContainer(cid: ContainerId): void;
 }
 
 /** 统计存储：**每容器一条**（v1 方案；容器 ID 全局唯一，键无需仓库前缀） */
@@ -98,35 +72,19 @@ export class InMemoryWarehouseStore implements WarehouseStore {
   }
 }
 
-export class InMemoryIndexStore implements IndexStore {
-  constructor(private kv: KeyValueStore = new InMemoryKeyValueStore()) {}
-
-  saveContainer(cid: ContainerId, entry: ContainerIndexEntry): void {
-    this.kv.write(key("idx", cid), entry);
-  }
-
-  loadContainer(cid: ContainerId): ContainerIndexEntry | undefined {
-    return this.kv.read<ContainerIndexEntry>(key("idx", cid));
-  }
-
-  removeContainer(cid: ContainerId): void {
-    this.kv.remove(key("idx", cid));
-  }
-}
-
 export class InMemoryStatsStore implements StatsStore {
   constructor(private kv: KeyValueStore = new InMemoryKeyValueStore()) {}
 
   loadContainer(containerId: ContainerId): ContainerStatsData | undefined {
-    return this.kv.read(key("cstats", containerId));
+    return this.kv.read<ContainerStatsData>(key("cst", containerId));
   }
 
   saveContainer(containerId: ContainerId, stats: ContainerStatsData): boolean {
-    this.kv.write(key("cstats", containerId), stats);
+    this.kv.write(key("cst", containerId), stats);
     return true;
   }
 
   removeContainer(containerId: ContainerId): void {
-    this.kv.remove(key("cstats", containerId));
+    this.kv.remove(key("cst", containerId));
   }
 }

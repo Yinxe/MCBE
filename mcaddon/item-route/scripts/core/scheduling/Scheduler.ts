@@ -12,7 +12,7 @@
 // 每仓库数据隔离（本次重构核心）：
 //   · Runtime 持有独立 `index?: ItemIndex`，**激活时加载、30 分钟空闲卸载**，
 //     不再全局共用一个 ItemIndex（避免全玩家/全仓库索引挤在单例里）。
-//   · 生产装配提供 `indexLifecycle`（load/unload，mc 层经 McIndexStore 存取）；
+//   · 生产装配提供 `indexLifecycle`（load/unload，mc 层纯运行时重建：激活全扫/卸载清内存）；
 //     未提供时回退 `fallbackIndex`（共享实例，测试/非隔离场景用）。
 //   · Router 每次路由按仓库拿到对应索引（routeFrom 第 4 参），实现按仓隔离。
 // 设计要点：
@@ -41,7 +41,7 @@ export interface ProximityChecker {
 
 /** 每仓库索引生命周期（数据隔离：激活加载/空闲卸载） */
 export interface IndexLifecycle {
-  /** 激活时加载该仓库索引（mc 层：读 McIndexStore → restore/重建） */
+  /** 激活时加载该仓库索引（mc 层纯运行时重建：按真实内容全量扫描，不持久化） */
   load(warehouse: Warehouse): ItemIndex;
   /** 空闲卸载（mc 层：落盘最新快照后释放引用） */
   unload(warehouse: Warehouse, index: ItemIndex): void;

@@ -1,8 +1,10 @@
-// ─── 持久化装配：索引生命周期 + 容器逐容器持久化（每容器一条键，事件驱动） ──
+// ─── 持久化装配：容器逐容器持久化（每容器一条键，事件驱动） + 索引纯运行时生命周期 ──
 // 把 main.ts 组合根里的两段持久化逻辑收进独立模块，组合根只保留一行装配：
-//   · createIndexLifecycle —— 索引生命周期（激活按每容器条目恢复/重建，卸载逐容器落盘）
-//   · createContainerPersistence —— 单容器写穿（注册表 ir2:c + 索引 ir2:idx + 统计 ir2:cst）
-// 两者都坚持"最小粒度 + 事件驱动"：整仓不重写，改动写入放大从"全仓"降为"单容器"。
+//   · createIndexRuntimeLifecycle —— 索引**纯运行时**生命周期：激活时按真实内容全量扫描
+//     重建（onContainerAdded），卸载即弃（不落盘）。索引是派生缓存，权威源 = 容器内容，
+//     重启无需持久化——永远最新、零写放大。
+//   · createContainerPersistence —— 单容器写穿（注册表 ir2:c；统计 ir2:cst 由 stats 自行）
+//     索引不落盘，故容器结构落地不再同步写索引条目。
 import { ItemIndex } from "../../core/index/ItemIndex";
 import type { IndexLifecycle } from "../../core/scheduling/Scheduler";
 import type { Scheduler } from "../../core/scheduling/Scheduler";
@@ -11,61 +13,43 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
 import type { ContainerId } from "../../core/model/types";
 import type { McWarehouseStore } from "../storage/McWarehouseStore";
-import type { McIndexStore } from "../storage/McIndexStore";
 import { ensureContainersLoaded, unloadContainers, type WarehouseLoaderDeps } from "../container/WarehouseLoader";
 
-// ── 索引生命周期 ─────────────────────────────────────────
+// ── 索引生命周期（纯运行时） ─────────────────────────────
 /**
- * 索引生命周期（Scheduler 激活/卸载时调用）。**容器与索引统一生命周期**：
- *   · load —— 先 `ensureContainersLoaded`（激活按需加载容器），再按每容器条目恢复（含角色反演），
- *     缺条目/版本不符回退全扫重建。
- *   · unload —— 先逐容器落盘索引条目，再 `unloadContainers` 清内存（闲置/离仓释放）。
+ * 索引生命周期（Scheduler 激活/卸载时调用）。**索引不持久化**：
+ *   · load —— ensureContainersLoaded（按需加载容器）→ 全容器扫描按真实内容重建（O(容器×槽)），
+ *     权威源 = 容器内容，永远最新，无落盘依赖。
+ *   · unload —— 直接 unloadContainers 清内存（容器/索引/统计缓存一并释放）。
  * loader 需 warehouseStore/factory/stats（见 container/WarehouseLoader）。
  */
-export function createIndexLifecycle(loader: WarehouseLoaderDeps, indexStore: McIndexStore): IndexLifecycle {
+export function createIndexRuntimeLifecycle(loader: WarehouseLoaderDeps): IndexLifecycle {
   return {
     load: (warehouse) => {
-      ensureContainersLoaded(warehouse, loader); // 按需加载容器（此时 containers 才齐，供索引用）
+      ensureContainersLoaded(warehouse, loader); // 激活按需加载容器（此时 containers 才齐，供索引用）
       const idx = new ItemIndex();
-      const entries = new Map<ContainerId, { items: string[]; singleBinding?: string }>();
-      let complete = true;
-      for (const c of warehouse.containers.values()) {
-        const entry = indexStore.loadContainer(c.id);
-        if (entry === undefined) {
-          complete = false;
-          break;
-        }
-        entries.set(c.id, entry);
-      }
-      if (complete && idx.restoreFromEntries(entries, warehouse.containers.values())) {
-        console.warn(`[ItemRoute] 索引加载 ${warehouse.id}`);
-      } else {
-        for (const c of warehouse.containers.values()) idx.onContainerAdded(c);
-        console.warn(`[ItemRoute] 索引重建 ${warehouse.id}`);
-      }
+      // 全量重建：权威源 = 容器真实内容，不读任何索引持久化（纯运行时派生缓存）
+      for (const c of warehouse.containers.values()) idx.onContainerAdded(c);
       return idx;
     },
-    unload: (warehouse, idx) => {
-      for (const c of warehouse.containers.values()) {
-        indexStore.saveContainer(c.id, idx.serializeContainer(c.id));
-      }
-      unloadContainers(warehouse, loader); // 索引落盘后卸载容器（配置/统计缓存一并释放）
+    unload: (warehouse) => {
+      // 索引不落盘（纯运行时缓存）——只卸载容器实体与内存
+      unloadContainers(warehouse, loader);
     },
   };
 }
 
-// ── 容器逐容器持久化 ─────────────────────────────────────
+// ── 容器逐容器持久化（注册表 + 让 stats 管统计；索引不落盘） ──
 export interface ContainerPersistenceDeps {
   warehouseStore: McWarehouseStore;
-  indexStore: McIndexStore;
   scheduler: Scheduler;
   stats: StatsService;
 }
 
 export interface ContainerPersistence {
-  /** 单容器写穿（注册表 + 有活索引则索引条目）；oldId=重定 ID 时清旧注册表/索引键 */
+  /** 单容器写穿（注册表；索引为纯内存缓存不落盘）；oldId=重定 ID 时清旧注册表/统计 */
   persistContainer: (warehouse: Warehouse, container: Container, oldId?: ContainerId) => void;
-  /** 移除容器：清注册表键 + 索引条目键 + 统计键（每容器一条，各自幂等） */
+  /** 移除容器：清注册表键 + 统计键（每容器一条，各自幂等） */
   removeContainer: (warehouse: Warehouse, containerId: ContainerId) => void;
   /** 同步该仓容器 ID 索引（容器新增/移除/重定 ID 后调用；枚举/清理/删除用） */
   persistContainerIds: (warehouse: Warehouse) => void;
@@ -74,7 +58,7 @@ export interface ContainerPersistence {
 }
 
 export function createContainerPersistence(deps: ContainerPersistenceDeps): ContainerPersistence {
-  const { warehouseStore, indexStore, scheduler, stats } = deps;
+  const { warehouseStore, stats } = deps;
   const entryOf = (c: Container) => ({
     id: c.id,
     warehouseId: c.warehouseId, // 直接归属解析（findContainerAt 不再逐仓扫）
@@ -91,17 +75,15 @@ export function createContainerPersistence(deps: ContainerPersistenceDeps): Cont
   const persistContainer = (warehouse: Warehouse, container: Container, oldId?: ContainerId): void => {
     if (oldId !== undefined && oldId !== container.id) {
       warehouseStore.removeContainer(oldId);
-      indexStore.removeContainer(oldId);
     }
     warehouseStore.saveContainer(container.id, entryOf(container));
-    const idx = scheduler.getIndex(warehouse.id);
-    if (idx !== undefined) indexStore.saveContainer(container.id, idx.serializeContainer(container.id));
+    void warehouse;
   };
 
   const removeContainer = (warehouse: Warehouse, containerId: ContainerId): void => {
     warehouseStore.removeContainer(containerId);
-    indexStore.removeContainer(containerId);
     stats.discard(containerId);
+    void warehouse;
   };
 
   const persistContainerIds = (warehouse: Warehouse): void => {

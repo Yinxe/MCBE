@@ -20,7 +20,7 @@ import { familyOf } from "../data/item-families";
 import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
 
-export const INDEX_VERSION = 2; // byItem 扩为含 misc 的全容器索引
+
 
 /** 单条目：各角色容器桶 */
 export interface ItemBuckets {
@@ -29,14 +29,6 @@ export interface ItemBuckets {
   misc: Set<ContainerId>;
 }
 
-export interface IndexSnapshot {
-  version: number;
-  byItem: Record<ItemId, { single: ContainerId[]; multi: ContainerId[]; misc: ContainerId[] }>;
-  containerItems: Record<ContainerId, ItemId[]>;
-  singleBindings: Record<ContainerId, ItemId>;
-  /** 派生族索引（familyId → 启族多物容器 ID[]），随全量快照卷走（serialize/restore） */
-  familyContainers: Record<string, ContainerId[]>;
-}
 
 function emptyBuckets(): ItemBuckets {
   return { single: new Set(), multi: new Set(), misc: new Set() };
@@ -45,7 +37,7 @@ function emptyBuckets(): ItemBuckets {
 /**
  * O(1) 全容器物品索引（每仓实例）：byItem 一条索引（single/multi 供路由，misc 供搜索）。
  * 路由只查索引、不做全仓扫描；搜索同样 O(1) 命中（读 misc+single+multi 桶）。
- * 持久化为**每容器一条条目**（serializeContainer/restoreFromEntries），与注册表/统计同风格。
+ * **纯运行时派生缓存**：不持久化——激活时按真实内容全量扫描重建（onContainerAdded），卸载即弃；权威源 = 容器内容。
  */
 export class ItemIndex {
   private byItem = new Map<ItemId, ItemBuckets>();
@@ -151,104 +143,6 @@ export class ItemIndex {
       if (container.role === "input" || container.role === "misc") continue;
       if (!container.contains(item)) continue;
       this.reconcile(container);
-    }
-  }
-
-  serialize(): IndexSnapshot {
-    const byItem: IndexSnapshot["byItem"] = {};
-    for (const [itemId, entry] of this.byItem) {
-      byItem[itemId] = {
-        single: [...entry.single],
-        multi: [...entry.multi],
-        misc: [...entry.misc],
-      };
-    }
-    const containerItems: IndexSnapshot["containerItems"] = {};
-    for (const [id, items] of this.containerItems) {
-      containerItems[id] = [...items];
-    }
-    const singleBindings: IndexSnapshot["singleBindings"] = {};
-    for (const [id, itemId] of this.singleBindings) {
-      singleBindings[id] = itemId;
-    }
-    const familyContainers: IndexSnapshot["familyContainers"] = {};
-    for (const [fam, set] of this.familyContainers) {
-      familyContainers[fam] = [...set];
-    }
-    return { version: INDEX_VERSION, byItem, containerItems, singleBindings, familyContainers };
-  }
-
-  /** 恢复快照；版本不匹配返回 false（调用方应重建） */
-  restore(snapshot: IndexSnapshot): boolean {
-    if (snapshot.version !== INDEX_VERSION) return false;
-    this.byItem = new Map();
-    this.containerItems = new Map();
-    this.singleBindings = new Map();
-    this.familyContainers = new Map();
-    this.containerFamilies = new Map();
-    for (const [itemId, entry] of Object.entries(snapshot.byItem)) {
-      this.byItem.set(itemId, {
-        single: new Set(entry.single ?? []),
-        multi: new Set(entry.multi ?? []),
-        misc: new Set(entry.misc ?? []),
-      });
-    }
-    for (const [id, items] of Object.entries(snapshot.containerItems)) {
-      this.containerItems.set(id, new Set(items));
-    }
-    for (const [id, itemId] of Object.entries(snapshot.singleBindings)) {
-      this.singleBindings.set(id, itemId);
-    }
-    for (const [fam, ids] of Object.entries(snapshot.familyContainers)) {
-      this.familyContainers.set(fam, new Set(ids));
-    }
-    return true;
-  }
-
-  /** 单容器索引条目（持久化**最小单位**） */
-  serializeContainer(containerId: ContainerId): { items: string[]; singleBinding?: string } {
-    const items = this.containerItems.get(containerId);
-    return {
-      items: items ? [...items] : [],
-      singleBinding: this.singleBindings.get(containerId),
-    };
-  }
-
-  /** 由**每容器条目**恢复索引；任一容器缺条目 → false，调用方回退全容器扫描重建。 */
-  restoreFromEntries(
-    entries: ReadonlyMap<ContainerId, { items: string[]; singleBinding?: string }>,
-    containers: Iterable<Container>
-  ): boolean {
-    this.byItem = new Map();
-    this.containerItems = new Map();
-    this.singleBindings = new Map();
-    this.familyContainers = new Map();
-    this.containerFamilies = new Map();
-    for (const container of containers) {
-      const entry = entries.get(container.id);
-      if (entry === undefined) return false;
-      this.restoreContainerFromEntry(container, entry);
-    }
-    return true;
-  }
-
-  private restoreContainerFromEntry(container: Container, entry: { items: string[]; singleBinding?: string }): void {
-    this.containerItems.set(container.id, new Set(entry.items));
-    const binding = entry.singleBinding;
-    const bucket = binding !== undefined ? this.ensureEntry(binding) : undefined;
-    if (binding !== undefined && container.role === "single") {
-      this.singleBindings.set(container.id, binding);
-      bucket?.single.add(container.id);
-    } else if (container.role === "multi") {
-      for (const itemId of entry.items) this.ensureEntry(itemId).multi.add(container.id);
-      if (container.familyEnabled) {
-        for (const itemId of entry.items) {
-          const fam = familyOf(itemId);
-          if (fam !== undefined) this.addContainerToFamily(container.id, fam);
-        }
-      }
-    } else if (container.role === "misc") {
-      for (const itemId of entry.items) this.ensureEntry(itemId).misc.add(container.id);
     }
   }
 

@@ -35,7 +35,6 @@ import { DynamicPropertyStore } from "./mc/storage/DynamicPropertyStore";
 import { ShardStore } from "./mc/storage/ShardStore";
 import { DirectStore } from "./mc/storage/DirectStore";
 import { McWarehouseStore } from "./mc/storage/McWarehouseStore";
-import { McIndexStore } from "./mc/storage/McIndexStore";
 import { McStatsStore } from "./mc/storage/McStatsStore";
 import { McModConfig } from "./mc/storage/McModConfig";
 import { McItemAdapter } from "./mc/adapters/McItemAdapter";
@@ -54,7 +53,7 @@ import { setupPersistentBoundaryControl } from "./mc/bootstrap/persistentBoundar
 import { createInventoryOrganizer } from "./mc/bootstrap/organizeInventory";
 import { registerRenderEffects } from "./mc/bootstrap/registerEffects";
 import { registerSubscriptions } from "./mc/events/Subscriptions";
-import { createContainerPersistence, createIndexLifecycle } from "./mc/persistence/Persistence";
+import { createContainerPersistence, createIndexRuntimeLifecycle } from "./mc/persistence/Persistence";
 import { ensureContainersLoaded } from "./mc/container/WarehouseLoader";
 
 // Phase 1: 无状态基础设施
@@ -75,7 +74,6 @@ const router = new Router(
 );
 // 容器级数据（注册表/索引/统计每容器一条键）全部走 DirectStore（普通 DP 直存）
 const warehouseStore = new McWarehouseStore(direct);
-const indexStore = new McIndexStore(direct);
 const members = new MemberService();
 // ⚠️ 早执行安全：create 只建默认值不读 DP（world.getDynamicProperty 早执行会报错）；
 // 持久化值在 Phase 4 system.run 里 config.refresh() 读取并重应用
@@ -99,8 +97,8 @@ const organizer = new Organizer();
 const stats = new StatsService(statsStore, bus);
 // 容器按需加载依赖（配置注册表/统计/索引随仓库生命周期统一，见 container/WarehouseLoader）
 const containerLoader = { warehouseStore, factory, stats };
-// 索引生命周期（激活 ensureContainersLoaded + 恢复/重建，卸载逐容器落盘 + unloadContainers）收进 persistence/Persistence
-const indexLifecycle = createIndexLifecycle(containerLoader, indexStore);
+// 索引生命周期（纯运行时：激活 ensureContainersLoaded + 全量重建，卸载 unloadContainers 清内存）收进 persistence/Persistence
+const indexLifecycle = createIndexRuntimeLifecycle(containerLoader);
 const scheduler = new Scheduler(router, intervals, proximity, bus, config.globalSpeedLimit, undefined, {
   indexLifecycle,
 });
@@ -121,8 +119,8 @@ registerRenderEffects(bus, loaded);
 // 仓库/会话状态 HUD：物品栏上方 actionbar（选区会话优先，其次附近仓库路由/工作状态）
 registerWarehouseHUD(scheduler, loaded, members, sessionStore);
 
-// ── 容器逐容器持久化（注册表/索引/统计每容器一条键，事件驱动最小单位）收进 persistence/Persistence ──
-const persistence = createContainerPersistence({ warehouseStore, indexStore, scheduler, stats });
+// ── 容器逐容器持久化（注册表/统计每容器一条键，事件驱动最小单位；索引纯运行时不落盘）收进 persistence/Persistence ──
+const persistence = createContainerPersistence({ warehouseStore, scheduler, stats });
 
 // 领域事件订阅中央注册：路由副作用/容器持久化/仓库生命周期 统一在此一处（见 events/Subscriptions.ts）
 registerSubscriptions({
@@ -133,7 +131,6 @@ registerSubscriptions({
   organize,
   scheduler,
   warehouseStore,
-  indexStore,
   factory,
   getMaxContainers: () => config.maxContainers, // 实时读（Phase 4 refresh 后自动生效）
   ...persistence,

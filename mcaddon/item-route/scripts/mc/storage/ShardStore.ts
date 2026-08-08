@@ -49,7 +49,7 @@ const dataKey = (key: string, gen: number, i: number): string => `${key}:data:${
  *  - 逻辑 key 的 payload 切成 ≤26K 的独立 DP 键（`key:data:gen:i`），每片 {h,v} 信封 + FNV-1a 哈希。
  *  - overwrite：固定 gen=0 覆盖写（小数据）；generation：写新世代→切 hdr→删旧世代（防崩溃半截）。
  *  - write 后读回验 hash，失败重写一次；仍失败回退旧 hdr（"新完整或旧完整，绝无半截"）。
- * 上层依赖：McWarehouseStore/McIndexStore/McStatsStore/McModConfig 均经此实现。
+ * 上层依赖：McWarehouseStore/McStatsStore/McModConfig 均经此实现。
  */
 export class ShardStore {
   constructor(
