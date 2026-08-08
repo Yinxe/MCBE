@@ -1,11 +1,11 @@
 // ─── 路由策略（可插拔）：类型定义 + 策略桶导出 ──
 // 每种策略独立成文件（Single/Multi/Family/Misc），此文件只承载：路由类型 + 统一 re-export。
 // 路线顺序（数字优先级升序）：输入 → 单物(10) → 多物(20) → 同族(30) → 其他(40);
-// 黑白名单是**横切层**（Admission.ts，与策略解耦）：
-//   · 黑名单/白名单"限定"准入 → Router.attempt 在 transfer 前统一 `containerAcceptsItem`；
-//   · 白名单"声明式"候选 → 各策略调 `collectWhitelistedCandidates` 一行（逻辑在 Admission）。
+// 黑白名单是**横切层**（Admission.ts，随 Router 注入 ctx.admission）：
+//   · 黑名单 = 拦截器（准入裁决）→ Router.attempt 在 transfer 前统一 `admission.accepts`；
+//   · 白名单 = 声明式候选 → 各策略调 `admission.collectWhitelisted` 一行（逻辑在 Admission）。
 // 依赖方向：策略/Admission/helpers → 仅 type 引本文件；本文件只 re-export 它们（无值循环）。
-import type { Container } from "../model/Container";
+import type { Container, ContainerRole } from "../model/Container";
 import type { ItemStack } from "../model/ItemStack";
 import type { Warehouse } from "../model/Warehouse";
 import type { ContainerId, ItemId } from "../model/types";
@@ -25,6 +25,19 @@ export interface RouteContext {
   lookupFamily(familyId: string): ContainerId[];
   /** 候选漂移时按容器真实内容重建索引条目（策略自行校验后调用，修复/移除过期候选） */
   reconcile(container: Container): void;
+  /** 黑白名单拦截器（Router 注入；策略用它取白名单声明候选） */
+  admission: {
+    /** 黑名单准入拦截：黑名单命中 → 该容器永不收此物品（前置于一切候选转移） */
+    accepts(container: Container, itemId: ItemId): boolean;
+    /** 白名单声明式候选收集 */
+    collectWhitelisted(
+      ctx: RouteContext,
+      itemId: ItemId,
+      roles: ReadonlyArray<ContainerRole>,
+      seen: Set<ContainerId>,
+      out: CandidateContainer[]
+    ): void;
+  };
 }
 
 /** 候选容器（含排序所需信息） */
@@ -50,5 +63,5 @@ export { SingleItemStrategy } from "./SingleItemStrategy";
 export { MultiItemStrategy } from "./MultiItemStrategy";
 export { FamilyStrategy } from "./FamilyStrategy";
 export { MiscStrategy } from "./MiscStrategy";
-// 黑白名单横切（Router 准入 + 策略白名单声明候选共用入口）
-export { containerAcceptsItem, collectWhitelistedCandidates } from "./Admission";
+// 黑白名单拦截器：Router 注入 ctx.admission 统一织入（黑=准入拦截，白=声明候选）
+export { AdmissionInterceptor, admission } from "./Admission";

@@ -14,6 +14,20 @@ export function dimensionShort(dimension: string): string {
   return dimension.startsWith("minecraft:") ? dimension.slice("minecraft:".length) : dimension;
 }
 
+/** 维度中文名：minecraft:overworld → 主世界；未知维度回退短名 */
+export function dimensionName(dimension: string): string {
+  switch (dimension) {
+    case "minecraft:overworld":
+      return "主世界";
+    case "minecraft:nether":
+      return "下界";
+    case "minecraft:the_end":
+      return "末地";
+    default:
+      return dimensionShort(dimension);
+  }
+}
+
 /** 由主坐标 + 维度生成容器 ID（维度存短名） */
 export function containerIdOf(loc: Location, dimension: string): ContainerId {
   return `c@(${loc.x},${loc.y},${loc.z})@${dimensionShort(dimension)}`;

@@ -3,7 +3,6 @@
 // 类型级判定（同 ID 不同 NBT 视为同类，各落槽不合并，由 mc.addItem 权威裁决）。
 import type { ContainerId } from "../model/types";
 import type { CandidateContainer, RouteContext, RouteStrategy } from "./RouteStrategy";
-import { collectWhitelistedCandidates } from "./Admission";
 import { hasItemType, toCandidate } from "./helpers";
 
 /** 策略 2：多物容器 —— 同型聚集（实含该类型）或 白名单声明（缺物也能收） */
@@ -33,7 +32,7 @@ export class MultiItemStrategy implements RouteStrategy {
         ctx.reconcile(container);
       }
     }
-    collectWhitelistedCandidates(ctx, itemId, ["multi"], seen, out);
+    ctx.admission.collectWhitelisted(ctx, itemId, ["multi"], seen, out);
     return out;
   }
 }

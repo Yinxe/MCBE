@@ -1,9 +1,8 @@
 // ─── 策略 1：单物容器（priority 10） ──
-// 候选 = 索引中该 typeId 的单物容器（绑定匹配，内容派生）+ 白名单声明式（允许缺物，见 Admission）。
-// 单物同样受黑白名单约束（准入在 Router.attempt 统一裁决，见 containerAcceptsItem）。
+// 候选 = 索引中该 typeId 的单物容器（绑定匹配，内容派生）+ 白名单声明式（允许缺物）。
+// 单物同样受黑白名单约束（黑名单准入拦截在 Router.attempt 统一经 admission.accepts 裁决）。
 import type { ContainerId } from "../model/types";
 import type { CandidateContainer, RouteContext, RouteStrategy } from "./RouteStrategy";
-import { collectWhitelistedCandidates } from "./Admission";
 import { toCandidate } from "./helpers";
 
 /** 策略 1：单物容器 —— 绑定匹配（索引）或 白名单声明（允许缺物）。单物同样支持黑白名单 */
@@ -29,7 +28,7 @@ export class SingleItemStrategy implements RouteStrategy {
       }
     }
     // ② 白名单声明式：空单物被白名单"预订"（缺物也能收），实现单物预分配
-    collectWhitelistedCandidates(ctx, itemId, ["single"], seen, out);
+    ctx.admission.collectWhitelisted(ctx, itemId, ["single"], seen, out);
     return out;
   }
 }

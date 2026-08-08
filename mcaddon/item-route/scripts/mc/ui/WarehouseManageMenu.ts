@@ -34,7 +34,7 @@ export async function showWarehouseManageMenu(player: Player, deps: CommandDeps)
     const size = areaSize(w.area);
     const ownerTag = isAdmin && w.ownerName !== player.name ? ` (${w.ownerName})` : "";
     form.button(
-      `${uiColor.btn.nav}${w.displayName}${uiColor.btn.info}${ownerTag}  ${dimensionShort(w.area.dimension)} ${size.x}×${size.y}×${size.z}=${size.volume}格`,
+      `${uiColor.btn.nav}${w.displayName}${uiColor.btn.info}${ownerTag}  ${uiColor.form.muted}${w.id}${uiColor.btn.info} ${dimensionShort(w.area.dimension)} ${size.x}×${size.y}×${size.z}=${size.volume}格`,
       () => void showWarehouseSettingsMenu(player, deps, w)
     );
   }

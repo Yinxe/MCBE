@@ -13,7 +13,9 @@ import { requireRole } from "../commands/auth";
 import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
 import { isHopperType } from "../../core/model/ContainerTypes";
 import { containerShortName } from "../../core/model/ContainerId";
+import { getChineseName } from "../../core/data/ItemNameMap";
 import { scanContainer } from "../../core/model/ContainerScan";
+import { containerFamilyRanks, formatFamilyRankLine } from "../../core/stats/familyRanks";
 import { refreshInputMembership } from "../../core/model/ContainerRegistry";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
@@ -45,16 +47,30 @@ function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container:
   const warnMark =
     container.capacity > 0 && usage >= Math.round(warehouse.settings.warningThreshold * 100) ? ` ${usageColor}⚠` : "";
   const capacityLine = `${uiColor.form.muted}容量 ${uiColor.form.body}${scan.usedSlots}${uiColor.form.muted}/${uiColor.form.body}${container.capacity}[${usageColor}${usage}%${uiColor.form.muted}]  ${uiColor.form.body}${scan.totalItems}${uiColor.form.muted} 个物品  ${uiColor.form.body}${Object.keys(scan.byType).length}${uiColor.form.muted} 种类型${warnMark}`;
+  // 族榜：多物容器启用同族收纳 → 信息区显示容器内族排行榜（族类型数降序，全排不省略）
+  const familyBlock =
+    container.role === "multi" && container.familyEnabled
+      ? formatFamilyRanksBlock(scan)
+      : "";
   return (
     `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
-    `${uiColor.form.muted}类型 ${uiColor.form.body}${blockType}${isHopperType(blockType) ? "（漏斗→输入容器）" : ""}\n` +
+    `${uiColor.form.muted}类型 ${uiColor.form.body}${getChineseName(blockType)}${isHopperType(blockType) ? "（漏斗→输入容器）" : ""}\n` +
     `${capacityLine}\n` +
     `${uiColor.form.muted}混乱度 ${uiColor.form.body}${(messiness * 100).toFixed(0)}%\n` +
     `${uiColor.form.muted}容器ID ${uiColor.form.body}${container.id}\n` +
     `${uiColor.form.muted}状态 ${container.enabled ? uiColor.form.success + "已启用" : uiColor.form.error + "已禁用"}\n` +
     `${uiColor.form.muted}角色 ${uiColor.form.accent}${roleLabel}\n` +
-    `${uiColor.form.muted}优先级 ${uiColor.form.body}${container.priority}`
+    `${uiColor.form.muted}优先级 ${uiColor.form.body}${container.priority}` +
+    familyBlock
   );
+}
+
+/** 容器族榜文本：`族榜:` 起行，`#1.羊毛(5|1.4k)` 逐族全排（仅实含族参与，类型数降序） */
+function formatFamilyRanksBlock(scan: ReturnType<typeof scanContainer>): string {
+  const ranks = containerFamilyRanks(scan);
+  if (ranks.length === 0) return "";
+  const lines = ranks.map((r, i) => `${uiColor.form.muted}${formatFamilyRankLine(r, i + 1)}`);
+  return `\n${uiColor.form.muted}族榜:` + "\n" + lines.join("\n");
 }
 
 /**
@@ -67,8 +83,9 @@ export async function showContainerRoleMenu(player: Player, deps: CommandDeps, w
     .body(`${uiColor.form.body}选择容器（漏斗为强制输入容器）：`);
   for (const container of warehouse.containers.values()) {
     const roleLabel = ROLE_LABELS[container.role] ?? container.role;
+    const blockType = (container as { blockType?: string }).blockType ?? "";
     form.button(
-      `${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]`,
+      `${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]${blockType ? ` ${uiColor.form.muted}${getChineseName(blockType)}` : ""}`,
       () => void showContainerConfigMenu(player, deps, warehouse, container)
     );
   }
@@ -141,9 +158,9 @@ export async function showContainerConfigMenu(
 
   // 同族收纳：仅多物容器有意义（按内容派生：装某族任一 → 收全族）
   if (container.role === "multi") {
-    form.toggle("familyEnabled", `${uiColor.form.accent}同族收纳（装某族任一 → 收全族）`, {
+    form.toggle("familyEnabled", `${uiColor.form.accent}同族收纳（允许接受同族物品）`, {
       defaultValue: container.familyEnabled,
-      tooltip: "开启后按内容派生成族：装入白羊毛→也能收橙/红/黑…全羊毛。仅多物容器生效",
+      tooltip: "容器启用后允许接受同族物品：装入某族任一成员 → 该族其余成员也能进入。仅多物容器生效",
     });
   }
 

@@ -8,6 +8,7 @@ import {
   warehouseIdOf,
   containerShortName,
   dimensionShort,
+  dimensionName,
 } from "../scripts/core/model/ContainerId";
 
 const DIM = "overworld";
@@ -25,6 +26,13 @@ test("containerIdOf: 维度全名截成短名（minecraft:overworld → overworl
   assert.equal(containerIdOf({ x: 1, y: 2, z: 3 }, "minecraft:overworld"), "c@(1,2,3)@overworld");
   assert.equal(containerIdPointsTo("c@(1,2,3)@overworld", { x: 1, y: 2, z: 3 }, "minecraft:overworld"), true);
   assert.equal(containerShortName("c@(10,64,3)@overworld"), "(10,64,3)@overworld");
+});
+
+test("dimensionName: minecraft 全名 → 中文维度，未知回退短名", () => {
+  assert.equal(dimensionName("minecraft:overworld"), "主世界");
+  assert.equal(dimensionName("minecraft:nether"), "下界");
+  assert.equal(dimensionName("minecraft:the_end"), "末地");
+  assert.equal(dimensionName("overworld"), "overworld"); // 已短名无前缀 → 回退短名
 });
 
 test("primaryLocationOf: 双箱取 (x,y,z) 最小者（与创建顺序无关）", () => {

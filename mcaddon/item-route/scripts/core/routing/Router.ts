@@ -14,7 +14,7 @@ import type { ContainerId, ItemId } from "../model/types";
 import type { Warehouse } from "../model/Warehouse";
 import type { CandidateSorter } from "./CandidateSorter";
 import { transfer } from "./Move";
-import { containerAcceptsItem, type RouteStrategy } from "./RouteStrategy";
+import { AdmissionInterceptor, admission, type RouteStrategy } from "./RouteStrategy";
 
 /** selfHeal 冷却时长（墙钟 ms）：同 type 在窗口内不再全仓自愈；配合滑动续期，持续无效流只扫首次。 */
 export const SELF_HEAL_COOLDOWN_MS = 5000;
@@ -56,14 +56,19 @@ export class Router {
   private readonly real: RouteStrategy[];
   /** 兜底策略（misc） */
   private readonly fallback: RouteStrategy[];
+  /** 黑白名单拦截器（构造注入；路由时下放 ctx.admission 供策略取白名单声明候选） */
+  private readonly admissionPolicy: AdmissionInterceptor;
 
   constructor(
     strategies: RouteStrategy[],
     private readonly sorter: CandidateSorter,
     private readonly bus: EventBus,
+    /** 黑白名单拦截器（默认共享单例 `admission`；测试可注入自定义 policy 断言准入） */
+    admissionPolicy: AdmissionInterceptor = admission,
     /** 时钟注入（默认 Date.now 墙钟；测试用假时钟） */
     private readonly now: () => number = Date.now
   ) {
+    this.admissionPolicy = admissionPolicy;
     const ordered = [...strategies].sort((a, b) => a.priority - b.priority);
     this.real = ordered.filter((s) => !s.isFallback);
     this.fallback = ordered.filter((s) => s.isFallback);
@@ -124,6 +129,7 @@ export class Router {
       },
       lookupFamily: (familyId: string) => index.lookupFamily(familyId),
       reconcile: (c: Container) => index.reconcile(c),
+      admission: this.admissionPolicy,
     };
     const real = this.real;
     const fallback = this.fallback;
@@ -134,8 +140,8 @@ export class Router {
         for (const candidate of sorted) {
           const target = candidate.container;
           if (!target.enabled) continue;
-          // 容器级准入：黑名单命中 → 该容器永远不收此物品（覆盖索引/族桶/白名单一切候选）
-          if (!containerAcceptsItem(target, itemId)) continue;
+          // 黑名单准入拦截（拦截器）：黑名单命中 → 该容器永远不收此物品（覆盖索引/族桶/白名单一切候选）
+          if (!this.admissionPolicy.accepts(target, itemId)) continue;
           const remaining = transfer({ container: input, slot }, target);
           if (remaining !== undefined && remaining.amount === originalAmount) continue; // 未移动
           const moved = originalAmount - (remaining?.amount ?? 0);

@@ -49,6 +49,27 @@ test("FAMILY_BY_ITEM：一物一族，族非空，羊毛含多色", () => {
   assert.ok(wool.items.includes("minecraft:orange_wool"));
 });
 
+test("头颅族：7 种头颅收纳一族，且从旧族（末地/其他材料）移出（一物一族核验已兜底）", () => {
+  const heads = ITEM_FAMILIES.find((f) => f.id === "heads");
+  assert.ok(heads !== undefined);
+  assert.equal(heads.displayName, "头颅");
+  assert.equal(heads.items.length, 7);
+  for (const id of ["minecraft:dragon_head", "minecraft:creeper_head", "minecraft:player_head"]) {
+    assert.equal(familyOf(id), "heads");
+  }
+  // 全部 7 种头颅都在头颅族
+  const allHeads = [
+    "minecraft:dragon_head",
+    "minecraft:creeper_head",
+    "minecraft:piglin_head",
+    "minecraft:player_head",
+    "minecraft:skeleton_skull",
+    "minecraft:wither_skeleton_skull",
+    "minecraft:zombie_head",
+  ];
+  for (const id of allHeads) assert.equal(familyOf(id), "heads", `${id} 应属头颅族`);
+});
+
 // ── 构建真实索引 + Router（含 FamilyStrategy）的最小可用仓库 ──
 function makeRouterWorld(items?: (c: InMemoryContainer) => void) {
   const containers = new Map<string, InMemoryContainer>();

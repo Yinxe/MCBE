@@ -21,7 +21,7 @@ export async function showStatsUI(player: Player, deps: CommandDeps, warehouse: 
     table.row(getChineseName(typeId), Cell.right(formatCount(itemStat.count)));
   }
   const body = [
-    `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}`,
+    `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName} ${uiColor.form.muted}(${warehouse.id})`,
     `${uiColor.form.muted}容器 ${uiColor.form.body}${stats.containerCount} ${uiColor.form.muted}| 槽位 ${uiColor.form.body}${stats.usedSlots}/${stats.totalSlots} ${uiColor.form.muted}| 物品 ${uiColor.form.body}${formatCount(stats.totalItems)} ${uiColor.form.muted}| 种类 ${uiColor.form.body}${stats.uniqueTypes}`,
     table.render(1, [1, 2]) || `${uiColor.form.muted}（空）`,
   ].join("\n");

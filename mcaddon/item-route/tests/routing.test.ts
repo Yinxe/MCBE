@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy } from "../scripts/core/routing/RouteStrategy";
+import { SingleItemStrategy, MultiItemStrategy, MiscStrategy, admission } from "../scripts/core/routing/RouteStrategy";
 import type { RouteContext, CandidateContainer } from "../scripts/core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
 import { transfer, MoveJournal } from "../scripts/core/routing/Move";
@@ -39,6 +39,7 @@ function makeCtx(
     lookupIndex: lookup,
     lookupFamily: () => [],
     reconcile: () => {},
+    admission,
   };
 }
 
@@ -347,6 +348,7 @@ test("Router: selfHeal 冷却+滑动续期——持续无效流只扫首次，�
     [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
     new DefaultCandidateSorter(),
     new EventBus(),
+    admission,
     () => t // 假时钟
   );
   // 连续同 type 路由：第 1 次自愈，之后每次命中都**续期**压住（不重扫）

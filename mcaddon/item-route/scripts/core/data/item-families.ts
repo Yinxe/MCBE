@@ -395,7 +395,7 @@ const logs: ItemFamily = {
 
 const fungi: ItemFamily = {
   id: "fungi",
-  displayName: "fungi",
+  displayName: "菌类",
   items: [
     "minecraft:crimson_fungus",
     "minecraft:crimson_hyphae",
@@ -761,6 +761,14 @@ const stone_core: ItemFamily = {
   id: "stone_core",
   displayName: "石材核心",
   items: [
+    "minecraft:andesite",
+    "minecraft:calcite",
+    "minecraft:cobbled_deepslate",
+    "minecraft:cobblestone",
+    "minecraft:deepslate",
+    "minecraft:diorite",
+    "minecraft:dripstone_block",
+    "minecraft:granite",
     "minecraft:infested_chiseled_stone_bricks",
     "minecraft:infested_cobblestone",
     "minecraft:infested_cracked_stone_bricks",
@@ -768,6 +776,13 @@ const stone_core: ItemFamily = {
     "minecraft:infested_mossy_stone_bricks",
     "minecraft:infested_stone",
     "minecraft:infested_stone_bricks",
+    "minecraft:mossy_cobblestone",
+    "minecraft:pointed_dripstone",
+    "minecraft:red_sandstone",
+    "minecraft:reinforced_deepslate",
+    "minecraft:sandstone",
+    "minecraft:stone",
+    "minecraft:tuff",
   ],
 };
 
@@ -775,45 +790,30 @@ const native: ItemFamily = {
   id: "native",
   displayName: "原生自然方块",
   items: [
-    "minecraft:andesite",
     "minecraft:blue_ice",
-    "minecraft:calcite",
     "minecraft:clay",
     "minecraft:coarse_dirt",
-    "minecraft:cobbled_deepslate",
-    "minecraft:cobblestone",
-    "minecraft:deepslate",
-    "minecraft:diorite",
     "minecraft:dirt",
     "minecraft:dirt_with_roots",
-    "minecraft:dripstone_block",
     "minecraft:farmland",
     "minecraft:frog_spawn",
     "minecraft:frosted_ice",
-    "minecraft:granite",
     "minecraft:grass_block",
     "minecraft:grass_path",
     "minecraft:gravel",
     "minecraft:ice",
-    "minecraft:mossy_cobblestone",
     "minecraft:mud",
     "minecraft:muddy_mangrove_roots",
     "minecraft:mycelium",
     "minecraft:packed_ice",
     "minecraft:packed_mud",
     "minecraft:podzol",
-    "minecraft:pointed_dripstone",
     "minecraft:red_sand",
-    "minecraft:red_sandstone",
-    "minecraft:reinforced_deepslate",
     "minecraft:sand",
-    "minecraft:sandstone",
     "minecraft:snow",
     "minecraft:snow_layer",
-    "minecraft:stone",
     "minecraft:suspicious_gravel",
     "minecraft:suspicious_sand",
-    "minecraft:tuff",
   ],
 };
 
@@ -1064,7 +1064,7 @@ const wearables: ItemFamily = {
 
 const pet_gear: ItemFamily = {
   id: "pet_gear",
-  displayName: "pet_gear",
+  displayName: "宠物装备",
   items: [
     "minecraft:carrot_on_a_stick",
     "minecraft:copper_horse_armor",
@@ -1091,56 +1091,61 @@ const weapons: ItemFamily = {
   id: "weapons",
   displayName: "武器",
   items: [
-    "minecraft:bow",
-    "minecraft:copper_axe",
-    "minecraft:copper_pickaxe",
-    "minecraft:copper_shovel",
     "minecraft:copper_spear",
     "minecraft:copper_sword",
-    "minecraft:crossbow",
-    "minecraft:diamond_axe",
-    "minecraft:diamond_pickaxe",
-    "minecraft:diamond_shovel",
-    "minecraft:diamond_spear",
     "minecraft:diamond_sword",
-    "minecraft:golden_axe",
-    "minecraft:golden_pickaxe",
-    "minecraft:golden_shovel",
-    "minecraft:golden_spear",
+    "minecraft:diamond_spear",
     "minecraft:golden_sword",
-    "minecraft:iron_axe",
-    "minecraft:iron_pickaxe",
-    "minecraft:iron_shovel",
-    "minecraft:iron_spear",
+    "minecraft:golden_spear",
     "minecraft:iron_sword",
+    "minecraft:iron_spear",
     "minecraft:mace",
-    "minecraft:netherite_axe",
-    "minecraft:netherite_pickaxe",
-    "minecraft:netherite_shovel",
-    "minecraft:netherite_spear",
     "minecraft:netherite_sword",
-    "minecraft:stone_axe",
-    "minecraft:stone_pickaxe",
-    "minecraft:stone_shovel",
-    "minecraft:stone_spear",
+    "minecraft:netherite_spear",
     "minecraft:stone_sword",
-    "minecraft:trident",
-    "minecraft:wooden_axe",
-    "minecraft:wooden_pickaxe",
-    "minecraft:wooden_shovel",
-    "minecraft:wooden_spear",
+    "minecraft:stone_spear",
     "minecraft:wooden_sword",
+    "minecraft:wooden_spear",
+    "minecraft:trident",
   ],
 };
 
-const projectiles: ItemFamily = {
-  id: "projectiles",
-  displayName: "弹射物",
+const archery: ItemFamily = {
+  id: "archery",
+  displayName: "弓箭",
   items: [
     "minecraft:arrow",
-    "minecraft:experience_bottle",
-    "minecraft:snowball",
-    "minecraft:wind_charge",
+    "minecraft:bow",
+    "minecraft:crossbow",
+  ],
+};
+
+/** 挖掘工具：斧/镐/铲全材质（从通用工具拆出，便于按挖掘类收纳） */
+const mining_tools: ItemFamily = {
+  id: "mining_tools",
+  displayName: "挖掘工具",
+  items: [
+    "minecraft:copper_axe",
+    "minecraft:copper_pickaxe",
+    "minecraft:copper_shovel",
+    "minecraft:diamond_axe",
+    "minecraft:diamond_pickaxe",
+    "minecraft:diamond_shovel",
+    "minecraft:golden_axe",
+    "minecraft:golden_pickaxe",
+    "minecraft:golden_shovel",
+    "minecraft:iron_axe",
+    "minecraft:iron_pickaxe",
+    "minecraft:iron_shovel",
+    "minecraft:netherite_axe",
+    "minecraft:netherite_pickaxe",
+    "minecraft:netherite_shovel",
+    "minecraft:stone_axe",
+    "minecraft:stone_pickaxe",
+    "minecraft:stone_shovel",
+    "minecraft:wooden_axe",
+    "minecraft:wooden_pickaxe",
+    "minecraft:wooden_shovel",
   ],
 };
 
@@ -1156,6 +1161,7 @@ const tools: ItemFamily = {
     "minecraft:diamond_hoe",
     "minecraft:fishing_rod",
     "minecraft:flint_and_steel",
+    "minecraft:glass_bottle",
     "minecraft:golden_hoe",
     "minecraft:hopper_minecart",
     "minecraft:iron_hoe",
@@ -1187,6 +1193,34 @@ const buckets: ItemFamily = {
     "minecraft:tropical_fish_bucket",
     "minecraft:water_bucket",
     "minecraft:sulfur_cube_bucket",
+  ],
+};
+
+/** 工作方块：村民职业台 + 通用工作/存储方块（箱子/熔炉/工作台等） */
+const workstations: ItemFamily = {
+  id: "workstations",
+  displayName: "工作方块",
+  items: [
+    "minecraft:anvil",
+    "minecraft:barrel",
+    "minecraft:beacon",
+    "minecraft:blast_furnace",
+    "minecraft:bookshelf",
+    "minecraft:brewing_stand",
+    "minecraft:cartography_table",
+    "minecraft:cauldron",
+    "minecraft:chest",
+    "minecraft:composter",
+    "minecraft:crafting_table",
+    "minecraft:enchanting_table",
+    "minecraft:fletching_table",
+    "minecraft:furnace",
+    "minecraft:grindstone",
+    "minecraft:lectern",
+    "minecraft:loom",
+    "minecraft:smithing_table",
+    "minecraft:smoker",
+    "minecraft:stonecutter_block",
   ],
 };
 
@@ -1228,22 +1262,26 @@ const redstone: ItemFamily = {
 
 const crops: ItemFamily = {
   id: "crops",
-  displayName: "crops",
+  displayName: "农作物",
   items: [
     "minecraft:beetroot",
     "minecraft:beetroot_seeds",
     "minecraft:carrot",
     "minecraft:carved_pumpkin",
     "minecraft:cocoa_beans",
+    "minecraft:glistering_melon_slice",
+    "minecraft:golden_carrot",
     "minecraft:hay_block",
     "minecraft:kelp",
     "minecraft:lit_pumpkin",
     "minecraft:melon_block",
     "minecraft:melon_seeds",
+    "minecraft:nether_wart",
     "minecraft:poisonous_potato",
     "minecraft:potato",
     "minecraft:pumpkin",
     "minecraft:pumpkin_seeds",
+    "minecraft:sugar",
     "minecraft:sugar_cane",
     "minecraft:wheat",
     "minecraft:wheat_seeds",
@@ -1252,7 +1290,7 @@ const crops: ItemFamily = {
 
 const food: ItemFamily = {
   id: "food",
-  displayName: "food",
+  displayName: "食物",
   items: [
     "minecraft:apple",
     "minecraft:baked_potato",
@@ -1291,7 +1329,7 @@ const food: ItemFamily = {
 
 const plants: ItemFamily = {
   id: "plants",
-  displayName: "植物与树苗",
+  displayName: "植物",
   items: [
     "minecraft:azalea",
     "minecraft:bamboo",
@@ -1342,7 +1380,7 @@ const plants: ItemFamily = {
 
 const leaves: ItemFamily = {
   id: "leaves",
-  displayName: "leaves",
+  displayName: "树叶",
   items: [
     "minecraft:acacia_leaves",
     "minecraft:azalea_leaves",
@@ -1361,7 +1399,7 @@ const leaves: ItemFamily = {
 
 const saplings: ItemFamily = {
   id: "saplings",
-  displayName: "saplings",
+  displayName: "树苗",
   items: [
     "minecraft:acacia_sapling",
     "minecraft:birch_sapling",
@@ -1438,9 +1476,32 @@ const coral: ItemFamily = {
   ],
 };
 
+/** 光源方块：会发光的景物/照明类（与建材区分开，便于按功能收纳） */
+const light_sources: ItemFamily = {
+  id: "light_sources",
+  displayName: "光源",
+  items: [
+    "minecraft:campfire",
+    "minecraft:end_rod",
+    "minecraft:glowstone",
+    "minecraft:lantern",
+    "minecraft:magma",
+    "minecraft:ochre_froglight",
+    "minecraft:pearlescent_froglight",
+    "minecraft:respawn_anchor",
+    "minecraft:sea_lantern",
+    "minecraft:shroomlight",
+    "minecraft:soul_campfire",
+    "minecraft:soul_lantern",
+    "minecraft:soul_torch",
+    "minecraft:torch",
+    "minecraft:verdant_froglight",
+  ],
+};
+
 const nether: ItemFamily = {
   id: "nether",
-  displayName: "地狱物品",
+  displayName: "下界方块",
   items: [
     "minecraft:basalt",
     "minecraft:blackstone",
@@ -1453,9 +1514,6 @@ const nether: ItemFamily = {
     "minecraft:cracked_polished_blackstone_bricks",
     "minecraft:crimson_nylium",
     "minecraft:crimson_roots",
-    "minecraft:glowstone",
-    "minecraft:glowstone_dust",
-    "minecraft:magma",
     "minecraft:nether_brick",
     "minecraft:nether_brick_fence",
     "minecraft:nether_brick_slab",
@@ -1465,8 +1523,6 @@ const nether: ItemFamily = {
     "minecraft:nether_wart_block",
     "minecraft:netherbrick",
     "minecraft:netherrack",
-    "minecraft:ochre_froglight",
-    "minecraft:pearlescent_froglight",
     "minecraft:polished_basalt",
     "minecraft:polished_blackstone",
     "minecraft:polished_blackstone_brick_slab",
@@ -1482,16 +1538,10 @@ const nether: ItemFamily = {
     "minecraft:red_nether_brick_slab",
     "minecraft:red_nether_brick_stairs",
     "minecraft:red_nether_brick_wall",
-    "minecraft:respawn_anchor",
-    "minecraft:shroomlight",
     "minecraft:smooth_basalt",
-    "minecraft:soul_campfire",
-    "minecraft:soul_lantern",
     "minecraft:soul_sand",
     "minecraft:soul_soil",
-    "minecraft:soul_torch",
     "minecraft:twisting_vines",
-    "minecraft:verdant_froglight",
     "minecraft:warped_nylium",
     "minecraft:warped_roots",
     "minecraft:warped_wart_block",
@@ -1506,12 +1556,10 @@ const end: ItemFamily = {
     "minecraft:chorus_flower",
     "minecraft:chorus_fruit",
     "minecraft:chorus_plant",
-    "minecraft:dragon_head",
     "minecraft:end_brick_stairs",
     "minecraft:end_bricks",
     "minecraft:end_crystal",
     "minecraft:end_portal_frame",
-    "minecraft:end_rod",
     "minecraft:end_stone",
     "minecraft:end_stone_brick_slab",
     "minecraft:end_stone_brick_wall",
@@ -1529,15 +1577,13 @@ const accessories: ItemFamily = {
   items: [
     "minecraft:blue_egg",
     "minecraft:brown_egg",
+    "minecraft:experience_bottle",
     "minecraft:fire_charge",
     "minecraft:firework_rocket",
     "minecraft:firework_star",
-    "minecraft:fireworks_rocket",
-    "minecraft:goat_horn",
     "minecraft:ominous_bottle",
     "minecraft:ominous_trial_key",
     "minecraft:trial_key",
-    "minecraft:xp_bottle",
   ],
 };
 
@@ -1563,27 +1609,11 @@ const books_maps: ItemFamily = {
 
 const potions: ItemFamily = {
   id: "potions",
-  displayName: "药水与酿造",
+  displayName: "药水",
   items: [
-    "minecraft:blaze_powder",
-    "minecraft:blaze_rod",
-    "minecraft:brewing_stand",
-    "minecraft:cauldron",
-    "minecraft:dragon_breath",
-    "minecraft:fermented_spider_eye",
-    "minecraft:ghast_tear",
-    "minecraft:glass_bottle",
-    "minecraft:glistering_melon_slice",
-    "minecraft:golden_carrot",
-    "minecraft:gunpowder",
     "minecraft:lingering_potion",
-    "minecraft:magma_cream",
-    "minecraft:nether_wart",
     "minecraft:potion",
-    "minecraft:rabbit_foot",
-    "minecraft:spider_eye",
     "minecraft:splash_potion",
-    "minecraft:sugar",
   ],
 };
 
@@ -1631,7 +1661,6 @@ const treasure: ItemFamily = {
   id: "treasure",
   displayName: "宝藏",
   items: [
-    "minecraft:beacon",
     "minecraft:conduit",
     "minecraft:creaking_heart",
     "minecraft:dragon_egg",
@@ -1650,50 +1679,82 @@ const treasure: ItemFamily = {
 
 const other_materials: ItemFamily = {
   id: "other_materials",
-  displayName: "other_materials",
+  displayName: "其他材料",
   items: [
-    "minecraft:armadillo_scute",
     "minecraft:bee_nest",
     "minecraft:beehive",
-    "minecraft:bone",
     "minecraft:bone_meal",
     "minecraft:brick",
     "minecraft:charcoal",
     "minecraft:clay_ball",
-    "minecraft:creeper_head",
     "minecraft:dried_ghast",
-    "minecraft:egg",
-    "minecraft:feather",
     "minecraft:flint",
-    "minecraft:glow_ink_sac",
+    "minecraft:glowstone_dust",
     "minecraft:honey_block",
-    "minecraft:honeycomb",
     "minecraft:honeycomb_block",
-    "minecraft:ink_sac",
-    "minecraft:leather",
-    "minecraft:phantom_membrane",
+    "minecraft:slime",
+    "minecraft:tnt",
+  ],
+};
+
+const heads: ItemFamily = {
+  id: "heads",
+  displayName: "头颅",
+  items: [
+    "minecraft:creeper_head",
+    "minecraft:dragon_head",
     "minecraft:piglin_head",
     "minecraft:player_head",
-    "minecraft:prismarine_crystals",
-    "minecraft:prismarine_shard",
-    "minecraft:rabbit_hide",
-    "minecraft:rotten_flesh",
     "minecraft:skeleton_skull",
-    "minecraft:slime",
-    "minecraft:slime_ball",
+    "minecraft:wither_skeleton_skull",
+    "minecraft:zombie_head",
+  ],
+};
+
+/** 友好生物掉落：驯养/中立的生物掉落物（参考 v1 friendly_drops 同款） */
+const friendly_drops: ItemFamily = {
+  id: "friendly_drops",
+  displayName: "友好生物掉落",
+  items: [
+    "minecraft:armadillo_scute",
+    "minecraft:egg",
+    "minecraft:feather",
+    "minecraft:glow_ink_sac",
+    "minecraft:goat_horn",
+    "minecraft:honeycomb",
+    "minecraft:ink_sac",
+    "minecraft:leather",
+    "minecraft:rabbit_foot",
+    "minecraft:rabbit_hide",
     "minecraft:sniffer_egg",
-    "minecraft:snow_golem_shell",
-    "minecraft:sponge",
-    "minecraft:string",
-    "minecraft:tnt",
     "minecraft:turtle_egg",
     "minecraft:turtle_helmet",
     "minecraft:turtle_scute",
-    "minecraft:wet_sponge",
-    "minecraft:wither_skeleton_skull",
-    "minecraft:zombie_head",
+  ],
+};
+
+/** 敌对生物掉落物：僵尸/骷髅/蜘蛛等敌对怪掉落（参考 v1 hostile_drops，头颅并入 heads 族） */
+const hostile_drops: ItemFamily = {
+  id: "hostile_drops",
+  displayName: "敌对生物掉落",
+  items: [
+    "minecraft:blaze_powder",
+    "minecraft:blaze_rod",
+    "minecraft:bone",
     "minecraft:breeze_rod",
-    "minecraft:sea_lantern",
+    "minecraft:dragon_breath",
+    "minecraft:ghast_tear",
+    "minecraft:gunpowder",
+    "minecraft:magma_cream",
+    "minecraft:phantom_membrane",
+    "minecraft:prismarine_crystals",
+    "minecraft:prismarine_shard",
+    "minecraft:rotten_flesh",
+    "minecraft:slime_ball",
+    "minecraft:spider_eye",
+    "minecraft:sponge",
+    "minecraft:string",
+    "minecraft:wet_sponge",
   ],
 };
 
@@ -1799,9 +1860,11 @@ export const ALL_FAMILIES: readonly ItemFamily[] = [
   wearables,
   pet_gear,
   weapons,
-  projectiles,
+  archery,
+  mining_tools,
   tools,
   buckets,
+  workstations,
   redstone,
   crops,
   food,
@@ -1810,6 +1873,7 @@ export const ALL_FAMILIES: readonly ItemFamily[] = [
   saplings,
   flowers,
   coral,
+  light_sources,
   nether,
   end,
   accessories,
@@ -1819,6 +1883,9 @@ export const ALL_FAMILIES: readonly ItemFamily[] = [
   music_disc,
   ancient,
   treasure,
+  heads,
+  friendly_drops,
+  hostile_drops,
   other_materials,
   smithing_templates,
   pottery_sherds,
@@ -1861,5 +1928,42 @@ export function familyOf(typeId: string): string | undefined {
   return FAMILY_BY_ITEM[typeId];
 }
 
-/** 有序族列表（UI 枚举/默认全开用）；与 ALL_FAMILIES 同一数组的语义别名 */
+/** 有序族列表（UI 枚举/DEFAULT_ENABLED_FAMILIES 参照用）；与 ALL_FAMILIES 同一数组的语义别名 */
 export const ITEM_FAMILIES: readonly ItemFamily[] = ALL_FAMILIES;
+
+/**
+ * 仓库同族**默认启用**清单（新建仓库按此开启；玩家可在同族配置里增减）。
+ * 收录凡人高频分拣族：羊毛/地毯/彩色玻璃/混凝土/陶瓦等色系，常备建材（原木/铜/可穿戴/武器/工具/桶/红石）、
+ * 作物食物树植与少量珍稀族，其余（床/菌/木/石/宠物装备/弹射物/下界末地/模组卡/魔法/矿石等）默认关。
+ */
+export const DEFAULT_ENABLED_FAMILIES: readonly string[] = [
+  "wool",
+  "carpet",
+  "stained_glass",
+  "concrete",
+  "concrete_powder",
+  "terracotta",
+  "glazed_terracotta",
+  "candle",
+  "dye",
+  "harness",
+  "logs",
+  "copper_blocks",
+  "wearables",
+  "weapons",
+  "tools",
+  "mining_tools",
+  "buckets",
+  "redstone",
+  "crops",
+  "food",
+  "plants",
+  "leaves",
+  "saplings",
+  "flowers",
+  "coral",
+  "music_disc",
+  "smithing_templates",
+  "pottery_sherds",
+  "banner_patterns",
+];

@@ -21,7 +21,7 @@ import { showItemSearchMultiPicker } from "./ItemSearchMultiPicker";
 import { ITEM_FAMILIES } from "../../core/data/item-families";
 import { isFamilyEnabled } from "../../core/model/Warehouse";
 import { formatCount } from "../../core/utils/formatCount";
-import { dimensionShort } from "../../core/model/ContainerId";
+import { dimensionName } from "../../core/model/ContainerId";
 import { Table, Cell } from "./Table";
 import { areaSize } from "../../core/services/WarehouseService";
 import * as uiColor from "./uiColor";
@@ -81,13 +81,16 @@ function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string
   const enabledFamilyCount = countEnabledFamilies(warehouse);
   return (
     `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
-    `${uiColor.form.muted}位置 ${uiColor.form.body}${dimensionShort(a.dimension)} [${minX},${minY},${minZ}]→[${maxX},${maxY},${maxZ}]  ${size.x}×${size.y}×${size.z}\n` +
+    `${uiColor.form.muted}仓库ID ${uiColor.form.body}${warehouse.id}\n` +
+    `${uiColor.form.muted}维度 ${uiColor.form.body}${dimensionName(a.dimension)}\n` +
+    `${uiColor.form.muted}范围 ${uiColor.form.body}[${minX},${minY},${minZ}] → [${maxX},${maxY},${maxZ}]\n` +
+    `${uiColor.form.muted}规格 ${uiColor.form.body}${size.x}×${size.y}×${size.z}（${size.volume} 格）\n` +
     `${uiColor.form.muted}已启用族类: ${uiColor.form.accent}${enabledFamilyCount} 族` +
     `\n${tbl.render(0, [1, 1, 3])}`
   );
 }
 
-/** 该仓已启用族数（默认全开 = 全部族） */
+/** 该仓已启用族数（默认启用 DEFAULT_ENABLED_FAMILIES） */
 function countEnabledFamilies(warehouse: Warehouse): number {
   return ITEM_FAMILIES.filter((f) => isFamilyEnabled(warehouse.settings, f.id)).length;
 }
@@ -176,7 +179,7 @@ export async function showWarehouseSettingsMenu(
         tooltip: "查看仓库物品统计（物品名/数量/所在容器，按数量排序）",
       })
       .toggle("familyConfig", `${uiColor.form.accent}同族配置（一族一开关，族内同收）`, {
-        tooltip: "分页列出全部物品族：逐族启用/禁用 + 查看族内物品清单",
+        tooltip: "启用后仓库识别该族；容器启用同族后收纳其全部成员。逐族开关 + 查看族内物品",
       })
       .toggle("blacklist", `${uiColor.form.warn}仓库黑名单[${warehouse.settings.blacklist.length}]（永不入库）`, {
         tooltip: "名单内物品输入必阻塞，永不进入本仓库",

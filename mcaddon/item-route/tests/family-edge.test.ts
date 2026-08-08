@@ -11,7 +11,7 @@ import {
   FamilyStrategy,
   MiscStrategy,
 } from "../scripts/core/routing/RouteStrategy";
-import { containerAcceptsItem } from "../scripts/core/routing/Admission";
+import { admission, AdmissionInterceptor } from "../scripts/core/routing/Admission";
 import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
 import { ItemIndex } from "../scripts/core/index/ItemIndex";
 import { EventBus } from "../scripts/core/events/DomainEvents";
@@ -22,7 +22,7 @@ import {
   isFamilyEnabled,
   type Warehouse,
 } from "../scripts/core/model/Warehouse";
-import { ITEM_FAMILIES, familyOf } from "../scripts/core/data/item-families";
+import { ITEM_FAMILIES, familyOf, DEFAULT_ENABLED_FAMILIES } from "../scripts/core/data/item-families";
 
 function makeWorld() {
   const containers = new Map<string, InMemoryContainer>();
@@ -67,16 +67,16 @@ function makeFamBox(id = "mF"): InMemoryContainer {
   return c;
 }
 
-// ── 准入（Admission）纯函数边界 ─────────────────────────────
+// ── 准入（Admission）拦截器边界 ─────────────────────────────
 test("admission: 黑名单优先——白名单是允许非限定，黑名单命中才拒", () => {
   const c = new InMemoryContainer("m1", "multi", 3);
   c.whitelist = ["minecraft:redstone"];
   c.blacklist = ["minecraft:redstone"];
-  assert.equal(containerAcceptsItem(c, "minecraft:redstone"), false); // 黑名单一票否决（即使白名单含）
+  assert.equal(admission.accepts(c, "minecraft:redstone"), false); // 黑名单拦截一票否决（即使白名单含）
   c.blacklist = [];
-  assert.equal(containerAcceptsItem(c, "minecraft:redstone"), true); // 白名单含 → 允许
+  assert.equal(admission.accepts(c, "minecraft:redstone"), true); // 白名单含 → 允许
   // 白名单是"允许"非"限定"：未白名单物品也不被白名单拒绝（仅黑名单拒）
-  assert.equal(containerAcceptsItem(c, "minecraft:stone"), true);
+  assert.equal(admission.accepts(c, "minecraft:stone"), true);
 });
 
 // ── 白名单 = 允许（加法，不收紧）────────────────────────────
@@ -122,12 +122,29 @@ test("族路由：物品不在任何族（bedrock 被精简剔除）→ 无族�
   assert.equal(res?.to, "m1"); // 多物有 bedrock 实箱 → 走多物（不落族，也不落 misc）
 });
 
-test("启用族类：默认空=全关；写入某族后该族启用", () => {
+test("启用族类：默认启用 DEFAULT_ENABLED_FAMILIES；空数组=全关（旧档缺省）", () => {
   const s = createDefaultSettings();
-  assert.equal(isFamilyEnabled(s, "wool"), false); // 空 = 全关（仓库同族默认禁用，按需开启）
+  // 新默认：常用族默认启用（羊毛/地毯等）
+  assert.equal(isFamilyEnabled(s, "wool"), true);
+  assert.equal(isFamilyEnabled(s, "carpet"), true);
+  // 非默认族（如头颅 heads）默认关
+  assert.equal(isFamilyEnabled(s, "heads"), false);
+  // 旧档缺省语义：显式空数组 = 全关
+  s.enabledFamilies = [];
+  assert.equal(isFamilyEnabled(s, "wool"), false);
   s.enabledFamilies = ["wool"];
   assert.equal(isFamilyEnabled(s, "wool"), true);
   assert.equal(isFamilyEnabled(s, "carpet"), false); // 未写入 → 关
+});
+
+test("DEFAULT_ENABLED_FAMILIES：每个 id 都是真实存在的族，无重复", () => {
+  const ids = ITEM_FAMILIES.map((f) => f.id);
+  const defaultIds = DEFAULT_ENABLED_FAMILIES;
+  assert.ok(defaultIds.length > 0);
+  assert.equal(new Set(defaultIds).size, defaultIds.length, "默认清单不应有重复族");
+  for (const id of defaultIds) {
+    assert.ok(ids.includes(id), `默认清单含不存在族 ${id}`);
+  }
 });
 
 test("同族多候选按优先级排序（priority 小者先）", () => {
@@ -240,9 +257,9 @@ test("isFamilyEnabled 旧档缺 enabledFamilies → 空=全关，不崩", () => 
   assert.equal(isFamilyEnabled(s, "wool"), false); // 缺字段 → 空 = 全关
 });
 
-test("containerAcceptsItem 容器缺 blacklist/whitelist（旧数据）→ 不崩", () => {
+test("admission.accepts 容器缺 blacklist/whitelist（旧数据）→ 不崩", () => {
   const c = { id: "m1", blacklist: undefined, whitelist: undefined } as never;
-  assert.equal(containerAcceptsItem(c as never, "minecraft:stone"), true); // 无黑名单 → 收
+  assert.equal(admission.accepts(c as never, "minecraft:stone"), true); // 无黑名单 → 收
 });
 
 test("白名单空箱（有配置）→ 允许进入（允许式，缺物也能进）", () => {
@@ -253,4 +270,61 @@ test("白名单空箱（有配置）→ 允许进入（允许式，缺物也能�
   const res = w.route(r("minecraft:stone", 7));
   assert.equal(res?.to, "m1"); // 空箱 + 白名单 → 能进（容器准入不拦截 + 白名单声明候选）
   assert.equal(box.getItem(0)?.itemId, "minecraft:stone");
+});
+
+// ── 工作方块族：村民职业台 + 通用工作/存储方块 ──────────
+test("workstations 族：村民职业方块 + 箱子/熔炉/工作台齐全", () => {
+  const w = ITEM_FAMILIES.find((f) => f.id === "workstations");
+  assert.ok(w !== undefined);
+  // 通用工作台
+  for (const id of [
+    "minecraft:crafting_table",
+    "minecraft:furnace",
+    "minecraft:chest",
+    "minecraft:barrel",
+    "minecraft:composter",
+  ]) {
+    assert.equal(familyOf(id), "workstations", `${id} 应属工作方块`);
+  }
+  // 村民职业方块
+  for (const id of [
+    "minecraft:blast_furnace",
+    "minecraft:smoker",
+    "minecraft:smithing_table",
+    "minecraft:grindstone",
+    "minecraft:cartography_table",
+    "minecraft:fletching_table",
+    "minecraft:lectern",
+    "minecraft:loom",
+  ]) {
+    assert.equal(familyOf(id), "workstations", `${id} 应属工作方块`);
+  }
+  // 酿造台/炼药锅从 tools 移出，归工作方块（村民职业）
+  assert.equal(familyOf("minecraft:brewing_stand"), "workstations");
+  assert.equal(familyOf("minecraft:cauldron"), "workstations");
+});
+
+test("tools 拆分：镐/铲/斧归 mining_tools，锄等留 tools", () => {
+  assert.equal(familyOf("minecraft:copper_pickaxe"), "mining_tools");
+  assert.equal(familyOf("minecraft:iron_axe"), "mining_tools");
+  assert.equal(familyOf("minecraft:golden_shovel"), "mining_tools");
+  assert.equal(familyOf("minecraft:diamond_hoe"), "tools");
+  assert.equal(familyOf("minecraft:shears"), "tools");
+});
+
+test("光源/植物边界：火把灯笼归光源，海泡菜发光地衣归植物", () => {
+  assert.equal(familyOf("minecraft:torch"), "light_sources");
+  assert.equal(familyOf("minecraft:lantern"), "light_sources");
+  assert.equal(familyOf("minecraft:sea_pickle"), "plants");
+  assert.equal(familyOf("minecraft:glow_lichen"), "plants");
+});
+
+test("下界/植物/海龟边界：nether 更名下界方块，海龟掉落入友好，种子回作物", () => {
+  const nether = ITEM_FAMILIES.find((f) => f.id === "nether");
+  assert.ok(nether !== undefined);
+  assert.equal(nether.displayName, "下界方块");
+  assert.equal(familyOf("minecraft:blackstone"), "nether");
+  assert.equal(familyOf("minecraft:glowstone"), "light_sources"); // 萤石出下界进光源
+  assert.equal(familyOf("minecraft:turtle_helmet"), "friendly_drops");
+  assert.equal(familyOf("minecraft:sea_pickle"), "plants");
 });
