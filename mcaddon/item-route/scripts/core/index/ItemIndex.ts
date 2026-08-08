@@ -1,6 +1,8 @@
-// ─── O(1) 物品索引：查询/增量维护/惰性校验/持久化快照 ──
-// 本模块是"路由只查索引、不做全仓扫描"的底座。三张表（内存 Map）：
-//   · byItem         typeId → { single[], multi[] } 候选容器 ID（O(1) 定位）
+// ─── O(1) 全容器物品索引：路由 + 搜索共用一个数据结构 ──
+// `byItem` 是**全量通用索引**：key = itemId，value = { single, multi, misc } 各角色容器 ID 集合。
+//   · 路由只读 single/multi（候选定位）；**misc 桶也纳入同一 byItem**（不参与路由，仅搜索命中），
+//     未来新增容器角色天然扩展——维护代价全局唯一，不再有独立的 searchIndex 与之重叠。
+// 另两张辅助表：
 //   · containerItems 容器 ID → 其含有的 typeId 集合（增量维护用）
 //   · singleBindings 单物容器 ID → 绑定类型（由 deriveBinding 推导）
 //
@@ -18,37 +20,54 @@ import { familyOf } from "../data/item-families";
 import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
 
-export const INDEX_VERSION = 1;
+export const INDEX_VERSION = 2; // byItem 扩为含 misc 的全容器索引
+
+/** 单条目：各角色容器桶 */
+export interface ItemBuckets {
+  single: Set<ContainerId>;
+  multi: Set<ContainerId>;
+  misc: Set<ContainerId>;
+}
 
 export interface IndexSnapshot {
   version: number;
-  byItem: Record<ItemId, { single: ContainerId[]; multi: ContainerId[] }>;
+  byItem: Record<ItemId, { single: ContainerId[]; multi: ContainerId[]; misc: ContainerId[] }>;
   containerItems: Record<ContainerId, ItemId[]>;
   singleBindings: Record<ContainerId, ItemId>;
   /** 派生族索引（familyId → 启族多物容器 ID[]），随全量快照卷走（serialize/restore） */
   familyContainers: Record<string, ContainerId[]>;
 }
 
+function emptyBuckets(): ItemBuckets {
+  return { single: new Set(), multi: new Set(), misc: new Set() };
+}
+
 /**
- * O(1) 物品索引（每仓实例）：byItem(typeId→候选) / containerItems(容器→物品) / singleBindings(单物绑定)。
- * 路由只查索引、不做全仓扫描；漂移由"三层兜底"（代理信号 reconcile + 策略惰性校验 + 空箱重绑）自愈。
+ * O(1) 全容器物品索引（每仓实例）：byItem 一条索引（single/multi 供路由，misc 供搜索）。
+ * 路由只查索引、不做全仓扫描；搜索同样 O(1) 命中（读 misc+single+multi 桶）。
  * 持久化为**每容器一条条目**（serializeContainer/restoreFromEntries），与注册表/统计同风格。
- * 此 class 为每仓隔离实例（Scheduler 激活/卸载加载），不进 MC 层，可单测。
  */
 export class ItemIndex {
-  private byItem = new Map<ItemId, { single: Set<ContainerId>; multi: Set<ContainerId> }>();
+  private byItem = new Map<ItemId, ItemBuckets>();
   private containerItems = new Map<ContainerId, Set<ItemId>>();
   private singleBindings = new Map<ContainerId, ItemId>();
   /** 族 → 启族多物容器 ID（**内容派生的同族索引**：容器实含某族任一成员即入该族桶） */
   private familyContainers = new Map<string, Set<ContainerId>>();
-  /** 容器 → 其覆盖的族集合（O(1) 幂等移除族桶的反向镜像） */
+  /** 容器 → 其覆盖的族集合（O(1) 幂等移除组桶的反向镜像） */
   private containerFamilies = new Map<ContainerId, Set<string>>();
 
-  /** O(1) 查询：typeId → 候选容器 ID（按角色分组） */
+  /** O(1) 路由查询：typeId → single/multi 候选（misc 不参与路由，故返回前不含） */
   lookup(typeId: ItemId): { single: ContainerId[]; multi: ContainerId[] } {
     const entry = this.byItem.get(typeId);
     if (!entry) return { single: [], multi: [] };
     return { single: [...entry.single], multi: [...entry.multi] };
+  }
+
+  /** O(1) 搜索查询：typeId → 含该物品的全部存储容器（single+multi+misc），无则空 */
+  lookupSearch(typeId: ItemId): ContainerId[] {
+    const entry = this.byItem.get(typeId);
+    if (!entry) return [];
+    return [...new Set([...entry.single, ...entry.multi, ...entry.misc])];
   }
 
   /** O(1) 族查询：familyId → 启族多物容器 ID[]（同族路由候选，复用多物索引派生） */
@@ -84,9 +103,7 @@ export class ItemIndex {
 
   /**
    * 轻量更新：路由自身移动物品后只更新目标侧（来源侧留待惰性校验清理）。
-   * 通用簿记（与具体策略无关）：containerItems + 族桶。
-   *   · 族桶：任何路由进**启族多物容器**若引入新族则增补族桶（幂等）——容器真装了该族成员即族容器。
-   * 多物候选增补（byItem）不在本方法：**仅同族路由**由 Router 显式调 `onFamilyRouted`（见下）。
+   * 只维护容器 → 物品反向（containerItems）+ 每容器家族桶；byItem 各角色桶由惰性校验自愈。
    */
   onItemMoved(from: Container, to: Container, itemId: ItemId): void {
     this.containerItems.get(from.id)?.delete(itemId);
@@ -98,30 +115,20 @@ export class ItemIndex {
     }
   }
 
-  /**
-   * 同族路由成功 → 把新类型补为多物候选（byItem）。
-   * 族路由把"新类型"首次带进多物箱，该型才应转为 O(1) 多物索引候选（下次同型走 multi 而非再族推导）；
-   * 多物/单物路由目标本已含该型（已在索引），白名单路由走"声明式候选"（不入内容索引），都不调用本方法。
-   * 由 Router 在命中策略为 family 时显式调用（strategy 本就在路由结果里，无需下钻到 onItemMoved 参数）。
-   */
+  /** 同族路由成功 → 把新类型补为多物候选。由 Router 在命中策略为 family 时显式调用。 */
   onFamilyRouted(to: Container, itemId: ItemId): void {
     if (to.role === "multi") this.ensureEntry(itemId).multi.add(to.id);
   }
 
-  /**
-   * 按容器**真实内容**重建其索引条目（remove + rebuild）。
-   * 由策略侧惰性校验在候选命中时调用（单物绑定漂移/容器清空 → 修复或移除过期候选）。
-   * 等价于 onContainerChanged 全量重算，是"三层兜底之第二层"的落地。
-   */
+  /** 按容器**真实内容**重建其索引条目（remove + rebuild）。 */
   reconcile(container: Container): void {
     this.onContainerChanged(container);
   }
 
   /**
    * 索引自愈（漏索引兜底）：无候选时扫描给定**存储容器**集，凡 `contains(item)` 的
-   * 按真实内容重建条目（含 byItem 分组）。解决"用户手动向单物/多物放入某类型但索引未记录
-   * → 路由漏配该类型直接落 misc"。只扫描**非 input/非 misc**（misc 是兜底桶、input 是源，
-   * 都不作为路由候选）；仅索引 miss（罕见）时由 Router 触发，不做每路由全仓扫描。
+   * 按真实内容重建条目（含 byItem 分组）。只扫 m 非 input/非 misc（路由候选中自愈；
+   * 搜索命中 misc 由搜索侧自行 reconcile）。仅索引 miss（罕见）时由 Router 触发。
    */
   selfHeal(item: ItemStack, containers: Iterable<Container>): void {
     for (const container of containers) {
@@ -134,7 +141,11 @@ export class ItemIndex {
   serialize(): IndexSnapshot {
     const byItem: IndexSnapshot["byItem"] = {};
     for (const [itemId, entry] of this.byItem) {
-      byItem[itemId] = { single: [...entry.single], multi: [...entry.multi] };
+      byItem[itemId] = {
+        single: [...entry.single],
+        multi: [...entry.multi],
+        misc: [...entry.misc],
+      };
     }
     const containerItems: IndexSnapshot["containerItems"] = {};
     for (const [id, items] of this.containerItems) {
@@ -161,8 +172,9 @@ export class ItemIndex {
     this.containerFamilies = new Map();
     for (const [itemId, entry] of Object.entries(snapshot.byItem)) {
       this.byItem.set(itemId, {
-        single: new Set(entry.single),
-        multi: new Set(entry.multi),
+        single: new Set(entry.single ?? []),
+        multi: new Set(entry.multi ?? []),
+        misc: new Set(entry.misc ?? []),
       });
     }
     for (const [id, items] of Object.entries(snapshot.containerItems)) {
@@ -177,10 +189,7 @@ export class ItemIndex {
     return true;
   }
 
-  /**
-   * 单容器索引条目（持久化**最小单位**）：该容器的物品集 + 单物绑定。
-   * 供 mc 层按容器粒度落盘（ir2:idx:{cid}），事件驱动、只写改动的那一个容器。
-   */
+  /** 单容器索引条目（持久化**最小单位**） */
   serializeContainer(containerId: ContainerId): { items: string[]; singleBinding?: string } {
     const items = this.containerItems.get(containerId);
     return {
@@ -189,11 +198,7 @@ export class ItemIndex {
     };
   }
 
-  /**
-   * 由**每容器条目**恢复索引（激活加载用）。条目来自 mc 层各容器键。
-   * 任一容器缺条目（结构变更后未落盘）→ 返回 false，调用方回退全容器扫描重建。
-   * byItem 由 items+role 反演（singleBinding 优先于 role 分组）。
-   */
+  /** 由**每容器条目**恢复索引；任一容器缺条目 → false，调用方回退全容器扫描重建。 */
   restoreFromEntries(
     entries: ReadonlyMap<ContainerId, { items: string[]; singleBinding?: string }>,
     containers: Iterable<Container>
@@ -214,26 +219,28 @@ export class ItemIndex {
   private restoreContainerFromEntry(container: Container, entry: { items: string[]; singleBinding?: string }): void {
     this.containerItems.set(container.id, new Set(entry.items));
     const binding = entry.singleBinding;
-    if (binding !== undefined) {
+    const bucket = binding !== undefined ? this.ensureEntry(binding) : undefined;
+    if (binding !== undefined && container.role === "single") {
       this.singleBindings.set(container.id, binding);
-      this.ensureEntry(binding).single.add(container.id);
+      bucket?.single.add(container.id);
     } else if (container.role === "multi") {
       for (const itemId of entry.items) this.ensureEntry(itemId).multi.add(container.id);
-      // 同族派生：启族多物容器按条目物品重算族桶（familyContainers 纯派生，不经每容器条目）
       if (container.familyEnabled) {
         for (const itemId of entry.items) {
           const fam = familyOf(itemId);
           if (fam !== undefined) this.addContainerToFamily(container.id, fam);
         }
       }
+    } else if (container.role === "misc") {
+      for (const itemId of entry.items) this.ensureEntry(itemId).misc.add(container.id);
     }
   }
 
   // ── 私有方法 ───────────────────────────────────────────
-  private ensureEntry(itemId: ItemId): { single: Set<ContainerId>; multi: Set<ContainerId> } {
+  private ensureEntry(itemId: ItemId): ItemBuckets {
     let entry = this.byItem.get(itemId);
     if (!entry) {
-      entry = { single: new Set(), multi: new Set() };
+      entry = emptyBuckets();
       this.byItem.set(itemId, entry);
     }
     return entry;
@@ -260,14 +267,15 @@ export class ItemIndex {
       for (const itemId of items) {
         this.ensureEntry(itemId).multi.add(container.id);
       }
-      // 同族索引：启族多物容器按**实际内容**派生所属族（存白羊毛 → 入羊毛族桶 → 可收全族羊毛）。
-      // 与多物索引同源（containerItems），是"复用多物索引派生族桶"的落地：先建好多物条目，
-      // 再由 FAMILY_BY_ITEM 投影出族桶，无需另查全仓。
       this.rebuildContainerFamilies(container, items);
+    } else if (container.role === "misc") {
+      // misc 容器：不参与路由，但仍登记 byItem.misc → 搜索可命中
+      for (const itemId of items) {
+        this.ensureEntry(itemId).misc.add(container.id);
+      }
     }
   }
 
-  /** 启族多物容器：按内容物品派生族桶（removeContainerEntries 已清旧 → 此处全量重建幂等） */
   private rebuildContainerFamilies(container: Container, items: Set<ItemId>): void {
     if (!container.familyEnabled) return;
     for (const itemId of items) {
@@ -276,7 +284,6 @@ export class ItemIndex {
     }
   }
 
-  /** 把容器放进某族桶 + 记入 containerFamilies 反向镜像（幂等，Set 去重） */
   private addContainerToFamily(containerId: ContainerId, fam: string): void {
     let bucket = this.familyContainers.get(fam);
     if (!bucket) {
@@ -301,11 +308,14 @@ export class ItemIndex {
     const items = this.containerItems.get(containerId);
     if (items) {
       for (const itemId of items) {
-        this.byItem.get(itemId)?.multi.delete(containerId);
+        const entry = this.byItem.get(itemId);
+        if (entry) {
+          entry.multi.delete(containerId);
+          entry.misc.delete(containerId);
+        }
       }
     }
     this.containerItems.delete(containerId);
-    // 清该容器全部族桶成员资格（containerFamilies 镜像 O(1)，避免逐族全扫）
     const fams = this.containerFamilies.get(containerId);
     if (fams) {
       for (const fam of fams) this.familyContainers.get(fam)?.delete(containerId);

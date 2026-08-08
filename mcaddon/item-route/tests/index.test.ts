@@ -195,3 +195,32 @@ test("ItemIndex: onItemMoved 路由进启族多物容器 → 增补族桶（同�
   index.onItemMoved(input, target, "minecraft:redstone");
   assert.deepEqual(index.lookupFamily("redstone"), ["mF"]);
 });
+
+// ── 通用搜索索引（byItem 含 misc 桶） ────────────────────
+test("ItemIndex: lookupSearch 含 misc（全容器通用索引），lookup 路由仍仅 single/multi", () => {
+  const index = new ItemIndex();
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  const multi = new InMemoryContainer("m1", "multi", 3);
+  multi.setItem(0, new SimpleItemStack("minecraft:diamond", 3, 64));
+  const misc = new InMemoryContainer("x1", "misc", 3);
+  misc.setItem(0, new SimpleItemStack("minecraft:diamond", 4, 64));
+  index.onContainerAdded(single);
+  index.onContainerAdded(multi);
+  index.onContainerAdded(misc);
+  // 路由只看 single/multi
+  assert.deepEqual(index.lookup("minecraft:diamond").single, ["s1"]);
+  assert.deepEqual(index.lookup("minecraft:diamond").multi, ["m1"]);
+  // 搜索含全部存储容器（含 misc）
+  assert.deepEqual(index.lookupSearch("minecraft:diamond").sort(), ["m1", "s1", "x1"]);
+});
+
+test("ItemIndex: onContainerRemoved 清 misc 桶（搜索索引同步移除）", () => {
+  const index = new ItemIndex();
+  const misc = new InMemoryContainer("x1", "misc", 3);
+  misc.setItem(0, new SimpleItemStack("minecraft:stone", 2, 64));
+  index.onContainerAdded(misc);
+  assert.deepEqual(index.lookupSearch("minecraft:stone"), ["x1"]);
+  index.onContainerRemoved(misc);
+  assert.deepEqual(index.lookupSearch("minecraft:stone"), []);
+});

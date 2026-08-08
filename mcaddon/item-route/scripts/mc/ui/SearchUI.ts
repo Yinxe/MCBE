@@ -2,7 +2,7 @@
 import { world, system, type Player } from "@minecraft/server";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
-import { searchItems, getChineseName } from "../../core/data/ItemNameMap";
+import { searchContainers } from "../../core/search/WarehouseSearch";
 import { containerShortName } from "../../core/model/ContainerId";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";
@@ -80,7 +80,7 @@ export async function showSearchUI(player: Player, deps: CommandDeps): Promise<v
 /** 搜索指定仓库并展示结果 + 标记粒子（命令与 UI 共用） */
 export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse: Warehouse, query: string): void {
   deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（搜索扫容器内容）
-  const lines = runSearch(warehouse, query);
+  const lines = runSearch(deps, warehouse, query);
   if (lines.length === 0) {
     player.sendMessage(`${uiColor.chat.muted}未找到匹配物品`);
     return;
@@ -88,9 +88,11 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
   player.sendMessage(`${uiColor.chat.highlight}━━ ${warehouse.displayName} 搜索结果：${lines.length} 种 ━━`);
   const locs: Location[] = [];
   for (const line of lines) {
-    player.sendMessage(
-      `${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${line.containerIds.map(shortId).join(", ")}]`
-    );
+    // 容器**最多显示 1 个**，多余的略写（"+N"）；容器 id 用于粒子标记仍取全部
+    const shown = line.containerIds.slice(0, 1);
+    const extra = line.containerIds.length - 1;
+    const containerText = extra > 0 ? `${shown.map(shortId).join(", ")} ${uiColor.chat.muted}+${extra} 容器` : shown.map(shortId).join(", ");
+    player.sendMessage(`${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${containerText}]`);
     for (const id of line.containerIds) {
       const c = warehouse.containers.get(id);
       if (c) locs.push(...c.occupiedLocations);
@@ -99,32 +101,21 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
   if (locs.length > 0) startMarkerParticles(player, player.dimension.id, locs, (t) => deps.config.isToken(t));
 }
 
-/** 纯逻辑搜索：在指定仓库内 query → typeIds → 逐容器按 typeId 精确计数（可单测） */
-export function runSearch(warehouse: Warehouse, query: string): SearchResultLine[] {
-  // ⚠️ 性能：宽查询（如"石"/"a"）会命中数百 typeId，若对每个都全仓逐槽 getItem 会 O(N³) 卡顿。
-  //    限制对**前 MAX_TYPE_IDS 个**匹配类型扫描（按字母序），超出折叠提示，避免宽查询拖垮。
-  const MAX_TYPE_IDS = 40;
-  const typeIds = searchItems(query).slice(0, MAX_TYPE_IDS);
-  // 只搜存储容器（single/multi/misc），排除在途输入仓（input 不落库、且索引不含 misc，
-  // 直接扫全量非 input 保证"索引加载与否"两种状态结果一致，对齐 v1 SearchService 逐容器扫描）
-  const containers = [...warehouse.containers.values()].filter((c) => c.role !== "input");
-  const out: SearchResultLine[] = [];
-  for (const typeId of typeIds) {
-    let count = 0;
-    const containerIds: string[] = [];
-    for (const container of containers) {
-      let found = false;
-      for (let i = 0; i < container.capacity; i++) {
-        const item = container.getItem(i);
-        if (item?.itemId !== typeId) continue;
-        count += item.amount; // 仅统计该类型（multi 混放不虚高）
-        found = true;
+/** 纯逻辑搜索：基于通用容器索引（ItemIndex.lookupSearch，含 misc）O(1) 命中；未激活时本地倒排兜底 */
+export function runSearch(deps: CommandDeps, warehouse: Warehouse, query: string): SearchResultLine[] {
+  const index = deps.resolveIndex(warehouse.id);
+  const lookup = index?.lookupSearch;
+  const hits = searchContainers(warehouse.containers.values(), query, lookup);
+  // 搜索命中容器进行索引校验（reconcile 自愈：漂移的 byItem/misc 桶按真实内容重建）
+  if (index !== undefined) {
+    for (const h of hits) {
+      for (const id of h.containerIds) {
+        const c = warehouse.containers.get(id);
+        if (c) index.reconcile(c);
       }
-      if (found) containerIds.push(container.id);
     }
-    if (count > 0) out.push({ typeId, name: getChineseName(typeId), count, containerIds });
   }
-  return out;
+  return hits.map((h) => ({ typeId: h.typeId, name: h.name, count: h.count, containerIds: h.containerIds }));
 }
 
 /** 在容器坐标持续播放标记粒子（v1 状态机：正常 15 秒 / 超时手持续时 / 松手 3 秒宽限） */
