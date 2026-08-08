@@ -8,7 +8,7 @@
 //     内存注册表/索引联动，不亲自写 DP、无 markDirty、无定时 flush。
 //   · 主循环（每 5 tick）—— scheduler.tick() 驱动路由/生命周期 + stats.tick() 递减预警冷却
 // 路由移动（itemRouted）的索引/统计：itemRouted → main.ts 扫描目标 → containerScanned
-// （统计单容器写穿）；索引 itemRouted 不落盘（卸载/离仓时按每容器条目落盘，重载后惰性自愈）。
+// （统计单容器写穿）；索引纯运行时（激活全量重建、路由 itemRouted 只更新内存桶，不落盘）。
 import { world, system, type Block } from "@minecraft/server";
 import type { EventBus } from "../../core/events/DomainEvents";
 import type { ItemIndex } from "../../core/index/ItemIndex";

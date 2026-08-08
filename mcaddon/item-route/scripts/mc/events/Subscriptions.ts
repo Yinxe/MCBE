@@ -30,9 +30,9 @@ export interface SubscriptionContext {
   scheduler: Scheduler;
   warehouseStore: McWarehouseStore;
   factory: McContainerFactory;
-  /** 单容器写穿（注册表 + 索引条目；oldId=重定 ID 清旧键） */
+  /** 单容器写穿（注册表；oldId=重定 ID 清旧键） */
   persistContainer: (warehouse: Warehouse, container: Container, oldId?: ContainerId) => void;
-  /** 移除容器：清注册表 + 索引条目 + 统计键 */
+  /** 移除容器：清注册表 + 统计键 */
   removeContainer: (warehouse: Warehouse, containerId: ContainerId) => void;
   /** 同步该仓容器 ID 索引 */
   persistContainerIds: (warehouse: Warehouse) => void;
@@ -153,7 +153,7 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
   });
 
   // ── 仓库生命周期（cold） ──
-  // 删除：清内存 + 停调度 + 清索引条目/统计键（注册表键由 core deleteWarehouse 的 store.remove 清理）。
+  // 删除：清内存 + 停调度 + 清统计键（注册表键由 core deleteWarehouse 的 store.remove 清理）。
   // 容器可能**未加载**（启动不预载）→ 用 cids 索引枚举清键，而非依赖 warehouse.containers。
   bus.warehouseDeleted.subscribe((e) => {
     const i = loaded.findIndex((w) => w.id === e.warehouseId);
@@ -194,7 +194,7 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
   // resize 区域变更 → **容器/索引/统计全部失效并重扫新区域**（item 9.6）：
   //   重新选区后区域内容器集合会变（新增/移除出范围），必须以新区域为真相源重建。
   //   做法：清内存容器表 + 输入镜像 + 统计缓存，删每容器注册表/索引键（按 cids），
-  //   再 scanWarehouseArea 按新区域重注册（持久化新增 + 重建索引条目）。
+  //   再 scanWarehouseArea 按新区域重注册（持久化新增；索引随进程重建）。
   //   ⚠️ 顺序关键：warehouseAreaChanged 在旧 meta 移除**前**触发（WarehouseService 已重排），
   //   此处读到的是旧 cids 索引（需先枚举再删）。ID 未变时（e.oldId===warehouseId）同样失效重扫。
   bus.warehouseAreaChanged.subscribe((e) => {
@@ -218,7 +218,7 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
       scheduler.unregisterWarehouse(e.oldId);
       scheduler.registerWarehouse(wh);
     }
-    // 2) 按新区域重扫 → 重新注册容器 + 重建索引条目 + 持久化（含 cids 索引）
+    // 2) 按新区域重扫 → 重新注册容器 + 持久化（含 cids 索引）
     const dim = world.getDimension(wh.area.dimension);
     if (dim !== undefined) {
       scanWarehouseArea(dim, wh.area, factory, index, wh, ctx.getMaxContainers(), ctx.persistScannedContainers);

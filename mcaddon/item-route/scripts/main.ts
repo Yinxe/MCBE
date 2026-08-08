@@ -72,7 +72,7 @@ const router = new Router(
   new DefaultCandidateSorter(),
   bus
 );
-// 容器级数据（注册表/索引/统计每容器一条键）全部走 DirectStore（普通 DP 直存）
+// 容器级数据（注册表/统计每容器一条键）全部走 DirectStore（普通 DP 直存）
 const warehouseStore = new McWarehouseStore(direct);
 const members = new MemberService();
 // ⚠️ 早执行安全：create 只建默认值不读 DP（world.getDynamicProperty 早执行会报错）；

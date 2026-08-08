@@ -110,8 +110,13 @@ export class ItemIndex {
     // 目标角色对应桶同步登记（O(1) 幂等）：路由移动即刻对搜索/路由可见
     const entry = this.ensureEntry(itemId);
     if (to.role === "single") {
-      if (this.getBinding(to.id) === itemId) entry.single.add(to.id);
-      // 单物目标绑定须吻合；若漂移则不强行登记，交 reconcile 按真实内容重建
+      // 用**实时绑定**（容器侧派生）而非索引缓存：白名单空单物首件进箱后，索引缓存尚无绑定，
+      // 读缓存会误判漂移漏登记 → 实时对比 + 顺带回填缓存，保证首件即可搜/可路由
+      if (to.getDedicatedItemId() === itemId) {
+        this.singleBindings.set(to.id, itemId);
+        entry.single.add(to.id);
+      }
+      // 漂移（绑定与其不符的其它类型）不强行登记，交 reconcile 按真实内容重建
     } else if (to.role === "multi") {
       entry.multi.add(to.id);
     } else if (to.role === "misc") {
@@ -123,25 +128,21 @@ export class ItemIndex {
     }
   }
 
-  /** 同族路由成功 → 把新类型补为多物候选。由 Router 在命中策略为 family 时显式调用。 */
-  onFamilyRouted(to: Container, itemId: ItemId): void {
-    if (to.role === "multi") this.ensureEntry(itemId).multi.add(to.id);
-  }
-
   /** 按容器**真实内容**重建其索引条目（remove + rebuild）。 */
   reconcile(container: Container): void {
     this.onContainerChanged(container);
   }
 
   /**
-   * 索引自愈（漏索引兜底）：无候选时扫描给定**存储容器**集，凡 `contains(item)` 的
-   * 按真实内容重建条目（含 byItem 分组）。只扫 m 非 input/非 misc（路由候选中自愈；
-   * 搜索命中 misc 由搜索侧自行 reconcile）。仅索引 miss（罕见）时由 Router 触发。
+   * 索引自愈（漏索引兜底）：无候选时扫描给定**存储容器**集，凡**逐槽 typeId 匹配**（类型级，
+   * 与 multi 候选 hasItemType / 测试 InMemoryContainer.contains 语义一致，不做 NBT 敏感判定）
+   * 的按真实内容重建条目。只扫非 input/misc（路由候选中自愈；搜索命中 misc 由搜索侧自行 reconcile）。
+   * 仅索引 miss（罕见）时由 Router 触发。
    */
   selfHeal(item: ItemStack, containers: Iterable<Container>): void {
     for (const container of containers) {
       if (container.role === "input" || container.role === "misc") continue;
-      if (!container.contains(item)) continue;
+      if (!hasItemOfType(container, item.itemId)) continue;
       this.reconcile(container);
     }
   }
@@ -232,4 +233,12 @@ export class ItemIndex {
       this.containerFamilies.delete(containerId);
     }
   }
+}
+/** 容器是否含某 typeId（逐槽类型级比对，不做 NBT 敏感判定——与 multi 候选语义一致） */
+function hasItemOfType(container: Container, typeId: string): boolean {
+  for (let i = 0; i < container.capacity; i++) {
+    const item = container.getItem(i);
+    if (item !== undefined && item.itemId === typeId) return true;
+  }
+  return false;
 }

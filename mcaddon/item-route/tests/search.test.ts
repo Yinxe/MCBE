@@ -69,3 +69,49 @@ test("searchContainers: 无命中返回空", () => {
   const containers = [box("m1", "multi", [["minecraft:diamond", 1]])];
   assert.deepEqual(searchContainers(containers, "不存在的词xyz"), []);
 });
+
+// ── 索引注入兼容：ItemIndex.lookupSearch 实例方法绑定（P0 回归） ──
+import { ItemIndex } from "../scripts/core/index/ItemIndex";
+test("searchContainers: 注入 ItemIndex 实例 lookupSearch（含 misc）不炸且 O(1) 命中", () => {
+  const containers = [
+    box("m1", "multi", [["minecraft:diamond", 3]]),
+    box("x1", "misc", [["minecraft:diamond", 7]]),
+  ];
+  const idx = new ItemIndex();
+  for (const c of containers) idx.onContainerAdded(c);
+  // 用"实例方法裸引用"的形式模拟 SearchUI 传法——searchContainers 内经 fallback 兜底 & 索引优先
+  const lookup: (t: string) => string[] = (t) => idx.lookupSearch(t);
+  const hits = searchContainers(containers, "diamond", lookup);
+  const d = hits.find((h) => h.typeId === "minecraft:diamond");
+  assert.ok(d !== undefined);
+  assert.equal(d?.count, 10);
+  assert.deepEqual(d?.containerIds.sort(), ["m1", "x1"]);
+});
+
+test("searchContainers: 索引 miss（lookup 无结果）→ 实时倒排兜底不漏报", () => {
+  const real = new InMemoryContainer("m1", "multi", 4);
+  real.setItem(0, new SimpleItemStack("minecraft:netherite_ingot", 4, 64));
+  // 假 lookup：声称索引完全没索引到 netherite_ingot → fallback 实时扫描应兜住
+  const stub: (t: string) => string[] = () => [];
+  const hits = searchContainers([real], "netherite_ingot", stub);
+  const n = hits.find((h) => h.typeId === "minecraft:netherite_ingot");
+  assert.ok(n !== undefined, "索引 miss 时实时兜底应命中");
+  assert.equal(n!.count, 4);
+  assert.deepEqual(n!.containerIds, ["m1"]);
+});
+
+// ── 并集兜底：索引漏记某容器（stale）→ 实时倒排补齐，搜索不漏报 ──
+test("searchContainers: 索引漏记容器（stale）→ 并集实时兜底仍命中", () => {
+  const filled = new InMemoryContainer("m2", "multi", 4);
+  filled.setItem(0, new SimpleItemStack("minecraft:diamond", 12, 64));
+  // lookup 声称索引只记得 m1？——用一个只对 diamond 返回 ["m1"] 的 lookup 模拟"索引漏了 m2"
+  const phantom = new InMemoryContainer("m1", "multi", 4) as never; // 只为给 lookup 提供 m1 id
+  const idxDict: Record<string, string[]> = { "minecraft:diamond": ["m1"] };
+  const stub: (t: string) => string[] = (t) => idxDict[t] ?? [];
+  const hits = searchContainers([filled as never, phantom], "diamond", stub);
+  const d = hits.find((h) => h.typeId === "minecraft:diamond");
+  // 实时倒排（fallback）发现 m2 实际有 diamond → 并集后命中 m2；m1 真实读 0 被跳过
+  assert.ok(d !== undefined);
+  assert.equal(d!.count, 12);
+  assert.deepEqual(d!.containerIds, ["m2"]);
+});

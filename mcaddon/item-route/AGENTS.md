@@ -55,8 +55,8 @@ scripts/
 ## 核心设计约定（新代码遵循）
 
 - **core 无副作用**：core 只发领域事件（EventBus），mc 层订阅做**持久化/视觉/通知**副作用。事件负载只用可序列化 string/number，不携带 MC 对象。
-- **按需加载 + 统一生命周期**：启动只载仓库 meta（空容器表）；容器在**激活 / 菜单 / 命令访问**时 `ensureContainersLoaded` 按需加载，闲置（30 分钟）卸载。容器级数据（配置注册表 `ir2:c` / 索引 `ir2:idx` / 统计 `ir2:cst`）生命周期一致，随仓库激活加载/卸载。
-- **持久化最小单位**：容器级数据每容器一条 DP 键（`ir2:c:{cid}` / `ir2:idx:{cid}` / `ir2:cst:{cid}`），**事件驱动写穿、无定时 flush**；仓库 meta 单键（`ir2:wh:{id}:meta`）+ cids 索引（`ir2:wh:{id}:cids`）。容器 ID 全局唯一（不随仓库 resize 变），统计/索引键无需迁移。
+- **按需加载 + 统一生命周期**：启动只载仓库 meta（空容器表）；容器在**激活 / 菜单 / 命令访问**时 `ensureContainersLoaded` 按需加载，闲置（30 分钟）卸载。容器级数据（配置注册表 `ir2:c` / 统计 `ir2:cst`）生命周期一致，随仓库激活加载/卸载；**索引纯运行时**（激活全量重建、卸载即弃，不落盘）。
+- **持久化最小单位**：容器级数据每容器一条 DP 键（`ir2:c:{cid}` / `ir2:cst:{cid}`），**事件驱动写穿、无定时 flush**；仓库 meta 单键（`ir2:wh:{id}:meta`）+ cids 索引（`ir2:wh:{id}:cids`）。容器 ID 全局唯一（不随仓库 resize 变），统计键无需迁移。
 - **维度短名**：ID 内维度用短名（`minecraft:overworld` → `overworld`）；容器短名 `(x,y,z)@overworld`。
 - **不吞/不覆盖/不刷物**：概念 `ItemStack` 是缩减视图（id/数量/堆叠上限），写回用 `McItemAdapter` 携带源 `mc.ItemStack`（`clone()` 保留全部 NBT/组件）；堆叠判定委托 `mc.addItem` 权威（NBT 级，防错误合并/刷物）。整理合并权也委托 `addItem`。
 - **区块安全**：所有方块/容器访问 try-catch；`beforeEvents.playerInteractWithBlock` 回调**受限执行上下文**内不触世界/容器/UI 操作（延迟到 `system.run`），只做分支判断/读状态。

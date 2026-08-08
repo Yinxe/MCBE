@@ -47,7 +47,7 @@ export function ensureContainersLoaded(warehouse: Warehouse, deps: WarehouseLoad
 
 /**
  * 卸载该仓容器（闲置/删仓安全释放）：清 containers/inputs + 丢弃成员统计缓存（冷读重算）。
- * 必须在索引已落盘之后再调用（索引逐容器条目依赖 containers 在场）。
+ * 时机：容器卸载清内存（索引为纯运行时缓存，随进程重建，无须落盘）。
  */
 export function unloadContainers(warehouse: Warehouse, deps: WarehouseLoaderDeps): void {
   for (const c of warehouse.containers.keys()) deps.stats.invalidate(c);

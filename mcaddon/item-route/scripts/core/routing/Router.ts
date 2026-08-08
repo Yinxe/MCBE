@@ -26,9 +26,8 @@ export interface IndexGateway {
   lookupFamily(familyId: string): ContainerId[];
   /** 候选漂移时按容器真实内容重建索引条目（各策略自持校验后调用） */
   reconcile(container: Container): void;
+  /** 路由成功 → 按目标角色即时登记 byItem 桶（single/multi/misc）+ 族桶（onItemMoved 内聚） */
   onItemMoved(from: Container, to: Container, itemId: ItemId): void;
-  /** 同族路由成功 → 把新类型补为多物候选（byItem）；由 Router 在命中 family 时显式调用 */
-  onFamilyRouted(to: Container, itemId: ItemId): void;
   /** 索引 miss 时全仓自愈：扫描存储容器找 hasItem 并重建条目（Router 在无候选时触发） */
   selfHeal(item: ItemStack, containers: Iterable<Container>): void;
 }
@@ -145,9 +144,7 @@ export class Router {
           const remaining = transfer({ container: input, slot }, target);
           if (remaining !== undefined && remaining.amount === originalAmount) continue; // 未移动
           const moved = originalAmount - (remaining?.amount ?? 0);
-          index.onItemMoved(input, target, stack.itemId);
-          // 同族路由成功 → 把新类型补为多物候选（strategy 已在手中，直接驱动索引增补）
-          if (strategy.key === "family") index.onFamilyRouted(target, stack.itemId);
+          index.onItemMoved(input, target, stack.itemId); // 按目标角色登记桶+族桶（onItemMoved 内聚）
           this.bus.itemRouted.trigger({
             type: "item-routed",
             warehouseId: warehouse.id,

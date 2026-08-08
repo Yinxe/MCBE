@@ -1,6 +1,6 @@
 {
   "name": "item-route",
-  "version": "0.1.11",
+  "version": "0.1.13",
   "description": "物品路由仓库 — 自动分拣、容器整理、仓库统计、容量预警",
   "private": true,
   "devDependencies": {

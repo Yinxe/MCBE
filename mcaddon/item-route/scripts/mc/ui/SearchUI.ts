@@ -86,7 +86,9 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
     return;
   }
   player.sendMessage(`${uiColor.chat.highlight}━━ ${warehouse.displayName} 搜索结果：${lines.length} 种 ━━`);
+  // 粒子标记坐标按位置去重：同一容器命中多类型（如搜"石"→stone/stone_bricks 同箱）只标记一次
   const locs: Location[] = [];
+  const seenLoc = new Set<string>();
   for (const line of lines) {
     // 容器**最多显示 1 个**，多余的略写（"+N"）；容器 id 用于粒子标记仍取全部
     const shown = line.containerIds.slice(0, 1);
@@ -95,7 +97,14 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
     player.sendMessage(`${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${containerText}]`);
     for (const id of line.containerIds) {
       const c = warehouse.containers.get(id);
-      if (c) locs.push(...c.occupiedLocations);
+      if (!c) continue;
+      for (const loc of c.occupiedLocations) {
+        const k = `${loc.x},${loc.y},${loc.z}`;
+        if (!seenLoc.has(k)) {
+          seenLoc.add(k);
+          locs.push(loc);
+        }
+      }
     }
   }
   if (locs.length > 0) startMarkerParticles(player, player.dimension.id, locs, (t) => deps.config.isToken(t));
@@ -104,7 +113,8 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
 /** 纯逻辑搜索：基于通用容器索引（ItemIndex.lookupSearch，含 misc）O(1) 命中；未激活时本地倒排兜底 */
 export function runSearch(deps: CommandDeps, warehouse: Warehouse, query: string): SearchResultLine[] {
   const index = deps.resolveIndex(warehouse.id);
-  const lookup = index?.lookupSearch;
+  // ⚠️ 绑定 this：lookupSearch 是实例方法，裸引用会丢 this（TypeError）。箭头包裹保证实例上下文。
+  const lookup = index !== undefined ? (typeId: string) => index.lookupSearch(typeId) : undefined;
   const hits = searchContainers(warehouse.containers.values(), query, lookup);
   // 搜索命中容器进行索引校验（reconcile 自愈：漂移的 byItem/misc 桶按真实内容重建）
   if (index !== undefined) {

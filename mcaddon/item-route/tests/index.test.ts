@@ -228,3 +228,48 @@ test("ItemIndex: 路由到 single（绑定吻合）→ byItem.single 即时登�
   index.onItemMoved(input, single, "minecraft:stone");
   assert.deepEqual(index.lookup("minecraft:stone").single, before.single);
 });
+
+// ── 白名单空单物首件进箱：onItemMoved 实时绑定登记（P1 回归） ──
+test("ItemIndex: onItemMoved 白名单空单物首件 → single 桶即时登记（实时绑定）", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.whitelist = ["minecraft:diamond"]; // 白名单声明：空单物缺物预分配
+  index.onContainerAdded(single); // 空箱 → 无绑定、无 single 桶
+  assert.deepEqual(index.lookup("minecraft:diamond").single, []);
+  single.setItem(0, new SimpleItemStack("minecraft:diamond", 1, 64)); // transfer 后容器已装物
+  index.onItemMoved(input, single, "minecraft:diamond"); // 白名单首件进箱
+  // 实时绑定（getDedicatedItemId=首槽 diamond）→ 立即登记 single 桶 + 回填缓存
+  assert.deepEqual(index.lookup("minecraft:diamond").single, ["s1"]);
+  assert.deepEqual(index.lookupSearch("minecraft:diamond"), ["s1"]);
+  // 缓存已回填：直接 getBinding 也能读到
+  assert.equal(index.getBinding("s1"), "minecraft:diamond");
+});
+
+test("ItemIndex: onItemMoved 容器首槽被换（stone→diamond）→ 实时绑定登记 diamond（single 桶随实际首槽）", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.setItem(0, new SimpleItemStack("minecraft:stone", 2, 64)); // 绑定 stone
+  index.onContainerAdded(single);
+  assert.deepEqual(index.lookup("minecraft:stone").single, ["s1"]);
+  // 玩家替换首槽为 diamond 后再路由 diamond 进箱：实时绑定=首槽 diamond → 登记 diamond
+  single.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  index.onItemMoved(input, single, "minecraft:diamond");
+  assert.deepEqual(index.lookup("minecraft:diamond").single, ["s1"]);
+});
+
+// ── selfHeal 类型级判定：源物品带 NBT，容器存白板同类 → 仍命中（与 multi 语义一致） ──
+test("ItemIndex: selfHeal 类型级——源带 NBT、容器存白板 → 仍重建命中", () => {
+  const index = new ItemIndex();
+  const m1 = new InMemoryContainer("m1", "multi", 4);
+  m1.setItem(0, new SimpleItemStack("minecraft:stone", 3, 64)); // 白板 stone
+  index.onContainerAdded(m1);
+  // 源物品"带 NBT"（模拟附魔/耐久）：selfHeal 按 typeId 逐槽比对 → 命中并重建
+  const enchanted = new SimpleItemStack("minecraft:stone", 1, 64);
+  (enchanted as unknown as { nbt?: string }).nbt = "minecraft:sharpness:1";
+  index.selfHeal(enchanted, [m1]);
+  assert.deepEqual(index.lookup("minecraft:stone").multi, ["m1"]);
+});

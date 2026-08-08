@@ -160,9 +160,6 @@ function makeIndexStub() {
     onItemMoved: (from: unknown, to: unknown, itemId: string) => {
       state.moved.push(`${(from as { id: string }).id}->${(to as { id: string }).id}:${itemId}`);
     },
-    onFamilyRouted: (to: unknown, itemId: string) => {
-      state.moved.push(`family:${(to as { id: string }).id}:${itemId}`);
-    },
     // 自愈：扫描存储容器找 hasItem → 记录 + 把该容器加为候选（单物→single / 多物→multi）
     selfHeal: (item: { itemId: string }, containers: Iterable<InMemoryContainer>) => {
       state.selfHealed.push(item.itemId);

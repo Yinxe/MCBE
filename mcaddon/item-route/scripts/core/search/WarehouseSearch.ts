@@ -58,7 +58,11 @@ export function searchContainers(
 ): SearchHit[] {
   const byId = new Map<string, Container>();
   for (const c of containers) byId.set(c.id, c);
-  const resolve = lookup ?? buildSearchLookup(byId.values());
+  // 实时倒排恒构建：与索引结果**并集**兜底——索引是纯运行时缓存，玩家手动改箱可能 stale
+  //（漏登记部分容器），并集保证不漏报；SearchUI 对命中容器 reconcile 会自愈索引。
+  const fallback = buildSearchLookup(byId.values());
+  const resolve: SearchLookup = (typeId) =>
+    [...new Set([...(lookup?.(typeId) ?? []), ...fallback(typeId)])];
   const typeIds = searchItems(query);
   const hits: SearchHit[] = [];
   for (const typeId of typeIds) {
@@ -73,7 +77,8 @@ export function searchContainers(
       total += amount;
     }
     if (total > 0) {
-      // 命中容器按数量降序（展示取前 1 + 其余略写）
+      // 命中容器按数量降序（展示取前 1 时是"最多"那个；其余略写）
+      lines.sort((a, b) => b.amount - a.amount);
       hits.push({ typeId, name: getChineseName(typeId), count: total, containerIds: lines.map((l) => l.id) });
     }
   }
