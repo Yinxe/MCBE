@@ -486,4 +486,15 @@ test("hasItemType: 原生 hasItemType 优先（命中直返免遍历）；未实
   assert.equal(hasItemType(plain, "minecraft:stone"), true);
   const empty = new InMemoryContainer("p2", "multi", 3);
   assert.equal(hasItemType(empty, "minecraft:stone"), false);
+  // ④ 原生命中可信；未命中返回 undefined（NBT/data 差异假阴性）→ core 线性遍历兜底确定
+  const NativeMiss = class extends InMemoryContainer {
+    hasItemType(): boolean | undefined {
+      return undefined;
+    }
+  };
+  const miss = new NativeMiss("p3", "multi", 3);
+  miss.setItem(0, new SimpleItemStack("minecraft:stone", 3, 64));
+  assert.equal(hasItemType(miss, "minecraft:stone"), true); // 遍历兜底兜出
+  const missEmpty = new NativeMiss("p4", "multi", 3);
+  assert.equal(hasItemType(missEmpty, "minecraft:stone"), false);
 });

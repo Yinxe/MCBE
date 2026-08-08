@@ -24,8 +24,8 @@ export function containerIsDead(container: Container): boolean {
 }
 
 /** 容器是否已存在给定**类型**的槽（typeId 级，非 NBT 精确——多物候选判定用）。
- * 优先容器原生 O(1) 判定（`hasItemType` → native `contains` 快判）；原生未实现/失效
- * （返回 undefined）时回退线性遍历查物（capacity 逐槽 getItem）。 */
+ * 优先容器原生 O(1) 判定（`hasItemType` → native `contains` 快判）：true=命中确定、false=空容器确定，
+ * 均直接返回；**undefined = 原生未命中不可信（NBT/data 差异假阴性）或原生失效** → 此处线性遍历兜底查物。 */
 export function hasItemType(container: Container, itemId: ItemId): boolean {
   const fast = container.hasItemType?.(itemId);
   if (fast !== undefined) return fast;

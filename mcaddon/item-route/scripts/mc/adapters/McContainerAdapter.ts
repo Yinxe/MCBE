@@ -143,22 +143,21 @@ export class McContainerAdapter implements Container {
     }
   }
 
-  /** 原生 O(1) 类型判定（native `contains` 快判）：容器为空直接 false；命中即 true；
-   * 原生未命中（NBT/data 差异可致假阴性）或失效（抛错 → dead）时回退线性遍历查物。
-   * 返回 boolean 为权威判定；undefined 仅当 native 失效且遍历也中断（防御，调用方按未命中处理）。 */
+  /** 原生 O(1) 类型判定（native `contains` 快判）。约定：
+   *   · true   —— 原生命中：该类型确定存在（唯一可信正向，直接短路，免遍历）
+   *   · false  —— 空容器（empty 确定，类型必不存在）
+   *   · undefined —— 原生未命中（NBT/data 差异可假阴性，**不做线性遍历**——遍历由 core
+   *     helpers.hasItemType 统一兜底，避免双写同逻辑）或原生失效（→ dead）
+   * 返回 undefined 时调用方（core hasItemType）走 linear 遍历确定。 */
   hasItemType(itemId: string): boolean | undefined {
     try {
       if (this.mc.emptySlotsCount === this.mc.size) return false; // 空容器 → 免构造 ItemStack + contains
       if (this.mc.contains(new McItemStack(itemId, 1))) return true; // 原生 O(1) 命中
+      return undefined; // 未命中不可全信（NBT/data 差异假阴性）→ 交 core 线性遍历确定
     } catch {
       this.dead = true;
-      return undefined; // 原生失效 → 调用方（core hasItemType）遍历兜底
+      return undefined; // 原生失效 → core hasItemType 遍历兜底（getItem/capacity 安全）
     }
-    // 原生未命中不可全信 → 线性遍历兜底（capacity getter 自带 try，失效即 0 安全退出）
-    for (let i = 0; i < this.capacity; i++) {
-      if (this.getItem(i)?.itemId === itemId) return true;
-    }
-    return false;
   }
 
   // ── 便捷搜索：first/last 手封装线性扫描（复用 getItem 的安全访问，不依赖官方
