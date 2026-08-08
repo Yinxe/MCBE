@@ -45,7 +45,12 @@ export function containerFamilyRanks(scan: ContainerScanResult): FamilyRank[] {
     .sort((a, b) => b.typeCount - a.typeCount || a.displayName.localeCompare(b.displayName));
 }
 
-/** 族榜单条渲染：`#1.羊毛(5|1.4k)`（首页序号从 1，全排不省略） */
+/** 族榜条目的内容段：`羊毛(5→1.4k)`（→ 分隔类型数|数量，避免竖线误读为 1） */
+export function formatFamilyRankBody(rank: FamilyRank): string {
+  return `${rank.displayName}(${rank.typeCount}→${formatCount(rank.totalCount)})`;
+}
+
+/** 族榜单条渲染：`#1.羊毛(5→…)`（序号从 1，全排不省略）。颜色由渲染层按名次处理 */
 export function formatFamilyRankLine(rank: FamilyRank, index: number): string {
-  return `#${index}. ${rank.displayName}(${rank.typeCount}|${formatCount(rank.totalCount)})`;
+  return `#${index}. ${formatFamilyRankBody(rank)}`;
 }

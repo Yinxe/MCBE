@@ -16,7 +16,7 @@ import { containerShortName } from "../../core/model/ContainerId";
 import { getChineseName } from "../../core/data/ItemNameMap";
 import { isMenuInfoOn } from "../../core/data/MenuInfo";
 import { scanContainer } from "../../core/model/ContainerScan";
-import { containerFamilyRanks, formatFamilyRankLine } from "../../core/stats/familyRanks";
+import { containerFamilyRanks, formatFamilyRankBody } from "../../core/stats/familyRanks";
 import { refreshInputMembership } from "../../core/model/ContainerRegistry";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
@@ -78,7 +78,13 @@ function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container:
     const ranks = containerFamilyRanks(scan);
     if (ranks.length > 0) {
       lines.push(`${uiColor.form.muted}族榜:`);
-      ranks.forEach((r, i) => lines.push(`${uiColor.form.muted}${formatFamilyRankLine(r, i + 1)}`));
+      // 前三名序号特殊着色（金/银/紫铜），正文保持正文色；其余 muted
+      const medalColors = [uiColor.color.gold, uiColor.color.white, uiColor.color.lightPurple];
+      ranks.forEach((r, i) => {
+        const no = i + 1;
+        const color = no <= 3 ? medalColors[no - 1]! : uiColor.form.muted;
+        lines.push(`${color}#${no}. ${uiColor.form.body}${formatFamilyRankBody(r)}`);
+      });
     }
   }
   return lines.join("\n");

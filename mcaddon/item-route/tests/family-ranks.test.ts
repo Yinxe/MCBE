@@ -3,7 +3,7 @@
 //     只统计实含族（无族物品不参与）、formatCount 单位化渲染、空容器返回空。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { containerFamilyRanks, formatFamilyRankLine } from "../scripts/core/stats/familyRanks";
+import { containerFamilyRanks, formatFamilyRankLine, formatFamilyRankBody } from "../scripts/core/stats/familyRanks";
 import type { ContainerScanResult } from "../scripts/core/model/ContainerScan";
 
 function scanOf(byType: Record<string, number>): ContainerScanResult {
@@ -68,9 +68,10 @@ test("containerFamilyRanks: 无族物品（合成物）不参与排行", () => {
   assert.ok(wool !== undefined);
 });
 
-test("formatFamilyRankLine: #序号.名(类型|数量单位化) 格式", () => {
-  assert.equal(formatFamilyRankLine({ familyId: "wool", displayName: "羊毛", typeCount: 5, totalCount: 1430 }, 1), "#1. 羊毛(5|1.43k)");
-  assert.equal(formatFamilyRankLine({ familyId: "plants", displayName: "植物", typeCount: 3, totalCount: 22 }, 2), "#2. 植物(3|22)");
+test("familyRank 格式: → 分隔类型|数量（避免竖线误读为 1）", () => {
+  assert.equal(formatFamilyRankBody({ familyId: "wool", displayName: "羊毛", typeCount: 5, totalCount: 1430 }), "羊毛(5→1.43k)");
+  assert.equal(formatFamilyRankBody({ familyId: "plants", displayName: "植物", typeCount: 3, totalCount: 22 }), "植物(3→22)");
+  assert.equal(formatFamilyRankLine({ familyId: "wool", displayName: "羊毛", typeCount: 5, totalCount: 1430 }, 1), "#1. 羊毛(5→1.43k)");
 });
 
 test("containerFamilyRanks: 空容器 → 空榜", () => {
