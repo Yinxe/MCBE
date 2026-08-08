@@ -12,6 +12,7 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import type { McModConfig } from "../storage/McModConfig";
 import type { BoundaryControl } from "../commands/deps";
 import { startPersistentBoundary, stopBoundary, PROXIMITY_MARGIN } from "../effects/BoundaryDisplay";
+import { namedPlayers } from "../util/playerName";
 
 /** 装配依赖：领域总线 + 全局配置（信物判定）+ 运行时仓库表（resize 重启用） */
 export interface PersistentBoundaryDeps {
@@ -29,20 +30,20 @@ export function setupPersistentBoundaryControl({ bus, config, loaded }: Persiste
   const guard =
     (wh: Warehouse): (() => boolean) =>
     () => {
-      for (const p of world.getAllPlayers()) {
-        if (p.dimension.id !== wh.area.dimension) continue;
-        let holdingToken = false;
+      // ⚠️ 安全枚举（真实+模拟玩家）：namedPlayers 丢弃半初始化/字段不全项；单玩家 try 隔离
+      for (const { player: p } of namedPlayers(world.getAllPlayers())) {
         try {
+          if (p.dimension.id !== wh.area.dimension) continue;
           const held = p.getComponent("inventory")?.container?.getItem(p.selectedSlotIndex);
-          holdingToken = config.isToken(held?.typeId ?? "");
+          const holdingToken = config.isToken(held?.typeId ?? "");
+          if (!holdingToken) continue;
+          if (
+            isPlayerNearby(wh.area, [{ dimension: p.dimension.id, x: p.location.x, z: p.location.z }], PROXIMITY_MARGIN)
+          ) {
+            return true;
+          }
         } catch {
-          /* 读取失败视为未持信物 */
-        }
-        if (!holdingToken) continue;
-        if (
-          isPlayerNearby(wh.area, [{ dimension: p.dimension.id, x: p.location.x, z: p.location.z }], PROXIMITY_MARGIN)
-        ) {
-          return true;
+          /* 玩家读取失败/半初始化 → 视为未持信物，跳过 */
         }
       }
       return false;

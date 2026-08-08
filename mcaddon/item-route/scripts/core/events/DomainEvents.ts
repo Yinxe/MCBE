@@ -166,6 +166,13 @@ export interface OrganizeCompletedEvent {
   moves: number;
 }
 
+/** 容器补注册：某容器在加载时被跳过（区块未加载）——mc 层订阅后记入仓库的 pendingReloads，主循环按节律重试 */
+export interface ContainerDeferredEvent {
+  type: "container-deferred";
+  warehouseId: WarehouseId;
+  containerId: ContainerId;
+}
+
 /** 领域事件总线：core 发事件 → 适配层订阅（视觉反馈/统计联动/成员通知/集成测试观测） */
 export class EventBus {
   readonly itemRouted = new EventSignal<ItemRoutedEvent>();
@@ -185,4 +192,5 @@ export class EventBus {
   readonly warehouseRenamed = new EventSignal<WarehouseRenamedEvent>();
   readonly warehouseAreaChanged = new EventSignal<WarehouseAreaChangedEvent>();
   readonly organizeCompleted = new EventSignal<OrganizeCompletedEvent>();
+  readonly containerDeferred = new EventSignal<ContainerDeferredEvent>();
 }

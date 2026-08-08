@@ -471,3 +471,93 @@ test("Scheduler: 仓库设置缺 blacklist（旧档）→ 空值防护不崩，�
   assert.equal(input.getItem(0), undefined);
   assert.equal(target.getItem(0)?.amount, 15);
 });
+
+// ── 待补容器 pump：随每仓 routing interval（非全局主循环）触发 ─────────────────
+test("Scheduler: 待补容器 pump 随每仓 interval 节奏——active 每轮触发 refresh，inactive 停", () => {
+  const intervals = new MemoryIntervalScheduler();
+  const proximity = new StubProximity();
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  let refreshCount = 0;
+  const lifecycle: IndexLifecycle = {
+    load: (wh) => new ItemIndex(),
+    refresh: () => void refreshCount++,
+    unload: () => void 0,
+  };
+  const scheduler = new Scheduler(router, intervals, proximity, new EventBus(), 20, 20, { indexLifecycle: lifecycle });
+  const w = {
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(),
+    containers: new Map<string, InMemoryContainer>(),
+    inputs: new Map<string, InMemoryContainer>(),
+  };
+  scheduler.registerWarehouse(w);
+  proximity.setNearby("w1", true);
+  scheduler.tick(); // inactive → active（创建 interval）
+  assert.equal(refreshCount, 0); // 主循环 tick 本身不调 refresh
+  intervals.advance(19); // 默认 processingSpeed=8，clamp 到 globalSpeedLimit=20 → interval 周期 20 tick
+  assert.equal(refreshCount, 0); // 一个 interval 周期未满
+  intervals.advance(1); // 满 20 tick → interval 回调：processOnce + refresh
+  assert.equal(refreshCount, 1);
+  intervals.advance(20);
+  assert.equal(refreshCount, 2); // 每 interval 一轮（每仓独立频率）
+  // 玩家离开：active → deactivating（interval 立即 stop）→ 不再 pump；越宽限 → inactive
+  proximity.setNearby("w1", false);
+  scheduler.tick();
+  assert.equal(scheduler.getLifecycle("w1"), "deactivating");
+  const after = refreshCount;
+  intervals.advance(100);
+  assert.equal(refreshCount, after, "停用后 interval 已停止 → 不再 pump");
+  for (let i = 0; i < 25; i++) scheduler.tick();
+  assert.equal(scheduler.getLifecycle("w1"), "inactive");
+});
+
+test("Scheduler: pump 抛错（区块未加载）→ interval 内 try 隔离，不崩路由/生命周期，下轮重试", () => {
+  const intervals = new MemoryIntervalScheduler();
+  const proximity = new StubProximity();
+  let fail = true;
+  let calls = 0;
+  const lifecycle: IndexLifecycle = {
+    load: (wh) => new ItemIndex(),
+    refresh: () => {
+      calls++;
+      if (fail) throw new Error("区块未加载");
+    },
+    unload: () => void 0,
+  };
+  const scheduler = new Scheduler(
+    new Router([], new DefaultCandidateSorter(), new EventBus()),
+    intervals,
+    proximity,
+    new EventBus(),
+    20,
+    20,
+    { indexLifecycle: lifecycle }
+  );
+  const w = {
+    id: "w1",
+    displayName: "w",
+    ownerName: "p1",
+    members: [],
+    area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
+    settings: createDefaultSettings(),
+    containers: new Map<string, InMemoryContainer>(),
+    inputs: new Map<string, InMemoryContainer>(),
+  };
+  scheduler.registerWarehouse(w);
+  proximity.setNearby("w1", true);
+  scheduler.tick(); // active（创建 interval）
+  intervals.advance(20); // 满 interval → refresh 抛错 → 被 interval try 捕获
+  assert.equal(calls, 1);
+  assert.equal(scheduler.getLifecycle("w1"), "active"); // pump 失败不拖垮主循环/路由
+  fail = false;
+  intervals.advance(20);
+  assert.equal(calls, 2); // 下轮重试成功
+});

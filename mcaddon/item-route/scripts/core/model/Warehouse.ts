@@ -6,7 +6,7 @@
 // 命令/UI 统一经 `MemberService.can()` 判定，替代 v1 的 OP 二元判断。
 import type { Container } from "./Container";
 import type { ContainerRole } from "./Container";
-import type { PlayerName, WarehouseId } from "./types";
+import type { ContainerId, PlayerName, WarehouseId } from "./types";
 import { DEFAULT_ENABLED_FAMILIES } from "../data/item-families";
 
 /** 成员角色：仓库仅两类参与者 —— owner（全权限）/ member（管理），不再有访客 */
@@ -98,4 +98,20 @@ export interface Warehouse {
    * 由 ContainerRegistry 各函数与 `containers` 同写同删，Scheduler 每轮取输入零过滤
    * （输入通常仅 1~3 个，不遍历全仓容器）。 */
   readonly inputs: Map<string, Container>;
+  /**
+   * **待补注册的容器 id（运行时内存，不持久化；可选字段，缺省按空处理）**：容器加载/激活时若其
+   * 所在区块未加载而被跳过，记为 pending → 主循环按固定节律对它们逐个重试（区块加载则注册；
+   * 确认空气则移除注册表）。与 `containers` 生命周期一致：unload 即清；重启后随注册表重建。
+   * 读取用 `pendingReloadsOf(warehouse)`（缺省空 Set，不强制每个构造点实现）。
+   */
+  readonly pendingReloads?: Set<ContainerId>;
+}
+
+/** 取仓库待补容器集（字段缺省按空处理——旧字面量/测试未声明的兼容；返回可写引用） */
+export function pendingReloadsOf(wh: Warehouse): Set<ContainerId> {
+  if (wh.pendingReloads === undefined) {
+    // 运行时此处才会实际写入；用 `as` 给缺省字段惰性建集（后续 add 落回 wh，统一状态）
+    (wh as { pendingReloads?: Set<ContainerId> }).pendingReloads = new Set();
+  }
+  return wh.pendingReloads as Set<ContainerId>;
 }

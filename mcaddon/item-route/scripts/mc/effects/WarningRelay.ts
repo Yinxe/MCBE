@@ -7,6 +7,7 @@ import { ROLE_LABELS } from "../../core/model/Container";
 import { containerShortName } from "../../core/model/ContainerId";
 import { WARNING_LEVEL_LABELS } from "../ui/Labels";
 import { color } from "../ui/uiColor";
+import { namedPlayers } from "../util/playerName";
 
 /** 预警消息只发给距仓库中心 8 格内玩家（v1 CapacityWarningService 口径） */
 export const WARNING_MARGIN = 8;
@@ -43,9 +44,14 @@ export function registerWarningRelay(bus: EventBus, warehouses: () => Warehouse[
       const text = LEVEL_TEXT[e.level] ?? e.level;
       const containerInfo = e.containerId !== undefined ? containerDetail(warehouse, e.containerId) : "";
       const message = `${color.error}[容量预警] 仓库 "${warehouse.displayName}"${containerInfo ? ` ${containerInfo}` : ""}：${text}`;
-      for (const p of world.getAllPlayers()) {
-        if (near(warehouse, { dimension: p.dimension.id, x: p.location.x, z: p.location.z }, WARNING_MARGIN)) {
-          p.sendMessage(message);
+      // ⚠️ 安全枚举（真实+模拟玩家）：namedPlayers 丢弃半初始化/字段不全项；单玩家 try 隔离不拦截其他玩家
+      for (const { player: p } of namedPlayers(world.getAllPlayers())) {
+        try {
+          if (near(warehouse, { dimension: p.dimension.id, x: p.location.x, z: p.location.z }, WARNING_MARGIN)) {
+            p.sendMessage(message);
+          }
+        } catch {
+          /* 玩家读取失败/维度切换 → 跳过该玩家，不影响其他玩家收预警 */
         }
       }
     } catch (err) {

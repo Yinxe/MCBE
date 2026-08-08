@@ -9,6 +9,7 @@ import { system, world, type Player } from "@minecraft/server";
 import type { ProximityChecker } from "../../core/scheduling/Scheduler";
 import type { WarehouseId } from "../../core/model/types";
 import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
+import { namedPlayers } from "../util/playerName";
 
 /** 邻近判定参考（与 core Warehouse 结构对齐，main.ts 可直接喂 loaded 仓库） */
 export interface WarehouseRef {
@@ -47,9 +48,11 @@ export class McProximityChecker implements ProximityChecker {
     if (warehouse === undefined) return false;
     const memberNames = new Set<string>([warehouse.ownerName, ...warehouse.members.map((m) => m.playerName)]);
     const memberPositions: PlayerPosition[] = [];
-    for (const p of this.players()) {
+    // ⚠️ 安全枚举（真实+模拟玩家）：namedPlayers 丢弃半初始化/字段不全项（自带的 .name 坑），
+    // 成员判定按解析名匹配（owner/member 表）
+    for (const { player: p, name } of namedPlayers(this.players())) {
       if (p.dimension.id !== warehouse.area.dimension) continue;
-      if (!memberNames.has(p.name)) continue; // 只统计在线成员（owner/member）
+      if (!memberNames.has(name)) continue; // 只统计在线成员（真实+模拟玩家）
       memberPositions.push({ dimension: warehouse.area.dimension, x: p.location.x, z: p.location.z });
     }
     return isPlayerNearby(warehouse.area, memberPositions, PROXIMITY_MARGIN);

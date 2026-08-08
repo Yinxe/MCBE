@@ -9,7 +9,7 @@
 // ⚠️ 刻意**不订阅 container-changed**（内容变更）：该事件在路由/整理/**任何玩家开箱**（代理信号）
 //   都触发，属高频噪声、非可执行事件——订阅会导致"非信物交互也刷屏容器已更新"（v1 不通知内容）。
 // 全部事件驱动、不轮询；回调 try/catch 隔离（单事件崩溃不影响其他订阅者）。
-import { world, system } from "@minecraft/server";
+import { world, system, type Player } from "@minecraft/server";
 import type {
   EventBus,
   ContainerAddedEvent,
@@ -26,6 +26,7 @@ import { containerRoleName } from "../../core/model/Container";
 import { containerShortName } from "../../core/model/ContainerId";
 import { PROXIMITY_MARGIN } from "../adapters/McProximityChecker";
 import { chat } from "../ui/uiColor";
+import { namedPlayers } from "../util/playerName";
 import { LIFECYCLE_ACTIONS } from "../ui/Labels";
 
 /** 输入堵塞通知防抖窗口（tick；600 = 30 秒 @20tps） */
@@ -120,10 +121,13 @@ export function registerNotifyRelay(bus: EventBus, warehouses: () => Warehouse[]
   });
 }
 
-/** 在线成员（owner + member 的玩家对象） */
-function onlineMembers(warehouse: Warehouse): ReturnType<typeof world.getAllPlayers> {
+/** 在线成员（owner + member 的玩家对象；真实+模拟玩家统一按安全解析名匹配，
+ * 半初始化/异常实体项被 namedPlayers 丢弃——成员判定不再裸读 `.name`） */
+function onlineMembers(warehouse: Warehouse): Player[] {
   const ids = new Set([warehouse.ownerName, ...warehouse.members.map((m) => m.playerName)]);
-  return world.getAllPlayers().filter((p) => ids.has(p.name));
+  return namedPlayers(world.getAllPlayers())
+    .filter(({ name }) => ids.has(name))
+    .map(({ player }) => player);
 }
 
 /** 附近（中心直线距离 ≤ 外接圆半径 + margin）的在线成员 */

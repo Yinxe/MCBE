@@ -11,6 +11,7 @@ import type { MemberService } from "../../core/services/MemberService";
 import type { SelectionSessionStore, SelectionSession } from "../interaction/SelectionSessionStore";
 import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
 import { color } from "../ui/uiColor";
+import { namedPlayers } from "../util/playerName";
 
 /** HUD 刷新间隔（tick；0.5 秒 @20tps） */
 const HUD_INTERVAL = 10;
@@ -87,32 +88,34 @@ export function registerWarehouseHUD(
 ): void {
   system.runInterval(() => {
     try {
-      for (const p of world.getAllPlayers()) {
-        let text = "";
-        // 1) 选区会话优先（建仓/调整区域进行中，显示流程/选点/异常提示）
-        const session = sessions.get(p.name);
-        if (session !== undefined) {
-          text = sessionLine(session);
-        } else {
-          const pos: PlayerPosition = { dimension: p.dimension.id, x: p.location.x, z: p.location.z };
-          // 就近取"成员身份 + 在附近"的仓库（同一玩家多仓时只显示最近一仓，避免刷屏）
-          let best: Warehouse | undefined;
-          let bestDist = Infinity;
-          for (const w of loaded) {
-            if (!members.can(w, p.name, "member")) continue; // HUD 只给拥有/管理成员看
-            if (!isPlayerNearby(w.area, [pos], HUD_MARGIN)) continue;
-            const d = distTo(w, pos);
-            if (d < bestDist) {
-              bestDist = d;
-              best = w;
-            }
-          }
-          if (best !== undefined) text = hudLine(scheduler, best);
-        }
+      // ⚠️ getAllPlayers 可能含未初始化/模拟玩家项 → 用 namedPlayers 安全枚举（解析名，非裸 .name）；
+      // 单玩家帧 try 隔离：一个异常实体不掉整个 HUD 帧
+      for (const { player: p, name } of namedPlayers(world.getAllPlayers())) {
         try {
+          let text = "";
+          // 1) 选区会话优先（建仓/调整区域进行中，显示流程/选点/异常提示）
+          const session = sessions.get(name);
+          if (session !== undefined) {
+            text = sessionLine(session);
+          } else {
+            const pos: PlayerPosition = { dimension: p.dimension.id, x: p.location.x, z: p.location.z };
+            // 就近取"成员身份 + 在附近"的仓库（同一玩家多仓时只显示最近一仓，避免刷屏）
+            let best: Warehouse | undefined;
+            let bestDist = Infinity;
+            for (const w of loaded) {
+              if (!members.can(w, name, "member")) continue; // HUD 只给拥有/管理成员看（真实+模拟玩家同名判定）
+              if (!isPlayerNearby(w.area, [pos], HUD_MARGIN)) continue;
+              const d = distTo(w, pos);
+              if (d < bestDist) {
+                bestDist = d;
+                best = w;
+              }
+            }
+            if (best !== undefined) text = hudLine(scheduler, best);
+          }
           p.onScreenDisplay.setActionBar(text);
         } catch {
-          /* 玩家离线/维度切换：忽略 */
+          /* 玩家离线/维度切换/字段不全：跳过该玩家 */
         }
       }
     } catch {

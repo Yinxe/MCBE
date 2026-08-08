@@ -43,6 +43,9 @@ export interface ProximityChecker {
 export interface IndexLifecycle {
   /** 激活时加载该仓库索引（mc 层纯运行时重建：按真实内容全量扫描，不持久化） */
   load(warehouse: Warehouse): ItemIndex;
+  /** 激活后待补容器 pump（可选）：随该仓自己的 routing interval（每轮）被调用——对 pendingReloads
+   * 逐容器重读方块，区块加载则注册、空气/非容器则移除（见 WarehouseLoader.pumpPendingReloads）。幂等。 */
+  refresh?(warehouse: Warehouse, index: ItemIndex): void;
   /** 空闲卸载（mc 层：落盘最新快照后释放引用） */
   unload(warehouse: Warehouse, index: ItemIndex): void;
 }
@@ -270,7 +273,19 @@ export class Scheduler {
 
   private createInterval(rt: Runtime): IntervalHandle {
     return this.intervals.createInterval(
-      () => this.processOnce(rt),
+      () => {
+        this.processOnce(rt);
+        // 待补容器 pump：随该仓**自己的路由节奏**（interval 仅 active 存在）每轮重试跳过注册的
+        // 容器——区块慢加载的等区块好了注册、空气/非容器确认移除（见 pumpPendingReloads）。
+        // 与路由同频 = 激活后第一个 interval 周期（默认 ~1s）即覆盖"延迟初始化"；失败隔离不影响路由。
+        if (this.options.indexLifecycle?.refresh !== undefined && rt.index !== undefined) {
+          try {
+            this.options.indexLifecycle.refresh(rt.warehouse, rt.index);
+          } catch {
+            // 补注册失败（区块个别未加载）→ 下轮再试，不影响路由
+          }
+        }
+      },
       this.clampSpeed(rt.warehouse.settings.processingSpeed)
     );
   }

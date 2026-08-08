@@ -5,6 +5,9 @@
 //     重启无需持久化——永远最新、零写放大。
 //   · createContainerPersistence —— 单容器写穿（注册表 ir2:c；统计 ir2:cst 由 stats 自行）
 //     索引不落盘，故容器结构落地不再同步写索引条目。
+// 容器补注册（简单版）：激活时 ensure 跳过注册的容器登记 pendingReloads，由**仓库自己的 routing
+//   interval**（Scheduler 每轮调 indexLifecycle.refresh → pumpPendingReloads）周期重试——
+//   active 后第一个 interval 周期（默认 ~1s）即覆盖"激活瞬间区块慢加载跳过"的窗口，无需额外定时器。
 import { ItemIndex } from "../../core/index/ItemIndex";
 import type { IndexLifecycle } from "../../core/scheduling/Scheduler";
 import type { Scheduler } from "../../core/scheduling/Scheduler";
@@ -13,27 +16,37 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
 import type { ContainerId } from "../../core/model/types";
 import type { McWarehouseStore } from "../storage/McWarehouseStore";
-import { ensureContainersLoaded, unloadContainers, type WarehouseLoaderDeps } from "../container/WarehouseLoader";
+import {
+  ensureContainersLoaded,
+  pumpPendingReloads,
+  unloadContainers,
+  type WarehouseLoaderDeps,
+} from "../container/WarehouseLoader";
 
 // ── 索引生命周期（纯运行时） ─────────────────────────────
 /**
  * 索引生命周期（Scheduler 激活/卸载时调用）。**索引不持久化**：
  *   · load —— ensureContainersLoaded（按需加载容器）→ 全容器扫描按真实内容重建（O(容器×槽)），
  *     权威源 = 容器内容，永远最新，无落盘依赖。
- *   · unload —— 直接 unloadContainers 清内存（容器/索引/统计缓存一并释放）。
- * loader 需 warehouseStore/factory/stats（见 container/WarehouseLoader）。
+ *   · refresh —— Scheduler 每轮每仓 routing interval 调一次：对待补容器（pendingReloads）pump，
+ *     区块加载则注册/空气则移除（见 WarehouseLoader.pumpPendingReloads）。
+ *   · unload —— unloadContainers 清内存（容器/索引/统计缓存/待补集一并释放）。
+ * loader 需 warehouseStore/factory/stats/bus（见 container/WarehouseLoader）。
  */
 export function createIndexRuntimeLifecycle(loader: WarehouseLoaderDeps): IndexLifecycle {
   return {
     load: (warehouse) => {
       ensureContainersLoaded(warehouse, loader); // 激活按需加载容器（此时 containers 才齐，供索引用）
       const idx = new ItemIndex();
-      // 全量重建：权威源 = 容器真实内容，不读任何索引持久化（纯运行时派生缓存）
       for (const c of warehouse.containers.values()) idx.onContainerAdded(c);
+      // 首轮延迟补试由激活后**第一个 routing interval**（默认 ~1s）覆盖：此时区块多数就绪，
+      // interval 回调里的 refresh → pumpPendingReloads 会对跳过的容器补注册/确认移除，无独立定时器。
       return idx;
     },
+    refresh: (warehouse, index) => {
+      pumpPendingReloads(warehouse, loader, index);
+    },
     unload: (warehouse) => {
-      // 索引不落盘（纯运行时缓存）——只卸载容器实体与内存
       unloadContainers(warehouse, loader);
     },
   };

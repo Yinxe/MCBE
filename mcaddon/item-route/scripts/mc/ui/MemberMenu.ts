@@ -7,6 +7,7 @@ import { world, type Player } from "@minecraft/server";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import type { Warehouse } from "../../core/model/Warehouse";
+import { onlinePlayerNames } from "../util/playerName";
 import * as uiColor from "./uiColor";
 
 /** 下拉"无"选项（默认）：不添加任何人 */
@@ -26,7 +27,8 @@ function shortId(playerName: string): string {
  */
 export async function showMemberMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   const members = warehouse.members.filter((m) => m.playerName !== warehouse.ownerName); // owner 隐含，不可列/不可移除
-  const onlineNames = world.getAllPlayers().map((p) => p.name);
+  // ⚠️ getAllPlayers 可能含 undefined/字段不全项（模拟玩家进出/半初始化）→ 三级兜底取名并拒绝不安全数据
+  const onlineNames = onlinePlayerNames(world.getAllPlayers());
   // 可添加候选：在线且未在成员列表、非 owner
   const addable = onlineNames.filter(
     (name) => name !== warehouse.ownerName && !warehouse.members.some((m) => m.playerName === name)

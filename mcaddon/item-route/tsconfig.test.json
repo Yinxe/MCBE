@@ -19,6 +19,7 @@
     "scripts/mc/interaction/interactionLogic.ts",
     "scripts/mc/commands/auth.ts",
     "scripts/mc/effects/SortEffects.ts",
+    "scripts/mc/util/playerName.ts",
     "tests/**/*.ts"
   ],
   "exclude": ["node_modules", ".test-build", "scripts/mc/storage/DynamicPropertyStore.ts"]

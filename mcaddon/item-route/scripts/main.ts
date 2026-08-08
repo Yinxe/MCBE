@@ -95,8 +95,8 @@ const loaded: Warehouse[] = []; // Phase 4 填充
 const proximity = new McProximityChecker((id) => loaded.find((w) => w.id === id));
 const organizer = new Organizer();
 const stats = new StatsService(statsStore, bus);
-// 容器按需加载依赖（配置注册表/统计/索引随仓库生命周期统一，见 container/WarehouseLoader）
-const containerLoader = { warehouseStore, factory, stats };
+// 容器按需加载依赖（配置注册表/统计/索引随仓库生命周期统一 + 补注册事件总线，见 container/WarehouseLoader）
+const containerLoader = { warehouseStore, factory, stats, bus };
 // 索引生命周期（纯运行时：激活 ensureContainersLoaded + 全量重建，卸载 unloadContainers 清内存）收进 persistence/Persistence
 const indexLifecycle = createIndexRuntimeLifecycle(containerLoader);
 const scheduler = new Scheduler(router, intervals, proximity, bus, config.globalSpeedLimit, undefined, {

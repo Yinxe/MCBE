@@ -8,6 +8,7 @@ import { world } from "@minecraft/server";
 import type { EventBus } from "../../core/events/DomainEvents";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
+import { pendingReloadsOf } from "../../core/model/Warehouse";
 import type { ContainerId } from "../../core/model/types";
 import type { StatsService } from "../../core/stats/StatsService";
 import type { Organizer } from "../../core/organizing/Organizer";
@@ -151,6 +152,12 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
     ctx.removeContainer(wh, e.containerId);
     ctx.persistContainerIds(wh);
   });
+  // 容器跳过注册（区块未加载）→ 登记待补（冗余保险；ensure 侧已 direct add，此处解耦其他副作用）
+  bus.containerDeferred.subscribe((e) => {
+    const wh = resolveWh(e.warehouseId);
+    if (wh === undefined) return;
+    pendingReloadsOf(wh).add(e.containerId);
+  });
 
   // ── 仓库生命周期（cold） ──
   // 删除：清内存 + 停调度 + 清统计键（注册表键由 core deleteWarehouse 的 store.remove 清理）。
@@ -212,6 +219,7 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
     }
     wh.containers.clear();
     wh.inputs.clear();
+    pendingReloadsOf(wh).clear(); // 待补集一并重制（新区域重扫以新真相注册，旧待补无意义）
     if (e.oldId !== undefined && e.oldId !== e.warehouseId) {
       // 仓库 ID 迁移：清旧 cids 索引键 + 调度器重注册（内存对象 id 已更新）
       warehouseStore.removeContainerIds(e.oldId);
