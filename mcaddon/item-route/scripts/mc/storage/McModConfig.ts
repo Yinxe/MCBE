@@ -6,6 +6,7 @@
 // WarehouseService.limits，作为建仓时的边界校验（见 services/WarehouseService）。
 import type { ShardStore } from "./ShardStore";
 import type { WarehouseSpec } from "../../core/services/WarehouseService";
+import { defaultMenuInfo } from "../../core/data/MenuInfo";
 
 const CONFIG_KEY = "ir2:modcfg";
 const GUIDE_SEEN_KEY = "ir2:guide_seen:"; // 每玩家独立（v1 按玩家标记）
@@ -22,6 +23,8 @@ export interface ModConfigData {
   maxWarehousesPerPlayer: number;
   /** 单仓最大容器数（v1 默认 100，建仓/重扫/放置注册时校验） */
   maxContainers: number;
+  /** 菜单信息元素开关（key → 是否显示；默认全开；渲染方按它跳过计算） */
+  menuInfo: Record<string, boolean>;
 }
 
 export const DEFAULT_MOD_CONFIG: ModConfigData = {
@@ -31,9 +34,10 @@ export const DEFAULT_MOD_CONFIG: ModConfigData = {
   maxWarehouseSpec: { x: 32, y: 16, z: 32 },
   maxWarehousesPerPlayer: 1,
   maxContainers: 100,
+  menuInfo: defaultMenuInfo(),
 };
 
-/** 信物可选列表（ConfigUI 下拉；对齐 v1 smartwarehouse ModConfigStore.TOKEN_OPTIONS 的物品清单） */
+/** 信物可选列表（OPConfigUI 下拉；对齐 v1 smartwarehouse ModConfigStore.TOKEN_OPTIONS 的物品清单） */
 export const TOKEN_OPTIONS = [
   "minecraft:wooden_hoe",
   "minecraft:stick",
@@ -94,6 +98,8 @@ export class McModConfig {
       maxWarehouseSpec: data?.maxWarehouseSpec ?? DEFAULT_MOD_CONFIG.maxWarehouseSpec,
       maxWarehousesPerPlayer: data?.maxWarehousesPerPlayer ?? DEFAULT_MOD_CONFIG.maxWarehousesPerPlayer,
       maxContainers: data?.maxContainers ?? DEFAULT_MOD_CONFIG.maxContainers,
+      // 菜单信息开关：旧档缺字段 → 落到默认（全开）
+      menuInfo: data?.menuInfo ?? defaultMenuInfo(),
     };
   }
 
@@ -115,6 +121,16 @@ export class McModConfig {
   get maxContainers(): number {
     return this.data.maxContainers;
   }
+  /** 菜单信息元素开关态（key → boolean；默认全开） */
+  get menuInfo(): Record<string, boolean> {
+    return { ...this.data.menuInfo };
+  }
+
+  /** 批量更新菜单信息开关（局部合并：未传 key 保留当前值，写穿落盘） */
+  setMenuInfo(next: Record<string, boolean>): void {
+    this.data.menuInfo = { ...this.data.menuInfo, ...next };
+    this.save();
+  }
 
   setGlobalEnabled(enabled: boolean): void {
     this.data.globalEnabled = enabled;
@@ -132,19 +148,19 @@ export class McModConfig {
     this.save();
   }
 
-  /** 修改单仓最大规格（各轴最大边长，v1 ConfigUI 下拉可配） */
+  /** 修改单仓最大规格（各轴最大边长，v1 OPConfigUI 下拉可配） */
   setMaxWarehouseSpec(spec: WarehouseSpec): void {
     this.data.maxWarehouseSpec = spec;
     this.save();
   }
 
-  /** 修改每玩家最多仓库数（v1 ConfigUI slider 可配） */
+  /** 修改每玩家最多仓库数（v1 OPConfigUI slider 可配） */
   setMaxWarehousesPerPlayer(count: number): void {
     this.data.maxWarehousesPerPlayer = count;
     this.save();
   }
 
-  /** 修改单仓最大容器数（v1 ConfigUI 下拉可配） */
+  /** 修改单仓最大容器数（v1 OPConfigUI 下拉可配） */
   setMaxContainers(count: number): void {
     this.data.maxContainers = count;
     this.save();

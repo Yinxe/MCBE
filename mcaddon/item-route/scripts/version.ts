@@ -1,5 +1,5 @@
 // 此文件由 just.config.ts 在构建时自动生成
 
 export const VERSION = "0.1.13";
-export const BUILD_TIME = "2026-08-08T02:22:23.815Z";
+export const BUILD_TIME = "2026-08-08T03:05:43.409Z";
 export const PROJECT_URL = "https://github.com/YinxSmartHouse/item-route";

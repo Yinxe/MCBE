@@ -4,7 +4,7 @@
 //   · 提交一次落 warehouse.settings.enabledFamilies（经 WarehouseService.updateSettings，meta 持久化）。
 // 默认启用 DEFAULT_ENABLED_FAMILIES（常用族）；这里把勾选结果写为显式启用列表（空数组 = 全关）。
 import { type Player } from "@minecraft/server";
-import { ModalFormBuilder } from "@yinxe/toolkit";
+import { ModalFormBuilder, canManage } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../commands/auth";
 import { isFamilyEnabled, type Warehouse } from "../../core/model/Warehouse";
@@ -18,7 +18,7 @@ export async function showFamilyConfigMenu(
   deps: CommandDeps,
   warehouse: Warehouse
 ): Promise<void> {
-  if (!requireRole(deps.members, warehouse, player.name, "owner")) {
+  if (!requireRole(deps.members, warehouse, player.name, "owner", canManage(player))) {
     player.sendMessage(`${uiColor.chat.error}需要管理员权限`);
     return;
   }

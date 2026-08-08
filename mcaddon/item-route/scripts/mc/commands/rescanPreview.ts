@@ -3,7 +3,7 @@
 // 不注册、不写索引、不改持久化——供玩家在真正 rescan 前确认范围。
 // 直接扫区块方块（不经 warehouse.containers），故无需 ensureContainersLoaded。
 import { world } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit";
+import { defineCommand, canManage } from "@yinxe/toolkit";
 import { nameCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 import { resolveWarehouseByName, requireRole } from "./auth";
@@ -26,7 +26,7 @@ export function registerRescanPreview(registry: Parameters<typeof defineCommand>
       player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
-    if (!requireRole(deps.members, warehouse, player.name, "member")) {
+    if (!requireRole(deps.members, warehouse, player.name, "member", canManage(player))) {
       player.sendMessage(`${chat.error}需要成员及以上权限`);
       return;
     }

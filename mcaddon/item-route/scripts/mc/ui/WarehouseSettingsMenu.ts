@@ -6,7 +6,7 @@
 //     动作开关（同时只允许一个，防误触）。提交后先落设置，再执行所选单个动作。
 // 权限：成员可见 [刷新容器]；owner 额外 [成员/统计/调整/删除]（经 auth.requireRole 分级）。
 import { world, type Player } from "@minecraft/server";
-import { ModalFormBuilder, ActionFormBuilder } from "@yinxe/toolkit";
+import { ModalFormBuilder, ActionFormBuilder, canManage } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../commands/auth";
 import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
@@ -20,6 +20,7 @@ import { showFamilyConfigMenu } from "./FamilyConfigMenu";
 import { showItemSearchMultiPicker } from "./ItemSearchMultiPicker";
 import { ITEM_FAMILIES } from "../../core/data/item-families";
 import { isFamilyEnabled } from "../../core/model/Warehouse";
+import { isMenuInfoOn } from "../../core/data/MenuInfo";
 import { formatCount } from "../../core/utils/formatCount";
 import { dimensionName } from "../../core/model/ContainerId";
 import { Table, Cell } from "./Table";
@@ -31,8 +32,42 @@ const SPEED_OPTIONS = [4, 8, 16, 20, 30, 40];
 /** 默认容器角色可选集（输入由漏斗/放置决定，不作为整仓默认；与建仓表单一致） */
 const DEFAULT_ROLE_OPTIONS: ContainerRole[] = ["single", "multi", "misc"];
 
-/** 仓库概览：v1 WarehouseStats 风格表格（TYPES/ITEMS/STORAGE + 分角色行），供 info label（ModalForm 深底 → 浅色） */
+/** 仓库概览：v1 WarehouseStats 风格表格（TYPES/ITEMS/STORAGE + 分角色行），供 info label（ModalForm 深底 → 浅色）。
+ *  信息元素按 OPInfoConfigUI 开关逐行控制（关 → 不计算不显示）。 */
 function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string {
+  const info = deps.config.menuInfo;
+  const lines: string[] = [];
+  if (isMenuInfoOn(info, "warehouseName")) lines.push(`${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}`);
+  if (isMenuInfoOn(info, "warehouseId")) lines.push(`${uiColor.form.muted}仓库ID ${uiColor.form.body}${warehouse.id}`);
+
+  // 位置信息（维度 + 归一化区域 + 占地规格），对齐 v1 formatWarehouseStats
+  const a = warehouse.area;
+  if (isMenuInfoOn(info, "warehouseDimension")) lines.push(`${uiColor.form.muted}维度 ${uiColor.form.body}${dimensionName(a.dimension)}`);
+  if (isMenuInfoOn(info, "warehouseCoords")) {
+    const minX = Math.min(a.corner1.x, a.corner2.x);
+    const maxX = Math.max(a.corner1.x, a.corner2.x);
+    const minY = Math.min(a.corner1.y, a.corner2.y);
+    const maxY = Math.max(a.corner1.y, a.corner2.y);
+    const minZ = Math.min(a.corner1.z, a.corner2.z);
+    const maxZ = Math.max(a.corner1.z, a.corner2.z);
+    lines.push(`${uiColor.form.muted}范围 ${uiColor.form.body}[${minX},${minY},${minZ}] → [${maxX},${maxY},${maxZ}]`);
+  }
+  if (isMenuInfoOn(info, "warehouseSpec")) {
+    const size = areaSize(a);
+    lines.push(`${uiColor.form.muted}规格 ${uiColor.form.body}${size.x}×${size.y}×${size.z}（${size.volume} 格）`);
+  }
+  if (isMenuInfoOn(info, "warehouseFamily")) {
+    lines.push(`${uiColor.form.muted}已启用族类: ${uiColor.form.accent}${countEnabledFamilies(warehouse)} 族`);
+  }
+  // 统计表（容器/槽位/物品/种类 + 分角色）——关闭则完全跳过 stats 计算
+  if (isMenuInfoOn(info, "warehouseStats")) {
+    lines.push(renderWarehouseStatsTable(deps, warehouse));
+  }
+  return lines.join("\n");
+}
+
+/** 仓库统计表格（容器/槽位/物品/种类 + 分角色行，v1 WarehouseStats 风格） */
+function renderWarehouseStatsTable(deps: CommandDeps, warehouse: Warehouse): string {
   const s = deps.stats.getWarehouseStats(warehouse);
   const warnPct = Math.round(warehouse.settings.warningThreshold * 100);
   const uc = (p: number): string =>
@@ -69,25 +104,7 @@ function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string
       )
     );
   }
-  // 位置信息（维度 + 归一化区域 + 占地规格），对齐 v1 formatWarehouseStats
-  const a = warehouse.area;
-  const minX = Math.min(a.corner1.x, a.corner2.x);
-  const maxX = Math.max(a.corner1.x, a.corner2.x);
-  const minY = Math.min(a.corner1.y, a.corner2.y);
-  const maxY = Math.max(a.corner1.y, a.corner2.y);
-  const minZ = Math.min(a.corner1.z, a.corner2.z);
-  const maxZ = Math.max(a.corner1.z, a.corner2.z);
-  const size = areaSize(a);
-  const enabledFamilyCount = countEnabledFamilies(warehouse);
-  return (
-    `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
-    `${uiColor.form.muted}仓库ID ${uiColor.form.body}${warehouse.id}\n` +
-    `${uiColor.form.muted}维度 ${uiColor.form.body}${dimensionName(a.dimension)}\n` +
-    `${uiColor.form.muted}范围 ${uiColor.form.body}[${minX},${minY},${minZ}] → [${maxX},${maxY},${maxZ}]\n` +
-    `${uiColor.form.muted}规格 ${uiColor.form.body}${size.x}×${size.y}×${size.z}（${size.volume} 格）\n` +
-    `${uiColor.form.muted}已启用族类: ${uiColor.form.accent}${enabledFamilyCount} 族` +
-    `\n${tbl.render(0, [1, 1, 3])}`
-  );
+  return tbl.render(0, [1, 1, 3]);
 }
 
 /** 该仓已启用族数（默认启用 DEFAULT_ENABLED_FAMILIES） */
@@ -105,7 +122,7 @@ export async function showWarehouseSettingsMenu(
   warehouse: Warehouse
 ): Promise<void> {
   deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载
-  const isOwner = requireRole(deps.members, warehouse, player.name, "owner");
+  const isOwner = requireRole(deps.members, warehouse, player.name, "owner", canManage(player));
 
   const settings = warehouse.settings;
   // 只能选 ≥ 全局最快速度限制 的档位（不得快于管理员上限；v1 getAvailableSpeeds 口径）

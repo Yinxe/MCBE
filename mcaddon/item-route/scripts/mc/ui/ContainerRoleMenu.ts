@@ -7,13 +7,14 @@
 //   · 提交：角色/启用变更 → 刷新 inputs 镜像 + 更新索引 + invalidate 统计 + 触发
 //     containerRegistryChanged（持久化由中央订阅处理，单容器最小单位）
 import { type Player } from "@minecraft/server";
-import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
+import { ActionFormBuilder, ModalFormBuilder, canManage } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../commands/auth";
 import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
 import { isHopperType } from "../../core/model/ContainerTypes";
 import { containerShortName } from "../../core/model/ContainerId";
 import { getChineseName } from "../../core/data/ItemNameMap";
+import { isMenuInfoOn } from "../../core/data/MenuInfo";
 import { scanContainer } from "../../core/model/ContainerScan";
 import { containerFamilyRanks, formatFamilyRankLine } from "../../core/stats/familyRanks";
 import { refreshInputMembership } from "../../core/model/ContainerRegistry";
@@ -28,49 +29,59 @@ import * as uiColor from "./uiColor";
 /** 容器角色下拉（漏斗强制 input，其余可选；v1 语义带说明） */
 const ROLE_OPTIONS: ContainerRole[] = ["input", "single", "multi", "misc"];
 
-/** 容器实时信息文本（单趟扫描 → 容量 + 混乱度，供 info label；ModalForm 深底 → 浅色） */
+/** 容器实时信息文本（按 OPInfoConfigUI 开关逐行渲染；关 → 跳过对应计算），ModalForm 深底 → 浅色 */
 function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container: Container): string {
+  const info = deps.config.menuInfo;
   const blockType = (container as { blockType?: string }).blockType ?? "未知";
-  const scan = scanContainer(container);
-  const messiness = new Organizer().messinessFromScan(scan).total;
   const roleLabel = ROLE_LABELS[container.role];
-  // 容量行对齐 v1 formatContainerCapacityLine：usage% 按档着色 + ⚠ 告急（≥ warningThreshold）
-  const usage = container.capacity > 0 ? Math.round((scan.usedSlots / container.capacity) * 100) : 0;
-  const usageColor =
-    usage >= 100
-      ? uiColor.form.error
-      : usage >= 80
-        ? uiColor.form.warn
-        : usage >= 50
-          ? uiColor.form.accent
-          : uiColor.form.success;
-  const warnMark =
-    container.capacity > 0 && usage >= Math.round(warehouse.settings.warningThreshold * 100) ? ` ${usageColor}⚠` : "";
-  const capacityLine = `${uiColor.form.muted}容量 ${uiColor.form.body}${scan.usedSlots}${uiColor.form.muted}/${uiColor.form.body}${container.capacity}[${usageColor}${usage}%${uiColor.form.muted}]  ${uiColor.form.body}${scan.totalItems}${uiColor.form.muted} 个物品  ${uiColor.form.body}${Object.keys(scan.byType).length}${uiColor.form.muted} 种类型${warnMark}`;
-  // 族榜：多物容器启用同族收纳 → 信息区显示容器内族排行榜（族类型数降序，全排不省略）
-  const familyBlock =
-    container.role === "multi" && container.familyEnabled
-      ? formatFamilyRanksBlock(scan)
-      : "";
-  return (
-    `${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}\n` +
-    `${uiColor.form.muted}类型 ${uiColor.form.body}${getChineseName(blockType)}${isHopperType(blockType) ? "（漏斗→输入容器）" : ""}\n` +
-    `${capacityLine}\n` +
-    `${uiColor.form.muted}混乱度 ${uiColor.form.body}${(messiness * 100).toFixed(0)}%\n` +
-    `${uiColor.form.muted}容器ID ${uiColor.form.body}${container.id}\n` +
-    `${uiColor.form.muted}状态 ${container.enabled ? uiColor.form.success + "已启用" : uiColor.form.error + "已禁用"}\n` +
-    `${uiColor.form.muted}角色 ${uiColor.form.accent}${roleLabel}\n` +
-    `${uiColor.form.muted}优先级 ${uiColor.form.body}${container.priority}` +
-    familyBlock
-  );
-}
 
-/** 容器族榜文本：`族榜:` 起行，`#1.羊毛(5|1.4k)` 逐族全排（仅实含族参与，类型数降序） */
-function formatFamilyRanksBlock(scan: ReturnType<typeof scanContainer>): string {
-  const ranks = containerFamilyRanks(scan);
-  if (ranks.length === 0) return "";
-  const lines = ranks.map((r, i) => `${uiColor.form.muted}${formatFamilyRankLine(r, i + 1)}`);
-  return `\n${uiColor.form.muted}族榜:` + "\n" + lines.join("\n");
+  // 容量/混乱度/族榜都依赖 scan：仅当至少一项开着才执行单趟扫描（避免无效计算）
+  const needScan =
+    isMenuInfoOn(info, "containerCapacity") ||
+    isMenuInfoOn(info, "containerMessiness") ||
+    isMenuInfoOn(info, "containerFamilyRank");
+  const scan = needScan ? scanContainer(container) : undefined;
+
+  const lines: string[] = [];
+  if (isMenuInfoOn(info, "containerWhName")) lines.push(`${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}`);
+  if (isMenuInfoOn(info, "containerType"))
+    lines.push(`${uiColor.form.muted}类型 ${uiColor.form.body}${getChineseName(blockType)}${isHopperType(blockType) ? "（漏斗→输入容器）" : ""}`);
+
+  if (scan !== undefined && isMenuInfoOn(info, "containerCapacity")) {
+    // 容量行对齐 v1 formatContainerCapacityLine：usage% 按档着色 + ⚠ 告急（≥ warningThreshold）
+    const usage = container.capacity > 0 ? Math.round((scan.usedSlots / container.capacity) * 100) : 0;
+    const usageColor =
+      usage >= 100
+        ? uiColor.form.error
+        : usage >= 80
+          ? uiColor.form.warn
+          : usage >= 50
+            ? uiColor.form.accent
+            : uiColor.form.success;
+    const warnMark =
+      container.capacity > 0 && usage >= Math.round(warehouse.settings.warningThreshold * 100) ? ` ${usageColor}⚠` : "";
+    lines.push(
+      `${uiColor.form.muted}容量 ${uiColor.form.body}${scan.usedSlots}${uiColor.form.muted}/${uiColor.form.body}${container.capacity}[${usageColor}${usage}%${uiColor.form.muted}]  ${uiColor.form.body}${scan.totalItems}${uiColor.form.muted} 个物品  ${uiColor.form.body}${Object.keys(scan.byType).length}${uiColor.form.muted} 种类型${warnMark}`
+    );
+  }
+  if (scan !== undefined && isMenuInfoOn(info, "containerMessiness")) {
+    const messiness = new Organizer().messinessFromScan(scan).total;
+    lines.push(`${uiColor.form.muted}混乱度 ${uiColor.form.body}${(messiness * 100).toFixed(0)}%`);
+  }
+  if (isMenuInfoOn(info, "containerId")) lines.push(`${uiColor.form.muted}容器ID ${uiColor.form.body}${container.id}`);
+  if (isMenuInfoOn(info, "containerStatus"))
+    lines.push(`${uiColor.form.muted}状态 ${container.enabled ? uiColor.form.success + "已启用" : uiColor.form.error + "已禁用"}`);
+  if (isMenuInfoOn(info, "containerRole")) lines.push(`${uiColor.form.muted}角色 ${uiColor.form.accent}${roleLabel}`);
+  if (isMenuInfoOn(info, "containerPriority")) lines.push(`${uiColor.form.muted}优先级 ${uiColor.form.body}${container.priority}`);
+  // 族榜：多物容器启用同族收纳 + 开关开 → 信息区显示容器内族排行榜（族类型数降序，全排）
+  if (scan !== undefined && isMenuInfoOn(info, "containerFamilyRank") && container.role === "multi" && container.familyEnabled) {
+    const ranks = containerFamilyRanks(scan);
+    if (ranks.length > 0) {
+      lines.push(`${uiColor.form.muted}族榜:`);
+      ranks.forEach((r, i) => lines.push(`${uiColor.form.muted}${formatFamilyRankLine(r, i + 1)}`));
+    }
+  }
+  return lines.join("\n");
 }
 
 /**
@@ -78,16 +89,18 @@ function formatFamilyRanksBlock(scan: ReturnType<typeof scanContainer>): string 
  */
 export async function showContainerRoleMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（列表才有容器可编辑）
+  const info = deps.config.menuInfo;
   const form = new ActionFormBuilder()
     .title(`${uiColor.form.title}容器角色 · ${warehouse.displayName}`)
     .body(`${uiColor.form.body}选择容器（漏斗为强制输入容器）：`);
   for (const container of warehouse.containers.values()) {
     const roleLabel = ROLE_LABELS[container.role] ?? container.role;
     const blockType = (container as { blockType?: string }).blockType ?? "";
-    form.button(
-      `${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]${blockType ? ` ${uiColor.form.muted}${getChineseName(blockType)}` : ""}`,
-      () => void showContainerConfigMenu(player, deps, warehouse, container)
-    );
+    const parts: string[] = [`${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]`];
+    if (blockType && isMenuInfoOn(info, "containerType")) {
+      parts.push(` ${uiColor.form.muted}${getChineseName(blockType)}`);
+    }
+    form.button(parts.join(""), () => void showContainerConfigMenu(player, deps, warehouse, container));
   }
   await form.show(player);
 }
@@ -103,7 +116,7 @@ export async function showContainerConfigMenu(
   warehouse: Warehouse,
   container: Container
 ): Promise<void> {
-  if (!requireRole(deps.members, warehouse, player.name, "member")) {
+  if (!requireRole(deps.members, warehouse, player.name, "member", canManage(player))) {
     player.sendMessage(`${uiColor.chat.error}需要成员及以上权限`);
     return;
   }

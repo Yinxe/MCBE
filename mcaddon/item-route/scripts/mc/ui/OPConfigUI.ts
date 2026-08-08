@@ -1,12 +1,11 @@
-// ─── 模组配置 UI：信物/全局开关/速度上限/全服统计（仅管理员可进） ──
-// 由 MainMenu 的 OP（canManage）入口打开。全局配置写穿 McModConfig（单键 ir2:modcfg），
-// 运行时立即应用到 RouteService（setGlobalEnabled/setGlobalSpeedLimit）。
+// ─── 管理员配置 UI（OP 专属）：全局开关/信物/速度上限/建仓限制/全服统计/菜单信息开关 ──
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import type { WarehouseSpec } from "../../core/services/WarehouseService";
 import { getChineseName } from "../../core/data/ItemNameMap";
 import { TOKEN_OPTIONS } from "../storage/McModConfig";
+import { showOPInfoConfigUI } from "./OPInfoConfigUI";
 import * as uiColor from "./uiColor";
 
 /** 全局速度上限可选项（tick/槽）；默认 index 1 = 8 tick */
@@ -22,12 +21,12 @@ const SPEC_OPTIONS: WarehouseSpec[] = [
 const CONTAINER_OPTIONS: number[] = [50, 100, 200, 512];
 
 /**
- * 展示模组配置面板（管理员专属）：当前状态总览 + 修改 + 全服统计。
+ * 展示模组配置面板（管理员专属）：当前状态总览 + 修改 + 全服统计 + 菜单信息开关。
  *
  * @param player - 打开面板的玩家
  * @param deps   - 命令共享依赖门面
  */
-export async function showConfigUI(player: Player, deps: CommandDeps): Promise<void> {
+export async function showOPConfigUI(player: Player, deps: CommandDeps): Promise<void> {
   // 按钮文字深色（ActionForm 浅灰按钮背景）
   const form = new ActionFormBuilder()
     .title(`${uiColor.form.title}模组配置`)
@@ -39,7 +38,8 @@ export async function showConfigUI(player: Player, deps: CommandDeps): Promise<v
       ].join("\n")
     )
     .button(`${uiColor.btn.primary}修改设置`, () => void editConfig(player, deps))
-    .button(`${uiColor.btn.info}全服统计`, () => void serverStats(player, deps));
+    .button(`${uiColor.btn.info}全服统计`, () => void serverStats(player, deps))
+    .button(`${uiColor.btn.accent}菜单信息显示`, () => void showOPInfoConfigUI(player, deps));
   await form.show(player);
 }
 

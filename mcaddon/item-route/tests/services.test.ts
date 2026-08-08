@@ -517,7 +517,7 @@ test("createWarehouse: 每玩家数量上限", () => {
   assert.match((fourth as { error: string }).error, /最多/);
 });
 
-test("WarehouseService: setLimits 运行时更新建仓限制（ConfigUI/Phase 4 重应用）", () => {
+test("WarehouseService: setLimits 运行时更新建仓限制（OPConfigUI/Phase 4 重应用）", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus(), {
     ...DEFAULT_WAREHOUSE_LIMITS,
     maxWarehousesPerPlayer: 1,

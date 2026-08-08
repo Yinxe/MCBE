@@ -8,11 +8,13 @@ import type { CommandDeps } from "../commands/deps";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
 import { areaSize } from "../../core/services/WarehouseService";
 import { dimensionShort } from "../../core/model/ContainerId";
+import { isMenuInfoOn } from "../../core/data/MenuInfo";
 import * as uiColor from "./uiColor";
 
 /**
  * 展示仓库列表（主菜单"仓库列表"入口）：按管理员/成员身份筛选可见仓库，按名排序。
- * 空列表给出提示；按钮附 维度/面积/owner 信息（v1 同款）；选择后跳转仓库设置。
+ * 空列表给出提示；按钮附 维度/面积/owner 信息（按 OPInfoConfigUI 开关，可关掉不显示）；
+ * 选择后跳转仓库设置。
  *
  * @param player - 打开列表的玩家
  * @param deps   - 命令共享依赖门面
@@ -28,15 +30,24 @@ export async function showWarehouseManageMenu(player: Player, deps: CommandDeps)
     return;
   }
 
-  // 仓库名按钮在浅灰背景上 → 深色前景；附 面积 + 维度（管理员额外显示 owner）
+  // 仓库名按钮在浅灰背景上 → 深色前景；附 owner/ID/维度/规格（OPInfoConfigUI 开关控制）
+  const info = deps.config.menuInfo;
   const form = new ActionFormBuilder().title(`${uiColor.form.title}仓库列表`).body(`${uiColor.form.body}选择仓库：`);
   for (const w of [...visible].sort((a, b) => a.displayName.localeCompare(b.displayName))) {
-    const size = areaSize(w.area);
-    const ownerTag = isAdmin && w.ownerName !== player.name ? ` (${w.ownerName})` : "";
-    form.button(
-      `${uiColor.btn.nav}${w.displayName}${uiColor.btn.info}${ownerTag}  ${uiColor.form.muted}${w.id}${uiColor.btn.info} ${dimensionShort(w.area.dimension)} ${size.x}×${size.y}×${size.z}=${size.volume}格`,
-      () => void showWarehouseSettingsMenu(player, deps, w)
-    );
+    const parts: string[] = [`${uiColor.btn.nav}${w.displayName}`];
+    if (isAdmin && w.ownerName !== player.name && isMenuInfoOn(info, "warehouseOwner")) {
+      parts.push(`${uiColor.btn.info}(${w.ownerName})`);
+    }
+    if (isMenuInfoOn(info, "warehouseId")) parts.push(`${uiColor.form.muted}${w.id}`);
+    if (isMenuInfoOn(info, "warehouseDimension") || isMenuInfoOn(info, "warehouseSpec")) {
+      const size = areaSize(w.area);
+      parts.push(
+        `${uiColor.btn.info} ` +
+          (isMenuInfoOn(info, "warehouseDimension") ? `${dimensionShort(w.area.dimension)} ` : "") +
+          (isMenuInfoOn(info, "warehouseSpec") ? `${size.x}×${size.y}×${size.z}=${size.volume}格` : "")
+      );
+    }
+    form.button(parts.join(" "), () => void showWarehouseSettingsMenu(player, deps, w));
   }
   await form.show(player);
 }

@@ -10,7 +10,7 @@ import { showSearchUI } from "./SearchUI";
 import { showWarehouseManageMenu } from "./WarehouseManageMenu";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
 import { showWarehouseCreateForm } from "./WarehouseCreateFlow";
-import { showConfigUI } from "./ConfigUI";
+import { showOPConfigUI } from "./OPConfigUI";
 import { showHelpGuide } from "./HelpGuide";
 import { nearestWarehouseByPermission } from "../../core/model/Area";
 import { btn } from "./uiColor";
@@ -43,7 +43,7 @@ export async function showMainMenu(player: Player, deps: CommandDeps): Promise<v
     .button(`${btn.info}帮助`, () => void showHelpGuide(player));
 
   if (isAdmin) {
-    form.button(`${btn.accent}模组配置`, () => void showConfigUI(player, deps));
+    form.button(`${btn.accent}模组配置`, () => void showOPConfigUI(player, deps));
   }
 
   await form.show(player);

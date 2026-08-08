@@ -68,3 +68,16 @@ test("canRunCommand: 权限贯穿（owner 可 delete，member 可 rescan/menu，
   assert.equal(canRunCommand(members, wh, "m", "search"), true); // search：member+
   assert.equal(canRunCommand(members, wh, "v", "rescan"), false); // 非成员（原 visitor）不可
 });
+
+test("canRunCommand: OP（isAdmin）豁免——非成员管理员可执行 owner 级命令", () => {
+  const members = new MemberService();
+  const wh = makeWarehouse([{ playerName: "o", role: "owner" }]);
+  // 若 OP（isAdmin=true）：即使非成员也能 delete/resize（管理员全权限）
+  assert.equal(canRunCommand(members, wh, "admin", "delete", true), true);
+  assert.equal(canRunCommand(members, wh, "admin", "resize", true), true);
+  assert.equal(canRunCommand(members, wh, "admin", "rescan", true), true);
+  // isAdmin=false（普通玩家）→ 仍按成员矩阵
+  assert.equal(canRunCommand(members, wh, "admin", "delete", false), false);
+  // "any" 命令不受 isAdmin 影响（本就任意）
+  assert.equal(canRunCommand(members, wh, "admin", "create", true), true);
+});

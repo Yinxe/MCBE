@@ -56,3 +56,19 @@ test("McModConfig: 建仓限制字段默认值", () => {
   assert.deepEqual(cfg.maxWarehouseSpec, { x: 32, y: 16, z: 32 });
   assert.equal(cfg.maxWarehousesPerPlayer, 1);
 });
+
+// ── 菜单信息开关（menuInfo） ─────────────────────────────
+test("McModConfig: menuInfo 默认全开 + 局部合并持久化", () => {
+  const kv = new InMemoryKeyValueStore();
+  const cfg = McModConfig.load(new ShardStore(kv));
+  assert.equal(cfg.menuInfo["warehouseId"], true);
+  assert.equal(cfg.menuInfo["containerFamilyRank"], true);
+  // 关一个 → 局部合并（其余仍开）
+  cfg.setMenuInfo({ warehouseId: false });
+  assert.equal(cfg.menuInfo["warehouseId"], false);
+  assert.equal(cfg.menuInfo["containerFamilyRank"], true); // 未传保留
+  // 重载持久化
+  const reloaded = McModConfig.load(new ShardStore(kv));
+  assert.equal(reloaded.menuInfo["warehouseId"], false);
+  assert.equal(reloaded.menuInfo["containerFamilyRank"], true);
+});

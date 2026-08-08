@@ -3,7 +3,7 @@
 // scanWarehouseArea 遍历区域补注册新容器（最小单位：只持久化本次新增容器 + 一次索引同步）。
 // 超限（MAX_SCAN_VOLUME）跳过提示；结果播报扫描格数/新注册数/总容器数。
 import { world } from "@minecraft/server";
-import { defineCommand } from "@yinxe/toolkit";
+import { defineCommand, canManage } from "@yinxe/toolkit";
 import { chat } from "../ui/uiColor";
 import { nameCommand } from "./defs";
 import type { CommandDeps } from "./deps";
@@ -24,7 +24,7 @@ export function registerRescan(registry: Parameters<typeof defineCommand>[0], de
       player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
-    if (!requireRole(deps.members, warehouse, player.name, "member")) {
+    if (!requireRole(deps.members, warehouse, player.name, "member", canManage(player))) {
       player.sendMessage(`${chat.error}需要成员及以上权限`);
       return;
     }

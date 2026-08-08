@@ -3,7 +3,7 @@
 // 区域变化使仓库 ID 重算时（ID 编码初始区域），迁移由 warehouseAreaChanged 事件订阅者
 // 处理（cids 索引 old→new + 调度器重注册，见 events/Subscriptions.ts）；新区域内的容器
 // 由后续 /ir:rescan 或放块/惰性补注册收敛。
-import { defineCommand } from "@yinxe/toolkit";
+import { defineCommand, canManage } from "@yinxe/toolkit";
 import { chat } from "../ui/uiColor";
 import { regionCommand } from "./defs";
 import type { CommandDeps } from "./deps";
@@ -23,7 +23,7 @@ export function registerResize(registry: Parameters<typeof defineCommand>[0], de
       player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
-    if (!requireRole(deps.members, warehouse, player.name, "owner")) {
+    if (!requireRole(deps.members, warehouse, player.name, "owner", canManage(player))) {
       player.sendMessage(`${chat.error}需要拥有者权限`);
       return;
     }
