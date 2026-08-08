@@ -2,9 +2,10 @@
 // 索引本为"路由加速"派生缓存（权威源 = 容器内容），持久化仅为重载加速，非崩溃关键。
 // 每容器一条 `ir2:idx:{cid}`（items + singleBinding），对齐注册表/统计的"每容器一单位"风格：
 //   · 写入时机（mc 层）/容器粒度事件驱动——结构事件（容器增删/角色/优先级）只写该容器，
-//     卸载/离仓/删仓时写全部容器；itemRouted 只更新内存不落盘（重载后惰性自愈）。
+//     卸载/离仓/删仓时写全部容器；**路由成功后立即写目标容器索引条目**（misc/multi/single
+//     桶增量随同落盘，重启可按条目完整重建 byItem，避免 misc 等搜索 miss）。
 //   · 单容器索引条目是小值 → **DirectStore**（普通 DP 单键）直存，无分片/hash 开销。
-// 崩溃安全：只内存不落盘时崩溃丢"本次会话增量"，启动时缺条目回退全容器扫描重建。
+// 崩溃安全：仅"写盘瞬间的会话增量"可能丢，启动时缺条目回退全容器扫描重建。
 import type { DirectStore } from "./DirectStore";
 import type { ContainerIndexEntry, IndexStore } from "../../core/storage/Stores";
 import type { ContainerId } from "../../core/model/types";
