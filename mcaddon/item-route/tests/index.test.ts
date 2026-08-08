@@ -224,3 +224,44 @@ test("ItemIndex: onContainerRemoved 清 misc 桶（搜索索引同步移除）",
   index.onContainerRemoved(misc);
   assert.deepEqual(index.lookupSearch("minecraft:stone"), []);
 });
+
+// ── onItemMoved：路由移动后 byItem 桶即时更新（搜索可见） ──
+test("ItemIndex: 路由到 misc → byItem.misc 即时登记（lookupSearch 可见）", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const misc = new InMemoryContainer("x1", "misc", 3);
+  index.onContainerAdded(misc);
+  assert.deepEqual(index.lookupSearch("minecraft:stone"), []); // 初始无
+  index.onItemMoved(input, misc, "minecraft:stone"); // 路由把石头放进 misc
+  assert.deepEqual(index.lookupSearch("minecraft:stone"), ["x1"]); // misc 桶已登记 → 搜索可见
+});
+
+test("ItemIndex: 路由到 multi（白名单声明型，缺卡也进）→ byItem.multi 即时登记", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const multi = new InMemoryContainer("m1", "multi", 3);
+  index.onContainerAdded(multi);
+  // 白名单声明：multi 容器 whitelist 含 diamond，空箱也进（MultiItemStrategy 声明候选）
+  assert.deepEqual(index.lookup("minecraft:diamond").multi, []); // 未登记（空箱白名单不入内容索引）
+  index.onItemMoved(input, multi, "minecraft:diamond"); // 路由放入
+  assert.deepEqual(index.lookup("minecraft:diamond").multi, ["m1"]); // 移动后补 multi 桶
+  assert.deepEqual(index.lookupSearch("minecraft:diamond"), ["m1"]); // 搜索同步可见
+});
+
+test("ItemIndex: 路由到 single（绑定吻合）→ byItem.single 即时登记；漂移不强行登记", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64)); // 绑定 diamond
+  index.onContainerAdded(single);
+  // 绑定吻合 → 路由补 single 桶（幂等）
+  index.onItemMoved(input, single, "minecraft:diamond");
+  assert.deepEqual(index.lookup("minecraft:diamond").single, ["s1"]);
+  // 漂移：路由放了个与绑定不符的类型 → 不强行登记（留 reconcile）
+  const before = index.lookup("minecraft:stone");
+  index.onItemMoved(input, single, "minecraft:stone");
+  assert.deepEqual(index.lookup("minecraft:stone").single, before.single);
+});

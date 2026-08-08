@@ -102,13 +102,29 @@ export class ItemIndex {
   }
 
   /**
-   * 轻量更新：路由自身移动物品后只更新目标侧（来源侧留待惰性校验清理）。
-   * 只维护容器 → 物品反向（containerItems）+ 每容器家族桶；byItem 各角色桶由惰性校验自愈。
+   * 轻量更新：路由自身移动物品后，**同时刷新 byItem 角色桶**（O(1) 幂等）：
+   *   · 目标 misc   → misc 桶登记（**否则路由进 misc 后搜索 lookupSearch 搜不到**：misc 是
+   *     兜底层，不进路由候选，无专项增补——必须在此补 `byItem[itemId].misc`）
+   *   · 目标 multi  → multi 桶登记（补齐**白名单声明式 MultiItemStrategy 缺卡多物容器**的桶：
+   *     白名单路由未走内容索引，若不补，同型搜索/后续 O(1) 路由会 miss）
+   *   · 目标 single → single 桶（绑定型，幂等）
+   * 来源侧留待惰性校验清理（reconcile 全量重建；见"三层兜底"）。
+   * containerItems（容器→物品）与家族桶同样此处理。
    */
   onItemMoved(from: Container, to: Container, itemId: ItemId): void {
     this.containerItems.get(from.id)?.delete(itemId);
     const toItems = this.containerItems.get(to.id);
     if (toItems) toItems.add(itemId);
+    // 目标角色对应桶同步登记（O(1) 幂等）：路由移动即刻对搜索/路由可见
+    const entry = this.ensureEntry(itemId);
+    if (to.role === "single") {
+      if (this.getBinding(to.id) === itemId) entry.single.add(to.id);
+      // 单物目标绑定须吻合；若漂移则不强行登记，交 reconcile 按真实内容重建
+    } else if (to.role === "multi") {
+      entry.multi.add(to.id);
+    } else if (to.role === "misc") {
+      entry.misc.add(to.id);
+    }
     if (to.role === "multi" && to.familyEnabled) {
       const fam = familyOf(itemId);
       if (fam !== undefined) this.addContainerToFamily(to.id, fam);
