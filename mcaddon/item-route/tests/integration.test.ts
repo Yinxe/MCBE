@@ -149,5 +149,5 @@ test("集成: 单容器整理后发 container-changed 事件（索引更新对�
 test("集成: 成员权限贯穿", () => {
   const { app, warehouse } = makeWorld();
   assert.equal(app.members.can(warehouse, "p1", "owner"), true);
-  assert.equal(app.members.can(warehouse, "stranger", "visitor"), false);
+  assert.equal(app.members.can(warehouse, "stranger", "member"), false);
 });

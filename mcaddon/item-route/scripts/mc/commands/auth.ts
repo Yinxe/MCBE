@@ -25,8 +25,8 @@ export function requireRole(
 }
 
 /**
- * 权限矩阵（设计 §3.3）：命令 → 最低角色；"any" = 任意玩家。
- * create/organize/help 任意；menu/search visitor+；rescan/rescan_preview member+；
+ * 权限矩阵：命令 → 最低角色；"any" = 任意玩家。
+ * create/organize/help 任意；menu member+（无访客角色，成员即可进菜单）；rescan member+；
  * delete/resize owner。
  */
 export type CommandAccess = MemberRole | "any";
@@ -36,7 +36,7 @@ export const COMMAND_MIN_ROLE: Record<string, CommandAccess> = {
   rescan: "member",
   rescan_preview: "member",
   delete: "owner",
-  menu: "visitor",
+  menu: "member",
   search: "member", // 容器搜索：仅仓库成员（就近需有权限），v1 语义
   organize: "any",
   help: "any",

@@ -1,108 +1,74 @@
-// ─── 成员管理：列表 + 添加/改角色/移除（owner 专属） ────────
-// 权限由 WarehouseService（addMember/setMemberRole/removeMember）校验并落 meta；
-// owner 角色不可被改变/移除（服务侧防护，UI 侧同样过滤 owner 之外的成员）。
-import { type Player } from "@minecraft/server";
-import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
+// ─── 成员管理：**单个模态 UI**（owner 专属） ────────────────
+// v2 简化（无访客）：仓库成员只有 owner（隐含）+ member。一个 ModalForm 完成全部操作：
+//   · 主控件 = 下拉选择框：默认项"无" + 所有**在线且未添加**的玩家（选取即添加为 member）
+//   · 下方 = 已添加成员列表：每个一行开关（开=保留 / 关=移除）
+// 提交一次落所有变更（添加选中玩家 + 移除被关闭的成员），owner 不在列表中（不可移除）。
+import { world, type Player } from "@minecraft/server";
+import { ModalFormBuilder } from "@yinxe/toolkit";
 import type { CommandDeps } from "../commands/deps";
 import type { Warehouse } from "../../core/model/Warehouse";
-import type { MemberRole } from "../../core/model/Warehouse";
-import { MEMBER_ROLE_LABELS } from "./Labels";
 import * as uiColor from "./uiColor";
 
-/** 成员角色中文标签（来自 Labels 中心，dropdown 选项 + 列表展示） */
-const ROLE_LABELS: Record<MemberRole, string> = MEMBER_ROLE_LABELS;
-/** 可新增/授予的角色（owner 只能通过转让设置，见 WarehouseService.addMember） */
-const ASSIGNABLE_ROLES: MemberRole[] = ["member", "visitor"];
+/** 下拉"无"选项（默认）：不添加任何人 */
+const DROP_NONE = "无";
 
-/** 玩家 ID 短显示（UUID 尾 8 位，v1 口径，聊天友好） */
+/** 玩家 ID 短显示（UUID 尾 8 位，聊天友好） */
 function shortId(playerName: string): string {
   return playerName.length > 10 ? playerName.slice(-8) : playerName;
 }
 
 /**
- * 展示成员管理菜单（owner）：成员列表 + 添加/改角色/移除。
+ * 展示成员管理单模态（owner）：下拉选在线未添加玩家 → 添加为成员；成员开关列表（关=移除）。
  *
- * @param player    - 操作玩家
+ * @param player    - 操作玩家（必须为仓库 owner，调用方已 requireRole 守卫）
  * @param deps      - 命令共享依赖门面
  * @param warehouse - 目标仓库
  */
 export async function showMemberMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
-  // 按钮文字深色（ActionForm 浅灰按钮背景）
-  const form = new ActionFormBuilder()
+  const members = warehouse.members.filter((m) => m.playerName !== warehouse.ownerName); // owner 隐含，不可列/不可移除
+  const onlineNames = world.getAllPlayers().map((p) => p.name);
+  // 可添加候选：在线且未在成员列表、非 owner
+  const addable = onlineNames.filter(
+    (name) => name !== warehouse.ownerName && !warehouse.members.some((m) => m.playerName === name)
+  );
+  const dropdownOptions = [DROP_NONE, ...addable];
+
+  const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}成员管理 · ${warehouse.displayName}`)
-    .body(
-      `${uiColor.form.muted}成员：\n${warehouse.members.map((m) => `${uiColor.form.body}${shortId(m.playerName)} ${uiColor.form.muted}(${ROLE_LABELS[m.role]})`).join("\n")}`
-    )
-    .button(`${uiColor.btn.primary}添加成员`, () => void addMemberForm(player, deps, warehouse))
-    .button(`${uiColor.btn.nav}调整角色`, () => void changeRoleForm(player, deps, warehouse))
-    .button(`${uiColor.btn.danger}移除成员`, () => void removeMemberForm(player, deps, warehouse));
-  await form.show(player);
-}
+    .dropdown("addPlayer", "添加成员（在线玩家）", dropdownOptions, {
+      defaultValueIndex: 0,
+      tooltip: "选中在线玩家 → 提交后添加为成员；选「无」则不添加",
+    });
 
-/** 添加成员表单：输入玩家 ID + 选角色（member/visitor） */
-async function addMemberForm(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
-  const form = new ModalFormBuilder()
-    .title(`${uiColor.form.title}添加成员`)
-    .textField("playerName", "玩家 ID", { defaultValue: "" })
-    .dropdown(
-      "role",
-      "角色",
-      ASSIGNABLE_ROLES.map((r) => ROLE_LABELS[r]),
-      { defaultValueIndex: 0 }
-    );
-  const values = await form.show(player);
-  if (!values) return;
-  const pid = (values.playerName as string).trim();
-  if (!pid) return;
-  const role = ASSIGNABLE_ROLES[values.role as number] ?? "visitor";
-  const err = deps.warehouses.addMember(warehouse, pid, role);
-  player.sendMessage(err ? `${uiColor.chat.error}${err}` : `${uiColor.chat.success}已添加 ${pid}`);
-}
-
-/** 调整角色表单：排除 owner，可选择任意新角色（含 owner→成员/visitor，visitor→member） */
-async function changeRoleForm(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
-  const nonOwner = warehouse.members.filter((m) => m.playerName !== warehouse.ownerName);
-  if (nonOwner.length === 0) {
-    player.sendMessage(`${uiColor.chat.muted}暂无其他成员可调整`);
-    return;
+  if (members.length > 0) {
+    const tooltip = "开 = 保留该成员；关 = 移除（提交生效）";
+    for (const m of members) {
+      form.toggle(`keep_${m.playerName}`, `${m.playerName}`, {
+        defaultValue: true,
+        tooltip,
+      });
+    }
   }
-  const form = new ModalFormBuilder()
-    .title(`${uiColor.form.title}调整角色`)
-    .dropdown(
-      "playerName",
-      "成员",
-      nonOwner.map((m) => m.playerName),
-      { defaultValueIndex: 0 }
-    )
-    .dropdown("role", "新角色", Object.values(ROLE_LABELS), { defaultValueIndex: 1 });
-  const values = await form.show(player);
-  if (!values) return;
-  const pid = nonOwner[values.playerName as number]?.playerName;
-  if (!pid) return;
-  const role = (Object.keys(ROLE_LABELS) as MemberRole[])[values.role as number] ?? "visitor";
-  const err = deps.warehouses.setMemberRole(warehouse, pid, role);
-  player.sendMessage(
-    err ? `${uiColor.chat.error}${err}` : `${uiColor.chat.success}${pid} 角色已设为 ${ROLE_LABELS[role]}`
-  );
-}
+  form.label("empty", members.length === 0 ? `${uiColor.form.muted}（暂无成员）` : "");
 
-/** 移除成员表单：排除 owner（owner 不可被移除，见 WarehouseService.removeMember） */
-async function removeMemberForm(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
-  const nonOwner = warehouse.members.filter((m) => m.playerName !== warehouse.ownerName);
-  if (nonOwner.length === 0) {
-    player.sendMessage(`${uiColor.chat.muted}暂无其他成员可移除`);
-    return;
-  }
-  const form = new ModalFormBuilder().title(`${uiColor.form.title}移除成员`).dropdown(
-    "playerName",
-    "成员",
-    nonOwner.map((m) => m.playerName),
-    { defaultValueIndex: 0 }
-  );
   const values = await form.show(player);
   if (!values) return;
-  const pid = nonOwner[values.playerName as number]?.playerName;
-  if (!pid) return;
-  const err = deps.warehouses.removeMember(warehouse, pid);
-  player.sendMessage(err ? `${uiColor.chat.error}${err}` : `${uiColor.chat.success}已移除 ${pid}`);
+
+  // 1) 添加所选玩家（默认"无" → 不添加）
+  const chosen = dropdownOptions[values.addPlayer as number];
+  if (chosen !== undefined && chosen !== DROP_NONE) {
+    const err = deps.warehouses.addMember(warehouse, chosen, "member");
+    player.sendMessage(err ? `${uiColor.chat.error}${err}` : `${uiColor.chat.success}已添加成员 ${chosen}`);
+  }
+
+  // 2) 移除被关闭的成员（开关关 = 移除）
+  for (const m of members) {
+    if (values[`keep_${m.playerName}`] === false) {
+      const err = deps.warehouses.removeMember(warehouse, m.playerName);
+      if (!err) player.sendMessage(`${uiColor.chat.success}已移除成员 ${shortId(m.playerName)}`);
+    }
+  }
+  if (chosen === DROP_NONE && members.every((m) => values[`keep_${m.playerName}`] !== false)) {
+    player.sendMessage(`${uiColor.chat.muted}成员未变更`);
+  }
 }

@@ -12,7 +12,7 @@ function makeWarehouse(): Warehouse {
     members: [
       { playerName: "p1", role: "owner" },
       { playerName: "p2", role: "member" },
-      { playerName: "p3", role: "visitor" },
+      { playerName: "p3", role: "member" },
     ],
     area: { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 5, y: 5, z: 5 } },
     settings: createDefaultSettings(),
@@ -26,7 +26,7 @@ test("MemberService: getRole", () => {
   const wh = makeWarehouse();
   assert.equal(svc.getRole(wh, "p1"), "owner");
   assert.equal(svc.getRole(wh, "p2"), "member");
-  assert.equal(svc.getRole(wh, "p3"), "visitor");
+  assert.equal(svc.getRole(wh, "p3"), "member");
   assert.equal(svc.getRole(wh, "ghost"), undefined);
 });
 
@@ -36,9 +36,8 @@ test("MemberService: 权限矩阵", () => {
   assert.equal(svc.can(wh, "p1", "owner"), true);
   assert.equal(svc.can(wh, "p2", "owner"), false);
   assert.equal(svc.can(wh, "p2", "member"), true);
-  assert.equal(svc.can(wh, "p3", "member"), false);
-  assert.equal(svc.can(wh, "p3", "visitor"), true);
-  assert.equal(svc.can(wh, "ghost", "visitor"), false);
+  assert.equal(svc.can(wh, "p3", "member"), true);
+  assert.equal(svc.can(wh, "ghost", "member"), false);
 });
 
 // ── Task 21: WarehouseService ─────────────────────────────
@@ -130,8 +129,8 @@ test("WarehouseService: 删除/重命名/成员管理", () => {
   assert.equal(wh.members.length, 2);
   const dupMember = svc.addMember(wh, "p2", "member");
   assert.match(dupMember ?? "", /已是成员/);
-  svc.setMemberRole(wh, "p2", "visitor");
-  assert.equal(wh.members.find((m) => m.playerName === "p2")?.role, "visitor");
+  svc.setMemberRole(wh, "p2", "member");
+  assert.equal(wh.members.find((m) => m.playerName === "p2")?.role, "member");
   svc.removeMember(wh, "p2");
   assert.equal(wh.members.length, 1);
   svc.deleteWarehouse(wh.id);

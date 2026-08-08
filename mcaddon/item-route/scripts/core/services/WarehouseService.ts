@@ -199,7 +199,7 @@ export class WarehouseService {
     return undefined;
   }
 
-  /** 改成员角色：owner 角色不可改/不可授让；member 可视需要降为 visitor 等。失败返回中文错误 */
+  /** 改成员角色：owner 角色不可改/不可授让；成员角色统一为 member（无访客） */
   setMemberRole(warehouse: Warehouse, playerName: PlayerName, role: MemberRole): string | undefined {
     if (playerName === warehouse.ownerName) return "不能修改 owner 的角色";
     if (role === "owner") return "owner 只能通过转让设置"; // 与 addMember 一致，防提权口径不一

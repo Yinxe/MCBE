@@ -24,7 +24,6 @@ export const LIFECYCLE_ACTIONS: Record<WarehouseLifecycle, string> = {
 export const MEMBER_ROLE_LABELS: Record<MemberRole, string> = {
   owner: "拥有者",
   member: "成员",
-  visitor: "访客",
 };
 
 /** 预警级别中文名 */

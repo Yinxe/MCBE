@@ -2,15 +2,15 @@
 // 仓库 = 一个维度区域 + 成员 + 设置 + 该区域内注册的逻辑容器。
 // 纯数据/类型 + 默认值；不感知 MC，由 core 的 WarehouseService 管理 CRUD、
 // mc 层负责把真实方块扫描/注册进 `containers`。
-// 权限模型（配合 services/MemberService.ts）：owner > member > visitor，
+// 权限模型（配合 services/MemberService.ts）：owner > member，
 // 命令/UI 统一经 `MemberService.can()` 判定，替代 v1 的 OP 二元判断。
 import type { Container } from "./Container";
 import type { ContainerRole } from "./Container";
 import type { PlayerName, WarehouseId } from "./types";
 import { DEFAULT_ENABLED_FAMILIES } from "../data/item-families";
 
-/** 成员角色：owner 全权限 / member 管理 / visitor 只读 */
-export type MemberRole = "owner" | "member" | "visitor";
+/** 成员角色：仓库仅两类参与者 —— owner（全权限）/ member（管理），不再有访客 */
+export type MemberRole = "owner" | "member";
 
 export interface Member {
   playerName: PlayerName;
