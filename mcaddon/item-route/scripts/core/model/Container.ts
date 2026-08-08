@@ -72,4 +72,11 @@ export interface Container {
   find(itemStack: ItemStack): number | undefined;
   /** 查找给定物品所在的槽（最后一个） */
   findLast(itemStack: ItemStack): number | undefined;
+  // ── 扩展能力（可选，适配层可选实现；未实现按安全默认处理） ──
+  /** 底层方块是否已失效（活塞移动/摧毁等使 mc 读取抛错或注册位置不再是容器）——
+   * 路由候选命中时**跳过 + 触发 containerLost** 让订阅者注销；缺省视为未失效。 */
+  isDead?(): boolean;
+  /** 原生 O(1) 类型判定（适配层 native `contains` 快判）：undefined = 未实现/原生失效，
+   * 调用方（routing/helpers.hasItemType）回退线性遍历查物。 */
+  hasItemType?(itemId: ItemId): boolean | undefined;
 }

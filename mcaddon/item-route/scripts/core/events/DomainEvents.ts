@@ -8,6 +8,7 @@
 //   · containerChanged —— 容器内容/注册变化触发；索引/统计联动；
 //     OrganizeService 整理后也逐容器触发（整理造成的索引重建对外信号）
 //   · containerAdded/containerRemoved —— 容器 CRUD：mc 层注册/完全拆除处触发
+//   · containerLost —— Router 路由候选检测到底层容器失效（活塞移动/摧毁）；Subscriptions 订阅注销
 //   · indexUpdated  —— 预留（当前未消费，为搜索/展示留口）
 //   · statsChanged  —— 预留（统计联动）
 //   · warning       —— StatsService.evaluateWarnings 触发；WarningRelay 订阅 → 播报附近玩家
@@ -98,6 +99,18 @@ export interface ContainerRemovedEvent {
   containerId: ContainerId;
 }
 
+/**
+ * 容器在路由候选时被检测到**失效**（活塞移动/摧毁等世界机制使容器无 break/explode 事件即消失）——
+ * mc 层订阅后注销该容器（内存 + 索引 + 注册表 + 统计 + 成员通知），保障"失联容器不再成为路由目标"。
+ */
+export interface ContainerLostEvent {
+  type: "container-lost";
+  warehouseId: WarehouseId;
+  containerId: ContainerId;
+  /** 丢失来源（预留）：routing-stale = 路由候选判定底层不再是受支持容器 */
+  reason?: "routing-stale";
+}
+
 export interface IndexUpdatedEvent {
   type: "index-updated";
   warehouseId: WarehouseId;
@@ -182,6 +195,7 @@ export class EventBus {
   readonly containerScanned = new EventSignal<ContainerScannedEvent>();
   readonly containerAdded = new EventSignal<ContainerAddedEvent>();
   readonly containerRemoved = new EventSignal<ContainerRemovedEvent>();
+  readonly containerLost = new EventSignal<ContainerLostEvent>();
   readonly indexUpdated = new EventSignal<IndexUpdatedEvent>();
   readonly statsChanged = new EventSignal<StatsChangedEvent>();
   readonly warning = new EventSignal<WarningEvent>();

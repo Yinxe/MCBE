@@ -415,3 +415,75 @@ test("Router: 索引有候选时**不**触发 selfHeal（仅 miss 兜底，不�
   assert.equal(result?.to, "s1");
   assert.deepEqual(index.state.selfHealed, []); // 有候选 → 不扫描
 });
+
+// ── 失联容器（活塞移动/摧毁）清扫 ──────────────────────
+test("Router: 候选容器 isDead（活塞移动/摧毁）→ reconcile 清索引 + 触发 containerLost + 跳过", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  // s1：已注册、绑定 stone，但底层被活塞摧毁 → 失效
+  const dead = add(new InMemoryContainer("s1", "single", 3));
+  dead.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  dead.kill();
+  const index = makeIndexStub();
+  index.state.byItem.set("minecraft:stone", { single: ["s1"], multi: [] });
+  const bus = new EventBus();
+  const lost: string[] = [];
+  bus.containerLost.subscribe((e) => {
+    lost.push(e.containerId);
+    wh.containers.delete(e.containerId); // 模拟 Subscriptions 订阅者注销（unregisterContainer）
+  });
+  const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
+  const result = router.routeFrom(input, 0, wh, index);
+  assert.equal(result, undefined); // 失效容器被跳过 → 单物无候选 → 不路由
+  assert.deepEqual(lost, ["s1"]); // 已发 containerLost 事件
+  assert.deepEqual(index.state.reconciled, ["s1"]); // 已按空内容 reconcile 清出索引候选
+  assert.deepEqual(index.state.moved, []); // 未发生任何移动
+});
+
+test("Router: 兜底 misc 候选失效 → 转移前死检跳过 + 发 containerLost（非索引源路径）", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const misc = add(new InMemoryContainer("x1", "misc", 3));
+  misc.setItem(0, new SimpleItemStack("minecraft:dirt", 2, 64));
+  misc.kill(); // 失效（活塞摧毁）
+  const index = makeIndexStub(); // 无候选（stone 不在任何桶）
+  const bus = new EventBus();
+  const lost: string[] = [];
+  bus.containerLost.subscribe((e) => {
+    lost.push(e.containerId);
+    wh.containers.delete(e.containerId);
+  });
+  const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
+  const result = router.routeFrom(input, 0, wh, index);
+  assert.equal(result, undefined); // 死 misc 被跳过 → 不路由
+  assert.deepEqual(lost, ["x1"]); // 已发 containerLost（attempt 死检覆盖非索引兜底）
+  assert.deepEqual(index.state.moved, []);
+});
+
+// ── hasItemType 原生 O(1) 快判优先 + 遍历兜底 ──────────
+import { hasItemType } from "../scripts/core/routing/helpers";
+
+test("hasItemType: 原生 hasItemType 优先（命中直返免遍历）；未实现回退线性遍历", () => {
+  // ① 原生快判 true → 直返（不依赖内容遍历）
+  const FastYes = class extends InMemoryContainer {
+    hasItemType(): boolean | undefined {
+      return true;
+    }
+  };
+  assert.equal(hasItemType(new FastYes("f1", "multi", 3), "minecraft:stone"), true);
+  // ② 原生快判 false → 直返
+  const FastNo = class extends InMemoryContainer {
+    hasItemType(): boolean | undefined {
+      return false;
+    }
+  };
+  assert.equal(hasItemType(new FastNo("f2", "multi", 3), "minecraft:stone"), false);
+  // ③ 未实现（InMemoryContainer 无 hasItemType）→ core 遍历兜底：装有 stone 即 true，空即 false
+  const plain = new InMemoryContainer("p1", "multi", 3);
+  plain.setItem(0, new SimpleItemStack("minecraft:stone", 3, 64));
+  assert.equal(hasItemType(plain, "minecraft:stone"), true);
+  const empty = new InMemoryContainer("p2", "multi", 3);
+  assert.equal(hasItemType(empty, "minecraft:stone"), false);
+});

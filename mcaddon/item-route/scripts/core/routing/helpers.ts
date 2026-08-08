@@ -17,8 +17,18 @@ export function toCandidate(container: Container): CandidateContainer {
   };
 }
 
-/** 容器是否已存在给定**类型**的槽（typeId 级，非 NBT 精确——多物候选判定用） */
+/** 容器是否已失效（活塞移动/摧毁使底层方块不再是容器/mc 读取抛错）——候选命中时跳过并触发
+ * containerLost；未实现 isDead 的容器（InMemory/未知）视为未失效。 */
+export function containerIsDead(container: Container): boolean {
+  return container.isDead?.() === true;
+}
+
+/** 容器是否已存在给定**类型**的槽（typeId 级，非 NBT 精确——多物候选判定用）。
+ * 优先容器原生 O(1) 判定（`hasItemType` → native `contains` 快判）；原生未实现/失效
+ * （返回 undefined）时回退线性遍历查物（capacity 逐槽 getItem）。 */
 export function hasItemType(container: Container, itemId: ItemId): boolean {
+  const fast = container.hasItemType?.(itemId);
+  if (fast !== undefined) return fast;
   for (let i = 0; i < container.capacity; i++) {
     if (container.getItem(i)?.itemId === itemId) return true;
   }

@@ -15,11 +15,13 @@
 //     contains/find/findLast 委托原生（索引已在 ItemIndex 缓存，仅交互/校验兜底用），
 //     firstNoEmptyItem/lastNoEmptyItem 为手封装线性扫描（见下方实现）。
 // 注意：本文件依赖 @minecraft/server，仅编译检查 + 游戏内冒烟，不进 node 测试构建。
-import type { Container as McContainer } from "@minecraft/server";
+import { world, ItemStack as McItemStack, type Container as McContainer } from "@minecraft/server";
 import type { Container, ContainerRole } from "../../core/model/Container";
 import type { ItemStack } from "../../core/model/ItemStack";
 import type { ContainerId, Location, WarehouseId } from "../../core/model/types";
 import { deriveBinding } from "../../core/model/DeriveBinding";
+import { parseContainerId, dimensionName } from "../../core/model/ContainerId";
+import { isSupportedContainerType } from "../../core/model/ContainerTypes";
 import type { McItemAdapter } from "./McItemAdapter";
 
 /**
@@ -47,6 +49,12 @@ export class McContainerAdapter implements Container {
   readonly occupiedLocations: Location[];
   /** 源方块类型 ID（漏斗强制 input 判定用） */
   readonly blockType: string;
+  /**
+   * 底层容器是否已**失效**（活塞移动/摧毁等）：mc 读取抛错（InvalidContainerError）或
+   * 重读注册位置不再是受支持容器时置位，一旦 true 永久 true（容器不会在同一适配器上复活）。
+   * 路由候选判定用 `isDead()` → Router 跳过 + containerLost 注销，绝不让失效容器成为路由目标。
+   */
+  private dead = false;
 
   constructor(
     id: ContainerId,
@@ -66,13 +74,15 @@ export class McContainerAdapter implements Container {
     try {
       return this.mc.size;
     } catch {
-      return 0; // 方块失效/区块未加载：按空容器处理，绝不让单点故障崩掉菜单/扫描
+      this.dead = true; // 底层失效（活塞移动/摧毁）→ 标记 dead，路由候选判定跳过并注销
+      return 0; // 按空容器处理，绝不让单点故障崩掉菜单/扫描
     }
   }
   get emptySlotsCount(): number {
     try {
       return this.mc.emptySlotsCount;
     } catch {
+      this.dead = true;
       return 0;
     }
   }
@@ -84,6 +94,7 @@ export class McContainerAdapter implements Container {
     try {
       return this.item.toDomain(this.mc.getSlot(slot).getItem());
     } catch {
+      this.dead = true; // 失效容器读取抛错 → 标记 dead（供 isDead() 跳过）
       return undefined;
     }
   }
@@ -93,7 +104,7 @@ export class McContainerAdapter implements Container {
       // 直接用 Container.setItem（比经 getSlot().setItem 更贴近 mc API）
       this.mc.setItem(slot, item === undefined ? undefined : this.item.toMc(item));
     } catch {
-      // 区块未加载/容器失效：静默
+      this.dead = true; // 写入也抛错 → 同一失效判定（区块未加载的读写同样进 catch）
     }
   }
 
@@ -101,6 +112,7 @@ export class McContainerAdapter implements Container {
     try {
       return this.item.toDomain(this.mc.addItem(this.item.toMc(stack)));
     } catch {
+      this.dead = true;
       return stack; // 失败视为全部剩余
     }
   }
@@ -109,17 +121,71 @@ export class McContainerAdapter implements Container {
     return deriveBinding(this);
   }
 
+  /** 底层容器是否已失效（活塞移动/摧毁等）：mc 读取已抛错，或重读注册位置不再是受支持容器。
+   * 失效一旦为真即永久为真（同一适配器不会复活）；路由候选判定据此跳过 + containerLost 注销。 */
+  isDead(): boolean {
+    if (this.dead) return true;
+    // 句柄仍可读但方块可能已被活塞移走/摧毁（句柄不抛错、内容已迁走）→ 重读注册位置确认真伪
+    try {
+      const parsed = parseContainerId(this.id);
+      if (parsed === undefined) return false;
+      const dim = world.getDimension(dimensionName(parsed.dimension));
+      const block = dim === undefined ? undefined : dim.getBlock(parsed.loc);
+      if (block === undefined) return false; // 区块未加载：不算失效（瞬态，保留待区块加载）
+      if (block.isAir || !isSupportedContainerType(block.typeId)) {
+        this.dead = true;
+        return true;
+      }
+      return false;
+    } catch {
+      this.dead = true;
+      return true;
+    }
+  }
+
+  /** 原生 O(1) 类型判定（native `contains` 快判）：容器为空直接 false；命中即 true；
+   * 原生未命中（NBT/data 差异可致假阴性）或失效（抛错 → dead）时回退线性遍历查物。
+   * 返回 boolean 为权威判定；undefined 仅当 native 失效且遍历也中断（防御，调用方按未命中处理）。 */
+  hasItemType(itemId: string): boolean | undefined {
+    try {
+      if (this.mc.emptySlotsCount === this.mc.size) return false; // 空容器 → 免构造 ItemStack + contains
+      if (this.mc.contains(new McItemStack(itemId, 1))) return true; // 原生 O(1) 命中
+    } catch {
+      this.dead = true;
+      return undefined; // 原生失效 → 调用方（core hasItemType）遍历兜底
+    }
+    // 原生未命中不可全信 → 线性遍历兜底（capacity getter 自带 try，失效即 0 安全退出）
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.getItem(i)?.itemId === itemId) return true;
+    }
+    return false;
+  }
+
   // ── 便捷搜索：first/last 手封装线性扫描（复用 getItem 的安全访问，不依赖官方
   //    firstItem 的槽 0 歧义）；firstEmptySlot/contains/find/findLast 委托 mc 原生 ──
   firstNoEmptyItem(): number | undefined {
-    for (let i = 0; i < this.mc.size; i++) {
+    let size: number;
+    try {
+      size = this.mc.size; // ⚠️ 必须 try：失效容器读 size 会抛（活塞摧毁后 getDedicatedItemId 崩）
+    } catch {
+      this.dead = true;
+      return undefined;
+    }
+    for (let i = 0; i < size; i++) {
       if (this.getItem(i) !== undefined) return i;
     }
     return undefined;
   }
 
   lastNoEmptyItem(): number | undefined {
-    for (let i = this.mc.size - 1; i >= 0; i--) {
+    let size: number;
+    try {
+      size = this.mc.size;
+    } catch {
+      this.dead = true;
+      return undefined;
+    }
+    for (let i = size - 1; i >= 0; i--) {
       if (this.getItem(i) !== undefined) return i;
     }
     return undefined;
@@ -129,6 +195,7 @@ export class McContainerAdapter implements Container {
     try {
       return this.mc.firstEmptySlot();
     } catch {
+      this.dead = true;
       return undefined;
     }
   }
@@ -137,6 +204,7 @@ export class McContainerAdapter implements Container {
     try {
       return this.mc.contains(this.item.toMc(itemStack));
     } catch {
+      this.dead = true;
       return false;
     }
   }
@@ -145,6 +213,7 @@ export class McContainerAdapter implements Container {
     try {
       return this.mc.find(this.item.toMc(itemStack));
     } catch {
+      this.dead = true;
       return undefined;
     }
   }
@@ -153,6 +222,7 @@ export class McContainerAdapter implements Container {
     try {
       return this.mc.findLast(this.item.toMc(itemStack));
     } catch {
+      this.dead = true;
       return undefined;
     }
   }

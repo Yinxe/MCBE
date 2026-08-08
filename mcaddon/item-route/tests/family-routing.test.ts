@@ -419,3 +419,40 @@ test("白名单路由后补多物候选——onItemMoved 统一登记 byItem.mul
   assert.equal(again?.to, "m1"); // 已入内容索引，仍多物候选（B同）
 });
 
+// ── 物品族数据修正（2026-08 审查定案） ───────────────────
+test("数据修正：末影之眼/珍珠入敌对掉落，炼药材料入其他材料，红石与古城分开，肉类生熟分族", () => {
+  // ① 怪物掉落补末影之眼/末影珍珠（原在"末地专属"）→ 敌对生物掉落
+  assert.equal(familyOf("minecraft:ender_eye"), "hostile_drops");
+  assert.equal(familyOf("minecraft:ender_pearl"), "hostile_drops");
+  assert.equal(familyOf("minecraft:wind_charge"), "hostile_drops"); // 补：breeze 风弹（敌对掉落）
+  assert.ok(!ITEM_FAMILIES.some((f) => f.id === "end" && f.items.includes("minecraft:ender_eye")));
+  // ② 红石族不再混入古城（潜声）物品 → 古城族
+  assert.equal(familyOf("minecraft:sculk_sensor"), "ancient");
+  assert.equal(familyOf("minecraft:calibrated_sculk_sensor"), "ancient");
+  assert.equal(familyOf("minecraft:redstone"), "redstone"); // 真红石仍归红石族
+  assert.ok(!ITEM_FAMILIES.some((f) => f.id === "redstone" && f.items.includes("minecraft:sculk_sensor")));
+  // ③ 炼药材料补充到其他材料（玻璃瓶从工具移出 + 发酵蛛眼补入）
+  assert.equal(familyOf("minecraft:glass_bottle"), "other_materials");
+  assert.equal(familyOf("minecraft:fermented_spider_eye"), "other_materials");
+  // ④ 生肉/生鱼 → 友好生物掉落；熟肉 → 食物
+  for (const raw of ["minecraft:beef", "minecraft:chicken", "minecraft:cod", "minecraft:mutton", "minecraft:porkchop", "minecraft:rabbit", "minecraft:salmon", "minecraft:pufferfish", "minecraft:tropical_fish"]) {
+    assert.equal(familyOf(raw), "friendly_drops", `${raw} 生食应属友好生物掉落`);
+  }
+  for (const cooked of ["minecraft:cooked_beef", "minecraft:cooked_chicken", "minecraft:cooked_cod", "minecraft:cooked_mutton", "minecraft:cooked_porkchop", "minecraft:cooked_rabbit", "minecraft:cooked_salmon"]) {
+    assert.equal(familyOf(cooked), "food", `${cooked} 熟食应属食物`);
+  }
+  // ⑤ 石材建筑 / 石材核心 两族已禁用（不在族列表，且原核心石材不再映射任何族）
+  assert.ok(!ITEM_FAMILIES.some((f) => f.id === "stone_building" || f.id === "stone_core"), "石材建筑/石材核心应已移除");
+  assert.equal(familyOf("minecraft:stone"), undefined); // 原生石材不再有专属族 → misc 兜底
+  assert.equal(familyOf("minecraft:stone_bricks"), undefined); // 建材同样归 misc
+  // ⑥ 一物一族自检兜底（改动后重跑）
+  const seen = new Map<string, string>();
+  for (const f of ITEM_FAMILIES) {
+    for (const id of f.items) {
+      const prev = seen.get(id);
+      assert.equal(prev, undefined, `物品 ${id} 同时属于 ${prev} 与 ${f.id}`);
+      seen.set(id, f.id);
+    }
+  }
+});
+

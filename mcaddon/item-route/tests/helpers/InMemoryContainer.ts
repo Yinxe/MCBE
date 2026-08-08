@@ -20,6 +20,8 @@ export class InMemoryContainer implements Container {
   readonly capacity: number;
   readonly occupiedLocations: Location[];
   private slots: (ItemStack | undefined)[];
+  /** 测试用失效标记（模拟活塞移动/摧毁后底层容器读取抛错）：kill() 置位 → isDead() 常真 */
+  private dead = false;
 
   constructor(id: ContainerId, role: ContainerRole, capacity: number, occupiedLocations: Location[] = []) {
     this.id = id;
@@ -27,6 +29,16 @@ export class InMemoryContainer implements Container {
     this.capacity = capacity;
     this.occupiedLocations = occupiedLocations;
     this.slots = new Array<ItemStack | undefined>(capacity).fill(undefined);
+  }
+
+  /** 测试用：标记容器失效（活塞移动/摧毁场景） */
+  kill(): void {
+    this.dead = true;
+  }
+
+  /** 底层是否失效（生产=McContainerAdapter 判 mc 句柄/方块；测试容器用 kill 标记） */
+  isDead(): boolean {
+    return this.dead;
   }
 
   get emptySlotsCount(): number {

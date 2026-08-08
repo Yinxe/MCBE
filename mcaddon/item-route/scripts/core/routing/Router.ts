@@ -14,6 +14,8 @@ import type { ContainerId, ItemId } from "../model/types";
 import type { Warehouse } from "../model/Warehouse";
 import type { CandidateSorter } from "./CandidateSorter";
 import { transfer } from "./Move";
+import { containerIsDead } from "./helpers";
+import { familyOf } from "../data/item-families";
 import { AdmissionInterceptor, admission, type RouteStrategy } from "./RouteStrategy";
 
 /** selfHeal 冷却时长（墙钟 ms）：同 type 在窗口内不再全仓自愈；配合滑动续期，持续无效流只扫首次。 */
@@ -130,6 +132,27 @@ export class Router {
       reconcile: (c: Container) => index.reconcile(c),
       admission: this.admissionPolicy,
     };
+    // ⚠️ 失联容器清扫：候选集（single/multi + 族桶）中**已失效**（活塞移动/摧毁等使底层不再
+    // 是受支持容器）的容器——立即 reconcile 清出索引并触发 containerLost，让订阅者注销掉，
+    // 绝不让"看不见的容器"继续成为路由目标（否则单物绑定/多物 contains 读底层失效句柄抛错）。
+    // 只扫候选（本轮真实要对某物品路由），非全仓；幂等——失效一旦 isDead() 常真即每次被扫出。
+    const sweepDead = (ids: readonly ContainerId[]): void => {
+      for (const id of ids) {
+        const c = warehouse.containers.get(id);
+        if (c === undefined || !containerIsDead(c)) continue;
+        ctx.reconcile(c); // 按空内容重建 → 该 cid 立即从索引候选消失（防下轮重复命中）
+        this.bus.containerLost.trigger({
+          type: "container-lost",
+          warehouseId: warehouse.id,
+          containerId: id,
+          reason: "routing-stale",
+        });
+      }
+    };
+    sweepDead(candidates.single);
+    sweepDead(candidates.multi);
+    const fam = familyOf(itemId);
+    if (fam !== undefined) sweepDead(index.lookupFamily(fam));
     const real = this.real;
     const fallback = this.fallback;
     const attempt = (strategies: RouteStrategy[]): RouteResult | undefined => {
@@ -138,6 +161,18 @@ export class Router {
         const sorted = this.sorter.sort(raw);
         for (const candidate of sorted) {
           const target = candidate.container;
+          if (containerIsDead(target)) {
+            // ⚠️ 失联容器（活塞移动/摧毁）：跳过转移 + 触发 containerLost 让订阅者注销。
+            // 覆盖 sweep 未触及的候选（misc 兜底/白名单声明式等非索引源）——失效容器不可能是路由目标
+            ctx.reconcile(target);
+            this.bus.containerLost.trigger({
+              type: "container-lost",
+              warehouseId: warehouse.id,
+              containerId: target.id,
+              reason: "routing-stale",
+            });
+            continue;
+          }
           if (!target.enabled) continue;
           // 黑名单准入拦截（拦截器）：黑名单命中 → 该容器永远不收此物品（覆盖索引/族桶/白名单一切候选）
           if (!this.admissionPolicy.accepts(target, itemId)) continue;
