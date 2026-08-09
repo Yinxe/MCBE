@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SingleItemStrategy, MultiItemStrategy, MiscStrategy, admission } from "../scripts/core/routing/RouteStrategy";
+import { SingleItemStrategy, MultiItemStrategy, FamilyStrategy, MiscStrategy, admission } from "../scripts/core/routing/RouteStrategy";
 import type { RouteContext, CandidateContainer } from "../scripts/core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
 import { transfer, MoveJournal } from "../scripts/core/routing/Move";
@@ -27,7 +27,7 @@ function makeCtx(
       warningEnabled: true,
       defaultContainerRole: "single" as const,
       defaultContainerEnabled: true,
-      enabledFamilies: [],
+      enabledFamilies: [] as string[],
       blacklist: [],
     },
     containers: new Map(containers.map((c) => [c.id, c])),
@@ -199,7 +199,7 @@ function makeWarehouse() {
       warningEnabled: true,
       defaultContainerRole: "single" as const,
       defaultContainerEnabled: true,
-      enabledFamilies: [],
+      enabledFamilies: [] as string[],
       blacklist: [],
     },
     containers,
@@ -545,4 +545,95 @@ test("Router: 潜影盒物品路由——传输前拒绝潜影盒容器目标，
   assert.equal(ok?.to, "c1");
   assert.equal(chest.getItem(0)?.itemId, "minecraft:undyed_shulker_box");
   assert.equal(shulkerTarget.getItem(0), undefined); // 潜影盒目标仍被排除
+});
+
+// ── 失联门边界 + 白名单去重 + 角色覆盖（自检补全） ──────────
+test("失联容器 + 白名单声明 → 也不参与候选（白名单排除，端到端不路由）", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const lostSingle = add(new InMemoryContainer("s1", "single", 3));
+  lostSingle.warehouseId = "w1";
+  lostSingle.whitelist = ["minecraft:stone"]; // 白名单声明"预订"（缺物也收）
+  lostSingle.markLost(); // 但底层失联
+  const index = makeIndexStub(); // s1 不进索引（纯白名单来源）
+  const bus = new EventBus();
+  const lostEvts: string[] = [];
+  bus.containerLost.subscribe((e) => lostEvts.push(e.containerId));
+  const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
+  const r = router.routeFrom(input, 0, wh, index);
+  assert.equal(r, undefined); // 失联白名单容器不作为候选 → 不路由
+  assert.deepEqual(lostEvts, ["s1"]); // 前置门已发 containerLost
+  assert.equal(input.getItem(0)?.itemId, "minecraft:stone"); // 物品留在输入
+});
+
+test("失联过渡事件：持续路由只发一次 containerLost；恢复发 recovered 一次；再次失联再发一次", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const lost = add(new InMemoryContainer("s1", "single", 3));
+  lost.warehouseId = "w1";
+  lost.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  lost.markLost();
+  const index = makeIndexStub();
+  index.state.byItem.set("minecraft:stone", { single: ["s1"], multi: [] });
+  const bus = new EventBus();
+  const lostEvts: string[] = [];
+  const recoveredEvts: string[] = [];
+  bus.containerLost.subscribe((e) => lostEvts.push(e.containerId));
+  bus.containerRecovered.subscribe((e) => recoveredEvts.push(e.containerId));
+  const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
+  router.routeFrom(input, 0, wh, index);
+  router.routeFrom(input, 0, wh, index);
+  assert.deepEqual(lostEvts, ["s1"]); // 持续失联多次路由只发一次
+  assert.deepEqual(recoveredEvts, []);
+  lost.recoverLost();
+  router.routeFrom(input, 0, wh, index); // 恢复 → 路由成功 + containerRecovered
+  router.routeFrom(input, 0, wh, index);
+  assert.deepEqual(recoveredEvts, ["s1"]); // 恢复事件一次
+  // 再次失联 → 再次发 containerLost（transition 语义）
+  input.setItem(0, new SimpleItemStack("minecraft:stone", 3, 64)); // 补货（上轮已路由走）
+  lost.markLost();
+  router.routeFrom(input, 0, wh, index);
+  assert.deepEqual(lostEvts, ["s1", "s1"]); // 第二次失联再发一次
+});
+
+test("多物白名单候选不重复（内容命中 + 白名单声明 → 仅 1 候选）", () => {
+  const multi = new InMemoryContainer("m1", "multi", 3);
+  multi.setItem(0, new SimpleItemStack("minecraft:stone", 3, 64)); // 内容已含
+  multi.whitelist = ["minecraft:stone"]; // 又声明白名单
+  const ctx = makeCtx([multi], () => ({ single: [], multi: ["m1"] }));
+  const cands = new MultiItemStrategy().findCandidates(ctx);
+  assert.equal(cands.length, 1); // 内联白名单已删 → 统一 collectWhitelisted（seen 去重）→ 仅 1
+});
+
+test("同族白名单由多物策略统一收集覆盖（Family 不再重复内联）", () => {
+  const { wh, add } = makeWarehouse();
+  wh.settings.enabledFamilies = ["wool"];
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:white_wool", 5, 64));
+  const famBox = add(new InMemoryContainer("f1", "multi", 27));
+  famBox.warehouseId = "w1";
+  famBox.familyEnabled = true;
+  famBox.whitelist = ["minecraft:white_wool"]; // 白名单声明（缺物也收，空箱）
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new FamilyStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  const r = router.routeFrom(input, 0, wh, makeIndexStub());
+  assert.equal(r?.to, "f1"); // 由多物白名单统一收集收入（Family 不重复）
+  assert.equal(famBox.getItem(0)?.itemId, "minecraft:white_wool");
+});
+
+test("潜影盒防套娃角色全覆盖：single/multi/misc 潜影盒目标一律禁止", () => {
+  const shulkerC = (id: string, role: "single" | "multi" | "misc"): InMemoryContainer => {
+    const c = new InMemoryContainer(id, role, 27);
+    c.blockType = "minecraft:red_shulker_box";
+    return c;
+  };
+  for (const role of ["single", "multi", "misc"] as const) {
+    assert.equal(containerCanAcceptItem(shulkerC(`sh-${role}`, role), "minecraft:undyed_shulker_box"), false);
+    assert.equal(containerCanAcceptItem(shulkerC(`sh-${role}`, role), "minecraft:diamond"), true); // 非潜影不限
+  }
 });
