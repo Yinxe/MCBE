@@ -9,7 +9,7 @@
 import type { Container, ContainerRole } from "../model/Container";
 import type { ContainerId, ItemId } from "../model/types";
 import type { CandidateContainer, RouteContext } from "./RouteStrategy";
-import { toCandidate } from "./helpers";
+import { containerIsLost, toCandidate } from "./helpers";
 
 /** 白名单声明收集回调签名（供策略内一行调用） */
 export type WhitelistCollector = (
@@ -38,10 +38,11 @@ export class AdmissionInterceptor {
     return this.policy(container, itemId);
   }
 
-  /** 白名单声明式候选：whitelist 含该物品、角色相符 → 加入候选（缺物也能进）。**失联容器的剔除由
-   * 路由层统一失联门（attempt 阶段 gateLost）负责**——此处只做白名单、不做丢失判断（解耦）。 */
+  /** 白名单声明式候选：whitelist 含该物品、角色相符 → 加入候选（缺物也能进）。失联容器不参与
+   * 候选（判定/事件由路由层前置统一门完成，此处仅按 isLost 谓词排除，**不再探测/发事件**——解耦）。 */
   collectWhitelisted: WhitelistCollector = (ctx, itemId, roles, seen, out) => {
     for (const c of ctx.warehouse.containers.values()) {
+      if (containerIsLost(c)) continue;
       if (!c.enabled || !roles.includes(c.role)) continue;
       if (!(c.whitelist ?? []).includes(itemId) || seen.has(c.id)) continue;
       seen.add(c.id);

@@ -141,8 +141,13 @@ export class Router {
     if (stack === undefined) return undefined;
     const originalAmount = stack.amount;
     const itemId = stack.itemId;
+    // ⚠️ 失联统一门 **必须在确定候选之前**：策略 findCandidates 会碰候选容器的 block/mc 句柄
+    // （单物绑定/多物 contains/族成员扫描），失联容器须先被排除，否则"后置 gate"到 transfer 才
+    // 拦截时策略早已在失效句柄上读过（抛错）。前置本仓全部容器一次过渡判定：healthy 零世界读
+    // （isLost 懒标记），失联才真正探测位置并完成 失联/恢复 事件。成本被 isLost 快路径天然摊薄。
+    for (const c of warehouse.containers.values()) this.gateLost(c);
     // 索引 miss → 全仓自愈兜底：用户手动向单物/多物放入该类型的存储容器被漏索引时，
-    // selfHeal 扫描全仓非 input/misc 容器找 hasItem 并重建条目，再查（罕见路径，不做每路由全扫）
+    // selfHeal 扫描全仓非 input/misc 容器找 hasItem 并重建条目，再查（罕见路径，不做每路由全扫）。
     let candidates = index.lookup(itemId);
     // ⚠️ 记录"初始是否已有候选"：只有初始**非空**（存在 stale 候选可能被拒）才在下方走 mid 自愈——
     //   初始为空的 item，顶部 ① 已做全仓自愈且 round0 已见愈合后候选，无需 mid 再扫（避免逐 misc-item 全扫）。
@@ -153,13 +158,12 @@ export class Router {
     }
     // 索引查询惰性缓存：各策略都查同一 itemId，一次路由只真正 look up 一次（索引在内存）
     let cached: { single: ContainerId[]; multi: ContainerId[] } | undefined = candidates;
-    // 统一失联门（路由层、findCandidates 之前）：预先从索引/族桶候选 id 中滤除失联容器。
-    // gateLost 在此完成 失联/恢复 过渡事件；healthy 容器 isLost 零世界读取。
+    // 候选 id 过滤：索引/族桶候选按**前置已判**的 lostIds 滤除（不再重复探测；事件已在前置门发过）
     const gateByIds = (ids: readonly ContainerId[]): ContainerId[] =>
       ids.filter((id) => {
         const c = warehouse.containers.get(id);
         if (c === undefined) return false; // 索引残留、不在内存 → 排除
-        return !this.gateLost(c);
+        return !this.lostIds.has(id);
       });
     const ctx = {
       item: stack,
@@ -181,8 +185,6 @@ export class Router {
         const sorted = this.sorter.sort(raw);
         for (const candidate of sorted) {
           const target = candidate.container;
-          // 统一失联门（全仓扫描来源的候选：misc/白名单）：失联 → 跳过
-          if (this.gateLost(target)) continue;
           if (!target.enabled) continue;
           // 黑名单准入拦截（拦截器）：黑名单命中 → 该容器永远不收此物品（覆盖索引/族桶/白名单一切候选）
           if (!this.admissionPolicy.accepts(target, itemId)) continue;
