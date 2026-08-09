@@ -8,18 +8,19 @@ import { spawnBot } from "./spawnMode";
 import { trackBotOnline } from "./tridentTracker";
 
 /**
- * 恢复离线假人上线
+ * 恢复离线假人上线（异步：生成前会等待名称唯一，见 spawnMode）
  * - 根据 spawnMode 选择普通/强加载模式
  * - 从记录中取最后位置/重生点
  * - 背包/装备/经验由后续的 playerJoin 事件恢复
  * - 反查表供 entitySpawn 标记三叉戟用；认主在 playerJoin 中统一处理
  */
-export function onlineBot(record: BotRecord): SimulatedPlayer {
+export async function onlineBot(record: BotRecord): Promise<SimulatedPlayer> {
   const state = record.lastPoint ?? record.respawnPoint;
   const dim = world.getDimension(state.dimension);
 
-  const bot = spawnBot(record, state.location, dim, state.rotation, state.lookTarget);
+  const bot = await spawnBot(record, state.location, dim, state.rotation, state.lookTarget);
 
+  // spawn 成功后（名称唯一）再置在线状态
   record.online = true;
   record.death = false;
 

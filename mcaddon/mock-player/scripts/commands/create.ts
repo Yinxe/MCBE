@@ -4,7 +4,6 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../features/core/tags";
 import { getPlayerLookTarget } from "../features/core/pose";
-import { generateBotName } from "../features/core/persistence";
 import { createBot } from "../features/createBot";
 
 export function registerCreateCommand(registry: any): void {
@@ -19,20 +18,28 @@ export function registerCreateCommand(registry: any): void {
       { name: "dimension", type: CustomCommandParamType.String },
     ],
   }, ({ player, params }) => {
-    system.run(() => {
-      const botName = (params.name as string) || generateBotName();
-      const pos = (params.location as Vector3 | undefined) ?? player.location;
-      const dimension = params.dimension ? world.getDimension(params.dimension as string) : player.dimension;
-      const playerRot = player.getRotation();
-      const lookTarget = getPlayerLookTarget(player);
-      createBot({
-        name: botName, location: pos, dimension,
-        initialTags: DEFAULT_TAGS,
-        rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
-        lookTarget, isSneaking: player.isSneaking,
-        spawnMode: "normal",
-      });
-      player.sendMessage(`${color.success}成功创建假人 ${color.playerName}${botName}${color.accent} [自动重生]`);
+    system.run(async () => {
+      try {
+        const botName = (params.name as string)?.trim() ?? "";
+        if (!botName) {
+          player.sendMessage(`${color.error}请填写假人名字：${color.muted}/mp:create <名字> [坐标] [维度]`);
+          return;
+        }
+        const pos = (params.location as Vector3 | undefined) ?? player.location;
+        const dimension = params.dimension ? world.getDimension(params.dimension as string) : player.dimension;
+        const playerRot = player.getRotation();
+        const lookTarget = getPlayerLookTarget(player);
+        await createBot({
+          name: botName, location: pos, dimension,
+          initialTags: DEFAULT_TAGS,
+          rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
+          lookTarget, isSneaking: player.isSneaking,
+          spawnMode: "normal",
+        });
+        player.sendMessage(`${color.success}成功创建假人 ${color.playerName}${botName}${color.accent} [自动重生]`);
+      } catch (e: any) {
+        player.sendMessage(`${color.error}${e.message}`);
+      }
     });
   });
 }

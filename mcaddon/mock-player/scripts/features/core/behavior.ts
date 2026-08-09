@@ -10,7 +10,7 @@ import { EntityEquippableComponent, Player, system, world } from "@minecraft/ser
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, isBotRestored, saveBotEquipment, saveBotRecord } from "./persistence";
-import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_USE, TAG_CONTROL, TAG_VAULT_MODE } from "./tags";
+import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL, TAG_VAULT_MODE } from "./tags";
 import { captureExperience, serializeEquipment } from "./utils";
 import { runVaultCycle } from "../vaultMode";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "./pose";
@@ -81,11 +81,6 @@ export function startTagBehaviors(): void {
         } catch (e: any) { console.warn(`[MockPlayer] 自动放置异常 ${bot.name}: ${e?.message ?? e}`); }
       }
 
-      // ── 使用物品 ── 每 10 tick ──
-      if (bot.hasTag(TAG_AUTO_USE.value) && tick % 10 === 0) {
-        try { sim.interact(); } catch (e: any) { console.warn(`[MockPlayer] 使用物品异常 ${bot.name}: ${e?.message ?? e}`); }
-      }
-
       // ── 宝库模式 ── 每 10 tick ──
       if (bot.hasTag(TAG_VAULT_MODE.value) && tick % 10 === 0) {
         try { runVaultCycle(sim, record); } catch (e: any) { console.warn(`[MockPlayer] 宝库模式异常 ${bot.name}: ${e?.message ?? e}`); }
@@ -93,17 +88,15 @@ export function startTagBehaviors(): void {
     }
 
     // ── 状态清理 ── 每 40 tick ──
+    // 只清理自动挖掘/放置的残留。使用物品是一次性动作（主菜单/行为开关触发），不进此循环。
     if (tick % 40 === 0) {
       const miningIds = new Set<string>();
       const placingIds = new Set<string>();
-      const usingIds = new Set<string>();
       for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
         if (bot.hasTag(TAG_AUTO_MINE.value)) miningIds.add(bot.id);
         if (bot.hasTag(TAG_AUTO_PLACE.value)) placingIds.add(bot.id);
-        if (bot.hasTag(TAG_AUTO_USE.value)) usingIds.add(bot.id);
         if (!miningIds.has(bot.id)) { try { (bot as SimulatedPlayer).stopBreakingBlock(); } catch {} }
         if (!placingIds.has(bot.id)) { try { (bot as SimulatedPlayer).stopBuild(); } catch {} }
-        if (!usingIds.has(bot.id)) { try { (bot as SimulatedPlayer).stopInteracting(); } catch {} }
       }
     }
 

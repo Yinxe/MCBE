@@ -1,4 +1,4 @@
-import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import { system, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry, loadBotRecord } from "../features/core/persistence";
@@ -14,7 +14,13 @@ export function registerOnlineCommand(registry: any): void {
     const record = botRegistry.get(targetName) ?? loadBotRecord(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     if (record.online) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已经在线`); return; }
-    onlineBot(record);
-    player.sendMessage(`${color.success}假人 ${color.playerName}${record.name}${color.success} 已上线`);
+    system.run(async () => {
+      try {
+        await onlineBot(record);
+        player.sendMessage(`${color.success}假人 ${color.playerName}${record.name}${color.success} 已上线`);
+      } catch (e: any) {
+        player.sendMessage(`${color.error}${record.name} 上线失败: ${e.message}`);
+      }
+    });
   });
 }

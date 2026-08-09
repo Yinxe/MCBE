@@ -46,7 +46,8 @@ scripts/
 │   ├── reclaim.ts       回收物品/经验
 │   ├── equip.ts         装备互换/卸甲/穿甲
 │   ├── saveState.ts     全量状态保存
-│   └── setTags.ts       标签更新
+│   ├── setTags.ts       标签更新
+│   └── useItem.ts       一次性使用/停止主手物品（云梦假人模型）
 └── ui/
     ├── menu.ts       # 主菜单（创建/列表/在线管理/标签速查）
     ├── bot.ts        # 统一假人操作面板（单菜单，无二级导航）

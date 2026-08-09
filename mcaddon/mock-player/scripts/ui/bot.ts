@@ -87,7 +87,9 @@ function equip(player: Player, botName: string, fn: (p: Player, b: Player) => vo
   system.run(() => { try { fn(player, bot); } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); } });
 }
 
-// ─── 统一假人操作面板（v3） ──────────────────────────
+/** 使用物品/停止使用：已移回行为菜单，用普通开关控制（见 tags.ts） */
+
+// ─── 统一假人操作面板（v3，showBotPanel 主菜单） ──────
 
 export function showBotPanel(player: Player, botName: string, onBack?: () => void): void {
   const record = botRegistry.get(botName);
@@ -357,8 +359,9 @@ function toggleOnline(player: Player, botName: string): void {
         offlineBot(r);
         player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已下线`);
       } else {
-        onlineBot(r);
-        player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已上线`);
+        onlineBot(r)
+          .then(() => player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已上线`))
+          .catch((e: any) => player.sendMessage(`${color.error}${e.message}`));
       }
     } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
   });
@@ -372,21 +375,22 @@ function tpToBot(player: Player, botName: string): void {
   if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已不存在`); return; }
 
   system.run(() => {
-    try {
-      if (!r.online || r.death) {
-        // 先上线
-        onlineBot(r);
-        player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已上线`);
-        // 等 1 tick 让实体就绪后再传送
-        system.run(() => {
-          tpPlayerToBot(player, botRegistry.get(botName)!);
-          player.sendMessage(`${color.success}已传送到 ${color.playerName}${botName}${color.success} 身边`);
-        });
+    if (!r.online || r.death) {
+        // 先上线（异步等待名称唯一），完成后传送
+        onlineBot(r)
+          .then(() => {
+            player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已上线`);
+            // 等 1 tick 让实体就绪后再传送
+            system.run(() => {
+              tpPlayerToBot(player, botRegistry.get(botName)!);
+              player.sendMessage(`${color.success}已传送到 ${color.playerName}${botName}${color.success} 身边`);
+            });
+          })
+          .catch((e: any) => player.sendMessage(`${color.error}${e.message}`));
       } else {
         tpPlayerToBot(player, r);
         player.sendMessage(`${color.success}已传送到 ${color.playerName}${botName}${color.success} 身边`);
       }
-    } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
   });
 }
 

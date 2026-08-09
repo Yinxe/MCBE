@@ -38,7 +38,7 @@ const HELP_SECTIONS: { title: string; content: string[] }[] = [
       `${color.muted}  ${color.playerName}自动放置${color.muted}: 将手中方块放置到面前位置`,
       `${color.muted}  ${color.playerName}自动攻击${color.muted}: 持续攻击附近的实体`,
       `${color.muted}  ${color.playerName}体态控制${color.muted}: 跟随控制玩家的位置和视角`,
-      `${color.muted}  ${color.playerName}使用物品${color.muted}: 每 8 tick 执行一次右键单击`,
+      `${color.muted}  ${color.playerName}使用物品${color.muted}: 行为菜单开关：勾选提交用一次主手物品（约 2 秒后自动停下），取消即立即停止（一次性，默认关闭）`,
       `${color.muted}  ${color.playerName}宝库模式${color.muted}: 自动用钥匙开 Trial Chambers 宝库`,
       "",
       `${color.accent}▶ 宝库模式专有说明`,

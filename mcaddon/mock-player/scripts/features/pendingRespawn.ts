@@ -69,13 +69,13 @@ export function safeReconnect(record: BotRecord, options?: SafeReconnectOptions)
     .finally(() => reconnectingBots.delete(record.name));
 }
 
-function doConnect(
+async function doConnect(
   record: BotRecord,
   onOnline?: (bot: SimulatedPlayer, record: BotRecord) => void,
-): void {
+): Promise<void> {
   let bot: SimulatedPlayer;
   try {
-    bot = onlineBot(record);
+    bot = await onlineBot(record);
   } catch (e: any) {
     console.error(`[MockPlayer] safeReconnect 上线失败 ${record.name}: ${e?.message ?? e}`);
     record.online = false;

@@ -4,13 +4,14 @@ import { Player, system } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
+import { TAG_BOT, TAG_AUTO_USE, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
 import { botRegistry } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
 import { setSneaking } from "../features";
 import { switchSpawnMode, getSpawnModeInfo } from "../features/spawnMode";
 import { safeReconnect } from "../features/pendingRespawn";
 import { startFollow, stopFollow, isFollowing } from "../features/follow";
+import { startUseItem, stopUseItem } from "../features/useItem";
 
 // ─── 行为标签管理（含 上线/潜行 快捷开关） ───────────
 
@@ -23,10 +24,12 @@ export function showTagManagement(player: Player, botName: string): void {
 
   const manageableCoexist = COEXIST_TAGS.filter((t) => t.value !== TAG_BOT.value);
 
-  const exclusiveOptions = [style("无", color.muted), ...EXCLUSIVE_TAGS.map((t) => style(t.label, color.black))];
+  // 「使用物品」是独立的普通开关（一次性使用），不进互斥行为下拉
+  const behaviorExclusive = EXCLUSIVE_TAGS.filter((t) => t.value !== TAG_AUTO_USE.value);
+  const exclusiveOptions = [style("无", color.muted), ...behaviorExclusive.map((t) => style(t.label, color.black))];
   let exclusiveIndex = 0;
-  for (let i = 0; i < EXCLUSIVE_TAGS.length; i++) {
-    if (record.tags.includes(EXCLUSIVE_TAGS[i].value)) {
+  for (let i = 0; i < behaviorExclusive.length; i++) {
+    if (record.tags.includes(behaviorExclusive[i].value)) {
       exclusiveIndex = i + 1;
       break;
     }
@@ -53,6 +56,12 @@ export function showTagManagement(player: Player, botName: string): void {
     .toggle("follow", style("自动跟随", color.playerName), {
       defaultValue: isFollowing(botName),
       tooltip: "开启后假人会持续跟随你",
+    })
+    // ── 使用物品（独立普通开关，每次打开默认关） ──
+    .label("sepUse", style("━━ 一次性使用 ──", color.accent))
+    .toggle("useItem", style("使用物品", color.accent), {
+      defaultValue: false,
+      tooltip: "勾选提交＝使用主手物品并约 2 秒后自动停下（吃完喝完）；取消提交＝立即停止。一次性动作，默认关闭",
     });
 
   for (const tag of manageableCoexist) {
@@ -65,7 +74,7 @@ export function showTagManagement(player: Player, botName: string): void {
   const shortNames = EXCLUSIVE_TAGS.map((t) => t.value.replace("mockplayer:tag:", ""));
   builder.dropdown("exclusive", style("行为（仅选一项）", color.warn), exclusiveOptions, {
     defaultValueIndex: exclusiveIndex,
-    tooltip: "自动挖掘/放置/攻击/使用物品/宝库模式等，互斥只能选一项",
+    tooltip: "自动挖掘/放置/攻击/宝库模式等，互斥只能选一项（使用物品是上方独立开关）",
   });
 
   builder.show(player).then((vals) => {
@@ -75,7 +84,6 @@ export function showTagManagement(player: Player, botName: string): void {
     player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
       return;
     }
-
     // ── 处理快捷开关 ──
     const wantSneaking = vals.sneaking as boolean;
     if (wantSneaking !== currentRecord.isSneaking) {
@@ -122,11 +130,24 @@ export function showTagManagement(player: Player, botName: string): void {
       if (vals[tag.value]) newTags.push(tag.value);
     }
     const exclusiveSel = vals.exclusive as number;
-    if (exclusiveSel > 0) newTags.push(EXCLUSIVE_TAGS[exclusiveSel - 1].value);
+    const pickedExclusive = exclusiveSel > 0 ? behaviorExclusive[exclusiveSel - 1].value : undefined;
+    if (pickedExclusive) newTags.push(pickedExclusive);
+
+    // 「使用物品」独立开关：勾选提交=使用一次（自动停下），取消提交=停止一次。
+    // 开关本身不落库（用后即停，无持续状态），每次打开行为菜单都默认关。
+    const useItemOn = vals.useItem as boolean;
 
     system.run(() => {
       setTags(currentRecord, newTags, player);
     });
+
+    // 一次性动作（不在 tick 循环里）：勾选=开始使用，取消=停止使用
+    if (useItemOn) {
+      startUseItem(player, currentRecord);
+    } else {
+      stopUseItem(player, currentRecord);
+    }
+
     player.sendMessage(`${color.success}已更新 ${color.playerName}${botName}${color.success} 的行为设置`);
   });
 }

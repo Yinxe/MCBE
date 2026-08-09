@@ -28,3 +28,4 @@ export { checkMainHandDurability } from "./toolHealth";
 export { startFollow, stopFollow, isFollowing } from "./follow";
 export { scanTridents, isMainhandTrident, throwTridents } from "./trident";
 export { getMainhandOptions, setMainhandSlot } from "./mainhand";
+export { startUseItem, stopUseItem } from "./useItem";

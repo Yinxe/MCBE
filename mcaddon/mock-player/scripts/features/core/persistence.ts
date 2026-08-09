@@ -64,12 +64,18 @@ export function resolveBotPlayer(name: string): SimulatedPlayer | undefined {
   } catch { return undefined; }
 }
 
-/** 自动生成假人名的计数器（sim001、sim002…） */
-export let botCounter = 1;
-
-export function generateBotName(): string {
-  const n = botCounter++;
-  return `sim${String(n).padStart(3, "0")}`;
+/**
+ * 世界中是否已有同名玩家实体（在线假人 / 真人）。
+ * 判定是否会生成 "name(2)" 重名假人的【权威依据】是世界中在线的玩家实体，
+ * 而非 botRegistry（注册表可能残留与真实世界不同步的名字）。
+ * 受限上下文拿不到世界查询时降级返回 false，交由 spawn 阶段的校验兜底。
+ */
+export function isNameOccupiedInWorld(name: string): boolean {
+  try {
+    return world.getPlayers({ name }).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 // ─── 基础记录持久化 ────────────────────────────────────────

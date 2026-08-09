@@ -64,8 +64,13 @@ export function showOnlineManagement(player: Player): void {
 
       system.runTimeout(() => {
         try {
-          if (newVal && !record.online) onlineBot(record);
-          else if (!newVal && record.online) offlineBot(record);
+          if (newVal && !record.online) {
+            onlineBot(record).catch((e: any) => {
+              player.sendMessage(`${color.error}${record.name} 上线失败: ${e.message}`);
+            });
+          } else if (!newVal && record.online) {
+            offlineBot(record);
+          }
         } catch (e: any) {
           player.sendMessage(`${color.error}${record.name} 状态切换失败: ${e.message}`);
         }

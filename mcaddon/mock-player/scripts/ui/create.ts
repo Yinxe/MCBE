@@ -8,14 +8,13 @@ import { PositionState } from "../features/core/types";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../features/core/tags";
 import { parseCoordinateInput } from "../features/core/utils";
 import { getPlayerLookTarget } from "../features/core/pose";
-import { generateBotName } from "../features/core/persistence";
 import { createBot } from "../features/createBot";
 
 export function showCreateForm(player: Player): void {
   const dimOptions = ["跟随玩家", "主世界 (overworld)", "下界 (nether)", "末地 (the_end)"];
 
   ModalFormBuilder.showQuick(player, `${color.bold}创建模拟玩家`, (f) => {
-    f.textField("name", "名称（留空自动生成）", { defaultValue: "", tooltip: "输入假人名称，留空则自动生成随机名字" })
+    f.textField("name", "名称（必填，不能留空）", { defaultValue: "", tooltip: "输入假人名称；名字将以玩家身份出现在世界中，需唯一" })
      .textField("coord", "坐标（留空使用玩家位置）", { defaultValue: "", tooltip: "格式: x y z，留空则生成在玩家当前位置" })
      .dropdown("dim", "维度", dimOptions, { defaultValueIndex: 0, tooltip: "假人所在的维度，跟随玩家则为当前维度" })
       .toggle("copyPosture", style("复刻玩家体态（同步潜行/朝向）", color.playerName), { defaultValue: true, tooltip: "创建时复制玩家的潜行和面向方向" })
@@ -24,7 +23,11 @@ export function showCreateForm(player: Player): void {
       .toggle("chunkload", style("强加载模式", color.playerName), { defaultValue: false, tooltip: "区块持续加载，但不可设置身体朝向。异地上线需玩家靠近后补足模拟距离" });
   }).then((vals) => {
     if (!vals) return;
-    const botName = (vals.name as string).trim() || generateBotName();
+    const botName = (vals.name as string).trim();
+    if (!botName) {
+      player.sendMessage(`${color.error}请输入假人名称（不能留空）`);
+      return;
+    }
     const coordResult = parseCoordinateInput(vals.coord as string, player.location);
     const dimIndex = vals.dim as number;
     const copyPosture = vals.copyPosture as boolean;
@@ -52,9 +55,9 @@ export function showCreateForm(player: Player): void {
     const lookTarget = getPlayerLookTarget(player);
     const sneaking = copyPosture ? player.isSneaking : false;
 
-    system.run(() => {
+    system.run(async () => {
       try {
-        createBot({
+        await createBot({
           name: botName,
           location: pos,
           dimension: targetDim,

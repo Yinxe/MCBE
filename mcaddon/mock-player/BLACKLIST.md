@@ -2,6 +2,7 @@
 
 _遇到问题持续增加踩坑记录_
 
+- **`spawnSimulatedPlayer` 同名会生成 "name(2)" 重名假人并丢数据**：旧实体 disconnect 后是异步释放的，期间立即重新 spawn，引擎会生成 "sim001(2)"。该实体 `Player.name` 带后缀，事件按名查 `botRegistry` 全部失配 → 状态无法保存。**判定 "(2)" 的权威依据是【世界中在线的玩家实体】（`world.getPlayers`），botRegistry 只防同名覆盖旧记录**。修复已收敛到 `scripts/features/spawnMode.ts`：所有 spawn（创建/上线）统一经 `spawnBot`，先 `waitNameFree` 轮询名称可用（同名或残留 "(N)" 幽灵会强制 disconnect），再 spawn，再二次校验 `bot.name === record.name`，仍重名则销毁重试，绝不留下 "(2)" 实体；`createBot` 以世界中同名实体 + 注册表双重判定。**自动取名已整体移除**（`generateBotName` 删除）：创建表单/命令强制要求手填唯一名字，杜绝自动名撞上世界中已占用的名。当年"disconnect 后至少等 20 tick"的手动等待已被该机制取代。
 - **`@minecraft/server-gametest` 的包需要在 esbuild 的 `external` 中声明**：构建时如果用到 gametest 模块，需要在 `just.config.ts` 的 `bundleTaskOptions.external` 中加入 `"@minecraft/server-gametest"`，否则 esbuild 会报模块解析失败。
 - **自定义命令注册必须用 `system.beforeEvents.startup`**：`customCommandRegistry` 不在 `world` 上，而是在 `StartupEvent` 上。必须通过 `system.beforeEvents.startup.subscribe((event) => { event.customCommandRegistry.registerCommand(...) })` 在 early-execution mode 中注册。
 - **`spawnSimulatedPlayer` 不能在受限执行模式中调用**：自定义命令的回调默认是受限执行模式，直接调用 `spawnSimulatedPlayer` 会报错。必须用 `system.run()` 包装，让创建逻辑在主 tick（非受限模式）中执行。
