@@ -29,7 +29,7 @@ task("sync-version", () => {
 
 // ── Build ──
 const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
-  "@minecraft/server",
+  "@minecraft/server", "@minecraft/server-ui",
 ]);
 const copyTaskOptions = copyOptions(__dirname, PROJECT_NAME, { hasRp: false });
 const mcaddonTaskOptions = {

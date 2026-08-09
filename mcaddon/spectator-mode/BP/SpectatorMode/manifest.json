@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "旁观模式 v1.0.0",
-    "description": "旁观模式（项目脚手架，业务待实现）",
+    "name": "灵魂出窍 v1.0.7",
+    "description": "灵魂出窍 · 旁观模式",
     "uuid": "67c0e536-82f7-459d-a15f-d4cd9b229bf8",
     "version": [
       1,
       0,
-      0
+      7
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         1,
         0,
-        0
+        7
       ],
       "uuid": "bd2e3fa2-017d-4af4-91d2-cca0fff38cf0",
       "type": "data"
@@ -34,7 +34,7 @@
       "version": [
         1,
         0,
-        0
+        7
       ],
       "entry": "scripts/main.js"
     }
@@ -45,6 +45,14 @@
       "version": [
         2,
         5,
+        0
+      ]
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": [
+        2,
+        0,
         0
       ]
     }

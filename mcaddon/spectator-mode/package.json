@@ -1,7 +1,7 @@
 {
   "name": "spectator-mode",
-  "version": "1.0.0",
-  "description": "旁观模式（项目脚手架，业务待实现）",
+  "version": "1.0.7",
+  "description": "灵魂出窍 · 旁观模式：飞离真身侦查，距离容忍自动回归",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
@@ -21,13 +21,16 @@
     "build": "just-scripts build",
     "clean": "just-scripts clean",
     "local-deploy": "just-scripts local-deploy",
-    "pack": "just-scripts mcaddon"
+    "pack": "just-scripts mcaddon",
+    "test:core": "tsc -p tsconfig.test.json && node --test \".test-build/tests/**/*.test.js\""
   },
   "dependencies": {
-    "@minecraft/server": "2.0.0"
+    "@minecraft/server": "2.0.0",
+    "@minecraft/server-ui": "2.0.0",
+    "@yinxe/toolkit": "workspace:*"
   },
   "mcbe": {
-    "packName": "旁观模式",
+    "packName": "灵魂出窍",
     "bp": "BP/SpectatorMode"
   }
 }
