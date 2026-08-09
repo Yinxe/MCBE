@@ -76,9 +76,10 @@ export interface Container {
   /** 查找给定物品所在的槽（最后一个） */
   findLast(itemStack: ItemStack): number | undefined;
   // ── 扩展能力（可选，适配层可选实现；未实现按安全默认处理） ──
-  /** 底层方块是否已失效（活塞移动/摧毁等使 mc 读取抛错或注册位置不再是容器）——
-   * 路由候选命中时**跳过 + 触发 containerLost** 让订阅者注销；缺省视为未失效。 */
-  isDead?(): boolean;
+  /** 容器是否**失联**（底层方块被活塞移动/摧毁等使 mc 读取抛错）——所有角色通用；路由策略在
+   * 确定每个候选容器前检查（且在白名单之前），失联即跳过 + 发事件；实现侧会在复查时探测同位置
+   * 是否已恢复（活塞推回/新放盒子 → 恢复则重新可选）。缺省视为未失联。 */
+  isLost?(): boolean;
   /** 原生 O(1) 类型判定（适配层 native `contains` 快判）：undefined = 未实现/原生失效，
    * 调用方（routing/helpers.hasItemType）回退线性遍历查物。 */
   hasItemType?(itemId: ItemId): boolean | undefined;

@@ -17,10 +17,9 @@ export function toCandidate(container: Container): CandidateContainer {
   };
 }
 
-/** 容器是否已失效（活塞移动/摧毁使底层方块不再是容器/mc 读取抛错）——候选命中时跳过并触发
- * containerLost；未实现 isDead 的容器（InMemory/未知）视为未失效。 */
-export function containerIsDead(container: Container): boolean {
-  return container.isDead?.() === true;
+/** 容器是否已**失联**（底层方块失效，isLost 实现侧会顺带探测同位置恢复）——策略定候选前统一判定 */
+export function containerIsLost(container: Container): boolean {
+  return container.isLost?.() === true;
 }
 
 /** 容器是否已存在给定**类型**的槽（typeId 级，非 NBT 精确——多物候选判定用）。

@@ -38,7 +38,8 @@ export class AdmissionInterceptor {
     return this.policy(container, itemId);
   }
 
-  /** 白名单声明式候选：whitelist 含该物品、角色相符 → 加入候选（缺物也能进） */
+  /** 白名单声明式候选：whitelist 含该物品、角色相符 → 加入候选（缺物也能进）。**失联容器的剔除由
+   * 路由层统一失联门（attempt 阶段 gateLost）负责**——此处只做白名单、不做丢失判断（解耦）。 */
   collectWhitelisted: WhitelistCollector = (ctx, itemId, roles, seen, out) => {
     for (const c of ctx.warehouse.containers.values()) {
       if (!c.enabled || !roles.includes(c.role)) continue;

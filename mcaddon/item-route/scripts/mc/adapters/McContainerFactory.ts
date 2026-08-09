@@ -54,7 +54,7 @@ export class McContainerFactory {
       // ID 用主坐标 + 维度（双箱取两半 (x,y,z) 最小者 + 所属维度）——稳定、防跨维重叠、拆主半可重定
       const primary = primaryLocationOf(occupied)!;
       const id = containerIdOf(primary, block.dimension.id);
-      return new McContainerAdapter(id, finalRole, inv, this.item, occupied, typeId);
+      return new McContainerAdapter(id, finalRole, inv, this.item, occupied, typeId, block.dimension.id);
     } catch {
       return undefined;
     }

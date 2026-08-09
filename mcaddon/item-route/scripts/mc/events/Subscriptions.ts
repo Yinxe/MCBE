@@ -9,7 +9,6 @@ import type { EventBus } from "../../core/events/DomainEvents";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Container } from "../../core/model/Container";
 import { pendingReloadsOf } from "../../core/model/Warehouse";
-import { unregisterContainer } from "../../core/model/ContainerRegistry";
 import type { ContainerId } from "../../core/model/types";
 import type { StatsService } from "../../core/stats/StatsService";
 import type { Organizer } from "../../core/organizing/Organizer";
@@ -153,27 +152,22 @@ export function registerSubscriptions(ctx: SubscriptionContext): void {
     ctx.removeContainer(wh, e.containerId);
     ctx.persistContainerIds(wh);
   });
-  // 容器在路由候选时被检测到**失效**（活塞移动/摧毁等世界机制，无 break/explode 事件）→ 注销：
-  // 清内存（containers/inputs + 索引）后复用 containerRemoved 做持久化/统计/成员通知清理。
-  bus.containerLost.subscribe((e) => {
-    const wh = resolveWh(e.warehouseId);
-    if (wh === undefined) return;
-    const c = wh.containers.get(e.containerId);
-    if (c === undefined) return; // 已注销/不存在 → 忽略
-    const index = scheduler.getIndex(e.warehouseId);
-    unregisterContainer(wh, e.containerId); // 内存容器表 + 输入镜像
-    index?.onContainerRemoved(c); // 索引候选同步清（reconcile 已按空内容清出，此处幂等保险）
-    bus.containerRemoved.trigger({
-      type: "container-removed",
-      warehouseId: e.warehouseId,
-      containerId: e.containerId,
-    }); // 持久化（注册表/统计/cids）+ 成员"已移除"通知 + 防抖表清理
-  });
   // 容器跳过注册（区块未加载）→ 登记待补（冗余保险；ensure 侧已 direct add，此处解耦其他副作用）
   bus.containerDeferred.subscribe((e) => {
     const wh = resolveWh(e.warehouseId);
     if (wh === undefined) return;
     pendingReloadsOf(wh).add(e.containerId);
+  });
+  // 容器失联/恢复（路由统一门检测，活塞移动/摧毁 → 找回）：**非销毁性**——只记录日志。
+  // 临时失联由容器自检恢复（重逢发 containerRecovered）；持续失联由卸载→重载补注册机制清扫，
+  // 此处不删注册表、不通知成员（避免把"短暂不在位"当成拆除刷屏）。
+  bus.containerLost.subscribe((e) => {
+    console.warn(
+      `[ItemRoute] 容器失联（路由候选跳过，非销毁）：${e.containerId}@${e.warehouseId}（活塞移动/摧毁），待恢复或重载清扫`
+    );
+  });
+  bus.containerRecovered.subscribe((e) => {
+    console.warn(`[ItemRoute] 容器已恢复可用：${e.containerId}@${e.warehouseId}`);
   });
 
   // ── 仓库生命周期（cold） ──

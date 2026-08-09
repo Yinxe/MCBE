@@ -19,11 +19,11 @@ export class InMemoryContainer implements Container {
   blacklist: string[] = [];
   readonly capacity: number;
   readonly occupiedLocations: Location[];
-  /** 源方块类型 ID（缺省空=未知方块；潜行称防套娃规则据此判定） */
+  /** 源方块类型 ID（缺省空=未知方块；潜影盒防套娃规则据此判定） */
   blockType: string = "";
   private slots: (ItemStack | undefined)[];
-  /** 测试用失效标记（模拟活塞移动/摧毁后底层容器读取抛错）：kill() 置位 → isDead() 常真 */
-  private dead = false;
+  /** 测试用失联标记（模拟活塞移动/摧毁后底层读取抛错）：markLost() 置位 → isLost() 返回 true；recoverLost() 清 */
+  private lost = false;
 
   constructor(id: ContainerId, role: ContainerRole, capacity: number, occupiedLocations: Location[] = []) {
     this.id = id;
@@ -33,14 +33,19 @@ export class InMemoryContainer implements Container {
     this.slots = new Array<ItemStack | undefined>(capacity).fill(undefined);
   }
 
-  /** 测试用：标记容器失效（活塞移动/摧毁场景） */
-  kill(): void {
-    this.dead = true;
+  /** 测试用：标记容器失联（活塞移动/摧毁场景） */
+  markLost(): void {
+    this.lost = true;
   }
 
-  /** 底层是否失效（生产=McContainerAdapter 判 mc 句柄/方块；测试容器用 kill 标记） */
-  isDead(): boolean {
-    return this.dead;
+  /** 测试用：模拟恢复（活塞推回 / 重新放盒） */
+  recoverLost(): void {
+    this.lost = false;
+  }
+
+  /** 是否失联（生产=McContainerAdapter 懒标记+恢复复查；测试容器用 markLost/recoverLost 驱动） */
+  isLost(): boolean {
+    return this.lost;
   }
 
   get emptySlotsCount(): number {

@@ -416,49 +416,54 @@ test("Router: 索引有候选时**不**触发 selfHeal（仅 miss 兜底，不�
   assert.deepEqual(index.state.selfHealed, []); // 有候选 → 不扫描
 });
 
-// ── 失联容器（活塞移动/摧毁）清扫 ──────────────────────
-test("Router: 候选容器 isDead（活塞移动/摧毁）→ reconcile 清索引 + 触发 containerLost + 跳过", () => {
+// ── 失联容器（活塞移动/摧毁）：路由层统一门 + 非销毁 + 恢复事件 ─────────
+test("Router: 失联候选容器 → 路由层统一跳过 + containerLost（非注销），恢复后路由到 + containerRecovered", () => {
   const { wh, add } = makeWarehouse();
   const input = add(new InMemoryContainer("in", "input", 3));
   input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
-  // s1：已注册、绑定 stone，但底层被活塞摧毁 → 失效
-  const dead = add(new InMemoryContainer("s1", "single", 3));
-  dead.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
-  dead.kill();
+  // s1：已注册、绑定 stone，但底层被活塞移动/摧毁 → 失联
+  const lost = add(new InMemoryContainer("s1", "single", 3));
+  lost.warehouseId = "w1";
+  lost.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  lost.markLost();
   const index = makeIndexStub();
   index.state.byItem.set("minecraft:stone", { single: ["s1"], multi: [] });
   const bus = new EventBus();
-  const lost: string[] = [];
-  bus.containerLost.subscribe((e) => {
-    lost.push(e.containerId);
-    wh.containers.delete(e.containerId); // 模拟 Subscriptions 订阅者注销（unregisterContainer）
-  });
+  const lostEvts: string[] = [];
+  const recoveredEvts: string[] = [];
+  bus.containerLost.subscribe((e) => lostEvts.push(e.containerId));
+  bus.containerRecovered.subscribe((e) => recoveredEvts.push(e.containerId));
   const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
   const result = router.routeFrom(input, 0, wh, index);
-  assert.equal(result, undefined); // 失效容器被跳过 → 单物无候选 → 不路由
-  assert.deepEqual(lost, ["s1"]); // 已发 containerLost 事件
-  assert.deepEqual(index.state.reconciled, ["s1"]); // 已按空内容 reconcile 清出索引候选
+  assert.equal(result, undefined); // 失联容器被路由层跳过 → 不路由
+  assert.deepEqual(lostEvts, ["s1"]); // 已发 containerLost（一次）
+  assert.deepEqual(recoveredEvts, []); // 尚无恢复
+  assert.ok(wh.containers.has("s1")); // 非销毁：容器仍在（临时不可用，等恢复或重载清扫）
   assert.deepEqual(index.state.moved, []); // 未发生任何移动
+  // 恢复（活塞推回 / 新放盒到原位）→ 再次路由成功 + 发 containerRecovered
+  lost.recoverLost();
+  const again = router.routeFrom(input, 0, wh, index);
+  assert.equal(again?.to, "s1");
+  assert.deepEqual(recoveredEvts, ["s1"]); // 恢复事件已发
 });
 
-test("Router: 兜底 misc 候选失效 → 转移前死检跳过 + 发 containerLost（非索引源路径）", () => {
+test("Router: 兜底 misc 候选失联 → 转移前统一门跳过 + 发 containerLost（全仓扫描来源路径）", () => {
   const { wh, add } = makeWarehouse();
   const input = add(new InMemoryContainer("in", "input", 3));
   input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
   const misc = add(new InMemoryContainer("x1", "misc", 3));
+  misc.warehouseId = "w1";
   misc.setItem(0, new SimpleItemStack("minecraft:dirt", 2, 64));
-  misc.kill(); // 失效（活塞摧毁）
+  misc.markLost(); // 失联（活塞摧毁）
   const index = makeIndexStub(); // 无候选（stone 不在任何桶）
   const bus = new EventBus();
-  const lost: string[] = [];
-  bus.containerLost.subscribe((e) => {
-    lost.push(e.containerId);
-    wh.containers.delete(e.containerId);
-  });
+  const lostEvts: string[] = [];
+  bus.containerLost.subscribe((e) => lostEvts.push(e.containerId));
   const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
   const result = router.routeFrom(input, 0, wh, index);
-  assert.equal(result, undefined); // 死 misc 被跳过 → 不路由
-  assert.deepEqual(lost, ["x1"]); // 已发 containerLost（attempt 死检覆盖非索引兜底）
+  assert.equal(result, undefined); // 失联 misc 被跳过 → 不路由
+  assert.deepEqual(lostEvts, ["x1"]); // 已发 containerLost（attempt 统一门覆盖全仓扫描候选）
+  assert.ok(wh.containers.has("x1")); // 非销毁
   assert.deepEqual(index.state.moved, []);
 });
 

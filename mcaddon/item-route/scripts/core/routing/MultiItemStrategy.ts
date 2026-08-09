@@ -17,14 +17,9 @@ export class MultiItemStrategy implements RouteStrategy {
     for (const id of ctx.lookupIndex(itemId).multi) {
       const container = ctx.warehouse.containers.get(id);
       if (!container || container.role !== "multi") continue;
-      // 白名单声明命中 → 缺物也是候选（不 reconcile）；否则须实含该类型，仍漂移才重建
-      if ((container.whitelist ?? []).includes(itemId)) {
-        seen.add(id);
-        out.push(toCandidate(container));
-        continue;
-      }
-      // 类型级可行：只要容器已含该 typeId（不管 NBT 变不变体）即收；异 NBT 各落槽不合并，
-      // 由 mc.addItem 权威裁决（详见文件头）。索引漂移（索引说含、实际已无该类型）→重建移除候选。
+      // 实含该类型（不管 NBT 变不变体）即收；异 NBT 各落槽不合并，由 mc.addItem 权威裁决。
+      // 索引漂移（索引说含、实际已无该类型）→ 重建移除候选。**白名单声明式候选统一由下方
+      // collectWhitelisted 收集（缺物也进）**——不再在此内联，避免与统一收集重复。
       if (hasItemType(container, itemId)) {
         seen.add(id);
         out.push(toCandidate(container));

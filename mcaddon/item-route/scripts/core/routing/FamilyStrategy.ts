@@ -24,12 +24,7 @@ export class FamilyStrategy implements RouteStrategy {
     for (const id of ctx.lookupFamily(familyId)) {
       const container = ctx.warehouse.containers.get(id);
       if (!container || !container.enabled || container.role !== "multi" || seen.has(id)) continue;
-      // 白名单声明命中 → 缺物也是候选（不 reconcile）；否则须实含该族成员，仍漂移才重建
-      if ((container.whitelist ?? []).includes(itemId)) {
-        seen.add(id);
-        out.push(toCandidate(container));
-        continue;
-      }
+      // 白名单声明式（缺物允许）已由多物策略的统一白名单候选覆盖（同 role=multi）——本策略不重复。
       if (container.familyEnabled && containerHasFamilyMember(container, familyId)) {
         seen.add(id);
         out.push(toCandidate(container));

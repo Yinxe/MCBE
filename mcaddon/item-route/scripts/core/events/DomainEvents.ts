@@ -8,7 +8,8 @@
 //   · containerChanged —— 容器内容/注册变化触发；索引/统计联动；
 //     OrganizeService 整理后也逐容器触发（整理造成的索引重建对外信号）
 //   · containerAdded/containerRemoved —— 容器 CRUD：mc 层注册/完全拆除处触发
-//   · containerLost —— Router 路由候选检测到底层容器失效（活塞移动/摧毁）；Subscriptions 订阅注销
+//   · containerLost —— 路由策略定候选时发现容器**失联**（活塞移动/摧毁）；**非销毁性**通知，
+//     恢复由容器自检跟随，持久丢失由仓库卸载→重载补注册机制清扫
 //   · indexUpdated  —— 预留（当前未消费，为搜索/展示留口）
 //   · statsChanged  —— 预留（统计联动）
 //   · warning       —— StatsService.evaluateWarnings 触发；WarningRelay 订阅 → 播报附近玩家
@@ -99,16 +100,22 @@ export interface ContainerRemovedEvent {
   containerId: ContainerId;
 }
 
-/**
- * 容器在路由候选时被检测到**失效**（活塞移动/摧毁等世界机制使容器无 break/explode 事件即消失）——
- * mc 层订阅后注销该容器（内存 + 索引 + 注册表 + 统计 + 成员通知），保障"失联容器不再成为路由目标"。
- */
+/** 容器**失联**（路由策略定候选时察觉：活塞移动/摧毁等，无 break/explode 事件）。
+ * **非销毁性**：不卸载、不删注册表——临时丢失由容器侧恢复自检跟随；持续丢失由仓库
+ * 卸载→重载的补注册机制（ensure→pending→pump 空气/非容器移除）清扫。 */
 export interface ContainerLostEvent {
   type: "container-lost";
   warehouseId: WarehouseId;
   containerId: ContainerId;
-  /** 丢失来源（预留）：routing-stale = 路由候选判定底层不再是受支持容器 */
+  /** 失联来源（预留）：routing-stale = 路由候选判定底层失效 */
   reason?: "routing-stale";
+}
+
+/** 容器**恢复**：此前被标记失联的容器，`isLost()` 复查同位置已是受支持容器（活塞推回/新放盒）→ 重新可用。 */
+export interface ContainerRecoveredEvent {
+  type: "container-recovered";
+  warehouseId: WarehouseId;
+  containerId: ContainerId;
 }
 
 export interface IndexUpdatedEvent {
@@ -196,6 +203,7 @@ export class EventBus {
   readonly containerAdded = new EventSignal<ContainerAddedEvent>();
   readonly containerRemoved = new EventSignal<ContainerRemovedEvent>();
   readonly containerLost = new EventSignal<ContainerLostEvent>();
+  readonly containerRecovered = new EventSignal<ContainerRecoveredEvent>();
   readonly indexUpdated = new EventSignal<IndexUpdatedEvent>();
   readonly statsChanged = new EventSignal<StatsChangedEvent>();
   readonly warning = new EventSignal<WarningEvent>();
