@@ -1,0 +1,33 @@
+{
+  "name": "spectator-mode",
+  "version": "1.0.0",
+  "description": "旁观模式（项目脚手架，业务待实现）",
+  "private": true,
+  "devDependencies": {
+    "@minecraft/core-build-tasks": "5.5.0",
+    "@types/node": "^26.1.1",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@typescript-eslint/parser": "^8.66.0",
+    "@yinxe/toolkit-build": "workspace:*",
+    "eslint-plugin-minecraft-linting": "2.0.2",
+    "just-scripts": "^2.6.2",
+    "prettier": "^3.9.6",
+    "source-map": "0.7.4",
+    "ts-node": "10.9.1",
+    "typescript": "5.0.2"
+  },
+  "scripts": {
+    "lint": "just-scripts lint",
+    "build": "just-scripts build",
+    "clean": "just-scripts clean",
+    "local-deploy": "just-scripts local-deploy",
+    "pack": "just-scripts mcaddon"
+  },
+  "dependencies": {
+    "@minecraft/server": "2.0.0"
+  },
+  "mcbe": {
+    "packName": "旁观模式",
+    "bp": "BP/SpectatorMode"
+  }
+}

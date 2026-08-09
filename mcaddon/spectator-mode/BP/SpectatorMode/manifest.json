@@ -1,0 +1,55 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "旁观模式 v1.0.0",
+    "description": "旁观模式（项目脚手架，业务待实现）",
+    "uuid": "67c0e536-82f7-459d-a15f-d4cd9b229bf8",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Behavior",
+      "version": [
+        1,
+        0,
+        0
+      ],
+      "uuid": "bd2e3fa2-017d-4af4-91d2-cca0fff38cf0",
+      "type": "data"
+    },
+    {
+      "description": "Script",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "ed36bbd0-5245-4c7d-871d-3f2437fdee07",
+      "version": [
+        1,
+        0,
+        0
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": [
+        2,
+        5,
+        0
+      ]
+    }
+  ],
+  "metadata": {
+    "product_type": "addon"
+  }
+}
