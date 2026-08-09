@@ -8,7 +8,8 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 - **在线/离线管理** — 上线（重新生成）、下线（保存状态并断开）（`/mp:online` `/mp:offline`）
 - **传送** — TPHERE（假人传送到玩家）、TPA（玩家传送到假人）（`/mp:tphere` `/mp:tp`）
 - **移动** — 假人自动寻路到目标位置（`/mp:move`）
-- **自动行为** — 通过标签系统控制：自动挖掘、自动攻击、自动跳跃、自动放置、跟随、使用物品、宝库模式
+- **自动行为** — 通过标签系统控制：自动挖掘、自动攻击、自动跳跃、自动放置、宝库模式
+- **使用物品** — 行为菜单一次性开关：让假人使用一次主手物品（吃食物/喝药水/射箭/投掷），约 2 秒蓄力后自动停止（默认关闭）
 - **体态控制** — 控制模式让假人跟随玩家的位置和朝向
 - **潜行** — 切换假人潜行状态（`/mp:sneak`）
 - **装备管理** — 交换主手/副手/装备、回收资源
@@ -63,8 +64,10 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 | `autoPlace` | 持续放置模式 |
 | `autoAttack` | 自动攻击 |
 | `control` | 体态控制模式（跟随玩家） |
-| `autoUse` | 使用物品 |
 | `vaultMode` | 宝库模式 |
+
+> **使用物品**已从标签改为**行为菜单里的一次性开关**（不再占用互斥标签、也不驱动持续循环）：
+> 勾选提交 → 假人使用一次主手物品（蓄力约 2 秒后自动停下）；取消提交 → 立即停止。开关每次打开默认关。
 
 ## UI 交互
 
@@ -117,7 +120,7 @@ scripts/
 │   │   ├── pose.ts       # 体态控制
 │   │   ├── gametestContext.ts # GameTest 上下文（chunkload 模式）
 │   │   └── ...
-│   ├── createBot/onlineBot/offlineBot/deleteBot/killBot/teleport/move/control/sneak/reclaim/equip/saveState/setTags/follow/trident/vaultMode/toolHealth/pendingRespawn/spawnMode/tridentTracker
+│   ├── createBot/onlineBot/offlineBot/deleteBot/killBot/teleport/move/control/sneak/reclaim/equip/saveState/setTags/follow/trident/vaultMode/toolHealth/pendingRespawn/spawnMode/tridentTracker/useItem
 └── ui/                   # ActionForm/ModalForm UI（menu/bot/create/move/online/tags/trident/reclaim 等）
 ```
 
