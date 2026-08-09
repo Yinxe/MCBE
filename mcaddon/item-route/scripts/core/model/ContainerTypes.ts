@@ -33,6 +33,11 @@ export function isHopperType(typeId: string): boolean {
   return typeId === "minecraft:hopper";
 }
 
+/** 是否潜影盒（物品/方块类型，含 17 种）——**禁放进潜影盒容器**（MC 原版机制：防套娃存储/崩溃） */
+export function isShulkerBoxType(typeId: string): boolean {
+  return SHULKER_BOX_IDS.has(typeId);
+}
+
 /** 是否为本 addon 支持的容器类型 */
 export function isSupportedContainerType(typeId: string): boolean {
   return isChestType(typeId) || isHopperType(typeId) || typeId === "minecraft:barrel" || SHULKER_BOX_IDS.has(typeId);

@@ -10,6 +10,7 @@
 //     生产实现把判定全权委托 mc.addItem（原生 NBT 级堆叠），保证不吞不覆盖不刷。
 import type { ItemStack } from "./ItemStack";
 import type { ContainerId, ItemId, Location, WarehouseId } from "./types";
+import { isShulkerBoxType } from "./ContainerTypes";
 
 /** 容器角色 */
 export type ContainerRole = "input" | "single" | "multi" | "misc";
@@ -49,6 +50,8 @@ export interface Container {
   /** O(1) 空槽数（adapter 委托 MC 属性，零遍历） */
   readonly emptySlotsCount: number;
   readonly usedSlots: number;
+  /** 源方块类型 ID（漏斗强制 input 判定/潜影盒防套娃等世界机制规则用；缺省视为未知方块） */
+  readonly blockType?: string;
   /** 逻辑容器全部方块坐标（大箱子 = primary + 附属） */
   readonly occupiedLocations: Location[];
   getItem(slot: number): ItemStack | undefined;
@@ -79,4 +82,14 @@ export interface Container {
   /** 原生 O(1) 类型判定（适配层 native `contains` 快判）：undefined = 未实现/原生失效，
    * 调用方（routing/helpers.hasItemType）回退线性遍历查物。 */
   hasItemType?(itemId: ItemId): boolean | undefined;
+}
+
+/**
+ * **存储安全准入规则**：物品能否放进该容器（世界机制硬限制，优先于黑白名单/白名单声明）。
+ * 当前规则：**潜影盒不能装潜影盒**（MC 原版禁止——套娃存储会递归、甚至崩溃）。Router 在
+ * transfer 前统一校验；目标方块类型经 `blockType` 判定（缺省视为非潜影盒）。
+ */
+export function containerCanAcceptItem(container: Container, itemId: ItemId): boolean {
+  if (isShulkerBoxType(itemId) && isShulkerBoxType(container.blockType ?? "")) return false;
+  return true;
 }

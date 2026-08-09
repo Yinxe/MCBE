@@ -19,6 +19,8 @@ export class InMemoryContainer implements Container {
   blacklist: string[] = [];
   readonly capacity: number;
   readonly occupiedLocations: Location[];
+  /** 源方块类型 ID（缺省空=未知方块；潜行称防套娃规则据此判定） */
+  blockType: string = "";
   private slots: (ItemStack | undefined)[];
   /** 测试用失效标记（模拟活塞移动/摧毁后底层容器读取抛错）：kill() 置位 → isDead() 常真 */
   private dead = false;

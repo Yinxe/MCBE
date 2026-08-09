@@ -498,3 +498,46 @@ test("hasItemType: 原生 hasItemType 优先（命中直返免遍历）；未实
   const missEmpty = new NativeMiss("p4", "multi", 3);
   assert.equal(hasItemType(missEmpty, "minecraft:stone"), false);
 });
+
+// ── 潜影盒防套娃：潜影盒物品不能路由进潜影盒容器 ───────────
+import { containerCanAcceptItem } from "../scripts/core/model/Container";
+
+test("containerCanAcceptItem: 潜影盒→潜影盒禁用；潜影盒→普通箱允许；非潜影物品不限制", () => {
+  const shulker = new InMemoryContainer("a", "misc", 27);
+  shulker.blockType = "minecraft:black_shulker_box";
+  const chest = new InMemoryContainer("b", "misc", 27);
+  chest.blockType = "minecraft:chest";
+  const unknown = new InMemoryContainer("u", "misc", 27); // 缺省 blockType（旧测试容器）
+  // BE 潜影盒物品 id：未染色=undyed_shulker_box（无 java 的 bare shulker_box）
+  assert.equal(containerCanAcceptItem(shulker, "minecraft:undyed_shulker_box"), false);
+  assert.equal(containerCanAcceptItem(shulker, "minecraft:white_shulker_box"), false); // 染色同样
+  assert.equal(containerCanAcceptItem(chest, "minecraft:undyed_shulker_box"), true);
+  assert.equal(containerCanAcceptItem(unknown, "minecraft:undyed_shulker_box"), true); // 未知方块不误伤
+  assert.equal(containerCanAcceptItem(shulker, "minecraft:diamond"), true); // 非潜影物品不限
+});
+
+test("Router: 潜影盒物品路由——传输前拒绝潜影盒容器目标，普通箱子仍可进", () => {
+  const { wh, add } = makeWarehouse();
+  const input = add(new InMemoryContainer("in", "input", 3));
+  input.setItem(0, new SimpleItemStack("minecraft:undyed_shulker_box", 1, 64));
+  // 唯一候选是潜影盒容器 → 被过滤 → 无处可去
+  const shulkerTarget = add(new InMemoryContainer("s1", "misc", 27));
+  shulkerTarget.blockType = "minecraft:white_shulker_box";
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    new EventBus()
+  );
+  const blocked = router.routeFrom(input, 0, wh, makeIndexStub());
+  assert.equal(blocked, undefined); // 潜影盒不能进潜影盒 → 不路由
+  assert.equal(input.getItem(0)?.itemId, "minecraft:undyed_shulker_box"); // 物品留在输入
+  assert.equal(shulkerTarget.getItem(0), undefined); // 目标未接受
+
+  // 再加一个普通箱子候选 → 传输前判断跳过潜影盒、落到箱子
+  const chest = add(new InMemoryContainer("c1", "misc", 27));
+  chest.blockType = "minecraft:chest";
+  const ok = router.routeFrom(input, 0, wh, makeIndexStub());
+  assert.equal(ok?.to, "c1");
+  assert.equal(chest.getItem(0)?.itemId, "minecraft:undyed_shulker_box");
+  assert.equal(shulkerTarget.getItem(0), undefined); // 潜影盒目标仍被排除
+});

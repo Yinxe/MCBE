@@ -9,6 +9,8 @@
 //   · 全部候选失败返回 undefined，物品留在源 —— 单槽原子性，不产生半成品。
 import type { EventBus } from "../events/DomainEvents";
 import type { Container } from "../model/Container";
+import { containerCanAcceptItem } from "../model/Container";
+import { isShulkerBoxType } from "../model/ContainerTypes";
 import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
 import type { Warehouse } from "../model/Warehouse";
@@ -176,6 +178,10 @@ export class Router {
           if (!target.enabled) continue;
           // 黑名单准入拦截（拦截器）：黑名单命中 → 该容器永远不收此物品（覆盖索引/族桶/白名单一切候选）
           if (!this.admissionPolicy.accepts(target, itemId)) continue;
+          // ⚠️ 世界机制硬限制：输入是**潜影盒**且目标是**潜影盒容器** → 传输前拒绝（套娃/崩溃防护，
+          // MC 原版禁止潜影盒装潜影盒）。此处就近判、逐候选直到首个成功即返回——非潜影物品
+          // 只多做一次 Set.has 就跳过，代价最小；候选列表不过滤（省整体一遍遍历）。
+          if (isShulkerBoxType(itemId) && !containerCanAcceptItem(target, itemId)) continue;
           const remaining = transfer({ container: input, slot }, target);
           if (remaining !== undefined && remaining.amount === originalAmount) continue; // 未移动
           const moved = originalAmount - (remaining?.amount ?? 0);
