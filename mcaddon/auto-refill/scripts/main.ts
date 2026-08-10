@@ -19,6 +19,7 @@ import { ToolManager } from "./ToolManager";
 import { RefillManager } from "./RefillManager";
 import { SettingsService } from "./Settings";
 import { registerAdminMenu } from "./AdminMenu";
+import { logger } from "./Logger";
 
 // ── 组装服务 ──────────────────────────────────────────
 const policy = new PlayerPolicy();
@@ -44,11 +45,11 @@ world.afterEvents.entityHitBlock.subscribe(
     const player = policy.asPlayer(event.damagingEntity);
     if (!player) return;
     if (!settings.isEnabled("tool")) return; // 工具替换开关关 → 不处理
-    console.warn(`[AutoRefill] hitBlock ${player.name}: ${event.hitBlockPermutation.type.id}`);
+    logger.debug(`hitBlock ${player.name}: ${event.hitBlockPermutation.type.id}`);
     try {
       toolManager.onPlayerHitBlock(player, event.hitBlock);
     } catch (e) {
-      console.warn(`[AutoRefill] tool manager failed ${player.name}: ${e}`);
+      logger.error(`tool manager failed ${player.name}: ${e}`);
     }
   },
   { entityTypes: ["minecraft:player"] }
@@ -68,14 +69,14 @@ world.afterEvents.entityHitEntity.subscribe(
       try {
         toolManager.onAttackEntity(player, event.hitEntity.typeId);
       } catch (e) {
-        console.warn(`[AutoRefill] weapon switch failed ${player.name}: ${e}`);
+        logger.error(`weapon switch failed ${player.name}: ${e}`);
       }
     }
     // 耐久保护独立于武器替换开关
     try {
       toolManager.checkDurability(player);
     } catch (e) {
-      console.warn(`[AutoRefill] durability guard failed ${player.name}: ${e}`);
+      logger.error(`durability guard failed ${player.name}: ${e}`);
     }
   },
   { entityTypes: ["minecraft:player"] }
@@ -122,13 +123,13 @@ world.afterEvents.playerBreakBlock.subscribe((event) => {
     try {
       toolManager.onToolBroke(player, event.itemStackBeforeBreak.typeId);
     } catch (e) {
-      console.warn(`[AutoRefill] tool broke replace failed ${player.name}: ${e}`);
+      logger.error(`tool broke replace failed ${player.name}: ${e}`);
     }
   }
   // 耐久保护域（独立开关）：未碎但耐久过低 → 提前收起替换同类
   try {
     toolManager.checkDurability(player);
   } catch (e) {
-    console.warn(`[AutoRefill] durability guard failed ${player.name}: ${e}`);
+    logger.error(`durability guard failed ${player.name}: ${e}`);
   }
 });

@@ -13,6 +13,7 @@
   },
   "include": [
     "scripts/types.ts",
+    "scripts/InstantBreak.ts",
     "scripts/ToolScorer.ts",
     "scripts/MinePreference.ts",
     "scripts/WeaponPreference.ts",

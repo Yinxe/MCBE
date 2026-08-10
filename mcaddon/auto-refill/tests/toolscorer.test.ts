@@ -311,6 +311,22 @@ test("buildReplacePool：候选占比不达标也排除", () => {
   assert.equal(buildReplacePool(old, bag, 0.1), null);
 });
 
+test("buildReplacePool：绝不降级——旧高品质、背包仅更低品质同类 → null", () => {
+  const old = cand({ slot: 0, tier: 5, durability: 10, durabilityRatio: 0.04 }); // 钻石镐
+  const bag = [cand({ slot: 3, tier: 3, durability: 240, durabilityRatio: 0.96 })]; // 铁镐更耐久
+  assert.equal(buildReplacePool(old, bag, 0.1), null); // 不换（宁保持），不改品质降级
+});
+
+test("buildReplacePool：同/更高品质可替换，同款优先于更高品质其它同类", () => {
+  const old = cand({ slot: 0, typeId: "minecraft:diamond_pickaxe", tier: 5, durability: 10, durabilityRatio: 0.04 });
+  const bag = [
+    cand({ slot: 2, typeId: "minecraft:diamond_pickaxe", tier: 5, durability: 240, durabilityRatio: 0.96 }),
+    cand({ slot: 4, typeId: "minecraft:netherite_pickaxe", tier: 6, durability: 300, durabilityRatio: 0.9 }),
+  ];
+  const target = buildReplacePool(old, bag, 0.1);
+  assert.equal(target!.slot, 2); // 同 typeId 组优先，其次才更高品质
+});
+
 test("buildReplacePool：旧带精准 → 优先同 typeId 且带精准的同款", () => {
   const old = cand({ slot: 0, typeId: "minecraft:iron_pickaxe", silk: true, durability: 10, durabilityRatio: 0.04 });
   const bag = [

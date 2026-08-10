@@ -19,6 +19,7 @@ import { lookupMineStrategy } from "./MinePreference";
 import { lookupWeaponStrategy } from "./WeaponPreference";
 import { resolve as resolveItemDomain } from "./ItemDomain";
 import { type SettingsService } from "./Settings";
+import { logger } from "./Logger";
 
 /** 武器域候选（换入来源）：剑/斧/重锤/三叉戟（弓弩只用于"已持则不动"） */
 function isWeaponSource(c: RankableCandidate): boolean {
@@ -50,7 +51,7 @@ export class ToolManager {
     if (!inv) return;
     const mainhand = inv.readMainhand();
     if (mainhand && !inv.slotIsSwappable(mainhand)) {
-      console.warn(`[AutoRefill] 主手锁定/自定义 ${player.name}: ${mainhand.typeId} → 尊重不动`);
+      logger.info(`主手锁定/自定义 ${player.name}: ${mainhand.typeId} → 尊重不动`);
       return;
     }
     const requirement = classify(block);
@@ -79,11 +80,11 @@ export class ToolManager {
     if (!inv) return;
     const mainhand = inv.readMainhand();
     if (mainhand && !inv.slotIsSwappable(mainhand)) {
-      console.warn(`[AutoRefill] 主手锁定/自定义 ${player.name}: ${mainhand.typeId} → 尊重不动`);
+      logger.info(`主手锁定/自定义 ${player.name}: ${mainhand.typeId} → 尊重不动`);
       return;
     }
     if (mainhand && InventoryService.isWeapon(mainhand)) {
-      console.warn(`[AutoRefill] 已持武器 ${player.name}: ${mainhand.typeId} → 不动`);
+      logger.info(`已持武器 ${player.name}: ${mainhand.typeId} → 不动`);
       return;
     }
     const pool = inv.scanCandidates(isWeaponSource, inv.mainhandSlot());
@@ -108,7 +109,7 @@ export class ToolManager {
     if (slot === undefined) return;
     if (!inv.swapMainhand(slot)) return;
     this.playPop(player);
-    console.warn(`[AutoRefill] 破碎补齐 ${player.name}: ${brokenTypeId} ← slot ${slot}`);
+    logger.info(`破碎补齐 ${player.name}: ${brokenTypeId} ← slot ${slot}`);
   }
 
   /**
@@ -132,15 +133,13 @@ export class ToolManager {
     const bag = inv.scanCandidates((c) => c.role === current.role, inv.mainhandSlot());
     const target = buildReplacePool(current, bag, threshold);
     if (target === null) {
-      console.warn(
-        `[AutoRefill] 耐久低但无同类可替 ${player.name}: ${current.typeId} 剩余 ${current.durability} → 不动`
-      );
+      logger.warn(`耐久低但无同类可替 ${player.name}: ${current.typeId} 剩余 ${current.durability} → 不动`);
       return;
     }
     if (!inv.swapMainhand(target.slot)) return;
     this.playPop(player);
-    console.warn(
-      `[AutoRefill] 耐久保护 ${player.name}: ${current.typeId}（剩 ${current.durability}）← ${target.typeId} slot ${target.slot}`
+    logger.info(
+      `耐久保护 ${player.name}: ${current.typeId}（剩 ${current.durability}）← ${target.typeId} slot ${target.slot}`
     );
   }
 
@@ -158,15 +157,15 @@ export class ToolManager {
     return pool;
   }
 
-  /** 统一执行决策：keep 记日志；swap 执行交换后记日志。 */
+  /** 统一执行决策：keep（无动作）记 debug；swap 执行交换后记 info。 */
   private execute(player: Player, inv: InventoryService, decision: RankDecision | null | undefined): void {
     if (!decision) return; // 无决策（方块无偏好 / 无适用策略）→ 不动
     if (decision.action === "keep") {
-      console.warn(`[AutoRefill] ${decision.log}`);
+      logger.debug(`${decision.log}`); // 每次命中都会触发 → 无动作的保持用 debug 收敛
       return;
     }
     if (!inv.swapMainhand(decision.slot)) return;
     this.playPop(player);
-    console.warn(`[AutoRefill] ${decision.log}`);
+    logger.info(`${decision.log}`);
   }
 }

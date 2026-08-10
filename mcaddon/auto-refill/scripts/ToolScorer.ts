@@ -349,12 +349,12 @@ export function isUrgent(c: RankableCandidate, threshold: number, absFloor: numb
 
 /**
  * 从同 role 候选里挑替换对象（耐久保护用，纯逻辑）。
- * 规则：严格更耐久（remaining > 旧工具）且占比达标 → 才入选；
+ * 规则：品质不降级（tier ≥ 旧工具）、严格更耐久（remaining > 旧工具）、占比达标 → 才入选；
  * 排序：同 typeId → 同精准采集属性 → 品质 → 耐久（旧带精准则优先带精准的同款，避免降级属性）。
  * @param old       当前旧工具（入池但会被筛掉）
  * @param candidates 同 role 的候选池（含锁定槽之外的全部同 role 工具）
  * @param threshold 替换对象的最低占比（不够"充足"的候选不入选）
- * @returns 最优替换对象；无合格候选返回 null（保持不动，不降级）
+ * @returns 最优替换对象；无合格候选返回 null（保持不动，绝不降级：无同/更高品质同类 → 不换）
  */
 export function buildReplacePool(
   old: RankableCandidate,
@@ -364,7 +364,11 @@ export function buildReplacePool(
   const valid = candidates
     .filter(
       (c) =>
-        c.slot !== old.slot && c.role === old.role && c.durability > old.durability && c.durabilityRatio >= threshold
+        c.slot !== old.slot &&
+        c.role === old.role &&
+        c.tier >= old.tier && // 绝不降级：不同/更高品质的同类才可替换
+        c.durability > old.durability &&
+        c.durabilityRatio >= threshold
     )
     .sort((a, b) => {
       const typeDiff = (a.typeId === old.typeId ? 0 : 1) - (b.typeId === old.typeId ? 0 : 1);

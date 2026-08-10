@@ -16,6 +16,7 @@
 import { type Player } from "@minecraft/server";
 import { resolve as resolveItemDomain } from "./ItemDomain";
 import { InventoryService } from "./Inventory";
+import { logger } from "./Logger";
 
 /** 使用消耗品后留在主手的副作用残留物品（产出：补充同类 + 残留堆叠回收） */
 const SIDE_EFFECT_ITEMS: ReadonlySet<string> = new Set([
@@ -73,6 +74,6 @@ export class RefillManager {
       inv.stackRemainder(slot);
     }
     this.playPop(player);
-    console.warn(`[AutoRefill] 替换 ${player.name}: ${refillType} ← slot ${slot}`);
+    logger.info(`替换 ${player.name}: ${refillType} ← slot ${slot}`);
   }
 }

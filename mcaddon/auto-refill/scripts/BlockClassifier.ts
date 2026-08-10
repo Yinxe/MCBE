@@ -11,6 +11,7 @@
 
 import { type Block } from "@minecraft/server";
 import { type ToolCategory, type ToolRequirement, type ToolTarget } from "./types";
+import { isInstantBreak } from "./InstantBreak";
 
 // ─── 识别表 ────────────────────────────────────────────
 
@@ -223,18 +224,6 @@ function safeHasTag(block: Block, tag: string): boolean {
  */
 function matchAny(str: string, keywords: readonly string[]): boolean {
   return keywords.some((k) => str.includes(k));
-}
-
-/**
- * 是否为不需工具的瞬破方块。
- * 这类 ID 常含关键词干扰词（redstone_wire 含 "stone"、jack_o_lantern 含
- * "lantern"、stone_button 属按键），须先于标签/关键词层排除，避免误判换工具。
- * @param id 方块 typeId
- */
-function isInstantBreak(id: string): boolean {
-  if (id.endsWith("_button") || id.endsWith("_pressure_plate")) return true;
-  if (id === "minecraft:redstone_wire" || id === "minecraft:redstone_torch") return true;
-  return id === "minecraft:jack_o_lantern";
 }
 
 /** 构造单目标需求（通用规则的产物）：省略可选的 minTier 字段保持简洁。 */

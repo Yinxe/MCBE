@@ -17,6 +17,7 @@ import {
 } from "@minecraft/server";
 import { type RankableCandidate } from "./types";
 import { profile } from "./ToolProfile";
+import { logger } from "./Logger";
 
 // ─── 常量 ──────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ export class InventoryService {
       this.container.swapItems(this.mainhandSlot(), slot, this.container);
       return true;
     } catch (e) {
-      console.warn(`[AutoRefill] swap failed ${this.player.name}: slot ${slot} - ${e}`);
+      logger.error(`swap failed ${this.player.name}: slot ${slot} - ${e}`);
       return false;
     }
   }
@@ -90,7 +91,7 @@ export class InventoryService {
     try {
       return this.container.transferItem(slot, this.container) === undefined;
     } catch (e) {
-      console.warn(`[AutoRefill] stack failed ${this.player.name}: slot ${slot} - ${e}`);
+      logger.warn(`stack failed ${this.player.name}: slot ${slot} - ${e}`);
       return false;
     }
   }
@@ -128,7 +129,12 @@ export class InventoryService {
       const item = this.container.getItem(slot);
       if (!item) continue;
       if (item.lockMode === ItemLockMode.slot) continue; // 锁定槽不可移动
-      const candidate = profile(item, slot);
+      let candidate: RankableCandidate | undefined;
+      try {
+        candidate = profile(item, slot);
+      } catch {
+        continue; // 个体物品数据异常 → 跳过，不中断整次扫描
+      }
       if (candidate === undefined) continue; // 非工具/武器
       if (!predicate(candidate)) continue;
       out.push(candidate);
