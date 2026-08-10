@@ -20,17 +20,15 @@ import { InventoryService } from "./Inventory";
 /** 使用消耗品后留在主手的副作用残留物品（产出：补充同类 + 残留堆叠回收） */
 const SIDE_EFFECT_ITEMS: ReadonlySet<string> = new Set([
   "minecraft:glass_bottle", // 药水 / 蜂蜜瓶 / 龙息瓶喝完
-  "minecraft:bucket",       // 水/牛奶桶喝掉、水/岩浆放置后
-  "minecraft:bowl",         // 蘑菇煲 / 迷之炖菜 / 兔肉煲 / 甜菜汤吃完
+  "minecraft:bucket", // 水/牛奶桶喝掉、水/岩浆放置后
+  "minecraft:bowl", // 蘑菇煲 / 迷之炖菜 / 兔肉煲 / 甜菜汤吃完
 ]);
 
 export class RefillManager {
   /**
    * @param playPop 补货成功后的反馈音效（注入便于维护，默认 random.pop）
    */
-  constructor(
-    private readonly playPop: (player: Player) => void = (p) => p.playSound("random.pop"),
-  ) {}
+  constructor(private readonly playPop: (player: Player) => void = (p) => p.playSound("random.pop")) {}
 
   /**
    * 使用/交互事件后的自动补充。按使用后主手状态分派：

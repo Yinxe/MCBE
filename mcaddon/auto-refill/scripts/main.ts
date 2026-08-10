@@ -1,20 +1,20 @@
 // ─── 组装根（Composition Root） ────────────────────────
 // 只做两件事：实例化服务、把世界事件路由到领域服务。不含任何业务逻辑。
 //
-// 事件 → 领域路由（受 SettingsService 四项开关约束）：
+// 事件 → 领域路由（受 SettingsService 开关约束）：
 //   entityHitBlock  → ToolManager（挖掘核对，破坏前换正确挖掘工具）·工具替换
-//   entityHitEntity → ToolManager（攻击实体，非武器换武器：剑→斧→镐）·武器替换
-//   playerBreakBlock（工具破碎） → ToolManager（换同类新工具）·工具替换
+//   entityHitEntity → ToolManager（攻击实体，非武器换武器；随后耐久保护）·武器替换+耐久
+//   playerBreakBlock → ToolManager（工具破碎换同类 / 未碎但耐久过低提前收起）·工具替换+耐久
 //   itemUse 家族（使用物品）     → RefillManager（按使用后主手状态判断）·物品补充
 // 管理员菜单：/ar:menu（GameDirectors 权限）在 Settings.ts / AdminMenu.ts。
 //
-// 冲突化解：工具切换/武器切换换主手后，连带触发的"使用"事件也被路由到
+// 冲突化解：工具切换/武器切换/耐久保护换主手后，连带触发的"使用"事件也被路由到
 // RefillManager——它识别到主手既非 undefined 也非副作用残留，判定为
 // "其他（切换已发生）"并忽略，从而不撤销 ToolManager 刚换上的物品。
 
 import { system, world, type Entity } from "@minecraft/server";
 import { PlayerPolicy } from "./PlayerPolicy";
-import { CategoryStrategy, SilkTouchStrategy, ToolDecisionPlanner, WeaponPriorityStrategy } from "./ToolStrategies";
+import { createDefaultScorers, ToolSelector } from "./ToolScorer";
 import { ToolManager } from "./ToolManager";
 import { RefillManager } from "./RefillManager";
 import { SettingsService } from "./Settings";
@@ -23,10 +23,9 @@ import { registerAdminMenu } from "./AdminMenu";
 // ── 组装服务 ──────────────────────────────────────────
 const policy = new PlayerPolicy();
 const settings = new SettingsService();
-const toolManager = new ToolManager(
-  new ToolDecisionPlanner([new SilkTouchStrategy(), new CategoryStrategy()]),
-  new ToolDecisionPlanner([new WeaponPriorityStrategy()]),
-);
+// 共享一份策略注册表：挖掘默认省耐久不择优（frugal），武器默认剑→斧→镐（weapon）
+const scorers = createDefaultScorers();
+const toolManager = new ToolManager(new ToolSelector(scorers, "frugal"), new ToolSelector(scorers, "weapon"), settings);
 const refillManager = new RefillManager();
 
 // 配置：世界加载后从动态属性恢复开关（DP 读取需世界就绪）；注册 /ar:menu
@@ -52,26 +51,34 @@ world.afterEvents.entityHitBlock.subscribe(
       console.warn(`[AutoRefill] tool manager failed ${player.name}: ${e}`);
     }
   },
-  { entityTypes: ["minecraft:player"] },
+  { entityTypes: ["minecraft:player"] }
 );
 
 /**
- * 攻击实体（击中其他实体）→ 武器切换：非武器主手换入武器（剑→斧→镐）
- * 已持武器 / 锁定·自定义主手 / 背包无武器 → 不动（武器策略内判定）。
+ * 攻击实体（击中其他实体）→ 武器切换 + 耐久保护
+ * 武器切换：非武器主手换入武器（剑→斧→镐）；已持武器 / 锁定·自定义 / 背包无武器 → 不动。
+ * 随后独立评估主手耐久：武器或工具低于阈值时提前替换同类（受 durability 开关约束）。
  * entityTypes 过滤只收玩家的攻击。
  */
 world.afterEvents.entityHitEntity.subscribe(
   (event) => {
     const player = policy.asPlayer(event.damagingEntity);
     if (!player) return;
-    if (!settings.isEnabled("weapon")) return; // 武器替换开关关 → 不处理
+    if (settings.isEnabled("weapon")) {
+      try {
+        toolManager.onAttackEntity(player, event.hitEntity.typeId);
+      } catch (e) {
+        console.warn(`[AutoRefill] weapon switch failed ${player.name}: ${e}`);
+      }
+    }
+    // 耐久保护独立于武器替换开关
     try {
-      toolManager.onAttackEntity(player);
+      toolManager.checkDurability(player);
     } catch (e) {
-      console.warn(`[AutoRefill] weapon switch failed ${player.name}: ${e}`);
+      console.warn(`[AutoRefill] durability guard failed ${player.name}: ${e}`);
     }
   },
-  { entityTypes: ["minecraft:player"] },
+  { entityTypes: ["minecraft:player"] }
 );
 
 /**
@@ -102,14 +109,26 @@ world.afterEvents.playerInteractWithBlock.subscribe((event) => {
 });
 
 /**
- * 方块破碎 — 工具耐久耗尽 → 换入同类新工具（工具域）
- * itemStackAfterBreak 为空即工具碎掉；仅此时才需要补。
+ * 方块破碎 — 工具处理（工具替换域 + 耐久保护域）
+ *   itemStackAfterBreak 为空（工具碎掉）→ 换入同类新工具（tool 开关约束）；
+ *   工具未碎 → 评估耐久，低于阈值未碎也提前收起替换同类（durability 开关约束）。
  */
 world.afterEvents.playerBreakBlock.subscribe((event) => {
   if (event.itemStackBeforeBreak === undefined) return;
-  if (event.itemStackAfterBreak !== undefined) return;
-  if (!settings.isEnabled("tool")) return; // 工具替换开关关 → 不处理
   const player = policy.asPlayer(event.player);
   if (!player) return;
-  toolManager.onToolBroke(player, event.itemStackBeforeBreak.typeId);
+  // 工具替换域：破碎 → 补同类
+  if (settings.isEnabled("tool") && event.itemStackAfterBreak === undefined) {
+    try {
+      toolManager.onToolBroke(player, event.itemStackBeforeBreak.typeId);
+    } catch (e) {
+      console.warn(`[AutoRefill] tool broke replace failed ${player.name}: ${e}`);
+    }
+  }
+  // 耐久保护域（独立开关）：未碎但耐久过低 → 提前收起替换同类
+  try {
+    toolManager.checkDurability(player);
+  } catch (e) {
+    console.warn(`[AutoRefill] durability guard failed ${player.name}: ${e}`);
+  }
 });

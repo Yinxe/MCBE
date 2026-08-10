@@ -8,14 +8,12 @@
 export type ItemDomain = "tool" | "consumable";
 
 /** 判定为耐久工具/武器的 typeId 后缀（带前缀的原版工具以 _xxx 结尾） */
-const DURABLE_SUFFIXES = [
-  "_pickaxe", "_axe", "_shovel", "_hoe", "_sword",
-  "_trident", "_bow", "_crossbow",
-] as const;
+const DURABLE_SUFFIXES = ["_pickaxe", "_axe", "_shovel", "_hoe", "_sword", "_trident", "_bow", "_crossbow"] as const;
 
 /** 无前缀的单体耐久物品（整名精确匹配） */
 const DURABLE_EXACT = new Set([
   "minecraft:shears",
+  "minecraft:mace", // 重锤
   "minecraft:trident",
   "minecraft:bow",
   "minecraft:crossbow",

@@ -2,8 +2,8 @@
 // 唯一封装 @minecraft/server Container I/O 的地方：
 //   - 构造：InventoryService.of(player)（含 try/catch，失败返回 undefined）
 //   - 读写：主手槽 / 换主手 / 残留堆叠回收
-//   - 查找：同类物品 / 指定类别（含最低品质）/ 精准采集工具
-//   - 物品元数据：类别判定 / 品质 / 耐久 / 精准采集 / 择优比较
+//   - 查找：同类物品 / 按候选特征泛型扫描（scanCandidates，配 ToolProfile）
+//   - 物品元数据：品质 / 耐久 / 精准采集 / 武器判定
 //   - 槽位策略：锁定槽与自定义（非 minecraft:）物品不可换走
 // 两端 Manager 都只通过这里操作背包，框架 I/O 与业务解耦，便于 node 单测替身。
 
@@ -15,7 +15,8 @@ import {
   type ItemStack,
   type Player,
 } from "@minecraft/server";
-import { type ToolCandidate, type ToolCategory, type ToolTarget } from "./types";
+import { type RankableCandidate } from "./types";
+import { profile } from "./ToolProfile";
 
 // ─── 常量 ──────────────────────────────────────────────
 
@@ -29,31 +30,6 @@ const TIER_BY_PREFIX: Record<string, number> = {
   netherite: 6,
 };
 
-/** 工具类别 → typeId 后缀（兜底用） */
-const CATEGORY_SUFFIX: Record<ToolCategory, string> = {
-  pickaxe: "_pickaxe",
-  axe: "_axe",
-  shovel: "_shovel",
-  hoe: "_hoe",
-  shears: "shears",
-};
-
-/** 工具类别 → 物品原生标签（minecraft:is_*，hasTag 主判） */
-const CATEGORY_ITEM_TAG: Record<ToolCategory, string> = {
-  pickaxe: "minecraft:is_pickaxe",
-  axe: "minecraft:is_axe",
-  shovel: "minecraft:is_shovel",
-  hoe: "minecraft:is_hoe",
-  shears: "minecraft:is_shears",
-};
-
-/** 近战武器类别与 typeId 后缀（按切换优先级：剑 → 斧 → 镐） */
-const WEAPON_SELECTIONS: ReadonlyArray<readonly [name: string, suffix: string]> = [
-  ["sword", "_sword"],
-  ["axe", "_axe"],
-  ["pickaxe", "_pickaxe"],
-];
-
 // ─── 物品元数据（静态） ────────────────────────────────
 
 export class InventoryService {
@@ -62,7 +38,7 @@ export class InventoryService {
 
   private constructor(
     private readonly player: Player,
-    container: Container,
+    container: Container
   ) {
     this.container = container;
   }
@@ -139,69 +115,25 @@ export class InventoryService {
   }
 
   /**
-   * 泛型扫描：按"类别谓词"过滤背包，取品质/耐久最优（跳过锁定与排除槽位）。
-   * @param category    物品类别谓词（如"是某类镐 / 是武器 / 带精准采集"）
-   * @param minTier     最低品质要求；低于该品质不可入选
+   * 泛型扫描：按"候选特征谓词"过滤背包（跳过锁定槽与排除槽位），返回候选列表。
+   * 谓词对 RankableCandidate 判定（达标/角色等），语义由调用方决定；保持槽位
+   * 升序返回，供选择引擎进一步排序。
+   * @param predicate   候选谓词（如 isMineCapable / 武器角色）
    * @param excludeSlot 排除的槽位（主手）
    */
-  private scanTools(
-    category: (item: ItemStack) => boolean,
-    minTier: number | undefined,
-    excludeSlot: number,
-  ): ToolCandidate | undefined {
-    let best: ToolCandidate | undefined;
+  scanCandidates(predicate: (c: RankableCandidate) => boolean, excludeSlot: number): RankableCandidate[] {
+    const out: RankableCandidate[] = [];
     for (let slot = 0; slot < this.container.size; slot++) {
       if (slot === excludeSlot) continue;
       const item = this.container.getItem(slot);
       if (!item) continue;
       if (item.lockMode === ItemLockMode.slot) continue; // 锁定槽不可移动
-      if (!category(item)) continue;
-      const tier = InventoryService.tierOf(item);
-      if (tier === undefined) continue;
-      if (minTier !== undefined && tier < minTier) continue; // 达不到要求，不可入选
-      const candidate: ToolCandidate = { slot, tier, durability: InventoryService.remainingDurability(item) };
-      if (!best || InventoryService.isBetter(candidate, best)) best = candidate;
+      const candidate = profile(item, slot);
+      if (candidate === undefined) continue; // 非工具/武器
+      if (!predicate(candidate)) continue;
+      out.push(candidate);
     }
-    return best;
-  }
-
-  /**
-   * 背包中满足指定"工具目标"（类别 + 可选最低品质/精准采集）的最优原版工具。
-   * 评分：品质优先、同品质比耐久；跳过锁定与排除槽位。
-   * @param target      工具目标（如"精准采集的锄头"）
-   * @param excludeSlot 排除的槽位（主手）
-   */
-  findByTarget(target: ToolTarget, excludeSlot: number): ToolCandidate | undefined {
-    return this.scanTools((item) => InventoryService.matchesTarget(item, target), undefined, excludeSlot);
-  }
-
-  /**
-   * 背包中带精准采集的最优原版工具（任意类别，跨类别按品质/耐久择优）。
-   * @param excludeSlot 排除的槽位（主手）
-   */
-  findSilkTouch(excludeSlot: number): ToolCandidate | undefined {
-    return this.scanTools(
-      (item) => InventoryService.isVanillaTool(item) && InventoryService.hasSilkTouch(item),
-      undefined,
-      excludeSlot,
-    );
-  }
-
-  /**
-   * 背包中按优先级（剑 → 斧 → 镐）取最优武器；
-   * 首个有货的类别里选品质/耐久最优，跳过锁定与排除槽位。
-   * @param excludeSlot 排除的槽位（主手）
-   */
-  findBestWeapon(excludeSlot: number): ToolCandidate | undefined {
-    for (const [, suffix] of WEAPON_SELECTIONS) {
-      const best = this.scanTools(
-        (item) => item.typeId.startsWith("minecraft:") && item.typeId.endsWith(suffix),
-        undefined,
-        excludeSlot,
-      );
-      if (best) return best;
-    }
-    return undefined;
+    return out;
   }
 
   /**
@@ -216,43 +148,7 @@ export class InventoryService {
 
   // ─── 物品元数据（静态工具方法） ────────────────────────
 
-  /**
-   * 物品是否属于该类别的原版工具。
-   * 主判物品原生标签（minecraft:is_pickaxe 等），typeId 后缀兜底——
-   * 无需维护物品列表，且能识别挂了对应标签的自定义工具。
-   */
-  static isVanillaToolOf(item: ItemStack, tool: ToolCategory): boolean {
-    const id = item.typeId;
-    const suffixOk =
-      tool === "shears" ? id === "minecraft:shears" : id.startsWith("minecraft:") && id.endsWith(CATEGORY_SUFFIX[tool]);
-    if (suffixOk) return true;
-    try {
-      return item.hasTag(CATEGORY_ITEM_TAG[tool]);
-    } catch {
-      return false;
-    }
-  }
-
-  /** 物品是否满足指定工具目标（类别 + 可选最低品质 + 可选精准采集） */
-  static matchesTarget(item: ItemStack, target: ToolTarget): boolean {
-    if (!InventoryService.isVanillaToolOf(item, target.category)) return false;
-    if (target.minTier !== undefined) {
-      const tier = InventoryService.tierOf(item);
-      if (tier === undefined || tier < target.minTier) return false;
-    }
-    if (target.silk && !InventoryService.hasSilkTouch(item)) return false;
-    return true;
-  }
-
-  /** 是否为任意类别的原版挖掘工具（镐/斧/锹/锄/剪刀） */
-  static isVanillaTool(item: ItemStack): boolean {
-    const id = item.typeId;
-    if (!id.startsWith("minecraft:")) return false;
-    if (id === "minecraft:shears") return true;
-    return ["_pickaxe", "_axe", "_shovel", "_hoe"].some((suffix) => id.endsWith(suffix));
-  }
-
-  /** 是否已持近战武器（剑/斧/镐/三叉戟 或 弓弩）。用于"已持武器则不切换"。 */
+  /** 是否已持近战武器（剑/斧/镐/重锤/三叉戟 或 弓弩）。用于"已持武器则不切换"。 */
   static isWeapon(item: ItemStack): boolean {
     const id = item.typeId;
     if (!id.startsWith("minecraft:")) return false;
@@ -260,6 +156,7 @@ export class InventoryService {
       id.endsWith("_sword") ||
       id.endsWith("_axe") ||
       id.endsWith("_pickaxe") ||
+      id === "minecraft:mace" ||
       id === "minecraft:trident" ||
       id === "minecraft:bow" ||
       id === "minecraft:crossbow"
@@ -280,6 +177,15 @@ export class InventoryService {
     return durability.maxDurability - durability.damage;
   }
 
+  /** 最大耐久；无耐久组件视为 0 */
+  static maxDurability(item: ItemStack): number {
+    try {
+      return item.getComponent("minecraft:durability")?.maxDurability ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
   /** 是否带精准采集附魔（minecraft:enchantable 组件查询） */
   static hasSilkTouch(item: ItemStack): boolean {
     try {
@@ -287,10 +193,5 @@ export class InventoryService {
     } catch {
       return false;
     }
-  }
-
-  /** 是否严格优于参考方：品质更高，或同品质更耐久 */
-  static isBetter(a: ToolCandidate, b: Pick<ToolCandidate, "tier" | "durability">): boolean {
-    return a.tier > b.tier || (a.tier === b.tier && a.durability > b.durability);
   }
 }
