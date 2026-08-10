@@ -1,20 +1,19 @@
 // ─── 实体种类武器偏好表（武器域扩展入口，纯数据，零 @minecraft 依赖） ──
-// 为"被攻击的实体种类"覆盖默认武器选择：这是表达
-//   "打亡灵生物 → 优先亡灵杀手等级最高的武器，其次锋利，最后默认规则"
-// 这类偏好的唯一入口。
-// 每个 `EntityWeaponRule`：match 命中被攻击实体的 typeId → 用该偏好（策略 +
-// 纵向 fallback 链，缺省落到 weapon 默认策略）在该武器域决策。
-// 策略本身在 ToolScorer 注册（smite / sharpness / weapon 等）。
+// 为"被攻击的实体种类"覆盖默认武器选择：两级偏好（附魔 1 级 + 工具 2 级）
+//   "打亡灵 → 亡灵杀手>锋利（附魔 1 级），同附魔下剑>斧（工具 2 级）"
+//   "打其它 → 锋利优先（附魔 1 级），同附魔下剑>斧（工具 2 级）"
+// 每行产出 PreferenceSpec，由 ToolScorer.preferenceScorer 排序；表达不了（无亡灵/锋利）
+// → 该策略内按工具链排序（剑>斧），与 weapon 默认兜底同语义。区别于挖掘域（strict）：
+// 武器域不 strict——没有附魔只是"赢不了附魔候选"，仍按工具偏好选最优。
 // 与 MinePreference（方块偏好）并列，同走 ToolSelector 决策引擎。
 
-import { type StrategyPref } from "./types";
+import { type PreferenceSpec } from "./types";
 
-/** 实体种类武器偏好规则 */
+/** 实体种类武器偏好规则：match 命中被攻击实体的 typeId → 按该两级偏好决策 */
 interface EntityWeaponRule {
   readonly name: string;
-  /** 命中判定：被攻击实体 typeId 是否属于本规则管辖 */
   readonly match: (entityTypeId: string) => boolean;
-  readonly pref: StrategyPref;
+  readonly pref: PreferenceSpec;
 }
 
 /** 亡灵（undead）种类：亡灵杀手附魔对这些怪生效（含僵尸马/骷髅马等含关键词的马） */
@@ -35,18 +34,38 @@ function isUndead(entityTypeId: string): boolean {
 
 /**
  * 实体种类偏好注册表（按数组顺序，首个命中者胜出）。
- * 亡灵 → 亡灵杀手优先（smite 最高者），无亡灵杀手 → 锋利最高者，最后默认规则。
- * 需要新增偏好（如"猪人 → 时运?"）时在此追加一条即可；策略本身写在 ToolScorer。
+ * 亡灵 → 亡灵杀手优先，其次锋利（附魔 1 级）；其它 → 锋利优先（附魔 1 级）；
+ * 工具 2 级统一 剑>斧>其它。需要新增偏好（如"猪人 → 下界合金?"）时在
+ * 此追加一条即可；排序维度由 preferenceScorer 组合，无需注册新策略。
  */
 const ENTITY_WEAPON_TABLE: readonly EntityWeaponRule[] = [
-  { name: "undead-smite", match: isUndead, pref: { strategy: "smite", fallbackChain: ["sharpness"] } },
+  {
+    name: "undead-smite",
+    match: isUndead,
+    pref: {
+      name: "undead-smite",
+      enchantChain: ["smite", "sharpness"], // 附魔 1 级：亡灵杀手最高，其次锋利
+      toolChain: ["sword", "axe", "*"], //     工具 2 级：剑>斧>其它武器
+      fallback: "weapon",
+    },
+  },
+  {
+    name: "sharpness-general",
+    match: () => true, // 所有非亡灵实体：锋利武器优先（附魔 1 级），剑>斧（工具 2 级）
+    pref: {
+      name: "sharpness-general",
+      enchantChain: ["sharpness"],
+      toolChain: ["sword", "axe", "*"],
+      fallback: "weapon",
+    },
+  },
 ];
 
 /**
- * 查被攻击实体的武器偏好；未命中返回 undefined（用默认武器策略）。
+ * 查被攻击实体的武器偏好（两级偏好规格）；本表必有任意规则命中（sharpness-general）。
  * @param entityTypeId 被攻击实体的 typeId（如 minecraft:zombie）
  */
-export function lookupWeaponStrategy(entityTypeId: string): StrategyPref | undefined {
+export function lookupWeaponStrategy(entityTypeId: string): PreferenceSpec | undefined {
   const rule = ENTITY_WEAPON_TABLE.find((r) => r.match(entityTypeId));
   return rule?.pref;
 }

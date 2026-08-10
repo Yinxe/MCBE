@@ -19,6 +19,8 @@ export interface AutoRefillSettings {
   durabilityProtectEnabled: boolean;
   /** 耐久保护替换阈值：剩余耐久占比低于该值（0..1）视为紧急 */
   durabilityThreshold: number;
+  /** 耐久保护绝对下限：剩余耐久低于该值（不论占比）也视为紧急，兜住低耐久上限工具 */
+  durabilityFloor: number;
 }
 
 const DP_GLOBAL = "autorefill:global";
@@ -27,10 +29,15 @@ const DP_WEAPON = "autorefill:weapon";
 const DP_TOOL = "autorefill:tool";
 const DP_DURABILITY = "autorefill:durability";
 const DP_DURABILITY_THRESHOLD = "autorefill:durabilityThreshold";
+const DP_DURABILITY_FLOOR = "autorefill:durabilityFloor";
 
 /** 耐久保护阈值取值范围（占比） */
 export const DURABILITY_THRESHOLD_MIN = 0.01;
 export const DURABILITY_THRESHOLD_MAX = 0.5;
+
+/** 耐久保护绝对下限取值范围（剩余耐久点数） */
+export const DURABILITY_FLOOR_MIN = 1;
+export const DURABILITY_FLOOR_MAX = 64;
 
 const DEFAULTS: AutoRefillSettings = {
   globalEnabled: true,
@@ -39,6 +46,7 @@ const DEFAULTS: AutoRefillSettings = {
   toolSwapEnabled: true,
   durabilityProtectEnabled: true,
   durabilityThreshold: 0.1,
+  durabilityFloor: 16,
 };
 
 /** 布尔开关字段（toggle 可写的快照字段集合） */
@@ -70,6 +78,7 @@ export class SettingsService {
   load(): void {
     try {
       const threshold = world.getDynamicProperty(DP_DURABILITY_THRESHOLD);
+      const floor = world.getDynamicProperty(DP_DURABILITY_FLOOR);
       this.s = {
         globalEnabled: world.getDynamicProperty(DP_GLOBAL) !== false,
         refillEnabled: world.getDynamicProperty(DP_REFILL) !== false,
@@ -78,6 +87,7 @@ export class SettingsService {
         durabilityProtectEnabled: world.getDynamicProperty(DP_DURABILITY) !== false,
         durabilityThreshold:
           typeof threshold === "number" && threshold > 0 ? clamp(threshold) : DEFAULTS.durabilityThreshold,
+        durabilityFloor: typeof floor === "number" && floor > 0 ? clampFloor(floor) : DEFAULTS.durabilityFloor,
       };
     } catch {
       // DP 读取失败（世界未完全加载）→ 保持默认全开
@@ -136,9 +146,32 @@ export class SettingsService {
       // 落盘失败不影响内存状态
     }
   }
+
+  /** 当前耐久保护绝对下限（剩余耐久点数；与占比阈值折算取较大值生效） */
+  durabilityFloor(): number {
+    return this.s.durabilityFloor;
+  }
+
+  /**
+   * 设置耐久保护绝对下限并落盘（收敛到 [FLOOR_MIN, FLOOR_MAX]）。
+   * @param floor 剩余耐久点数下限（如 16：石镐还剩 16 点耐久就提前收起）
+   */
+  setDurabilityFloor(floor: number): void {
+    this.s.durabilityFloor = clampFloor(floor);
+    try {
+      world.setDynamicProperty(DP_DURABILITY_FLOOR, this.s.durabilityFloor);
+    } catch {
+      // 落盘失败不影响内存状态
+    }
+  }
 }
 
 /** 收敛阈值占比到合法区间 */
 function clamp(ratio: number): number {
   return Math.min(DURABILITY_THRESHOLD_MAX, Math.max(DURABILITY_THRESHOLD_MIN, ratio));
+}
+
+/** 收敛绝对下限到合法区间 */
+function clampFloor(floor: number): number {
+  return Math.min(DURABILITY_FLOOR_MAX, Math.max(DURABILITY_FLOOR_MIN, Math.round(floor)));
 }

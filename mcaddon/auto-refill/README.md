@@ -7,52 +7,57 @@ Minecraft Bedrock「自动替换」Add-On，行为包（TypeScript + Script API�
 ## 功能
 
 - **自动补充消耗品** — 生存/冒险模式下，主手物品被消耗（食物、药水、弓/弩/三叉戟射击等）后，自动从背包查找同 `typeId` 物品替换到主手
-- **自动切换挖掘工具** — 开始挖掘方块时，识别方块所需工具类别（镐/斧/锹/锄/剪刀，`BlockClassifier` 四层启发式），从**能力候选池**按策略排序换入正确工具。默认**省耐久不择优**（主手已用对工具则不动，尊重玩家用铁镐省钻石镐耐久的自主选择）；每个方块可通过**方块偏好表**指定其它策略（品质/耐久/精准采集/效率……），完全可扩展
-- **自动切换武器** — 攻击实体时，若主手**不是武器**则按**被攻击实体种类偏好**换入武器：默认剑 → 斧 → 重锤/三叉戟；打亡灵生物优先换入背包**亡灵杀手等级最高**的武器，其次**锋利**等级最高，最后默认规则；**已持任意武器（含弓弩/三叉戟/重锤）一律不动**
+- **自动切换挖掘工具** — 开始挖掘方块时，识别方块所需工具类别（镐/斧/锹/锄/剪刀，`BlockClassifier` 四层启发式），从**能力候选池**按策略排序换入正确工具。默认**省耐久不择优**（主手已用对工具则不动，尊重玩家用铁镐省钻石镐耐久的自主选择）；每个方块可通过**方块偏好表**叠加**两级偏好（附魔 1 级 + 工具 2 级）**，完全可扩展
+- **自动切换武器** — 攻击实体时，若主手**不是武器**则按**被攻击实体种类偏好**换入武器，**附魔 1 级优先**（亡灵 → 亡灵杀手最高、其次锋利；其它实体 → 锋利最高）、**工具 2 级优先**（同附魔下 剑→斧→其它武器）；**已持任意武器（含弓弩/三叉戟/重锤）一律不动**
 - **自动换精准采集工具** — 挖掘玻璃/玻璃片/冰/萤石/海晶灯等不用精准采集就无法产出方块本体的方块时，自动换上任意带精准采集（Silk Touch）的工具
-- **耐久保护（可开关）** — 工具/武器被使用后耐久低于阈值（占比 + 绝对下限）时，**未碎也提前收起**，替换背包中同类别、更耐久的同类工具；旧工具带精准采集 → 优先换同样带精准采集的同款；无合格同类则不动（绝不降级）
+- **耐久保护（可开关）** — 工具/武器被使用后耐久低于阈值时，**未碎也提前收起**，替换背包中同类别、更耐久的同类工具；阈值支持**剩余占比（%）+ 剩余点数绝对下限**两个维度（取较大的生效），且可**配置**；旧工具带精准采集 → 优先换同样带精准采集的同款；无合格同类则不动（**绝不降级**）
 - **替换音效** — 每次成功替换播放 `random.pop` 音效，给出即时反馈
 - **模式守卫** — 仅生存/冒险模式生效，创造/旁观/假人不触发
-- **管理员配置（ModalForm 一键保存）** — 命令 `/ar:menu`（仅**操作员**）打开配置表单：全局/物品补充/武器替换/工具替换/耐久保护五个开关 + 耐久保护阈值滑条，一次调整、提交保存，持久化到世界（重启不变）
+- **管理员配置（ModalForm 一键保存）** — 命令 `/ar:menu`（仅**操作员**）打开配置表单：五个开关 + 耐久保护阈值滑条（占比）与绝对下限滑条（点数），一次调整、提交保存，持久化到世界（重启不变）
 
 ## 管理员配置
 
-命令 `/ar:menu`（`CommandPermissionLevel.GameDirectors`，仅操作员）打开 **ModalForm**：每个开关一个 toggle（显示当前状态），耐久保护阈值一个滑条（1%~50%），提交时一次性应用并保存：
+命令 `/ar:menu`（`CommandPermissionLevel.GameDirectors`，仅操作员）打开 **ModalForm**：每个开关一个 toggle（显示当前状态），耐久保护阈值两个滑条（占比 / 绝对下限点数），提交时一次性应用并保存：
 
 | 项 | 控制 |
 |---|---|
 | 全局启用 | 总开关，关闭则所有功能不执行 |
 | 物品补充 | 消耗品补货（使用后主手 `undefined` / 副作用残留 → 换同类 + 堆叠回收） |
-| 武器替换 | 攻击实体时非武器主手换武器（默认剑→斧→重锤/三叉戟，亡灵偏好亡灵杀手） |
+| 武器替换 | 攻击实体时非武器主手换武器（附魔 1 级：亡灵亡灵杀手>锋利 / 其它锋利；工具 2 级：剑>斧>其它） |
 | 工具替换 | 挖掘工具核对换入 + 工具破碎换同类 |
 | 耐久保护 | 工具低耐久未碎也提前收起换同类（影响替代阈值） |
-| 保护阈值 | 剩余耐久占比低于该值（点开滑条调整，默认 10%） |
+| 保护阈值 | 剩余耐久占比低于该值即替换（滑条 1%~50%，默认 10%） |
+| 绝对下限 | 剩余耐久点数低于该值即替换（滑条 1~64，默认 16；与占比阈值取较大的生效） |
 
-开关存世界动态属性（键 `autorefill:global/refill/weapon/tool/durability/durabilityThreshold`），重启世界保持。
+开关与两个阈值存世界动态属性（键 `autorefill:global/refill/weapon/tool/durability/durabilityThreshold/durabilityFloor`），重启世界保持。
 
 ## 架构
 
 按「**评分选择引擎（纯逻辑）+ 两个核心功能域 + 主手状态判定**」构建：
-- **工具/武器选择引擎**（`ToolScorer` + `MinePreference` + `WeaponPreference`）：把"这块/这刀用什么、或要不要换"建模为**候选特征向量 → 策略打分排序 → Keep/Swap 决策**，策略可注册、可按方块/实体种类绑定，带双层 fallback
+- **工具/武器选择引擎**（`ToolScorer` + `MinePreference` + `WeaponPreference`）：把"这块/这刀用什么、或要不要换"建模为**候选特征向量 → 策略打分排序 → Keep/Swap 决策**。命名策略可注册，更可**按方块/实体种类绑定两级偏好（`PreferenceSpec`：附魔 1 级 + 工具 2 级，越靠前越优先）**，统一由 `preferenceScorer` 排序，带双层 fallback
 - **工具切换/耐久保护**（`ToolManager`）：`entityHitBlock` / `entityHitEntity` / `playerBreakBlock` 触发
 - **自动填充**（`RefillManager`）：使用/交互事件触发，按**使用后主手状态**决定是否补货
 
 ```
 scripts/
 ├── main.ts             组装根：只订阅事件 → PlayerPolicy 守卫 → 按事件路由到领域服务（无业务逻辑）
-├── types.ts            领域类型：ToolCategory/WeaponClass / ToolRequirement / RankableCandidate / RankContext / RankDecision
+├── types.ts            领域类型：ToolCategory/WeaponClass / ToolRequirement / RankableCandidate /
+│                        RankContext / RankDecision / PreferenceSpec（两级偏好）/ EnchantKey / ToolKey
 ├── ItemDomain.ts        物品域判定：resolve(typeId) → 'tool' | 'consumable'（补货的消耗分支兜底守卫）
 ├── PlayerPolicy.ts      玩家守卫：真实玩家 + 生存/冒险模式
 ├── Inventory.ts         背包端口（Port & Adapter）：唯一封装 Container I/O + 候选泛型扫描 scanCandidates
 ├── ToolProfile.ts       特征提取（Adapter）：ItemStack → RankableCandidate（品质/耐久/占比/附魔）
 ├── BlockClassifier.ts   方块识别（Strategy 表驱动）：tag 优先 + 关键词兜底 + 精准采集标记
 ├── ToolScorer.ts        评分选择引擎（纯逻辑，零 @minecraft 依赖，可 node 单测）：
-│                        roleOf / matchesTargetProfile / isMineCapable / 各内置策略 /
+│                        roleOf / matchesTargetProfile / isMineCapable（跨类别附魔池 / 排除角色）/
+│                        preferenceScorer（附魔 1 级 + 工具 2 级组合排序）/ 命名策略 /
 │                        ToolSelector 决策（双层 fallback）/ isUrgent / buildReplacePool
-├── MinePreference.ts    方块偏好表（纯逻辑）：按方块 typeId 指定选择策略（如草方块→精准采集优先）
-├── WeaponPreference.ts  实体种类偏好表（纯逻辑）：按被攻击实体 typeId 指定武器策略（如亡灵→亡灵杀手优先）
+├── MinePreference.ts    方块偏好表（纯逻辑）：按方块 typeId 绑定两级偏好
+│                        （如农作物→时运优先、树叶→精准锄>剪；附魔 1 级 + 工具 2 级）
+├── WeaponPreference.ts  实体种类偏好表（纯逻辑）：按被攻击实体 typeId 绑定武器两级偏好
+│                        （亡灵→亡灵杀手>锋利；其它→锋利；同附魔下 剑>斧）
 ├── ToolManager.ts       工具领域服务（Facade）：挖掘核对 / 武器切换 / 耐久保护 / 工具破碎换同类
-├── Settings.ts          全局配置：五项开关 + 耐久保护阈值 + 世界 DP 持久化
+├── Settings.ts          全局配置：五项开关 + 耐久保护两个阈值（占比/绝对下限）+ 世界 DP 持久化
 ├── AdminMenu.ts         管理员菜单（ModalFormData 一键配置）
 └── RefillManager.ts     消耗品领域服务（Facade）：按主手状态补货 + 副作用堆叠
 ```
@@ -74,40 +79,43 @@ scripts/
 
 - **候选特征**（`RankableCandidate`）：槽位 / typeId / 角色（工具类别或武器类别）/ 品质 `tier` / 剩余耐久 / 剩余占比 / 精准采集 `silk` / 效率 / 时运 / 亡灵杀手 / 锋利。
 - **策略**（`CandidateScorer.rank(cands, ctx) → 排序列表 | null`）：策略只出"偏好排序"，`null` = 表达不了偏好 → 交给 fallback。
-  - **挖掘域**：`frugal`(默认·省耐久不择优，等价旧 SilkTouch+Category) / `quality`(品质优先，会升级) / `durability`(耐久优先) / `silk`(精准采集优先) / `efficiency`(效率优先) / `priority`(目标优先级序列)
-  - **武器域**：`weapon`(默认 剑→斧→重锤/三叉戟) / `smite`(亡灵杀手优先) / `sharpness`(锋利优先)
-- **决策**（`ToolSelector.decide`）：当前主手若达标则以 `isCurrent` 伪候选入池——策略把它排第 0 就 Keep，排后面就 Swap（`frugal` 给主手特权→不升级；`quality` 不给→背包有更好的就升级）。`pool` 为空（无适用工具）→ 保持。
-- **双层 fallback**：垂直（策略未注册/抛错）→ 跳过；横向（如 `silk` 策略但没人带精准工具 → rank 返回 null）→ 走下一条；链尾落到默认策略；默认也表达不了 → 保持。
+  - **命名策略**：挖掘域 `frugal`(默认·省耐久不择优，等价旧 SilkTouch+Category) / `quality`(品质优先) / `durability`(耐久占比优先) / `priority`(目标优先级序列)；武器域 `weapon`(默认 剑→斧→重锤/三叉戟)
+  - **两级偏好（组合策略 `preferenceScorer`）**：`PreferenceSpec` = 附魔链 `enchantChain`（**1 级优先**，越靠前越优先，同键等级越高越优先）+ 工具链 `toolChain`（**2 级优先**，越靠前越优先，`*` 兜底任意角色）；排序 = 附魔元组字典序 → 工具角色位置 → 品质/耐久。方块/实体偏好表都产出 `PreferenceSpec`，同一套引擎管挖掘/武器两域。扩展位：`strict`（无候选命中附魔 → 表达不了 → fallback）、`exclude`（排除角色，如农作物排除时运锹）、`crossEnchant`（候选池跨类别：命中任一附魔的任意工具入池，如树叶的任意精准工具）、`tieBreak: "durability"`（打平按耐久占比）
+- **决策**（`ToolSelector.decide`）：当前主手若达标则以 `isCurrent` 伪候选入池——策略把它排第 0 就 Keep，排后面就 Swap（`frugal` 给主手特权→不升级；`quality`/两级偏好不给→背包有更好的就升级）。`pool` 为空（无适用工具）→ 保持。
+- **双层 fallback**：垂直（策略未注册/抛错）→ 跳过；横向（rank 返回 `null`，如 `strict` 附魔偏好但没人带精准工具）→ 走下一条；链尾落到默认策略；默认也表达不了 → 保持。
 
 ### 策略扩展（方块 / 实体偏好表）
 
-新增偏好 = 往表里加一行；新增策略 = 在 `ToolScorer` 注册一个 `CandidateScorer`。均不碰分类/执行代码：
+新增偏好 = 往表里加一行（写成 `PreferenceSpec`）；新增排序维度 = 在 `ToolScorer` 的组合位扩展。均不碰分类/执行代码：
 
 - **方块偏好表**（`MinePreference.PREFERENCE_TABLE`，已是多行数据表）：
 
-| 规则 | 命中 | 策略 |
+| 规则 | 命中 | 两级偏好（附魔 1 级 → 工具 2 级） |
 |---|---|---|
-| `grass-silk` | 草方块 / 灰化土 / 菌丝 | `silk`（保方块本体，无带精准工具时 fallback 回默认） |
-| `leaves-silk` | `*_leaves` 树叶 | `silk`（完整产出树叶方块） |
-| *(注释示例)* `ore-quality` | `_ore` / 下界合金块 | `quality`（挖矿自动升级最高品质镐） |
-| *(注释示例)* `durability-first` | 石头 / 深板岩 | `durability`（大量挖掘省换工具） |
+| `crop-fortune` | 小麦 / 胡萝卜 / 马铃薯 / 甜菜根 | 时运（锄>其它，**排除锹**；无时运 → 回落默认） |
+| `grass-silk` | 草方块 / 灰化土 / 菌丝 | 精准（锹>其它） |
+| `leaves-silk` | `*_leaves` 树叶 | 精准（锄>剪>任意精准工具，跨类别） |
+| `glass-silk` | 玻璃 / 冰 / 萤石 / 海晶灯 | 精准（镐>其它） |
+| *(注释示例)* `ore-quality` | `_ore` / 下界合金块 | 无附魔偏好；只收镐、同镐内品质优先 |
+| *(注释示例)* `durability-first` | 石头 / 深板岩 | 无附魔偏好；只收镐/锹、打平按耐久占比 |
 
 - **实体种类偏好表**（`WeaponPreference.ENTITY_WEAPON_TABLE`）：
 
-| 规则 | 命中 | 策略（纵向 fallback） |
+| 规则 | 命中 | 两级偏好（附魔 1 级 → 工具 2 级） |
 |---|---|---|
-| `undead-smite` | 亡灵（僵尸/骷髅/凋零/幻翼/猪人变异者…） | `smite` → `sharpness` → 默认 `weapon` |
+| `undead-smite` | 亡灵（僵尸/骷髅/凋零/幻翼/猪人变异者…） | 亡灵杀手>锋利；剑>斧>其它 |
+| `sharpness-general` | 其它所有实体 | 锋利；剑>斧>其它 |
 
 ### 挖掘工具切换（`ToolManager.onPlayerHitBlock`）
 
 由 `entityHitBlock` 触发（命中即换，无需给工具挂自定义组件）。流程：
 
 1. 主手锁定/自定义 → 尊重不动
-2. `classify(block)` 识别（四层：瞬破排除 → 现代挖掘标签 `is_*_item_destructible` + 镐最低品质 → 遗留标签 → 关键词）＋ `wantsSilkTouch` 标记；由 `scanCandidates` 建**能力候选池**（达标且可换）
-3. `lookupMineStrategy(block.typeId)` 取方块偏好（无则默认 `frugal`）
-4. `ToolSelector.decide` 出 Keep/Swap，`execute` 统一执行 + pop 音效
+2. `classify(block)` 识别（四层：瞬破排除 → 现代挖掘标签 `is_*_item_destructible` + 镐最低品质 → 遗留标签 → 关键词）＋ `wantsSilkTouch` 标记；`lookupMineStrategy(block.typeId)` 取方块两级偏好（无则默认 `frugal`）
+3. 按「类别 + 偏好」建**能力候选池**：默认扫能力类别（镐/斧/锹/锄/剪）；方块偏好 `crossEnchant` 时额外把在线命中附魔的任意工具入池（如树叶的任意精准工具、农作物的时运工具）；`exclude` 角色（如时运锹）永不入池
+4. `ToolSelector.decide`（`preferenceScorer`：附魔 1 级 → 工具 2 级 → 品质/耐久）出 Keep/Swap，`execute` 统一执行 + pop 音效
 
-> **默认省耐久**：`frugal` 把已达标的当前主手排第 0 → 一律保持、不择优升级（尊重玩家省钻石镐耐久）。想升级就用 `quality` 等偏好。"无适用工具"（能力池为空）→ 保持。
+> **默认省耐久**：无偏好的方块走 `frugal`，把已达标的当前主手排第 0 → 一律保持、不择优升级（尊重玩家省钻石镐耐久）。绑定了 `PreferenceSpec` 的方块按"附魔 1 级 → 工具 2 级"择优（同一优先维内会升级到更优的偏好工具）。"无适用工具"（能力池为空）→ 保持。
 
 ### 武器切换（`ToolManager.onAttackEntity`）
 
@@ -115,12 +123,15 @@ scripts/
 
 1. 主手锁定/自定义 → 尊重不动
 2. **已持任意武器**（剑/斧/镐/重锤/三叉戟/弓弩）→ 不动
-3. 空手/非武器主手 → 从**武器库**（剑/斧/重锤/三叉戟）建池，按**被攻击实体偏好**决策：亡灵 → `smite` 最高者优先 → 无则 `sharpness` 最高者 → 无则默认 `weapon`（剑→斧→重锤/三叉戟，组内品质/耐久）
+3. 空手/非武器主手 → 从**武器库**（剑/斧/重锤/三叉戟）建池，按**被攻击实体种类偏好**决策（`preferenceScorer`）：
+   - **亡灵** → 附魔 1 级：亡灵杀手最高 → 其次锋利最高；工具 2 级：剑→斧→其它
+   - **其它实体** → 附魔 1 级：锋利最高；工具 2 级：剑→斧→其它
+   - 全场无附魔 → 落到工具 2 级（剑优先），与默认 `weapon` 兜底一致
 
 ### 耐久保护（`ToolManager.checkDurability`，独立开关）
 
 1. 每次使用工具后（`playerBreakBlock` / `entityHitEntity` 尾部）读主手耐久
-2. 低于阈值（剩余占比 < 设置阈值，或绝对剩余 < 16）→ 提前触发替换
+2. **达到紧急** → 提前触发替换：紧急判定为「剩余占比 < 设置阈值 **或** 剩余点数 < 设置的绝对下限」（两路取较大的剩余地即触发，兜住低耐久上限的工具如木制低耐久）；两个阈值都可在 `/ar:menu` 调整
 3. 替换池 = 背包**同 role** 候选，且**严格更耐久 (remaining 更大) + 占比达标**；排序 同 typeId → 同精准采集属性 → 品质 → 耐久（**旧带精准 → 优先带精准的同款**）
 4. 无合格候选 → 保持不动，绝不降级
 
@@ -172,7 +183,7 @@ pnpm run clean         # 清理构建产物
 
 ### 测试
 
-- **纯逻辑层**（`ToolScorer` / `MinePreference` / `WeaponPreference`）零 `@minecraft` 依赖，`tsconfig.test.json` 单独编译进 `node --test`（镜像 item-route 机制），覆盖：角色判定 / 达标判定 / 各内置策略排序 / 双层 fallback / 无适用→保持 / 耐久替换池规则。文件在 `tests/*.test.ts`。
+- **纯逻辑层**（`ToolScorer` / `MinePreference` / `WeaponPreference`）零 `@minecraft` 依赖，`tsconfig.test.json` 单独编译进 `node --test`（镜像 item-route 机制），覆盖：角色判定 / 达标判定 / 命名策略排序 / **两级偏好组合（附魔 1 级 + 工具 2 级字典序、strict 无命中→fallback、exclude 排除角色、crossEnchant 跨类别入池、tieBreak）** / 双层 fallback / 无适用→保持 / 耐久替换池规则。文件在 `tests/*.test.ts`（45 项）。
 - **适配层**（分类器、背包、UI、接线）靠游戏内冒烟验证。
 
 ### 打包产物

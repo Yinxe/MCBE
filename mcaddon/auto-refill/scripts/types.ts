@@ -83,8 +83,40 @@ export interface RankContext {
 /** 决策结果：保持 / 换成指定槽位（log 为给玩家看的中文文案） */
 export type RankDecision = { action: "keep"; log: string } | { action: "swap"; slot: number; log: string };
 
-/** 方块偏好：为指定方块选用的策略名 + 纵向 fallback 链（缺省落到默认策略） */
-export interface StrategyPref {
-  strategy: string;
-  fallbackChain?: readonly string[];
+/** 附魔键（1 级偏好维度）：对应 RankableCandidate 上的附魔字段 */
+export type EnchantKey = "silk" | "fortune" | "efficiency" | "smite" | "sharpness";
+
+/** 工具角色键（2 级偏好维度）：“*”= 任意角色 */
+export type ToolKey = ToolCategory | WeaponClass | "*";
+
+/**
+ * 两级偏好策略（附魔 1 级优先 + 工具 2 级优先）——表达"面对某个 方块/实体，
+ * 我希望用带什么附魔、什么类别的工具"的唯一入口。正好对应需求模型
+ * `f(typeId) -> { 候选工具列表(=toolChain), 附魔推荐(=enchantChain) }`：越靠前越推荐。
+ *
+ * 语义：先按“附魔元组（enchantChain 逐键等级，首位优先）”字典序降序，再按
+ * “工具角色在 toolChain 中的位置（越靠前越优先，'*' 兜底任意，未列按链尾）”，
+ * 最后品质/耐久占比。横向 fallback 仍走 ToolSelector 双层：strict 且无候选命中
+ * 任一附魔 → 本策略表达不了 → 交给预置默认策略（挖掘 frugal / 武器 weapon）。
+ */
+export interface PreferenceSpec {
+  /** 规则名（日志/调试用） */
+  readonly name: string;
+  /** 附魔键链（1 级优先）：越靠前越优先；同键内等级越高越优先；空 = 无附魔偏好 */
+  readonly enchantChain: readonly EnchantKey[];
+  /** 工具角色链（2 级优先）：越靠前越优先；“*”兜底任意角色；未列角色按链尾 */
+  readonly toolChain: readonly ToolKey[];
+  /** strict：附魔链非空且无候选命中任一附魔 → 本策略表达不了 → 交给 fallback（如树叶无带精准刀具） */
+  readonly strict?: boolean;
+  /** 排除的工具角色（如农作物时运优先时排除时运锹），命中的候选不入池 */
+  readonly exclude?: readonly ToolKey[];
+  /** crossEnchant：候选池跨类别——命中任一附魔的任意工具即可入池（如树叶/玻璃的任意精准采集工具） */
+  readonly crossEnchant?: boolean;
+  /** 工具/附魔都打平后的最终 tie-break：tier（品质优先）/ durability（耐久占比优先）；默认 tier */
+  readonly tieBreak?: "tier" | "durability";
+  /** 本策略表达不了时的兜底策略名；缺省由决策域决定（挖掘 frugal / 武器 weapon） */
+  fallback?: string;
 }
+
+/** 决策偏好：命名策略（注册表查，如 "frugal"）或两级偏好规格 */
+export type RankPreference = string | PreferenceSpec;

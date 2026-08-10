@@ -30,21 +30,26 @@ function openMenu(player: Player, settings: SettingsService): void {
     .toggle("武器替换（攻击时换正确武器）", { defaultValue: s.weaponSwapEnabled })
     .toggle("工具替换（挖掘换正确工具）", { defaultValue: s.toolSwapEnabled })
     .toggle("耐久保护（低耐久提前收起同类）", { defaultValue: s.durabilityProtectEnabled })
-    .slider("耐久保护阈值：剩余占比低于该值即替换同类", 1, 50, {
+    .slider("耐久保护阈值：剩余占比低于该值即替换同类（%）", 1, 50, {
       defaultValue: Math.round(s.durabilityThreshold * 100),
+      valueStep: 1,
+    })
+    .slider("耐久保护绝对下限：剩余耐久低于该值也替换同类", 1, 64, {
+      defaultValue: s.durabilityFloor,
       valueStep: 1,
     })
     .submitButton("§a保存");
 
   form.show(player).then((response) => {
     if (response.canceled || response.formValues === undefined) return;
-    const [global, refill, weapon, tool, durability, thresholdPct] = response.formValues;
+    const [global, refill, weapon, tool, durability, thresholdPct, floor] = response.formValues;
     settings.setFeature("global", global === true);
     settings.setFeature("refill", refill === true);
     settings.setFeature("weapon", weapon === true);
     settings.setFeature("tool", tool === true);
     settings.setFeature("durability", durability === true);
     if (typeof thresholdPct === "number") settings.setDurabilityThreshold(thresholdPct / 100);
+    if (typeof floor === "number") settings.setDurabilityFloor(floor);
     player.sendMessage("§a已保存「自动替换」配置");
   });
 }

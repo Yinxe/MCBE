@@ -12,7 +12,7 @@
 import { type Block, type Player } from "@minecraft/server";
 import { InventoryService } from "./Inventory";
 import { buildReplacePool, isMineCapable, isUrgent, ToolSelector } from "./ToolScorer";
-import { type RankableCandidate, type RankContext, type RankDecision } from "./types";
+import { type PreferenceSpec, type RankableCandidate, type RankContext, type RankDecision } from "./types";
 import { profile } from "./ToolProfile";
 import { classify, wantsSilkTouch } from "./BlockClassifier";
 import { lookupMineStrategy } from "./MinePreference";
@@ -56,8 +56,9 @@ export class ToolManager {
     }
     const requirement = classify(block);
     const wantsSilk = wantsSilkTouch(block);
+    const pref = lookupMineStrategy(block.typeId); // 方块的两级偏好（如农作物→时运 / 树叶→精准锄>剪）
     const current = mainhand ? profile(mainhand, inv.mainhandSlot(), true) : undefined;
-    const pool = this.buildMinePool(inv, requirement, wantsSilk, current);
+    const pool = this.buildMinePool(inv, requirement, wantsSilk, pref, current);
     const ctx: RankContext = {
       playerName: player.name,
       blockTypeId: block.typeId,
@@ -65,7 +66,7 @@ export class ToolManager {
       wantsSilk,
       domain: "mine",
     };
-    const decision = this.minerSelector.decide(pool, ctx, lookupMineStrategy(block.typeId));
+    const decision = this.minerSelector.decide(pool, ctx, pref);
     this.execute(player, inv, decision);
   }
 
@@ -129,7 +130,8 @@ export class ToolManager {
     const current = profile(mainhand, inv.mainhandSlot());
     if (!current) return;
     const threshold = this.settings.durabilityThreshold();
-    if (!isUrgent(current, threshold)) return; // 还健康 → 不动
+    const floor = this.settings.durabilityFloor(); // 绝对下限（占比阈值折算与它取较大值生效）
+    if (!isUrgent(current, threshold, floor)) return; // 还健康 → 不动
     const bag = inv.scanCandidates((c) => c.role === current.role, inv.mainhandSlot());
     const target = buildReplacePool(current, bag, threshold);
     if (target === null) {
@@ -143,15 +145,16 @@ export class ToolManager {
     );
   }
 
-  /** 构造挖掘能力候选池：达标且可换槽位 + 主手若达标以 isCurrent 入池。 */
+  /** 构造挖掘能力候选池：达标且可换槽位 + 主手若达标以 isCurrent 入池。偏好（pref）影响跨类别附魔池与排除角色。 */
   private buildMinePool(
     inv: InventoryService,
     requirement: ReturnType<typeof classify>,
     wantsSilk: boolean,
+    pref: PreferenceSpec | undefined,
     current: RankableCandidate | undefined
   ): RankableCandidate[] {
-    const pool = inv.scanCandidates((c) => isMineCapable(c, requirement, wantsSilk), inv.mainhandSlot());
-    if (current && isMineCapable(current, requirement, wantsSilk)) {
+    const pool = inv.scanCandidates((c) => isMineCapable(c, requirement, wantsSilk, pref), inv.mainhandSlot());
+    if (current && isMineCapable(current, requirement, wantsSilk, pref)) {
       pool.push(current); // 当前主手达标 → 作为 isCurrent 伪候选参与排序
     }
     return pool;
