@@ -33,9 +33,13 @@
 - **`syncManifestVersion(projectDir, opts?)`** → `void`
   - 读取 `package.json` 的 `version`，同步到 `BP/*/manifest.json` 与 `RP/*/manifest.json`
   - 同步内容：`header.version`、`modules` / `dependencies` 中的数组版本
+  - **作者信息注入（默认开启）**：从 monorepo 根 `package.json`（含 `pnpm-workspace.yaml` 的目录，或第一个带 `author`+`repository` 的 package.json）读取作者全部字段（作者/邮箱/主页/QQ群）与 `repository.url`，以 `\n` 换行追加到 `header.description` 末尾（幂等：重复构建不会叠加，先清理旧块再注入）
   - `formatName` 可选回调：修改显示名（`header.name`）
   - `onManifest` 可选回调：写入前修改 manifest 内容
-- **类型**：`SyncManifestOptions` = `{ formatName?, onManifest? }`
+  - `authorInfo: false` 可关闭作者信息注入
+- **类型**：`SyncManifestOptions` = `{ formatName?, onManifest?, authorInfo? }`
+- **`buildAuthorBlock(projectDir)`** → `string | undefined`
+  - 生成多行作者信息块（"标签：值" 用 `\n` 连接），供复用/调试
 
 ### `bin/sync-version.mjs` — CLI（Node 脚本）
 
@@ -43,7 +47,7 @@
 - 读取 `package.json` 的 `mcbe` 配置定位 manifest：
   - 新格式：`{ packName, bp }` 或 `{ packName, bp, rp }`
   - 旧格式：`{ bpDir }`
-- 同步版本号 + 显示名（`<packName> v<ver>`），完成后输出 `✓` 提示
+- 同步版本号 + 显示名（`<packName> v<ver>`），并**注入作者/仓库信息到 description**，完成后输出 `✓` 提示
 
 ## 使用场景
 
