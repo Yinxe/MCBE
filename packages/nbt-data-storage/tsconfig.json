@@ -6,7 +6,6 @@
     "module": "ES2020",
     "declaration": false,
     "strict": true,
-    "noUncheckedIndexedAccess": true,
     "noImplicitAny": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,

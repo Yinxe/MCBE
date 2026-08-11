@@ -19,6 +19,8 @@ export const LEVEL_EDGE = 16;
 export const BARRELS_PER_LEVEL = LEVEL_EDGE * LEVEL_EDGE;
 /** 每层槽位数 = 256 桶 × 27 槽 */
 export const SLOTS_PER_LEVEL = BARRELS_PER_LEVEL * BARREL_SLOTS;
+/** 阵列默认纵向层数（固定，无需配置）：0..63 层 → 容量 442368 槽；不够再注册新集群 */
+export const MAX_LEVELS = 64;
 
 /** 存储区域布局（不可变几何参数；由首个注册该区块的模组定下，后续模组共享） */
 export interface RegionLayout {

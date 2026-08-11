@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   BARREL_SLOTS,
   BARRELS_PER_LEVEL,
+  MAX_LEVELS,
   SLOTS_PER_LEVEL,
   barrelIndexOf,
   capacityOf,
@@ -21,6 +22,20 @@ const DEFAULT: RegionLayout = { chunkX: 0, chunkZ: 0, baseY: 120, maxLevels: 4 }
 test("capacityOf：单层 = 256 桶 × 27 槽；默认 4 层 = 27648", () => {
   assert.equal(capacityOf({ ...DEFAULT, maxLevels: 1 }), SLOTS_PER_LEVEL);
   assert.equal(capacityOf(DEFAULT), 4 * SLOTS_PER_LEVEL);
+});
+
+test("MAX_LEVELS：固定 64 层，容量 = 442368 槽，顶层落在第 63 层", () => {
+  assert.equal(MAX_LEVELS, 64);
+  const layout: RegionLayout = { chunkX: 0, chunkZ: 0, baseY: 120, maxLevels: MAX_LEVELS };
+  assert.equal(capacityOf(layout), 64 * SLOTS_PER_LEVEL);
+  assert.equal(validateLayout(layout), null);
+  const last = capacityOf(layout) - 1; // 442367
+  const pos = slotIdToPosition(last, layout);
+  assert.ok(pos);
+  assert.equal(pos.y, 120 + 63);
+  assert.equal(pos.x, 15);
+  assert.equal(pos.z, 15);
+  assert.equal(pos.slotInBarrel, BARREL_SLOTS - 1);
 });
 
 test("slotIdToPosition：0 号槽位于区块原点 (0, baseY, 0)", () => {

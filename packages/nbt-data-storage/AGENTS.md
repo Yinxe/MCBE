@@ -14,15 +14,17 @@ packages/nbt-data-storage/
 │   ├── core/             # 纯领域逻辑（**零 @minecraft 依赖**，可 node 单测）
 │   │   ├── layout.ts     # RegionLayout：槽位 ID ↔ (x,y,z,槽内索引) 纯算术 O(1) 解码 / 容量 / 校验
 │   │   ├── meta.ts       # RegionMeta：水印 + 按层空洞（holeLevels 索引 + 洞数），O(1) 分配/回收
-│   │   ├── keys.ts       # 维度短名 / 区域键（the_end:0:-64）/ 解析
+│   │   ├── keys.ts       # 维度枚举(0/1/2) / 区域ID（2:0:-64）/ 解析
 │   │   ├── record.ts     # 持久化区域记录序列化（layout+dimensionId+meta 合一）
 │   │   ├── stats.ts      # RegionStats 只读统计（纯函数）
+│   │   ├── transfer.ts   # 原子传输编排（TransferPort 注入，可 mock 单测）
 │   │   └── index.ts
 │   └── mc/               # MC 适配层（只做副作用/IO）
 │       ├── ItemStorage.ts    # 注册表 + register/listRegions/getRegion/queryWorld/totalStats
-│       ├── StoredRegion.ts   # 区域句柄：put/get/take/remove/stats（DP 读改写 + 世界真值兜底）
+│       ├── StoredRegion.ts   # 区域句柄：put/get/take/remove/transfer/stats（DP 读改写 + 世界真值兜底）
 │       ├── BarrelRuntime.ts  # 方块物化 / 容器 IO / ticking area 常加载
-│       ├── store.ts          # DP 直存（nds:regions 索引 + nds:item:{key} 记录）
+│       ├── store.ts          # DP 直存（nds:regions 索引 + nds:item:{ID} 记录 + 按层空洞池）
+│       ├── events.ts         # 存储事件（复用 toolkit EventSignal：stored/taken/removed）
 │       └── commands.ts       # 可选 nds:regions / nds:stats 命令
 └── tests/                # core 单测（node:test）
 ```
@@ -31,31 +33,34 @@ packages/nbt-data-storage/
 
 - **core 无副作用**：core 只做纯计算（寻址/分配/统计/序列化），不触世界；mc 层做全部 IO 副作用。core 不得 import `@minecraft/*`（`tsconfig.test.json` 只编译 `src/core` + `tests`）。
 - **以世界为真值**：物品实物在木桶槽位里，DP 元数据（水印/按层空洞池）只是软状态。`put` 写入前检查目标槽占用，被外部占用则**丢弃候选改选下一候选**（有界重试 `MAX_ALLOC_RETRY=64`），绝不覆盖他人物品；元数据丢失自愈。
-- **空洞按层分键存储（DP 单值有界）**：空洞池每层一条 DP 键（`nds:item:{key}:pool:{层}`），存 **level-local 索引（0..6911）**，不存全局 slotId——层数再多（如 64 层）单值也 ≤ 一层 6912 条、数字 ≤ 4 位，规避 DynamicProperty 单值上限。主记录 meta 只留 `nextFree` + `holeLevels`（有洞层号索引）+ `holeCount`（洞数），分配 O(1) 定位最低洞层、统计免加载全部层。
+- **空洞按层分键存储（DP 单值有界）**：空洞池每层一条 DP 键（`nds:item:{区域ID}:pool:{层}`），存 **level-local 索引（0..6911）**，不存全局 slotId——层数再多（如 64 层）单值也 ≤ 一层 6912 条、数字 ≤ 4 位，规避 DynamicProperty 单值上限。主记录 meta 只留 `nextFree` + `holeLevels`（有洞层号索引）+ `holeCount`（洞数），分配 O(1) 定位最低洞层、统计免加载全部层。
 - **DP 读改写（RMW）**：`put`/`take`/`remove` 每次先读记录（+触碰的那一层池）→ 变更 → 写回。跨模组共享同一区域时以世界真值消解竞态（同一 tick 内重复分配同槽的窗口极小，见 README）。
 - **O(1) 纪律**：`get`/`take`/`remove` 只做纯算术解码 + 一次容器槽位访问，禁止扫描/枚举。`put` 分配也是 O(1)（经 `holeLevels` 取最低洞层 pop，或推进水印）；层号扫描有界（≤ maxLevels，常量级）。
 - **先占位后写入**：`put` 在物化/写入前先写 DP 占位（收窄竞态窗口）。失败分流：**世界已占用** → 丢弃候选改选下一候选（不回收，避免"占用的槽进空洞池 → 无限重试"）；**物化/写入失败**（区块未就绪、新桶容器暂不可用）→ 槽位回归该层空洞池并返回 null，由调用方下个周期重试（不烧水印、不丢空槽）。
 - **区块安全**：所有方块/容器访问 try-catch；容器不可达返回失败而非抛错。消费模组须在**完整执行上下文**（命令回调/事件/system.run）内调用本库 API。
 - **常加载依赖作弊**：ticking area 是 OP 命令，世界需开启作弊；未开启时注册静默失败，读写降级为 `null`/`undefined`（不崩溃）。每个维度 ticking area 数量有上限，建议存储集中末地。
 - **跨模组共享的寻址单元是区块**：锚点经 `chunkFromAnchor`（`Math.floor(x/16)`，负数精确归块）定到 16×16 区块；同维度**同区块**（16 块一格）即共享，跨区块各自独立。归块逻辑在 core（`chunkFromBlock`），单测覆盖四象限与边界点。
-- **动态扩容**：不预生成阵列；`put` 分配到的桶不存在时才 `setBlockType`（幂等）。容量上限 = `maxLevels × 256 × 27`，满则拒绝。
+- **凭据取物（区域ID + slotId）**：区域唯一 ID = `维度枚举:区块X:区块Z`（如 `2:0:-64`，0=主世界 1=下界 2=末地，其余维度回退短名可逆）。`put` 成功返回 `{ regionId, slotId }`；`ItemStorage.get/take(ref)` 凭凭据 O(1) 取物，未注册时从 DP 记录**惰性采纳**区域句柄（跨模组可用）。
+- **动态扩容**：不预生成阵列；`put` 分配到的桶不存在时才 `setBlockType`（幂等）。**层数固定 64（无需配置）**，容量上限 = `64 × 256 × 27` = 442368 槽，满则拒绝（不够再注册新集群）。
+- **原子传输**：`transferIn/transferOut` 走 core `transfer.ts` 编排（TransferPort 注入、可 mock 单测）——要么整体成功要么保持原状，物品不丢不重复；失败回滚 = 取回区域槽并尽力还原源槽。
+- **自定义事件**：mc 层复用 `@yinxe/toolkit` 的 `EventSignal` 暴露 `ItemStorage.events`（stored/taken/removed）；事件负载只用可序列化 string/number，不携带 MC 对象。core 不依赖 toolkit（保持零 `@minecraft`）。
 
 ## 持久化键约定
 
 | 键                            | 内容                                                                             |
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `nds:regions`                 | 全局区域索引（JSON `string[]`，跨模组盘点）                                      |
-| `nds:item:{区域键}`           | 区域主记录 `{ v:2, dimensionId, layout, meta }`（meta = 水印 + 洞层索引 + 洞数） |
-| `nds:item:{区域键}:pool:{层}` | 该层空洞池（JSON level-local 索引数组）                                          |
+| `nds:item:{区域ID}`           | 区域主记录 `{ v:2, dimensionId, layout, meta }`（meta = 水印 + 洞层索引 + 洞数） |
+| `nds:item:{区域ID}:pool:{层}` | 该层空洞池（JSON level-local 索引数组）                                          |
 
-区域键 = `维度短名:区块X:区块Z`（如 `the_end:0:-64`），即 DP 键后缀。预留 `nds:entity:` / `nds:structure:` 前缀给生物/结构模式。
+区域ID = `维度枚举:区块X:区块Z`（如 `2:0:-64`），即 DP 键后缀。预留 `nds:entity:` / `nds:structure:` 前缀给生物/结构模式。
 
 ## 命令（可选安装）
 
 | 命令                  | 说明                                  |
 | --------------------- | ------------------------------------- |
 | `/nds:regions`        | 列出全部存储区域 + 全库汇总           |
-| `/nds:stats [区域键]` | 指定区域详情（容量/已用/水印/空洞数） |
+| `/nds:stats [区域ID]` | 指定区域详情（容量/已用/水印/空洞数） |
 
 - 消费模组在 startup（Phase 3）调用 `installNdsCommands()`；**本上下文内幂等**。
 - 多个模组各自打包本库并都调用它时，重复的 `registerCommand` 会被**捕获忽略**（命令由先注册者管理），不报错；其余模组直接使用 `ItemStorage` API。
@@ -66,7 +71,7 @@ packages/nbt-data-storage/
 pnpm --filter nbt-data-storage run test   # tsc -p tsconfig.test.json && node --test ".test-build/tests/**/*.test.js"
 ```
 
-- core 纯逻辑（layout 寻址 / meta 分配回收 / record 序列化 / keys / stats）必须有单测覆盖；
+- core 纯逻辑（layout 寻址 / meta 分配回收 / record 序列化 / keys 维度枚举+区域ID / stats / transfer 原子传输）必须有单测覆盖；
 - mc 适配层（物化/容器 IO/ticking area）靠游戏内冒烟（同 item-route 约定）。
 
 ## 构建与提交

@@ -104,7 +104,7 @@ export function installNdsCommands(): void {
         runSafe(() => {
           const all = queryWorld();
           if (!key) {
-            player.sendMessage(`用法：/nds:stats <区域键>；可用：${all.map((s) => s.key).join(", ") || "（无）"}`);
+            player.sendMessage(`用法：/nds:stats <区域ID>；可用：${all.map((s) => s.key).join(", ") || "（无）"}`);
             return;
           }
           const s = all.find((x) => x.key === key);
