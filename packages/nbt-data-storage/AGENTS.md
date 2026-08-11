@@ -44,6 +44,8 @@ packages/nbt-data-storage/
 - **凭据取物（区域ID + slotId）**：区域唯一 ID = `维度枚举:区块X:区块Z`（如 `2:0:-64`，0=主世界 1=下界 2=末地，其余维度回退短名可逆）。`put` 成功返回 `{ regionId, slotId }`；`ItemStorage.get/take(ref)` 凭凭据 O(1) 取物，未注册时从 DP 记录**惰性采纳**区域句柄（跨模组可用）。
 - **动态扩容**：不预生成阵列；`put` 分配到的桶不存在时才 `setBlockType`（幂等，上报 created → `meta.barrelCount` +1）。**层数固定 64（无需配置）**，容量上限 = `64 × 256 × 27` = 442368 槽、满容量桶数 = `64 × 256` = 16384，满则拒绝（不够再注册新集群）。空桶常驻不回收（供空洞复用）。
 - **存入编排在 core**：`putItem(PutPort)` 下沉到 core（可 mock 单测）——先占位写 DP → 物化 → 世界占用检查 → 写入；世界占用则换候选（有界重试），物化/写入失败槽回归空洞池返回 null。`StoredRegion` 只留薄接线（port + 事件触发）。
+- **扩容与并发**：分配优先复用空位（最低洞层 O(1)），无空位才推进水印扩容（触新桶首槽才物化建桶）；区域真满（无洞 + 水印触顶）拒绝且**绝不建桶**。并发扩容撞同槽由世界真值检查兜底——后写入者改选下一槽，**绝不覆盖前者**（有 mock 单测）。
+- **布局采纳（首个注册者定）**：注册决策走 core `resolveRegistration`（可 mock 单测）——已有记录采纳其维度/baseY/层数，后注册者传的高度被忽略；区域 ID 由维度枚举+区块决定（不含高度）。
 - **原子传输**：`transferIn/transferOut` 走 core `transfer.ts` 编排（TransferPort 注入、可 mock 单测）——要么整体成功要么保持原状，物品不丢不重复；失败回滚 = 取回区域槽并尽力还原源槽。
 - **自定义事件**：mc 层复用 `@yinxe/toolkit` 的 `EventSignal` 暴露 `ItemStorage.events`（stored/taken/removed）；事件负载只用可序列化 string/number，不携带 MC 对象。core 不依赖 toolkit（保持零 `@minecraft`）。
 

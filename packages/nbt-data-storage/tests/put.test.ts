@@ -156,3 +156,43 @@ test("putItem：空物品/未定义物品 → null，无副作用", () => {
   assert.equal(putItem(port, null, RID, DIM, LAYOUT), null);
   assert.equal(record(), undefined);
 });
+
+test("putItem：区域真满（无洞水印触顶）→ 返回 null 且不新建桶", () => {
+  const { port, barrels } = makeWorld(4);
+  const rec = createRegionRecord(DIM, LAYOUT);
+  rec.meta.nextFree = 4 * SLOTS_PER_LEVEL; // 水印触顶
+  port.writeRecord(rec);
+  const before = barrels.size;
+  assert.equal(putItem(port, "a", RID, DIM, LAYOUT), null);
+  assert.equal(barrels.size, before); // 拒绝时绝不建桶
+});
+
+test("putItem：有可用空位先用空位，无空位才扩容建新桶", () => {
+  const { port, barrels } = makeWorld(4);
+  putItem(port, "a", RID, DIM, LAYOUT); // slot 0（建桶 0）
+  putItem(port, "b", RID, DIM, LAYOUT); // slot 1
+  // 模拟 take(slot 0)：先清世界槽（真值），再回收空洞
+  barrels.get("0,120,0")![0] = false;
+  releaseSlot(port, 0, DIM, LAYOUT);
+  const barrelsBefore = barrels.size;
+  const r = putItem(port, "c", RID, DIM, LAYOUT);
+  assert.equal(r?.slotId, 0); // 复用洞，而非扩到 slot 2
+  assert.equal(barrels.size, barrelsBefore); // 未新建桶
+});
+
+test("putItem：并发扩容到同一新桶 → 后者因世界占用改选同桶下一槽，不覆盖前者写入", () => {
+  const { port, barrels } = makeWorld(4);
+  // 填满桶 0（槽 0..26），使水印到 27
+  for (let i = 0; i < 27; i++) putItem(port, `f${i}`, RID, DIM, LAYOUT);
+  // 模组 A 扩容：写入槽 27（建新桶，位置 1,120,0）
+  const ra = putItem(port, "A", RID, DIM, LAYOUT);
+  assert.equal(ra?.slotId, 27);
+  // 模拟模组 B 读到 A 提交前的陈旧元数据（水印仍为 27），但世界里 A 的物品已在槽 27
+  const stale = createRegionRecord(DIM, LAYOUT);
+  stale.meta.nextFree = 27;
+  port.writeRecord(stale);
+  const r = putItem(port, "B", RID, DIM, LAYOUT);
+  assert.equal(r?.slotId, 28); // 撞槽 27（新桶 slot 0）→ 改选槽 28（同桶 slot 1）
+  assert.equal(barrels.get("1,120,0")?.[0], true); // A 的数据未被覆盖
+  assert.equal(barrels.get("1,120,0")?.[1], true); // B 落在同桶下一槽
+});

@@ -8,16 +8,14 @@
 // `{ regionId, slotId }`，之后凭凭据 O(1) 取物（getRegion/ref → 解码 → 秒定位）。
 import { world } from "@minecraft/server";
 import type { ItemStack, Vector3 } from "@minecraft/server";
-import { MAX_LEVELS, chunkFromAnchor, validateLayout, type RegionLayout } from "../core/layout";
+import { chunkFromAnchor, validateLayout } from "../core/layout";
 import { regionId, shortDimension, type StoredRef } from "../core/keys";
 import { createRegionRecord } from "../core/record";
+import { resolveRegistration } from "../core/region";
 import { regionStats, type RegionStats } from "../core/stats";
 import { StoredRegion } from "./StoredRegion";
 import { ItemStorageEvents } from "./events";
 import { appendRegionIndex, readRegionIndex, readRegionRecord, writeRegionRecord } from "./store";
-
-/** 默认底层木桶 Y（末地虚空高度，避让末地主岛/黑曜石柱） */
-const DEFAULT_BASE_Y = 120;
 
 /** 注册参数：维度 + 锚点坐标（决定区块地址），可选 baseY（层数固定 64） */
 export interface RegisterOptions {
@@ -47,28 +45,31 @@ export function register(opts: RegisterOptions): StoredRegion {
   const { cx, cz } = chunkFromAnchor(opts.anchor.x, opts.anchor.z);
   const id = regionId(shortDimension(opts.dimension), cx, cz);
 
-  const existing = getRegion(id);
+  const existing = regions.get(id);
   if (existing) return existing;
 
-  const layout: RegionLayout = {
-    chunkX: cx,
-    chunkZ: cz,
-    baseY: opts.baseY ?? DEFAULT_BASE_Y,
-    maxLevels: MAX_LEVELS,
-  };
+  // 已有持久化记录 → 采纳其维度/布局（后注册者传的 baseY 等被忽略）；否则按传入参数新建
+  const persisted = readRegionRecord(id);
+  const { dimensionId, layout } = resolveRegistration(
+    persisted,
+    { dimensionId: opts.dimension, baseY: opts.baseY },
+    { cx, cz }
+  );
   const invalid = validateLayout(layout);
   if (invalid) throw new Error(invalid);
 
   // 维度存在性校验（无效维度 getDimension 会抛错，提前给出中文提示）
   try {
-    world.getDimension(opts.dimension);
+    world.getDimension(dimensionId);
   } catch {
-    throw new Error(`维度不存在或不可访问：${opts.dimension}`);
+    throw new Error(`维度不存在或不可访问：${dimensionId}`);
   }
 
-  const region = new StoredRegion(id, opts.dimension, layout);
-  writeRegionRecord(id, createRegionRecord(opts.dimension, layout));
-  appendRegionIndex(id);
+  const region = new StoredRegion(id, dimensionId, layout);
+  if (!persisted) {
+    writeRegionRecord(id, createRegionRecord(dimensionId, layout));
+    appendRegionIndex(id);
+  }
   region.ensureTickingArea();
   regions.set(id, region);
   return region;
@@ -84,7 +85,12 @@ export function getRegion(regionId: string): StoredRegion | undefined {
   if (existing) return existing;
   const record = readRegionRecord(regionId);
   if (!record) return undefined;
-  const region = new StoredRegion(regionId, record.dimensionId, record.layout);
+  const { dimensionId, layout } = resolveRegistration(
+    record,
+    { dimensionId: record.dimensionId },
+    { cx: record.layout.chunkX, cz: record.layout.chunkZ }
+  );
+  const region = new StoredRegion(regionId, dimensionId, layout);
   region.ensureTickingArea();
   regions.set(regionId, region);
   return region;
