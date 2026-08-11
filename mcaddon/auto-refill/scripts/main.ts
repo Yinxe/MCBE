@@ -19,6 +19,7 @@ import { createDefaultScorers, ToolSelector } from "./ToolScorer";
 import { ToolManager } from "./ToolManager";
 import { RefillManager } from "./RefillManager";
 import { TotemManager } from "./TotemManager";
+import { AntiTouchHud } from "./AntiTouchHud";
 import { isTotemHealCause } from "./TotemPolicy";
 import { SettingsService } from "./Settings";
 import { registerAdminMenu } from "./AdminMenu";
@@ -30,12 +31,24 @@ const policy = new PlayerPolicy();
 const settings = new SettingsService();
 // 共享一份策略注册表：挖掘默认省耐久不择优（frugal），武器默认剑→斧→镐（weapon）
 const scorers = createDefaultScorers();
-const toolManager = new ToolManager(new ToolSelector(scorers, "frugal"), new ToolSelector(scorers, "weapon"), settings);
+const antiTouchHud = new AntiTouchHud();
+const toolManager = new ToolManager(
+  new ToolSelector(scorers, "frugal"),
+  new ToolSelector(scorers, "weapon"),
+  settings,
+  undefined,
+  undefined,
+  // 防误触拦截/确认 → 公共 actionbar 总线 HUD 提示（拦截 2.5s 倒计时 / 确认清除）
+  (p, intercepted) => (intercepted ? antiTouchHud.notifyIntercept(p) : antiTouchHud.clear(p))
+);
 const refillManager = new RefillManager();
 const totemManager = new TotemManager();
 
 // 配置：世界加载后从动态属性恢复开关（DP 读取需世界就绪）；注册 /ar:menu 与 /ar:help
-system.run(() => settings.load());
+system.run(() => {
+  settings.load();
+  antiTouchHud.start(); // 公共 HUD 总线须在安全上下文启动
+});
 registerAdminMenu(settings);
 registerHelpCommand();
 
@@ -148,15 +161,18 @@ world.afterEvents.playerBreakBlock.subscribe((event) => {
  * afterEvents.entityHeal（旧版本）→ 静默跳过订阅不崩。
  */
 if (world.afterEvents.entityHeal) {
-  world.afterEvents.entityHeal.subscribe((event) => {
-    const player = policy.asPlayer(event.healedEntity);
-    if (!player) return;
-    if (!settings.isEnabled("totem")) return; // 图腾补充开关关 → 不处理
-    if (!isTotemHealCause(event.healSource.cause)) return; // 非图腾治愈来源
-    try {
-      totemManager.onTotemTriggered(player);
-    } catch (e) {
-      logger.error(`totem refill failed ${player.name}: ${e}`);
-    }
-  });
+  world.afterEvents.entityHeal.subscribe(
+    (event) => {
+      if (!settings.isEnabled("totem")) return; // 图腾补充开关关 → 最早拦下
+      const player = policy.asPlayer(event.healedEntity);
+      if (!player) return;
+      if (!isTotemHealCause(event.healSource.cause)) return; // 非图腾治愈来源
+      try {
+        totemManager.onTotemTriggered(player);
+      } catch (e) {
+        logger.error(`totem refill failed ${player.name}: ${e}`);
+      }
+    },
+    { entityFilter: { families: ["player"] } } // 事件级过滤：只收玩家被治愈（盾牌/怪物治愈不进回调）
+  );
 }
