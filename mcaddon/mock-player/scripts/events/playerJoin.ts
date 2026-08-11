@@ -10,10 +10,11 @@
 import { world, system, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEquippableComponent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { BOT_TAG } from "../features/core/tags";
+import { BOT_TAG, TAG_RAID_MODE } from "../features/core/tags";
 import { botRegistry, saveBotRecord, loadBotInventory, loadBotEquipment, markBotRestored } from "../features/core/persistence";
 import { deserializeContainer, deserializeEquipment, getTotalXpForLevels } from "../features/core/utils";
 import { rebindBotTridents, trackBotOnline } from "../features/tridentTracker";
+import { startRaidMode } from "../features/raidMode";
 
 export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   const record = botRegistry.get(event.playerName);
@@ -67,4 +68,9 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
     system.run(() => rebindBotTridents(record.name));
   }
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.success}${record.name} 加入了游戏`);
+
+  // 劫掠模式开启 → 背包已恢复，喝第一瓶（不祥之瓶在背包里）
+  if (record.tags.includes(TAG_RAID_MODE.value)) {
+    startRaidMode(record.name);
+  }
 }

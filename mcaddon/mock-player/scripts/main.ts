@@ -58,7 +58,7 @@ world.afterEvents.worldLoad.subscribe(() => {
   console.info(`[MockPlayer] 初始化三叉戟追踪`);
   initTridentTracker();
 
-  // 初始化劫掠效果监听（effectAdd 检测村庄英雄，验证假人能否获得）
-  console.info(`[MockPlayer] 初始化劫掠效果监听`);
+  // 初始化劫掠事件系统（effectAdd → raidStarted/raidVictory 自定义事件）
+  console.info(`[MockPlayer] 初始化劫掠事件系统`);
   initRaidModeEffects();
 });

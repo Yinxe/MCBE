@@ -11,9 +11,10 @@
 import { world, PlayerSpawnAfterEvent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { BOT_TAG, syncEntityTags } from "../features/core/tags";
+import { BOT_TAG, TAG_RAID_MODE, syncEntityTags } from "../features/core/tags";
 import { botRegistry, saveBotRecord } from "../features/core/persistence";
 import { trackBotOnline } from "../features/tridentTracker";
+import { startRaidMode } from "../features/raidMode";
 
 export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   // 首次生成不处理（由 playerJoin 负责恢复）
@@ -33,4 +34,9 @@ export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
 
   saveBotRecord(record);
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 重生了`);
+
+  // 劫掠模式开启 → 死亡重生后补喝一瓶（死亡会清掉效果，重新拉起的袭击/续杯）
+  if (record.tags.includes(TAG_RAID_MODE.value)) {
+    startRaidMode(record.name);
+  }
 }

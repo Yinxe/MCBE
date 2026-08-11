@@ -10,10 +10,9 @@ import { EntityEquippableComponent, Player, system, world } from "@minecraft/ser
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, isBotRestored, saveBotEquipment, saveBotRecord } from "./persistence";
-import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL, TAG_VAULT_MODE, TAG_RAID_MODE } from "./tags";
+import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL, TAG_VAULT_MODE } from "./tags";
 import { captureExperience, serializeEquipment } from "./utils";
 import { runVaultCycle } from "../vaultMode";
-import { runRaidCycle } from "../raidMode";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "./pose";
 
 // ─── 启动引擎 ──────────────────────────────────────────
@@ -85,11 +84,6 @@ export function startTagBehaviors(): void {
       // ── 宝库模式 ── 每 10 tick ──
       if (bot.hasTag(TAG_VAULT_MODE.value) && tick % 10 === 0) {
         try { runVaultCycle(sim, record); } catch (e: any) { console.warn(`[MockPlayer] 宝库模式异常 ${bot.name}: ${e?.message ?? e}`); }
-      }
-
-      // ── 劫掠模式 ── 每 10 tick ──
-      if (bot.hasTag(TAG_RAID_MODE.value) && tick % 10 === 0) {
-        try { runRaidCycle(sim, record); } catch (e: any) { console.warn(`[MockPlayer] 劫掠模式异常 ${bot.name}: ${e?.message ?? e}`); }
       }
     }
 

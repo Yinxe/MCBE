@@ -24,17 +24,23 @@ export const TAG_RAID_MODE: TagDef = { label: "劫掠模式", value: `${TAG_PREF
 /** 可共存的标签组 */
 export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
 
-/** 互斥的标签组 */
-export const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE, TAG_VAULT_MODE, TAG_RAID_MODE];
+/** 互斥的标签组（同一时间只能有一个生效） */
+export const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE, TAG_VAULT_MODE];
+
+/** 独立开关标签组（与互斥/共存标签均可并存，各自独立的持久开关，如劫掠模式） */
+export const STANDALONE_TAGS: TagDef[] = [TAG_RAID_MODE];
 
 /** 所有已定义的标签 */
-export const ALL_TAGS: TagDef[] = [...COEXIST_TAGS, ...EXCLUSIVE_TAGS];
+export const ALL_TAGS: TagDef[] = [...COEXIST_TAGS, ...STANDALONE_TAGS, ...EXCLUSIVE_TAGS];
 
 /** 新的假人默认拥有的标签（value 列表） */
 export const DEFAULT_TAGS: string[] = [TAG_BOT.value, TAG_RESPAWN.value, TAG_IDLE.value];
 
 /** 互斥标签的 value 集合，用于快速判断 */
 export const EXCLUSIVE_SET: Set<string> = new Set(EXCLUSIVE_TAGS.map((t) => t.value));
+
+/** 独立开关标签的 value 集合，用于快速判断 */
+export const STANDALONE_SET: Set<string> = new Set(STANDALONE_TAGS.map((t) => t.value));
 
 /** 假人基础标识标签值（字符串快捷引用，等价于 TAG_BOT.value） */
 export const BOT_TAG = TAG_BOT.value;
@@ -74,6 +80,11 @@ export function buildTagListMessage(): string {
 
   lines.push(`${color.muted}━━ 可共存 ────`);
   for (const t of COEXIST_TAGS) {
+    lines.push(` ${color.playerName}${t.label}${color.muted} (${t.value})`);
+  }
+
+  lines.push(`${color.muted}━━ 独立开关 ────`);
+  for (const t of STANDALONE_TAGS) {
     lines.push(` ${color.playerName}${t.label}${color.muted} (${t.value})`);
   }
 

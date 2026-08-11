@@ -124,7 +124,7 @@ bump version (+0.01) → build → pack → commit → tag → push
 - 面向玩家的错误消息使用中文；调试日志使用英文
 - GameTest 生成的假人触发 `playerJoin` 事件恢复背包，使用 `isBotRestored` 防护空背包覆写
 - `disconnect()` 后至少等待 20 tick 才能重新 `spawnSimulatedPlayer`，否则出现 "(2)" 重复名导致数据丢失
-- 常加载模式（chunkload）假人不可扭头/瞄准，需切普通模式才能使用物品
+- 常加载模式（chunkload）假人受限的是扭头/瞄准（GameTest 限制，无 lookAt/setRotation），但 `useItemInSlot` 使用物品（喝药水/进食）不受影响
 
 ## 命名与版本
 
