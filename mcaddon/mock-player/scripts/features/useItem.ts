@@ -78,6 +78,8 @@ export function startUseItem(player: Player, record: BotRecord): void {
   }
   system.run(() => {
     try {
+      // ⚠️ 实体有效性防护：死亡/下线/重连瞬间实体失效，useItemInSlot 会抛 "entity being invalid"
+      if (!sim.isValid) return;
       const slot = findUsableSlot(sim);
       const item = slotItemType(sim, slot);
       const pressed = sim.useItemInSlot(slot);
@@ -88,6 +90,8 @@ export function startUseItem(player: Player, record: BotRecord): void {
       }
       // 延迟自动松开：给蓄力（弓/弩）充能，用后即自动停止
       system.runTimeout(() => {
+        // ⚠️ 实体有效性防护：假人死亡/下线瞬间实体失效，stopUsingItem 会抛 "entity being invalid"
+        if (!sim.isValid) return;
         try {
           const released = sim.stopUsingItem();
           console.warn(`[MockPlayer] 使用物品：${record.name} 自动停止(延迟 ${USE_AUTO_STOP_DELAY}tick, 释放=${released?.typeId ?? "无"})`);
@@ -116,6 +120,8 @@ export function stopUseItem(player: Player, record: BotRecord): void {
   }
   system.run(() => {
     try {
+      // ⚠️ 实体有效性防护：死亡/下线/重连瞬间实体失效，stopUsingItem 会抛 "entity being invalid"
+      if (!sim.isValid) return;
       const released = sim.stopUsingItem();
       console.warn(`[MockPlayer] 停止使用：${record.name} 已停止(释放=${released?.typeId ?? "无"})`);
     } catch (e: any) {

@@ -4,10 +4,10 @@ import { Player, system } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_AUTO_USE, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
+import { TAG_BOT, TAG_IDLE, TAG_AUTO_USE, TAG_RAID_MODE, TAG_CONTROL, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../features/core/tags";
 import { botRegistry } from "../features/core/persistence";
 import { setTags } from "../features/setTags";
-import { setSneaking } from "../features";
+import { setSneaking, initRaidSession, cleanupRaidSession } from "../features";
 import { switchSpawnMode, getSpawnModeInfo } from "../features/spawnMode";
 import { safeReconnect } from "../features/pendingRespawn";
 import { startFollow, stopFollow, isFollowing } from "../features/follow";
@@ -77,6 +77,27 @@ export function showTagManagement(player: Player, botName: string): void {
     tooltip: "自动挖掘/放置/攻击/宝库模式等，互斥只能选一项（使用物品是上方独立开关）",
   });
 
+  // ── 劫掠区域配置（始终显示） ──
+  const raidCfg = record.raidConfig;
+  builder
+    .label("sepRaid", style("━━ 劫掠区域 ────", color.accent))
+    .textField("raidX", "X 半尺寸（以假人为中心）", {
+      defaultValue: String(raidCfg?.x ?? 20),
+      tooltip: "劫掠检测区域 X 轴半尺寸，默认 20（区域宽度 40 格）",
+    })
+    .textField("raidY", "Y 半尺寸（以假人为中心）", {
+      defaultValue: String(raidCfg?.y ?? 50),
+      tooltip: "劫掠检测区域 Y 轴半尺寸，默认 50（区域高度 100 格）",
+    })
+    .textField("raidZ", "Z 半尺寸（以假人为中心）", {
+      defaultValue: String(raidCfg?.z ?? 20),
+      tooltip: "劫掠检测区域 Z 轴半尺寸，默认 20（区域深度 40 格）",
+    })
+    .toggle("raidBoundary", style("显示劫掠区域边框", color.playerName), {
+      defaultValue: raidCfg?.showBoundary ?? true,
+      tooltip: "开启后持续显示劫掠检测区域的粒子线框",
+    });
+
   builder.show(player).then((vals) => {
     if (!vals) return;
     const currentRecord = botRegistry.get(botName);
@@ -125,20 +146,54 @@ export function showTagManagement(player: Player, botName: string): void {
     }
 
     // ── 处理标签 ──
+    const exclusiveSel = vals.exclusive as number;
+    const pickedExclusive = exclusiveSel > 0 ? behaviorExclusive[exclusiveSel - 1].value : undefined;
+
+    // ⚠️ 冲突检测：劫掠模式与强加载模式互斥（劫掠需要普通模式使用物品）
+    // 同时勾选 → 取消劫掠模式，保留强加载切换，避免 safeReconnect 与 initRaidSession 时序竞争
+    let raidTagBlocked = false;
+    if (pickedExclusive === TAG_RAID_MODE.value && wantChunkload) {
+      raidTagBlocked = true;
+      player.sendMessage(
+        `${color.warn}劫掠模式与强加载模式冲突：劫掠模式只能在普通模式使用，已取消劫掠模式，保留强加载切换`
+      );
+    }
+
     const newTags: string[] = [TAG_BOT.value];
     for (const tag of manageableCoexist) {
       if (vals[tag.value]) newTags.push(tag.value);
     }
-    const exclusiveSel = vals.exclusive as number;
-    const pickedExclusive = exclusiveSel > 0 ? behaviorExclusive[exclusiveSel - 1].value : undefined;
-    if (pickedExclusive) newTags.push(pickedExclusive);
+    if (pickedExclusive && !raidTagBlocked) {
+      newTags.push(pickedExclusive);
+    } else if (raidTagBlocked) {
+      // 劫掠被拦截 → 恢复空闲，避免无互斥标签
+      newTags.push(TAG_IDLE.value);
+    }
 
     // 「使用物品」独立开关：勾选提交=使用一次（自动停下），取消提交=停止一次。
     // 开关本身不落库（用后即停，无持续状态），每次打开行为菜单都默认关。
     const useItemOn = vals.useItem as boolean;
 
+    // ── 处理劫掠区域配置 ──
+    const rawX = parseInt(vals.raidX as string, 10);
+    const rawY = parseInt(vals.raidY as string, 10);
+    const rawZ = parseInt(vals.raidZ as string, 10);
+    const raidX = isNaN(rawX) || rawX <= 0 ? 20 : rawX;
+    const raidY = isNaN(rawY) || rawY <= 0 ? 50 : rawY;
+    const raidZ = isNaN(rawZ) || rawZ <= 0 ? 20 : rawZ;
+    const raidBoundary = vals.raidBoundary as boolean;
+
     system.run(() => {
       setTags(currentRecord, newTags, player);
+
+      // 如果选中劫掠模式，初始化会话
+      const hasRaidTag = newTags.includes(TAG_RAID_MODE.value);
+      if (hasRaidTag) {
+        initRaidSession(botName, { x: raidX, y: raidY, z: raidZ, showBoundary: raidBoundary });
+      } else {
+        // 劫掠模式被移除，清理会话
+        cleanupRaidSession(botName);
+      }
     });
 
     // 一次性动作（不在 tick 循环里）：勾选=开始使用，取消=停止使用

@@ -29,3 +29,4 @@ export { startFollow, stopFollow, isFollowing } from "./follow";
 export { scanTridents, isMainhandTrident, throwTridents } from "./trident";
 export { getMainhandOptions, setMainhandSlot } from "./mainhand";
 export { startUseItem, stopUseItem } from "./useItem";
+export { initRaidSession, cleanupRaidSession, hasRaidSession } from "./raidMode";
