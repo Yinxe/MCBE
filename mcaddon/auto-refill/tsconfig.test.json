@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "scripts/types.ts",
+    "scripts/InstantBreak.ts",
+    "scripts/AccidentalGuard.ts",
+    "scripts/ToolScorer.ts",
+    "scripts/MinePreference.ts",
+    "scripts/WeaponPreference.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".test-build"]
+}

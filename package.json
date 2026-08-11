@@ -4,8 +4,16 @@
   "private": true,
   "description": "MCBE Addon — Monorepo",
   "packageManager": "pnpm@11.1.3",
-  "keywords": [],
-  "author": "Yinx",
+  "keywords": ["MCBE","addon","模组","扩展"],
+  "author": {
+    "name": "Yinx",
+    "email": "1423716216@qq.com",
+    "url": "https://github.com/Yinxe/",
+    "group":"632178498"
+  },
+  "repository": {
+    "url": "https://github.com/Yinxe/MCBE"
+  },
   "license": "ISC",
   "devEngines": {
     "packageManager": {
@@ -24,9 +32,11 @@
     "build:keepinventory": "pnpm --filter keepinventory run build",
     "build:smartwarehouse": "pnpm --filter smartwarehouse run build",
     "build:antibundledup": "pnpm --filter antibundledup run build",
+    "build:auto-refill": "pnpm --filter auto-refill run build",
     "build:teleporter": "pnpm --filter teleporter run build",
     "build:spectator-mode": "pnpm --filter spectator-mode run build",
     "pack:mock-player": "pnpm --filter mock-player run pack",
+    "pack:auto-refill": "pnpm --filter auto-refill run pack",
     "pack:keepinventory": "pnpm --filter keepinventory run pack",
     "pack:craftablerarities": "pnpm --filter craftablerarities run pack",
     "pack:smartwarehouse": "pnpm --filter smartwarehouse run pack",
@@ -35,6 +45,7 @@
     "pack:spectator-mode": "pnpm --filter spectator-mode run pack",
     "pack:enchanter": "pnpm --filter enchanter run pack",
     "sync-version": "node packages/toolkit-build/bin/sync-version.mjs",
-    "pack:stackable": "pnpm --filter stackable run pack"
+    "pack:stackable": "pnpm --filter stackable run pack",
+    "test:auto-refill": "pnpm --filter auto-refill run test:core"
   }
 }

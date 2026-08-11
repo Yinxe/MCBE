@@ -1,14 +1,17 @@
 {
   "name": "auto-refill",
-  "version": "1.0.5",
+  "version": "2.1.0",
   "description": "自动替换主手消耗物品——保留成就",
   "private": true,
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
     "@types/node": "^26.1.1",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@typescript-eslint/parser": "^8.66.0",
     "@yinxe/toolkit-build": "workspace:*",
     "eslint-plugin-minecraft-linting": "2.0.2",
     "just-scripts": "^2.6.2",
+    "prettier": "^3.9.6",
     "source-map": "0.7.4",
     "ts-node": "10.9.1",
     "typescript": "5.0.2"
@@ -18,10 +21,12 @@
     "build": "just-scripts build",
     "clean": "just-scripts clean",
     "local-deploy": "just-scripts local-deploy",
-    "pack": "just-scripts mcaddon"
+    "pack": "just-scripts mcaddon",
+    "test:core": "tsc -p tsconfig.test.json && node --test \".test-build/tests/**/*.test.js\""
   },
   "dependencies": {
-    "@minecraft/server": "2.0.0"
+    "@minecraft/server": "2.0.0",
+    "@minecraft/server-ui": "2.0.0"
   },
   "mcbe": {
     "packName": "自动替换",

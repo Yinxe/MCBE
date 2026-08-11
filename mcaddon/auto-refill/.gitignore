@@ -1,0 +1,2 @@
+# 测试构建产物（tsc -p tsconfig.test.json）
+.test-build/

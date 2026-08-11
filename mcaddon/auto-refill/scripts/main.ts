@@ -1,218 +1,137 @@
-// ─── 自动替换主手消耗品 ──────────────────────────────────
-// 当主手物品被消耗/破碎时，自动从背包中查找同类物品替换。
-// 保留成就，无需开启作弊。
+// ─── 组装根（Composition Root） ────────────────────────
+// 只做两件事：实例化服务、把世界事件路由到领域服务。不含任何业务逻辑。
 //
-// 核心思路：交换 + 堆叠
-//   1. 交换：主手即快捷栏选中槽（player.selectedSlotIndex），
-//      用官方 Container.swapItems 一步交换主手与背包同类槽位，
-//      原子操作，无复制/丢失风险
-//   2. 堆叠：交换后原主手残留物（如喝药后的空瓶）留在槽位，
-//      用官方 Container.transferItem 转移回背包，优先堆叠到
-//      已有同类堆，其次填入空槽
+// 事件 → 领域路由（受 SettingsService 开关约束）：
+//   entityHitBlock  → ToolManager（挖掘核对，破坏前换正确挖掘工具；含挖掘防误触）·工具替换
+//   entityHitEntity → ToolManager（攻击实体，非武器换武器；随后耐久保护）·武器替换+耐久
+//   playerBreakBlock → ToolManager（工具破碎换同类 / 未碎但耐久过低提前收起）·工具替换+耐久
+//   itemUse 家族（使用物品）     → RefillManager（按使用后主手状态判断）·物品补充
+// 管理员菜单：/ar:menu（GameDirectors 权限）、帮助 /ar:help（全体玩家）在 Settings.ts / AdminMenu.ts / Help.ts。
 //
-// 监听事件：
-//   itemCompleteUse            — 使用完毕（食物/药水/弓/弩/三叉戟蓄力满）
-//   itemReleaseUse             — 提前松开蓄力物品
-//   itemUse                    — 使用物品（放置方块/盾牌/钓鱼等）
-//   playerInteractWithBlock    — 对方块使用物品（锄/锹/骨粉等）
-//   playerBreakBlock           — 工具耐久耗尽破碎
-//
-// ⚠️ @minecraft/server 2.0.0 移除了 world.afterEvents.itemUseOn，
-//    改用 playerInteractWithBlock 覆盖"对方块使用物品"场景。
+// 冲突化解：工具切换/武器切换/耐久保护换主手后，连带触发的"使用"事件也被路由到
+// RefillManager——它识别到主手既非 undefined 也非副作用残留，判定为
+// "其他（切换已发生）"并忽略，从而不撤销 ToolManager 刚换上的物品。
 
-import {
-  world,
-  EntityComponentTypes,
-  EntityInventoryComponent,
-  GameMode,
-  type Player,
-} from "@minecraft/server";
+import { system, world, type Entity } from "@minecraft/server";
+import { PlayerPolicy } from "./PlayerPolicy";
+import { createDefaultScorers, ToolSelector } from "./ToolScorer";
+import { ToolManager } from "./ToolManager";
+import { RefillManager } from "./RefillManager";
+import { SettingsService } from "./Settings";
+import { registerAdminMenu } from "./AdminMenu";
+import { registerHelpCommand } from "./Help";
+import { logger } from "./Logger";
 
-// ─── 通用替换逻辑（交换 + 堆叠）────────────────────────
+// ── 组装服务 ──────────────────────────────────────────
+const policy = new PlayerPolicy();
+const settings = new SettingsService();
+// 共享一份策略注册表：挖掘默认省耐久不择优（frugal），武器默认剑→斧→镐（weapon）
+const scorers = createDefaultScorers();
+const toolManager = new ToolManager(new ToolSelector(scorers, "frugal"), new ToolSelector(scorers, "weapon"), settings);
+const refillManager = new RefillManager();
+
+// 配置：世界加载后从动态属性恢复开关（DP 读取需世界就绪）；注册 /ar:menu 与 /ar:help
+system.run(() => settings.load());
+registerAdminMenu(settings);
+registerHelpCommand();
+
+// ── 事件 → 领域路由 ───────────────────────────────────
 
 /**
- * 交换主手与背包指定槽位的物品。
- * 主手即快捷栏选中槽（player.selectedSlotIndex），
- * 使用官方 Container.swapItems 一步完成，原子操作无复制/丢失风险。
- *
- * @param player 目标玩家
- * @param slot   背包槽位（必须非空）
- * @returns 是否成功
+ * 命中方块（挖掘开始、破坏前）→ 工具核对换入正确工具
+ * after 事件、正常上下文：hitBlock 方块对象还在，可走标签层（含最低品质）。
+ * entityTypes 过滤只收玩家的命中，无需给工具挂自定义组件（不动原版物品）。
  */
-function swapMainhandWithSlot(player: Player, slot: number): boolean {
-  const inventory = player.getComponent(EntityComponentTypes.Inventory) as EntityInventoryComponent | undefined;
-  if (!inventory?.container) return false;
-  try {
-    inventory.container.swapItems(player.selectedSlotIndex, slot, inventory.container);
-    return true;
-  } catch (e) {
-    console.warn(`[AutoRefill] swap failed ${player.name}: slot ${slot} - ${e}`);
-    return false;
-  }
-}
-
-/**
- * 将槽位中的残留物堆叠回背包：优先堆叠到已有同类堆，其次填入空槽。
- * 使用官方 Container.transferItem 原子转移，全部放入则槽位自动清空。
- *
- * @param player 目标玩家
- * @param slot   残留物所在槽位
- * @returns 是否全部放入（true = 槽位已清空）
- */
-function stackRemainder(player: Player, slot: number): boolean {
-  const inventory = player.getComponent(EntityComponentTypes.Inventory) as EntityInventoryComponent | undefined;
-  if (!inventory?.container) return false;
-  try {
-    return inventory.container.transferItem(slot, inventory.container) === undefined;
-  } catch (e) {
-    console.warn(`[AutoRefill] stack failed ${player.name}: slot ${slot} - ${e}`);
-    return false;
-  }
-}
-
-/**
- * 主手物品耗尽后自动补充：交换 + 堆叠。
- *
- * 1. 主手仍有同类物品（未耗尽）→ 不需要替换
- * 2. 从背包查找同类物品 → 交换主手与槽位
- * 3. 交换后残留物（如喝药后的空瓶）堆叠回背包
- * 4. 背包无同类物品（最后一件已用完）→ 主手残留物堆叠回背包
- *
- * 覆盖场景：食物/药水（空瓶回填）/弓弩蓄力/工具破碎/交互消耗等，
- * 无需按物品类型特判。
- *
- * @param player 目标玩家
- * @param typeId 需要补充的物品类型
- * @returns 是否成功替换
- */
-function refillMainhand(player: Player, typeId: string): boolean {
-  const inventory = player.getComponent(EntityComponentTypes.Inventory) as EntityInventoryComponent | undefined;
-  if (!inventory?.container) return false;
-  const container = inventory.container;
-  const hotbarSlot = player.selectedSlotIndex;
-
-  // 主手残留物（可能为空：物品耗尽；也可能非空：如喝药后的空瓶）
-  const mainhand = container.getItem(hotbarSlot);
-  // 主手仍是同类物品（未耗尽）→ 不需要替换
-  if (mainhand && mainhand.typeId === typeId) return false;
-
-  for (let slot = 0; slot < container.size; slot++) {
-    const item = container.getItem(slot);
-    if (!item) continue;
-    if (item.typeId !== typeId) continue;
-
-    // 1. 交换：主手（hotbar 选中槽）↔ 背包槽位
-    if (!swapMainhandWithSlot(player, slot)) return false;
-
-    // 2. 堆叠：交换后残留物（如空瓶）已在槽位，回填背包
-    if (container.getItem(slot)) {
-      stackRemainder(player, slot);
+world.afterEvents.entityHitBlock.subscribe(
+  (event) => {
+    const player = policy.asPlayer(event.damagingEntity);
+    if (!player) return;
+    if (!settings.isEnabled("tool")) return; // 工具替换开关关 → 不处理
+    logger.debug(`hitBlock ${player.name}: ${event.hitBlockPermutation.type.id}`);
+    try {
+      toolManager.onPlayerHitBlock(player, event.hitBlock);
+    } catch (e) {
+      logger.error(`tool manager failed ${player.name}: ${e}`);
     }
-
-    player.playSound("random.pop");
-    console.info(`[AutoRefill] 替换 ${player.name}: ${typeId} ← slot ${slot}`);
-    return true;
-  }
-
-  // 3. 背包无同类物品（最后一件已用完）→ 主手残留物堆叠回背包
-  if (mainhand) {
-    stackRemainder(player, hotbarSlot);
-  }
-  return false;
-}
-
-// ─── 事件订阅 ──────────────────────────────────────────
+  },
+  { entityTypes: ["minecraft:player"] }
+);
 
 /**
- * 判断是否为真实玩家（非模拟玩家）。
- * 假人标识 tag（mock-player 模组给所有假人打的标），带 tag 即假人。
+ * 攻击实体（击中其他实体）→ 武器切换 + 耐久保护
+ * 武器切换：非武器主手换入武器（剑→斧→镐）；已持武器 / 锁定·自定义 / 背包无武器 → 不动。
+ * 随后独立评估主手耐久：武器或工具低于阈值时提前替换同类（受 durability 开关约束）。
+ * entityTypes 过滤只收玩家的攻击。
  */
-function isRealPlayer(player: Player): boolean {
-  return !player.hasTag("mockplayer:tag:bot");
-}
+world.afterEvents.entityHitEntity.subscribe(
+  (event) => {
+    const player = policy.asPlayer(event.damagingEntity);
+    if (!player) return;
+    if (settings.isEnabled("weapon")) {
+      try {
+        toolManager.onAttackEntity(player, event.hitEntity.typeId);
+      } catch (e) {
+        logger.error(`weapon switch failed ${player.name}: ${e}`);
+      }
+    }
+    // 耐久保护独立于武器替换开关
+    try {
+      toolManager.checkDurability(player);
+    } catch (e) {
+      logger.error(`durability guard failed ${player.name}: ${e}`);
+    }
+  },
+  { entityTypes: ["minecraft:player"] }
+);
 
 /**
- * 判断玩家是否为生存/冒险模式。
- * 模拟玩家的 getGameMode() 会抛异常或返回 undefined，此时返回 false。
+ * "使用物品"事件路由：交给 RefillManager 按"使用后主手状态"判断是否补货。
+ *   完全消耗（主手 undefined）→ 补同类；副作用残留 → 补 + 堆叠；
+ *   其他（工具切换已换主手等）→ RefillManager 内部忽略。
+ * @param typeId 被使用物品的类型
+ * @param source 事件来源实体（玩家）
  */
-function isSurvivalOrAdventure(player: Player): boolean {
-  let mode: GameMode | undefined;
-  try {
-    mode = player.getGameMode();
-  } catch {
-    return false;
-  }
-  if (mode === undefined) return false;
-  return mode === GameMode.Survival || mode === GameMode.Adventure;
-}
-
-/**
- * 目标校验通过后执行回调。
- * 统一守卫：实体存在 → 真实玩家（非假人）→ 生存/冒险模式。
- * @param player   玩家实体（可能为 undefined）
- * @param callback 校验通过后要执行的替换逻辑
- */
-function ifRefillEligible(player: Player | undefined, callback: (p: Player) => void): void {
+function routeConsumption(typeId: string | undefined, source: Entity | undefined): void {
+  if (!typeId) return;
+  if (!settings.isEnabled("refill")) return; // 物品补充开关关 → 不处理
+  const player = policy.asPlayer(source);
   if (!player) return;
-  if (!isRealPlayer(player)) return;
-  if (!isSurvivalOrAdventure(player)) return;
-  callback(player);
+  refillManager.onConsumed(player, typeId);
 }
 
-/**
- * 物品使用完毕 — 食物/药水/弓/弩/三叉戟等蓄力到满释放后
- */
-world.afterEvents.itemCompleteUse.subscribe((event) => {
-  ifRefillEligible(event.source, (player) => {
-    if (!event.itemStack) return;
-    refillMainhand(player, event.itemStack.typeId);
-  });
-});
-
-/**
- * 提前释放蓄力物品 — 弓/弩/三叉戟蓄力时提前松开
- */
-world.afterEvents.itemReleaseUse.subscribe((event) => {
-  ifRefillEligible(event.source, (player) => {
-    if (event.itemStack !== undefined) {
-      refillMainhand(player, event.itemStack.typeId);
-    }
-  });
-});
-
-/**
- * 使用物品 — 放置方块/盾牌/钓鱼竿/打火石等
- */
-world.afterEvents.itemUse.subscribe((event) => {
-  ifRefillEligible(event.source, (player) => {
-    if (event.itemStack !== undefined) {
-      refillMainhand(player, event.itemStack.typeId);
-    }
-  });
-});
-
-/**
- * 对方块使用物品 — 锄地/锹土/骨粉等
- * 2.0.0 中替代已移除的 itemUseOn 事件。
- * 交互成功后主手物品可能消失（消耗类），此时自动替换。
- */
+/** 物品使用完毕 — 食物/药水等消耗品用完；蓄力物放满（使用事件并不消耗工具） */
+world.afterEvents.itemCompleteUse.subscribe((event) => routeConsumption(event.itemStack?.typeId, event.source));
+/** 提前释放蓄力物品 — 弓/弩/三叉戟蓄力时提前松开 */
+world.afterEvents.itemReleaseUse.subscribe((event) => routeConsumption(event.itemStack?.typeId, event.source));
+/** 使用物品 — 放置方块/盾牌/钓鱼竿/打火石等 */
+world.afterEvents.itemUse.subscribe((event) => routeConsumption(event.itemStack?.typeId, event.source));
+/** 对方块使用物品 — 锄地/锹土/骨粉等（2.0.0 中替代已移除的 itemUseOn） */
 world.afterEvents.playerInteractWithBlock.subscribe((event) => {
-  ifRefillEligible(event.player, (player) => {
-    // 交互前的物品类型（beforeItemStack 是交互前主手拿的物品）
-    const usedType = event.beforeItemStack?.typeId ?? event.itemStack?.typeId;
-    if (!usedType) return;
-    // 交互成功后主手可能已被消耗 → 自动替换同类
-    refillMainhand(player, usedType);
-  });
+  const usedType = event.beforeItemStack?.typeId ?? event.itemStack?.typeId;
+  routeConsumption(usedType, event.player);
 });
 
 /**
- * 方块破碎 — 工具耐久耗尽自动替换同类工具
+ * 方块破碎 — 工具处理（工具替换域 + 耐久保护域）
+ *   itemStackAfterBreak 为空（工具碎掉）→ 换入同类新工具（tool 开关约束）；
+ *   工具未碎 → 评估耐久，低于阈值未碎也提前收起替换同类（durability 开关约束）。
  */
 world.afterEvents.playerBreakBlock.subscribe((event) => {
-  ifRefillEligible(event.player, (player) => {
-    if (event.itemStackBeforeBreak === undefined) return;
-    if (event.itemStackAfterBreak !== undefined) return;
-    refillMainhand(player, event.itemStackBeforeBreak.typeId);
-  });
+  if (event.itemStackBeforeBreak === undefined) return;
+  const player = policy.asPlayer(event.player);
+  if (!player) return;
+  // 工具替换域：破碎 → 补同类
+  if (settings.isEnabled("tool") && event.itemStackAfterBreak === undefined) {
+    try {
+      toolManager.onToolBroke(player, event.itemStackBeforeBreak.typeId);
+    } catch (e) {
+      logger.error(`tool broke replace failed ${player.name}: ${e}`);
+    }
+  }
+  // 耐久保护域（独立开关）：未碎但耐久过低 → 提前收起替换同类
+  try {
+    toolManager.checkDurability(player);
+  } catch (e) {
+    logger.error(`durability guard failed ${player.name}: ${e}`);
+  }
 });
