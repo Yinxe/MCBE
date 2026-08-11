@@ -22,7 +22,7 @@ export interface RegionStats {
   used: number;
   /** 分配水印（下一个从未用过的槽位 ID） */
   nextFree: number;
-  /** 空洞复用池大小 */
+  /** 空洞总数（各层之和） */
   freePoolSize: number;
 }
 
@@ -38,6 +38,6 @@ export function regionStats(key: string, dimensionId: string, layout: RegionLayo
     capacity: capacityOf(layout),
     used: usedSlots(meta),
     nextFree: meta.nextFree,
-    freePoolSize: meta.freePool.length,
+    freePoolSize: meta.holeCount,
   };
 }

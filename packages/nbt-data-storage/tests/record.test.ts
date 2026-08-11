@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseRegionKey, regionKey, shortDimension } from "../src/core/keys";
-import { allocateSlotId, createRegionMeta, releaseSlotId } from "../src/core/meta";
+import { allocateSlotId, createLevelPools, releaseSlotId } from "../src/core/meta";
 import { createRegionRecord, parseRegionRecord, serializeRegionRecord } from "../src/core/record";
 import { regionStats } from "../src/core/stats";
 
@@ -19,30 +19,34 @@ test("regionKey / parseRegionKey：往返一致，非法键返回 null", () => {
   assert.equal(parseRegionKey("the_end:0"), null);
 });
 
-test("serializeRegionRecord / parseRegionRecord：往返保留 layout + meta", () => {
+test("serializeRegionRecord / parseRegionRecord：往返保留 layout + meta（空洞按层）", () => {
   const rec = createRegionRecord("minecraft:the_end", { chunkX: 0, chunkZ: -64, baseY: 120, maxLevels: 4 });
-  allocateSlotId(rec.meta, 100);
-  allocateSlotId(rec.meta, 100);
-  releaseSlotId(rec.meta, 0);
+  const pools = createLevelPools(rec.layout.maxLevels);
+  allocateSlotId(rec.meta, pools, 100);
+  allocateSlotId(rec.meta, pools, 100);
+  releaseSlotId(rec.meta, pools, 0);
   const parsed = parseRegionRecord(serializeRegionRecord(rec));
   assert.ok(parsed);
   assert.equal(parsed.dimensionId, "minecraft:the_end");
   assert.deepEqual(parsed.layout, rec.layout);
   assert.equal(parsed.meta.nextFree, 2);
-  assert.deepEqual(parsed.meta.freePool, [0]);
+  assert.deepEqual(parsed.meta.holeLevels, [0]);
+  assert.equal(parsed.meta.holeCount, 1);
 });
 
 test("parseRegionRecord：垃圾/版本不符返回 undefined", () => {
   assert.equal(parseRegionRecord("not-json"), undefined);
   assert.equal(parseRegionRecord("{}"), undefined);
-  assert.equal(parseRegionRecord('{"v":2}'), undefined);
-  assert.equal(parseRegionRecord('{"v":1}'), undefined); // 缺 layout/meta
+  assert.equal(parseRegionRecord('{"v":1}'), undefined); // 旧版本（freePool 时代）
+  assert.equal(parseRegionRecord('{"v":3}'), undefined); // 未来版本
+  assert.equal(parseRegionRecord('{"v":2}'), undefined); // 缺 layout/meta
 });
 
 test("regionStats：统计快照计算正确", () => {
   const rec = createRegionRecord("minecraft:the_end", { chunkX: 0, chunkZ: -64, baseY: 120, maxLevels: 2 });
-  for (let i = 0; i < 5; i++) allocateSlotId(rec.meta, 1000);
-  releaseSlotId(rec.meta, 1);
+  const pools = createLevelPools(rec.layout.maxLevels);
+  for (let i = 0; i < 5; i++) allocateSlotId(rec.meta, pools, 1000);
+  releaseSlotId(rec.meta, pools, 1);
   const stats = regionStats("the_end:0:-64", rec.dimensionId, rec.layout, rec.meta);
   assert.equal(stats.capacity, 2 * 256 * 27);
   assert.equal(stats.used, 4);
