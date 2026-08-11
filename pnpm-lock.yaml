@@ -523,7 +523,7 @@ importers:
         specifier: 5.0.2
         version: 5.0.2
 
-  packages/item-matrix:
+  packages/nbt-data-storage:
     dependencies:
       '@minecraft/server':
         specifier: 2.8.0
@@ -532,6 +532,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      typescript:
+        specifier: 5.0.2
+        version: 5.0.2
 
   packages/toolkit:
     dependencies:

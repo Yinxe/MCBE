@@ -38,3 +38,6 @@ item-matrix
 
 # Deepwork state
 .slim/deepwork/
+
+# CodeGraph index
+.codegraph/

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "lib": ["es2017"],
+    "moduleResolution": "bundler",
+    "module": "ES2020",
+    "declaration": false,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitAny": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "noEmitHelpers": true,
+    "pretty": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", ".test-build"]
+}
