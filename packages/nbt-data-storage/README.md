@@ -58,7 +58,7 @@ ItemStorage.events.stored.subscribe(({ regionId, slotId, itemTypeId }) => {});
 
 // 统计
 const stats = region.stats();
-// => { regionId, dimensionId, chunkX, chunkZ, baseY, maxLevels, capacity, used, nextFree, freePoolSize }
+// => { regionId, dimensionId, chunkX, chunkZ, baseY, maxLevels, capacity, barrels, totalBarrels, used, nextFree, freePoolSize }
 ```
 
 ## API 一览
@@ -107,6 +107,12 @@ y = baseY + level
 ### 动态扩容
 
 阵列**不初始化时全量生成**。`put` 分配到一个槽位时才物化该桶（`setBlockType` 幂等，已存在即跳过），按使用逐桶/逐层增长；`nextFree` 水印触及容量上限后拒绝存入。空洞（`take`/`remove` 释放的槽位）**按层存回该层的空洞池**，下次 `put` 优先复用，不浪费容量。
+
+### 桶的创建与感知
+
+- **创建时机**：`put` 分配的槽位所在桶在世界上不存在（不是木桶）时才 `setBlockType` 物化——只在"首次触达某桶的第一个槽位"时发生；空洞复用不建新桶。
+- **创建顺序**：槽位 ID 递增 → 桶序号 0..16383 递增（层内 X→Z 行扫描，层 0 填满 256 桶才到层 1），新桶总在"当前最高触达槽位的那个桶"。
+- **感知数量**：`stats()` 报告 `barrels`（已物化桶数，`meta.barrelCount` 精确跟踪）、`totalBarrels`（满容量桶数 = 层数×256，静态）、`capacity`（总槽数 = 层数×256×27，静态）。
 
 ### 空洞存储：每层一个 DP 键（规避单值上限）
 

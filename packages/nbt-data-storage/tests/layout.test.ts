@@ -13,6 +13,7 @@ import {
   levelOf,
   materializedBarrelsFor,
   slotIdToPosition,
+  totalBarrelsOf,
   validateLayout,
   type RegionLayout,
 } from "../src/core/layout";
@@ -36,6 +37,12 @@ test("MAX_LEVELS：固定 64 层，容量 = 442368 槽，顶层落在第 63 层"
   assert.equal(pos.x, 15);
   assert.equal(pos.z, 15);
   assert.equal(pos.slotInBarrel, BARREL_SLOTS - 1);
+});
+
+test("totalBarrelsOf：满容量桶总数 = 层数 × 256", () => {
+  assert.equal(totalBarrelsOf({ ...DEFAULT, maxLevels: 1 }), 256);
+  assert.equal(totalBarrelsOf(DEFAULT), 4 * 256);
+  assert.equal(totalBarrelsOf({ ...DEFAULT, maxLevels: MAX_LEVELS }), 64 * 256);
 });
 
 test("slotIdToPosition：0 号槽位于区块原点 (0, baseY, 0)", () => {

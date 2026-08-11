@@ -21,6 +21,8 @@ export interface RegionMeta {
   holeLevels: number[];
   /** 空洞总数（= 各层空洞之和；统计 used 用，免加载全部层） */
   holeCount: number;
+  /** 已物化的木桶数（每次真正 setBlockType 建新桶 +1；空桶常驻不回收） */
+  barrelCount: number;
 }
 
 /** 空洞池（纯内存形状，core 分配/回收用；持久化由 mc 层按层读写 DP） */
@@ -36,7 +38,7 @@ export function createLevelPools(maxLevels: number): LevelPools {
 
 /** 新建空元数据 */
 export function createRegionMeta(): RegionMeta {
-  return { v: 2, nextFree: 0, holeLevels: [], holeCount: 0 };
+  return { v: 2, nextFree: 0, holeLevels: [], holeCount: 0, barrelCount: 0 };
 }
 
 /**

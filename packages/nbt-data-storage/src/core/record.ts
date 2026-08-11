@@ -19,7 +19,7 @@ export interface PersistedRegion {
 
 /** 新建区域主记录（新注册时使用） */
 export function createRegionRecord(dimensionId: string, layout: RegionLayout): PersistedRegion {
-  return { v: 2, dimensionId, layout, meta: { v: 2, nextFree: 0, holeLevels: [], holeCount: 0 } };
+  return { v: 2, dimensionId, layout, meta: { v: 2, nextFree: 0, holeLevels: [], holeCount: 0, barrelCount: 0 } };
 }
 
 /** 序列化为 JSON 字符串（DP 值） */

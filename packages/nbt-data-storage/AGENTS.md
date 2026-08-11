@@ -16,8 +16,9 @@ packages/nbt-data-storage/
 │   │   ├── meta.ts       # RegionMeta：水印 + 按层空洞（holeLevels 索引 + 洞数），O(1) 分配/回收
 │   │   ├── keys.ts       # 维度枚举(0/1/2) / 区域ID（2:0:-64）/ 解析
 │   │   ├── record.ts     # 持久化区域记录序列化（layout+dimensionId+meta 合一）
-│   │   ├── stats.ts      # RegionStats 只读统计（纯函数）
+│   │   ├── stats.ts      # RegionStats 只读统计（含 barrels/totalBarrels）
 │   │   ├── transfer.ts   # 原子传输编排（TransferPort 注入，可 mock 单测）
+│   │   ├── put.ts        # 存入编排（PutPort 注入：分配→占位→物化→占用检查→写入，有界重试）
 │   │   └── index.ts
 │   └── mc/               # MC 适配层（只做副作用/IO）
 │       ├── ItemStorage.ts    # 注册表 + register/listRegions/getRegion/queryWorld/totalStats
@@ -41,7 +42,8 @@ packages/nbt-data-storage/
 - **常加载依赖作弊**：ticking area 是 OP 命令，世界需开启作弊；未开启时注册静默失败，读写降级为 `null`/`undefined`（不崩溃）。每个维度 ticking area 数量有上限，建议存储集中末地。
 - **跨模组共享的寻址单元是区块**：锚点经 `chunkFromAnchor`（`Math.floor(x/16)`，负数精确归块）定到 16×16 区块；同维度**同区块**（16 块一格）即共享，跨区块各自独立。归块逻辑在 core（`chunkFromBlock`），单测覆盖四象限与边界点。
 - **凭据取物（区域ID + slotId）**：区域唯一 ID = `维度枚举:区块X:区块Z`（如 `2:0:-64`，0=主世界 1=下界 2=末地，其余维度回退短名可逆）。`put` 成功返回 `{ regionId, slotId }`；`ItemStorage.get/take(ref)` 凭凭据 O(1) 取物，未注册时从 DP 记录**惰性采纳**区域句柄（跨模组可用）。
-- **动态扩容**：不预生成阵列；`put` 分配到的桶不存在时才 `setBlockType`（幂等）。**层数固定 64（无需配置）**，容量上限 = `64 × 256 × 27` = 442368 槽，满则拒绝（不够再注册新集群）。
+- **动态扩容**：不预生成阵列；`put` 分配到的桶不存在时才 `setBlockType`（幂等，上报 created → `meta.barrelCount` +1）。**层数固定 64（无需配置）**，容量上限 = `64 × 256 × 27` = 442368 槽、满容量桶数 = `64 × 256` = 16384，满则拒绝（不够再注册新集群）。空桶常驻不回收（供空洞复用）。
+- **存入编排在 core**：`putItem(PutPort)` 下沉到 core（可 mock 单测）——先占位写 DP → 物化 → 世界占用检查 → 写入；世界占用则换候选（有界重试），物化/写入失败槽回归空洞池返回 null。`StoredRegion` 只留薄接线（port + 事件触发）。
 - **原子传输**：`transferIn/transferOut` 走 core `transfer.ts` 编排（TransferPort 注入、可 mock 单测）——要么整体成功要么保持原状，物品不丢不重复；失败回滚 = 取回区域槽并尽力还原源槽。
 - **自定义事件**：mc 层复用 `@yinxe/toolkit` 的 `EventSignal` 暴露 `ItemStorage.events`（stored/taken/removed）；事件负载只用可序列化 string/number，不携带 MC 对象。core 不依赖 toolkit（保持零 `@minecraft`）。
 

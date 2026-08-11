@@ -116,7 +116,7 @@ export function installNdsCommands(): void {
             [
               `§l== ${s.key} ==§r`,
               `维度 ${s.dimensionId}｜区块 ${s.chunkX}, ${s.chunkZ}｜底层 Y=${s.baseY}｜层数 ${s.maxLevels}`,
-              `容量 ${s.capacity} 槽｜已用 ${s.used}｜水印 nextFree=${s.nextFree}｜空洞 ${s.freePoolSize}`,
+              `容量 ${s.capacity} 槽｜桶 ${s.barrels}/${s.totalBarrels}｜已用 ${s.used}｜水印 nextFree=${s.nextFree}｜空洞 ${s.freePoolSize}`,
             ].join("\n")
           );
         });

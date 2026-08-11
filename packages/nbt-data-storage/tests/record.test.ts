@@ -17,6 +17,7 @@ test("serializeRegionRecord / parseRegionRecord：往返保留 layout + meta（�
   assert.equal(parsed.meta.nextFree, 2);
   assert.deepEqual(parsed.meta.holeLevels, [0]);
   assert.equal(parsed.meta.holeCount, 1);
+  assert.equal(parsed.meta.barrelCount, 0);
 });
 
 test("parseRegionRecord：垃圾/版本不符返回 undefined", () => {
@@ -34,6 +35,8 @@ test("regionStats：统计快照计算正确", () => {
   releaseSlotId(rec.meta, pools, 1);
   const stats = regionStats("2:0:-64", rec.dimensionId, rec.layout, rec.meta);
   assert.equal(stats.capacity, 2 * 256 * 27);
+  assert.equal(stats.totalBarrels, 2 * 256);
+  assert.equal(stats.barrels, 0);
   assert.equal(stats.used, 4);
   assert.equal(stats.nextFree, 5);
   assert.equal(stats.freePoolSize, 1);

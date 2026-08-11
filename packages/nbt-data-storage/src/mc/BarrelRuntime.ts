@@ -21,18 +21,19 @@ export class BarrelRuntime {
 
   /**
    * 物化（幂等）：确保该槽位所在木桶存在；非木桶方块被替换为木桶。
-   * 区块未加载或 setBlockType 失败返回 false。
+   * 返回是否就绪 + 本次是否新建了桶（新建 → 上层计数）。
+   * 区块未加载或 setBlockType 失败 → { ok:false }。
    */
-  ensureBarrel(pos: SlotPosition): boolean {
+  ensureBarrel(pos: SlotPosition): { ok: boolean; created: boolean } {
     try {
       const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
-      if (!block) return false;
-      if (block.typeId === BARREL) return true;
+      if (!block) return { ok: false, created: false };
+      if (block.typeId === BARREL) return { ok: true, created: false };
       this.dimension.setBlockType({ x: pos.x, y: pos.y, z: pos.z }, BARREL);
-      return true;
+      return { ok: true, created: true };
     } catch (e) {
       console.warn("[nbt-data-storage] ensureBarrel 失败", e);
-      return false;
+      return { ok: false, created: false };
     }
   }
 

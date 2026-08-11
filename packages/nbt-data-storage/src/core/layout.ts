@@ -48,6 +48,11 @@ export function capacityOf(layout: RegionLayout): number {
   return layout.maxLevels * SLOTS_PER_LEVEL;
 }
 
+/** 阵列满容量时的木桶总数（静态可预知：层数 × 每层 256 桶） */
+export function totalBarrelsOf(layout: RegionLayout): number {
+  return layout.maxLevels * BARRELS_PER_LEVEL;
+}
+
 /** slotId 是否落在有效范围 [0, capacity) 内 */
 export function isValidSlotId(slotId: number, layout: RegionLayout): boolean {
   return Number.isInteger(slotId) && slotId >= 0 && slotId < capacityOf(layout);
