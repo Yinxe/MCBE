@@ -18,6 +18,7 @@
     "scripts/ToolScorer.ts",
     "scripts/MinePreference.ts",
     "scripts/WeaponPreference.ts",
+    "scripts/TotemPolicy.ts",
     "tests/**/*.ts"
   ],
   "exclude": ["node_modules", ".test-build"]
