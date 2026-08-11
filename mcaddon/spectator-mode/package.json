@@ -1,6 +1,6 @@
 {
   "name": "spectator-mode",
-  "version": "1.0.7",
+  "version": "1.0.10",
   "description": "灵魂出窍 · 旁观模式：飞离真身侦查，距离容忍自动回归",
   "private": true,
   "devDependencies": {
