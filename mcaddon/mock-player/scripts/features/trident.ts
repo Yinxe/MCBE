@@ -174,6 +174,8 @@ function doThrowLoop(
       // 蓄力后释放（trident 约需 15-20 tick 蓄力）
       system.runTimeout(() => {
         try {
+          // ⚠️ 实体有效性防护：假人死亡/下线瞬间实体失效
+          if (!b.isValid) return;
           b.stopUsingItem();
         } catch {
           // 释放失败时继续

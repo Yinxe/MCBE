@@ -16,6 +16,7 @@ import { startTagBehaviors } from "./features/core/behavior";
 import { initGameTestContext } from "./features/core/gametestContext";
 import { botRegistry, loadAllBotRecords, saveBotRecord } from "./features/core/persistence";
 import { initTridentTracker } from "./features/tridentTracker";
+import { initRaidModeEffects } from "./features/raidMode";
 
 // ─── 命令注册（early-execution mode） ─────────────────────
 // customCommandRegistry 不在 world 上，而是在 StartupEvent 上
@@ -56,4 +57,8 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 初始化三叉戟追踪（entitySpawn 标记假人抛出的三叉戟）
   console.info(`[MockPlayer] 初始化三叉戟追踪`);
   initTridentTracker();
+
+  // 初始化劫掠效果监听（effectAdd 检测村庄英雄，验证假人能否获得）
+  console.info(`[MockPlayer] 初始化劫掠效果监听`);
+  initRaidModeEffects();
 });

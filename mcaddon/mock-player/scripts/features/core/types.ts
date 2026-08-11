@@ -164,6 +164,20 @@ export interface BotRecord {
   experience: ExperienceRecord;
   /** 生成模式：normal=普通可转向 / chunkload=强加载不可转向 */
   spawnMode?: "normal" | "chunkload";
+  /** 劫掠区域配置（开启劫掠模式时设置） */
+  raidConfig?: RaidAreaConfig;
+}
+
+/** 劫掠区域配置 */
+export interface RaidAreaConfig {
+  /** 以假人为中心的 X 轴半尺寸（实际区域 = bot.x ± x） */
+  x: number;
+  /** 以假人为中心的 Y 轴半尺寸 */
+  y: number;
+  /** 以假人为中心的 Z 轴半尺寸 */
+  z: number;
+  /** 是否显示边界粒子线框 */
+  showBoundary: boolean;
 }
 
 /** 回收预览——单个物品的展示信息 */
