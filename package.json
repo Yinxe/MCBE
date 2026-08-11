@@ -4,8 +4,16 @@
   "private": true,
   "description": "MCBE Addon — Monorepo",
   "packageManager": "pnpm@11.1.3",
-  "keywords": [],
-  "author": "Yinx",
+  "keywords": ["MCBE","addon","模组","扩展"],
+  "author": {
+    "name": "Yinx",
+    "email": "1423716216@qq.com",
+    "url": "https://github.com/Yinxe/",
+    "group":"632178498"
+  },
+  "repository": {
+    "url": "https://github.com/Yinxe/MCBE"
+  },
   "license": "ISC",
   "devEngines": {
     "packageManager": {

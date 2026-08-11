@@ -1,14 +1,14 @@
 // ─── 全局配置（管理员设置服务） ────────────────────────
-// 五项开关 + 耐久保护阈值 + 世界动态属性持久化：
+// 六个开关 + 耐久保护阈值 + 世界动态属性持久化：
 //   全局启用 / 物品补充（refill）/ 武器替换（weapon）/ 工具替换（tool）
-//   / 耐久保护（durability，含阈值 durabilityThreshold）
+//   / 挖掘防误触（antiTouch）/ 耐久保护（durability，含阈值 durabilityThreshold）
 // 启动后由 main.ts 用 system.run 调用 load() 从世界 DP 恢复；此后在内存
 // 读写，toggle/setThreshold 即落盘。各事件路由前用 isEnabled 判断是否执行。
 
 import { world } from "@minecraft/server";
 
 /** 功能开关标识（不含全局） */
-export type Feature = "refill" | "weapon" | "tool" | "durability";
+export type Feature = "refill" | "weapon" | "tool" | "antiTouch" | "durability";
 
 /** 当前配置快照（菜单展示用） */
 export interface AutoRefillSettings {
@@ -16,6 +16,8 @@ export interface AutoRefillSettings {
   refillEnabled: boolean;
   weaponSwapEnabled: boolean;
   toolSwapEnabled: boolean;
+  /** 挖掘防误触：首次用错误工具挖方块不切换（防误拆），窗口内同信号二次才启用 */
+  antiTouchEnabled: boolean;
   durabilityProtectEnabled: boolean;
   /** 耐久保护替换阈值：剩余耐久占比低于该值（0..1）视为紧急 */
   durabilityThreshold: number;
@@ -27,13 +29,14 @@ const DP_GLOBAL = "autorefill:global";
 const DP_REFILL = "autorefill:refill";
 const DP_WEAPON = "autorefill:weapon";
 const DP_TOOL = "autorefill:tool";
+const DP_ANTI_TOUCH = "autorefill:antiTouch";
 const DP_DURABILITY = "autorefill:durability";
 const DP_DURABILITY_THRESHOLD = "autorefill:durabilityThreshold";
 const DP_DURABILITY_FLOOR = "autorefill:durabilityFloor";
 
-/** 耐久保护阈值取值范围（占比） */
+/** 耐久保护阈值取值范围（占比）：默认 5%，滑条上限 20% */
 export const DURABILITY_THRESHOLD_MIN = 0.01;
-export const DURABILITY_THRESHOLD_MAX = 0.5;
+export const DURABILITY_THRESHOLD_MAX = 0.2;
 
 /** 耐久保护绝对下限取值范围（剩余耐久点数） */
 export const DURABILITY_FLOOR_MIN = 1;
@@ -44,14 +47,20 @@ const DEFAULTS: AutoRefillSettings = {
   refillEnabled: true,
   weaponSwapEnabled: true,
   toolSwapEnabled: true,
+  antiTouchEnabled: true,
   durabilityProtectEnabled: true,
-  durabilityThreshold: 0.1,
+  durabilityThreshold: 0.05,
   durabilityFloor: 16,
 };
 
 /** 布尔开关字段（toggle 可写的快照字段集合） */
 type BooleanField =
-  "globalEnabled" | "refillEnabled" | "weaponSwapEnabled" | "toolSwapEnabled" | "durabilityProtectEnabled";
+  | "globalEnabled"
+  | "refillEnabled"
+  | "weaponSwapEnabled"
+  | "toolSwapEnabled"
+  | "antiTouchEnabled"
+  | "durabilityProtectEnabled";
 
 /** 开关 → 动态属性键 */
 const DP_BY_FEATURE: Record<"global" | Feature, string> = {
@@ -59,6 +68,7 @@ const DP_BY_FEATURE: Record<"global" | Feature, string> = {
   refill: DP_REFILL,
   weapon: DP_WEAPON,
   tool: DP_TOOL,
+  antiTouch: DP_ANTI_TOUCH,
   durability: DP_DURABILITY,
 };
 
@@ -68,6 +78,7 @@ const FIELD_BY_FEATURE: Record<"global" | Feature, BooleanField> = {
   refill: "refillEnabled",
   weapon: "weaponSwapEnabled",
   tool: "toolSwapEnabled",
+  antiTouch: "antiTouchEnabled",
   durability: "durabilityProtectEnabled",
 };
 
@@ -84,6 +95,7 @@ export class SettingsService {
         refillEnabled: world.getDynamicProperty(DP_REFILL) !== false,
         weaponSwapEnabled: world.getDynamicProperty(DP_WEAPON) !== false,
         toolSwapEnabled: world.getDynamicProperty(DP_TOOL) !== false,
+        antiTouchEnabled: world.getDynamicProperty(DP_ANTI_TOUCH) !== false,
         durabilityProtectEnabled: world.getDynamicProperty(DP_DURABILITY) !== false,
         durabilityThreshold:
           typeof threshold === "number" && threshold > 0 ? clamp(threshold) : DEFAULTS.durabilityThreshold,

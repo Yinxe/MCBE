@@ -8,17 +8,18 @@ MCBE（Minecraft Bedrock）Addon 单体仓库：TypeScript Script API 模组 + �
 
 | 包名 | 显示名 | 说明 |
 |------|--------|------|
-| `mock-player` | 模拟玩家 | GameTest 假人管理（核心交互示例） |
-| `smartwarehouse` | 智能仓库 | v1 仓库管理（item-route 的前身/参考） |
-| `item-route` | 物品路由 | **参考架构**：自动分拣/容器整理/统计/预警（core/mc 六边形） |
-| `keepinventory` | 死亡不掉落 | 死亡保护 |
-| `auto-refill` | 自动替换 | 物品自动补充 |
-| `craftablerarities` | 合成配方扩展 | 配方/品质扩展 |
-| `teleporter` | 传送 | 传送功能 |
+| `mock-player` | 模拟玩家 | GameTest 假人管理：生成/行为控制/物品交互/数据持久化（核心交互示例） |
+| `smartwarehouse` | 智能仓库 | 仓库管理 v1：自动分拣 + 容器整理 + 统计 + 容量预警（item-route 的前身） |
+| `item-route` | 物品路由 | **参考架构**：六边形 core/mc 分层，自动分拣/容器整理/统计/预警，core 零 `@minecraft` 可单测 |
+| `keepinventory` | 死亡不掉落 | 死亡掉落保护：无需作弊、保留成就、极限复活 |
+| `auto-refill` | 自动替换 | 消耗品自动补货 + 工具/武器按偏好自动切换 + 耐久保护 + 挖掘防误触 |
+| `craftablerarities` | 合成配方扩展 | 合成稀有/不可再生物品，创造模式快速获取隐藏方块 |
+| `teleporter` | 传送 | 玩家间传送请求 TPA / TPHERE / 返回点 |
+| `spectator-mode` | 灵魂出窍 | 飞离真身旁观侦查，距离容忍自动回归 |
 
 **服务端插件（`server-plugin/<name>/`，纯 JSON / 轻量 BP）**
 
-- `antibundledup`（去堆叠重复）
+- `antibundledup`（反收纳袋刷物）— 收纳袋改为可食用食物，防刷物漏洞
 
 **共享包（`packages/`）**
 
@@ -92,9 +93,11 @@ bump version (+0.01) → build → pack → commit → tag → push
 
 ### 分支管理
 
-- `main`：稳定分支，发布产物
+- `main`：稳定分支，正式发布（main 上的 tag → 稳定版 Release）
+- `dev`：集成/测试分支，默认发布测试版（dev 上的 tag → 预发布 beta Release）
 - `feat/<name>`：新 addon 开发分支（如 `feat/auto-refill`）
 - 新 addon 完成构建验证后，切出 feature branch 提交，main 保持干净
+- 发布通道：`.github/workflows/release.yml` 只处理 main / dev 上的 tag，其它分支的 tag 不构建不发布
 
 ### 新建 Addon
 

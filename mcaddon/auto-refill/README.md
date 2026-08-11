@@ -8,6 +8,7 @@ Minecraft Bedrock「自动替换」Add-On，行为包（TypeScript + Script API�
 
 - **自动补充消耗品** — 生存/冒险模式下，主手物品被消耗（食物、药水、弓/弩/三叉戟射击等）后，自动从背包查找同 `typeId` 物品替换到主手
 - **自动切换挖掘工具** — 开始挖掘方块时，识别方块所需工具类别（镐/斧/锹/锄/剪刀，`BlockClassifier` 四层启发式），从**能力候选池**按策略排序换入正确工具。默认**省耐久不择优**（主手已用对工具则不动，尊重玩家用铁镐省钻石镐耐久的自主选择）；每个方块可通过**方块偏好表**叠加**两级偏好（附魔 1 级 + 工具 2 级）**，完全可扩展
+- **挖掘防误触（默认开，可开关）** — 第一次用"错误工具/空手"命中方块、且本会触发工具切换时，**先拦截不切换**（防空手随手命中把效率5镐秒切进建筑而误拆）；**2.5 秒内**完全相同操作（同一玩家+主手物品+方块）再挖一次才确认有意·允许切换，**超过窗口防误触重置**
 - **自动切换武器** — 攻击实体时，若主手**不是武器**则按**被攻击实体种类偏好**换入武器，**附魔 1 级优先**（亡灵 → 亡灵杀手最高、其次锋利；其它实体 → 锋利最高）、**工具 2 级优先**（同附魔下 剑→斧→其它武器）；**已持任意武器（含弓弩/三叉戟/重锤）一律不动**
 - **自动换精准采集工具** — 挖掘玻璃/玻璃片/冰/萤石/海晶灯等不用精准采集就无法产出方块本体的方块时，自动换上任意带精准采集（Silk Touch）的工具
 - **耐久保护（可开关）** — 工具/武器被使用后耐久低于阈值时，**未碎也提前收起**，替换背包中同类别、更耐久的同类工具；阈值支持**剩余占比（%）+ 剩余点数绝对下限**两个维度（取较大的生效），且可**配置**；旧工具带精准采集 → 优先换同样带精准采集的同款；无合格同类则不动（**绝不降级**）
@@ -17,7 +18,7 @@ Minecraft Bedrock「自动替换」Add-On，行为包（TypeScript + Script API�
 
 ## 管理员配置
 
-命令 `/ar:menu`（`CommandPermissionLevel.GameDirectors`，仅操作员）打开 **ModalForm**：每个开关一个 toggle（显示当前状态），耐久保护阈值两个滑条（占比 / 绝对下限点数），提交时一次性应用并保存：
+命令 `/ar:menu`（`CommandPermissionLevel.GameDirectors`，仅操作员）打开 **ModalForm**：每个开关一个 toggle（显示当前状态，**每个开关/滑条带 tooltip**，悬停感叹号显示说明），耐久保护阈值两个滑条（占比 / 绝对下限点数），提交时一次性应用并保存：
 
 | 项 | 控制 |
 |---|---|
@@ -25,11 +26,14 @@ Minecraft Bedrock「自动替换」Add-On，行为包（TypeScript + Script API�
 | 物品补充 | 消耗品补货（使用后主手 `undefined` / 副作用残留 → 换同类 + 堆叠回收） |
 | 武器替换 | 攻击实体时非武器主手换武器（附魔 1 级：亡灵亡灵杀手>锋利 / 其它锋利；工具 2 级：剑>斧>其它） |
 | 工具替换 | 挖掘工具核对换入 + 工具破碎换同类 |
+| 挖掘防误触 | 首次错误工具/空手挖方块不切换（防误拆）；2.5 秒内同信号二次才启用 |
 | 耐久保护 | 工具低耐久未碎也提前收起换同类（影响替代阈值） |
-| 保护阈值 | 剩余耐久占比低于该值即替换（滑条 1%~50%，默认 10%） |
+| 保护阈值 | 剩余耐久占比低于该值即替换（滑条 1%~20%，默认 **5%**） |
 | 绝对下限 | 剩余耐久点数低于该值即替换（滑条 1~64，默认 16；与占比阈值取较大的生效） |
 
-开关与两个阈值存世界动态属性（键 `autorefill:global/refill/weapon/tool/durability/durabilityThreshold/durabilityFloor`），重启世界保持。
+开关与两个阈值存世界动态属性（键 `autorefill:global/refill/weapon/tool/antiTouch/durability/durabilityThreshold/durabilityFloor`），重启世界保持。
+
+另有 **`/ar:help`**（全体玩家可用，`CommandPermissionLevel.Any`）：简要列出本模组功能与机制（物品补充 / 工具替换+方块偏好 / 挖掘防误触 / 武器替换 / 耐久保护 / 配置入口）。
 
 ## 架构
 
@@ -44,7 +48,7 @@ scripts/
 ├── types.ts            领域类型：ToolCategory/WeaponClass / ToolRequirement / RankableCandidate /
 │                        RankContext / RankDecision / PreferenceSpec（两级偏好）/ EnchantKey / ToolKey
 ├── ItemDomain.ts        物品域判定：resolve(typeId) → 'tool' | 'consumable'（补货的消耗分支兜底守卫）
-├── PlayerPolicy.ts      玩家守卫：真实玩家 + 生存/冒险模式
+├── PlayerPolicy.ts      玩家守卫：真实玩家 + 生存/冒险模式；playerOf（命令来源取玩家，菜单/帮助共用）
 ├── Inventory.ts         背包端口（Port & Adapter）：唯一封装 Container I/O + 候选泛型扫描 scanCandidates
 ├── ToolProfile.ts       特征提取（Adapter）：ItemStack → RankableCandidate（品质/耐久/占比/附魔）
 ├── BlockClassifier.ts   方块识别（Strategy 表驱动）：tag 优先 + 关键词兜底 + 精准采集标记
@@ -56,9 +60,11 @@ scripts/
 │                        （如农作物→时运优先、树叶→精准锄>剪；附魔 1 级 + 工具 2 级）
 ├── WeaponPreference.ts  实体种类偏好表（纯逻辑）：按被攻击实体 typeId 绑定武器两级偏好
 │                        （亡灵→亡灵杀手>锋利；其它→锋利；同附魔下 剑>斧）
-├── ToolManager.ts       工具领域服务（Facade）：挖掘核对 / 武器切换 / 耐久保护 / 工具破碎换同类
-├── Settings.ts          全局配置：五项开关 + 耐久保护两个阈值（占比/绝对下限）+ 世界 DP 持久化
-├── AdminMenu.ts         管理员菜单（ModalFormData 一键配置）
+├── AccidentalGuard.ts   挖掘防误触守卫（纯逻辑）：信号(玩家·主手·方块)首拦 / 窗口内二次放行 / 越窗重置
+├── ToolManager.ts       工具领域服务（Facade）：挖掘核对 / 挖掘防误触 / 武器切换 / 耐久保护 / 工具破碎换同类
+├── Settings.ts          全局配置：六项开关（含防误触）+ 耐久保护两个阈值（占比/绝对下限）+ 世界 DP 持久化
+├── AdminMenu.ts         管理员菜单（ModalFormData 一键配置，每项带 tooltip）
+├── Help.ts              帮助命令 /ar:help（全体玩家可用，简要说明功能与机制）
 └── RefillManager.ts     消耗品领域服务（Facade）：按主手状态补货 + 副作用堆叠
 ```
 
@@ -113,7 +119,8 @@ scripts/
 1. 主手锁定/自定义 → 尊重不动
 2. `classify(block)` 识别（四层：瞬破排除 → 现代挖掘标签 `is_*_item_destructible` + 镐最低品质 → 遗留标签 → 关键词）＋ `wantsSilkTouch` 标记；`lookupMineStrategy(block.typeId)` 取方块两级偏好（无则默认 `frugal`）
 3. 按「类别 + 偏好」建**能力候选池**：默认扫能力类别（镐/斧/锹/锄/剪）；方块偏好 `crossEnchant` 时额外把在线命中附魔的任意工具入池（如树叶的任意精准工具、农作物的时运工具）；`exclude` 角色（如时运锹）永不入池
-4. `ToolSelector.decide`（`preferenceScorer`：附魔 1 级 → 工具 2 级 → 品质/耐久）出 Keep/Swap，`execute` 统一执行 + pop 音效
+4. `ToolSelector.decide`（`preferenceScorer`：附魔 1 级 → 工具 2 级 → 品质/耐久）出 Keep/Swap
+5. **挖掘防误触**（默认开）：决策为 Swap 时，以 `(玩家·主手物品或空·方块)` 为信号——首次同信号直接拦截不执行（防误拆），窗口内（2.5s）同信号再命中才确认有意、`execute` 统一执行 + pop 音效；越窗重置
 
 > **默认省耐久**：无偏好的方块走 `frugal`，把已达标的当前主手排第 0 → 一律保持、不择优升级（尊重玩家省钻石镐耐久）。绑定了 `PreferenceSpec` 的方块按"附魔 1 级 → 工具 2 级"择优（同一优先维内会升级到更优的偏好工具）。"无适用工具"（能力池为空）→ 保持。
 
@@ -141,7 +148,7 @@ scripts/
 
 | 事件 | 分派 | 所属领域 |
 |---|---|---|
-| `entityHitBlock` | `ToolManager.onPlayerHitBlock`（挖掘开始、破坏前核对换入） | tool |
+| `entityHitBlock` | `ToolManager.onPlayerHitBlock`（挖掘开始、破坏前核对换入；防误触：首次错工具命中不换） | tool |
 | `entityHitEntity` | `ToolManager.onAttackEntity`（攻击实体，按实体偏好换武器）＋ `checkDurability` | tool |
 | `playerBreakBlock` | 工具**破碎** → `onToolBroke` 换同类；**未碎** → `checkDurability` 低耐久提前收 | tool |
 | `itemCompleteUse` / `itemReleaseUse` / `itemUse` / `playerInteractWithBlock` | `RefillManager.onConsumed`（按使用后主手状态判断） | 消耗 / 工具切换由主手状态判别 |
@@ -183,7 +190,7 @@ pnpm run clean         # 清理构建产物
 
 ### 测试
 
-- **纯逻辑层**（`ToolScorer` / `MinePreference` / `WeaponPreference`）零 `@minecraft` 依赖，`tsconfig.test.json` 单独编译进 `node --test`（镜像 item-route 机制），覆盖：角色判定 / 达标判定 / 命名策略排序 / **两级偏好组合（附魔 1 级 + 工具 2 级字典序、strict 无命中→fallback、exclude 排除角色、crossEnchant 跨类别入池、tieBreak）** / 双层 fallback / 无适用→保持 / 耐久替换池规则。文件在 `tests/*.test.ts`（45 项）。
+- **纯逻辑层**（`ToolScorer` / `MinePreference` / `WeaponPreference` / `AccidentalGuard`）零 `@minecraft` 依赖，`tsconfig.test.json` 单独编译进 `node --test`（镜像 item-route 机制），覆盖：角色判定 / 达标判定 / 命名策略排序 / **两级偏好组合（附魔 1 级 + 工具 2 级字典序、strict 无命中→fallback、exclude 排除角色、crossEnchant 跨类别入池、tieBreak）** / 双层 fallback / 无适用→保持 / 耐久替换池规则 / **挖掘防误触（首拦·窗口内二次放行·越窗重置·信号多维独立·过期清理）**。文件在 `tests/*.test.ts`（53 项）。
 - **适配层**（分类器、背包、UI、接线）靠游戏内冒烟验证。
 
 ### 打包产物

@@ -2,11 +2,11 @@
 // 只做两件事：实例化服务、把世界事件路由到领域服务。不含任何业务逻辑。
 //
 // 事件 → 领域路由（受 SettingsService 开关约束）：
-//   entityHitBlock  → ToolManager（挖掘核对，破坏前换正确挖掘工具）·工具替换
+//   entityHitBlock  → ToolManager（挖掘核对，破坏前换正确挖掘工具；含挖掘防误触）·工具替换
 //   entityHitEntity → ToolManager（攻击实体，非武器换武器；随后耐久保护）·武器替换+耐久
 //   playerBreakBlock → ToolManager（工具破碎换同类 / 未碎但耐久过低提前收起）·工具替换+耐久
 //   itemUse 家族（使用物品）     → RefillManager（按使用后主手状态判断）·物品补充
-// 管理员菜单：/ar:menu（GameDirectors 权限）在 Settings.ts / AdminMenu.ts。
+// 管理员菜单：/ar:menu（GameDirectors 权限）、帮助 /ar:help（全体玩家）在 Settings.ts / AdminMenu.ts / Help.ts。
 //
 // 冲突化解：工具切换/武器切换/耐久保护换主手后，连带触发的"使用"事件也被路由到
 // RefillManager——它识别到主手既非 undefined 也非副作用残留，判定为
@@ -19,6 +19,7 @@ import { ToolManager } from "./ToolManager";
 import { RefillManager } from "./RefillManager";
 import { SettingsService } from "./Settings";
 import { registerAdminMenu } from "./AdminMenu";
+import { registerHelpCommand } from "./Help";
 import { logger } from "./Logger";
 
 // ── 组装服务 ──────────────────────────────────────────
@@ -29,9 +30,10 @@ const scorers = createDefaultScorers();
 const toolManager = new ToolManager(new ToolSelector(scorers, "frugal"), new ToolSelector(scorers, "weapon"), settings);
 const refillManager = new RefillManager();
 
-// 配置：世界加载后从动态属性恢复开关（DP 读取需世界就绪）；注册 /ar:menu
+// 配置：世界加载后从动态属性恢复开关（DP 读取需世界就绪）；注册 /ar:menu 与 /ar:help
 system.run(() => settings.load());
 registerAdminMenu(settings);
+registerHelpCommand();
 
 // ── 事件 → 领域路由 ───────────────────────────────────
 

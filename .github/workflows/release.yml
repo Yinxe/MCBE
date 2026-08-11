@@ -1,8 +1,15 @@
 # Build & Release — 自动构建发布
 #
 # 触发方式:
-#   git tag <name>@<version>   → 构建并发布 Release
-#   workflow_dispatch          → 手动指定模组名和版本号
+#   git push 标签 <name>@<version>   → 自动构建并发布 Release
+#   workflow_dispatch                → 手动指定模组名和版本号（可标记为测试版）
+#
+# 发布通道（只处理 main / dev 分支的标签）:
+#   - 标签提交在 main 上 → 稳定版 Release
+#   - 标签提交在 dev 上  → 测试版（默认 --prerelease 预发布）
+#   - 其它分支（feat/* 等）→ 跳过，不构建不发布
+#   通道判定：标签提交是否为 origin/main 或 origin/dev 的祖先
+#   （git merge-base --is-ancestor；main 优先，避免 dev 后代误判为 beta）。
 #
 # 模组注册: 无需修改本文件，只需在:
 #   mcaddon/<name>/package.json  或  server-plugin/<name>/package.json
@@ -14,7 +21,6 @@ on:
   push:
     tags:
       - "*@*"
-  create:
   workflow_dispatch:
     inputs:
       mod:
@@ -25,16 +31,74 @@ on:
         description: "版本号 (如 1.0.0)"
         required: true
         type: string
+      beta:
+        description: "标记为测试版（预发布）"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    if: |
-      github.event_name != 'create' ||
-      (startsWith(github.ref, 'refs/tags/') && contains(github.ref, '@'))
+  # ── 解析输入 + 判定发布通道（仅 main / dev 上的标签才发布） ──
+  resolve:
     runs-on: ubuntu-latest
+    outputs:
+      pkg: ${{ steps.parse.outputs.pkg }}
+      version: ${{ steps.parse.outputs.version }}
+      channel: ${{ steps.channel.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 需要完整历史判断标签归属分支
+
+      # ── 解析 tag / 手动输入 → 包名 + 版本号 ───────────────
+      - name: Parse tag / input
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+            PKG="${TAG%%@*}"
+            VER="${TAG#*@}"
+          else
+            PKG="${{ inputs.mod }}"
+            VER="${{ inputs.version }}"
+          fi
+          echo "pkg=$PKG" | tee -a "$GITHUB_OUTPUT"
+          echo "version=$VER" | tee -a "$GITHUB_OUTPUT"
+
+      # ── 判定发布通道（main=stable / dev=beta / 其它=skip） ──
+      - name: Resolve channel
+        id: channel
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            git fetch origin main dev --prune 2>/dev/null || true
+            TAG="${{ github.ref_name }}"
+            if git merge-base --is-ancestor "$TAG" origin/main 2>/dev/null; then
+              echo "value=stable" | tee -a "$GITHUB_OUTPUT"
+            elif git merge-base --is-ancestor "$TAG" origin/dev 2>/dev/null; then
+              echo "value=beta" | tee -a "$GITHUB_OUTPUT"
+            else
+              echo "value=skip" | tee -a "$GITHUB_OUTPUT"
+              echo "::warning::标签 $TAG 不在 main 或 dev 分支上，跳过发布"
+            fi
+          else
+            # workflow_dispatch 手动触发：可选标记测试版
+            if [ "${{ inputs.beta }}" = "true" ]; then
+              echo "value=beta" | tee -a "$GITHUB_OUTPUT"
+            else
+              echo "value=stable" | tee -a "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  # ── 构建并发布（仅在 main / dev 标签或手动触发时执行） ──
+  release:
+    needs: resolve
+    if: needs.resolve.outputs.channel != 'skip'
+    runs-on: ubuntu-latest
+    env:
+      CHANNEL: ${{ needs.resolve.outputs.channel }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,26 +111,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # ── 解析 tag → 包名 + 版本号 ────────────────────────────
-      - name: Parse tag / input
-        id: parse
-        run: |
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "create" ]; then
-            TAG="${{ github.ref_name }}"
-            PKG="${TAG%%@*}"
-            VER="${TAG#*@}"
-          else
-            PKG="${{ inputs.mod }}"
-            VER="${{ inputs.version }}"
-          fi
-          echo "pkg=$PKG" | tee -a "$GITHUB_OUTPUT"
-          echo "version=$VER" | tee -a "$GITHUB_OUTPUT"
-
       # ── 动态解析项目目录（mcaddon/ 或 server-plugin/） ─────
       - name: Resolve project directory
         id: resolve
         run: |
-          PKG="${{ steps.parse.outputs.pkg }}"
+          PKG="${{ needs.resolve.outputs.pkg }}"
           found=false
           for base in mcaddon server-plugin; do
             if [ -f "$base/$PKG/package.json" ]; then
@@ -99,24 +148,23 @@ jobs:
           echo "packName=$PACK_NAME" | tee -a "$GITHUB_OUTPUT"
           echo "artifactExt=$ARTIFACT_EXT" | tee -a "$GITHUB_OUTPUT"
 
-      # ── 安装依赖 ────────────────────────────────────────────
+      # ── 安装依赖 / 设置版本号 ──────────────────────────────
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ── 设置版本号 ──────────────────────────────────────────
       - name: Set version
         run: |
           DIR="${{ steps.resolve.outputs.dir }}"
-          cd "$DIR" && npm pkg set version="${{ steps.parse.outputs.version }}"
+          cd "$DIR" && npm pkg set version="${{ needs.resolve.outputs.version }}"
 
       # ── 构建（有 build 脚本才执行） ────────────────────────
       - name: Build
         if: steps.config.outputs.hasBuild == 'true'
-        run: pnpm --filter "${{ steps.parse.outputs.pkg }}" run build
+        run: pnpm --filter "${{ needs.resolve.outputs.pkg }}" run build
 
       # ── 打包 ────────────────────────────────────────────────
       - name: Pack
-        run: pnpm --filter "${{ steps.parse.outputs.pkg }}" run pack
+        run: pnpm --filter "${{ needs.resolve.outputs.pkg }}" run pack
 
       # ── 查找产物 ────────────────────────────────────────────
       - name: Locate artifact
@@ -124,8 +172,8 @@ jobs:
         run: |
           DIR="${{ steps.resolve.outputs.dir }}"
           EXT="${{ steps.config.outputs.artifactExt }}"
-          PKG="${{ steps.parse.outputs.pkg }}"
-          VER="${{ steps.parse.outputs.version }}"
+          PKG="${{ needs.resolve.outputs.pkg }}"
+          VER="${{ needs.resolve.outputs.version }}"
           ARTIFACT=$(find "$DIR/dist/packages" -name "${PKG}-v${VER}.${EXT}" -type f 2>/dev/null | head -1)
 
           if [ -z "$ARTIFACT" ]; then
@@ -135,33 +183,37 @@ jobs:
 
           echo "path=$ARTIFACT" | tee -a "$GITHUB_OUTPUT"
 
-      # ── 生成 Release Notes ──────────────────────────────
+      # ── 生成 Release Notes ──────────────────────────────────
       # 只用 tag 所在提交的 commit message，不用 git log 范围
       # （多个模组混提时 log 范围会包含无关提交）
       - name: Generate release notes
         id: notes
         run: |
-          TAG="${{ steps.parse.outputs.pkg }}@${{ steps.parse.outputs.version }}"
+          TAG="${{ needs.resolve.outputs.pkg }}@${{ needs.resolve.outputs.version }}"
           NOTES=$(git log --format="* %s" -1 "$TAG" 2>/dev/null || true)
           if [ -z "${NOTES:-}" ]; then
-            NOTES="🎉 ${{ steps.config.outputs.packName }} ${{ steps.parse.outputs.version }} 首次发布"
+            NOTES="🎉 ${{ steps.config.outputs.packName }} ${{ needs.resolve.outputs.version }} 首次发布"
           fi
           NOTES="${NOTES//'%'/'%25'}"
           NOTES="${NOTES//$'\n'/'%0A'}"
           NOTES="${NOTES//$'\r'/'%0D'}"
           echo "notes=$NOTES" | tee -a "$GITHUB_OUTPUT"
 
-      # ── 上传到 GitHub Release ───────────────────────────────
+      # ── 上传到 GitHub Release（dev 通道默认预发布） ────────
       - name: Upload to release
         if: steps.artifact.outputs.path != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.parse.outputs.pkg }}@${{ steps.parse.outputs.version }}"
+          TAG="${{ needs.resolve.outputs.pkg }}@${{ needs.resolve.outputs.version }}"
           FILE="${{ steps.artifact.outputs.path }}"
           CN="${{ steps.config.outputs.packName }}"
-          VERSION="${{ steps.parse.outputs.version }}"
-          IS_PR=""; echo "$VERSION" | grep -qiE 'beta|alpha|rc|pre' && IS_PR="--prerelease"
+          VERSION="${{ needs.resolve.outputs.version }}"
+          # 预发布判定：dev 通道（beta）默认，或版本号含 beta/alpha/rc/pre
+          IS_PR=""
+          if [ "$CHANNEL" = "beta" ] || echo "$VERSION" | grep -qiE 'beta|alpha|rc|pre'; then
+            IS_PR="--prerelease"
+          fi
 
           cp "$FILE" "/tmp/$(basename "$FILE")"
 
@@ -179,5 +231,5 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && steps.artifact.outputs.path != ''
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.config.outputs.packName }}-${{ steps.parse.outputs.version }}
+          name: ${{ steps.config.outputs.packName }}-${{ needs.resolve.outputs.version }}
           path: ${{ steps.artifact.outputs.path }}

@@ -1,7 +1,8 @@
 // ─── 工具领域服务（Facade） ────────────────────────────
 // 主手工具/武器的选择、耐久保护、破碎补齐，策略收敛到 ToolScorer 引擎：
 //   onPlayerHitBlock — 命中方块（挖掘开始、破坏前）：构造能力候选池 →
-//      偏好策略排序（默认省耐久不择优）→ 保持/换入正确工具
+//      偏好策略排序（默认省耐久不择优）→ 保持/换入正确工具；
+//      挖掘防误触：本会切换时首次同信号先拦截（防误拆），窗口内二次才启用
 //   onAttackEntity   — 攻击实体：武器域决策（已持任意武器不动；空/非武器按
 //      被攻击实体偏好，如亡灵 → 亡灵杀手 > 锋利 > 默认剑斧重锤/三叉戟）
 //   onToolBroke      — 工具耐久耗尽破碎（playerBreakBlock 末兜底）：换同类新工具
@@ -9,9 +10,10 @@
 //      未碎也提前收起、替换同 role 更耐久的同类（旧带精准则优先带精准）
 // 挖掘/武器决策皆为"只出决策、统一执行"，执行与日志收敛在本文件的 execute。
 
-import { type Block, type Player } from "@minecraft/server";
+import { system, type Block, type Player } from "@minecraft/server";
 import { InventoryService } from "./Inventory";
 import { buildReplacePool, isMineCapable, isUrgent, ToolSelector } from "./ToolScorer";
+import { AccidentalGuard } from "./AccidentalGuard";
 import { type PreferenceSpec, type RankableCandidate, type RankContext, type RankDecision } from "./types";
 import { profile } from "./ToolProfile";
 import { classify, wantsSilkTouch } from "./BlockClassifier";
@@ -30,14 +32,16 @@ export class ToolManager {
   /**
    * @param minerSelector  挖掘决策引擎（默认策略 frugal，方块偏好可覆盖）
    * @param weaponSelector 武器决策引擎（默认策略 weapon）
-   * @param settings       全局设置（耐久保护开关 + 阈值）
+   * @param settings       全局设置（耐久保护开关 + 阈值、防误触开关）
    * @param playPop        换工具成功后的反馈音效（注入便于维护，默认 random.pop）
+   * @param antiTouch      挖掘防误触守卫（首次错误工具命中不切，窗口内二次才启用）
    */
   constructor(
     private readonly minerSelector: ToolSelector,
     private readonly weaponSelector: ToolSelector,
     private readonly settings: SettingsService,
-    private readonly playPop: (player: Player) => void = (p) => p.playSound("random.pop")
+    private readonly playPop: (player: Player) => void = (p) => p.playSound("random.pop"),
+    private readonly antiTouch: AccidentalGuard = new AccidentalGuard()
   ) {}
 
   /**
@@ -67,6 +71,16 @@ export class ToolManager {
       domain: "mine",
     };
     const decision = this.minerSelector.decide(pool, ctx, pref);
+    // 挖掘防误触（默认开）：本会触发切换时，第一次同信号（玩家·主手·方块）先拦截，
+    // 防"空手/错工具随手命中把效率5镐秒切进建筑而误拆"；窗口 2.5s 内相同操作
+    // 再命中一次 = 确认有意挖掘 → 放行切换。超过窗口 → 防误触重置。
+    if (decision.action === "swap" && this.settings.isEnabled("antiTouch")) {
+      const hand = mainhand ? mainhand.typeId : "空手";
+      if (this.antiTouch.shouldIntercept(player.id, mainhand?.typeId, block.typeId, system.currentTick)) {
+        logger.info(`防误触 ${player.name}: ${block.typeId}（${hand}）→ 已拦截切换，2.5 秒内再挖一次将启用`);
+        return;
+      }
+    }
     this.execute(player, inv, decision);
   }
 
