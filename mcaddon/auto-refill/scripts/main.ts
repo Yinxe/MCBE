@@ -6,6 +6,7 @@
 //   entityHitEntity → ToolManager（攻击实体，非武器换武器；随后耐久保护）·武器替换+耐久
 //   playerBreakBlock → ToolManager（工具破碎换同类 / 未碎但耐久过低提前收起）·工具替换+耐久
 //   itemUse 家族（使用物品）     → RefillManager（按使用后主手状态判断）·物品补充
+//   entityHeal（cause=图腾）     → TotemManager（合成"图腾已触发"，副手补备用图腾）·图腾补充
 // 管理员菜单：/ar:menu（GameDirectors 权限）、帮助 /ar:help（全体玩家）在 Settings.ts / AdminMenu.ts / Help.ts。
 //
 // 冲突化解：工具切换/武器切换/耐久保护换主手后，连带触发的"使用"事件也被路由到
@@ -17,6 +18,8 @@ import { PlayerPolicy } from "./PlayerPolicy";
 import { createDefaultScorers, ToolSelector } from "./ToolScorer";
 import { ToolManager } from "./ToolManager";
 import { RefillManager } from "./RefillManager";
+import { TotemManager } from "./TotemManager";
+import { isTotemHealCause } from "./TotemPolicy";
 import { SettingsService } from "./Settings";
 import { registerAdminMenu } from "./AdminMenu";
 import { registerHelpCommand } from "./Help";
@@ -29,6 +32,7 @@ const settings = new SettingsService();
 const scorers = createDefaultScorers();
 const toolManager = new ToolManager(new ToolSelector(scorers, "frugal"), new ToolSelector(scorers, "weapon"), settings);
 const refillManager = new RefillManager();
+const totemManager = new TotemManager();
 
 // 配置：世界加载后从动态属性恢复开关（DP 读取需世界就绪）；注册 /ar:menu 与 /ar:help
 system.run(() => settings.load());
@@ -135,3 +139,24 @@ world.afterEvents.playerBreakBlock.subscribe((event) => {
     logger.error(`durability guard failed ${player.name}: ${e}`);
   }
 });
+
+/**
+ * "图腾已触发"合成事件：不死图腾没有原生触发事件，但触发时引擎产生治愈事件，
+ * 其 healSource.cause 标识来源（TotemOfUndying；低版本枚举缺该成员）。
+ * 用 TotemPolicy.isTotemHealCause 判别（高版本精确比对 / 低版本排除法），
+ * 命中即路由 TotemManager 把备用图腾换入副手。运行时特性侦测：environment 无
+ * afterEvents.entityHeal（旧版本）→ 静默跳过订阅不崩。
+ */
+if (world.afterEvents.entityHeal) {
+  world.afterEvents.entityHeal.subscribe((event) => {
+    const player = policy.asPlayer(event.healedEntity);
+    if (!player) return;
+    if (!settings.isEnabled("totem")) return; // 图腾补充开关关 → 不处理
+    if (!isTotemHealCause(event.healSource.cause)) return; // 非图腾治愈来源
+    try {
+      totemManager.onTotemTriggered(player);
+    } catch (e) {
+      logger.error(`totem refill failed ${player.name}: ${e}`);
+    }
+  });
+}
