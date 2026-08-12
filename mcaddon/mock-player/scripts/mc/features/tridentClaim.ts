@@ -9,7 +9,7 @@ import type { Entity } from "@minecraft/server";
 import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { formatEnchantments, formatDurability } from "../format";
-import { tridentClaimed, tridentOwnerChanged } from "../../core/events/DomainEvents";
+import { domainEvents } from "../../core/events/DomainEvents";
 import {
   makeSecondOwnerTag, parseClaimTags, parseItemTag, isOwnedByFamily, OWNER2_TAG_PREFIX,
 } from "../../core/items/TridentClaimRules";
@@ -158,8 +158,8 @@ export function claimTridents(botName: string, entityIds: string[]): number {
       console.info(`[MockPlayer] 认主 ${botName} → 三叉戟 ${t.id}`);
 
       // 认主事件 + 主人更替事件（第二任覆盖复写：1任→2任 或 2任→新2任）
-      tridentClaimed.trigger({ tridentId: id, claimedBy: botName, via: "ui", firstOwner, secondOwner: botName });
-      tridentOwnerChanged.trigger({
+      domainEvents.tridentClaimed.trigger({ tridentId: id, claimedBy: botName, via: "ui", firstOwner, secondOwner: botName });
+      domainEvents.tridentOwnerChanged.trigger({
         tridentId: id,
         firstOwner,
         previousSecondOwner: previousSecond,

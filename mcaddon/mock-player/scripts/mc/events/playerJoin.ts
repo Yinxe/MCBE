@@ -11,7 +11,7 @@ import { world, system, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEq
 import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { botOnline } from "../../core/events/DomainEvents";
+import { domainEvents } from "../../core/events/DomainEvents";
 import { botRegistry, botStore, saveCoordinator } from "../bootstrap/context";
 import { deserializeContainer, deserializeEquipment } from "../adapters/McItemCodec";
 import { getTotalXpForLevels } from "../../core/xp/XpMath";
@@ -68,7 +68,7 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
     trackBotOnline(player.id, record.name);
 
     // 上线领域事件：订阅方（三叉戟认主夺回/劫掠续药等）驱动
-    botOnline.trigger({ botName: record.name });
+    domainEvents.botOnline.trigger({ botName: record.name });
   }
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.success}${record.name} 加入了游戏`);
 }

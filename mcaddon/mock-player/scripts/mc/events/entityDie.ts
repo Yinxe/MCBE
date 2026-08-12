@@ -17,7 +17,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { PositionState } from "../../core/model/Types";
 import { BOT_TAG, TAG_RESPAWN } from "../../core/tags/BotTags";
-import { botDeath, botOffline } from "../../core/events/DomainEvents";
+import { domainEvents } from "../../core/events/DomainEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
@@ -62,7 +62,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   saveCoordinator.saveRecord(record);
 
   // 死亡领域事件（自动重生仍触发，复活由 botRespawn 表达）
-  botDeath.trigger({
+  domainEvents.botDeath.trigger({
     botName: record.name,
     position: { x: deathState.location.x, y: deathState.location.y, z: deathState.location.z },
     dimension: deathState.dimension,
@@ -107,6 +107,6 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   saveCoordinator.saveRecord(record);
   bot.disconnect();
   // 下线领域事件（订阅方：三叉戟回退第一任等）
-  botOffline.trigger({ botName: record.name });
+  domainEvents.botOffline.trigger({ botName: record.name });
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 已死亡下线`);
 }

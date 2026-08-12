@@ -187,6 +187,24 @@ scripts/
 
 ---
 
+## 领域事件全景（13 个，负载全部可序列化）
+
+```
+生命周期：botOnline / botOffline / botDeath / botRespawn
+认主：    tridentClaimed / tridentOwnerChanged
+劫掠：    raidStarted / raidVictory
+行为：    botMainhandChanged / botBlockBroken / botBlockPlaced / botItemUsed / botEntityAttacked
+```
+
+### 聚合导出约定
+- 统一走 `domainEvents` 命名空间（`core/events/DomainEvents.ts` 内聚合对象，core barrel 亦导出）：
+  ```ts
+  import { domainEvents } from "../../core";   // 或 "../../core/events/DomainEvents"
+  domainEvents.botOnline.subscribe((e) => { ... });
+  ```
+- 事件类型按需单独导入（如 `import type { RaidVictoryEvent } from ".../DomainEvents"`）
+- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（`mc/events/botActions.ts`）、认主（tridentTracker/tridentClaim）、劫掠（raidMode）；新领域事件一律经 domainEvents 聚合导出
+
 ## 踩坑记录
 
 见 `BLACKLIST.md`（处理 spawnSimulatedPlayer、lookAtLocation、death/respawn 事件顺序、beforeEvents 权限限制等坑点）。

@@ -19,7 +19,7 @@
 import { world, system, EntityProjectileComponent } from "@minecraft/server";
 import type { Entity, ItemStack } from "@minecraft/server";
 import { botRegistry } from "../bootstrap/context";
-import { botOnline, botOffline, botRespawn, tridentClaimed } from "../../core/events/DomainEvents";
+import { domainEvents } from "../../core/events/DomainEvents";
 import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner } from "../../core/items/TridentClaimRules";
 
 const THROWN_TRIDENT = "minecraft:thrown_trident";
@@ -100,9 +100,9 @@ function readMainhandItem(owner: Entity): { tag: string } | undefined {
  */
 export function initTridentTracker(): void {
   // ── 生命周期事件订阅（事件驱动认主，业务模块不再硬编码互相调用） ──
-  botOnline.subscribe((e) => system.run(() => rebindBotTridents(e.botName)));
-  botRespawn.subscribe((e) => system.run(() => rebindBotTridents(e.botName)));
-  botOffline.subscribe((e) => system.run(() => releaseBotTridents(e.botName)));
+  domainEvents.botOnline.subscribe((e) => system.run(() => rebindBotTridents(e.botName)));
+  domainEvents.botRespawn.subscribe((e) => system.run(() => rebindBotTridents(e.botName)));
+  domainEvents.botOffline.subscribe((e) => system.run(() => releaseBotTridents(e.botName)));
 
   // ── 投掷即标记：第一任主人 = 实际投掷者（玩家或假人）+ 附魔信息 ──
   world.afterEvents.entitySpawn.subscribe((event) => {
@@ -127,7 +127,7 @@ export function initTridentTracker(): void {
         `[MockPlayer] 投掷物 ${entity.typeId} ${entity.id} 认主日志：第一任=${ownerName}` +
         (mappedName ? `（反查表 ${owner.id}）` : "")
       );
-      tridentClaimed.trigger({ tridentId: entity.id, claimedBy: ownerName, via: "spawn", firstOwner: ownerName });
+      domainEvents.tridentClaimed.trigger({ tridentId: entity.id, claimedBy: ownerName, via: "spawn", firstOwner: ownerName });
 
       // 附魔/耐久编码：优先投掷流程 pending 队列，其次投掷者主手
       const itemInfo = consumePendingItem(ownerName) ?? readMainhandItem(owner);
@@ -165,7 +165,7 @@ export function initTridentTracker(): void {
           `[MockPlayer] entityLoad 认主 ${entity.typeId} ${entity.id} → ${target}（${via}${secondOwner && secondOwner !== target ? "离线回退" : ""}）` +
           `｜主人列表：第一任=${firstOwner ?? "无"} 第二任=${secondOwner ?? "无"}`
         );
-        tridentClaimed.trigger({ tridentId: entity.id, claimedBy: target, via: "load", firstOwner, secondOwner });
+        domainEvents.tridentClaimed.trigger({ tridentId: entity.id, claimedBy: target, via: "load", firstOwner, secondOwner });
       }
     } catch (e) {
       console.info(`[MockPlayer] entityLoad 认主异常: ${e}`);
@@ -256,7 +256,7 @@ export function rebindBotTridents(botName: string): void {
           const proj = t.getComponent("minecraft:projectile") as EntityProjectileComponent;
           if (proj) {
             proj.owner = newOwner;
-            tridentClaimed.trigger({ tridentId: t.id, claimedBy: botName, via: "rebind", firstOwner: f, secondOwner: s });
+            domainEvents.tridentClaimed.trigger({ tridentId: t.id, claimedBy: botName, via: "rebind", firstOwner: f, secondOwner: s });
           }
         } catch (e) {
           console.info(`[MockPlayer] 重绑定 ${t.id} 失败: ${e}`);
@@ -305,7 +305,7 @@ export function releaseBotTridents(botName: string): void {
             proj.owner = targetEntity;
             total++;
             console.info(`[MockPlayer] 下线回退 ${botName} → 三叉戟 ${t.id} 认主第一任=${firstOwner}`);
-            tridentClaimed.trigger({ tridentId: t.id, claimedBy: firstOwner, via: "offline-fallback", firstOwner, secondOwner });
+            domainEvents.tridentClaimed.trigger({ tridentId: t.id, claimedBy: firstOwner, via: "offline-fallback", firstOwner, secondOwner });
           }
         } catch (e) {
           console.info(`[MockPlayer] 下线回退 ${t.id} 失败: ${e}`);

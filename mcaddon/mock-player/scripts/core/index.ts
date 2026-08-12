@@ -6,16 +6,10 @@ export * from "./model/Types";
 
 // events
 export { EventSignal, type EventCallback } from "./events/EventSignal";
-export {
-  raidStarted, raidVictory, tridentClaimed, tridentOwnerChanged,
-  botOnline, botOffline, botDeath, botRespawn,
-  botMainhandChanged, botBlockBroken, botBlockPlaced, botItemUsed, botEntityAttacked,
-  type RaidStartedEvent, type RaidVictoryEvent,
-  type TridentClaimedEvent, type TridentClaimVia, type TridentOwnerChangedEvent,
-  type BotOnlineEvent, type BotOfflineEvent, type BotDeathEvent, type BotRespawnEvent,
-  type BotMainhandChangedEvent, type BotBlockBrokenEvent, type BotBlockPlacedEvent,
-  type BotItemUsedEvent, type BotEntityAttackedEvent,
-} from "./events/DomainEvents";
+// 领域事件聚合导出（生命周期/认主/劫掠/行为共 13 个信号 + 全部类型）：
+//   import { domainEvents } from "../../core";
+//   domainEvents.botOnline.subscribe(...)
+export * from "./events/DomainEvents";
 
 // tags
 export * from "./tags/BotTags";

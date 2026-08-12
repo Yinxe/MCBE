@@ -17,7 +17,7 @@ import { color } from "@yinxe/toolkit";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { syncEntityTags } from "../adapters/EntityTags";
-import { botOnline, botRespawn, raidStarted, raidVictory } from "../../core/events/DomainEvents";
+import { domainEvents } from "../../core/events/DomainEvents";
 import type { RaidVictoryEvent } from "../../core/events/DomainEvents";
 import { TAG_RAID_MODE } from "../../core/tags/BotTags";
 import { BotRecord } from "../../core/model/Types";
@@ -57,9 +57,9 @@ export function initRaidModeEffects(): void {
   raidEventsReady = true;
 
   world.afterEvents.effectAdd.subscribe(handleEffectAdd);
-  raidVictory.subscribe(handleRaidVictory);
-  botOnline.subscribe((e) => startRaidMode(e.botName));
-  botRespawn.subscribe((e) => startRaidMode(e.botName));
+  domainEvents.raidVictory.subscribe(handleRaidVictory);
+  domainEvents.botOnline.subscribe((e) => startRaidMode(e.botName));
+  domainEvents.botRespawn.subscribe((e) => startRaidMode(e.botName));
 }
 
 /**
@@ -114,14 +114,14 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
 
     // 不祥之兆 = 喝瓶成功，袭击即将开始
     if (kind === "bad-omen") {
-      raidStarted.trigger({ botName: name, amplifier: amp });
+      domainEvents.raidStarted.trigger({ botName: name, amplifier: amp });
       scheduleRaidStuckCheck(name);
       return;
     }
 
     // 村庄英雄 = 袭击胜利
     if (kind === "village-hero") {
-      raidVictory.trigger({ botName: name, amplifier: amp });
+      domainEvents.raidVictory.trigger({ botName: name, amplifier: amp });
     }
   } catch (err) {
     console.warn(`[MockPlayer] 劫掠效果监听异常: ${err}`);
