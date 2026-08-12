@@ -175,6 +175,13 @@ scripts/
   - tridentTracker 订阅 botOnline/botRespawn → rebindBotTridents（夺回）；botOffline → releaseBotTridents（回退第一任）
   - raidMode 订阅 botOnline/botRespawn → startRaidMode（续喝第一瓶，替代 playerJoin/playerSpawn 硬编码）
 
+### 劫掠模式兜底（`mc/features/raidMode.ts`，事件驱动 + 巡检）
+- 事件链：喝瓶→不祥之兆（raidStarted）→袭击胜利→村庄英雄（raidVictory）→英雄叠加给主人→续瓶；`system.runInterval` 30 秒巡检（raidModeSweep）恢复链断裂：
+  - 胜利但无英雄（未参与击杀/死亡时获胜）→「无任何效果 + 预期窗口过期（10 分钟）+ 附近 128 格无袭击者」→ 兜底续瓶
+  - 村庄英雄已施加但 effectAdd 丢失 → 兜底补记胜利（`processVictory` viaSweep）并续瓶
+  - 喝瓶静默失败 → 冷却 1 分钟重试
+- 村庄英雄清除前 `grantVillageHeroToOwner` 叠加给主人：剩余时长相加、等级取高（`getEffect` 读 tick 后显式相加，不依赖引擎刷新语义）；主人不在线则不转移
+
 ### 假人行为事件（`core/events/DomainEvents`，`mc/events/botActions.ts` 生产端）
 - `botMainhandChanged`（热栏槽位切换，含新主手物品）/ `botBlockBroken`（成功破坏方块，含方块/位置/破坏后物品）/ `botBlockPlaced`（成功放置）/ `botItemUsed`（成功使用物品）/ `botEntityAttacked`（造成伤害，含目标/伤害量）
 - 生产端：订阅 playerHotbarSelectedSlotChange / playerBreakBlock / playerPlaceBlock / itemUse / entityHurt（damageSource.damagingEntity 是假人），全部过滤 BOT_TAG

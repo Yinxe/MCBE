@@ -12,11 +12,24 @@ export const RAID_OMEN = "minecraft:raid_omen";
 /** 村庄英雄（袭击胜利获得）——劫掠结束判定 */
 export const VILLAGE_HERO = "minecraft:village_hero";
 
-/** 饮用完整时长（tick）：不祥之瓶需按住 ~1.6s 才消耗完 */
-export const DRINK_DURATION = 32;
+/** 饮用完整时长（tick）：不祥之瓶需按住 ~1.6s（32 tick）才消耗完。
+ *  留 ~8 tick 余量（= 2 秒）：防网络/调度抖动导致 stopUsingItem 在消耗完成前打断、药水没喝完 */
+export const DRINK_DURATION = 40;
 
 /** 袭击未触发卡死提醒：1 分钟 = 1200 tick（带不祥之兆却久未触发 → 提醒玩家） */
 export const RAID_STUCK_TICKS = 1200;
+
+/** 劫掠兜底巡检间隔：30 秒 = 600 tick。
+ *  周期扫一遍劫掠假人，恢复事件驱动链的断裂（胜利无英雄 / 英雄事件丢失 / 喝瓶静默失败）。 */
+export const RAID_SWEEP_TICKS = 600;
+
+/** 单场袭击预期最长时长：10 分钟 = 12000 tick。
+ *  基岩版袭击最多 7 波（困难），波间隔约 40 秒，10 分钟足够打完；
+ *  超过后假人仍无村庄英雄且附近无袭击者 → 判定袭击已结束但胜利信号丢失，兜底续瓶。 */
+export const RAID_EXPECT_TICKS = 12000;
+
+/** 兜底续瓶冷却：1 分钟 = 1200 tick（防止巡检反复续瓶刷屏/连开多场袭击） */
+export const RAID_FORCE_COOLDOWN = 1200;
 
 /** 物品类型匹配：Script API typeId 恒带命名空间前缀，直接精确比对 */
 export function isOminousBottle(typeId: string): boolean {
