@@ -96,3 +96,20 @@ test("removeInventory：只清背包+装备，不动记录", () => {
   assert.equal(store.loadEquipment("a"), undefined);
   assert.equal(store.loadRecord("a")?.name, "a"); // 记录保留
 });
+
+test("renameBinding：背包/装备数据随名迁移，旧名清理", () => {
+  const store = makeStore();
+  store.saveSlot("old", 0, makeItem("minecraft:diamond"));
+  store.saveSlot("old", 5, makeItem("minecraft:stone", 64));
+  store.saveEquipSlot("old", "head", makeItem("minecraft:iron_helmet"));
+
+  store.renameBinding?.("old", "new");
+
+  assert.equal(store.loadInventory("old"), undefined);
+  assert.equal(store.loadEquipment("old"), undefined);
+  const inv = store.loadInventory("new");
+  assert.ok(inv);
+  assert.equal(inv[0]?.typeId, "minecraft:diamond");
+  assert.equal(inv[5]?.amount, 64);
+  assert.equal(store.loadEquipment("new")?.head?.typeId, "minecraft:iron_helmet");
+});

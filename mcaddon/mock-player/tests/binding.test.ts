@@ -16,6 +16,7 @@ import {
   unbindEquipSlot,
   unbindSlot,
 } from "../scripts/core/storage/Binding";
+import type { StorageBinding } from "../scripts/core/model/Types";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../scripts/core/model/Types";
 
 test("createBinding 初始全未绑定（空对象）", () => {
@@ -103,4 +104,27 @@ test("hasAnyBinding 判定（undefined / 空表 / 部分绑定）", () => {
   const b = createBinding("2:0:-64");
   bindEquipSlot(b, "offhand", 7);
   assert.equal(hasAnyBinding(b), true);
+});
+
+test("StorageBinding JSON 序列化往返（独立持久化格式：对象 key-value）", () => {
+  const b = createBinding("2:0:-64");
+  bindSlot(b, 3, 100);
+  bindSlot(b, 20, 200);
+  bindEquipSlot(b, "head", 300);
+  bindEquipSlot(b, "offhand", 400);
+
+  // 模拟独立 DP key 存储：JSON.stringify → 解析还原
+  const raw = JSON.stringify(b);
+  const parsed = JSON.parse(raw) as StorageBinding;
+
+  assert.equal(parsed.regionId, "2:0:-64");
+  // 对象结构：字符串 key、无长度约束、稀疏
+  assert.deepEqual(Object.keys(parsed.inv), ["3", "20"]);
+  assert.equal(boundSlotId(parsed, 3), 100);
+  assert.equal(boundSlotId(parsed, 20), 200);
+  assert.equal(boundSlotId(parsed, 35), undefined); // 未绑定格无 key
+  assert.equal(boundEquipSlotId(parsed, "head"), 300);
+  assert.equal(boundEquipSlotId(parsed, "offhand"), 400);
+  assert.equal(boundEquipSlotId(parsed, "chest"), undefined);
+  assert.deepEqual(allBoundSlotIds(parsed).sort((x, y) => x - y), [100, 200, 300, 400]);
 });

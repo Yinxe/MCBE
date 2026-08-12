@@ -123,6 +123,26 @@ test("rename：内存 key 迁移 + 持久化新 key", () => {
   assert.equal(store.loadRecord("new")?.name, "new");
 });
 
+test("rename：绑定表随迁（renameBinding）——改名后背包/装备数据仍可读", () => {
+  const { store, registry } = makeRegistry();
+  const record = makeRecord("old");
+  registry.save(record);
+  // 先存入背包/装备（InMemory 替身：slot key 前缀含假人名）
+  store.saveInventory("old", [makeItem("minecraft:diamond", 1), null]);
+  store.saveEquipment("old", { head: makeItem("minecraft:iron_helmet", 1) });
+
+  registry.rename("old", "new");
+
+  // 旧名下无数据（已迁移），新名下数据完整
+  assert.equal(store.loadInventory("old"), undefined);
+  assert.equal(store.loadEquipment("old"), undefined);
+  const inv = store.loadInventory("new");
+  assert.ok(inv);
+  assert.equal(inv[0]?.typeId, "minecraft:diamond");
+  const equip = store.loadEquipment("new");
+  assert.equal(equip?.head?.typeId, "minecraft:iron_helmet");
+});
+
 test("save(silent=true)：静默保存仍写持久化", () => {
   const { store, registry } = makeRegistry();
   registry.save(makeRecord("bot1"), true);
