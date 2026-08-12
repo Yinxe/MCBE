@@ -59,6 +59,7 @@ export function showCreateForm(player: Player): void {
       try {
         await createBot({
           name: botName,
+          ownerName: player.name,
           location: pos,
           dimension: targetDim,
           initialTags: initTags,

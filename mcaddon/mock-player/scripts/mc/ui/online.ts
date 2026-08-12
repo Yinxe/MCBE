@@ -8,6 +8,7 @@ import { BOT_TAG, getTagDef } from "../../core/tags/BotTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
 import { botRegistry } from "../bootstrap/context";
+import { canManageBot } from "../commands/auth";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 
@@ -62,6 +63,12 @@ export function showOnlineManagement(player: Player): void {
       if (newVal === initialState[i]) continue;
       const record = botRegistry.get(records[i].name);
       if (!record) continue;
+
+      // ── 管理权限：只有主人或管理员可以切换他人的假人上下线 ──
+      if (!canManageBot(player, record)) {
+        player.sendMessage(`${color.error}${record.name} 只允许主人或管理员操作，已跳过`);
+        continue;
+      }
 
       system.runTimeout(() => {
         try {

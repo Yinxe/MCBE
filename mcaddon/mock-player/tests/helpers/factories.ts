@@ -13,10 +13,11 @@ export function makeState(overrides: Partial<PositionState> = {}): PositionState
   };
 }
 
-/** 构造标准假人记录（默认离线、带 bot+respawn+idle 标签） */
+/** 构造标准假人记录（默认离线、带 bot+respawn+idle 标签、主人 Steve） */
 export function makeRecord(name = "bot1", overrides: Partial<BotRecord> = {}): BotRecord {
   const record: BotRecord = {
     name,
+    ownerName: "Steve",
     online: false,
     death: false,
     tags: ["mockplayer:tag:bot", "mockplayer:tag:respawn", "mockplayer:tag:idle"],

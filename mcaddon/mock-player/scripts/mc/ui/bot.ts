@@ -29,6 +29,8 @@ import { saveBotEquipState } from "../features/equip";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 import { showTridentSelector } from "./trident";
+import { showTridentClaimUI } from "./tridentClaim";
+import { canManageBot } from "../commands/auth";
 import { showReclaimForm } from "./reclaim";
 import { showMainhandSelector } from "./mainhand";
 import { confirmDelete } from "./move";
@@ -94,13 +96,20 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
   const record = botRegistry.get(botName);
   if (!record) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`); return; }
 
+  // ── 管理权限：只有主人或管理员可以操作假人 ──
+  if (!canManageBot(player, record)) {
+    player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 只允许主人或管理员操作`);
+    return;
+  }
+
+  const ownerStr = record.ownerName ? `\n${color.accent}主人: ${color.playerName}${record.ownerName}` : `\n${color.muted}无主（仅管理员可管理）`;
   const tagLabels = record.tags.filter(t => t !== BOT_TAG).map(t => { const d = getTagDef(t); return d ? d.label : t; });
   const tagStr = tagLabels.length > 0 ? `\n${color.accent}标签: ${color.playerName}${tagLabels.join(`${color.accent} | ${color.playerName}`)}` : "";
   const expStr = record.experience ? `\n${color.accent}经验: ${color.playerName}Lv.${record.experience.level} ${color.accent}(${record.experience.totalXp} XP)` : "";
 
   new ActionFormBuilder()
     .title(`${color.bold}${botName} ${getStatusIcon(record)}`)
-    .body(`${getPosSummary(record)}${tagStr}${expStr}`)
+    .body(`${getPosSummary(record)}${ownerStr}${tagStr}${expStr}`)
     // ── 上线/下线（置顶） ──
     .button(record.online ? style("设为离线", color.darkGreen) : style("设为在线", color.darkGreen), () => toggleOnline(player, botName))
     // ── 传送 ──
@@ -145,6 +154,7 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     .button(style("修改名字", color.darkBlue), () => doRename(player, botName))
     // ── 战斗/工具 ──
     .button(style("投三叉戟", color.darkBlue), () => showTridentSelector(player, botName))
+    .button(style("三叉戟认主", color.darkBlue), () => showTridentClaimUI(player, botName))
     .button(style("查看数据", color.darkBlue), () => { const r = botRegistry.get(botName); if (r) sendData(player, r); })
     // ── 危险 ──
     .button(style("击杀假人", color.darkRed), () => requireActive(player, botName, (r) => {

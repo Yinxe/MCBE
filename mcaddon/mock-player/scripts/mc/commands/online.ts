@@ -2,6 +2,7 @@ import { system, CommandPermissionLevel, CustomCommandParamType } from "@minecra
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry, botStore } from "../bootstrap/context";
+import { guardBotCommand } from "./auth";
 import { onlineBot } from "../features/onlineBot";
 export function registerOnlineCommand(registry: any): void {
   defineCommand(registry, {
@@ -11,6 +12,8 @@ export function registerOnlineCommand(registry: any): void {
   }, ({ player, params }) => {
     const targetName = params.name as string;
     if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
+    const denied = guardBotCommand(player, targetName);
+    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
     const record = botRegistry.get(targetName) ?? botStore.loadRecord(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     if (record.online) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已经在线`); return; }

@@ -30,7 +30,7 @@ export function registerCreateCommand(registry: any): void {
         const playerRot = player.getRotation();
         const lookTarget = getPlayerLookTarget(player);
         await createBot({
-          name: botName, location: pos, dimension,
+          name: botName, ownerName: player.name, location: pos, dimension,
           initialTags: DEFAULT_TAGS,
           rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
           lookTarget, isSneaking: player.isSneaking,

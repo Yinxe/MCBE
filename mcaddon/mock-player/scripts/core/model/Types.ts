@@ -151,6 +151,11 @@ export interface SerializedItemStack {
 export interface BotRecord {
   /** 假人唯一名（同时也是 SimulatedPlayer 的 name） */
   name: string;
+  /**
+   * 主人玩家名（创建者）。玩家重连后实体 ID 会变但 name 稳定，故只存 name。
+   * 为空 = 无主假人（存量数据迁移），仅管理员可管理。
+   */
+  ownerName?: string;
   /** 是否在线（false = 离线/死亡离线，重启后加载时默认 false） */
   online: boolean;
   /** 是否死亡 */
@@ -196,4 +201,27 @@ export interface ReclaimPreview {
   feet: ItemPreview | null;
   /** 背包略写文字 */
   inventorySummary: string;
+}
+
+// ─── 全局配置 ──────────────────────────────────────────
+
+/** 全局配置默认值：每玩家默认配额（管理员不受配额限制） */
+export const DEFAULT_QUOTA = 5;
+
+/**
+ * 全局配置（管理员菜单可改），单键 DP `mockplayer:config` 存储。
+ * 纯可序列化数据，core 层定义，mc 层 McConfigStore 负责读写。
+ */
+export interface ModConfig {
+  /** 每玩家默认可创建的假人数（0 = 禁止创建；管理员豁免） */
+  defaultQuota: number;
+  /** 逐玩家覆盖配额（key = 玩家名） */
+  quotas: Record<string, number>;
+  /** 额外管理员名单（非 OP 玩家，如服务器服主/协作管理） */
+  admins: string[];
+}
+
+/** 默认配置（早执行创建用；worldLoad 后从持久化 refresh 合并） */
+export function createDefaultConfig(): ModConfig {
+  return { defaultQuota: DEFAULT_QUOTA, quotas: {}, admins: [] } as ModConfig;
 }

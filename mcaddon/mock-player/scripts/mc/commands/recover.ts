@@ -15,6 +15,7 @@ import {
 import { defineCommand, color } from "@yinxe/toolkit";
 
 import { botRegistry, botStore } from "../bootstrap/context";
+import { guardBotCommand } from "./auth";
 import { deserializeContainer, deserializeEquipment } from "../adapters/McItemCodec";
 import { getTotalXpForLevels } from "../../core/xp/XpMath";
 
@@ -31,6 +32,9 @@ export function registerRecoverCommand(registry: any): void {
       player.sendMessage(`${color.error}用法: /mp:recover <假人名>`);
       return;
     }
+
+    const denied = guardBotCommand(player, nameInput);
+    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
 
     const record = botRegistry.get(nameInput);
     if (!record) {

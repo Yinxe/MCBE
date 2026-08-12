@@ -14,8 +14,23 @@ import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 import { saveBotFullState } from "../features/saveState";
+import { offlineBot } from "../features/offlineBot";
 import { reconnectingBots } from "../features/pendingRespawn";
 import { color } from "@yinxe/toolkit";
+
+/** 真实玩家下线 → 该主人名下全部在线假人安全下线 */
+function offlineOwnerBots(ownerName: string): void {
+  const owned = botRegistry.all().filter((r) => r.ownerName === ownerName && r.online);
+  if (owned.length === 0) return;
+  console.info(`[MockPlayer] 玩家 ${ownerName} 下线，联动下线 ${owned.length} 个假人`);
+  for (const record of owned) {
+    try {
+      offlineBot(record);
+    } catch (e: any) {
+      console.warn(`[MockPlayer] 联动下线失败 ${record.name}: ${e?.message ?? e}`);
+    }
+  }
+}
 
 export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   let record = botRegistry.get(event.playerName);
@@ -32,7 +47,12 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
     }
   }
 
-  if (!record) return;
+  if (!record) {
+    // ── 真实玩家下线 → 他的全部在线假人联动下线（玩家隔离机制） ──
+    // 假人都在 registry 中（本 handler 是假人路径）；查不到记录 = 真实玩家离开
+    offlineOwnerBots(event.playerName);
+    return;
+  }
   console.info(`[MockPlayer] 事件 playerLeave ${event.playerName}`);
 
   // ⚠️ 旧实体残留：如果 record 已指向新实体（safeReconnect 已完成），

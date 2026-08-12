@@ -2,6 +2,7 @@ import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/serve
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../bootstrap/context";
+import { guardBotCommand } from "./auth";
 import { deleteBot } from "../features/deleteBot";
 export function registerDeleteCommand(registry: any): void {
   defineCommand(registry, {
@@ -11,6 +12,8 @@ export function registerDeleteCommand(registry: any): void {
   }, ({ player, params }) => {
     const targetName = params.name as string;
     if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
+    const denied = guardBotCommand(player, targetName);
+    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     deleteBot(record, player);

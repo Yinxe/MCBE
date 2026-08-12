@@ -22,6 +22,7 @@ import { registerFollowCommand } from "./follow";
 import { registerTridentCommand } from "./trident";
 
 import { registerRecoverCommand } from "./recover";
+import { registerAdminCommand } from "./admin";
 
 export function registerAllCommands(event: StartupEvent): void {
   const registry = event.customCommandRegistry;
@@ -47,4 +48,5 @@ export function registerAllCommands(event: StartupEvent): void {
   registerFollowCommand(registry);
   registerTridentCommand(registry);
   registerRecoverCommand(registry);
+  registerAdminCommand(registry);
 }

@@ -96,8 +96,53 @@ scripts/
 - 恢复标记（BotRegistry.restoredBots）：防 spawnSimulatedPlayer 空背包覆盖持久化数据
 
 ### 运行时单例
-- `mc/bootstrap/context.ts` 导出 `botStore` / `botRegistry` 单例（mc 层共享，等价旧 persistence.ts 的模块级 botRegistry）
+- `mc/bootstrap/context.ts` 导出 `botStore` / `botRegistry` / `configStore` 单例（mc 层共享，等价旧 persistence.ts 的模块级 botRegistry）
 - core 测试不经过 context：自行 `new BotRegistry(new InMemoryBotStore())`
+
+---
+
+## 玩家隔离与权限
+
+### 主人（ownerName）
+- `BotRecord.ownerName` = 创建者玩家名（玩家重连实体 ID 会变但 name 稳定，**只存 name 不存 ID**）
+- 存量假人无 ownerName = 无主，仅管理员可管理；无主假人不参与下线联动/认主/配额
+- 假人面板显示主人；改名（rename）不影响 ownerName
+
+### 管理员判定（`mc/commands/auth.ts`）
+- `isAdmin(player)` = OP（toolkit `canManage`）**或** 配置名单 `config.admins` 内玩家
+- `canManageBot(player, record)` = isAdmin 或 record.ownerName === player.name
+- 权限应用：假人面板入口（ui/bot.ts）、在线管理 toggle（ui/online.ts）、全部修改类命令（delete/kill/control/sneak/tag add-remove/setrespawn/tp/tphere/move/offline/online/reclaim/follow/trident/recover）；只读命令（list/data/tags list）不限
+
+### 配额（`core/service/QuotaRules` + `McConfigStore`）
+- 全局配置单键 DP `mockplayer:config`：`{ defaultQuota: 5, quotas: {玩家: 数}, admins: [] }`
+- 每玩家配额 = `quotas[name] ?? defaultQuota`；0 = 禁止创建；**管理员（OP 或名单）豁免配额**
+- 配额按主人名下现存记录数（含离线）统计；删除/回收释放名额
+- 管理员菜单：`/mp:admin` 或主菜单"⚙ 管理员菜单"（仅 isAdmin 可见）
+
+### 下线联动
+- 真实玩家 playerLeave → 该 ownerName 名下全部在线假人 `offlineBot` 安全下线（events/playerLeave.ts）
+- 假人 playerLeave 走原假人路径（registry 命中），不受联动影响
+
+---
+
+## 投掷物双任认主（三叉戟/箭）
+
+### tag 约定（`core/items/TridentClaimRules`）
+- `mp:owner:<name>` — 第一任主人（实际投掷者，玩家或假人皆可）
+- `mp:owner2:<name>` — 第二任主人（仅假人，可被后续假人覆盖复写）
+- **不兼容旧格式 `mp:trid:<name>`**（旧三叉戟 tag 失效，不做迁移）
+- 覆盖投掷物 typeId：`minecraft:thrown_trident` + `minecraft:arrow`（arrow 含药水箭，API 无法细分）
+
+### 双认主机制（`mc/features/tridentTracker.ts`）
+1. **投掷即标记**：entitySpawn 时以投射物 owner（投掷者）打第一任 tag（假人投掷 → 第一任即该假人）
+2. **fallback 认主**：entityLoad 时按优先级认主——**第二任在线 > 第一任在线**（`resolveClaimOwner` 纯函数）；都离线不动等上线夺回
+3. **上线夺回**：假人上线（playerJoin/playerSpawn）→ `rebindBotTridents` 扫第一/第二任含自己的三叉戟重设 owner
+
+### 认主 UI（ui/tridentClaim.ts，面板"三叉戟认主"按钮）
+- 扫描假人 100 半径（当前维度）内三叉戟，过滤**自家**（第一/第二任 ∈ 家族集合 = 主人名 ∪ 主人名下假人名）
+- 附魔/耐久展示经 `EntityItemComponent.itemStack`；**组件缺失直接跳过该条**（不显示"未知"）
+- **聚集概率**（`core/coords/Cluster.ts`）：邻居密度归一化（半径 15 判定），扎堆概率大；列表按概率降序（百分比展示）
+- 批量 toggle 勾选 → 认主 = 写/覆盖第二任 tag + 重设 proj.owner
 
 ---
 

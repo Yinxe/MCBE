@@ -5,6 +5,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { TAG_CONTROL } from "../../core/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
+import { guardBotCommand } from "./auth";
 import { toggleControl } from "../features/control";
 
 export function registerControlCommand(registry: any): void {
@@ -18,6 +19,8 @@ export function registerControlCommand(registry: any): void {
   }, ({ player, params }) => {
     const targetName = params.name as string;
     if (!targetName) { player.sendMessage(`${color.error}用法: /mp:control <假人> [true|false]`); return; }
+    const denied = guardBotCommand(player, targetName);
+    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
 
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }

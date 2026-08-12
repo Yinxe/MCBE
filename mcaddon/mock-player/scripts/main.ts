@@ -19,7 +19,7 @@ import { startTagBehaviors } from "./mc/features/behavior";
 import { initGameTestContext } from "./mc/features/gametestContext";
 import { initTridentTracker } from "./mc/features/tridentTracker";
 import { initRaidModeEffects } from "./mc/features/raidMode";
-import { botRegistry } from "./mc/bootstrap/context";
+import { botRegistry, configStore } from "./mc/bootstrap/context";
 
 // Phase 1/2: 基础设施与业务装配在 mc/bootstrap/context 模块 import 时完成
 // （botStore = DynamicProperty 后端，botRegistry = 内存注册表 + 写穿持久化）
@@ -36,6 +36,9 @@ system.beforeEvents.startup.subscribe((event) => {
 // worldLoad 在 world 完全加载后触发，此时可以安全读写动态属性
 
 world.afterEvents.worldLoad.subscribe(() => {
+  // 加载全局配置（默认配额/逐人配额/管理员名单）
+  configStore.refresh();
+
   // 初始化 GameTest（供 chunkload 模式使用）
   initGameTestContext();
 

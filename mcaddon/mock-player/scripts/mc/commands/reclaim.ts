@@ -2,6 +2,7 @@ import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/serve
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../bootstrap/context";
+import { guardBotCommand } from "./auth";
 import { reclaimBot } from "../features/reclaim";
 export function registerReclaimCommand(registry: any): void {
   defineCommand(registry, {
@@ -11,6 +12,8 @@ export function registerReclaimCommand(registry: any): void {
   }, ({ player, params }) => {
     const targetName = params.name as string;
     if (!targetName) { player.sendMessage(`${color.error}用法: /mp:reclaim <假人名>`); return; }
+    const denied = guardBotCommand(player, targetName);
+    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     const r = reclaimBot(player, record);
