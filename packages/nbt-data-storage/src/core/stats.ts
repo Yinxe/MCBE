@@ -30,8 +30,10 @@ export interface RegionStats {
 }
 
 /**
- * 从 layout + meta + 桶水位回调计算统计快照（纯函数，可单测）。
- * @param levelUsage 某层桶水位（占用计数数组；缺失/损坏返回空数组）
+ * 从 layout + meta + 账本回调计算统计快照（纯函数，可单测）。
+ * `barrels` 用**真值**（各层账本登记桶数之和）而非 meta.barrelCount 缓存——
+ * 缓存可能因"物化后写入失败"等路径漂移（显示"桶 257/256"的虚增），真值永不错。
+ * @param levelUsage 某层账本（每桶已用格数数组；缺失/损坏返回空数组）
  */
 export function regionStats(
   key: string,
@@ -42,8 +44,10 @@ export function regionStats(
 ): RegionStats {
   const capacity = capacityOf(layout);
   let used = 0;
+  let barrels = 0;
   for (let level = 0; level < layout.maxLevels; level++) {
     const usage = levelUsage(level);
+    barrels += usage.length; // 已登记桶数（含伪满占位——该位置确实被占用）
     for (const u of usage) {
       if (Number.isInteger(u) && u > 0) used += Math.min(u, BARREL_SLOTS);
     }
@@ -58,7 +62,7 @@ export function regionStats(
     maxLevels: layout.maxLevels,
     slotPerBarrel: usableSlotsPerBarrel(layout),
     capacity,
-    barrels: meta.barrelCount,
+    barrels,
     totalBarrels: totalBarrelsOf(layout),
     used: clamped,
     freeSlots: capacity - clamped,

@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "NBT存储测试 v0.1.20",
-    "description": "NBT 存储测试（@yinxe/nbt-data-storage 演示）v0.1.20",
+    "name": "NBT存储测试 v0.1.21",
+    "description": "NBT 存储测试（@yinxe/nbt-data-storage 演示）v0.1.21",
     "uuid": "bbdb7b1f-04c9-47b3-b808-14c1b698a17c",
     "version": [
       0,
       1,
-      20
+      21
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         0,
         1,
-        20
+        21
       ],
       "uuid": "3a0c1cb5-d634-43a2-9adf-164a1fcd9337",
       "type": "data"
@@ -34,7 +34,7 @@
       "version": [
         0,
         1,
-        20
+        21
       ],
       "entry": "scripts/main.js"
     }

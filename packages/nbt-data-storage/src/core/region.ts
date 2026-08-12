@@ -67,7 +67,7 @@ export function assertLayoutConsistent(existing: RegionLayout, input: Registrati
   const existingSlots = existing.slotPerBarrel ?? BARREL_SLOTS;
   if (input.slotPerBarrel !== undefined && input.slotPerBarrel !== existingSlots) {
     throw new Error(
-      `该区块(${cx},${cz})已被布局（每桶 ${existingSlots} 槽）占用，不一致的注册被拒绝，测试区域请更换锚点`
+      `该区块(${cx},${cz})已被布局（每桶 ${existingSlots} 格）占用，不一致的注册被拒绝，测试区域请更换锚点`
     );
   }
 }

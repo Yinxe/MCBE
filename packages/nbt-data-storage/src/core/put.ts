@@ -157,16 +157,25 @@ function allocateCandidate(
         continue;
       }
       if (!barrel.ok) return null; // 区块未就绪：本轮放弃（不烧计数）
+      const newBarrelIndex = usage.length; // push 前的长度 = 新桶序号
+      if (barrel.created) {
+        // 刚物化的桶必空（同 tick 内外部无法插入物品）——直接写槽 0，跳过探测。
+        // 探测反而有害：setBlockType 后同 tick 容器组件可能尚未就绪，误判"被塞满"
+        // → 伪满占位 → 下一个位置再物化（barrelCount 虚增，出现"桶 257/256"）。
+        usage.push(1);
+        port.writeLevelUsage(level, usage);
+        return { slotId: base + newBarrelIndex * BARREL_SLOTS, createdBarrel: true };
+      }
+      // 位置已有木桶（旧数据/外部建桶）：桶内找空格子（已存在的桶容器通常就绪）
       const empty = port.findEmptySlotInBarrel
         ? port.findEmptySlotInBarrel(pos.x, pos.y, pos.z, usable)
         : scanEmptySlot(port, pos.x, pos.y, pos.z, usable);
       if (empty !== null && empty < usable) {
-        const newBarrelIndex = usage.length; // push 前的长度 = 新桶序号
         usage.push(1); // 新桶登记：占用 1（该槽）
         port.writeLevelUsage(level, usage);
-        return { slotId: base + newBarrelIndex * BARREL_SLOTS + empty, createdBarrel: barrel.created };
+        return { slotId: base + newBarrelIndex * BARREL_SLOTS + empty, createdBarrel: false };
       }
-      // 新桶被外部塞满（几乎不可能）→ 伪满，继续下一位置
+      // 位置木桶被外部塞满（几乎不可能）→ 伪满，继续下一位置
       usage.push(usable);
       port.writeLevelUsage(level, usage);
     }

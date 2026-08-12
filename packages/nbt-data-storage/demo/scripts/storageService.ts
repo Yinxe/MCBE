@@ -170,7 +170,7 @@ export class StorageService {
    * 应用配置（可选持久化）：注册/重注册存储区域。
    * - 目标区块已有记录：
    *   - 参数完全一致 → 直接共享（不调整）；
-   *   - **测试区域（test:true）参数不一致** → `resizeLayout` 动态调整层数/每桶槽数
+   *   - **测试区域（test:true）参数不一致** → `resizeLayout` 动态调整层数/每桶格数
    *     （含 0..27，扩层任意、缩层需高层为空），无需换锚点；
    *   - 正式区域参数不一致 → 走注册 → 布局冲突拒绝 → 提示更换锚点。
    * - 无记录 → 经 registerTest 新建（test:true 测试区域）。
@@ -186,7 +186,7 @@ export class StorageService {
       return null;
     }
     try {
-      // 目标区块已有记录且每桶槽数一致 → 动态调整层数（不触发布局冲突）
+      // 目标区块已有记录且每桶格数一致 → 动态调整层数（不触发布局冲突）
       const { cx, cz } = chunkFromAnchor(config.anchorX, config.anchorZ);
       const targetId = regionId(shortDimension(config.dimension), cx, cz);
       const target = ItemStorage.getRegion(targetId);
@@ -297,7 +297,7 @@ export class StorageService {
     if (!container) return { ok: false, message: "无法读取背包容器" };
 
     const chosen = slots.filter((s) => container.getItem(s) !== undefined);
-    if (chosen.length === 0) return { ok: false, message: "所选槽位没有物品" };
+    if (chosen.length === 0) return { ok: false, message: "所选格子没有物品" };
 
     let stored = 0;
     let full = false;
@@ -356,7 +356,7 @@ export class StorageService {
     if (back) {
       return {
         ok: true,
-        message: `#${slotId} 已取出但背包空间不足：${leftover.typeId} ×${leftover.amount} 放回存储（新槽位 #${back.slotId}）`,
+        message: `#${slotId} 已取出但背包空间不足：${leftover.typeId} ×${leftover.amount} 放回存储（新格子 #${back.slotId}）`,
       };
     }
     // 放回也失败：掉落地面兜底（物品不消失）
@@ -372,8 +372,9 @@ export class StorageService {
   }
 
   /**
-   * 原位覆写：手持物品覆写（ItemStack → 指定格子，slotId 不变；空槽也允许——实时数据保存用）。
-   * 成功后清空手持槽（防复制）、同步凭据索引；旧物品进背包（放不下 → 存回存储/掉落地面）。
+   * 原位覆写（**单向**）：手持物品覆盖写入指定格子（slotId 不变；空格也允许——
+   * 实时数据保存用）。**旧物品随覆盖替换丢弃，不可找回**（需要保留旧物请用 `swapToSlot`）。
+   * 成功后清空手持槽（防复制）、同步凭据索引。
    * 护栏：位置异常（非木桶/未加载）→ 拒绝（请先 /nds-demo:check）。
    */
   overwriteToSlot(player: Player, slotId: number): OpResult {
@@ -395,33 +396,39 @@ export class StorageService {
       amount: item.amount,
       storedAt: Date.now(),
     });
-    // 旧物品处置：先放背包，放不下 → 存回存储（新槽）/掉落地面，不丢
     const old = r.old as ItemStack | undefined;
-    if (!old)
-      return { ok: true, message: `已覆写 #${slotId}：${item.typeId} ×${item.amount}（原位置为空/洞，已写入）` };
-    const leftover = container.addItem(old);
-    if (!leftover) {
-      return {
-        ok: true,
-        message: `已覆写 #${slotId}：${item.typeId} 替换 ${old.typeId} ×${old.amount}（旧物已放入背包）`,
-      };
+    if (!old) {
+      return { ok: true, message: `已覆写 #${slotId}：${item.typeId} ×${item.amount}（原位置为空，已写入）` };
     }
-    const back = this.region!.put(leftover);
-    if (back) {
-      return {
-        ok: true,
-        message: `已覆写 #${slotId}：${item.typeId} 替换 ${old.typeId}；背包空间不足，旧物品已存回存储（新槽位 #${back.slotId}）`,
-      };
+    // 单向覆盖：旧物品随覆盖替换丢弃（不交换、不放回——需要保留旧物请用 /nds-demo:swap）
+    return {
+      ok: true,
+      message: `已覆写 #${slotId}：${item.typeId} 替换 ${old.typeId} ×${old.amount}（旧物品已随覆盖丢弃，不可找回）`,
+    };
+  }
+
+  /**
+   * 安全交换（原子）：手持物品 ↔ 指定格子对调，**双方都保留**（引擎级 swapItems，
+   * 要么换成功要么两边原样）。交换后：格子 = 手持物、背包格 = 旧物。
+   * 凭据索引由 taken/stored 事件自动同步。
+   */
+  swapToSlot(player: Player, slotId: number): OpResult {
+    const notReady = this.notReadyResult();
+    if (notReady) return notReady;
+    const container = player.getComponent("minecraft:inventory")?.container;
+    if (!container) return { ok: false, message: "无法读取背包容器" };
+    const held = container.getItem(player.selectedSlotIndex);
+    if (!held) return { ok: false, message: "手中没有可交换的物品" };
+
+    const r = this.region!.swap(slotId, container, player.selectedSlotIndex);
+    if (!r.ok) return { ok: false, message: `交换失败：${r.error ?? "未知原因"}（双方保持原样）` };
+    if (!r.oldTypeId) {
+      return { ok: true, message: `已交换 #${slotId}：${r.newTypeId ?? held.typeId} 放入格子（原位置为空，等同存入）` };
     }
-    try {
-      player.dimension.spawnItem(leftover, player.location);
-      return {
-        ok: true,
-        message: `已覆写 #${slotId}：${item.typeId} 替换 ${old.typeId}；背包/存储均放不下，旧物品已掉落在地面，请捡起`,
-      };
-    } catch {
-      return { ok: true, message: `已覆写 #${slotId}：${item.typeId}；旧物品 ${old.typeId} 处置失败，请尽快处理！` };
-    }
+    return {
+      ok: true,
+      message: `已交换 #${slotId}：格子 = ${r.newTypeId ?? held.typeId}；背包格 = ${r.oldTypeId}（双方保留）`,
+    };
   }
 
   /** 批量取出：按格子 ID 列表逐件取出（UI 勾选），汇总成功/失败 */
@@ -437,7 +444,7 @@ export class StorageService {
     }
     return {
       ok: took > 0,
-      message: `已取出 §e${took}§r 件` + (empty > 0 ? `；${empty} 件槽位为空（可能已被取走）` : ""),
+      message: `已取出 §e${took}§r 件` + (empty > 0 ? `；${empty} 件格子为空（可能已被取走）` : ""),
     };
   }
 
@@ -512,7 +519,7 @@ export class StorageService {
         k === "barrel-destroyed" ? "桶损坏" : "外部取走";
       const lines = [
         "§l== 阵列自检（盘点 + 修复）==§r",
-        `区域 §e${this.region!.regionId}§r｜扫描 §e${report.scanned}§r 槽`,
+        `区域 §e${this.region!.regionId}§r｜扫描 §e${report.scanned}§r 格`,
         report.fixedBarrels > 0
           ? `§e修复损坏木桶 ${report.fixedBarrels} 个§r（已重建；桶内物品随方块损坏无法找回）`
           : "§7木桶方块完好§r",
@@ -521,7 +528,7 @@ export class StorageService {
               .map((d) => `第${d.level + 1}层桶${d.barrelInLevel}：${d.count}件${kindLabel(d.kind)}`)
               .join("、")}），相关凭据已自动清理`
           : "§7无丢失槽位§r",
-        report.unknownSlots > 0 ? `§7跳过 ${report.unknownSlots} 槽（区块未加载，下次盘点再试）§r` : "",
+        report.unknownSlots > 0 ? `§7跳过 ${report.unknownSlots} 格（区块未加载，下次盘点再试）§r` : "",
         "§7账本已对齐真值，容量与分配状态一致§r",
       ];
       player.sendMessage(lines.filter((l) => l !== "").join("\n"));

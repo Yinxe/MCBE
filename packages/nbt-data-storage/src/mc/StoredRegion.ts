@@ -173,6 +173,34 @@ export class StoredRegion {
   }
 
   /**
+   * 安全交换（原子）：区域格子 ↔ 外部容器槽位对调（引擎级 `swapItems`，
+   * 要么换成功要么两边原样）。与覆写（单向，旧物丢弃/由调用方处置）互补。
+   * 成功后触发 `taken`（旧物离开区域）+ `stored`（新物进入区域）事件。
+   * @returns { ok, oldTypeId?, newTypeId?, error? }；ok=false 时双方未动
+   */
+  swap(slotId: number, container: Container, destSlot: number): { ok: boolean; oldTypeId?: string; newTypeId?: string; error?: string } {
+    const pos = slotIdToPosition(slotId, this.layout);
+    if (!pos) return { ok: false, error: "格子号超出范围" };
+    const oldItem = this.runtime.readItem(pos);
+    if (!this.runtime.swapItems(pos, container, destSlot)) {
+      return { ok: false, error: "交换失败（位置异常/区块未加载），双方保持原样" };
+    }
+    const newItem = this.runtime.readItem(pos);
+    ItemStorageEvents.taken.trigger({
+      regionId: this.regionId,
+      slotId,
+      itemTypeId: oldItem?.typeId,
+    });
+    ItemStorageEvents.stored.trigger({
+      regionId: this.regionId,
+      slotId,
+      itemTypeId: newItem?.typeId,
+      stackSize: newItem?.amount,
+    });
+    return { ok: true, oldTypeId: oldItem?.typeId, newTypeId: newItem?.typeId };
+  }
+
+  /**
    * 原子存入：把 `container` 的 `sourceSlot` 槽位物品搬进区域。
    * 成功 → 源槽清空、返回 { ok:true, slotId }；失败 → 源槽保持原样（物品不丢）。
    */
@@ -242,9 +270,16 @@ export class StoredRegion {
     );
   }
 
-  /** 已建木桶总数（轻量查询：1 次主记录读，供扩容见证等高频场景替代全量 stats） */
+  /**
+   * 已建木桶总数（真值：各层账本登记桶数之和；供扩容见证等高频场景替代全量 stats）。
+   * 不用 meta.barrelCount 缓存——它可能因"物化后写入失败"等路径漂移（虚增）。
+   */
   get barrelCount(): number {
-    return this.readRecord()?.meta.barrelCount ?? 0;
+    let n = 0;
+    for (let level = 0; level < this.layout.maxLevels; level++) {
+      n += readLevelUsage(this.regionId, level).length;
+    }
+    return n;
   }
 
   /**

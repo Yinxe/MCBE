@@ -3,7 +3,7 @@
 // 不持有业务状态（账本等由 StoredRegion 经 DP 读写）。
 // 所有方块/容器访问 try-catch 保护；区块未加载或不可达时返回失败而非抛错。
 import { world } from "@minecraft/server";
-import type { BlockInventoryComponent, Dimension, ItemStack, TickingAreaOptions } from "@minecraft/server";
+import type { BlockInventoryComponent, Container, Dimension, ItemStack, TickingAreaOptions } from "@minecraft/server";
 import type { RegionLayout, SlotPosition } from "../core/layout";
 import type { SlotStatus } from "../core/repair";
 import { shortDimension } from "../core/keys";
@@ -158,6 +158,25 @@ export class BarrelRuntime {
       const inv = block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined;
       if (!inv?.container) return false;
       inv.container.setItem(pos.slotInBarrel, undefined);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 安全交换（原子）：区域格子 ↔ 外部容器槽位对调。
+   * 用原版 `Container.swapItems`（引擎级原子语义：要么换成功要么两边原样，
+   * 不会出现"一边写入成功一边失败"的中间态）；区域位置不是木桶/未加载 → false。
+   */
+  swapItems(pos: SlotPosition, container: Container, destSlot: number): boolean {
+    try {
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block || block.typeId !== BARREL) return false;
+      const regionContainer = (block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined)
+        ?.container;
+      if (!regionContainer) return false;
+      regionContainer.swapItems(pos.slotInBarrel, destSlot, container); // 引擎级原子交换（失败会抛，被 catch 兜底）
       return true;
     } catch {
       return false;

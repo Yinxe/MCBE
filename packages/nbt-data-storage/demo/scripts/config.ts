@@ -1,12 +1,12 @@
 // ── 演示配置：模型 + DP 持久化 + 配置 UI ─────────────────────────────
 // 配置是"存储区域"的完整参数：启用开关 + 维度 + 锚点 X/Z（决定区块地址）
-// + 底层 Y（桶阵列最底层）+ 测试参数（每桶可用槽数 / 层数）。
+// + 底层 Y（桶阵列最底层）+ 测试参数（每桶可用格数 / 层数）。
 // 持久化到 `ndsdemo:cfg`，保存后由调用方注入的 onApply 回调立即重新应用
 // （registerTest 幂等，同区块共享；改锚点即新区域）。
 // 默认配置 = 库 README 示例：末地 (0,120,-1024)，进游戏即可直接冒烟。
 //
 // ⚠️ 测试参数（slotPerBarrel/maxLevels）仅测试用途，走库的 registerTest 渠道：
-// 解码恒按 27 槽/桶（ID 语义恒定），每桶可用槽数只限制分配（跳过桶内超限槽），
+// 解码恒按 27 格/桶（ID 语义恒定），每桶可用格数只限制分配（跳过桶内超限格），
 // 调小即可快速模拟满容量/见证扩容；正式模组请用 register 默认参数。
 // 注意：本模块不依赖 storageService（避免循环依赖），应用动作经 onApply 注入。
 import { world } from "@minecraft/server";
@@ -128,9 +128,9 @@ export async function showConfigForm(player: Player, opts: ConfigFormOptions = {
     .divider()
     .label(
       "_test",
-      "§7⚠️ 以下为测试参数（仅测试模组用）：解码恒按 27 槽/桶，\n§7调小每桶槽数/层数 → 容量变小 → 快速堆满 + 见证扩容"
+      "§7⚠️ 以下为测试参数（仅测试模组用）：解码恒按 27 槽/桶，\n§7调小每桶格数/层数 → 容量变小 → 快速堆满 + 见证扩容"
     )
-    .slider("slotPerBarrel", "每桶可用槽数（仅测试）", 0, 27, {
+    .slider("slotPerBarrel", "每桶可用格数（仅测试）", 0, 27, {
       defaultValue: cfg.slotPerBarrel,
       valueStep: 1,
       tooltip:

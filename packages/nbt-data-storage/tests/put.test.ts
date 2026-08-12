@@ -226,6 +226,42 @@ test("putItem：每桶 1 槽（微型）→ ID 只落桶内槽 0（0,27,54,…�
   assert.equal(record()?.meta.barrelCount, 256); // 绝不建第 257 桶
 });
 
+test("putItem：物化后容器未就绪（探测失败）→ 刚建桶直接写槽 0，不误判伪满、不虚增桶数", () => {
+  // 回归：MCBE setBlockType 后同 tick 容器组件可能未就绪——旧逻辑物化后探测失败
+  // → 误判"被塞满"→ 伪满占位 → 下一位置再物化（barrelCount 虚增，出现"桶 257/256"）。
+  // 修复：刚物化的桶必空（同 tick 内外部无法插入），直接写槽 0，不做探测。
+  const MICRO = { chunkX: 0, chunkZ: 0, baseY: 120, maxLevels: 1, slotPerBarrel: 1 };
+  const { port, barrels, usage, record } = makeWorld(1);
+  const justCreated = new Set<string>(); // 刚物化未就绪的桶位置
+  const delayed: PutPort = {
+    ...port,
+    ensureBarrel: (x, y, z) => {
+      const r = port.ensureBarrel(x, y, z);
+      if (r.created) justCreated.add(`${x},${y},${z}`);
+      return r;
+    },
+    findEmptySlotInBarrel: (x, y, z, usable) => {
+      // 模拟容器延迟：刚物化的桶探测不到（返回 null）；已就绪的桶正常
+      const k = `${x},${y},${z}`;
+      if (justCreated.has(k)) return null;
+      const b = barrels.get(k);
+      if (!b) return null;
+      for (let j = 0; j < usable; j++) if (!b[j]) return j;
+      return null;
+    },
+  };
+  for (let n = 0; n < 256; n++) {
+    const ref = putItem(delayed, `i${n}`, RID, DIM, MICRO);
+    assert.equal(ref?.slotId, n * 27); // 全部成功（直接写槽 0）
+  }
+  // 256 件 = 256 桶：无虚增、无伪满占位
+  assert.equal(record()?.meta.barrelCount, 256);
+  assert.equal(usage.get(0)?.length, 256);
+  assert.ok((usage.get(0) ?? []).every((u) => u === 1));
+  // 第 257 件：真满拒绝
+  assert.equal(putItem(delayed, "overflow", RID, DIM, MICRO), null);
+});
+
 test("putItem：0 槽瞬满布局 → 直接 null（不空转）", () => {
   const ZERO = { chunkX: 0, chunkZ: 0, baseY: 120, maxLevels: 1, slotPerBarrel: 0 };
   const { port, record } = makeWorld(1);

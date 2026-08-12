@@ -31,7 +31,7 @@ export async function showMainMenu(player: Player): Promise<void> {
     .title("§lNBT 存储测试")
     .body(
       `状态：${status}｜区域 §e${region}§r\n` +
-        `已用 §e${s?.used ?? 0}§r/${s?.capacity ?? 0} 槽｜桶 §e${s?.barrels ?? 0}§r/${s?.totalBarrels ?? 0}｜凭据 ${refs.length} 条`
+        `已用 §e${s?.used ?? 0}§r/${s?.capacity ?? 0} 格｜桶 §e${s?.barrels ?? 0}§r/${s?.totalBarrels ?? 0}｜凭据 ${refs.length} 条`
     )
     .divider()
     .button("§l存入手中物品§r", () => {
@@ -42,7 +42,8 @@ export async function showMainMenu(player: Player): Promise<void> {
     .button("§l取出（凭据列表）§r", () => showTakeList(player))
     .button("§l批量取出（勾选）§r", () => showBatchTake(player))
     .button("§l取出（按格子号）§r", () => showTakeBySlot(player))
-    .button("§l覆写（手持→格子）§r", () => showOverwriteBySlot(player))
+    .button("§l覆写（单向，旧物丢弃）§r", () => showOverwriteBySlot(player))
+    .button("§l安全交换（双方保留）§r", () => showSwapBySlot(player))
     .button("§l自检修复§r", () => storage.checkAndRepair(player))
     .button("存储统计", () => storage.showStats(player))
     .button("配置", () => showConfigForm(player, { onApply: (cfg) => storage.applyConfig(cfg, true) }))
@@ -92,7 +93,7 @@ export async function showBatchStore(player: Player): Promise<void> {
   for (let i = 0; i < container.size; i++) {
     const item = container.getItem(i);
     if (!item) continue;
-    items.push({ key: String(i), label: `槽 ${i}：§f${item.typeId}§r ×${item.amount}` });
+    items.push({ key: String(i), label: `格 ${i}：§f${item.typeId}§r ×${item.amount}` });
   }
   if (items.length === 0) {
     notifyError(player, "背包没有可存入的物品");
@@ -181,11 +182,11 @@ export async function showTakeBySlot(player: Player): Promise<void> {
   player.sendMessage(`${colorOf(res)}${res.message}`);
 }
 
-/** 原位覆写（ModalForm 文本输入）：手持物品覆写到指定格子，旧物品进背包/存回。 */
+/** 原位覆写（ModalForm 文本输入）：手持物品单向覆写到指定格子（旧物随覆盖丢弃）。 */
 export async function showOverwriteBySlot(player: Player): Promise<void> {
   const vals = await new ModalFormBuilder()
     .title("§l覆写 · 手持物品 → 格子")
-    .label("_hint", "§7把手中物品覆写到指定格子（slotId 不变），旧物品返回背包或存回存储")
+    .label("_hint", "§7把手中物品单向覆写到指定格子（slotId 不变）\n§7⚠️ 旧物品随覆盖丢弃不可找回；想保留旧物请用「安全交换」")
     .textFieldWithPlaceholder("slotId", "格子号（slotId）", "已有物品的格号，如 3")
     .divider()
     .submitButton("覆写")
@@ -198,5 +199,25 @@ export async function showOverwriteBySlot(player: Player): Promise<void> {
     return;
   }
   const res = storage.overwriteToSlot(player, slotId);
+  player.sendMessage(`${colorOf(res)}${res.message}`);
+}
+
+/** 安全交换（ModalForm 文本输入）：手持物品 ↔ 指定格子对调（原子，双方都保留）。 */
+export async function showSwapBySlot(player: Player): Promise<void> {
+  const vals = await new ModalFormBuilder()
+    .title("§l交换 · 手持物品 ↔ 格子")
+    .label("_hint", "§7手持物品与指定格子对调（引擎级原子交换）\n§7交换后：格子 = 手持物，背包格 = 旧物，双方都保留")
+    .textFieldWithPlaceholder("slotId", "格子号（slotId）", "已有物品的格号，如 3")
+    .divider()
+    .submitButton("交换")
+    .show(player);
+  if (!vals) return;
+
+  const slotId = Number(vals.slotId);
+  if (!Number.isInteger(slotId) || slotId < 0) {
+    notifyError(player, "格子号必须是非负整数");
+    return;
+  }
+  const res = storage.swapToSlot(player, slotId);
   player.sendMessage(`${colorOf(res)}${res.message}`);
 }

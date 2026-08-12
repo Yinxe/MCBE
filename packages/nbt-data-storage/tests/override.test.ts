@@ -138,7 +138,7 @@ test("resolveRegistration：微型区域已有记录 → 只有相同微型参�
   const persisted = createRegionRecord(DIM, MICRO);
   assert.throws(
     () => resolveRegistration(persisted, { dimensionId: DIM, slotPerBarrel: 27 }, { cx: 0, cz: 0 }),
-    /每桶 1 槽/
+    /每桶 1 格/
   );
   const r = resolveRegistration(persisted, { dimensionId: DIM, slotPerBarrel: 1, maxLevels: 1 }, { cx: 0, cz: 0 });
   assert.equal(r.layout.slotPerBarrel, 1);
@@ -166,12 +166,12 @@ test("assertLayoutConsistent：参数一致（含未显式传入）→ 不抛错
 });
 
 test("assertLayoutConsistent：slotPerBarrel/maxLevels 任一不一致 → 抛错提示更换锚点", () => {
-  assert.throws(() => assertLayoutConsistent(LAYOUT_27, { dimensionId: DIM, slotPerBarrel: 2 }, 0, 0), /每桶 27 槽/);
+  assert.throws(() => assertLayoutConsistent(LAYOUT_27, { dimensionId: DIM, slotPerBarrel: 2 }, 0, 0), /每桶 27 格/);
   assert.throws(() => assertLayoutConsistent(LAYOUT_27, { dimensionId: DIM, maxLevels: 1 }, 0, 0), /更换锚点/);
   // 缺省字段的既有布局按 27 归一化比较
   const legacy = { chunkX: 0, chunkZ: 0, baseY: 120, maxLevels: 64 };
   assert.doesNotThrow(() => assertLayoutConsistent(legacy, { dimensionId: DIM, slotPerBarrel: 27 }, 0, 0));
-  assert.throws(() => assertLayoutConsistent(legacy, { dimensionId: DIM, slotPerBarrel: 2 }, 0, 0), /每桶 27 槽/);
+  assert.throws(() => assertLayoutConsistent(legacy, { dimensionId: DIM, slotPerBarrel: 2 }, 0, 0), /每桶 27 格/);
 });
 
 test("assertLayoutConsistent：测试区域仅测试渠道可用（正式 register 拒绝进入）", () => {
