@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { EventSignal } from "../scripts/core/events/EventSignal";
+import { MemoryIntervalScheduler } from "../scripts/core/storage/IntervalScheduler";
 import { WorkflowManager, type Workflow, type WorkflowEvent } from "../scripts/core/service/Workflow";
 
 /** 测试用工作流：记录生命周期调用，发布事件 */
@@ -115,4 +116,81 @@ test("取消订阅后不再收到事件", () => {
   unsub();
   wf.events.trigger({ workflow: "wf-unsub", type: "x" });
   assert.equal(count, 1);
+});
+
+// ─── 独立引擎调度 ──────────────────────────────────────
+
+test("独立引擎：initAll 按 intervalTicks 创建独立周期，到点执行 tick", () => {
+  const scheduler = new MemoryIntervalScheduler();
+  const manager = new WorkflowManager(scheduler);
+  let engineTicks = 0;
+  manager.register({
+    name: "engine-wf",
+    events: new EventSignal(),
+    init() {},
+    start() {},
+    stop() {},
+    isRunning: () => false,
+    engine: { intervalTicks: 10, tick: () => engineTicks++ },
+  });
+  manager.initAll();
+  assert.equal(engineTicks, 0);
+  scheduler.advance(9); // 未到点
+  assert.equal(engineTicks, 0);
+  scheduler.advance(1); // 到点（tick 10）
+  assert.equal(engineTicks, 1);
+  scheduler.advance(20); // 跨两个周期
+  assert.equal(engineTicks, 3);
+});
+
+test("独立引擎：多个工作流各自独立周期，互不干扰", () => {
+  const scheduler = new MemoryIntervalScheduler();
+  const manager = new WorkflowManager(scheduler);
+  let a = 0;
+  let b = 0;
+  manager.register({
+    name: "eng-a", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    engine: { intervalTicks: 5, tick: () => a++ },
+  });
+  manager.register({
+    name: "eng-b", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    engine: { intervalTicks: 20, tick: () => b++ },
+  });
+  manager.initAll();
+  scheduler.advance(20);
+  assert.equal(a, 4); // 20/5
+  assert.equal(b, 1); // 20/20
+});
+
+test("独立引擎：shutdown 停止全部引擎（clear 后不再执行）", () => {
+  const scheduler = new MemoryIntervalScheduler();
+  const manager = new WorkflowManager(scheduler);
+  let ticks = 0;
+  manager.register({
+    name: "eng-shutdown", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    engine: { intervalTicks: 5, tick: () => ticks++ },
+  });
+  manager.initAll();
+  scheduler.advance(5);
+  assert.equal(ticks, 1);
+  manager.shutdown();
+  scheduler.advance(20);
+  assert.equal(ticks, 1); // 引擎已停
+});
+
+test("独立引擎：tick 异常隔离（单工作流崩溃不影响其他）", () => {
+  const scheduler = new MemoryIntervalScheduler();
+  const manager = new WorkflowManager(scheduler);
+  let good = 0;
+  manager.register({
+    name: "eng-bad", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    engine: { intervalTicks: 5, tick: () => { throw new Error("tick boom"); } },
+  });
+  manager.register({
+    name: "eng-good", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    engine: { intervalTicks: 5, tick: () => good++ },
+  });
+  manager.initAll();
+  scheduler.advance(10);
+  assert.equal(good, 2); // 好引擎不受坏引擎影响
 });

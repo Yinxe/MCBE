@@ -53,7 +53,7 @@ task("package", series("clean-collateral", "copyArtifacts"));
 task(
   "local-deploy",
   watchTask(
-    ["scripts/**/*.ts", "BP/**/*.{json,lang,tga,ogg,png}", "RP/**/*.{json,lang,tga,ogg,png}"],
+    ["scripts/**/*.ts", "BP/**/*.{json,lang,tga,ogg,png}"],
     series("clean-local", "build", "package")
   )
 );

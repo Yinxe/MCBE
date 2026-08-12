@@ -7,11 +7,16 @@
 // 工作流是复杂组合功能（劫掠循环/宝库循环）——有生命周期与事件机制。
 
 import { WorkflowManager } from "../../core/service/Workflow";
+import { McIntervalScheduler } from "../adapters/McIntervalScheduler";
 import { raidWorkflow } from "../features/raidMode";
 import { vaultWorkflow } from "../features/vaultMode";
 
-/** 工作流管理器（单例）：注册 / 初始化 / 启停 / 查询 */
-export const workflowManager = new WorkflowManager();
+/**
+ * 工作流管理器（单例）：注册 / 初始化 / 启停 / 查询。
+ * 注入 runInterval 调度后端——带独立引擎的工作流（如 vault-mode）由
+ * 本管理器按各自 intervalTicks 创建独立周期（不共享统一行为引擎）。
+ */
+export const workflowManager = new WorkflowManager(new McIntervalScheduler());
 
 workflowManager.register(raidWorkflow);
 workflowManager.register(vaultWorkflow);

@@ -11,7 +11,7 @@ import { world, system, EquipmentSlot, type Player, ItemStack } from "@minecraft
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
-import { TAG_VAULT_MODE } from "../../core/tags/BotTags";
+import { BOT_TAG, TAG_VAULT_MODE } from "../../core/tags/BotTags";
 import { EventSignal } from "../../core/events/EventSignal";
 import type { Workflow, WorkflowEvent } from "../../core/service/Workflow";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
@@ -21,14 +21,14 @@ import { color } from "@yinxe/toolkit";
 /** 宝库工作流事件总线（供其他模块订阅联动） */
 const vaultWorkflowEvents = new EventSignal<WorkflowEvent>();
 
-/** 宝库工作流：钥匙开宝库 → 保存 → 重连 → 继续（行为引擎驱动，runVaultCycle） */
+/** 宝库工作流：钥匙开宝库 → 保存 → 重连 → 继续（自带独立引擎，不共享统一行为引擎） */
 export const vaultWorkflow: Workflow = {
   name: "vault-mode",
   description: "宝库模式：手持钥匙开 Trial Chambers 宝库，成功后下线重连循环",
   events: vaultWorkflowEvents,
 
   init(): void {
-    // 宝库周期由行为引擎（behavior.ts 标签驱动）调用 runVaultCycle，无需全局订阅
+    // 引擎由 WorkflowManager 调度（initAll 时按 intervalTicks 创建独立 interval）
   },
 
   start(botName?: string): void {
@@ -51,6 +51,30 @@ export const vaultWorkflow: Workflow = {
     if (!botName) return false;
     const record = botRegistry.get(botName);
     return !!record && record.tags.includes(TAG_VAULT_MODE.value) && record.online && !record.death;
+  },
+
+  // ── 独立引擎：每 10 tick 遍历宝库标签在线假人，执行一次开箱周期 ──
+  // （从统一行为引擎 behavior.ts 迁出——工作流自带引擎，不共享）
+  engine: {
+    intervalTicks: 10,
+    tick(): void {
+      let players;
+      try {
+        players = world.getPlayers({ tags: [BOT_TAG] });
+      } catch {
+        return;
+      }
+      for (const player of players) {
+        try {
+          if (!player.hasTag(TAG_VAULT_MODE.value)) continue;
+          const record = botRegistry.get(player.name);
+          if (!record || record.death || !record.online) continue;
+          runVaultCycle(player as SimulatedPlayer, record);
+        } catch (e: any) {
+          console.warn(`[MockPlayer] 宝库模式异常 ${player.name}: ${e?.message ?? e}`);
+        }
+      }
+    },
   },
 };
 

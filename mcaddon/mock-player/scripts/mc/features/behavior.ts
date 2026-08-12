@@ -10,10 +10,9 @@ import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, inventoryStorage, saveCoordinator } from "../bootstrap/context";
-import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL, TAG_VAULT_MODE } from "../../core/tags/BotTags";
+import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL } from "../../core/tags/BotTags";
 import { EQUIP_SLOT_NAMES } from "../../core/model/Types";
 import { captureExperience } from "../adapters/McItemCodec";
-import { runVaultCycle } from "./vaultMode";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../adapters/PoseGateway";
 
 // ─── 启动引擎 ──────────────────────────────────────────
@@ -91,11 +90,6 @@ export function startTagBehaviors(): void {
           sim.startBuild(0);
           sim.stopBuild();
         } catch (e: any) { console.warn(`[MockPlayer] 自动放置异常 ${bot.name}: ${e?.message ?? e}`); }
-      }
-
-      // ── 宝库模式 ── 每 10 tick ──
-      if (bot.hasTag(TAG_VAULT_MODE.value) && tick % 10 === 0) {
-        try { runVaultCycle(sim, record); } catch (e: any) { console.warn(`[MockPlayer] 宝库模式异常 ${bot.name}: ${e?.message ?? e}`); }
       }
     }
 
