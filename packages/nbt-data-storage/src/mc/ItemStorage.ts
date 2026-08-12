@@ -89,7 +89,8 @@ function registerWith(opts: RegisterOptions): StoredRegion {
 
   // 已有持久化记录 → 校验一致性并采纳其维度/布局（后注册者传的 baseY 等被忽略）；
   // 否则按传入参数新建（resolveRegistration 内部对不一致的 slotPerBarrel/maxLevels 抛错）
-  const persisted = readRegionRecord(id);
+  // throwOnError：世界未完全加载时读失败 → 抛出（绝不把真实记录误判为"无记录"而覆盖）
+  const persisted = readRegionRecord(id, { throwOnError: true });
   const { dimensionId, layout } = resolveRegistration(
     persisted,
     {

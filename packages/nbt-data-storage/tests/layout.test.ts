@@ -103,8 +103,10 @@ test("validateLayout：合法返回 null", () => {
 });
 
 test("validateLayout：非法布局返回中文错误", () => {
-  assert.ok(validateLayout({ ...DEFAULT, baseY: -1 }));
+  assert.ok(validateLayout({ ...DEFAULT, baseY: -65 })); // 低于世界最低层 -64
+  assert.equal(validateLayout({ ...DEFAULT, baseY: -64 }), null); // 世界最低层合法
   assert.ok(validateLayout({ ...DEFAULT, maxLevels: 0 }));
+  assert.ok(validateLayout({ ...DEFAULT, maxLevels: 65 })); // 超过 64 层上限
   assert.ok(validateLayout({ ...DEFAULT, maxLevels: 1.5 }));
   assert.ok(validateLayout({ ...DEFAULT, chunkX: 1.5 }));
   // 顶部 Y = baseY + maxLevels - 1 ≤ 320 合法；= 321 越界

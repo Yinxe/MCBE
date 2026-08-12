@@ -23,13 +23,19 @@ export function levelPoolDpKey(key: string, level: number): string {
   return `${regionDpKey(key)}:pool:${level}`;
 }
 
-/** 读取区域记录；无/损坏返回 undefined */
-export function readRegionRecord(key: string): PersistedRegion | undefined {
+/**
+ * 读取区域记录；无/损坏返回 undefined。
+ * @param opts.throwOnError 世界未完全加载等异常时**抛出**而非当作"无记录"
+ *   （注册路径用：防止早期执行把真实记录误判为不存在而覆盖/建错误布局句柄）
+ */
+export function readRegionRecord(key: string, opts: { throwOnError?: boolean } = {}): PersistedRegion | undefined {
   try {
     const value = world.getDynamicProperty(regionDpKey(key));
     if (typeof value === "string") return parseRegionRecord(value);
     return undefined;
-  } catch {
+  } catch (e) {
+    if (opts.throwOnError)
+      throw new Error(`存储区域记录读取失败（世界可能尚未完全加载）：${e instanceof Error ? e.message : String(e)}`);
     return undefined;
   }
 }
@@ -59,9 +65,13 @@ export function readLevelPool(key: string, level: number): number[] {
   }
 }
 
-/** 写某层空洞池（含空数组：层已无洞时清掉数据本身） */
+/** 写某层空洞池；空数组 = 该层已无洞 → 真正删除键（不留 `"[]"` 残留） */
 export function writeLevelPool(key: string, level: number, locals: number[]): void {
   try {
+    if (locals.length === 0) {
+      world.setDynamicProperty(levelPoolDpKey(key, level), undefined); // 删键
+      return;
+    }
     world.setDynamicProperty(levelPoolDpKey(key, level), JSON.stringify(locals));
   } catch (e) {
     console.warn(`[nbt-data-storage] 持久化空洞池 ${levelPoolDpKey(key, level)} 失败`, e);

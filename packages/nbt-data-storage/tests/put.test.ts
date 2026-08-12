@@ -196,3 +196,37 @@ test("putItem：并发扩容到同一新桶 → 后者因世界占用改选同�
   assert.equal(barrels.get("1,120,0")?.[0], true); // A 的数据未被覆盖
   assert.equal(barrels.get("1,120,0")?.[1], true); // B 落在同桶下一槽
 });
+
+test("putItem：物化目标被非木桶方块占用（他人容器）→ 跳过候选，绝不替换他人方块", () => {
+  const { port, barrels, record } = makeWorld(4);
+  // 模拟"水印推进的目标位置"已被他人放了箱子：ensureBarrel 返回 occupied
+  const guarded: PutPort = {
+    ...port,
+    ensureBarrel: (x, y, z) => {
+      const k = `${x},${y},${z}`;
+      if (barrels.has(k)) return { ok: true, created: false };
+      return { ok: false, created: false, occupied: true }; // 其它方块：不替换
+    },
+  };
+  // 全部候选位置都 occupied → 有界重试耗尽 → null，一个桶都没建
+  assert.equal(putItem(guarded, "x", RID, DIM, LAYOUT), null);
+  assert.equal(barrels.size, 0); // 未被替换
+  assert.equal(record()?.meta.barrelCount, 0);
+});
+
+test("putItem：物化目标被占用时跳过；后续候选可用则成功写入正确槽位", () => {
+  const { port, barrels } = makeWorld(4);
+  // 只让"桶 0"位置（0,120,0）返回 occupied（模拟他人方块），其余正常物化
+  const guarded: PutPort = {
+    ...port,
+    ensureBarrel: (x, y, z) => {
+      if (x === 0 && y === 120 && z === 0) return { ok: false, created: false, occupied: true };
+      return port.ensureBarrel(x, y, z);
+    },
+  };
+  // 桶 0 的 27 个槽（slotId 0..26）目标位置全被占用 → 跳过 → slotId 27 落桶 1（1,120,0）
+  const ref = putItem(guarded, "x", RID, DIM, LAYOUT);
+  assert.equal(ref?.slotId, 27);
+  assert.equal(barrels.has("0,120,0"), false); // 他人方块未被替换
+  assert.equal(barrels.has("1,120,0"), true);
+});

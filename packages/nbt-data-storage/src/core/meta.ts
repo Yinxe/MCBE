@@ -45,11 +45,16 @@ export function createRegionMeta(): RegionMeta {
 }
 
 /**
- * 分配一个槽位 ID（O(1) 有界）：优先复用**最低层**空洞（层号经 holeLevels 索引 O(1) 定位），
+ * 分配一个槽位 ID（O(1) 有界）：优先复用**最低层**空洞（层号经 holeLevels 索引定位），
  * 否则推进 nextFree 水印并跳过"桶内索引 ≥ usablePerBarrel"的不可用槽位
  * （每 27 个 ID 至多跳 26 个 → 常量级循环）。水印触及解码硬上限且无空洞 → null。
+ * 防御：
+ * - **usablePerBarrel ≤ 0（瞬满布局）→ 直接 null**（不空转水印）；
+ * - 洞池 pop 出的洞若"桶内索引 ≥ usablePerBarrel"（布局收缩后的超限残留）
+ *   → 丢弃该洞继续找下一洞（超限槽永不再分配）；
+ * - 最低洞层池为空/丢失（脏索引）→ 循环丢弃索引并检查次低层（不会误报真满）。
  * @param hardLimit 解码硬上限（= maxLevels × SLOTS_PER_LEVEL；ID 从此不可再分配）
- * @param usablePerBarrel 每桶可分配槽位上限（1..27，缺省 27 = 全部可用）
+ * @param usablePerBarrel 每桶可分配槽位上限（0..27，缺省 27 = 全部可用）
  */
 export function allocateSlotId(
   meta: RegionMeta,
@@ -57,16 +62,19 @@ export function allocateSlotId(
   hardLimit: number,
   usablePerBarrel: number = BARREL_SLOTS
 ): number | null {
-  const lowest = meta.holeLevels[0];
-  if (lowest !== undefined) {
+  if (usablePerBarrel <= 0) return null; // 瞬满布局：无可用槽
+  for (;;) {
+    const lowest = meta.holeLevels[0];
+    if (lowest === undefined) break;
     const pool = pools.byLevel[lowest];
     const local = pool?.pop();
     if (local !== undefined) {
       if (pool && pool.length === 0) meta.holeLevels.shift(); // 该层无洞 → 移出索引
       meta.holeCount -= 1;
-      return lowest * SLOTS_PER_LEVEL + local;
+      if (local % BARREL_SLOTS < usablePerBarrel) return lowest * SLOTS_PER_LEVEL + local;
+      continue; // 超限残留洞：丢弃，继续找下一洞（不分配不可用槽）
     }
-    // 索引指向的层没有数据（异常：该层池丢失）→ 丢弃该索引，走水印
+    // 索引指向的层没有数据（异常：该层池丢失）→ 丢弃该索引，继续检查次低层
     meta.holeLevels.shift();
   }
   while (meta.nextFree < hardLimit) {
@@ -81,14 +89,22 @@ export function allocateSlotId(
  * 保护：
  * - 槽位 ID 必须小于水印（即曾被分配过），否则忽略；
  * - **幂等**：该槽已在洞池（重复回收，如重复 take 同一空槽）→ 忽略，
- *   防止洞池重复项导致同一槽被分配两次/统计虚高。
+ *   防止洞池重复项导致同一槽被分配两次/统计虚高；
+ * - **超限槽不入池**：桶内索引 ≥ usablePerBarrel 的槽（布局收缩后的旧占位）
+ *   → 忽略（该槽永不再分配，与"每桶可分配槽数"契约一致）。
  * 副作用：同步维护 holeLevels（升序）与 holeCount。
  */
-export function releaseSlotId(meta: RegionMeta, pools: LevelPools, slotId: number): void {
+export function releaseSlotId(
+  meta: RegionMeta,
+  pools: LevelPools,
+  slotId: number,
+  usablePerBarrel: number = BARREL_SLOTS
+): void {
   if (!Number.isInteger(slotId) || slotId < 0) return;
   if (slotId >= meta.nextFree) return;
   const level = levelOf(slotId);
   const local = slotId - level * SLOTS_PER_LEVEL;
+  if (local % BARREL_SLOTS >= usablePerBarrel) return; // 超限槽：不入池（不再分配）
   const pool = (pools.byLevel[level] ??= []);
   if (pool.includes(local)) return; // 已在洞池：重复回收忽略
   if (pool.length === 0 && !meta.holeLevels.includes(level)) {

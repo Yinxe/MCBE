@@ -133,10 +133,11 @@ export async function showConfigForm(player: Player, opts: ConfigFormOptions = {
       "_test",
       "§7⚠️ 以下为测试参数（仅测试模组用）：解码恒按 27 槽/桶，\n§7调小每桶槽数/层数 → 容量变小 → 快速堆满 + 见证扩容"
     )
-    .slider("slotPerBarrel", "每桶可用槽数（仅测试）", 1, 27, {
+    .slider("slotPerBarrel", "每桶可用槽数（仅测试）", 0, 27, {
       defaultValue: cfg.slotPerBarrel,
       valueStep: 1,
-      tooltip: "1..27，默认 27（全部可用）；ID 解码恒按 27 槽/桶，此值只限制每桶可分配槽数。创建后不可变，改它需换锚点",
+      tooltip:
+        "0..27，默认 27（全部可用）；ID 解码恒按 27 槽/桶，此值只限制每桶可分配槽数。0 = 容量 0 瞬满测试；创建后不可变，改它需换锚点",
     })
     .slider("maxLevels", "层数（仅测试）", 1, 64, {
       defaultValue: cfg.maxLevels,

@@ -3,9 +3,10 @@
 // 不持有业务状态（分配水印等由 StoredRegion 经 DP 读写）。
 // 所有方块/容器访问 try-catch 保护；区块未加载或不可达时返回失败而非抛错。
 import { world } from "@minecraft/server";
-import type { BlockInventoryComponent, Container, Dimension, ItemStack } from "@minecraft/server";
+import type { BlockInventoryComponent, Dimension, ItemStack, TickingAreaOptions } from "@minecraft/server";
 import type { RegionLayout, SlotPosition } from "../core/layout";
 import type { SlotStatus } from "../core/repair";
+import { shortDimension } from "../core/keys";
 
 const BARREL = "minecraft:barrel";
 
@@ -30,15 +31,19 @@ export class BarrelRuntime {
   }
 
   /**
-   * 物化（幂等）：确保该槽位所在木桶存在；非木桶方块被替换为木桶。
-   * 返回是否就绪 + 本次是否新建了桶（新建 → 上层计数）。
-   * 区块未加载或 setBlockType 失败 → { ok:false }。
+   * 物化（幂等）：确保该槽位所在木桶存在。
+   * - 已是木桶 → { ok:true, created:false }
+   * - 空气/未生成 → setBlockType 物化 → { ok:true, created:true }
+   * - **其它方块（他人容器/普通方块）→ { ok:false, occupied:true }——绝不替换他人方块**
+   *   （put 编排据此跳过候选；巡检的显式重建走 ensureBarrelForRepair）
+   * - 区块未加载/失败 → { ok:false }
    */
-  ensureBarrel(pos: SlotPosition): { ok: boolean; created: boolean } {
+  ensureBarrel(pos: SlotPosition): { ok: boolean; created: boolean; occupied?: boolean } {
     try {
       const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
       if (!block) return { ok: false, created: false };
       if (block.typeId === BARREL) return { ok: true, created: false };
+      if (block.typeId !== "minecraft:air") return { ok: false, created: false, occupied: true };
       this.dimension.setBlockType({ x: pos.x, y: pos.y, z: pos.z }, BARREL);
       return { ok: true, created: true };
     } catch (e) {
@@ -47,20 +52,30 @@ export class BarrelRuntime {
     }
   }
 
-  private containerOf(pos: SlotPosition): Container | undefined {
+  /**
+   * 巡检重建（显式修复）：把阵列坐标内的**任何非木桶方块一律覆盖**为木桶
+   * （含其它容器——按设计阵列坐标内的一切非木桶都是预期之外的干扰）。
+   */
+  ensureBarrelForRepair(pos: SlotPosition): { ok: boolean; created: boolean } {
     try {
       const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
-      const inv = block?.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined;
-      return inv?.container;
-    } catch {
-      return undefined;
+      if (!block) return { ok: false, created: false };
+      if (block.typeId === BARREL) return { ok: true, created: false };
+      this.dimension.setBlockType({ x: pos.x, y: pos.y, z: pos.z }, BARREL);
+      return { ok: true, created: true };
+    } catch (e) {
+      console.warn("[nbt-data-storage] ensureBarrelForRepair 失败", e);
+      return { ok: false, created: false };
     }
   }
 
-  /** 读取槽位物品（克隆返回，避免外部改动污染已存物品） */
+  /** 读取槽位物品（克隆返回，避免外部改动污染已存物品）；**位置不是木桶 → undefined（绝不读他人容器）** */
   readItem(pos: SlotPosition): ItemStack | undefined {
     try {
-      return this.containerOf(pos)?.getItem(pos.slotInBarrel)?.clone();
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block || block.typeId !== BARREL) return undefined;
+      const inv = block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined;
+      return inv?.container?.getItem(pos.slotInBarrel)?.clone();
     } catch {
       return undefined;
     }
@@ -93,12 +108,14 @@ export class BarrelRuntime {
     }
   }
 
-  /** 清空槽位（移除物品）；容器不可用返回 false */
+  /** 清空槽位（移除物品）；**位置不是木桶 → false（绝不清空他人容器）** */
   clearSlot(pos: SlotPosition): boolean {
     try {
-      const container = this.containerOf(pos);
-      if (!container) return false;
-      container.setItem(pos.slotInBarrel, undefined);
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block || block.typeId !== BARREL) return false;
+      const inv = block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined;
+      if (!inv?.container) return false;
+      inv.container.setItem(pos.slotInBarrel, undefined);
       return true;
     } catch {
       return false;
@@ -123,17 +140,57 @@ export class BarrelRuntime {
     }
   }
 
-  /** 注册 ticking area 保持阵列所在区块常加载（幂等；已存在/数量受限忽略） */
-  ensureTickingArea(): void {
+  /**
+   * ticking area 名称（维度 + 区块 组合，跨维度不冲突）。名称仅本包可见
+   * （TickingAreaManager 语义：无法修改/查询其他包或命令添加的区域）。
+   */
+  private areaName(): string {
+    return `nds_${shortDimension(this.dimensionId)}_${this.layout.chunkX}_${this.layout.chunkZ}`;
+  }
+
+  /**
+   * 注册 ticking area 保持阵列所在区块常加载（低频：注册/调整时各一次）。
+   * 使用 **world.tickingAreaManager（TickingAreaManager）**——模组独立额度：
+   * - **不占游戏命令预算**（每包固定 ticking 区块数，独立于命令限制）；
+   * - 多模组共用同一存储区域：各包各自挂自己的常加载（API 无法感知其他包的区域，
+   *   但**各包额度独立**，互不挤占；本包内 `hasTickingArea` 去重，同名不重复创建）；
+   * - createTickingArea 为异步（区块加载完成后 resolve），fire-and-forget + 失败告警；
+   * - force=true（resizeLayout 后范围变化）：先 remove 再重建；
+   * - 容量不足/失败 → 警告日志（否则远方容器读写将静默降级，难以排查）。
+   */
+  ensureTickingArea(opts: { force?: boolean } = {}): void {
+    const name = this.areaName();
+    const manager = world.tickingAreaManager;
     try {
+      if (!opts.force && manager.hasTickingArea(name)) return; // 本包已挂 → 去重
+      if (opts.force) {
+        try {
+          manager.removeTickingArea(name); // 范围变化：先移除旧区域
+        } catch {
+          /* 不存在则忽略 */
+        }
+      }
       const x0 = this.layout.chunkX * 16;
       const z0 = this.layout.chunkZ * 16;
-      const x1 = x0 + 15;
-      const z1 = z0 + 15;
-      const y1 = this.layout.baseY + this.layout.maxLevels - 1;
-      this.dimension.runCommand(`tickingarea add ${x0} ${this.layout.baseY} ${z0} ${x1} ${y1} ${z1}`);
-    } catch {
-      /* 已存在/数量受限：忽略，不影响存储 */
+      // from/to 取**同一点**（区块原点）：引擎自动把该点所在区块（16×16 垂直柱）设为常加载，
+      // 避免 16×16 包围盒在区块边界上跨越多个区块；区块柱覆盖全部 Y 层（含 64 层桶阵列）
+      const anchor = { x: x0, y: this.layout.baseY, z: z0 };
+      const options: TickingAreaOptions = {
+        dimension: this.dimension,
+        from: anchor,
+        to: anchor,
+      };
+      if (!manager.hasCapacity(options)) {
+        console.warn(
+          `[nbt-data-storage] 常加载区块容量不足（本包额度 ${manager.chunkCount}/${manager.maxChunkCount}），存储阵列可能受区块加载影响`
+        );
+        return;
+      }
+      void manager.createTickingArea(name, options).catch((e) => {
+        console.warn(`[nbt-data-storage] 常加载区块挂载失败：${e instanceof Error ? e.message : String(e)}`);
+      });
+    } catch (e) {
+      console.warn(`[nbt-data-storage] 常加载区块挂载失败：${e instanceof Error ? e.message : String(e)}`);
     }
   }
 }

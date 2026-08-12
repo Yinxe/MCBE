@@ -138,6 +138,10 @@ export class StoredRegion {
    */
   overwrite(slotId: number, item: ItemStack | undefined): OverwriteResult {
     const port: OverwritePort = {
+      readRecord: () => this.readRecord(),
+      writeRecord: (record) => this.writeRecord(record),
+      readLevelPool: (level) => readLevelPool(this.regionId, level),
+      writeLevelPool: (level, locals) => writeLevelPool(this.regionId, level, locals),
       probeSlot: (id) => {
         const pos = slotIdToPosition(id, this.layout);
         if (!pos) return "unknown";
@@ -247,7 +251,7 @@ export class StoredRegion {
     this._layout = {
       ...this._layout,
       maxLevels: patch.maxLevels ?? this._layout.maxLevels,
-      slotPerBarrel: patch.slotPerBarrel ?? (this._layout.slotPerBarrel ?? BARREL_SLOTS),
+      slotPerBarrel: patch.slotPerBarrel ?? this._layout.slotPerBarrel ?? BARREL_SLOTS,
     };
     this.runtime.applyLayout(this._layout);
     // 重扫全部已分配槽位，按新布局重建洞池（遗留超限洞清除，与世界真值对齐）
@@ -264,7 +268,7 @@ export class StoredRegion {
       },
       this._layout
     );
-    this.runtime.ensureTickingArea(); // 范围变化：重挂（幂等，新范围新增一个 area）
+    this.runtime.ensureTickingArea({ force: true }); // 层数/范围变化：强制重挂（默认预检会跳过同名旧 area）
     return null;
   }
 
@@ -291,7 +295,8 @@ export class StoredRegion {
       restoreBarrel: (slotId) => {
         const pos = slotIdToPosition(slotId, this.layout);
         if (!pos) return { ok: false, created: false };
-        return this.runtime.ensureBarrel(pos);
+        // 显式巡检修复：阵列坐标内任何非木桶一律覆盖重建（区别于 put 的保守 ensureBarrel）
+        return this.runtime.ensureBarrelForRepair(pos);
       },
     };
     return checkAndRepair(port, this.layout, (e) => {

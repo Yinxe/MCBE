@@ -157,3 +157,40 @@ test("transferOut：目标写入失败 → 回滚重存区域，返回新 slotId
   assert.equal(region.get(0), undefined);
   assert.equal(storeCalls, 1);
 });
+
+test("transferOut：目标写失败且重存也失败 → dropped 携带物品（调用方兜底，不静默丢失）", () => {
+  const { region } = makeWorld();
+  region.set(0, "bow");
+  const port: TransferPort = {
+    readSource: () => undefined,
+    store: () => null, // 重存失败（区域满/IO）
+    take: (slotId) => {
+      const item = region.get(slotId);
+      region.delete(slotId);
+      return item;
+    },
+    writeDest: () => false, // 目标写失败
+    clearSource: () => true,
+  };
+  const r = transferOut(port, 0);
+  assert.deepEqual(r, { ok: false, reason: "full", dropped: "bow" });
+  assert.equal(region.size, 0); // 槽已清空
+});
+
+test("transferIn：源槽清空失败且还原/重存都失败 → dropped 携带物品", () => {
+  const { state } = makeWorld();
+  state.source = "sword";
+  let storeCalls = 0;
+  const port: TransferPort = {
+    readSource: () => state.source,
+    store: () => {
+      storeCalls += 1;
+      return storeCalls === 1 ? 0 : null; // 首次存入成功，回滚重存失败
+    },
+    take: () => "sword",
+    writeDest: () => false, // 还原源槽失败
+    clearSource: () => false, // 清空源槽失败
+  };
+  const r = transferIn(port);
+  assert.deepEqual(r, { ok: false, reason: "io", dropped: "sword" });
+});

@@ -29,7 +29,7 @@ demo/
 | `/nds-demo:store` | 存入手持物品（成功后清空手持槽；带扩容见证） |
 | `/nds-demo:store-all` | 打开批量存入 UI（背包非空物品分页勾选 → 批量存入） |
 | `/nds-demo:take <slotId>` | 按格子 ID 取出到背包（凭据取物 O(1)，跨模组可取；背包满自动放回） |
-| `/nds-demo:overwrite <slotId>` | 手持物品**原位覆写**到指定格子（slotId 不变，旧物进背包/存回；空槽/异常位置拒绝） |
+| `/nds-demo:overwrite <slotId>` | 手持物品**原位覆写**到指定格子（ItemStack → 格子，slotId 不变；空槽也允许——实时数据保存；旧物进背包/存回；异常位置拒绝） |
 | `/nds-demo:take-all` | 打开批量取出 UI（当前区域凭据分页勾选 → 批量取出） |
 | `/nds-demo:check` | **阵列自检 + 修复**：损坏木桶重建、丢失槽回收、洞池对齐（自检维护） |
 | `/nds-demo:list` | 列出当前区域已存物品凭据 |

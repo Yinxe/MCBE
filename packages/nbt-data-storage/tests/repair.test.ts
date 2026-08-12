@@ -66,7 +66,10 @@ test("checkAndRepair：桶方块损坏 → 重建木桶 + 报告丢失槽（物�
   const { port, record } = makeRepairWorld(slots, new Map());
   const report = checkAndRepair(port, LAYOUT);
   assert.equal(report.fixedBarrels, 2); // 两处都重建
-  assert.deepEqual(report.lostSlots.sort((a, b) => a - b), [3, 8]); // 重建后为空 = 丢失
+  assert.deepEqual(
+    report.lostSlots.sort((a, b) => a - b),
+    [3, 8]
+  ); // 重建后为空 = 丢失
   // 丢失槽已回收为洞（容量恢复可复用）
   assert.deepEqual(record().meta.holeLevels, [0]);
   assert.equal(record().meta.holeCount, 2);
@@ -128,11 +131,28 @@ test("checkAndRepair：丢失原因区分（桶损坏 vs 外部取走）+ onEven
     if (e.type === "barrel-restored") events.push(`restored:${e.slotId}`);
     if (e.type === "item-lost") events.push(`lost:${e.slotId}:${e.kind}`);
   });
-  assert.deepEqual(report.lostDetails.sort((a, b) => a.slotId - b.slotId), [
-    { slotId: 3, kind: "barrel-destroyed" },
-    { slotId: 6, kind: "taken-externally" },
-  ]);
+  assert.deepEqual(
+    report.lostDetails.sort((a, b) => a.slotId - b.slotId),
+    [
+      { slotId: 3, kind: "barrel-destroyed" },
+      { slotId: 6, kind: "taken-externally" },
+    ]
+  );
   assert.deepEqual(events.sort(), ["lost:3:barrel-destroyed", "lost:6:taken-externally", "restored:3"]);
+});
+
+test("checkAndRepair：洞在损坏桶中 → 重建桶但不误报物品丢失", () => {
+  // 槽 3 是洞（曾 take 释放），槽 8 有实物；两者所在桶被破坏（damaged）
+  const slots = occupiedSlots(10);
+  slots.set(3, "damaged");
+  slots.set(8, "damaged");
+  const holes = new Map<number, number[]>([[0, [3]]]); // 槽 3 登记为洞
+  const { port, record } = makeRepairWorld(slots, holes);
+  const report = checkAndRepair(port, LAYOUT);
+  assert.ok(report.fixedBarrels >= 1); // 桶已重建（mock 每槽计一次 created，真实同桶只计一次）
+  assert.deepEqual(report.lostSlots, [8]); // 只有有物的槽 8 报丢失；洞槽 3 不误报
+  assert.deepEqual(report.lostDetails, [{ slotId: 8, kind: "barrel-destroyed" }]);
+  assert.equal(record().meta.holeCount, 2); // 洞 3 保留 + 丢失槽 8 回收为洞（容量恢复）
 });
 
 test("checkAndRepair：真实 put 流程后外部破坏一个桶 → 巡检修复并释放容量", () => {

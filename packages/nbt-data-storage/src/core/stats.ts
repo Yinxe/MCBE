@@ -34,6 +34,7 @@ export interface RegionStats {
 
 /** 从 layout + meta 计算统计快照（纯函数，可单测） */
 export function regionStats(key: string, dimensionId: string, layout: RegionLayout, meta: RegionMeta): RegionStats {
+  const capacity = capacityOf(layout);
   return {
     key,
     dimensionId,
@@ -42,10 +43,12 @@ export function regionStats(key: string, dimensionId: string, layout: RegionLayo
     baseY: layout.baseY,
     maxLevels: layout.maxLevels,
     slotPerBarrel: usableSlotsPerBarrel(layout),
-    capacity: capacityOf(layout),
+    capacity,
     barrels: meta.barrelCount,
     totalBarrels: totalBarrelsOf(layout),
-    used: usedSlots(meta),
+    // 视为已占用的槽位数：水印 − 空洞（但受可用容量约束——测试布局每桶槽数 <27 时
+    // 水印含跳过的不可用槽，clamp 到容量避免 used > capacity 的虚高显示）
+    used: Math.min(usedSlots(meta), capacity),
     nextFree: meta.nextFree,
     freePoolSize: meta.holeCount,
   };

@@ -25,8 +25,7 @@ export type LostKind = "barrel-destroyed" | "taken-externally";
 
 /** 巡检事件（经 onEvent 回调暴露，mc 层桥接为 EventSignal） */
 export type RepairEvent =
-  | { type: "barrel-restored"; slotId: number }
-  | { type: "item-lost"; slotId: number; kind: LostKind };
+  { type: "barrel-restored"; slotId: number } | { type: "item-lost"; slotId: number; kind: LostKind };
 
 /** checkAndRepair 依赖的端口：区域记录 + 洞池 + 世界槽位探测/修复 */
 export interface RepairPort {
@@ -73,7 +72,11 @@ export interface RepairReport {
  * @param onEvent 可选：巡检事件回调（barrel-restored / item-lost / container-conflict），
  *                由 mc 层桥接为 ItemStorage.events 供外部模组订阅
  */
-export function checkAndRepair(port: RepairPort, layout: RegionLayout, onEvent?: (e: RepairEvent) => void): RepairReport {
+export function checkAndRepair(
+  port: RepairPort,
+  layout: RegionLayout,
+  onEvent?: (e: RepairEvent) => void
+): RepairReport {
   const record = port.readRecord();
   const report: RepairReport = {
     scanned: 0,
@@ -116,6 +119,7 @@ export function checkAndRepair(port: RepairPort, layout: RegionLayout, onEvent?:
       if (restored.created) report.fixedBarrels++; // 真正新建桶才计数（同桶多槽只计一次）
       onEvent?.({ type: "barrel-restored", slotId });
       if (port.probeSlot(slotId) === "occupied") continue; // 重建后幸存（保守视为未丢失）
+      if (isHole(slotId)) continue; // 该槽本就是洞（曾 take 释放）→ 桶已重建，无物品丢失
       // 重建后为空 = 物品随方块损坏丢失
       report.lostSlots.push(slotId);
       report.lostDetails.push({ slotId, kind: "barrel-destroyed" });

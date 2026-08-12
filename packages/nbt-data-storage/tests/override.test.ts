@@ -393,3 +393,29 @@ test("serializeRegionRecord：带 slotPerBarrel 的布局往返一致（记录�
   assert.equal(parsed.layout.slotPerBarrel, 1);
   assert.equal(parsed.layout.maxLevels, 1);
 });
+
+// ── 审查修复回归：超限洞过滤 / 脏索引循环 / 0 槽瞬满 ────────────────
+
+test("审查回归：布局收缩后 take 超限旧槽 → 不入池、不再分配（0 槽瞬满不被绕过）", () => {
+  const meta = { v: 2 as const, nextFree: 30, holeLevels: [], holeCount: 0, barrelCount: 0 };
+  const pools = createLevelPools(4);
+  // 27 槽时代占用过桶 0 槽 2（超限：新布局每桶 2 槽）
+  releaseSlotId(meta, pools, 2, 2); // usable=2：local 2 ≥ 2 → 不入池
+  assert.equal(meta.holeCount, 0);
+  assert.deepEqual(meta.holeLevels, []);
+  // 0 槽布局：allocate 直接 null（不空转水印、不被洞绕过）
+  const meta0 = { v: 2 as const, nextFree: 0, holeLevels: [], holeCount: 0, barrelCount: 0 };
+  const pools0 = createLevelPools(4);
+  assert.equal(allocateSlotId(meta0, pools0, 6912, 0), null);
+  assert.equal(meta0.nextFree, 0); // 未空转
+});
+
+test("审查回归：最低洞层池为空（脏索引）→ 循环丢弃并分配高层洞（不误报真满）", () => {
+  const meta = { v: 2 as const, nextFree: 100, holeLevels: [0, 1], holeCount: 1, barrelCount: 0 };
+  const pools = createLevelPools(4);
+  pools.byLevel[1] = [3]; // 层 0 池丢失（脏索引），层 1 有洞 local=3
+  const slotId = allocateSlotId(meta, pools, 6912);
+  assert.equal(slotId, 1 * 6912 + 3); // 分配到层 1 的洞
+  assert.deepEqual(meta.holeLevels, []); // 脏索引 0 与空层 1 都已清
+  assert.equal(meta.holeCount, 0);
+});

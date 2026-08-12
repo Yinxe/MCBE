@@ -128,11 +128,11 @@ export function validateLayout(layout: RegionLayout): string | null {
   if (!Number.isInteger(layout.chunkX) || !Number.isInteger(layout.chunkZ)) {
     return "区块坐标必须为整数";
   }
-  if (!Number.isInteger(layout.baseY) || layout.baseY < 0) {
-    return "baseY 必须为非负整数";
+  if (!Number.isInteger(layout.baseY) || layout.baseY < -64) {
+    return "baseY 必须为 >= -64 的整数（世界最低层）";
   }
-  if (!Number.isInteger(layout.maxLevels) || layout.maxLevels < 1) {
-    return "maxLevels 必须为 >= 1 的整数";
+  if (!Number.isInteger(layout.maxLevels) || layout.maxLevels < 1 || layout.maxLevels > MAX_LEVELS) {
+    return `maxLevels 必须为 1..${MAX_LEVELS} 的整数`;
   }
   if (layout.slotPerBarrel !== undefined) {
     if (

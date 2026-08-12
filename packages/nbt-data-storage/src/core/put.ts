@@ -25,8 +25,12 @@ export interface PutPort {
   readLevelPool(level: number): number[];
   /** 写某层空洞池 */
   writeLevelPool(level: number, locals: number[]): void;
-  /** 物化/确认木桶存在（幂等）；返回是否就绪 + 本次是否新建了桶 */
-  ensureBarrel(x: number, y: number, z: number): { ok: boolean; created: boolean };
+  /**
+   * 物化/确认木桶存在（幂等）。返回是否就绪 + 本次是否新建了桶 + 位置是否被
+   * **非木桶方块占用**（occupied=true 表示该位置有其它方块/容器——调用方必须
+   * 跳过该候选，**绝不能替换他人方块**；物化只发生在空气/已是木桶的位置）。
+   */
+  ensureBarrel(x: number, y: number, z: number): { ok: boolean; created: boolean; occupied?: boolean };
   /** 该槽位是否已被世界占用（真值检查；无法确认保守视为占用） */
   isSlotOccupied(x: number, y: number, z: number, slotInBarrel: number): boolean;
   /** 把物品写入槽位（物品为不透明引用）；成功返回 true */
@@ -35,7 +39,9 @@ export interface PutPort {
 
 /**
  * 存入编排（O(1) 分配 + 有界重试）：成功返回取物凭据 `{ regionId, slotId }`，满/失败返回 null。
- * 分配只触碰最低洞层（holeLevels[0]），无洞则推进水印；每轮都是常量操作，不扫描槽位。
+ * 分配只触碰洞层（holeLevels 全部加载，通常 1-2 层），无洞则推进水印；每轮常量操作。
+ * 物化顺序（防销毁他人方块）：先 `ensureBarrel` 探测——位置被**非木桶方块占用**
+ * → 跳过该候选（绝不替换）；仅空气/已是木桶才物化；区块未就绪 → 槽回洞池返回 null。
  */
 export function putItem(
   port: PutPort,
@@ -51,20 +57,23 @@ export function putItem(
   for (let attempt = 0; attempt < MAX_ALLOC_RETRY; attempt++) {
     const record = port.readRecord() ?? createRegionRecord(dimensionId, layout);
     const meta = record.meta;
-    // 分配前的最低洞层：分配只会触碰这一层（复用 or 移出索引）
-    const lowest = meta.holeLevels[0];
+    // 加载全部洞层池（洞层通常 1-2 个；脏索引循环丢弃时需要次低层数据）
     const pools: LevelPools = createLevelPools(layout.maxLevels);
-    if (lowest !== undefined) pools.byLevel[lowest] = port.readLevelPool(lowest);
+    for (const level of meta.holeLevels) {
+      pools.byLevel[level] = port.readLevelPool(level);
+    }
     const slotId = allocateSlotId(meta, pools, hardLimit, usable);
     if (slotId === null) return null; // 真满
     const pos = slotIdToPosition(slotId, layout);
     if (!pos) return null;
     // 先占位持久化：收窄 RMW 窗口内跨模组重复分配同一槽的竞态
     port.writeRecord(record);
-    if (lowest !== undefined) {
-      port.writeLevelPool(lowest, pools.byLevel[lowest] ?? []);
+    for (const level of meta.holeLevels) {
+      port.writeLevelPool(level, pools.byLevel[level] ?? []);
     }
+    // 先探测后物化：位置被非木桶方块占用（他人容器/方块）→ 跳过候选，绝不替换
     const barrel = port.ensureBarrel(pos.x, pos.y, pos.z);
+    if (barrel.occupied) continue;
     if (!barrel.ok) {
       releaseSlot(port, slotId, dimensionId, layout); // 区块未就绪：槽回归空洞池
       return null;
@@ -85,14 +94,14 @@ export function putItem(
 
 /**
  * 回收槽位到其所在层空洞池（读改写：主记录 + 该层池）。
- * 供 put 失败回滚与 take/remove 共用。
+ * 供 put 失败回滚与 take/remove 共用。超限槽（桶内索引 ≥ 每桶可用槽数）不入池。
  */
 export function releaseSlot(port: PutPort, slotId: number, dimensionId: string, layout: RegionLayout): void {
   const record = port.readRecord() ?? createRegionRecord(dimensionId, layout);
   const level = levelOf(slotId);
   const pools: LevelPools = createLevelPools(layout.maxLevels);
   pools.byLevel[level] = port.readLevelPool(level);
-  releaseSlotId(record.meta, pools, slotId);
+  releaseSlotId(record.meta, pools, slotId, usableSlotsPerBarrel(layout));
   port.writeRecord(record);
   port.writeLevelPool(level, pools.byLevel[level] ?? []);
 }

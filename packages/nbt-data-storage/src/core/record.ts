@@ -6,6 +6,7 @@
 // 后续模组注册同一区块时直接采纳该记录 → 跨模组共享同一存储阵列与分配水印。
 
 import type { RegionLayout } from "./layout";
+import { BARREL_SLOTS, MAX_LEVELS, SLOTS_PER_LEVEL } from "./layout";
 import type { RegionMeta } from "./meta";
 
 /** 持久化的区域主记录（layout 与 meta 合一；空洞本体另存于 `...:pool:{level}` 键） */
@@ -27,11 +28,35 @@ export function serializeRegionRecord(record: PersistedRegion): string {
   return JSON.stringify(record);
 }
 
-/** 解析 DP 值；非法/版本不符返回 undefined */
+/** 解析 DP 值；垃圾/版本不符/**字段损坏**返回 undefined */
 export function parseRegionRecord(json: string): PersistedRegion | undefined {
   try {
     const raw = JSON.parse(json) as PersistedRegion;
     if (raw?.v !== 2 || !raw.dimensionId || !raw.layout || !raw.meta) return undefined;
+    // 字段级校验：损坏记录（nextFree 巨大/负数、holeLevels 越界、layout 非法等）直接拒绝，
+    // 防止巡检/重建按坏水印空转卡死或统计荒谬
+    const { meta, layout } = raw;
+    if (
+      !Number.isInteger(meta.nextFree) ||
+      meta.nextFree < 0 ||
+      meta.nextFree > layout.maxLevels * SLOTS_PER_LEVEL || // 水印不可能越过解码硬上限
+      !Number.isInteger(meta.holeCount) ||
+      meta.holeCount < 0 ||
+      !Array.isArray(meta.holeLevels) ||
+      !meta.holeLevels.every((l) => Number.isInteger(l) && l >= 0 && l < layout.maxLevels) ||
+      !Number.isInteger(meta.barrelCount) ||
+      meta.barrelCount < 0 ||
+      !Number.isInteger(layout.chunkX) ||
+      !Number.isInteger(layout.chunkZ) ||
+      !Number.isInteger(layout.baseY) ||
+      !Number.isInteger(layout.maxLevels) ||
+      layout.maxLevels < 1 ||
+      layout.maxLevels > MAX_LEVELS ||
+      (layout.slotPerBarrel !== undefined &&
+        (!Number.isInteger(layout.slotPerBarrel) || layout.slotPerBarrel < 0 || layout.slotPerBarrel > BARREL_SLOTS))
+    ) {
+      return undefined;
+    }
     return raw;
   } catch {
     return undefined;

@@ -58,9 +58,7 @@ export interface RegistrationDecision {
  */
 export function assertLayoutConsistent(existing: RegionLayout, input: RegistrationInput, cx: number, cz: number): void {
   if (existing.test === true && input.test !== true) {
-    throw new Error(
-      `该区块(${cx},${cz})是测试区域（仅测试渠道 registerTest 可用），正式渠道注册被拒绝，请更换锚点`
-    );
+    throw new Error(`该区块(${cx},${cz})是测试区域（仅测试渠道 registerTest 可用），正式渠道注册被拒绝，请更换锚点`);
   }
   if (input.maxLevels !== undefined && input.maxLevels !== existing.maxLevels) {
     throw new Error(
@@ -127,9 +125,10 @@ export interface ResizePatch {
  * @returns null=成功；字符串=面向玩家的中文拒绝原因
  */
 export function resizeLayout(port: ResizePort, layout: RegionLayout, patch: ResizePatch): string | null {
-  if (layout.test !== true) return "该区域非测试区域，无法动态调整参数（仅 registerTest 创建的测试区域可调，正式区域请更换锚点）";
+  if (layout.test !== true)
+    return "该区域非测试区域，无法动态调整参数（仅 registerTest 创建的测试区域可调，正式区域请更换锚点）";
   const newMaxLevels = patch.maxLevels ?? layout.maxLevels;
-  const newSlotPerBarrel = patch.slotPerBarrel ?? (layout.slotPerBarrel ?? BARREL_SLOTS);
+  const newSlotPerBarrel = patch.slotPerBarrel ?? layout.slotPerBarrel ?? BARREL_SLOTS;
   if (!Number.isInteger(newMaxLevels) || newMaxLevels < 1 || newMaxLevels > MAX_LEVELS) {
     return `maxLevels 必须为 1..${MAX_LEVELS} 的整数`;
   }

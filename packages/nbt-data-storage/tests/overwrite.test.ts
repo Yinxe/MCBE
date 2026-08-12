@@ -1,26 +1,48 @@
-// ── 原位覆写（overwriteSlot）单测 ─────────────────────────────────
-// 语义：指定已有格子覆盖写入（slotId 不变），旧物品返回调用方（不丢）。
-// 护栏：仅 occupied 允许；empty 拒绝（请用 put）；damaged/unknown 拒绝（请先巡检）。
+// ── 指定格子精准覆写（overwriteSlot）单测 ─────────────────────────
+// 语义：ItemStack → 指定格子直接覆写（slotId 不变），主要用于实时数据保存：
+//   - 格内已有物品（occupied）→ 替换，旧物品返回调用方（不丢）；
+//   - 格内为空/洞（empty）→ **直接写入**（精准指定格子的写入手势），洞占位移除；
+//   - 非木桶/未加载（damaged/unknown）→ 拒绝（请先巡检）；
+//   - 越界/空物品 → 拒绝。
 import test from "node:test";
 import assert from "node:assert/strict";
 import { overwriteSlot, type OverwritePort } from "../src/core/overwrite";
 import type { SlotStatus } from "../src/core/repair";
+import { createRegionRecord, type PersistedRegion } from "../src/core/record";
 
 const LAYOUT = { chunkX: 0, chunkZ: 0, baseY: 120, maxLevels: 4 };
 
-/** 内存覆写世界：slotId → 状态 + 物品（字符串代指） */
-function makeOverwriteWorld(slots: Map<number, SlotStatus>, items: Map<number, string>) {
+/** 内存覆写世界：slotId → 状态 + 物品 + 按层洞池 */
+function makeOverwriteWorld(
+  slots: Map<number, SlotStatus>,
+  items: Map<number, string>,
+  holes: Map<number, number[]> = new Map()
+) {
+  let record = createRegionRecord("minecraft:the_end", LAYOUT);
+  record.meta.nextFree = 100;
+  record.meta.holeLevels = [...holes.keys()].sort((a, b) => a - b);
+  record.meta.holeCount = [...holes.values()].reduce((n, a) => n + a.length, 0);
+  const pools = new Map(holes);
   const port: OverwritePort = {
+    readRecord: () => JSON.parse(JSON.stringify(record)) as PersistedRegion,
+    writeRecord: (r) => {
+      record = JSON.parse(JSON.stringify(r)) as PersistedRegion;
+    },
+    readLevelPool: (level) => pools.get(level) ?? [],
+    writeLevelPool: (level, locals) => {
+      if (locals.length === 0) pools.delete(level);
+      else pools.set(level, [...locals]);
+    },
     probeSlot: (slotId) => slots.get(slotId) ?? "unknown",
     readItem: (slotId) => items.get(slotId),
     writeItem: (slotId, item) => {
       const status = slots.get(slotId);
-      if (status !== "occupied") return false;
+      if (status !== "occupied" && status !== "empty") return false;
       items.set(slotId, item as string);
       return true;
     },
   };
-  return { port, items };
+  return { port, items, pools, record: () => record };
 }
 
 test("overwriteSlot：位置有实物 → 覆写成功，返回旧物品（slotId 不变）", () => {
@@ -33,13 +55,18 @@ test("overwriteSlot：位置有实物 → 覆写成功，返回旧物品（slotI
   assert.equal(world.get(3), "new-axe"); // 原位覆写
 });
 
-test("overwriteSlot：空槽 → 拒绝（覆写需目标已有物品）", () => {
+test("overwriteSlot：空槽 → 直接写入（实时数据保存），洞池占位移除", () => {
   const slots = new Map<number, SlotStatus>([[5, "empty"]]);
-  const { port, items } = makeOverwriteWorld(slots, new Map());
-  const r = overwriteSlot(port, 5, "x", LAYOUT);
-  assert.equal(r.ok, false);
-  assert.ok(r.error?.includes("为空"));
-  assert.equal(items.has(5), false); // 未写入
+  const holes = new Map<number, number[]>([[0, [5]]]); // 槽 5 曾是洞
+  const { port, items, pools, record } = makeOverwriteWorld(slots, new Map(), holes);
+  const r = overwriteSlot(port, 5, "snapshot", LAYOUT);
+  assert.equal(r.ok, true);
+  assert.equal(r.old, undefined); // 原为空
+  assert.equal(items.get(5), "snapshot");
+  // 洞已占位移除：holeCount 归零、层池清空、holeLevels 无 0
+  assert.equal(record().meta.holeCount, 0);
+  assert.deepEqual(record().meta.holeLevels, []);
+  assert.equal(pools.has(0), false);
 });
 
 test("overwriteSlot：非木桶/未加载 → 拒绝（请先巡检）", () => {

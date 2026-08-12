@@ -1,6 +1,6 @@
 {
   "name": "@yinxe/nbt-data-storage",
-  "version": "0.1.12",
+  "version": "0.1.16",
   "private": true,
   "description": "MCBE 存储基石：区块锚定的全木桶阵列，按格存 ItemStack（完整 NBT），O(1) 槽位 ID 存取，动态扩容，多模组共享",
   "main": "src/index.ts",
