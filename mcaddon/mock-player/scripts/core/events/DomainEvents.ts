@@ -28,3 +28,45 @@ export const raidStarted = new EventSignal<RaidStartedEvent>();
 
 /** 劫掠胜利信号 */
 export const raidVictory = new EventSignal<RaidVictoryEvent>();
+
+// ─── 三叉戟认主事件 ────────────────────────────────────
+// 认主机制的所有动作（投掷标记/加载回退/上线夺回/UI 认主/下线回退）完成时触发，
+// 供订阅方做通知/统计/联动（负载只用可序列化 string/number）。
+
+/** 认主途径 */
+export type TridentClaimVia = "spawn" | "load" | "rebind" | "ui" | "offline-fallback";
+
+/** 三叉戟认主事件：某把三叉戟的 owner 被设置/重设 */
+export interface TridentClaimedEvent {
+  /** 三叉戟实体 ID */
+  tridentId: string;
+  /** 认主到谁（当前 owner） */
+  claimedBy: string;
+  /** 认主途径 */
+  via: TridentClaimVia;
+  /** 第一任主人（玩家或假人） */
+  firstOwner?: string;
+  /** 第二任主人（仅假人） */
+  secondOwner?: string;
+}
+
+/** 三叉戟认主信号 */
+export const tridentClaimed = new EventSignal<TridentClaimedEvent>();
+
+/**
+ * 三叉戟主人更替事件：第二任被覆盖复写时触发（1任→2任 或 2任→新2任）。
+ * 第一任不可变，更替只发生在第二任。
+ */
+export interface TridentOwnerChangedEvent {
+  /** 三叉戟实体 ID */
+  tridentId: string;
+  /** 第一任主人（不变） */
+  firstOwner?: string;
+  /** 更替前的第二任（undefined = 首次认领第二任） */
+  previousSecondOwner?: string;
+  /** 更替后的第二任 */
+  newSecondOwner: string;
+}
+
+/** 三叉戟主人更替信号 */
+export const tridentOwnerChanged = new EventSignal<TridentOwnerChangedEvent>();

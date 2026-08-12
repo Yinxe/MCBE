@@ -157,9 +157,15 @@ scripts/
 - 覆盖投掷物 typeId：`minecraft:thrown_trident` + `minecraft:arrow`（arrow 含药水箭，API 无法细分）
 
 ### 双认主机制（`mc/features/tridentTracker.ts`）
-1. **投掷即标记**：entitySpawn 时以投射物 owner（投掷者）打第一任 tag（假人投掷 → 第一任即该假人）
+1. **投掷即标记**：entitySpawn 时以投射物 owner（投掷者）打第一任 tag（假人投掷 → 第一任即该假人）；反查表（entityOwnerMap，entityId→假人名）优先解析投掷者（实体无 name 兜底）
 2. **fallback 认主**：entityLoad 时按优先级认主——**第二任在线 > 第一任在线**（`resolveClaimOwner` 纯函数）；都离线不动等上线夺回
-3. **上线夺回**：假人上线（playerJoin/playerSpawn）→ `rebindBotTridents` 扫第一/第二任含自己的三叉戟重设 owner
+3. **上线夺回**：假人上线（playerJoin/playerSpawn）→ `rebindBotTridents`，**先按优先级计算最优 owner，只有最优是自己才重设**（避免抢走"第二任是其他在线假人"的三叉戟）
+4. **下线回退**：假人下线（offlineBot/entityDie 死亡下线/playerLeave 兜底）→ `releaseBotTridents`，名下第二任=自己的三叉戟**回退认主第一任**（第一任在线才认），避免 owner 悬空丢击杀经验；tag 保留，上线后 rebind 夺回
+
+### 认主领域事件（`core/events/DomainEvents`）
+- `tridentClaimed`：所有认主动作完成触发（via: spawn/load/rebind/ui/offline-fallback，负载含 tridentId/claimedBy/第一二任）
+- `tridentOwnerChanged`：**第二任覆盖复写时触发**（1任→2任 或 2任→新2任；负载含 firstOwner/previousSecondOwner/newSecondOwner）
+- 生产端：tridentTracker（spawn/load/rebind/offline-fallback）+ tridentClaim（ui）；订阅方做通知/统计/联动
 
 ### 认主 UI（ui/tridentClaim.ts，面板"三叉戟认主"按钮）
 - 扫描假人 100 半径（当前维度）内三叉戟，过滤**自家**（第一/第二任 ∈ 家族集合 = 主人名 ∪ 主人名下假人名）

@@ -22,7 +22,7 @@ import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";
-import { trackBotOffline } from "../features/tridentTracker";
+import { trackBotOffline, releaseBotTridents } from "../features/tridentTracker";
 
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;
@@ -98,5 +98,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   record.entityId = undefined;
   saveCoordinator.saveRecord(record);
   bot.disconnect();
+  // 三叉戟下线回退：名下三叉戟认主第一任（避免 owner 悬空丢击杀经验）
+  releaseBotTridents(record.name);
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 已死亡下线`);
 }

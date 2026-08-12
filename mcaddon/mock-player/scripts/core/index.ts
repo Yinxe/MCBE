@@ -6,7 +6,11 @@ export * from "./model/Types";
 
 // events
 export { EventSignal, type EventCallback } from "./events/EventSignal";
-export { raidStarted, raidVictory, type RaidStartedEvent, type RaidVictoryEvent } from "./events/DomainEvents";
+export {
+  raidStarted, raidVictory, tridentClaimed, tridentOwnerChanged,
+  type RaidStartedEvent, type RaidVictoryEvent,
+  type TridentClaimedEvent, type TridentClaimVia, type TridentOwnerChangedEvent,
+} from "./events/DomainEvents";
 
 // tags
 export * from "./tags/BotTags";

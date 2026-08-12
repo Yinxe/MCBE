@@ -9,6 +9,7 @@ import type { Entity } from "@minecraft/server";
 import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { formatEnchantments, formatDurability } from "../format";
+import { tridentClaimed, tridentOwnerChanged } from "../../core/events/DomainEvents";
 import {
   makeSecondOwnerTag, parseClaimTags, parseItemTag, isOwnedByFamily, OWNER2_TAG_PREFIX,
 } from "../../core/items/TridentClaimRules";
@@ -142,6 +143,9 @@ export function claimTridents(botName: string, entityIds: string[]): number {
       const t = world.getEntity(id);
       if (!t || t.typeId !== THROWN_TRIDENT) continue;
 
+      // 更替事件负载：记录更替前的第二任与第一任
+      const { firstOwner, secondOwner: previousSecond } = parseClaimTags(t.getTags());
+
       // 覆盖复写：先移除已有第二任 tag（mp:owner2:*），再打当前假人
       for (const tag of t.getTags()) {
         if (tag.startsWith(OWNER2_TAG_PREFIX)) t.removeTag(tag);
@@ -152,6 +156,15 @@ export function claimTridents(botName: string, entityIds: string[]): number {
       if (proj) proj.owner = bot;
       claimed++;
       console.info(`[MockPlayer] 认主 ${botName} → 三叉戟 ${t.id}`);
+
+      // 认主事件 + 主人更替事件（第二任覆盖复写：1任→2任 或 2任→新2任）
+      tridentClaimed.trigger({ tridentId: id, claimedBy: botName, via: "ui", firstOwner, secondOwner: botName });
+      tridentOwnerChanged.trigger({
+        tridentId: id,
+        firstOwner,
+        previousSecondOwner: previousSecond,
+        newSecondOwner: botName,
+      });
     } catch {
       // 单条失败不影响批量
     }

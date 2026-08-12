@@ -14,6 +14,7 @@ import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { offlineBot } from "../features/offlineBot";
+import { releaseBotTridents } from "../features/tridentTracker";
 import { reconnectingBots } from "../features/pendingRespawn";
 import { color } from "@yinxe/toolkit";
 
@@ -76,6 +77,9 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   record.online = false;
   record.entityId = undefined;
   saveCoordinator.saveRecord(record);
+
+  // 三叉戟下线回退（假人离开兜底；offlineBot/entityDie 路径已各自调用）
+  releaseBotTridents(record.name);
   botRegistry.removeRestored(record.name);
 
   // 重连周期（宝库/模式切换）不发送"离开游戏"消息

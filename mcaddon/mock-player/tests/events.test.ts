@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { EventSignal } from "../scripts/core/events/EventSignal";
-import { raidStarted, raidVictory } from "../scripts/core/events/DomainEvents";
+import { raidStarted, raidVictory, tridentClaimed, tridentOwnerChanged } from "../scripts/core/events/DomainEvents";
 
 test("EventSignal：订阅/触发/退订", () => {
   const signal = new EventSignal<number>();
@@ -61,4 +61,47 @@ test("领域事件：raidStarted/raidVictory 信号可触发并携带序列化�
 
   off1();
   off2();
+});
+
+test("领域事件：三叉戟认主事件（各途径可触发）", () => {
+  const events: string[] = [];
+  const off = tridentClaimed.subscribe((e) => events.push(`${e.tridentId}:${e.claimedBy}:${e.via}`));
+
+  tridentClaimed.trigger({ tridentId: "t1", claimedBy: "Steve", via: "spawn", firstOwner: "Steve" });
+  tridentClaimed.trigger({ tridentId: "t1", claimedBy: "Steave", via: "load", firstOwner: "Steve", secondOwner: "bot1" });
+  tridentClaimed.trigger({ tridentId: "t1", claimedBy: "bot1", via: "rebind", firstOwner: "Steve", secondOwner: "bot1" });
+  tridentClaimed.trigger({ tridentId: "t2", claimedBy: "bot1", via: "ui", firstOwner: "Steve", secondOwner: "bot1" });
+  tridentClaimed.trigger({ tridentId: "t2", claimedBy: "Steve", via: "offline-fallback", firstOwner: "Steve", secondOwner: "bot1" });
+
+  assert.deepEqual(events, [
+    "t1:Steve:spawn",
+    "t1:Steave:load",
+    "t1:bot1:rebind",
+    "t2:bot1:ui",
+    "t2:Steve:offline-fallback",
+  ]);
+
+  off();
+});
+
+test("领域事件：三叉戟主人更替事件（第二任覆盖复写）", () => {
+  const events: string[] = [];
+  const off = tridentOwnerChanged.subscribe((e) =>
+    events.push(`${e.tridentId}:${e.firstOwner ?? "无"}:${e.previousSecondOwner ?? "无"}→${e.newSecondOwner}`)
+  );
+
+  // 首次认领第二任（1任→2任）
+  tridentOwnerChanged.trigger({ tridentId: "t1", firstOwner: "Steve", newSecondOwner: "bot1" });
+  // 更替第二任（2任→新2任）
+  tridentOwnerChanged.trigger({ tridentId: "t1", firstOwner: "Steve", previousSecondOwner: "bot1", newSecondOwner: "bot2" });
+  // 无第一任的异常数据
+  tridentOwnerChanged.trigger({ tridentId: "t2", newSecondOwner: "bot1" });
+
+  assert.deepEqual(events, [
+    "t1:Steve:无→bot1",
+    "t1:Steve:bot1→bot2",
+    "t2:无:无→bot1",
+  ]);
+
+  off();
 });
