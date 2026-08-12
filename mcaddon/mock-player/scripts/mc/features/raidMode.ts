@@ -12,7 +12,7 @@
 // 规则常量/识别（不祥之瓶、效果分类、饮用/卡死/巡检阈值）在 core/service/RaidRules。
 // 与假人加载模式无关（普通/强加载均可 useItemInSlot 使用物品）。
 
-import { Container, Effect, EffectAddAfterEvent, Entity, Player, system, world } from "@minecraft/server";
+import { Container, Effect, EffectAddAfterEvent, Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
@@ -24,12 +24,17 @@ import type { RaidVictoryEvent } from "../../core/events/DomainEvents";
 import { TAG_RAID_MODE } from "../../core/tags/BotTags";
 import { BotRecord } from "../../core/model/Types";
 import {
+  createRaidSession,
+  advanceRaidSession,
+  type RaidSession,
+  type RaidWorldState,
+} from "../../core/service/RaidSession";
+import {
   BAD_OMEN,
   RAID_OMEN,
   VILLAGE_HERO,
   RAIDER_TYPE_IDS,
   DRINK_DURATION,
-  RAID_STUCK_TICKS,
   RAID_SWEEP_TICKS,
   RAID_EXPECT_TICKS,
   RAID_FORCE_COOLDOWN,
@@ -45,14 +50,11 @@ const drinking = new Set<string>();
 /** 本次会话劫掠胜利次数（仅内存，与假人绑定，不持久化；重启后清零） */
 const victoryCounts = new Map<string, number>();
 
-/** 最近一次劫掠胜利的 tick（仅内存，用于卡死检查区分「本瓶尚未触发」与「上一瓶已胜利进入下一瓶」） */
-const lastVictoryTick = new Map<string, number>();
+/** 劫掠会话（每启用劫掠的在线假人一个，状态机推进——见 core/service/RaidSession） */
+const raidSessions = new Map<string, RaidSession>();
 
-/** 当前袭击的预期结束 tick（不祥之兆施加时设定；巡检用它区分「袭击仍在进行」与「袭击已结束但胜利信号丢失」） */
-const raidWindowUntil = new Map<string, number>();
-
-/** 最近一次兜底续瓶的 tick（冷却，防止巡检反复续瓶刷屏） */
-const lastForceDrinkTick = new Map<string, number>();
+/** 卡死提醒节流（warn-stuck 每 2 分钟最多一次，防刷屏） */
+const lastWarnTick = new Map<string, number>();
 
 let raidEventsReady = false;
 
@@ -73,7 +75,16 @@ export function initRaidModeEffects(): void {
   BotEvents.raidVictory.subscribe(handleRaidVictory);
   BotEvents.botOnline.subscribe((e) => startRaidMode(e.botName));
   BotEvents.botRespawn.subscribe((e) => startRaidMode(e.botName));
+  // 下线/死亡 → 清理会话（状态机只服务在线假人；上线/重生时重建）
+  BotEvents.botOffline.subscribe((e) => removeRaidSession(e.botName));
+  BotEvents.botDeath.subscribe((e) => removeRaidSession(e.botName));
   system.runInterval(raidModeSweep, RAID_SWEEP_TICKS);
+}
+
+/** 移除假人的劫掠会话（关模式/下线/死亡时清理内存） */
+function removeRaidSession(botName: string): void {
+  raidSessions.delete(botName);
+  drinking.delete(botName);
 }
 
 /**
@@ -82,14 +93,13 @@ export function initRaidModeEffects(): void {
  */
 export function cleanupRaidMode(botName: string): void {
   victoryCounts.delete(botName);
-  lastVictoryTick.delete(botName);
   drinking.delete(botName);
-  raidWindowUntil.delete(botName);
-  lastForceDrinkTick.delete(botName);
+  raidSessions.delete(botName);
+  lastWarnTick.delete(botName);
 }
 
 /**
- * 启动劫掠模式：喝下一瓶不祥之瓶（首次开启 / 续瓶 / 死亡重生恢复）。
+ * 启动劫掠模式：创建会话并喝下一瓶不祥之瓶（首次开启 / 续瓶 / 死亡重生恢复）。
  * 幂等：已在喝、已有不祥之兆排队、假人不在线/死亡时安全跳过。
  * 由「行为表单开启劫掠开关」「假人上线」「假人重生」三处触发。
  */
@@ -101,6 +111,11 @@ export function startRaidMode(botName: string): void {
 
   const bot = resolveBotPlayer(botName);
   if (!bot || !bot.isValid) return;
+
+  // 会话不存在 → 新建（drinking 阶段）；存在（重连/重生）→ 保持状态继续
+  if (!raidSessions.has(botName)) {
+    raidSessions.set(botName, createRaidSession(botName, system.currentTick));
+  }
   drinkNextBottle(bot, record);
 }
 
@@ -128,26 +143,32 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
     const kind = classifyRaidEffect(typeId);
     if (!kind) return;
 
-    // 袭击之兆施加瞬间 = 劫掠位置被标记（官方存于玩家数据 raid_omen_position），打印坐标辅助验证
+    // 袭击之兆 = 袭击开始 → raiding 阶段（设定预期窗口）
     if (kind === "raid-omen") {
       const loc = e.entity.location;
       console.info(
         `[MockPlayer] ${name} 袭击之兆 → 袭击触发点 (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})（≈ raid_omen_position）`
       );
-      probeRaidOmenDp(e.entity, name);
+      const session = raidSessions.get(name);      if (session) {
+        session.phase = "raiding";
+        session.phaseSince = system.currentTick;
+        session.windowUntil = system.currentTick + RAID_EXPECT_TICKS;
+      }
       return;
     }
 
-    // 不祥之兆 = 喝瓶成功，袭击即将开始
+    // 不祥之兆 = 喝瓶成功，袭击即将开始 → 状态机推进到 bad-omen 阶段
     if (kind === "bad-omen") {
       BotEvents.raidStarted.trigger({ botName: name, amplifier: amp });
-      // 记录袭击预期窗口：此后 10 分钟内视为可能有袭击在进行，兜底巡检到期才续瓶
-      raidWindowUntil.set(name, system.currentTick + RAID_EXPECT_TICKS);
-      scheduleRaidStuckCheck(name);
+      const session = raidSessions.get(name);
+      if (session) {
+        session.phase = "bad-omen";
+        session.phaseSince = system.currentTick;
+      }
       return;
     }
 
-    // 村庄英雄 = 袭击胜利
+    // 村庄英雄 = 袭击胜利（事件正常路径；丢失由巡检 claim-victory 兜底）
     if (kind === "village-hero") {
       BotEvents.raidVictory.trigger({ botName: name, amplifier: amp });
     }
@@ -179,12 +200,13 @@ function processVictory(record: BotRecord, amplifier: number, bot: SimulatedPlay
   // 胜利次数累加（仅内存，不持久化）
   const wins = (victoryCounts.get(botName) ?? 0) + 1;
   victoryCounts.set(botName, wins);
-  // 记录胜利时刻，供卡死检查区分「本瓶尚未触发」与「已胜利进入下一瓶」
-  lastVictoryTick.set(botName, system.currentTick);
-
-  // 胜利后一段时间内视为可能有袭击在进行（喝下一瓶到新不祥之兆之间、或下一场袭击），
-  // 兜底巡检需等窗口过期才续瓶
-  raidWindowUntil.set(botName, system.currentTick + RAID_EXPECT_TICKS);
+  const session = raidSessions.get(botName);
+  if (session) {
+    session.wins = wins;
+    // 胜利处理完成后进入下一瓶（drinking 阶段）
+    session.phase = "drinking";
+    session.phaseSince = system.currentTick;
+  }
 
   if (viaSweep) {
     world.sendMessage(
@@ -248,50 +270,71 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
   }
 }
 
-// ─── 兜底巡检 ──────────────────────────────────────────
-// 事件驱动链可能因三类原因断裂，巡检每 30 秒恢复一次：
-//   1. 袭击胜利但假人未获得村庄英雄（未参与击杀 / 死亡时获胜）→ 无任何效果且窗口过期 → 续瓶
-//   2. 村庄英雄已施加但 effectAdd 事件丢失（假人挂着英雄却无胜利处理）→ 补记胜利并续瓶
-//   3. 喝瓶静默失败（useItemInSlot 未返回 true）→ 无效果、无窗口 → 冷却后重试
-// 「袭击可能仍在进行」的判定（满足任一即跳过续瓶）：
-//   带不祥/袭击之兆、预期窗口未过期、或附近 128 格内有袭击参与生物。
+// ─── 兜底巡检（session 状态机驱动） ────────────────────
+// 每 30 秒对每个劫掠会话推进状态机（core advanceRaidSession 纯逻辑），
+// 采集世界状态 → 产出动作 → 执行副作用。事件链任何断裂都由状态机判定恢复：
+//   1. 袭击结束但没拿到村庄英雄（未参与击杀）→ 窗口过期 + 无袭击者 → 重喝（修复死锁）
+//   2. 挂着村庄英雄但 effectAdd 丢失 → claim-victory 补记胜利
+//   3. 喝瓶静默失败 → drinking 超时无效果 → 重喝
+//   4. 带不祥之兆久未触发袭击 → warn-stuck 提醒（效果过期后自动重喝）
+//   5. 无瓶 → stop 模式
 
 function raidModeSweep(): void {
   try {
     const now = system.currentTick;
-    for (const record of botRegistry.all()) {
+    for (const [botName, session] of [...raidSessions.entries()]) {
       try {
-        if (!record.tags.includes(TAG_RAID_MODE.value)) continue;
-        if (record.death || !record.online) continue;
-        const bot = resolveBotPlayer(record.name);
-        if (!bot || !bot.isValid) continue;
-        if (drinking.has(record.name)) continue;
-
-        // 袭击排队/酝酿中（不祥/袭击之兆还在）→ 正常推进，跳过
-        if (hasEffect(bot, BAD_OMEN) || hasEffect(bot, RAID_OMEN)) continue;
-
-        // 挂着村庄英雄却无胜利处理 → effectAdd 事件丢失，兜底补记胜利并续瓶
-        const hero = tryGetEffect(bot, VILLAGE_HERO);
-        if (hero) {
-          processVictory(record, hero.amplifier, bot, true);
+        const record = botRegistry.get(botName);
+        if (!record || !record.tags.includes(TAG_RAID_MODE.value)) {
+          raidSessions.delete(botName); // 模式已关/记录缺失 → 清理会话
           continue;
         }
+        if (record.death || !record.online) continue; // 下线/死亡由事件清理，双保险
+        const bot = resolveBotPlayer(botName);
+        if (!bot || !bot.isValid) continue;
 
-        // 无任何效果：袭击可能仍在进行（窗口未过期或附近有袭击者）→ 跳过
-        if (now < (raidWindowUntil.get(record.name) ?? 0)) continue;
-        if (hasRaiderNearby(bot)) continue;
+        // 采集世界状态（状态机输入）
+        const container = safeGetContainer(bot);
+        const worldState: RaidWorldState = {
+          now,
+          hasBadOmen: hasEffect(bot, BAD_OMEN),
+          hasRaidOmen: hasEffect(bot, RAID_OMEN),
+          hasVillageHero: !!tryGetEffect(bot, VILLAGE_HERO),
+          hasRaiderNearby: hasRaiderNearby(bot),
+          hasBottle: !!container && findOminousBottleSlot(container) !== -1,
+        };
 
-        // 冷却，防反复续瓶刷屏
-        if (now - (lastForceDrinkTick.get(record.name) ?? 0) < RAID_FORCE_COOLDOWN) continue;
-        lastForceDrinkTick.set(record.name, now);
+        const { session: next, action } = advanceRaidSession(session, worldState);
+        raidSessions.set(botName, next);
 
-        const reason = raidWindowUntil.has(record.name)
-          ? "袭击已结束但未获得村庄英雄（可能未参与击杀或事件丢失），兜底自动续喝下一瓶"
-          : "劫掠链中断（喝瓶或效果事件丢失），兜底自动重新喝瓶";
-        world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.warn}${record.name}：${reason}`);
-        drinkNextBottle(bot, record);
+        switch (action.type) {
+          case "drink":
+            drinkNextBottle(bot, record);
+            break;
+          case "claim-victory": {
+            const hero = tryGetEffect(bot, VILLAGE_HERO);
+            processVictory(record, hero?.amplifier ?? 0, bot, true);
+            break;
+          }
+          case "warn-stuck": {
+            // 节流：2 分钟最多提醒一次
+            if (now - (lastWarnTick.get(botName) ?? 0) >= RAID_FORCE_COOLDOWN) {
+              lastWarnTick.set(botName, now);
+              world.sendMessage(
+                `${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName} 带不祥之兆久未触发袭击` +
+                `，请确认假人在村庄内且非和平难度（效果过期后将自动重喝）`
+              );
+            }
+            break;
+          }
+          case "stop":
+            disableRaidMode(botName, record, "背包里没有不祥之瓶了，请补充后重新开启劫掠模式");
+            break;
+          case "none":
+            break;
+        }
       } catch (err) {
-        console.warn(`[MockPlayer] 劫掠巡检 ${record.name} 异常: ${err}`);
+        console.warn(`[MockPlayer] 劫掠巡检 ${botName} 异常: ${err}`);
       }
     }
   } catch (err) {
@@ -317,34 +360,6 @@ function hasRaiderNearby(bot: SimulatedPlayer): boolean {
   } catch {
     return true;
   }
-}
-
-/** 喝瓶后 1 分钟仍带不祥之兆 → 袭击未触发，提醒玩家（一次性的，非轮询） */
-function scheduleRaidStuckCheck(botName: string): void {
-  // 记录排程时刻；若在这之后已胜利（进入下一瓶）则本检查作废
-  const scheduledAt = system.currentTick;
-
-  system.runTimeout(() => {
-    try {
-      const record = botRegistry.get(botName);
-      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
-      const bot = resolveBotPlayer(botName);
-      if (!bot || !bot.isValid) return;
-
-      // 这瓶之后已胜利过（自动进入下一瓶，正握着新不祥之兆）→ 正常推进，跳过
-      if ((lastVictoryTick.get(botName) ?? 0) > scheduledAt) return;
-
-      // 1 分钟后仍带不祥/袭击之兆 → 袭击未触发
-      if (hasEffect(bot, BAD_OMEN) || hasEffect(bot, RAID_OMEN)) {
-        world.sendMessage(
-          `${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName} 带不祥之兆超 1 分钟仍未触发袭击` +
-          `，请确认假人在村庄内且非和平难度`
-        );
-      }
-    } catch (err) {
-      console.warn(`[MockPlayer] 劫掠卡死检查异常: ${err}`);
-    }
-  }, RAID_STUCK_TICKS);
 }
 
 // ─── 饮用不祥之瓶 ──────────────────────────────────────
@@ -498,48 +513,14 @@ function tryGetEffect(bot: SimulatedPlayer | Player, effectId: string): Effect |
   }
 }
 
-/**
- * 延迟几秒从玩家动态属性探测官方 raid_omen_position。
- * 机制验证：官方文档称袭击位置存于玩家数据（NBT 整数数组），而 getDynamicProperty 只支持
- * 标量/Vector3 不支持数组——此探测用于确认该字段是否被暴露为可读的动态属性。
- * 若能读到则打印坐标；否则打印全部动态属性 key 供排查。
- */
-function probeRaidOmenDp(entity: Entity, name: string): void {
-  system.runTimeout(() => {
-    try {
-      if (!entity.isValid) return;
-      const player = entity as Player;
-
-      let direct: string;
-      try {
-        direct = JSON.stringify(player.getDynamicProperty("raid_omen_position"));
-      } catch (e) {
-        direct = `读取抛错: ${e}`;
-      }
-
-      let ids: string[];
-      try {
-        ids = player.getDynamicPropertyIds();
-      } catch (e) {
-        console.warn(`[MockPlayer] DP 探测 ${name} 枚举 key 失败: ${e}`);
-        return;
-      }
-
-      const raidish = ids.filter((id) => /raid|omen|position|village/i.test(id));
-      console.info(
-        `[MockPlayer] DP 探测 ${name} → raid_omen_position=${direct}` +
-        ` | 相关 key=${JSON.stringify(raidish)} | 全部 ${ids.length} 个 key=${JSON.stringify(ids)}`
-      );
-    } catch (e) {
-      console.warn(`[MockPlayer] DP 探测 ${name} 失败: ${e}`);
-    }
-  }, 80); // 延迟 4 秒：若游戏稍后才写入该字段，多等几秒再读
-}
-
 /** 关闭劫掠模式（移除标签即停用；劫掠为独立开关，与其它行为可共存，不额外切回空闲） */
 function disableRaidMode(botName: string, record: BotRecord, message?: string): void {
   record.tags = record.tags.filter((t) => t !== TAG_RAID_MODE.value);
   saveCoordinator.saveRecord(record);
+
+  // 清理会话（关模式后状态机不再服务该假人）
+  raidSessions.delete(botName);
+  drinking.delete(botName);
 
   const bot = resolveBotPlayer(botName);
   if (bot) syncEntityTags(bot, record.tags);
