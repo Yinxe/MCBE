@@ -31,18 +31,33 @@ export function makeSecondOwnerTag(name: string): string {
   return `${OWNER2_TAG_PREFIX}${name}`;
 }
 
-/** 解析实体 tags 中的双任主人（不含旧格式） */
+/** 解析实体 tags 中的双任主人（不含旧格式；空名 tag 忽略） */
 export function parseClaimTags(tags: readonly string[]): { firstOwner?: string; secondOwner?: string } {
   let firstOwner: string | undefined;
   let secondOwner: string | undefined;
   for (const tag of tags) {
     if (tag.startsWith(OWNER_TAG_PREFIX)) {
-      firstOwner = tag.slice(OWNER_TAG_PREFIX.length);
+      const name = tag.slice(OWNER_TAG_PREFIX.length);
+      if (name) firstOwner = name;
     } else if (tag.startsWith(OWNER2_TAG_PREFIX)) {
-      secondOwner = tag.slice(OWNER2_TAG_PREFIX.length);
+      const name = tag.slice(OWNER2_TAG_PREFIX.length);
+      if (name) secondOwner = name;
     }
   }
   return { firstOwner, secondOwner };
+}
+
+/**
+ * 判定投掷物是否属于某家族（自家三叉戟）。
+ * 家族 = 主人名 ∪ 主人名下全部假人名；第一/第二任任一命中即算自家。
+ */
+export function isOwnedByFamily(
+  firstOwner: string | undefined,
+  secondOwner: string | undefined,
+  family: ReadonlySet<string>
+): boolean {
+  return (firstOwner !== undefined && family.has(firstOwner))
+    || (secondOwner !== undefined && family.has(secondOwner));
 }
 
 /**

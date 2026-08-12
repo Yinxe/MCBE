@@ -34,3 +34,22 @@ test("remainingQuota：剩余名额", () => {
 test("remainingQuota：管理员返回 -1（无限）", () => {
   assert.equal(remainingQuota(99, 5, true), -1);
 });
+
+// ─── 边界条件 ─────────────────────────────────────────
+
+test("边界：负数配额等价禁止（配置侧已归一化，防御语义）", () => {
+  assert.equal(canCreateBot(0, -1, false), false);
+  assert.equal(remainingQuota(0, -1, false), 0);
+});
+
+test("边界：0 个假人 + 配额 0 禁止创建", () => {
+  assert.equal(canCreateBot(0, 0, false), false);
+});
+
+test("边界：管理员 + 负数配额仍豁免", () => {
+  assert.equal(canCreateBot(0, -5, true), true);
+});
+
+test("边界：count 远超 quota 时 remaining 为 0（不出现负数名额）", () => {
+  assert.equal(remainingQuota(100, 5, false), 0);
+});

@@ -10,7 +10,7 @@ import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { formatEnchantments, formatDurability } from "../format";
 import {
-  makeSecondOwnerTag, parseClaimTags, OWNER2_TAG_PREFIX,
+  makeSecondOwnerTag, parseClaimTags, isOwnedByFamily, OWNER2_TAG_PREFIX,
 } from "../../core/items/TridentClaimRules";
 import { sortByClusterProbability } from "../../core/coords/Cluster";
 import type { Vec3 } from "../../core/model/Types";
@@ -70,9 +70,7 @@ export function scanOwnTridents(botName: string): ClaimableTrident[] | undefined
     try {
       const { firstOwner, secondOwner } = parseClaimTags(t.getTags());
       if (!firstOwner && !secondOwner) continue;
-      const isOurs = (firstOwner !== undefined && family.has(firstOwner))
-        || (secondOwner !== undefined && family.has(secondOwner));
-      if (!isOurs) continue;
+      if (!isOwnedByFamily(firstOwner, secondOwner, family)) continue;
 
       // 附魔组件缺失 → 直接跳过（不显示"未知"）
       const itemComp = t.getComponent("minecraft:item") as { itemStack?: { typeId: string } } | undefined;

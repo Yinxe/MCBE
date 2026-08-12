@@ -78,3 +78,51 @@ test("sortByClusterProbability：概率相同时按原始下标升序（稳定�
   const sorted = sortByClusterProbability(points, 10);
   assert.deepEqual(sorted.map((p) => p.index), [0, 1]);
 });
+
+// ─── 边界条件 ─────────────────────────────────────────
+
+test("边界：radius=0 时仅完全同坐标算邻居", () => {
+  const probs = computeClusterProbabilities([
+    { x: 1, y: 2, z: 3 },
+    { x: 1, y: 2, z: 3 }, // 与 0 完全重叠
+    { x: 1, y: 2, z: 4 }, // 距离 1 > 0
+  ], 0);
+  assert.deepEqual(probs, [1 / 2, 1 / 2, 0]);
+});
+
+test("边界：多点完全重叠（同一坐标）概率最高", () => {
+  // 5 点全部重叠：互相都是邻居 → 概率 1
+  const points = Array.from({ length: 5 }, () => ({ x: 7, y: 7, z: 7 }));
+  const probs = computeClusterProbabilities(points, 10);
+  assert.deepEqual(probs, [1, 1, 1, 1, 1]);
+});
+
+test("边界：负数 radius 等价 0（仅同坐标）", () => {
+  const probs = computeClusterProbabilities([
+    { x: 0, y: 0, z: 0 },
+    { x: 0, y: 0, z: 0 },
+    { x: 1, y: 0, z: 0 },
+  ], -5);
+  assert.equal(probs[0], 1 / 2);
+  assert.equal(probs[2], 0);
+});
+
+test("边界：超大坐标差异不溢出（距离平方安全）", () => {
+  const probs = computeClusterProbabilities([
+    { x: 30000000, y: 0, z: 0 },
+    { x: -30000000, y: 0, z: 0 },
+  ], 10);
+  assert.deepEqual(probs, [0, 0]);
+});
+
+test("边界：概率为 0 的孤立点排在扎堆点之后", () => {
+  const sorted = sortByClusterProbability([
+    { x: 1000, y: 1000, z: 1000 }, // 孤立（index 0）
+    { x: 0, y: 0, z: 0 },          // 扎堆（index 1）
+    { x: 2, y: 0, z: 0 },          // 扎堆（index 2）
+  ], 5);
+  assert.equal(sorted[0]!.index, 1);
+  assert.equal(sorted[1]!.index, 2);
+  assert.equal(sorted[2]!.index, 0);
+  assert.equal(sorted[2]!.probability, 0);
+});

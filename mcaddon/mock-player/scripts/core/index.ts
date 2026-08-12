@@ -39,3 +39,4 @@ export * from "./service/BotRegistry";
 export * from "./service/ReclaimPlanner";
 export * from "./service/RaidRules";
 export * from "./service/QuotaRules";
+export * from "./service/ModConfigRules";

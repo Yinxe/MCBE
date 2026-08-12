@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   OWNER_TAG_PREFIX, OWNER2_TAG_PREFIX, TRACKED_PROJECTILE_IDS,
   isTrackedProjectile, makeOwnerTag, makeSecondOwnerTag,
-  parseClaimTags, resolveClaimOwner,
+  parseClaimTags, resolveClaimOwner, isOwnedByFamily,
 } from "../scripts/core/items/TridentClaimRules";
 
 test("tag 常量：前缀格式", () => {
@@ -69,4 +69,49 @@ test("resolveClaimOwner：无第二任时认第一任", () => {
 
 test("resolveClaimOwner：无任何主人返回 undefined", () => {
   assert.equal(resolveClaimOwner(undefined, undefined, () => true), undefined);
+});
+
+// ─── 边界条件 ─────────────────────────────────────────
+
+test("边界：空名 tag（mp:owner:）被忽略，不产生空主人", () => {
+  const parsed = parseClaimTags(["mp:owner:", "mp:owner2:"]);
+  assert.deepEqual(parsed, { firstOwner: undefined, secondOwner: undefined });
+});
+
+test("边界：名字含前缀子串（名字里有 owner2:）完整保留", () => {
+  // 玩家名 "owner2:steve" → tag mp:owner:owner2:steve，解析应得完整名字
+  const parsed = parseClaimTags(["mp:owner:owner2:steve"]);
+  assert.deepEqual(parsed, { firstOwner: "owner2:steve", secondOwner: undefined });
+});
+
+test("边界：owner2 前缀不被 owner 前缀误截（前缀顺序安全）", () => {
+  const parsed = parseClaimTags(["mp:owner2:bot1"]);
+  assert.equal(parsed.firstOwner, undefined); // 不落进第一任
+  assert.equal(parsed.secondOwner, "bot1");
+});
+
+test("边界：tag 列表重复时后者覆盖前者（同 tag 幂等）", () => {
+  const parsed = parseClaimTags(["mp:owner:a", "mp:owner:b"]);
+  assert.equal(parsed.firstOwner, "b"); // addTag 幂等不会出现，防御语义
+});
+
+test("isOwnedByFamily：第一任命中家族", () => {
+  const family = new Set(["Steve", "bot1", "bot2"]);
+  assert.equal(isOwnedByFamily("bot2", undefined, family), true);
+  assert.equal(isOwnedByFamily("Steve", undefined, family), true);
+});
+
+test("isOwnedByFamily：第二任命中家族（同主假人投掷物被兄弟夺回）", () => {
+  const family = new Set(["Steve", "bot1"]);
+  assert.equal(isOwnedByFamily("Alex", "bot1", family), true);
+});
+
+test("isOwnedByFamily：双任都不在家族返回 false", () => {
+  const family = new Set(["Steve", "bot1"]);
+  assert.equal(isOwnedByFamily("Alex", "botX", family), false);
+  assert.equal(isOwnedByFamily(undefined, undefined, family), false);
+});
+
+test("isOwnedByFamily：空家族恒 false", () => {
+  assert.equal(isOwnedByFamily("Steve", undefined, new Set()), false);
 });

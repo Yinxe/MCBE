@@ -6,6 +6,7 @@
 import { world } from "@minecraft/server";
 import { createDefaultConfig } from "../../core/model/Types";
 import type { ModConfig } from "../../core/model/Types";
+import { mergeStoredConfig } from "../../core/service/ModConfigRules";
 
 const CONFIG_KEY = "mockplayer:config";
 
@@ -17,21 +18,16 @@ export class McConfigStore {
     return this.config;
   }
 
-  /** 世界加载后调用：从 DP 读取持久化配置并合并（损坏/缺失回退默认） */
+  /** 世界加载后调用：从 DP 读取持久化配置并合并（解析/合并规则在 core 纯函数） */
   refresh(): void {
     try {
       const raw = world.getDynamicProperty(CONFIG_KEY);
       if (typeof raw !== "string") {
+        this.config = mergeStoredConfig(undefined);
         console.info(`[MockPlayer] 无全局配置，使用默认（defaultQuota=${this.config.defaultQuota}）`);
         return;
       }
-      const saved = JSON.parse(raw) as Partial<ModConfig>;
-      const base = createDefaultConfig();
-      this.config = {
-        defaultQuota: typeof saved.defaultQuota === "number" ? saved.defaultQuota : base.defaultQuota,
-        quotas: saved.quotas && typeof saved.quotas === "object" ? saved.quotas : {},
-        admins: Array.isArray(saved.admins) ? saved.admins.filter((a) => typeof a === "string") : [],
-      };
+      this.config = mergeStoredConfig(raw);
       console.info(`[MockPlayer] 全局配置已加载（defaultQuota=${this.config.defaultQuota}，逐人 ${Object.keys(this.config.quotas).length} 条，管理员 ${this.config.admins.length} 名）`);
     } catch (e: any) {
       console.error(`[MockPlayer] 全局配置加载失败，使用默认: ${e?.message ?? e}`);

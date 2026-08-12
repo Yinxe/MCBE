@@ -19,7 +19,9 @@ export function computeClusterProbabilities(points: readonly Vec3[], radius: num
   const n = points.length;
   if (n <= 1) return new Array(n).fill(0);
 
-  const radiusSq = radius * radius;
+  // 防御：负数半径按 0 处理（仅同坐标算邻居），避免平方后误放大
+  const r = Math.max(0, radius);
+  const radiusSq = r * r;
   const result: number[] = [];
   for (let i = 0; i < n; i++) {
     const p = points[i]!;
