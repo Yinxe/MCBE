@@ -5,6 +5,7 @@
 // 事件负载只用可序列化的 string/number——保持 core 纯净。
 
 import { EventSignal } from "./EventSignal";
+import { tridentClaimed, tridentOwnerChanged } from "./DomainEvents";
 
 // ─── 劫掠工作流（raid-mode） ──────────────────────────
 
@@ -54,4 +55,7 @@ export const BotWorkflowEvent = {
   raidVictory: workflowRaidVictory,
   // 宝库
   vaultOpened: workflowVaultOpened,
+  // 三叉戟认主（复用 DomainEvents 信号——同一实例，订阅方可从任一命名空间访问）
+  tridentClaimed,
+  tridentOwnerChanged,
 };

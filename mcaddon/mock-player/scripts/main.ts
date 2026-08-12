@@ -17,7 +17,6 @@ import { registerAllCommands } from "./mc/commands/index";
 import { registerAllEvents } from "./mc/events/index";
 import { startTagBehaviors } from "./mc/features/behavior";
 import { initGameTestContext } from "./mc/features/gametestContext";
-import { initTridentTracker } from "./mc/features/tridentTracker";
 import { runMigrations } from "./mc/bootstrap/migration";
 import { workflowManager } from "./mc/bootstrap/workflows";
 import { botRegistry, configStore } from "./mc/bootstrap/context";
@@ -70,11 +69,7 @@ world.afterEvents.worldLoad.subscribe(() => {
   console.info(`[MockPlayer] 启动引擎`);
   startTagBehaviors();
 
-  // 初始化三叉戟追踪（entitySpawn 标记假人抛出的三叉戟）
-  console.info(`[MockPlayer] 初始化三叉戟追踪`);
-  initTridentTracker();
-
-  // 初始化劫掠事件系统（effectAdd → raidStarted/raidVictory 自定义事件）
-  console.info(`[MockPlayer] 初始化工作流（劫掠/宝库）`);
+  // 初始化三叉戟追踪（entitySpawn 标记假人抛出的三叉戟）——由 trident 工作流 init 负责
+  console.info(`[MockPlayer] 初始化工作流（劫掠/宝库/三叉戟认主）`);
   workflowManager.initAll();
 });

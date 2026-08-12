@@ -21,6 +21,7 @@ import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { BotEvents } from "../../core/events/DomainEvents";
 import type { RaidVictoryEvent } from "../../core/events/DomainEvents";
+import { workflowRaidStarted, workflowRaidVictory } from "../../core/events/WorkflowEvents";
 import { TAG_RAID_MODE } from "../../core/tags/BotTags";
 import { BotRecord } from "../../core/model/Types";
 import {
@@ -64,49 +65,6 @@ export function initRaidModeEffects(): void {
   BotEvents.botOnline.subscribe((e) => startRaidMode(e.botName));
   BotEvents.botRespawn.subscribe((e) => startRaidMode(e.botName));
 }
-
-// ─── 劫掠工作流（Workflow 封装） ───────────────────────
-// 每个工作流单独一份文件（本文件即 raid 工作流实现）：
-//   init   = 注册效果/上线/重生监听（worldLoad 后 initAll 调用）
-//   start  = 开模式/上线/重生 → 喝第一瓶
-//   stop   = 关模式（移除标签即停用）
-//   isRunning = 假人带劫掠标签且在线
-// 对外事件走领域事件模式（BotWorkflowEvent.raidStarted / raidVictory，
-// 每个事件一个独立信号，见 core/events/WorkflowEvents）
-
-import type { Workflow } from "../../core/service/Workflow";
-import { workflowRaidStarted, workflowRaidVictory } from "../../core/events/WorkflowEvents";
-
-/** 劫掠工作流：喝不祥之瓶 → 袭击 → 胜利 → 下一瓶（事件驱动循环） */
-export const raidWorkflow: Workflow = {
-  name: "raid-mode",
-  description: "劫掠模式：喝不祥之瓶触发袭击，胜利后把村庄英雄叠加给主人并续喝下一瓶",
-
-  init(): void {
-    initRaidModeEffects();
-  },
-
-  start(botName?: string): void {
-    if (!botName) {
-      console.warn(`[Workflow] raid-mode start 需要指定假人`);
-      return;
-    }
-    startRaidMode(botName);
-  },
-
-  stop(botName?: string): void {
-    if (!botName) return;
-    const record = botRegistry.get(botName);
-    if (!record) return;
-    disableRaidMode(botName, record);
-  },
-
-  isRunning(botName?: string): boolean {
-    if (!botName) return false;
-    const record = botRegistry.get(botName);
-    return !!record && record.tags.includes(TAG_RAID_MODE.value) && record.online && !record.death;
-  },
-};
 
 /**
  * 清理假人劫掠状态（删除假人时调用）：胜利计数/胜利时刻/饮用中标记/袭击窗口，
@@ -453,7 +411,7 @@ function tryGetEffect(bot: SimulatedPlayer | Player, effectId: string): Effect |
 }
 
 /** 关闭劫掠模式（移除标签即停用；劫掠为独立开关，与其它行为可共存，不额外切回空闲） */
-function disableRaidMode(botName: string, record: BotRecord, message?: string): void {
+export function disableRaidMode(botName: string, record: BotRecord, message?: string): void {
   record.tags = record.tags.filter((t) => t !== TAG_RAID_MODE.value);
   saveCoordinator.saveRecord(record);
 

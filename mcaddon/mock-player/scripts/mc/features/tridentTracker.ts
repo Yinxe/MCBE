@@ -226,6 +226,15 @@ function resolveOwnerEntity(name: string): Entity | undefined {
 // 反查表（entityId → botName）供 entitySpawn 认主时解析假人投掷者；
 // 由 onlineBot/playerJoin/playerSpawn（在线）与 offlineBot/entityDie/deleteBot（离线）维护。
 
+/** 该假人当前被追踪的认主三叉戟数（工作流 isRunning 查询用） */
+export function countOwnedTridents(botName: string): number {
+  let count = 0;
+  for (const owner of entityOwnerMap.values()) {
+    if (owner === botName) count++;
+  }
+  return count;
+}
+
 export function trackBotOnline(entityId: string, botName: string): void {
   entityOwnerMap.set(entityId, botName);
   console.info(`[MockPlayer] 反查表 += ${botName}（${entityId}）共 ${entityOwnerMap.size} 条`);
