@@ -158,19 +158,28 @@ export class McBotStore implements BotStore<ItemStack> {
 
   /**
    * 世界重启时加载所有假人记录。
-   * 跳过含 :inv: / :equip: / :bind: 的子 key（旧版 DP 物品数据残留 与
-   * 独立绑定表 key——都不是记录，防御性跳过，防被当记录解析产生垃圾条目）。
+   * 跳过子 key：`:inv:` / `:equip:`（旧版 DP 物品数据残留）与 `:bind` 结尾
+   * （独立绑定表——注意绑定 key 是 `...:bind` 结尾，无尾部冒号，`:bind:` 匹配不到）。
+   * 解析后**结构校验**（name 必须是 string）——绑定表/损坏 JSON 即使解析成功
+   * 也不会被当作记录（防坏记录进入 registry：name/tags undefined 会导致
+   * UI 表单与劫掠巡检报 "cannot read property xxx of undefined"）。
    */
   loadAllRecords(): BotRecord[] {
     const ids = world.getDynamicPropertyIds();
     const records: BotRecord[] = [];
     for (const id of ids) {
       if (!id.startsWith(DP_PREFIX)) continue;
-      if (id.includes(":inv:") || id.includes(":equip:") || id.includes(":bind:")) continue;
+      if (id.includes(":inv:") || id.includes(":equip:") || id.endsWith(":bind")) continue;
       const value = world.getDynamicProperty(id);
       if (typeof value !== "string") continue;
       try {
-        records.push(JSON.parse(value) as BotRecord);
+        const parsed = JSON.parse(value) as BotRecord;
+        // 结构校验：必须有合法 name（绑定表/损坏记录解析成功但缺字段 → 拒绝）
+        if (!parsed || typeof parsed.name !== "string" || parsed.name.length === 0) {
+          console.error(`[MockPlayer] 加载记录 ${id} 结构非法已跳过`);
+          continue;
+        }
+        records.push(parsed);
       } catch {
         console.error(`[MockPlayer] 加载记录 ${id} 损坏已跳过`);
       }
