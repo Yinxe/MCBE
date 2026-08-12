@@ -15,9 +15,17 @@ export const VILLAGE_HERO = "minecraft:village_hero";
 /**
  * 基岩版袭击参与生物 typeId 列表（与 vanilla-data 1.26.20 逐一核对）：
  * 掠夺者/卫道士/唤魔者/劫掠兽/女巫；唤魔者 typeId 用基岩版内部名 evocation_illager。
- * ⚠️ 实测当前原版行为包（Mojang/bedrock-samples 1.26）：这些生物的 type_family 里
- * **没有 "raider" 家族**（只含 pillager/monster/illager/mob 等）——families 查询匹配不到
- * 袭击者，巡检探测必须直接按 typeId 逐个匹配。
+ *
+ * ⚠️ 为什么不按 type_family 一次匹配全部袭击者（双源实测：Mojang/bedrock-samples 1.26
+ * 原版行为包实体 JSON + 官方 wiki「族」页——该页由原版行为包模板自动生成，共 141 个族）：
+ *   1. 原版没有任何生物的 type_family 含 "raider"（袭击者）族：掠夺者/卫道士/唤魔者
+ *      只有 illager（灾厄村民）族，劫掠兽/女巫只有各自单例族 → families:["raider"] 恒匹配 0 个实体；
+ *   2. 最接近的 illager 族只含 唤魔者/掠夺者/卫道士 3 种，漏劫掠兽与女巫（基岩版袭击
+ *      第 4 波起有女巫、第 6 波起有劫掠兽）→ 单独用它做安全闸会漏；
+ *   3. EntityFilter.families 虽接受数组，但语义是 AND（匹配"全部"列出的族），无法做 OR 并集：
+ *      传 ["illager","ravager","witch"] 要求实体同时属于三族 → 恒为空。
+ *   结论：只能逐 typeId 查询合并；且 @minecraft/server 2.8.0 的 EntityFilter 只有单数
+ *   type 字段（typeIds 数组是后续版本才加的），见 mc/features/raidMode.ts hasRaiderNearby。
  */
 export const RAIDER_TYPE_IDS = [
   "minecraft:pillager",

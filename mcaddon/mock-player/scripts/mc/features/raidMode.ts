@@ -300,8 +300,8 @@ function raidModeSweep(): void {
 }
 
 /** 附近 128 格内是否有袭击参与生物（掠夺者/卫道士/唤魔者/劫掠兽/女巫）。
- *  原版 type_family 里没有 "raider" 家族（实测 1.26 行为包），且 2.8.0 查询只支持单数 type 字段，
- *  故逐 typeId 查询合并（见 core/service/RaidRules 的 RAIDER_TYPE_IDS 说明）。
+ *  逐 typeId 查询合并而非 families 一次匹配的原因见 core/service/RaidRules 的 RAIDER_TYPE_IDS 说明
+ *  （原版无 raider 家族、illager 族只含 3/5、families 数组是 AND 语义、2.8.0 无 typeIds 数组字段）。
  *  有袭击者在附近 → 视为袭击仍在进行，巡检不续瓶（避免同一时刻开两场袭击）。查询失败按「有袭击者」保守处理。 */
 function hasRaiderNearby(bot: SimulatedPlayer): boolean {
   try {
