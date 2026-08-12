@@ -134,7 +134,10 @@ export function getRegion(regionId: string): StoredRegion | undefined {
   if (!record) return undefined;
   const { dimensionId, layout } = resolveRegistration(
     record,
-    { dimensionId: record.dimensionId },
+    // 采纳路径只是还原既有记录的句柄，**不是注册**：不写记录、不决定布局，
+    // 必须带 test:true 才不会触发"正式渠道注册被拒"（否则 demo 自己的测试区域
+    // 一探测就抛错，导致"存储未初始化"）；正式渠道防线只在 registerWith 生效。
+    { dimensionId: record.dimensionId, test: true },
     { cx: record.layout.chunkX, cz: record.layout.chunkZ }
   );
   const region = new StoredRegion(regionId, dimensionId, layout);
