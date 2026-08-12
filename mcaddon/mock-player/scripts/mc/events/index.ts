@@ -11,6 +11,7 @@ import { onItemUse } from "./itemUse";
 import { onPlayerInteractWithEntity } from "./playerInteractWithEntity";
 import { onPlayerInventoryItemChange } from "./playerInventoryItemChange";
 import { registerBotActionEvents } from "./botActions";
+import { inventoryStorage } from "../bootstrap/context";
 
 export function registerAllEvents(): void {
   world.afterEvents.entityDie.subscribe(onEntityDie);
@@ -23,4 +24,7 @@ export function registerAllEvents(): void {
 
   // 假人行为领域事件（主手切换/破坏/放置/使用/攻击）
   registerBotActionEvents();
+
+  // 库存存储：订阅装备槽变化领域事件（互换/穿卸/受伤 → 快照对比 → 单槽保存）
+  inventoryStorage.register();
 }

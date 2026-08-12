@@ -6,6 +6,7 @@
 // 事件负载只用可序列化的 string/number，不携带 mc 对象——保证 core 纯净。
 
 import { EventSignal } from "./EventSignal";
+import type { EquipSlotName } from "../model/Types";
 
 /** 劫掠开始事件：假人喝下不祥之瓶获得不祥之兆（袭击将触发） */
 export interface RaidStartedEvent {
@@ -171,6 +172,27 @@ export const botItemUsed = new EventSignal<BotItemUsedEvent>();
 /** 攻击实体信号 */
 export const botEntityAttacked = new EventSignal<BotEntityAttackedEvent>();
 
+// ─── 装备槽变化事件（槽位粒度） ────────────────────────
+// MC 没有装备栏变化事件，自研领域事件：装备/副手写操作点与受伤时触发，
+// 订阅方重读对应槽并持久化（快照对比，变化才写）。
+// 槽位粒度：互换副手只触发 offhand；互换装备只触发 head/chest/legs/feet；
+// 受伤触发全部 5 槽（不判断掉血——护甲吸收也算，装备耐久可能损耗）。
+
+/** 装备槽变化触发来源 */
+export type EquipChangeVia = "swap" | "equip" | "unequip" | "hurt" | "death";
+
+/** 单个装备槽变化事件：该槽装备可能变化（互换/穿卸/受伤耐久），订阅方重读并保存 */
+export interface BotEquipSlotChangedEvent {
+  botName: string;
+  /** 装备槽名（head/chest/legs/feet/offhand） */
+  slot: EquipSlotName;
+  /** 触发来源 */
+  via: EquipChangeVia;
+}
+
+/** 装备槽变化信号 */
+export const botEquipSlotChanged = new EventSignal<BotEquipSlotChangedEvent>();
+
 // ─── 聚合导出 ──────────────────────────────────────────
 // 领域事件统一走 BotEvents 命名空间（生命周期/认主/劫掠/行为全部信号）：
 //   import { BotEvents } from ".../DomainEvents"（或 core barrel）
@@ -196,4 +218,6 @@ export const BotEvents = {
   botBlockPlaced,
   botItemUsed,
   botEntityAttacked,
+  // 装备槽变化
+  botEquipSlotChanged,
 };

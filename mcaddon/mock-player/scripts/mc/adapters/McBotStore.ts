@@ -1,25 +1,68 @@
-// ─── DynamicProperty 持久化适配（mc 层） ────────────────
-// 实现 core/storage 的 BotStore 端口（DynamicProperty 后端）。
+// ─── NBT 木桶阵列持久化适配（mc 层） ───────────────────
+// 实现 core/storage 的 BotStore 端口（@yinxe/nbt-data-storage 后端）。
 //
-// key 设计（避免 32KB 上限）：
-//   mockplayer:players:<name>           — BotRecord（位置/标签/经验等）
-//   mockplayer:players:<name>:inv:<N>   — 背包第 N 格（slot 0-35）
-//   mockplayer:players:<name>:equip:<X> — 装备槽（head/chest/legs/feet/offhand）
-//
-// 载入时用 getDynamicPropertyIds() 枚举所有 key 按前缀过滤
-// 清理时只删 inv: 和 equip: 子 key，不动主 record
+// 记录（BotRecord）仍走单条 DP：mockplayer:players:<name>（含 storageBinding 绑定表）。
+// 物品（背包 36 格 + 装备 5 槽）存**真实 ItemStack** 到木桶阵列，完整 NBT 保留
+// （潜影盒/收纳袋内容随物品原样存取，根除旧 JSON 视图的内容丢失限制）：
+//   - 首次写某格 → region.put(item) 分配槽位 → 绑定表记录 slotId（按需分配）
+//   - 后续写该格 → region.overwrite(slotId, item) 原位覆写（slotId 不变）
+//   - 空位       → overwrite(slotId, structure_void 占位) **保持绑定**——
+//                  槽位一旦绑定永不释放（存储永远是该假人的背包备份镜像），
+//                  仅删除假人（removeInventory）时 take 释放全部绑定槽
+//   - 读取格     → region.get(slotId)（O(1) 克隆返回；占位视为空位跳过）
+// 区域懒注册（末地固定锚点，全假人共享，幂等）；失败降级为日志告警不抛错。
 
-import { world } from "@minecraft/server";
-import type { BotRecord, SerializedItemStack } from "../../core/model/Types";
-import { DP_PREFIX, INVENTORY_SIZE } from "../../core/model/Types";
+import { ItemStack, world } from "@minecraft/server";
+import { ItemStorage } from "@yinxe/nbt-data-storage";
+import type { StoredRegion } from "@yinxe/nbt-data-storage";
+
+import type { BotRecord, StorageBinding } from "../../core/model/Types";
+import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../../core/model/Types";
 import type { BotStore } from "../../core/storage/BotStore";
+import {
+  allBoundSlotIds,
+  bindEquipSlot,
+  bindSlot,
+  boundEquipSlotId,
+  boundSlotId,
+  createBinding,
+} from "../../core/storage/Binding";
 
-const INV_PREFIX = ":inv:";
-const EQUIP_PREFIX = ":equip:";
+/** 存储区域锚点：末地固定坐标（区块即区域，全假人共享；容量 442,368 格 ≈ 1 万假人） */
+const STORAGE_REGION = { dimension: "minecraft:the_end", anchor: { x: 1000, y: 120, z: 1000 } };
 
-export class McBotStore implements BotStore {
-  // ── 基础记录 ──
-  // BotRecord 存到单条 DynamicProperty，上限 32KB（不含背包/装备）
+/**
+ * 空位占位物品：空槽保持绑定时写入（"结构空位"）。
+ * 槽位一旦绑定就永不释放（存储永远是该假人的背包备份镜像），空手也写占位维持绑定；
+ * 占位是**真实物品**——put 分配器探测真值为占用，不会把他人物品分进绑定空槽；
+ * 恢复时按 typeId 跳过占位（视为空位）；仅删除假人时 take 释放全部绑定槽。
+ */
+export const PLACEHOLDER_TYPE = "minecraft:structure_void";
+
+export class McBotStore implements BotStore<ItemStack> {
+  private region: StoredRegion | undefined;
+
+  // ── 区域（懒注册，幂等；register 缓存命中成本低，失败下轮重试） ──
+  private ensureRegion(): StoredRegion | undefined {
+    if (this.region) return this.region;
+    try {
+      this.region = ItemStorage.register(STORAGE_REGION);
+      console.info(`[MockPlayer] NBT 存储区域就绪 ${this.region.regionId}`);
+    } catch (e: any) {
+      console.error(`[MockPlayer] NBT 存储区域注册失败: ${e?.message ?? e}`);
+    }
+    return this.region;
+  }
+
+  /** 取绑定表（无则新建）；区域不可用返回 undefined */
+  private bindingOf(record: BotRecord): StorageBinding | undefined {
+    if (record.storageBinding) return record.storageBinding;
+    if (!this.ensureRegion()) return undefined;
+    record.storageBinding = createBinding(this.region!.regionId);
+    return record.storageBinding;
+  }
+
+  // ── 基础记录（DP，不变） ──
 
   private getDPKey(name: string): string {
     return `${DP_PREFIX}${name}`;
@@ -41,7 +84,6 @@ export class McBotStore implements BotStore {
     if (typeof value !== "string") return undefined;
     try {
       const record = JSON.parse(value) as BotRecord;
-      console.info(`[MockPlayer] 加载单条记录 ${name}`);
       return record;
     } catch {
       console.error(`[MockPlayer] 加载记录 ${name} 损坏`);
@@ -50,16 +92,16 @@ export class McBotStore implements BotStore {
   }
 
   /**
-   * 世界重启时加载所有假人记录
-   * 注意：需要跳过 :inv: 和 :equip: 子 key，它们由独立的 loadBotInventory / loadBotEquipment 加载
+   * 世界重启时加载所有假人记录。
+   * 跳过含 :inv: / :equip: 的历史残留子 key（旧版 DP 物品数据已不受支持——
+   * 新后端不产生此类 key，但旧世界的残留 key 若被当记录解析会产生垃圾条目，防御性跳过）。
    */
   loadAllRecords(): BotRecord[] {
     const ids = world.getDynamicPropertyIds();
     const records: BotRecord[] = [];
     for (const id of ids) {
       if (!id.startsWith(DP_PREFIX)) continue;
-      // 跳过背包/装备子 key（以 :inv: 或 :equip: 结尾的 segment）
-      if (id.includes(INV_PREFIX) || id.includes(EQUIP_PREFIX)) continue;
+      if (id.includes(":inv:") || id.includes(":equip:")) continue;
       const value = world.getDynamicProperty(id);
       if (typeof value !== "string") continue;
       try {
@@ -68,144 +110,213 @@ export class McBotStore implements BotStore {
         console.error(`[MockPlayer] 加载记录 ${id} 损坏已跳过`);
       }
     }
-    console.info(`[MockPlayer] 世界加载恢复 ${records.length} 个假人记录`);
     return records;
   }
 
   removeRecord(name: string): void {
     world.setDynamicProperty(this.getDPKey(name), undefined);
-    console.info(`[MockPlayer] 删除记录 ${name}`);
   }
 
-  // ── 背包持久化（每格独立 key，避免 32KB 上限） ──
-  //
-  // slot 0-8 = 快捷栏，9-35 = 背包
-  // 空位存 undefined（即删除 key），避免数据膨胀
-  //
-  // 使用 playerInventoryItemChange 事件实时保存单格变化
-  // 离线/死亡时批量保存全部 36 格
+  // ── 背包（每格 ↔ NBT 存储槽） ──
 
-  /** 保存单个背包格子（传入 null 或 undefined 会删除该 key） */
-  saveSlot(name: string, slot: number, item: SerializedItemStack | null): void {
-    const key = `${DP_PREFIX}${name}${INV_PREFIX}${slot}`;
-    if (item) {
-      world.setDynamicProperty(key, JSON.stringify(item));
-    } else {
-      // 空位删除 key，避免无用数据累积
-      world.setDynamicProperty(key, undefined);
+  /** 保存单个格子（null 写占位保持绑定；首次写分配槽位） */
+  saveSlot(name: string, slot: number, item: ItemStack | null): void {
+    const record = this.loadRecord(name);
+    if (!record) {
+      console.error(`[MockPlayer] 保存背包失败：无记录 ${name}`);
+      return;
+    }
+    if (!this.ensureRegion()) return;
+    const binding = this.bindingOf(record);
+    if (!binding) return;
+    if (this.writeSlot(this.region!, record, binding, slot, item)) {
+      this.saveRecord(record, true);
     }
   }
 
-  /**
-   * 保存假人全部 36 格背包
-   *
-   * ⚠️ 当前使用 DynamicProperty 按格序列化，潜影盒/收纳袋的内部物品
-   *    因 API 限制不会真实保存（见 serializeItemStack 注释）。
-   *    如需支持，需要在存/加载时分流：
-   *      - 普通物品 → DynamicProperty（现有逻辑）
-   *      - 特殊物品（typeId 白名单中的容器类）→ structureManager
-   *    见 scripts/lib/ItemStorage.ts 预留实现。
-   */
-  saveInventory(name: string, items: (SerializedItemStack | null)[]): void {
-    const nonEmpty = items.filter((i) => i !== null).length;
-    for (let i = 0; i < items.length && i < INVENTORY_SIZE; i++) {
-      this.saveSlot(name, i, items[i]);
+  /** 保存全部背包格（空位传 null 回收） */
+  saveInventory(name: string, items: (ItemStack | null)[]): void {
+    const record = this.loadRecord(name);
+    if (!record) return;
+    if (!this.ensureRegion()) return;
+    const binding = this.bindingOf(record);
+    if (!binding) return;
+    const region = this.region!;
+    let changed = false;
+    for (let i = 0; i < Math.min(items.length, INVENTORY_SIZE); i++) {
+      changed = this.writeSlot(region, record, binding, i, items[i] ?? null) || changed;
     }
-    console.info(`[MockPlayer] 背包保存 ${name}——${nonEmpty}/${items.length} 格`);
+    if (changed) this.saveRecord(record, true);
+  }
+
+  /** 批量保存指定背包格（对账式：只写变化的格子；单次记录读写） */
+  saveSlots(name: string, items: { slot: number; item: ItemStack | null }[]): void {
+    if (items.length === 0) return;
+    const record = this.loadRecord(name);
+    if (!record) return;
+    if (!this.ensureRegion()) return;
+    const binding = this.bindingOf(record);
+    if (!binding) return;
+    const region = this.region!;
+    let changed = false;
+    for (const { slot, item } of items) {
+      changed = this.writeSlot(region, record, binding, slot, item ?? null) || changed;
+    }
+    if (changed) this.saveRecord(record, true);
   }
 
   /**
-   * 加载假人全部 36 格背包
-   * 枚举所有 <name>:inv: 前缀的 key，按 slot 填入数组
-   * 未找到任何 key 时返回 undefined（而非空数组），调用方据此判断是否需要恢复
+   * 未绑定/无任何物品时返回 undefined（调用方据此判断是否需要恢复）。
+   * 返回真实 ItemStack（完整 NBT）；占位物品（structure_void）视为空位跳过。
    */
-  loadInventory(name: string): (SerializedItemStack | null)[] | undefined {
-    const ids = world.getDynamicPropertyIds();
-    const prefix = `${DP_PREFIX}${name}${INV_PREFIX}`;
-    const result: (SerializedItemStack | null)[] = new Array(INVENTORY_SIZE).fill(null);
+  loadInventory(name: string): (ItemStack | null)[] | undefined {
+    const record = this.loadRecord(name);
+    if (!record?.storageBinding) return undefined;
+    const region = this.ensureRegion();
+    if (!region) return undefined;
+    const result: (ItemStack | null)[] = new Array(INVENTORY_SIZE).fill(null);
     let found = false;
-    for (const id of ids) {
-      if (!id.startsWith(prefix)) continue;
-      const slotStr = id.slice(prefix.length);
-      const slot = parseInt(slotStr);
-      if (isNaN(slot) || slot < 0 || slot >= INVENTORY_SIZE) continue;
-      const value = world.getDynamicProperty(id);
-      if (typeof value === "string") {
-        try {
-          result[slot] = JSON.parse(value) as SerializedItemStack;
-          found = true;
-        } catch {
-          console.error(`[MockPlayer] 加载背包 ${name} slot ${slot} 损坏`);
-        }
+    for (let i = 0; i < INVENTORY_SIZE; i++) {
+      const sid = boundSlotId(record.storageBinding, i);
+      if (sid === undefined) continue;
+      const item = region.get(sid);
+      if (item && item.typeId !== PLACEHOLDER_TYPE) {
+        result[i] = item;
+        found = true;
       }
     }
-    const count = result.filter((i) => i !== null).length;
-    if (found) console.info(`[MockPlayer] 背包加载 ${name}——${count}/${INVENTORY_SIZE} 格`);
     return found ? result : undefined;
   }
 
-  // ── 装备栏持久化 ──
-  //
-  // 装备槽没有变化事件，依赖 100tick 周期保存 + 离线/死亡兜底
-  // key 格式：mockplayer:players:<name>:equip:<slotName>
-  //
-  // ⚠️ 注意：world.getEntity 在 playerLeave 中可能已不可访问
-  // 所以装备在 entityDie 中保存最可靠
+  // ── 装备栏（每槽 ↔ NBT 存储槽） ──
 
-  /** 保存单个装备槽 */
-  saveEquipSlot(name: string, slot: string, item: SerializedItemStack | null): void {
-    const key = `${DP_PREFIX}${name}${EQUIP_PREFIX}${slot}`;
-    if (item) {
-      world.setDynamicProperty(key, JSON.stringify(item));
-    } else {
-      world.setDynamicProperty(key, undefined);
+  saveEquipSlot(name: string, slot: string, item: ItemStack | null): void {
+    const record = this.loadRecord(name);
+    if (!record) return;
+    if (!this.ensureRegion()) return;
+    const binding = this.bindingOf(record);
+    if (!binding) return;
+    if (this.writeEquipSlot(this.region!, record, binding, slot, item)) {
+      this.saveRecord(record, true);
     }
   }
 
-  /** 保存全部装备栏 */
-  saveEquipment(
-    name: string,
-    equipment: Record<string, SerializedItemStack | null>,
-    silent = false
-  ): void {
-    const slots = Object.keys(equipment);
-    const nonEmpty = Object.values(equipment).filter((i) => i !== null).length;
+  saveEquipment(name: string, equipment: Record<string, ItemStack | null>, _silent = false): void {
+    const record = this.loadRecord(name);
+    if (!record) return;
+    if (!this.ensureRegion()) return;
+    const binding = this.bindingOf(record);
+    if (!binding) return;
+    const region = this.region!;
+    let changed = false;
     for (const [slot, item] of Object.entries(equipment)) {
-      this.saveEquipSlot(name, slot, item);
+      changed = this.writeEquipSlot(region, record, binding, slot, item ?? null) || changed;
     }
-    if (!silent) console.info(`[MockPlayer] 装备保存 ${name}——${nonEmpty}/${slots.length} 槽`);
+    if (changed) this.saveRecord(record, true);
   }
 
-  /** 加载全部装备栏，返回 { head?, chest?, legs?, feet?, offhand? } */
-  loadEquipment(name: string): Record<string, SerializedItemStack> | undefined {
-    const ids = world.getDynamicPropertyIds();
-    const prefix = `${DP_PREFIX}${name}${EQUIP_PREFIX}`;
-    const result: Record<string, SerializedItemStack> = {};
-    for (const id of ids) {
-      if (!id.startsWith(prefix)) continue;
-      const slot = id.slice(prefix.length);
-      const value = world.getDynamicProperty(id);
-      if (typeof value === "string") {
-        try {
-          result[slot] = JSON.parse(value) as SerializedItemStack;
-        } catch {
-          console.error(`[MockPlayer] 加载装备 ${name} ${slot} 损坏`);
+  /** 批量保存指定装备槽（对账式：只写变化的槽；单次记录读写） */
+  saveEquipSlots(name: string, items: { slot: string; item: ItemStack | null }[]): void {
+    if (items.length === 0) return;
+    const record = this.loadRecord(name);
+    if (!record) return;
+    if (!this.ensureRegion()) return;
+    const binding = this.bindingOf(record);
+    if (!binding) return;
+    const region = this.region!;
+    let changed = false;
+    for (const { slot, item } of items) {
+      changed = this.writeEquipSlot(region, record, binding, slot, item ?? null) || changed;
+    }
+    if (changed) this.saveRecord(record, true);
+  }
+
+  /** 返回 { head?, chest?, legs?, feet?, offhand? }（真实 ItemStack；占位视为空），全空返回 undefined */
+  loadEquipment(name: string): Record<string, ItemStack> | undefined {
+    const record = this.loadRecord(name);
+    if (!record?.storageBinding) return undefined;
+    const region = this.ensureRegion();
+    if (!region) return undefined;
+    const result: Record<string, ItemStack> = {};
+    for (const slotName of EQUIP_SLOT_NAMES) {
+      const sid = boundEquipSlotId(record.storageBinding, slotName);
+      if (sid === undefined) continue;
+      const item = region.get(sid);
+      if (item && item.typeId !== PLACEHOLDER_TYPE) result[slotName] = item;
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  /** 删除假人的全部背包 + 装备槽数据（槽位释放回收 + 绑定表清空） */
+  removeInventory(name: string): void {
+    const record = this.loadRecord(name);
+    if (!record?.storageBinding) return;
+    const region = this.ensureRegion();
+    if (region) {
+      for (const sid of allBoundSlotIds(record.storageBinding)) {
+        region.take(sid);
+      }
+    }
+    record.storageBinding = undefined;
+    this.saveRecord(record, true);
+  }
+
+  // ── 私有：单格写入（返回绑定表是否变化） ──
+
+  private writeSlot(region: StoredRegion, record: BotRecord, binding: StorageBinding, slot: number, item: ItemStack | null): boolean {
+    const bound = boundSlotId(binding, slot);
+    if (!item) {
+      // 空位占位：保持绑定（槽位永不漂移），写入结构空位占位物品
+      // （put 分配器探测为占用，不会分给别人）；从未绑定则无操作
+      if (bound !== undefined) {
+        const r = region.overwrite(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
+        if (!r.ok) {
+          console.error(`[MockPlayer] 背包占位失败 ${record.name} slot=${slot}: ${r.error ?? "未知错误"}`);
         }
       }
+      return false;
     }
-    const count = Object.keys(result).length;
-    if (count > 0) console.info(`[MockPlayer] 装备加载 ${name}——${count}/5 槽`);
-    return count > 0 ? result : undefined;
+    if (bound !== undefined) {
+      const r = region.overwrite(bound, item);
+      if (!r.ok) {
+        console.error(`[MockPlayer] 背包保存失败 ${record.name} slot=${slot}: ${r.error ?? "未知错误"}`);
+      }
+      return false;
+    }
+    const ref = region.put(item);
+    if (ref) {
+      bindSlot(binding, slot, ref.slotId);
+      return true;
+    }
+    console.error(`[MockPlayer] 背包存储失败 ${record.name} slot=${slot}（区域满或区块未加载）`);
+    return false;
   }
 
-  /** 删除假人的全部背包 + 装备数据（删除假人时调用） */
-  removeInventory(name: string): void {
-    const ids = world.getDynamicPropertyIds();
-    const baseKey = `${DP_PREFIX}${name}`;
-    for (const id of ids) {
-      if (id.startsWith(baseKey + INV_PREFIX) || id.startsWith(baseKey + EQUIP_PREFIX)) {
-        world.setDynamicProperty(id, undefined);
+  private writeEquipSlot(region: StoredRegion, record: BotRecord, binding: StorageBinding, slot: string, item: ItemStack | null): boolean {
+    const bound = boundEquipSlotId(binding, slot);
+    if (!item) {
+      // 空位占位（同背包语义）：保持绑定，写入结构空位；从未绑定则无操作
+      if (bound !== undefined) {
+        const r = region.overwrite(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
+        if (!r.ok) {
+          console.error(`[MockPlayer] 装备占位失败 ${record.name} ${slot}: ${r.error ?? "未知错误"}`);
+        }
       }
+      return false;
     }
+    if (bound !== undefined) {
+      const r = region.overwrite(bound, item);
+      if (!r.ok) {
+        console.error(`[MockPlayer] 装备保存失败 ${record.name} ${slot}: ${r.error ?? "未知错误"}`);
+      }
+      return false;
+    }
+    const ref = region.put(item);
+    if (ref) {
+      bindEquipSlot(binding, slot, ref.slotId);
+      return true;
+    }
+    console.error(`[MockPlayer] 装备存储失败 ${record.name} ${slot}（区域满或区块未加载）`);
+    return false;
   }
 }

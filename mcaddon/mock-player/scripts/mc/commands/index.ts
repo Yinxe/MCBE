@@ -23,6 +23,7 @@ import { registerTridentCommand } from "./trident";
 
 import { registerRecoverCommand } from "./recover";
 import { registerAdminCommand } from "./admin";
+import { registerStorageCommand } from "./storage";
 
 export function registerAllCommands(event: StartupEvent): void {
   const registry = event.customCommandRegistry;
@@ -49,4 +50,5 @@ export function registerAllCommands(event: StartupEvent): void {
   registerTridentCommand(registry);
   registerRecoverCommand(registry);
   registerAdminCommand(registry);
+  registerStorageCommand(registry);
 }

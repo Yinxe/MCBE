@@ -89,10 +89,12 @@ export function runVaultCycle(bot: SimulatedPlayer, record: BotRecord): void {
   keyInfo.count = afterInfo!.count;
   keyInfo.totalInInventory = afterInfo!.totalInInventory;
 
-  // ── 4. 保存状态 + 下线 + 重新上线 ───────────────────
+  // ── 4. 下线 + 重新上线 ─────────────────────────────
   // 使用 safeReconnect：自动等待旧实体完全释放后再 spawn，
-  // 成功后通过 onOnline 通知最近玩家
-  saveCoordinator.saveFullState(bot, record);
+  // 成功后通过 onOnline 通知最近玩家。
+  // ⚠️ 不再在此调用 saveFullState：钥匙消耗/背包变化已由
+  //    playerInventoryItemChange 事件实时单格保存（物品）；位置/经验/记录
+  //    由 safeReconnect → offlineBot 的下线保存兜底。
   safeReconnect(record, {
     onOnline: (fresh, r) => notifyNearestPlayer(fresh, r, keyInfo),
   });

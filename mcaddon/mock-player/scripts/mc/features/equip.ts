@@ -2,11 +2,11 @@
 
 import { Player, EquipmentSlot } from "@minecraft/server";
 
-import { BotRecord } from "../../core/model/Types";
+import type { EquipChangeVia } from "../../core/events/DomainEvents";
+import { BotEvents } from "../../core/events/DomainEvents";
+import type { EquipSlotName } from "../../core/model/Types";
 import { SWAP_SLOTS, EQUIP_SLOT_MAP } from "../adapters/EquipmentSlots";
-import { serializeEquipment, captureExperience } from "../adapters/McItemCodec";
 import { getEquipmentSlot } from "../../core/items/ItemRules";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
 
 // ─── 内部工具 ──────────────────────────────────────────
 
@@ -23,6 +23,18 @@ function getBothEquip(player: Player, bot: Player): [any, any] | undefined {
   return p && b ? [p, b] : undefined;
 }
 
+/** EquipmentSlot → 装备槽名（非装备槽返回 undefined） */
+function slotNameOf(slot: EquipmentSlot): EquipSlotName | undefined {
+  const entry = Object.entries(EQUIP_SLOT_MAP).find(([, s]) => s === slot);
+  return entry?.[0] as EquipSlotName | undefined;
+}
+
+/** 装备槽变化领域事件触发（槽位粒度：InventoryStorage 订阅后快照对比保存） */
+function triggerEquipChange(bot: Player, slot: EquipmentSlot, via: EquipChangeVia): void {
+  const name = slotNameOf(slot);
+  if (name) BotEvents.botEquipSlotChanged.trigger({ botName: bot.name, slot: name, via });
+}
+
 // ─── 交换 ──────────────────────────────────────────────
 
 /** 与假人互换主手物品 */
@@ -34,17 +46,13 @@ export function swapMainhandWithBot(player: Player, bot: Player): boolean {
   return true;
 }
 
-/**
- * 与假人互换副手物品
- *
- * @deprecated 合并至 swapEquipmentWithBot——后者已通过 SWAP_SLOTS 包含 Offhand。
- *   功能代码保留以兼容外部命令调用（/mp:tag 等），但新菜单不再暴露此按钮。
- */
+/** 与假人互换副手物品 */
 export function swapOffhandWithBot(player: Player, bot: Player): boolean {
   const both = getBothEquip(player, bot);
   if (!both) return false;
   swapSlot(both[0], both[1], EquipmentSlot.Offhand);
   console.info(`[MockPlayer] 交换副手 ${bot.name} ←→ ${player.name}`);
+  triggerEquipChange(bot, EquipmentSlot.Offhand, "swap");
   return true;
 }
 
@@ -52,7 +60,10 @@ export function swapOffhandWithBot(player: Player, bot: Player): boolean {
 export function swapEquipmentWithBot(player: Player, bot: Player): boolean {
   const both = getBothEquip(player, bot);
   if (!both) return false;
-  for (const slot of SWAP_SLOTS) swapSlot(both[0], both[1], slot);
+  for (const slot of SWAP_SLOTS) {
+    swapSlot(both[0], both[1], slot);
+    triggerEquipChange(bot, slot, "swap");
+  }
   console.info(`[MockPlayer] 交换装备 ${bot.name} ←→ ${player.name}`);
   return true;
 }
@@ -83,6 +94,10 @@ export function unequipBotAll(player: Player, bot: Player): boolean {
     if (remainder) {
       player.dimension.spawnItem(remainder, player.location);
     }
+  }
+  // 装备槽变化事件（主手除外——主手是热栏，由背包事件覆盖）
+  for (const slot of SWAP_SLOTS) {
+    triggerEquipChange(bot, slot, "unequip");
   }
   console.info(`[MockPlayer] 一键卸甲 ${bot.name}——${count} 件 → ${player.name}`);
   return true;
@@ -123,21 +138,6 @@ export function equipBotArmor(bot: Player, player: Player, armorItem: any): bool
       }
     }
   }
+  triggerEquipChange(bot, slot, "equip");
   return true;
-}
-
-// ─── 装备状态保存 ──────────────────────────────────────
-
-/**
- * 仅保存假人装备栏 + 经验（不含背包）
- * 用于互换/脱下装备等场景，避免全量扫描 36 格背包
- */
-export function saveBotEquipState(bot: Player, record: BotRecord): void {
-  const equip = bot.getComponent("minecraft:equippable") as any;
-  if (equip) {
-    saveCoordinator.saveEquipment(record.name, serializeEquipment(equip));
-  }
-  record.experience = captureExperience(bot);
-  saveCoordinator.saveRecord(record);
-  console.info(`[MockPlayer] 装备状态保存完成 ${record.name}`);
 }

@@ -47,7 +47,7 @@ export const INVENTORY_SIZE = 36;
 
 // ─── 假人名字校验 ──────────────────────────────────────
 
-/** DP 子 key 分隔符（背包/装备槽 key 用），名字含这些子串会与槽位 key 冲突 */
+/** DP 子 key 分隔符（历史遗留：旧版背包/装备槽 key 用），名字含这些子串会与旧格式槽位 key 冲突 */
 export const INVALID_NAME_SEGMENTS = [":inv:", ":equip:"] as const;
 
 /** MC 假人名最大长度（玩家名上限） */
@@ -56,8 +56,8 @@ export const MAX_BOT_NAME_LENGTH = 16;
 /**
  * 假人名字是否合法。
  * 拒绝：空名、超长（>16，生成 "(2)" 重名防护的边界）、
- *      含 `:inv:` / `:equip:` 子串（会与 DynamicProperty 背包/装备槽 key 冲突，
- *      导致 loadAllRecords 跳过主记录 / removeInventory 误删他人数据）。
+ *      含 `:inv:` / `:equip:` 子串（历史遗留限制：旧版 DP 槽位 key 冲突；
+ *      新 NBT 存储后端已无此冲突，但保留校验以兼容旧数据格式）。
  */
 export function isValidBotName(name: string): boolean {
   if (!name) return false;
@@ -196,8 +196,30 @@ export interface BotRecord {
   deathPoint: PositionState | null;
   /** 经验值（等级 + 进度 + 总值） */
   experience: ExperienceRecord;
+  /**
+   * NBT 存储绑定表（背包/装备 ↔ nbt-data-storage 槽位映射，见 StorageBinding）。
+   * 惰性分配：首次写入某格时 `put` 分配槽位并记录在此，后续写入用
+   * `overwrite`（原位覆写）、清空用 `take`（释放回收）。
+   * 无此字段 = 旧版记录/未绑定（loadInventory 视为无存档）。
+   * 映射随记录持久化 → 改名零数据迁移。
+   */
+  storageBinding?: StorageBinding;
   /** 生成模式：normal=普通可转向 / chunkload=强加载不可转向 */
   spawnMode?: "normal" | "chunkload";
+}
+
+/**
+ * NBT 存储绑定表：假人背包格/装备槽 → nbt-data-storage 固定槽位（slotId）。
+ * 槽位由库的 `put` 惰性分配（绝不与他人冲突），凭据 { regionId, slotId }
+ * 完整 NBT 保留（潜影盒/收纳袋内容随真实 ItemStack 存取）。
+ */
+export interface StorageBinding {
+  /** 存储区域 ID（"维度token:区块X:区块Z"），本假人绑定槽所在区域 */
+  regionId: string;
+  /** 背包格 → slotId（36 格；null = 未绑定） */
+  inv: (number | null)[];
+  /** 装备槽名 → slotId（null = 未绑定） */
+  equip: Record<string, number | null>;
 }
 
 /** 回收预览——单个物品的展示信息 */
