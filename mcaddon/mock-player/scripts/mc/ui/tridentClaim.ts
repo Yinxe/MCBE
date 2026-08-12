@@ -1,14 +1,16 @@
 // ─── 投掷物认主 UI ────────────────────────────────────
 // 扫描假人 100 半径内自家投掷物（三叉戟/箭，主人或同主假人投掷的），
-// 按聚集概率分档分组展示（★高 / ☆中 / ·低），批量勾选后认主为第二任。
+// 按聚集概率分档分组展示，批量勾选后认主为第二任。
 // 附魔组件缺失的投掷物在 feature 层已跳过。
+//
+// ⚠️ ModalForm 背景为深色：文字只用亮色系（白/青/绿/黄），
+//    不用深色调（§7 灰、§9 深蓝等）与粗体大字号。
 
 import { Player } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { botRegistry } from "../bootstrap/context";
-import { formatPos } from "../format";
 import { scanOwnTridents, claimTridents, type ClaimableTrident } from "../features/tridentClaim";
 
 /** 聚集概率分档阈值（与 feature 层扫描一致） */
@@ -23,24 +25,25 @@ const TYPE_ICONS: Record<string, string> = {
 
 // ─── 单条展示 ─────────────────────────────────────────
 
-/** 单件投掷物的 toggle 标签：第一行=图标+名称+附魔+概率，第二行=坐标+认主状态 */
+/** 单件投掷物的 toggle 标签（单行、亮色系） */
 function entryLabel(botName: string, e: ClaimableTrident): string {
   const pct = Math.round(e.probability * 100);
-  const probColor = e.probability >= TIER_HIGH ? color.success : e.probability >= TIER_MID ? color.gold : color.muted;
+  const probColor = e.probability >= TIER_HIGH ? color.success : e.probability >= TIER_MID ? color.warn : color.info;
   const icon = TYPE_ICONS[e.typeId] ?? "🏹";
-  const itemPart = e.itemLabel ? ` ${color.darkBlue}${e.itemLabel}` : "";
+  const itemPart = e.itemLabel ? ` ${color.info}${e.itemLabel}` : "";
+  const pos = `[${Math.floor(e.pos.x)} ${Math.floor(e.pos.y)} ${Math.floor(e.pos.z)}]`;
 
-  // 认主状态徽标：已认主 / 覆盖他人 / 首次认主（无徽标）
+  // 认主状态：已认主 / 覆盖他人 / 首次认主（无标注）
   let status = "";
   if (e.currentSecondOwner) {
     if (e.currentSecondOwner === botName) {
-      status = ` ${color.success}✔ 已是本假人`;
+      status = ` ${color.success}✔已认主`;
     } else {
-      status = ` ${color.warn}⇄ 覆盖 ${color.playerName}${e.currentSecondOwner}`;
+      status = ` ${color.warn}⇄覆盖${color.playerName}${e.currentSecondOwner}`;
     }
   }
 
-  return `${icon} ${color.accent}${e.label}${itemPart} ${probColor}聚集${pct}%\n${color.muted}${formatPos(e.pos)}${status}`;
+  return `${icon} ${color.accent}${e.label}${itemPart} ${color.info}${pos} ${probColor}${pct}%${status}`;
 }
 
 // ─── 表单 ─────────────────────────────────────────────
@@ -75,23 +78,22 @@ export function showTridentClaimUI(player: Player, botName: string): void {
   }
 
   const builder = new ModalFormBuilder()
-    .title(`${color.bold}⚔ 投掷物认主 · ${botName}`)
-    .header(
-      `${color.muted}主人 ${color.playerName}${record.ownerName}${color.muted} · 半径 ${color.info}100${color.muted} 格 · 共 ${color.info}${entries.length}${color.muted} 个\n` +
-      `${color.muted}勾选后该假人成为 ${color.accent}第二任主人${color.muted}（可覆盖旧第二任）`
+    .title(`投掷物认主 · ${botName}`)
+    .label(
+      "summary",
+      `${color.info}主人 ${color.playerName}${record.ownerName}${color.info} · 共 ${color.accent}${entries.length}${color.info} 个 · 勾选后认主为第二任（可覆盖）`
     );
 
-  // 按聚集概率分档分组（保持降序内序）
+  // 按聚集概率分档分组（保持降序内序；分组标题用小字 label，不用大号 header）
   const groups: { label: string; entries: ClaimableTrident[] }[] = [
     { label: `${color.success}★ 高聚集（≥60%）`, entries: entries.filter((e) => e.probability >= TIER_HIGH) },
-    { label: `${color.gold}☆ 中等聚集（30%–59%）`, entries: entries.filter((e) => e.probability >= TIER_MID && e.probability < TIER_HIGH) },
-    { label: `${color.muted}· 分散（<30%）`, entries: entries.filter((e) => e.probability < TIER_MID) },
+    { label: `${color.warn}☆ 中等（30%–59%）`, entries: entries.filter((e) => e.probability >= TIER_MID && e.probability < TIER_HIGH) },
+    { label: `${color.info}· 分散（<30%）`, entries: entries.filter((e) => e.probability < TIER_MID) },
   ];
 
   for (const g of groups) {
     if (g.entries.length === 0) continue;
-    builder.divider();
-    builder.header(`${g.label} · ${color.info}${g.entries.length}${color.muted} 个`);
+    builder.label(`h-${g.label}`, `${g.label} · ${color.info}${g.entries.length}${color.info} 个`);
     for (const entry of g.entries) {
       builder.toggle(`t${entry.entityId}`, entryLabel(botName, entry), {
         defaultValue: false,
@@ -100,9 +102,7 @@ export function showTridentClaimUI(player: Player, botName: string): void {
     }
   }
 
-  builder
-    .divider()
-    .submitButton(`✔ 认主选中投掷物（${entries.length} 个）`);
+  builder.submitButton("提交");
 
   builder.show(player).then((vals) => {
     if (!vals) return;

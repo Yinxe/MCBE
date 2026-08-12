@@ -194,13 +194,19 @@ export function claimTridents(botName: string, entityIds: string[], operatorName
       });
 
       // 认主汇报（集中聚合；操作者已有 UI 直接消息，排除防重复）：
-      // - 认主假人的主人：认主成功
-      // - 旧第二任假人的主人：认主被覆盖（降级）
-      // - 第一任是玩家（被假人认走）：被覆盖
-      if (botOwner && botOwner !== operatorName) queueClaimReport(botOwner, "claimed");
+      // - 认主假人的主人：认领明细
+      // - 旧第二任假人的主人：名下假人被顶替（victim）
+      // - 第一任是玩家（被假人认走）：玩家视角"被认领"
+      if (botOwner && botOwner !== operatorName) {
+        queueClaimReport({ to: botOwner, bot: botName, kind: "claimed", typeId: t.typeId });
+      }
       const prevRecord = previousSecond ? botRegistry.get(previousSecond) : undefined;
-      if (prevRecord?.ownerName && prevRecord.ownerName !== operatorName) queueClaimReport(prevRecord.ownerName, "covered");
-      if (firstOwner && !botRegistry.get(firstOwner) && firstOwner !== operatorName) queueClaimReport(firstOwner, "covered");
+      if (prevRecord?.ownerName && prevRecord.ownerName !== operatorName) {
+        queueClaimReport({ to: prevRecord.ownerName, bot: botName, kind: "covered", typeId: t.typeId, victim: previousSecond });
+      }
+      if (firstOwner && !botRegistry.get(firstOwner) && firstOwner !== operatorName) {
+        queueClaimReport({ to: firstOwner, bot: botName, kind: "covered", typeId: t.typeId });
+      }
     } catch {
       // 单条失败不影响批量
     }

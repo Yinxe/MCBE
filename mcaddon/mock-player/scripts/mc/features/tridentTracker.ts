@@ -166,10 +166,13 @@ export function initTridentTracker(): void {
         );
         BotEvents.tridentClaimed.trigger({ tridentId: entity.id, claimedBy: target, via: "load", firstOwner, secondOwner });
 
-        // 认主汇报（集中聚合）：目标假人 → 其主人"认主"；目标玩家 → "重新获得"
+        // 认主汇报（集中聚合）：目标假人 → 其主人"认领"；目标玩家且原第二任是离线假人 → "回退给你"
         const targetRecord = botRegistry.get(target);
-        if (targetRecord) queueClaimReport(targetRecord.ownerName ?? "", "claimed");
-        else queueClaimReport(target, "returned");
+        if (targetRecord) {
+          queueClaimReport({ to: targetRecord.ownerName ?? "", bot: target, kind: "claimed", typeId: entity.typeId });
+        } else if (secondOwner) {
+          queueClaimReport({ to: target, bot: secondOwner, kind: "returned", typeId: entity.typeId, target });
+        }
       }
     } catch (e) {
       console.info(`[MockPlayer] entityLoad 认主异常: ${e}`);
@@ -276,9 +279,9 @@ export function rebindBotTridents(botName: string): void {
           if (proj) {
             proj.owner = newOwner;
             BotEvents.tridentClaimed.trigger({ tridentId: t.id, claimedBy: botName, via: "rebind", firstOwner: f, secondOwner: s });
-            // 认主汇报（集中聚合）：假人主人"夺回"；第一任是玩家则玩家"被覆盖"
-            queueClaimReport(record.ownerName ?? "", "claimed");
-            if (f && !botRegistry.get(f)) queueClaimReport(f, "covered");
+            // 认主汇报（集中聚合）：假人主人"认领"；第一任是玩家则玩家"被认走"
+            queueClaimReport({ to: record.ownerName ?? "", bot: botName, kind: "claimed", typeId: t.typeId });
+            if (f && !botRegistry.get(f)) queueClaimReport({ to: f, bot: botName, kind: "covered", typeId: t.typeId });
           }
         } catch (e) {
           console.info(`[MockPlayer] 重绑定 ${t.id} 失败: ${e}`);
@@ -329,9 +332,11 @@ export function releaseBotTridents(botName: string): void {
             total++;
             console.info(`[MockPlayer] 下线回退 ${botName} → 投掷物 ${t.id} 认主第一任=${firstOwner}`);
             BotEvents.tridentClaimed.trigger({ tridentId: t.id, claimedBy: firstOwner, via: "offline-fallback", firstOwner, secondOwner });
-            // 认主汇报（集中聚合）：假人主人"降级回退"；第一任是玩家则玩家"重新获得"
-            queueClaimReport(ownerName, "returned");
-            if (!botRegistry.get(firstOwner)) queueClaimReport(firstOwner, "returned");
+            // 认主汇报（集中聚合）：假人主人"降级回退"；第一任是玩家则"重新获得（→ 你）"
+            queueClaimReport({ to: ownerName, bot: botName, kind: "returned", typeId: t.typeId, target: firstOwner });
+            if (!botRegistry.get(firstOwner)) {
+              queueClaimReport({ to: firstOwner, bot: botName, kind: "returned", typeId: t.typeId, target: firstOwner });
+            }
           }
         } catch (e) {
           console.info(`[MockPlayer] 下线回退 ${t.id} 失败: ${e}`);
