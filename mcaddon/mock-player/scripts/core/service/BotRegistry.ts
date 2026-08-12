@@ -52,7 +52,7 @@ export class BotRegistry {
   }
 
   /**
-   * 假人改名：内存 key 迁移 + 持久化新 key + 恢复标记随迁
+   * 假人改名：内存 key 迁移 + 持久化新 key + 绑定表迁移 + 恢复标记随迁
    * 旧 key 的持久化记录保留（原实现行为：DP 旧 key 不主动清理）
    */
   rename(oldName: string, newName: string): void {
@@ -62,6 +62,8 @@ export class BotRegistry {
     record.name = newName;
     this.records.set(newName, record);
     this.store.saveRecord(record);
+    // 绑定表独立存储：key 含假人名，改名需迁移（bind 数据跟随记录）
+    this.store.renameBinding?.(oldName, newName);
     if (this.restoredBots.has(oldName)) {
       this.restoredBots.delete(oldName);
       this.restoredBots.add(newName);

@@ -196,30 +196,25 @@ export interface BotRecord {
   deathPoint: PositionState | null;
   /** 经验值（等级 + 进度 + 总值） */
   experience: ExperienceRecord;
-  /**
-   * NBT 存储绑定表（背包/装备 ↔ nbt-data-storage 槽位映射，见 StorageBinding）。
-   * 惰性分配：首次写入某格时 `put` 分配槽位并记录在此，后续写入用
-   * `overwrite`（原位覆写）、清空用 `take`（释放回收）。
-   * 无此字段 = 旧版记录/未绑定（loadInventory 视为无存档）。
-   * 映射随记录持久化 → 改名零数据迁移。
-   */
-  storageBinding?: StorageBinding;
   /** 生成模式：normal=普通可转向 / chunkload=强加载不可转向 */
   spawnMode?: "normal" | "chunkload";
 }
 
 /**
- * NBT 存储绑定表：假人背包格/装备槽 → nbt-data-storage 固定槽位（slotId）。
+ * NBT 存储绑定表：假人背包格/装备槽 → nbt-data-storage 槽位（slotId）。
+ * **独立持久化**（不与 BotRecord 混存——事件驱动的绑定写穿与记录解耦，
+ * 记录被覆盖不影响绑定）：key `mockplayer:players:<name>:bind`。
  * 槽位由库的 `put` 惰性分配（绝不与他人冲突），凭据 { regionId, slotId }
  * 完整 NBT 保留（潜影盒/收纳袋内容随真实 ItemStack 存取）。
+ * key-value 对象结构：无 key = 未绑定（稀疏，不受数组长度约束）。
  */
 export interface StorageBinding {
   /** 存储区域 ID（"维度token:区块X:区块Z"），本假人绑定槽所在区域 */
   regionId: string;
-  /** 背包格 → slotId（36 格；null = 未绑定） */
-  inv: (number | null)[];
-  /** 装备槽名 → slotId（null = 未绑定） */
-  equip: Record<string, number | null>;
+  /** 背包格号（字符串 key）→ slotId；无 key = 未绑定 */
+  inv: Record<string, number>;
+  /** 装备槽名 → slotId；无 key = 未绑定 */
+  equip: Record<string, number>;
 }
 
 /** 回收预览——单个物品的展示信息 */

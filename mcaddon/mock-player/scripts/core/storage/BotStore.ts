@@ -40,6 +40,9 @@ export interface BotStore<TItem = SerializedItemStack> {
 
   /** 删除假人的全部背包 + 装备槽数据（删除假人时调用） */
   removeInventory(name: string): void;
+
+  /** 改名迁移绑定表（可选：binding 独立存储的后端实现；无独立绑定可省略） */
+  renameBinding?(oldName: string, newName: string): void;
 }
 
 /** 内存后端（单测替身）：Map 直存，行为契约与 NBT 后端一致 */
@@ -145,6 +148,16 @@ export class InMemoryBotStore implements BotStore<SerializedItemStack> {
   removeInventory(name: string): void {
     for (const key of [...this.slots.keys()]) {
       if (key.startsWith(`${name}:inv:`) || key.startsWith(`${name}:equip:`)) {
+        this.slots.delete(key);
+      }
+    }
+  }
+
+  /** 改名迁移：背包/装备槽 key 前缀随名迁移（行为与 NBT 后端绑定迁移一致） */
+  renameBinding(oldName: string, newName: string): void {
+    for (const key of [...this.slots.keys()]) {
+      if (key.startsWith(`${oldName}:inv:`) || key.startsWith(`${oldName}:equip:`)) {
+        this.slots.set(newName + key.slice(oldName.length), this.slots.get(key)!);
         this.slots.delete(key);
       }
     }

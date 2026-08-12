@@ -35,9 +35,9 @@ export function sendStorage(player: Player, record: BotRecord): void {
   const lines: string[] = [];
   lines.push(`${color.gold}===== ${color.playerName}${record.name} ${color.gold}Storage 绑定调试 =====`);
 
-  const binding = record.storageBinding;
+  const binding = botStore.getBinding(record.name);
   if (!binding) {
-    lines.push(`${color.muted}未绑定任何存储槽位（storageBinding 不存在）——从未保存过物品`);
+    lines.push(`${color.muted}未绑定任何存储槽位（绑定表不存在）——从未保存过物品`);
   } else {
     lines.push(`${color.muted}存储区域: ${color.info}${binding.regionId}`);
 
@@ -48,9 +48,9 @@ export function sendStorage(player: Player, record: BotRecord): void {
     // ── 背包绑定表 ──
     lines.push(`${color.muted}━━ 背包绑定（36 格） ━━`);
     for (let i = 0; i < INVENTORY_SIZE; i++) {
-      const sid = binding.inv[i];
+      const sid = binding.inv[String(i)];
       const label = slotLabel(i);
-      if (sid === null || sid === undefined) {
+      if (sid === undefined) {
         lines.push(` ${color.muted}${label}: ${color.darkGray}[未绑定]`);
         continue;
       }
@@ -63,7 +63,7 @@ export function sendStorage(player: Player, record: BotRecord): void {
     lines.push(`${color.muted}━━ 装备绑定 ━━`);
     for (const name of EQUIP_SLOT_NAMES) {
       const sid = binding.equip[name];
-      if (sid === null || sid === undefined) {
+      if (sid === undefined) {
         lines.push(` ${color.muted}${name}: ${color.darkGray}[未绑定]`);
         continue;
       }
