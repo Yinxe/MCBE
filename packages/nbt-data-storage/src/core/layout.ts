@@ -120,16 +120,49 @@ export function materializedBarrelsFor(slotId: number): number {
   return barrelIndexOf(slotId) + 1;
 }
 
+/** 各维度世界高度约束（1.18+ 世界高度；y 轴合法范围，含两端） */
+export interface WorldHeightRange {
+  /** 最低可放置 Y（含） */
+  minY: number;
+  /** 最高可放置 Y（含） */
+  maxY: number;
+}
+
+/**
+ * 按维度 ID 查世界高度约束。**只有主世界能到 320**：
+ * - 主世界：-64..320（384 层，向下挖到基岩、向上到建筑上限）；
+ * - 下界：0..128（矮且浅，Y<0 是虚空不能放方块）；
+ * - 末地：0..256（主岛浮空，Y<0 是虚空）。
+ * 未知维度（自定义维度，无官方约束）→ undefined（不做额外高度校验）。
+ */
+export function worldHeightRangeOf(dimensionId: string): WorldHeightRange | undefined {
+  switch (dimensionId) {
+    case "minecraft:overworld":
+      return { minY: -64, maxY: 320 };
+    case "minecraft:nether":
+      return { minY: 0, maxY: 128 };
+    case "minecraft:the_end":
+      return { minY: 0, maxY: 256 };
+    default:
+      return undefined;
+  }
+}
+
 /**
  * 布局合法性校验。合法返回 null，否则返回面向玩家的中文错误消息。
- * 边界约束：baseY ≥ 0 且阵列顶部不超过世界上限 320（含）。
+ * 高度边界按维度（见 `worldHeightRangeOf`）；`dimensionId` 省略时按主世界
+ * （-64..320，最宽范围，不误拒）。
  */
-export function validateLayout(layout: RegionLayout): string | null {
+export function validateLayout(layout: RegionLayout, dimensionId?: string): string | null {
   if (!Number.isInteger(layout.chunkX) || !Number.isInteger(layout.chunkZ)) {
     return "区块坐标必须为整数";
   }
-  if (!Number.isInteger(layout.baseY) || layout.baseY < -64) {
-    return "baseY 必须为 >= -64 的整数（世界最低层）";
+  const range = dimensionId === undefined ? { minY: -64, maxY: 320 } : worldHeightRangeOf(dimensionId);
+  if (!Number.isInteger(layout.baseY)) {
+    return "baseY 必须为整数";
+  }
+  if (range !== undefined && layout.baseY < range.minY) {
+    return `baseY(${layout.baseY}) 低于维度 ${dimensionId ?? "主世界"} 的世界最低层 ${range.minY}`;
   }
   if (!Number.isInteger(layout.maxLevels) || layout.maxLevels < 1 || layout.maxLevels > MAX_LEVELS) {
     return `maxLevels 必须为 1..${MAX_LEVELS} 的整数`;
@@ -144,8 +177,8 @@ export function validateLayout(layout: RegionLayout): string | null {
     }
   }
   const topY = layout.baseY + layout.maxLevels - 1;
-  if (topY > 320) {
-    return `阵列顶部 Y(${topY}) 超过世界上限 320，请降低 baseY 或 maxLevels`;
+  if (range !== undefined && topY > range.maxY) {
+    return `阵列顶部 Y(${topY}) 超出维度 ${dimensionId ?? "主世界"} 的世界高度上限 ${range.maxY}，请降低 baseY 或 maxLevels`;
   }
   return null;
 }

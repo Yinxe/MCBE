@@ -102,7 +102,7 @@ function registerWith(opts: RegisterOptions): StoredRegion {
     },
     { cx, cz }
   );
-  const invalid = validateLayout(layout);
+  const invalid = validateLayout(layout, opts.dimension);
   if (invalid) throw new Error(invalid);
 
   // 维度存在性校验（无效维度 getDimension 会抛错，提前给出中文提示）

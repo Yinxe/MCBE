@@ -8,7 +8,7 @@
 // - 防丢物：take 取出后先 addItem 给玩家，背包放不下则把剩余部分 put 回区域
 // - 扩容见证：存入前后对比 stats().barrels，汇报新物化桶数（快速满箱时可亲见扩容过程）
 // - 事件订阅：stored/taken 事件驱动同步索引与区域真值一致
-import { world } from "@minecraft/server";
+import { system, world } from "@minecraft/server";
 import type { ItemStack, Player } from "@minecraft/server";
 import {
   BARREL_SLOTS,
@@ -35,8 +35,12 @@ export interface StoredRefRecord {
   storedAt: number;
 }
 
-/** 本地凭据索引 DP 键 */
+/** 本地凭据索引 DP 键（旧版单键；兼容读取，写入起用分片并删除） */
 const REFS_KEY = "ndsdemo:refs";
+/** 凭据索引分片前缀 `ndsdemo:refs:p:{片}`：每片 ≤ REFS_PAGE_SIZE 条，规避单值 32KB 上限 */
+const REFS_PREFIX = "ndsdemo:refs:p:";
+/** 每片凭据条数（单条约 100B，满片 ≈ 15KB < 32KB，留足 typeId 余量） */
+const REFS_PAGE_SIZE = 150;
 
 /** 操作结果（命令/UI 统一消费，替换色格式化） */
 export interface OpResult {
@@ -49,35 +53,81 @@ export function colorOf(r: OpResult): string {
   return r.ok ? "§a" : "§c";
 }
 
-/** 读取凭据索引（DP，损坏/缺失 → 空） */
-function readRefs(): StoredRefRecord[] {
+/** 解析一片凭据（损坏片跳过） */
+function parseRefPage(json: string): StoredRefRecord[] {
   try {
-    const raw = world.getDynamicProperty(REFS_KEY);
-    if (typeof raw === "string") {
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed.filter(
-          (x): x is StoredRefRecord =>
-            typeof x === "object" &&
-            x !== null &&
-            typeof (x as StoredRefRecord).slotId === "number" &&
-            typeof (x as StoredRefRecord).typeId === "string"
-        );
-      }
+    const parsed = JSON.parse(json) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (x): x is StoredRefRecord =>
+          typeof x === "object" &&
+          x !== null &&
+          typeof (x as StoredRefRecord).slotId === "number" &&
+          typeof (x as StoredRefRecord).typeId === "string"
+      );
     }
-  } catch (e) {
-    console.warn("[nds-demo] 读取凭据索引失败", e);
+  } catch {
+    /* 损坏片：跳过该片 */
   }
   return [];
 }
 
-/** 写凭据索引（事件驱动写穿，无定时 flush） */
-function writeRefs(refs: StoredRefRecord[]): void {
+/** 读取凭据索引（分片合并；无分片时兼容旧版单键，下次写入自动迁移为分片） */
+function readRefs(): StoredRefRecord[] {
   try {
-    world.setDynamicProperty(REFS_KEY, JSON.stringify(refs));
+    const page0 = world.getDynamicProperty(`${REFS_PREFIX}0`);
+    if (typeof page0 === "string") {
+      const all = parseRefPage(page0);
+      for (let i = 1; ; i++) {
+        const raw = world.getDynamicProperty(`${REFS_PREFIX}${i}`);
+        if (typeof raw !== "string") break;
+        all.push(...parseRefPage(raw));
+      }
+      return all;
+    }
+    const legacy = world.getDynamicProperty(REFS_KEY);
+    if (typeof legacy === "string") return parseRefPage(legacy);
+    return [];
   } catch (e) {
-    console.warn("[nds-demo] 持久化凭据索引失败", e);
+    console.warn("[nds-demo] 读取凭据索引失败", e);
+    return [];
   }
+}
+
+/** 写合并状态：同一 tick 内多次变更只落盘一次（批量存入 100 件 = 1 次写而非 100 次） */
+let refsDirty = false;
+let refsWriteScheduled = false;
+
+/**
+ * 调度凭据落盘（合并写）：下一 tick 一次性分片重写（删旧键/旧片 → 按片写）。
+ * 凭据索引是软状态：崩溃时丢失的只是列表记录，物品本身在桶阵列里安全。
+ */
+function scheduleWriteRefs(refs: StoredRefRecord[]): void {
+  refsDirty = true;
+  if (refsWriteScheduled) return;
+  refsWriteScheduled = true;
+  system.runTimeout(() => {
+    refsWriteScheduled = false;
+    if (!refsDirty) return;
+    refsDirty = false;
+    try {
+      world.setDynamicProperty(REFS_KEY, undefined); // 删旧版单键（迁移清理）
+      for (let i = 0; ; i++) {
+        const k = `${REFS_PREFIX}${i}`;
+        if (world.getDynamicProperty(k) === undefined) break;
+        world.setDynamicProperty(k, undefined); // 删旧片
+      }
+      for (let i = 0; i < refs.length; i += REFS_PAGE_SIZE) {
+        world.setDynamicProperty(
+          `${REFS_PREFIX}${Math.floor(i / REFS_PAGE_SIZE)}`,
+          JSON.stringify(refs.slice(i, i + REFS_PAGE_SIZE))
+        );
+      }
+    } catch (e) {
+      console.warn("[nds-demo] 持久化凭据索引失败", e);
+      // 失败也清脏标记：数据仍在内存 this.refs，下次变更会重新调度全量写
+    }
+  }, 1);
 }
 
 /** NBT 存储测试的领域服务（单例，main.ts Phase 4 初始化） */
@@ -448,8 +498,8 @@ export class StorageService {
   }
 
   /**
-   * 阵列巡检 + 修复（自检维护）：损坏桶重建、桶水位对齐真值（桶级丢失报告）。
-   * 发送面向玩家的格式化报告。
+   * 阵列盘点 + 修复（自检维护，**分批执行**）：损坏桶重建、账本对齐真值（桶级丢失报告）。
+   * 库层每 tick 盘一层（满阵列约数秒），完成后回调发送面向玩家的格式化报告。
    */
   checkAndRepair(player: Player): void {
     this.ensureRegion();
@@ -457,34 +507,41 @@ export class StorageService {
       player.sendMessage("§c存储未初始化：请用 /nds-demo:config 打开配置 UI 保存启用");
       return;
     }
-    const report = this.region.checkAndRepair();
-    const kindLabel = (k: "barrel-destroyed" | "taken-externally") =>
-      k === "barrel-destroyed" ? "桶损坏" : "外部取走";
-    const lines = [
-      "§l== 阵列自检（巡检 + 修复）==§r",
-      `区域 §e${this.region.regionId}§r｜扫描 §e${report.scanned}§r 槽`,
-      report.fixedBarrels > 0
-        ? `§e修复损坏木桶 ${report.fixedBarrels} 个§r（已重建；桶内物品随方块损坏无法找回）`
-        : "§7木桶方块完好§r",
-      report.lostDetails.length > 0
-        ? `§c确认丢失 ${report.lostItems} 件物品§r（${report.lostDetails
-            .map((d) => `第${d.level + 1}层桶${d.barrelInLevel}：${d.count}件${kindLabel(d.kind)}`)
-            .join("、")}），相关凭据已自动清理`
-        : "§7无丢失槽位§r",
-      report.unknownSlots > 0 ? `§7跳过 ${report.unknownSlots} 槽（区块未加载，下次巡检再试）§r` : "",
-      "§7桶水位已对齐真值，容量与分配状态一致§r",
-    ];
-    player.sendMessage(lines.filter((l) => l !== "").join("\n"));
+    const started = this.region.checkAndRepair((report) => {
+      const kindLabel = (k: "barrel-destroyed" | "taken-externally") =>
+        k === "barrel-destroyed" ? "桶损坏" : "外部取走";
+      const lines = [
+        "§l== 阵列自检（盘点 + 修复）==§r",
+        `区域 §e${this.region!.regionId}§r｜扫描 §e${report.scanned}§r 槽`,
+        report.fixedBarrels > 0
+          ? `§e修复损坏木桶 ${report.fixedBarrels} 个§r（已重建；桶内物品随方块损坏无法找回）`
+          : "§7木桶方块完好§r",
+        report.lostDetails.length > 0
+          ? `§c确认丢失 ${report.lostItems} 件物品§r（${report.lostDetails
+              .map((d) => `第${d.level + 1}层桶${d.barrelInLevel}：${d.count}件${kindLabel(d.kind)}`)
+              .join("、")}），相关凭据已自动清理`
+          : "§7无丢失槽位§r",
+        report.unknownSlots > 0 ? `§7跳过 ${report.unknownSlots} 槽（区块未加载，下次盘点再试）§r` : "",
+        "§7账本已对齐真值，容量与分配状态一致§r",
+      ];
+      player.sendMessage(lines.filter((l) => l !== "").join("\n"));
+    });
+    if (!started) {
+      player.sendMessage("§7盘点正在进行中，请稍候（每 tick 盘一层，完成后自动汇报）§r");
+      return;
+    }
+    player.sendMessage("§7开始盘点（分批执行，每 tick 盘一层；阵列越大耗时越长，完成后自动汇报）§r");
   }
 
   /**
-   * 扩容见证：执行 fn（内部含 put），返回其结果 + 本次新物化木桶数文本。
-   * 物化桶数变化来自 meta.barrelCount（真正 setBlockType 建桶才 +1）。
+   * 扩容见证：执行 fn（内部含 put），返回其结果 + 本次新建木桶数文本。
+   * 用轻量 `barrelCount`（1 次主记录读）替代全量 stats（64 层账本遍历）——
+   * 批量存入时每件少 128 次 DP 读。
    */
   private measureGrowth<T>(fn: () => T): { ref: T; text: string } {
-    const before = this.stats()?.barrels ?? 0;
+    const before = this.region?.barrelCount ?? 0;
     const ref = fn();
-    const after = this.stats()?.barrels ?? 0;
+    const after = this.region?.barrelCount ?? 0;
     const growth = after - before;
     return {
       ref,
@@ -498,14 +555,14 @@ export class StorageService {
     const i = this.refs.findIndex((r) => r.regionId === rec.regionId && r.slotId === rec.slotId);
     if (i >= 0) this.refs[i] = rec;
     else this.refs.push(rec);
-    writeRefs(this.refs);
+    scheduleWriteRefs(this.refs);
   }
 
   private removeRef(regionId: string | undefined, slotId: number): void {
     const i = this.refs.findIndex((r) => r.regionId === regionId && r.slotId === slotId);
     if (i < 0) return;
     this.refs.splice(i, 1);
-    writeRefs(this.refs);
+    scheduleWriteRefs(this.refs);
   }
 
   /** 桶级凭据清理（巡检确认丢失：桶损坏/外部取走）——该桶 slotId 范围内凭据全删 */
@@ -514,7 +571,7 @@ export class StorageService {
     const hi = lo + BARREL_SLOTS;
     const before = this.refs.length;
     this.refs = this.refs.filter((r) => !(r.regionId === regionId && r.slotId >= lo && r.slotId < hi));
-    if (this.refs.length !== before) writeRefs(this.refs);
+    if (this.refs.length !== before) scheduleWriteRefs(this.refs);
   }
 }
 

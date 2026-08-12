@@ -1,6 +1,6 @@
 // ── 木桶阵列运行时（mc 适配层：方块/容器 IO + 常加载） ─────────────────
-// 只做物理副作用：物化木桶方块、读写容器槽位、ticking area 常加载。
-// 不持有业务状态（分配水印等由 StoredRegion 经 DP 读写）。
+// 只做物理副作用：建木桶方块、读写容器格子、ticking area 常加载。
+// 不持有业务状态（账本等由 StoredRegion 经 DP 读写）。
 // 所有方块/容器访问 try-catch 保护；区块未加载或不可达时返回失败而非抛错。
 import { world } from "@minecraft/server";
 import type { BlockInventoryComponent, Dimension, ItemStack, TickingAreaOptions } from "@minecraft/server";
@@ -91,6 +91,48 @@ export class BarrelRuntime {
       return inv?.container?.getItem(pos.slotInBarrel) !== undefined;
     } catch {
       return true;
+    }
+  }
+
+  /**
+   * 在一个木桶里找第一个空格子（性能优化：**一次取容器**、循环查格，
+   * 替代逐格 `isSlotOccupied` 的每格一次方块查询）。
+   * 位置不是木桶/区块未加载 → null（保守：无空格子，调用方跳过该桶）。
+   */
+  firstEmptySlot(pos: SlotPosition, usable: number): number | null {
+    try {
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block || block.typeId !== BARREL) return null;
+      const container = (block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined)?.container;
+      if (!container) return null;
+      for (let j = 0; j < usable; j++) {
+        if (container.getItem(j) === undefined) return j;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 一次看一个木桶的全部格子（性能优化：**一次取容器**、循环查格，
+   * 供盘点按桶批处理；替代逐格 `probeStatus` 的每格一次方块查询）。
+   * 位置不是木桶 → 每格 damaged（盘点将重建）；区块未加载 → 每格 unknown。
+   */
+  probeBarrelSlots(pos: SlotPosition, usable: number): SlotStatus[] {
+    try {
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block) return new Array(usable).fill("unknown");
+      if (block.typeId !== BARREL) return new Array(usable).fill("damaged");
+      const container = (block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined)?.container;
+      if (!container) return new Array(usable).fill("unknown");
+      const statuses: SlotStatus[] = new Array(usable);
+      for (let j = 0; j < usable; j++) {
+        statuses[j] = container.getItem(j) !== undefined ? "occupied" : "empty";
+      }
+      return statuses;
+    } catch {
+      return new Array(usable).fill("unknown");
     }
   }
 

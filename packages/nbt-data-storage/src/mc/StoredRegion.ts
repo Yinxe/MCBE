@@ -7,11 +7,12 @@
 // - 分配/回收经 DP 读改写（RMW）持久化：桶水位按层分键（每层一条）；已物化桶数
 //   由 meta.barrelCount 精确跟踪（真正 setBlockType 建桶时 +1）。
 import type { Container, ItemStack } from "@minecraft/server";
+import { system } from "@minecraft/server";
 import { BARREL_SLOTS, capacityOf, slotIdToPosition, type RegionLayout } from "../core/layout";
 import { createRegionMeta, type RegionMeta } from "../core/meta";
 import { putItem, decrementUsage, type PutPort } from "../core/put";
 import { createRegionRecord, type PersistedRegion } from "../core/record";
-import { checkAndRepair, type RepairPort, type RepairReport } from "../core/repair";
+import { checkAndRepairLevel, createRepairReport, type RepairEvent, type RepairPort, type RepairReport } from "../core/repair";
 import { overwriteSlot, type OverwritePort, type OverwriteResult } from "../core/overwrite";
 import { rebuildUsage, resizeLayout, type ResizePatch, type ResizePort } from "../core/region";
 import { regionStats, type RegionStats } from "../core/stats";
@@ -25,6 +26,9 @@ import { readLevelUsage, readRegionRecord, writeLevelUsage, writeRegionRecord } 
 export class StoredRegion {
   private readonly runtime: BarrelRuntime;
   private _layout: RegionLayout;
+  /** 盘点分批执行状态：进行中标记 + 调度句柄 */
+  private repairing = false;
+  private repairTimer: number | undefined;
 
   constructor(
     /** 区域唯一 ID：`2:0:-64`（维度token:区块X:区块Z） */
@@ -64,6 +68,7 @@ export class StoredRegion {
         return result;
       },
       isSlotOccupied: (x, y, z, slotInBarrel) => region.runtime.isSlotOccupied({ x, y, z, slotInBarrel }),
+      findEmptySlotInBarrel: (x, y, z, usable) => region.runtime.firstEmptySlot({ x, y, z, slotInBarrel: 0 }, usable),
       writeItem: (x, y, z, slotInBarrel, item) =>
         region.runtime.writeItem({ x, y, z, slotInBarrel }, item as ItemStack),
     };
@@ -224,7 +229,7 @@ export class StoredRegion {
     return transferOut(port, slotId);
   }
 
-  /** 区域统计快照（capacity/barrels/totalBarrels/used/freeSlots，桶水位遍历求和） */
+  /** 区域统计快照（capacity/barrels/totalBarrels/used/freeSlots，账本遍历求和） */
   stats(): RegionStats {
     const record = this.readRecord();
     const meta: RegionMeta = record?.meta ?? createRegionMeta();
@@ -235,6 +240,11 @@ export class StoredRegion {
       meta,
       (level) => readLevelUsage(this.regionId, level)
     );
+  }
+
+  /** 已建木桶总数（轻量查询：1 次主记录读，供扩容见证等高频场景替代全量 stats） */
+  get barrelCount(): number {
+    return this.readRecord()?.meta.barrelCount ?? 0;
   }
 
   /**
@@ -279,33 +289,39 @@ export class StoredRegion {
   }
 
   /**
-   * 阵列巡检 + 修复（自检维护）：扫描全部已物化桶（桶水位范围）的可用槽，
-   * - 无数据方块（空气/普通方块）→ 重建木桶（容器内容随方块损坏已丢失，无法找回）；
-   * - **其它容器方块 → 绝不覆盖**（可能承载他人数据），仅报告冲突；
-   * - 桶级丢失判定：桶实际占用 < 水位计数 → 差异件数报丢失（桶损坏重建全丢 /
-   *   外部取走差额），水位对齐真值（丢失槽无需登记，分配探测自然复用）。
-   * 巡检事件（barrel-restored / item-lost-barrel）桥接为
-   * `ItemStorage.events.*` 供外部模组订阅。显式巡检（O(物化桶×可用槽) 扫描），仅调用时执行。
+   * 阵列盘点 + 修复（自检维护，**分批执行**）：每 tick 盘一层（`checkAndRepairLevel`），
+   * 满阵列 64 层 ≈ 3 秒完成，不把全部扫描堆在一个 tick 卡死游戏；完成时回调报告。
+   * - 桶位置不是木桶（空气/其它容器/普通方块）→ 重建（桶内物品随方块损坏已丢失，无法找回）；
+   * - 桶级丢失判定：实际占用 < 账本计数 → 差异件数报丢失（桶损坏重建全丢 /
+   *   外部取走差额），账本对齐真值（空格子无需登记，分配看实物自然复用）。
+   * 盘点事件（barrel-restored / item-lost-barrel）桥接为 `ItemStorage.events.*`。
+   * 进行中再次调用 → 忽略（返回 false）。
+   * @returns true=已开始盘点；false=正在盘点中（忽略本次请求）
    */
-  checkAndRepair(): RepairReport {
+  checkAndRepair(onDone?: (report: RepairReport) => void): boolean {
+    if (this.repairing) return false; // 防重入：上一轮还没盘完
+    this.repairing = true;
+    const report = createRepairReport();
+    let level = 0;
     const port: RepairPort = {
       readRecord: () => this.readRecord(),
       writeRecord: (record) => this.writeRecord(record),
-      readLevelUsage: (level) => readLevelUsage(this.regionId, level),
-      writeLevelUsage: (level, usage) => writeLevelUsage(this.regionId, level, usage),
+      readLevelUsage: (l) => readLevelUsage(this.regionId, l),
+      writeLevelUsage: (l, usage) => writeLevelUsage(this.regionId, l, usage),
       probeSlot: (slotId) => {
         const pos = slotIdToPosition(slotId, this.layout);
         if (!pos) return "unknown";
         return this.runtime.probeStatus(pos);
       },
+      probeBarrelSlots: (x, y, z, usable) => this.runtime.probeBarrelSlots({ x, y, z, slotInBarrel: 0 }, usable),
       restoreBarrel: (slotId) => {
         const pos = slotIdToPosition(slotId, this.layout);
         if (!pos) return { ok: false, created: false };
-        // 显式巡检修复：阵列坐标内任何非木桶一律覆盖重建（区别于 put 的保守 ensureBarrel）
+        // 显式盘点修复：阵列坐标内任何非木桶一律覆盖重建（区别于 put 的保守 ensureBarrel）
         return this.runtime.ensureBarrelForRepair(pos);
       },
     };
-    return checkAndRepair(port, this.layout, (e) => {
+    const bridge = (e: RepairEvent): void => {
       if (e.type === "barrel-restored") {
         ItemStorageEvents.barrelRestored.trigger({
           regionId: this.regionId,
@@ -322,7 +338,25 @@ export class StoredRegion {
           count: e.count,
         });
       }
-    });
+    };
+    this.repairTimer = system.runInterval(() => {
+      if (level >= this.layout.maxLevels) {
+        // 全部盘完：复位状态 + 回调汇总报告
+        if (this.repairTimer !== undefined) system.clearRun(this.repairTimer);
+        this.repairTimer = undefined;
+        this.repairing = false;
+        onDone?.(report);
+        return;
+      }
+      const step = checkAndRepairLevel(port, this.layout, level, bridge);
+      report.scanned += step.report.scanned;
+      report.fixedBarrels += step.report.fixedBarrels;
+      report.lostItems += step.report.lostItems;
+      report.unknownSlots += step.report.unknownSlots;
+      report.lostDetails.push(...step.report.lostDetails);
+      level = step.nextLevel ?? this.layout.maxLevels;
+    }, 1);
+    return true;
   }
 
   /** 确保阵列区块被 ticking area 常加载（注册后调用一次） */

@@ -272,11 +272,11 @@ test("resizeLayout：非法参数 / 超世界上限 → 拒绝；相同参数 �
   assert.ok(resizeLayout(world.port, layout, { slotPerBarrel: 28 })?.includes("0..27"));
   assert.equal(resizeLayout(world.port, layout, {}), null); // 无变化 → 无操作
 
-  // 世界上限：baseY 280 + 64 层 → 顶部 343 > 320
+  // 世界上限按维度（makeWorld 的 DIM=末地）：baseY 280 + 64 层 → 顶部 343 > 末地上限 256
   const wHigh = makeWorld(1);
   const LHigh = { chunkX: 0, chunkZ: 0, baseY: 280, maxLevels: 1, test: true };
   putItem(wHigh.port, "a", RID, DIM, LHigh);
-  assert.ok(resizeLayout(wHigh.port, wHigh.record()!.layout, { maxLevels: 64 })?.includes("320"));
+  assert.ok(resizeLayout(wHigh.port, wHigh.record()!.layout, { maxLevels: 64 })?.includes("世界高度上限"));
 });
 
 // ── rebuildUsage：调整后重扫容器重建桶水位（对齐世界真值） ─────────────

@@ -143,11 +143,11 @@ export function resizeLayout(port: ResizePort, layout: RegionLayout, patch: Resi
   }
   if (newMaxLevels === layout.maxLevels && newSlotPerBarrel === (layout.slotPerBarrel ?? BARREL_SLOTS)) return null; // 无变化
   const candidate: RegionLayout = { ...layout, maxLevels: newMaxLevels, slotPerBarrel: newSlotPerBarrel };
-  const invalid = validateLayout(candidate);
-  if (invalid) return invalid; // 含阵列顶部超世界上限
 
   const record = port.readRecord();
   if (!record) return "该区域尚无持久化记录，无法调整参数（请先注册）";
+  const invalid = validateLayout(candidate, record.dimensionId); // 高度上限按维度（下界 128 / 末地 256 / 主世界 320）
+  if (invalid) return invalid;
   if (newMaxLevels < layout.maxLevels) {
     for (let l = newMaxLevels; l < layout.maxLevels; l++) {
       const usage = port.readLevelUsage(l);

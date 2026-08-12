@@ -12,6 +12,7 @@
 import { world } from "@minecraft/server";
 import type { Player } from "@minecraft/server";
 import { ModalFormBuilder, notifyError, notifySuccess } from "@yinxe/toolkit";
+import { worldHeightRangeOf } from "@yinxe/nbt-data-storage";
 
 /** 演示配置（存储区域的完整参数） */
 export interface DemoConfig {
@@ -40,10 +41,6 @@ const DIMENSIONS = [
   { id: "minecraft:overworld", label: "主世界" },
   { id: "minecraft:nether", label: "下界" },
 ] as const;
-
-/** 底层 Y 合法范围（世界最低 -64 起，桶阵列 64 层不顶到世界上限 320） */
-const BASE_Y_MIN = -64;
-const BASE_Y_MAX = 256;
 
 /** 默认配置（库 README 示例：末地 (0,120,-1024)；测试参数默认 = 正式行为） */
 export function defaultConfig(): DemoConfig {
@@ -125,7 +122,7 @@ export async function showConfigForm(player: Player, opts: ConfigFormOptions = {
     .textFieldWithPlaceholder("anchorZ", "锚点 Z", "如 -1024 → 区块 -64", {
       defaultValue: String(cfg.anchorZ),
     })
-    .textFieldWithPlaceholder("baseY", "底层 Y", `最底层木桶 Y（${BASE_Y_MIN}..${BASE_Y_MAX}，默认 120）`, {
+    .textFieldWithPlaceholder("baseY", "底层 Y", "最底层木桶 Y（按维度校验高度，默认 120）", {
       defaultValue: String(cfg.baseY),
     })
     .divider()
@@ -156,12 +153,13 @@ export async function showConfigForm(player: Player, opts: ConfigFormOptions = {
     notifyError(player, "锚点 X/Z 与底层 Y 必须填写整数");
     return;
   }
-  if (baseY < BASE_Y_MIN || baseY > BASE_Y_MAX) {
-    notifyError(player, `底层 Y 需在 ${BASE_Y_MIN}..${BASE_Y_MAX} 之间`);
+  const dim = DIMENSIONS[Number(vals.dimension)] ?? DIMENSIONS[0];
+  // 世界高度按维度校验：只有主世界能到 320，下界 128、末地 256，最低 Y 也不同（主世界 -64，下界/末地 0）
+  const range = worldHeightRangeOf(dim.id);
+  if (range && (baseY < range.minY || baseY > range.maxY)) {
+    notifyError(player, `维度 ${dim.label} 的世界高度范围是 ${range.minY}..${range.maxY}，底层 Y=${baseY} 超出`);
     return;
   }
-
-  const dim = DIMENSIONS[Number(vals.dimension)] ?? DIMENSIONS[0];
   const next: DemoConfig = {
     enabled: Boolean(vals.enabled),
     dimension: dim.id,

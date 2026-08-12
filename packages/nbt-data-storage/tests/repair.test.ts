@@ -7,7 +7,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { putItem, type PutPort } from "../src/core/put";
-import { checkAndRepair, type RepairPort, type SlotStatus } from "../src/core/repair";
+import {
+  checkAndRepair,
+  checkAndRepairLevel,
+  createRepairReport,
+  type RepairPort,
+  type SlotStatus,
+} from "../src/core/repair";
 import { createRegionRecord, type PersistedRegion } from "../src/core/record";
 
 const DIM = "minecraft:the_end";
@@ -20,10 +26,18 @@ const LAYOUT = { chunkX: 0, chunkZ: 0, baseY: 120, maxLevels: 4, test: true };
  * 内存巡检世界替身：槽位状态表 + 按层桶水位 + 记录读改写。
  * 桶内未显式设置的槽 = empty（空槽）；usage 只登记层 0 的桶 0。
  */
-function makeRepairWorld(slots: Map<number, SlotStatus>, usageOf: (level: number) => number[]) {
+function makeRepairWorld(
+  slots: Map<number, SlotStatus>,
+  usageOf: (level: number) => number[],
+  extraUsage?: Map<number, number[]>
+) {
   const record = createRegionRecord(DIM, LAYOUT);
   const usage = new Map<number, number[]>();
   usage.set(0, usageOf(0));
+  if (extraUsage) {
+    for (const [l, u] of extraUsage) usage.set(l, u);
+  }
+  let barrelRebuilt = false; // 幂等重建：同桶只第一次真正建桶（对齐真实 ensureBarrelForRepair）
   const port: RepairPort = {
     readRecord: () => JSON.parse(JSON.stringify(record)) as PersistedRegion,
     writeRecord: (r) => {
@@ -35,9 +49,11 @@ function makeRepairWorld(slots: Map<number, SlotStatus>, usageOf: (level: number
     },
     probeSlot: (slotId) => slots.get(slotId) ?? "empty",
     restoreBarrel: (slotId) => {
-      // 重建该槽所在桶（桶 0）：桶内槽全部重置为 empty
+      // 重建该槽所在桶（桶 0）：桶内槽全部重置为 empty；同桶只第一次 created
+      const created = !barrelRebuilt;
+      barrelRebuilt = true;
       for (let j = 0; j < 27; j++) slots.set(j, "empty");
-      return { ok: true, created: true };
+      return { ok: true, created };
     },
   };
   return { port, usage, record: () => record };
@@ -118,6 +134,49 @@ test("checkAndRepair：空桶（计数 0）不扫不动", () => {
   assert.equal(report.scanned, 0);
   assert.deepEqual(report.lostDetails, []);
   assert.deepEqual(usage.get(0), [0]); // 不动
+});
+
+test("checkAndRepairLevel：分批盘点——逐层推进，各层独立累计，最后一层 nextLevel=null", () => {
+  const slots = bucketStatus([0, 1]); // 桶 0 占 2 件（层 0）
+  const { port, usage } = makeRepairWorld(
+    slots,
+    (level) => (level === 0 ? [2] : []),
+    new Map([[1, [1]]]) // 层 1 桶 0 占 1 件（槽 0 位于 6912）
+  );
+  slots.set(6912, "occupied");
+  // 模拟外部取走层 0 桶 0 的 1 件（槽 1 空，计数仍 2）
+  slots.set(1, "empty");
+
+  const total = createRepairReport();
+  let level = 0;
+  let steps = 0;
+  for (;;) {
+    const step = checkAndRepairLevel(port, LAYOUT, level);
+    total.scanned += step.report.scanned;
+    total.lostItems += step.report.lostItems;
+    total.lostDetails.push(...step.report.lostDetails);
+    steps++;
+    if (step.nextLevel === null) break;
+    level = step.nextLevel;
+  }
+  // 每层一步，LAYOUT 4 层 → 4 步
+  assert.equal(steps, 4);
+  // 层 0 桶 0：计数 2 vs 实际 1 → 外部取走丢失 1 件；层 1 桶 0 正常
+  assert.equal(total.lostItems, 1);
+  assert.deepEqual(total.lostDetails, [{ level: 0, barrelInLevel: 0, count: 1, kind: "taken-externally" }]);
+  // 各层账本对齐：层 0 桶 0 → 1；层 1 桶 0 → 1
+  assert.deepEqual(usage.get(0), [1]);
+  assert.deepEqual(usage.get(1), [1]);
+  // 空层也推进（不卡死）
+  assert.deepEqual(usage.get(2), undefined);
+});
+
+test("checkAndRepairLevel：越界层号 → 立即结束（nextLevel=null）", () => {
+  const slots = bucketStatus([]);
+  const { port } = makeRepairWorld(slots, () => []);
+  const step = checkAndRepairLevel(port, LAYOUT, LAYOUT.maxLevels);
+  assert.equal(step.report.scanned, 0);
+  assert.equal(step.nextLevel, null);
 });
 
 test("checkAndRepair：真实 put 流程后外部破坏桶 → 巡检修复并释放容量", () => {

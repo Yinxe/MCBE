@@ -15,6 +15,7 @@ import {
   slotIdToPosition,
   totalBarrelsOf,
   validateLayout,
+  worldHeightRangeOf,
   type RegionLayout,
 } from "../src/core/layout";
 
@@ -103,16 +104,39 @@ test("validateLayout：合法返回 null", () => {
 });
 
 test("validateLayout：非法布局返回中文错误", () => {
-  assert.ok(validateLayout({ ...DEFAULT, baseY: -65 })); // 低于世界最低层 -64
-  assert.equal(validateLayout({ ...DEFAULT, baseY: -64 }), null); // 世界最低层合法
+  assert.ok(validateLayout({ ...DEFAULT, baseY: -65 })); // 低于主世界最低层 -64
+  assert.equal(validateLayout({ ...DEFAULT, baseY: -64 }), null); // 主世界最低层合法
   assert.ok(validateLayout({ ...DEFAULT, maxLevels: 0 }));
   assert.ok(validateLayout({ ...DEFAULT, maxLevels: 65 })); // 超过 64 层上限
   assert.ok(validateLayout({ ...DEFAULT, maxLevels: 1.5 }));
   assert.ok(validateLayout({ ...DEFAULT, chunkX: 1.5 }));
-  // 顶部 Y = baseY + maxLevels - 1 ≤ 320 合法；= 321 越界
+  // 顶部 Y = baseY + maxLevels - 1 ≤ 320 合法；= 321 越界（无维度参数时按主世界 -64..320）
   assert.equal(validateLayout({ ...DEFAULT, baseY: 319, maxLevels: 2 }), null); // 顶部 320
   assert.ok(validateLayout({ ...DEFAULT, baseY: 320, maxLevels: 2 })); // 顶部 321
   assert.equal(validateLayout({ ...DEFAULT, baseY: 320, maxLevels: 1 }), null); // 顶部 320
+});
+
+test("worldHeightRangeOf：只有主世界能到 320；下界 128、末地 256，最低 Y 也不同", () => {
+  assert.deepEqual(worldHeightRangeOf("minecraft:overworld"), { minY: -64, maxY: 320 });
+  assert.deepEqual(worldHeightRangeOf("minecraft:nether"), { minY: 0, maxY: 128 });
+  assert.deepEqual(worldHeightRangeOf("minecraft:the_end"), { minY: 0, maxY: 256 });
+  assert.equal(worldHeightRangeOf("minecraft:void"), undefined); // 未知维度不限制
+});
+
+test("validateLayout：高度按维度校验（下界/末地更矮更浅）", () => {
+  // 下界：baseY 不能 < 0，顶部不能超 128
+  assert.ok(validateLayout({ ...DEFAULT, baseY: -1 }, "minecraft:nether")); // 低于下界最低层 0
+  assert.equal(validateLayout({ ...DEFAULT, baseY: 0 }, "minecraft:nether"), null);
+  assert.equal(validateLayout({ ...DEFAULT, baseY: 100, maxLevels: 29 }, "minecraft:nether"), null); // 顶部 128
+  assert.ok(validateLayout({ ...DEFAULT, baseY: 100, maxLevels: 30 }, "minecraft:nether")); // 顶部 129 超限
+  // 末地：顶部能到 256，但不能到 320（主世界专属）
+  assert.equal(validateLayout({ ...DEFAULT, baseY: 232, maxLevels: 25 }, "minecraft:the_end"), null); // 顶部 256
+  assert.ok(validateLayout({ ...DEFAULT, baseY: 232, maxLevels: 26 }, "minecraft:the_end")); // 顶部 257 超限
+  // 主世界 320 合法；同一布局换下界/末地 → 拒绝（证明维度参与校验）
+  assert.equal(validateLayout({ ...DEFAULT, baseY: 280, maxLevels: 41 }, "minecraft:overworld"), null); // 顶部 320
+  assert.ok(validateLayout({ ...DEFAULT, baseY: 280, maxLevels: 41 }, "minecraft:the_end")); // 顶部 320 超末地上限
+  // 未知维度（自定义维度）：不做高度限制
+  assert.equal(validateLayout({ ...DEFAULT, baseY: -100 }, "minecraft:void"), null);
 });
 
 test("chunkFromBlock：四象限 + 区块边界点精确归块（区块 c 覆盖块 [16c, 16c+15]）", () => {

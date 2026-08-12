@@ -32,18 +32,24 @@ export interface PutPort {
   /** 写区域主记录 */
   writeRecord(record: PersistedRegion): void;
   /**
-   * 读某层桶水位（已物化桶的占用计数数组，元素 0..usable；长度 = 该层桶数）。
-   * 缺失/损坏 → 空数组（= 从未物化）。
+   * 读某层"每桶已用格数"账本（数组元素 0..usable，长度 = 该层已建桶数）。
+   * 缺失/损坏 → 空数组（= 从未建桶）。
    */
   readLevelUsage(level: number): number[];
-  /** 写某层桶水位 */
+  /** 写某层账本 */
   writeLevelUsage(level: number, usage: number[]): void;
   /**
    * 物化/确认木桶存在（幂等）。返回是否就绪 + 本次是否新建了桶 + 位置是否被
    * **非木桶方块占用**（occupied=true 表示该位置有其它方块/容器——调用方必须
-   * 跳过该候选，**绝不能替换他人方块**；物化只发生在空气/已是木桶的位置）。
+   * 跳过该候选，**绝不能替换他人方块**；建桶只发生在空气/已是木桶的位置）。
    */
   ensureBarrel(x: number, y: number, z: number): { ok: boolean; created: boolean; occupied?: boolean };
+  /**
+   * 在一个木桶里找第一个空格子（性能优化，可选）：一次取容器、循环查格，
+   * 返回格子号 0..usable-1；无空格子/位置异常（非木桶、区块未加载）→ null。
+   * 未提供时回退逐格 `isSlotOccupied`（逻辑一致，只是慢一些）。
+   */
+  findEmptySlotInBarrel?(x: number, y: number, z: number, usable: number): number | null;
   /** 该槽位是否已被世界占用（真值检查；无法确认保守视为占用） */
   isSlotOccupied(x: number, y: number, z: number, slotInBarrel: number): boolean;
   /** 把物品写入槽位（物品为不透明引用）；成功返回 true */
@@ -66,8 +72,8 @@ export function normalizeUsage(raw: number[] | undefined, layout: RegionLayout):
 
 /**
  * 存入编排（有界重试）：成功返回取物凭据 `{ regionId, slotId }`，满/失败返回 null。
- * 分配流程（见文件头注释）：桶水位定位未满桶 → 桶内真值探测空槽 → 占位写水位 →
- * 物化（如需要）→ 写入物品；失败回滚计数。
+ * 分配流程（见文件头注释）：账本定位未满桶 → 桶内找空格子 → 占位写账本 →
+ * 建桶（如需要）→ 写入物品；失败回滚计数。
  */
 export function putItem(
   port: PutPort,
@@ -80,7 +86,6 @@ export function putItem(
   const usable = usableSlotsPerBarrel(layout);
   if (usable <= 0) return null; // 瞬满布局：无可用槽
   for (let attempt = 0; attempt < MAX_ALLOC_RETRY; attempt++) {
-    const record = port.readRecord() ?? createRegionRecord(dimensionId, layout);
     const candidate = allocateCandidate(port, layout, usable);
     if (!candidate) return null; // 真满
     const { slotId, createdBarrel } = candidate;
@@ -90,8 +95,8 @@ export function putItem(
       return null;
     }
     if (createdBarrel) {
-      // 物化成功：提交新建桶计数（读改写，窄竞态窗口）
-      const rec = port.readRecord() ?? record;
+      // 建桶成功：提交新建桶计数（读改写，窄竞态窗口；无物化时不读主记录）
+      const rec = port.readRecord() ?? createRegionRecord(dimensionId, layout);
       rec.meta.barrelCount += 1;
       port.writeRecord(rec);
     }
@@ -105,13 +110,13 @@ export function putItem(
 }
 
 /**
- * 候选分配（一轮）：桶水位扫描 + 真值探测 + 必要时物化新桶，找到即占位写回水位。
- * - 已物化桶（usage.length）：从桶 0 找第一个 usage[b] < usable 的桶，
- *   桶内探测 0..usable-1 第一个空槽 → 计数 +1 返回；
- *   （计数未满但桶内探测全占用 = 计数失真/外部塞满 → 计数修正为 usable 跳过）
- * - 全部已物化桶满 → 物化该层下一新桶（位置 = usage.length）：
+ * 候选分配（一轮）：账本扫描 + 看实物找空格 + 必要时建新桶，找到即占位写回账本。
+ * - 已建桶（usage.length）：从桶 0 找第一个 usage[b] < usable 的桶，
+ *   桶内找第一个空格子（`findEmptySlotInBarrel`，一次取容器循环查格）→ 计数 +1 返回；
+ *   （计数未满但桶内全是东西 = 计数失真/外部塞满 → 计数修正为 usable 跳过）
+ * - 全部已建桶满 → 建该层下一新桶（位置 = usage.length）：
  *   * 位置被非木桶方块占用 → 计数置 usable（伪满）永久跳过，继续下一位置；
- *   * 物化成功 → 桶内探测空槽（理论全空，外部干扰兜底）→ 计数 1 返回；
+ *   * 建桶成功 → 桶内找空格子（理论全空，外部干扰兜底）→ 计数 1 返回；
  * - 全部层满 → null。
  * @returns { slotId, createdBarrel } 找到可用槽（已占位）；null = 全满
  */
@@ -123,24 +128,24 @@ function allocateCandidate(
   for (let level = 0; level < layout.maxLevels; level++) {
     const base = level * SLOTS_PER_LEVEL;
     const usage = normalizeUsage(port.readLevelUsage(level), layout);
-    // 已物化桶：找未满桶 + 桶内真值空槽
+    // 已建桶：找未满桶 + 桶内找空格子
     for (let b = 0; b < usage.length; b++) {
       if (usage[b]! >= usable) continue;
-      for (let j = 0; j < usable; j++) {
-        const slotId = base + b * BARREL_SLOTS + j;
-        const pos = slotIdToPosition(slotId, layout);
-        if (!pos) break;
-        if (!port.isSlotOccupied(pos.x, pos.y, pos.z, pos.slotInBarrel)) {
-          usage[b]! += 1;
-          port.writeLevelUsage(level, usage); // 占位即写：收窄竞态窗口
-          return { slotId, createdBarrel: false };
-        }
+      const pos0 = slotIdToPosition(base + b * BARREL_SLOTS, layout);
+      if (!pos0) break;
+      const empty = port.findEmptySlotInBarrel
+        ? port.findEmptySlotInBarrel(pos0.x, pos0.y, pos0.z, usable)
+        : scanEmptySlot(port, pos0.x, pos0.y, pos0.z, usable);
+      if (empty !== null && empty < usable) {
+        usage[b]! += 1;
+        port.writeLevelUsage(level, usage); // 占位即写：收窄竞态窗口
+        return { slotId: base + b * BARREL_SLOTS + empty, createdBarrel: false };
       }
-      // 计数未满但探测全占用（计数失真/外部塞满）→ 修正为满，跳过该桶
+      // 计数未满但桶内没有空格（计数失真/外部塞满）→ 修正为满，跳过该桶
       usage[b] = usable;
       port.writeLevelUsage(level, usage);
     }
-    // 已物化桶全满 → 物化该层新桶（跳过被外部方块占用的候选位置）
+    // 已建桶全满 → 建该层新桶（跳过被外部方块占用的候选位置）
     for (;;) {
       if (usage.length >= BARRELS_PER_LEVEL) break; // 该层物理满
       const pos = slotIdToPosition(base + usage.length * BARREL_SLOTS, layout);
@@ -152,19 +157,33 @@ function allocateCandidate(
         continue;
       }
       if (!barrel.ok) return null; // 区块未就绪：本轮放弃（不烧计数）
-      for (let j = 0; j < usable; j++) {
-        const sid = base + usage.length * BARREL_SLOTS + j;
-        const p = slotIdToPosition(sid, layout);
-        if (p && !port.isSlotOccupied(p.x, p.y, p.z, p.slotInBarrel)) {
-          usage.push(1); // 新桶登记：占用 1（该槽）
-          port.writeLevelUsage(level, usage);
-          return { slotId: sid, createdBarrel: barrel.created };
-        }
+      const empty = port.findEmptySlotInBarrel
+        ? port.findEmptySlotInBarrel(pos.x, pos.y, pos.z, usable)
+        : scanEmptySlot(port, pos.x, pos.y, pos.z, usable);
+      if (empty !== null && empty < usable) {
+        const newBarrelIndex = usage.length; // push 前的长度 = 新桶序号
+        usage.push(1); // 新桶登记：占用 1（该槽）
+        port.writeLevelUsage(level, usage);
+        return { slotId: base + newBarrelIndex * BARREL_SLOTS + empty, createdBarrel: barrel.created };
       }
       // 新桶被外部塞满（几乎不可能）→ 伪满，继续下一位置
       usage.push(usable);
       port.writeLevelUsage(level, usage);
     }
+  }
+  return null;
+}
+
+/** 回退实现：逐格探测找第一个空格子（未提供 findEmptySlotInBarrel 时用，逻辑一致） */
+function scanEmptySlot(
+  port: PutPort,
+  x: number,
+  y: number,
+  z: number,
+  usable: number
+): number | null {
+  for (let j = 0; j < usable; j++) {
+    if (!port.isSlotOccupied(x, y, z, j)) return j;
   }
   return null;
 }
