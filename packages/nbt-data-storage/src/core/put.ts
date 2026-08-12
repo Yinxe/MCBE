@@ -1,14 +1,24 @@
 // ── 存入编排（纯逻辑，零 @minecraft 依赖） ────────────────────────────
-// 把 `put` 的"分配候选槽 → 先占位写 DP → 物化 → 世界占用检查 → 写入"全流程
-// 从 mc 适配层下沉到 core，通过 PutPort 注入世界/持久化副作用 → 可脱离游戏 mock 单测。
+// 把 `put` 的"找未满桶 → 桶内探测空槽 → 物化 → 写入"全流程从 mc 适配层
+// 下沉到 core，通过 PutPort 注入世界/持久化副作用 → 可脱离游戏 mock 单测。
+//
+// **桶水位设计**（v3，取代 v2 空洞池）：
+//   - 每层一条"桶水位"：已物化桶的占用计数数组 usage[]（元素 0..usable，
+//     length = 该层已物化桶数）。计数只是**快速过滤**（usage[b] < usable ⇔ 未满），
+//     本身不记录任何空槽 ID；
+//   - 分配：从桶 0 线性找第一个未满桶 → 桶内扫描 `usable` 个槽位探测
+//     世界真值 → 第一个空槽写入（真值权威：计数失真/外部干扰都被探测兜底，
+//     绝不覆盖占用槽）；全部桶满 → 物化该层下一新桶；
+//   - 物化位置被非木桶方块占用 → 计数置 usable（伪满标记）永久跳过该位置，
+//     绝不替换他人方块；
+//   - 占位即写（usage 变更立刻落盘）：收窄跨模组 RMW 竞态窗口。
 // 语义（以世界为真值，绝不覆盖他人物品）：
 //   - 候选槽被世界占用 → 丢弃候选、重试下一候选（有界，不覆盖）；
-//   - 物化/写入失败（区块未就绪、新桶容器暂不可用）→ 槽位回归该层空洞池并返回 null，
-//     由调用方下个周期重试（不烧水印、不丢空槽）；
+//   - 物化/写入失败（区块未就绪、新桶容器暂不可用）→ 回滚该桶计数并返回 null，
+//     由调用方下个周期重试（不烧计数、不丢槽）；
 //   - 真正 setBlockType 建了新桶 → meta.barrelCount +1。
 import type { RegionLayout } from "./layout";
-import { SLOTS_PER_LEVEL, levelOf, slotIdToPosition, usableSlotsPerBarrel } from "./layout";
-import { allocateSlotId, createLevelPools, releaseSlotId, type LevelPools } from "./meta";
+import { BARREL_SLOTS, BARRELS_PER_LEVEL, SLOTS_PER_LEVEL, levelOf, slotIdToPosition, usableSlotsPerBarrel } from "./layout";
 import { createRegionRecord, type PersistedRegion } from "./record";
 import type { StoredRef } from "./keys";
 
@@ -21,10 +31,13 @@ export interface PutPort {
   readRecord(): PersistedRegion | undefined;
   /** 写区域主记录 */
   writeRecord(record: PersistedRegion): void;
-  /** 读某层空洞池（level-local 索引） */
-  readLevelPool(level: number): number[];
-  /** 写某层空洞池 */
-  writeLevelPool(level: number, locals: number[]): void;
+  /**
+   * 读某层桶水位（已物化桶的占用计数数组，元素 0..usable；长度 = 该层桶数）。
+   * 缺失/损坏 → 空数组（= 从未物化）。
+   */
+  readLevelUsage(level: number): number[];
+  /** 写某层桶水位 */
+  writeLevelUsage(level: number, usage: number[]): void;
   /**
    * 物化/确认木桶存在（幂等）。返回是否就绪 + 本次是否新建了桶 + 位置是否被
    * **非木桶方块占用**（occupied=true 表示该位置有其它方块/容器——调用方必须
@@ -37,11 +50,24 @@ export interface PutPort {
   writeItem(x: number, y: number, z: number, slotInBarrel: number, item: unknown): boolean;
 }
 
+/** 读取某层桶水位并归一化（非法元素清 0、超长截断；不强制写回，下次写时自然修正） */
+export function normalizeUsage(raw: number[] | undefined, layout: RegionLayout): number[] {
+  if (!raw) return [];
+  const usable = usableSlotsPerBarrel(layout);
+  const usage = raw.slice(0, BARRELS_PER_LEVEL); // 解码硬上限：每层最多 256 桶
+  const out: number[] = new Array(usage.length);
+  for (let i = 0; i < usage.length; i++) {
+    const v = usage[i];
+    // 非法元素（缺失/负数/非整数）清 0；超载（布局调小后的旧计数）clamp 到可用上限
+    out[i] = v === undefined || !Number.isInteger(v) || v < 0 ? 0 : Math.min(v, usable);
+  }
+  return out;
+}
+
 /**
- * 存入编排（O(1) 分配 + 有界重试）：成功返回取物凭据 `{ regionId, slotId }`，满/失败返回 null。
- * 分配只触碰洞层（holeLevels 全部加载，通常 1-2 层），无洞则推进水印；每轮常量操作。
- * 物化顺序（防销毁他人方块）：先 `ensureBarrel` 探测——位置被**非木桶方块占用**
- * → 跳过该候选（绝不替换）；仅空气/已是木桶才物化；区块未就绪 → 槽回洞池返回 null。
+ * 存入编排（有界重试）：成功返回取物凭据 `{ regionId, slotId }`，满/失败返回 null。
+ * 分配流程（见文件头注释）：桶水位定位未满桶 → 桶内真值探测空槽 → 占位写水位 →
+ * 物化（如需要）→ 写入物品；失败回滚计数。
  */
 export function putItem(
   port: PutPort,
@@ -51,40 +77,26 @@ export function putItem(
   layout: RegionLayout
 ): StoredRef | null {
   if (item === undefined || item === null) return null;
-  // 解码硬上限（ID 以 27 槽/桶解码，容量上限 = 层数 × 6912）；可用容量由每桶可用槽数约束
-  const hardLimit = layout.maxLevels * SLOTS_PER_LEVEL;
   const usable = usableSlotsPerBarrel(layout);
+  if (usable <= 0) return null; // 瞬满布局：无可用槽
   for (let attempt = 0; attempt < MAX_ALLOC_RETRY; attempt++) {
     const record = port.readRecord() ?? createRegionRecord(dimensionId, layout);
-    const meta = record.meta;
-    // 加载全部洞层池（洞层通常 1-2 个；脏索引循环丢弃时需要次低层数据）
-    const pools: LevelPools = createLevelPools(layout.maxLevels);
-    for (const level of meta.holeLevels) {
-      pools.byLevel[level] = port.readLevelPool(level);
-    }
-    const slotId = allocateSlotId(meta, pools, hardLimit, usable);
-    if (slotId === null) return null; // 真满
+    const candidate = allocateCandidate(port, layout, usable);
+    if (!candidate) return null; // 真满
+    const { slotId, createdBarrel } = candidate;
     const pos = slotIdToPosition(slotId, layout);
-    if (!pos) return null;
-    // 先占位持久化：收窄 RMW 窗口内跨模组重复分配同一槽的竞态
-    port.writeRecord(record);
-    for (const level of meta.holeLevels) {
-      port.writeLevelPool(level, pools.byLevel[level] ?? []);
-    }
-    // 先探测后物化：位置被非木桶方块占用（他人容器/方块）→ 跳过候选，绝不替换
-    const barrel = port.ensureBarrel(pos.x, pos.y, pos.z);
-    if (barrel.occupied) continue;
-    if (!barrel.ok) {
-      releaseSlot(port, slotId, dimensionId, layout); // 区块未就绪：槽回归空洞池
+    if (!pos) {
+      decrementUsage(port, slotId, layout); // 回滚占位（理论不可达）
       return null;
     }
-    if (barrel.created) {
-      meta.barrelCount += 1;
-      port.writeRecord(record); // 提交新建桶计数
+    if (createdBarrel) {
+      // 物化成功：提交新建桶计数（读改写，窄竞态窗口）
+      const rec = port.readRecord() ?? record;
+      rec.meta.barrelCount += 1;
+      port.writeRecord(rec);
     }
-    if (port.isSlotOccupied(pos.x, pos.y, pos.z, pos.slotInBarrel)) continue; // 世界已占用 → 丢弃候选
     if (!port.writeItem(pos.x, pos.y, pos.z, pos.slotInBarrel, item)) {
-      releaseSlot(port, slotId, dimensionId, layout); // 新桶容器暂不可用：槽回归空洞池
+      decrementUsage(port, slotId, layout); // 写入失败：回滚占位，槽留给下轮重试
       return null;
     }
     return { regionId, slotId };
@@ -93,15 +105,83 @@ export function putItem(
 }
 
 /**
- * 回收槽位到其所在层空洞池（读改写：主记录 + 该层池）。
- * 供 put 失败回滚与 take/remove 共用。超限槽（桶内索引 ≥ 每桶可用槽数）不入池。
+ * 候选分配（一轮）：桶水位扫描 + 真值探测 + 必要时物化新桶，找到即占位写回水位。
+ * - 已物化桶（usage.length）：从桶 0 找第一个 usage[b] < usable 的桶，
+ *   桶内探测 0..usable-1 第一个空槽 → 计数 +1 返回；
+ *   （计数未满但桶内探测全占用 = 计数失真/外部塞满 → 计数修正为 usable 跳过）
+ * - 全部已物化桶满 → 物化该层下一新桶（位置 = usage.length）：
+ *   * 位置被非木桶方块占用 → 计数置 usable（伪满）永久跳过，继续下一位置；
+ *   * 物化成功 → 桶内探测空槽（理论全空，外部干扰兜底）→ 计数 1 返回；
+ * - 全部层满 → null。
+ * @returns { slotId, createdBarrel } 找到可用槽（已占位）；null = 全满
  */
-export function releaseSlot(port: PutPort, slotId: number, dimensionId: string, layout: RegionLayout): void {
-  const record = port.readRecord() ?? createRegionRecord(dimensionId, layout);
+function allocateCandidate(
+  port: PutPort,
+  layout: RegionLayout,
+  usable: number
+): { slotId: number; createdBarrel: boolean } | null {
+  for (let level = 0; level < layout.maxLevels; level++) {
+    const base = level * SLOTS_PER_LEVEL;
+    const usage = normalizeUsage(port.readLevelUsage(level), layout);
+    // 已物化桶：找未满桶 + 桶内真值空槽
+    for (let b = 0; b < usage.length; b++) {
+      if (usage[b]! >= usable) continue;
+      for (let j = 0; j < usable; j++) {
+        const slotId = base + b * BARREL_SLOTS + j;
+        const pos = slotIdToPosition(slotId, layout);
+        if (!pos) break;
+        if (!port.isSlotOccupied(pos.x, pos.y, pos.z, pos.slotInBarrel)) {
+          usage[b]! += 1;
+          port.writeLevelUsage(level, usage); // 占位即写：收窄竞态窗口
+          return { slotId, createdBarrel: false };
+        }
+      }
+      // 计数未满但探测全占用（计数失真/外部塞满）→ 修正为满，跳过该桶
+      usage[b] = usable;
+      port.writeLevelUsage(level, usage);
+    }
+    // 已物化桶全满 → 物化该层新桶（跳过被外部方块占用的候选位置）
+    for (;;) {
+      if (usage.length >= BARRELS_PER_LEVEL) break; // 该层物理满
+      const pos = slotIdToPosition(base + usage.length * BARREL_SLOTS, layout);
+      if (!pos) return null;
+      const barrel = port.ensureBarrel(pos.x, pos.y, pos.z);
+      if (barrel.occupied) {
+        usage.push(usable); // 位置被他人方块占用：伪满标记永久跳过
+        port.writeLevelUsage(level, usage);
+        continue;
+      }
+      if (!barrel.ok) return null; // 区块未就绪：本轮放弃（不烧计数）
+      for (let j = 0; j < usable; j++) {
+        const sid = base + usage.length * BARREL_SLOTS + j;
+        const p = slotIdToPosition(sid, layout);
+        if (p && !port.isSlotOccupied(p.x, p.y, p.z, p.slotInBarrel)) {
+          usage.push(1); // 新桶登记：占用 1（该槽）
+          port.writeLevelUsage(level, usage);
+          return { slotId: sid, createdBarrel: barrel.created };
+        }
+      }
+      // 新桶被外部塞满（几乎不可能）→ 伪满，继续下一位置
+      usage.push(usable);
+      port.writeLevelUsage(level, usage);
+    }
+  }
+  return null;
+}
+
+/**
+ * 回收一个槽位：所在桶占用计数 -1（幂等：计数 0/桶未登记/超限槽忽略）。
+ * 供 put 失败回滚与 take/remove 共用。**空槽不计**：槽本空（外部取走）时
+ * 计数保持虚高，由巡检对齐/分配探测自校正，取物不触碰计数。
+ */
+export function decrementUsage(port: PutPort, slotId: number, layout: RegionLayout): void {
   const level = levelOf(slotId);
-  const pools: LevelPools = createLevelPools(layout.maxLevels);
-  pools.byLevel[level] = port.readLevelPool(level);
-  releaseSlotId(record.meta, pools, slotId, usableSlotsPerBarrel(layout));
-  port.writeRecord(record);
-  port.writeLevelPool(level, pools.byLevel[level] ?? []);
+  const local = slotId - level * SLOTS_PER_LEVEL;
+  const b = Math.floor(local / BARREL_SLOTS);
+  const j = local % BARREL_SLOTS;
+  if (j >= usableSlotsPerBarrel(layout)) return; // 超限槽：从未计数
+  const usage = port.readLevelUsage(level);
+  if (b >= usage.length) return; // 桶未登记
+  if (usage[b]! > 0) usage[b] = usage[b]! - 1;
+  port.writeLevelUsage(level, usage);
 }

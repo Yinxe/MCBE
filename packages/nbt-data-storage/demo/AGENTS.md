@@ -42,7 +42,7 @@ demo/
 | 键 | 内容 |
 |------|------|
 | `ndsdemo:cfg` | 演示配置 `{ enabled, dimension, anchorX, anchorZ, baseY, slotPerBarrel, maxLevels }`（默认末地 0,120,-1024 + 27 槽/64 层） |
-| `ndsdemo:refs` | 本地凭据索引 `[{ regionId?, slotId, typeId, amount, storedAt }]`（事件驱动同步，软状态；**带 regionId 并按当前区域过滤**） |
+| `ndsdemo:refs:p:{片}` | 本地凭据索引分片 `[{ regionId?, slotId, typeId, amount, storedAt }]`（每片 150 条，事件驱动同步，软状态；**带 regionId 并按当前区域过滤**；旧单键 `ndsdemo:refs` 兼容读取） |
 
 存储本身（桶阵列 + 分配水印）用库的 `nds:item:{区域ID}` / `nds:item:{区域ID}:pool:{层}` / `nds:regions` 键，见 `../` 的键约定。
 
@@ -53,9 +53,9 @@ demo/
 - **测试注册渠道**：`applyConfig` 走 `ItemStorage.registerTest` 透传 `slotPerBarrel`/`maxLevels`（仅测试用途，正式模组请用 `register`）。**ID 语义恒定**：解码永远按 27 槽/桶，`slotPerBarrel` 只是每桶可分配槽数（分配跳过超限槽）——调整容量后旧物品的 ID 永不偏移；同区块布局参数不一致 → 注册抛错 → 提示更换锚点。
 - **布局动态调整（三态决策）**：`applyConfig` 对目标区块（`ItemStorage.getRegion` 探测，无副作用）分三种处理——①参数完全一致 → 直接共享；②**测试区域（test:true）参数不一致** → `resizeLayout` 动态调层/调槽（层 1..64 扩缩、槽 0..27 任意，调整后自动重扫容器重建洞池），无需换锚点；③正式区域（无 test 标记）参数不一致 → 落注册 → 布局冲突拒绝 → 提示更换锚点。配置 UI 滑块 tooltip 已注明差异。
 - **批量存入默认全选**：`showBatchStore` 的 toggle 全部 `defaultValue: true`——打开即全选，直接提交即存全部背包物品；取消勾选个别项再提交可排除。
-- **阵列自检维护**：`/nds-demo:check`（主菜单「自检修复」按钮同入口）→ `StoredRegion.checkAndRepair`——木桶被挖/变空气 → 重建（内容随方块丢失无法找回，如实报告）；外部取走 → 报告丢失并回收槽位；区块未加载跳过。巡检后洞池对齐，容量恢复。
+- **阵列自检维护**：`/nds-demo:check`（主菜单「自检修复」按钮同入口）→ `StoredRegion.checkAndRepair`——木桶被挖/变空气 → 重建（内容随方块丢失无法找回，如实报告，`barrelRestored` 事件驱动凭据清理）；外部取走 → **桶级丢失报告**（第 N 层桶 M 丢失 X 件，水位对齐真值，容量恢复）；区块未加载跳过。巡检后桶水位与真值一致。
 - **区域未初始化防护**：`applyConfig` **失败时保留上一个可用区域句柄**（只有显式停用才清空）；`ensureRegion` 在每次存取前惰性重试当前配置（解决"进世界过早操作/上次配置应用失败"导致的未初始化）。
-- **凭据索引不扫描阵列**：`ndsdemo:refs` 只记本上下文见过的槽位（自己的 put + `ItemStorage.events` stored/taken/itemLost/removed 事件同步，按 regionId+slotId 幂等），UI 列表/`list` 命令来源于此——遵守库的 O(1) 纪律。**丢失同步是必须的**：巡检确认丢失（itemLost）与空槽 take（不触发 taken）都会主动清凭据，否则 UI 残留"无法取出且已损坏"的记录。跨模组存入同一区域的物品也会经事件进入索引；切换锚点/布局后旧凭据按 regionId 过滤隐藏，切回原配置即恢复可见。
+- **凭据索引不扫描阵列**：`ndsdemo:refs` 只记本上下文见过的槽位（自己的 put + `ItemStorage.events` stored/taken/itemLost/removed 事件同步，按 regionId+slotId 幂等），UI 列表/`list` 命令来源于此——遵守库的 O(1) 纪律。**分片持久化**：凭据按每片 `REFS_PAGE_SIZE=150` 条分片存于 `ndsdemo:refs:p:{片}`（单条 DP 约 15KB < 32KB 上限，规避"存几百件就持久化失败"）；旧单键 `ndsdemo:refs` 兼容读取，写入即迁移。**丢失同步是必须的**：巡检确认丢失（itemLost 为**桶级事件** `{regionId, level, barrelInLevel, count, kind}`）→ `removeRefsInBarrel` 清该桶范围凭据；空槽 take（不触发 taken）→ 主动清凭据，否则 UI 残留"无法取出且已损坏"的记录。跨模组存入同一区域的物品也会经事件进入索引；切换锚点/布局后旧凭据按 regionId 过滤隐藏，切回原配置即恢复可见。
 - **防丢物**：`takeToPlayer` 先 `take`（读出+清空+回收），再 `container.addItem` 给玩家；放不下的剩余部分 `put` 回区域并提示新槽位。批量取出一件失败不影响其他件（逐件独立）。
 - **存储不复制**：存入在 `put` 成功返回凭据后才清空源槽（单件清手持、批量清对应背包槽）。
 - **扩容见证**：存入前后对比 `stats().barrels`（meta.barrelCount，真正建桶才 +1），单件/批量汇报「新物化木桶 +N（x→y）」；菜单与 stats 显示桶进度百分比。

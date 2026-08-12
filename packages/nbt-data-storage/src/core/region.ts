@@ -6,7 +6,7 @@
 //     会让同一 ID 指向不同物理位置（ID 漂移/错读/孤儿数据），绝不允许混用。
 //   - 测试区域（test:true，仅 registerTest 创建）：正式 register 拒绝进入（防正式模组
 //     数据混入可随时改参数的测试阵列）；测试渠道可对其**动态调整布局参数**（resizeLayout）
-//     并在调整后重扫容器重建洞池（rebuildPools，对齐世界真值）。
+//     并在调整后重扫容器重建桶水位（rebuildUsage，对齐世界真值）。
 //   - 全新区域 → 用传入参数创建（baseY 缺省 DEFAULT_BASE_Y；maxLevels 缺省 MAX_LEVELS；
 //     slotPerBarrel 缺省 BARREL_SLOTS = 全部可用）
 // 区域 ID 由"维度枚举 + 区块坐标"决定（不含 baseY）→ 同维度同区块必然共享同一记录/阵列，
@@ -21,7 +21,6 @@ import {
   SLOTS_PER_LEVEL,
   SLOT_PER_BARREL_MAX,
   SLOT_PER_BARREL_MIN,
-  levelOf,
   usableSlotsPerBarrel,
   validateLayout,
   type RegionLayout,
@@ -98,12 +97,14 @@ export function resolveRegistration(
   return { dimensionId, layout };
 }
 
-// ── 测试区域布局动态调整（resizeLayout）+ 洞池重建（rebuildPools） ──
+// ── 测试区域布局动态调整（resizeLayout）+ 桶水位重建（rebuildUsage） ──
 
-/** resizeLayout 依赖的端口：区域记录读改写 */
+/** resizeLayout 依赖的端口：区域记录 + 桶水位读改写 */
 export interface ResizePort {
   readRecord(): PersistedRegion | undefined;
   writeRecord(record: PersistedRegion): void;
+  /** 读某层桶水位（占用计数数组；缺失 → 空数组） */
+  readLevelUsage(level: number): number[];
 }
 
 /** 布局调整补丁：只传要改的字段（未传保持原值） */
@@ -117,10 +118,11 @@ export interface ResizePatch {
 /**
  * 动态调整测试区域布局参数（层数 / 每桶槽数）。**仅 test:true 区域可用**。
  * 解码恒按 27 槽/桶，调整不影响任何已有 slotId 的解码——已存物品永远安全：
- * - 层数增大：任意（≤64，顶部 ≤320），水印继续向新层推进；
- * - 层数减小：仅当被裁层无已分配槽位/空洞（水印未触达 + 无高层洞池），否则拒绝防孤儿；
+ * - 层数增大：任意（≤64，顶部 ≤320），后续分配向新层推进；
+ * - 层数减小：仅当被裁层**无任何物化木桶**（水位长度 = 0，含空桶——空桶也占
+ *   物理空间，不能裁出常加载范围），否则拒绝防孤儿；
  * - 每桶槽数：0..27 任意调整（缩小时已占用的超限槽保留可读，只是不再分配；
- *   洞池遗留由调用方在调整后执行 rebuildPools 重扫容器对齐）。
+ *   水位遗留由调用方在调整后执行 rebuildUsage 重扫容器对齐真值）。
  *
  * @returns null=成功；字符串=面向玩家的中文拒绝原因
  */
@@ -147,57 +149,54 @@ export function resizeLayout(port: ResizePort, layout: RegionLayout, patch: Resi
   const record = port.readRecord();
   if (!record) return "该区域尚无持久化记录，无法调整参数（请先注册）";
   if (newMaxLevels < layout.maxLevels) {
-    const shrunken = newMaxLevels * SLOTS_PER_LEVEL;
-    if (record.meta.nextFree > shrunken) {
-      return `无法缩减层数：高层仍有物品（水印 ${record.meta.nextFree} 已越过新上限 ${shrunken}），请先取出高层物品或保持 ${layout.maxLevels} 层`;
-    }
-    if (record.meta.holeLevels.some((l) => l >= newMaxLevels)) {
-      return `无法缩减层数：高层仍有空洞记录（该层曾分配过物品），请先取出或保持 ${layout.maxLevels} 层`;
+    for (let l = newMaxLevels; l < layout.maxLevels; l++) {
+      const usage = port.readLevelUsage(l);
+      if (usage.some((u) => u > 0) || usage.length > 0) {
+        return `无法缩减层数：高层（第 ${l + 1} 层）仍有物化木桶/物品，请先取出高层物品或保持 ${layout.maxLevels} 层`;
+      }
     }
   }
   port.writeRecord({ ...record, layout: candidate });
   return null;
 }
 
-/** rebuildPools 依赖的端口：区域记录 + 按层洞池读改写 + 世界槽位探测 */
+/** rebuildUsage 依赖的端口：区域记录 + 按层桶水位读改写 + 世界槽位探测 */
 export interface RebuildPort {
   readRecord(): PersistedRegion | undefined;
   writeRecord(record: PersistedRegion): void;
-  readLevelPool(level: number): number[];
-  writeLevelPool(level: number, locals: number[]): void;
+  /** 读某层桶水位（占用计数数组） */
+  readLevelUsage(level: number): number[];
+  /** 写某层桶水位 */
+  writeLevelUsage(level: number, usage: number[]): void;
   /** 世界真值：该槽位当前是否有物品（O(1) 解码 + 容器访问） */
   probeSlot(slotId: number): boolean;
 }
 
 /**
- * 重扫全部已分配槽位（0..水印），按**当前布局**重建每层空洞池：
+ * 重扫全部已物化桶，按**世界真值**重建每层桶水位（占用计数对齐）：
  * - 只扫"可用槽"（桶内索引 < slotPerBarrel），跳过不可分配槽；
- * - 空的进洞池（level-local 索引），有物的不进——洞池与参数/世界真值完全对齐；
- * - 清掉超出当前参数范围的遗留洞（如每桶槽数调小后旧洞 local 超限）。
- * 供测试区域 resizeLayout 后调用（一次性 O(水印) 扫描，非热路径）。
- * 缩层已被 resizeLayout 保证被裁层无数据，故扫描范围始终落在新层数内。
+ * - usage[b] = 该桶实际占用件数（探测真值）——水位与参数/世界真值完全对齐；
+ * - 桶内探测全空（桶已空）→ 计数 0（桶常驻不回收，分配时跳过）；
+ * - 桶水位长度（= 物化桶数）不变——不物化、不销毁任何方块。
+ * 供测试区域 resizeLayout 后调用（一次性 O(物化桶×可用槽) 扫描，非热路径）。
+ * 缩层已被 resizeLayout 保证被裁层无物化桶，故扫描范围始终落在新层数内。
  */
-export function rebuildPools(port: RebuildPort, layout: RegionLayout): void {
+export function rebuildUsage(port: RebuildPort, layout: RegionLayout): void {
   const record = port.readRecord();
   if (!record) return;
-  const limit = record.meta.nextFree;
   const usable = usableSlotsPerBarrel(layout);
-  const pools: number[][] = Array.from({ length: layout.maxLevels }, () => []);
-  for (let slotId = 0; slotId < limit; slotId++) {
-    if (slotId % BARREL_SLOTS >= usable) continue; // 不可分配槽：非洞非占用
-    if (!port.probeSlot(slotId)) {
-      const level = levelOf(slotId);
-      const pool = pools[level];
-      if (pool && level < layout.maxLevels) pool.push(slotId - level * SLOTS_PER_LEVEL);
-    }
-  }
-  // 洞池降序存储（大 local 在底）：allocateSlotId pop 取**最小**空槽 → 调整参数后
-  // 新 put 先填前面的空桶/空槽（对齐存储），而不是从水印附近倒着填
-  for (const pool of pools) pool.reverse();
-  record.meta.holeLevels = pools.map((p, i) => (p.length > 0 ? i : -1)).filter((i) => i >= 0);
-  record.meta.holeCount = pools.reduce((n, p) => n + p.length, 0);
-  port.writeRecord(record);
   for (let level = 0; level < layout.maxLevels; level++) {
-    port.writeLevelPool(level, pools[level] ?? []);
+    const usage = port.readLevelUsage(level);
+    for (let b = 0; b < usage.length; b++) {
+      let count = 0;
+      for (let j = 0; j < usable; j++) {
+        const slotId = level * SLOTS_PER_LEVEL + b * BARREL_SLOTS + j;
+        if (port.probeSlot(slotId)) count++;
+      }
+      if (count !== usage[b]) {
+        usage[b] = count;
+        port.writeLevelUsage(level, usage);
+      }
+    }
   }
 }

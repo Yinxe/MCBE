@@ -15,7 +15,7 @@ import { assertLayoutConsistent, resolveRegistration } from "../core/region";
 import { regionStats, type RegionStats } from "../core/stats";
 import { StoredRegion } from "./StoredRegion";
 import { ItemStorageEvents } from "./events";
-import { appendRegionIndex, readRegionIndex, readRegionRecord, writeRegionRecord } from "./store";
+import { appendRegionIndex, readLevelUsage, readRegionIndex, readRegionRecord, writeRegionRecord } from "./store";
 
 /** 注册参数：维度 + 锚点坐标（决定区块地址），可选 baseY（层数固定 64） */
 export interface RegisterOptions {
@@ -167,7 +167,13 @@ export function queryWorld(): RegionWorldInfo[] {
     .map((id) => {
       const record = readRegionRecord(id);
       if (!record) return undefined;
-      return regionStats(id, record.dimensionId, record.layout, record.meta);
+      return regionStats(
+        id,
+        record.dimensionId,
+        record.layout,
+        record.meta,
+        (level) => readLevelUsage(id, level)
+      );
     })
     .filter((s): s is RegionWorldInfo => s !== undefined);
 }

@@ -14,8 +14,8 @@
 // ⚠️ ID 语义恒定：解码**永远按 27 槽/桶**，不随布局参数漂移。`slotPerBarrel`
 // 只是**每桶可分配槽位上限**（测试渠道用，默认 27 = 全部可用）：分配时跳过
 // 桶内索引 ≥ 上限的槽位，但 ID 仍按 27 解码——已存物品的 ID 在任何配置下
-// 都指向同一物理位置，永不偏移（见 meta.allocateSlotId 的跳过逻辑）。
-// 测试区域（test:true）可在 resize 后经 rebuildPools 重扫容器重建洞池，
+// 都指向同一物理位置，永不偏移（见 put.allocateCandidate 的跳过逻辑）。
+// 测试区域（test:true）可在 resize 后经 rebuildUsage 重扫容器重建桶水位，
 // 保证"每桶可用槽数/层数"动态调整后分配状态与参数一致。
 
 /** 单个木桶的槽位数（解码公式恒用此值，永不参数化） */
@@ -44,7 +44,7 @@ export interface RegionLayout {
   readonly maxLevels: number;
   /**
    * 每桶可分配槽位上限（0..27，缺省 27）。**仅测试渠道（registerTest）可配**：
-   * 解码恒按 27 槽/桶，此值只让分配跳过桶内超限槽位（见 meta.allocateSlotId），
+   * 解码恒按 27 槽/桶，此值只让分配跳过桶内超限槽位（见 put.allocateCandidate），
    * 用于快速模拟满容量/见证扩容；0 = 容量 0（put 全拒，瞬见"已满"）。
    * 正式 register 不传此值。
    */

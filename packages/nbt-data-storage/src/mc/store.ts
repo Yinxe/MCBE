@@ -1,14 +1,17 @@
 // ── 区域持久化（DynamicProperty 直存，mc 适配层） ──────────────────────
 // DP 键约定：
-//   `nds:regions`                 → 全局区域索引（JSON string[]，供其他模组只读管理）
-//   `nds:item:{区域键}`            → 区域主记录（layout + dimensionId + meta：水印/洞索引/洞数）
-//   `nds:item:{区域键}:pool:{层}`  → 该层空洞池（JSON level-local 索引数组，单值 ≤ 6912 条）
+//   `nds:regions`                   → 全局区域索引（JSON string[]，供其他模组只读管理）
+//   `nds:item:{区域键}`              → 区域主记录（layout + dimensionId + meta：v3 仅 barrelCount）
+//   `nds:item:{区域键}:usage:{层}`  → 该层桶水位（已物化桶的占用计数数组，
+//                                     每桶一个 0..27 数字，满层 256 个 ≈ 640B）
 // 区域键形如 `the_end:0:-64`，即主记录 DP 键的后缀。
-// 空洞按层分键存储：即使层数很多（如 64 层），每个 DP 单值也始终 ≤ 一层槽数，
-// 从根上规避 DynamicProperty 单值大小上限。
+// **桶水位设计**（v3，取代 v2 空洞池）：空槽不做任何登记——分配时桶内探测
+// 容器真值。因此单值体量从"每层 6912 个 ID"降为"每层 256 个计数"，
+// 从根上规避 DynamicProperty 单值 32KB 上限（无需分片）。
 // DP 是软状态：丢失时从世界真值自愈，不影响已存物品安全。
 import { world } from "@minecraft/server";
 import { parseRegionRecord, serializeRegionRecord, type PersistedRegion } from "../core/record";
+import { BARREL_SLOTS } from "../core/layout";
 
 /** 全局区域索引 DP 键 */
 export const REGION_INDEX_KEY = "nds:regions";
@@ -18,9 +21,9 @@ export function regionDpKey(key: string): string {
   return `nds:item:${key}`;
 }
 
-/** 某层空洞池 DP 键（level-local 索引） */
-export function levelPoolDpKey(key: string, level: number): string {
-  return `${regionDpKey(key)}:pool:${level}`;
+/** 某层桶水位 DP 键（已物化桶的占用计数数组） */
+export function levelUsageDpKey(key: string, level: number): string {
+  return `${regionDpKey(key)}:usage:${level}`;
 }
 
 /**
@@ -49,32 +52,42 @@ export function writeRegionRecord(key: string, record: PersistedRegion): void {
   }
 }
 
-/** 读取某层空洞池（level-local 索引）；无/损坏返回空数组 */
-export function readLevelPool(key: string, level: number): number[] {
+/** 解析一层桶水位 JSON；损坏/非法元素过滤（0..27 整数） */
+function parseUsage(json: string): number[] {
   try {
-    const value = world.getDynamicProperty(levelPoolDpKey(key, level));
-    if (typeof value === "string") {
-      const parsed = JSON.parse(value) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed.filter((x): x is number => typeof x === "number" && Number.isInteger(x) && x >= 0);
-      }
+    const parsed = JSON.parse(json) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (x): x is number => typeof x === "number" && Number.isInteger(x) && x >= 0 && x <= BARREL_SLOTS
+      );
     }
+  } catch {
+    /* 损坏键：视为无数据 */
+  }
+  return [];
+}
+
+/** 读取某层桶水位（已物化桶的占用计数数组）；无/损坏返回空数组 */
+export function readLevelUsage(key: string, level: number): number[] {
+  try {
+    const value = world.getDynamicProperty(levelUsageDpKey(key, level));
+    if (typeof value === "string") return parseUsage(value);
     return [];
   } catch {
     return [];
   }
 }
 
-/** 写某层空洞池；空数组 = 该层已无洞 → 真正删除键（不留 `"[]"` 残留） */
-export function writeLevelPool(key: string, level: number, locals: number[]): void {
+/** 写某层桶水位；空数组 = 该层无物化桶 → 真正删除键（不留 `"[]"` 残留） */
+export function writeLevelUsage(key: string, level: number, usage: number[]): void {
   try {
-    if (locals.length === 0) {
-      world.setDynamicProperty(levelPoolDpKey(key, level), undefined); // 删键
+    if (usage.length === 0) {
+      world.setDynamicProperty(levelUsageDpKey(key, level), undefined); // 删键
       return;
     }
-    world.setDynamicProperty(levelPoolDpKey(key, level), JSON.stringify(locals));
+    world.setDynamicProperty(levelUsageDpKey(key, level), JSON.stringify(usage));
   } catch (e) {
-    console.warn(`[nbt-data-storage] 持久化空洞池 ${levelPoolDpKey(key, level)} 失败`, e);
+    console.warn(`[nbt-data-storage] 持久化桶水位 ${levelUsageDpKey(key, level)} 失败`, e);
   }
 }
 

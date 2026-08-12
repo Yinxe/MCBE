@@ -1,58 +1,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { allocateSlotId, createLevelPools, createRegionMeta, releaseSlotId, usedSlots } from "../src/core/meta";
+import { createRegionMeta, normalizeMeta } from "../src/core/meta";
 
-test("allocateSlotId：依次推进水印（O(1) 增长）", () => {
-  const meta = createRegionMeta();
-  const pools = createLevelPools(4);
-  assert.equal(allocateSlotId(meta, pools, 10), 0);
-  assert.equal(allocateSlotId(meta, pools, 10), 1);
-  assert.equal(allocateSlotId(meta, pools, 10), 2);
-  assert.equal(meta.nextFree, 3);
-  assert.equal(usedSlots(meta), 3);
+test("createRegionMeta：v3 空元数据（仅 barrelCount）", () => {
+  assert.deepEqual(createRegionMeta(), { v: 3, barrelCount: 0 });
 });
 
-test("allocateSlotId：容量满返回 null", () => {
-  const meta = createRegionMeta();
-  const pools = createLevelPools(4);
-  for (let i = 0; i < 3; i++) assert.equal(allocateSlotId(meta, pools, 3), i);
-  assert.equal(allocateSlotId(meta, pools, 3), null);
+test("normalizeMeta：v3 合法 → 原样归一", () => {
+  assert.deepEqual(normalizeMeta({ v: 3, barrelCount: 5 }), { v: 3, barrelCount: 5 });
+  assert.deepEqual(normalizeMeta({ v: 3, barrelCount: 0 }), { v: 3, barrelCount: 0 });
 });
 
-test("releaseSlotId：空洞优先复用，水印不受影响", () => {
-  const meta = createRegionMeta();
-  const pools = createLevelPools(4);
-  allocateSlotId(meta, pools, 100); // 0
-  allocateSlotId(meta, pools, 100); // 1
-  allocateSlotId(meta, pools, 100); // 2 → nextFree 3
-  releaseSlotId(meta, pools, 1);
-  assert.equal(usedSlots(meta), 2);
-  assert.equal(meta.holeCount, 1);
-  assert.deepEqual(meta.holeLevels, [0]);
-  assert.equal(allocateSlotId(meta, pools, 100), 1); // 复用空洞
-  assert.equal(meta.holeCount, 0);
-  assert.deepEqual(meta.holeLevels, []);
-  assert.equal(allocateSlotId(meta, pools, 100), 3); // 无洞后推进水印
-  assert.equal(meta.nextFree, 4);
+test("normalizeMeta：v2 旧记录（洞池时代）→ 迁移为 v3，洞信息丢弃", () => {
+  // 旧记录 meta：nextFree/holeLevels/holeCount 全部丢弃，只保留 barrelCount
+  assert.deepEqual(normalizeMeta({ v: 2, nextFree: 100, holeLevels: [0, 2], holeCount: 34, barrelCount: 7 }), {
+    v: 3,
+    barrelCount: 7,
+  });
+  // barrelCount 缺失/损坏 → 兜底 0
+  assert.deepEqual(normalizeMeta({ v: 2, nextFree: 0, holeLevels: [], holeCount: 0 }), { v: 3, barrelCount: 0 });
+  assert.deepEqual(normalizeMeta({ v: 2, nextFree: 0, holeLevels: [], holeCount: 0, barrelCount: -3 }), {
+    v: 3,
+    barrelCount: 0,
+  });
 });
 
-test("releaseSlotId：超过水印/负数的槽位被忽略（防重复回收越界）", () => {
-  const meta = createRegionMeta();
-  const pools = createLevelPools(4);
-  allocateSlotId(meta, pools, 10); // nextFree → 1
-  releaseSlotId(meta, pools, 5); // 5 >= nextFree → 忽略
-  releaseSlotId(meta, pools, -1); // 忽略
-  releaseSlotId(meta, pools, Number.NaN); // 忽略
-  assert.equal(meta.holeCount, 0);
-  assert.equal(meta.holeLevels.length, 0);
-});
-
-test("usedSlots：水印 − 空洞总数", () => {
-  const meta = createRegionMeta();
-  const pools = createLevelPools(4);
-  for (let i = 0; i < 5; i++) allocateSlotId(meta, pools, 10);
-  releaseSlotId(meta, pools, 0);
-  releaseSlotId(meta, pools, 2);
-  assert.equal(usedSlots(meta), 3);
-  assert.equal(meta.holeCount, 2);
+test("normalizeMeta：非法/未知版本 → undefined", () => {
+  assert.equal(normalizeMeta(undefined), undefined);
+  assert.equal(normalizeMeta(null), undefined);
+  assert.equal(normalizeMeta("x"), undefined);
+  assert.equal(normalizeMeta({}), undefined);
+  assert.equal(normalizeMeta({ v: 1, barrelCount: 0 }), undefined);
+  assert.equal(normalizeMeta({ v: 4, barrelCount: 0 }), undefined);
+  assert.equal(normalizeMeta({ v: 3, barrelCount: -1 }), undefined);
+  assert.equal(normalizeMeta({ v: 3, barrelCount: 1.5 }), undefined);
 });

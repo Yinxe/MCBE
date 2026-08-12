@@ -38,16 +38,31 @@ export interface BarrelCreatedEvent {
   z: number;
 }
 
-/** 巡检修复事件：木桶方块被破坏后重建（桶内物品随方块损坏已丢失） */
+/** 巡检重建损坏木桶后触发（阵列坐标内任何非木桶方块一律重建覆盖） */
 export interface BarrelRestoredEvent {
   regionId: string;
+  /** 触发事件的重建槽位（同桶多槽多次触发，created 仅首个） */
   slotId: number;
+  /** 纵向层号 */
+  level: number;
+  /** 层内木桶序号 0..255 */
+  barrelInLevel: number;
 }
 
-/** 巡检确认丢失事件（无法修复）：barrel-destroyed=桶损坏重建后为空 / taken-externally=外部取走 */
+/**
+ * 巡检确认丢失事件（桶级，v3 无逐槽空洞登记）：
+ * - barrel-destroyed=桶损坏重建后该桶全部占用丢失；
+ * - taken-externally=外部取走，桶计数与实际占用差额。
+ * 消费方（如凭据索引）可按桶范围清理自己的记录。
+ */
 export interface ItemLostEvent {
   regionId: string;
-  slotId: number;
+  /** 纵向层号 */
+  level: number;
+  /** 层内木桶序号 0..255 */
+  barrelInLevel: number;
+  /** 该桶确认丢失的物品件数 */
+  count: number;
   kind: "barrel-destroyed" | "taken-externally";
 }
 

@@ -10,7 +10,15 @@
 // - 事件订阅：stored/taken 事件驱动同步索引与区域真值一致
 import { world } from "@minecraft/server";
 import type { ItemStack, Player } from "@minecraft/server";
-import { ItemStorage, chunkFromAnchor, regionId, shortDimension, type StoredRegion } from "@yinxe/nbt-data-storage";
+import {
+  BARREL_SLOTS,
+  ItemStorage,
+  SLOTS_PER_LEVEL,
+  chunkFromAnchor,
+  regionId,
+  shortDimension,
+  type StoredRegion,
+} from "@yinxe/nbt-data-storage";
 import { loadConfig, saveConfig, type DemoConfig } from "./config";
 
 /** 凭据索引记录（可序列化，经 DP 持久化 + 事件同步） */
@@ -94,10 +102,10 @@ export class StorageService {
     ItemStorage.events.taken.subscribe((e) => {
       this.removeRef(e.regionId, e.slotId);
     });
-    // 巡检确认丢失（桶损坏/外部取走）：槽位已释放回洞池，凭据立即失效——
-    // 否则 UI 列表残留"无法取出且已损坏"的物品记录（用户点取出永远报"没有物品"）
+    // 巡检确认丢失（桶级：桶损坏重建全丢 / 外部取走差额）→ 该桶范围内凭据
+    // 全部失效，立即清理——否则 UI 列表残留"无法取出且已损坏"的物品记录
     ItemStorage.events.itemLost.subscribe((e) => {
-      this.removeRef(e.regionId, e.slotId);
+      this.removeRefsInBarrel(e.regionId, e.level, e.barrelInLevel);
     });
     // 任何渠道移除（remove/transferOut）：索引与区域真值保持一致
     ItemStorage.events.removed.subscribe((e) => {
@@ -394,7 +402,7 @@ export class StorageService {
         ? `区域 §e${s.key}§r｜维度 ${s.dimensionId}｜区块 ${s.chunkX},${s.chunkZ}｜底层 Y=${s.baseY}`
         : "§7（存储未初始化）§r",
       s
-        ? `层数 ${s.maxLevels}｜每桶 ${s.slotPerBarrel} 槽｜容量 §e${s.capacity}§r｜已用 §e${s.used}§r｜空洞 ${s.freePoolSize}`
+        ? `层数 ${s.maxLevels}｜每桶 ${s.slotPerBarrel} 槽｜容量 §e${s.capacity}§r｜已用 §e${s.used}§r｜可用 ${s.freeSlots}`
         : "",
       s
         ? `桶 §e${s.barrels}§r/${s.totalBarrels}（扩容进度：已物化 ${Math.round((s.barrels / Math.max(s.totalBarrels, 1)) * 100)}%）`
@@ -440,7 +448,7 @@ export class StorageService {
   }
 
   /**
-   * 阵列巡检 + 修复（自检维护）：损坏桶重建、丢失槽回收、洞池对齐。
+   * 阵列巡检 + 修复（自检维护）：损坏桶重建、桶水位对齐真值（桶级丢失报告）。
    * 发送面向玩家的格式化报告。
    */
   checkAndRepair(player: Player): void {
@@ -458,13 +466,13 @@ export class StorageService {
       report.fixedBarrels > 0
         ? `§e修复损坏木桶 ${report.fixedBarrels} 个§r（已重建；桶内物品随方块损坏无法找回）`
         : "§7木桶方块完好§r",
-      report.lostSlots.length > 0
-        ? `§c确认丢失 ${report.lostSlots.length} 件物品§r（${report.lostDetails
-            .map((d) => `#${d.slotId}${kindLabel(d.kind)}`)
-            .join("、")}），槽位已释放可重新存入`
+      report.lostDetails.length > 0
+        ? `§c确认丢失 ${report.lostItems} 件物品§r（${report.lostDetails
+            .map((d) => `第${d.level + 1}层桶${d.barrelInLevel}：${d.count}件${kindLabel(d.kind)}`)
+            .join("、")}），相关凭据已自动清理`
         : "§7无丢失槽位§r",
       report.unknownSlots > 0 ? `§7跳过 ${report.unknownSlots} 槽（区块未加载，下次巡检再试）§r` : "",
-      "§7空洞池已重建，容量与真值对齐§r",
+      "§7桶水位已对齐真值，容量与分配状态一致§r",
     ];
     player.sendMessage(lines.filter((l) => l !== "").join("\n"));
   }
@@ -498,6 +506,15 @@ export class StorageService {
     if (i < 0) return;
     this.refs.splice(i, 1);
     writeRefs(this.refs);
+  }
+
+  /** 桶级凭据清理（巡检确认丢失：桶损坏/外部取走）——该桶 slotId 范围内凭据全删 */
+  private removeRefsInBarrel(regionId: string | undefined, level: number, barrelInLevel: number): void {
+    const lo = level * SLOTS_PER_LEVEL + barrelInLevel * BARREL_SLOTS;
+    const hi = lo + BARREL_SLOTS;
+    const before = this.refs.length;
+    this.refs = this.refs.filter((r) => !(r.regionId === regionId && r.slotId >= lo && r.slotId < hi));
+    if (this.refs.length !== before) writeRefs(this.refs);
   }
 }
 

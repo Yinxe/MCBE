@@ -2,9 +2,8 @@
 // 供运行时 stats() / 管理命令 / queryWorld() 共用，可脱离游戏 mock 断言。
 
 import type { RegionLayout } from "./layout";
-import { capacityOf, totalBarrelsOf, usableSlotsPerBarrel } from "./layout";
+import { BARREL_SLOTS, capacityOf, totalBarrelsOf, usableSlotsPerBarrel } from "./layout";
 import type { RegionMeta } from "./meta";
-import { usedSlots } from "./meta";
 
 /** 一个存储区域的统计快照 */
 export interface RegionStats {
@@ -24,17 +23,32 @@ export interface RegionStats {
   barrels: number;
   /** 阵列满容量时的木桶总数（静态可预知） */
   totalBarrels: number;
-  /** 视为已占用的槽位数 */
+  /** 已占用的槽位数（桶水位计数之和，真值对齐） */
   used: number;
-  /** 分配水印（下一个从未用过的槽位 ID） */
-  nextFree: number;
-  /** 空洞总数（各层之和） */
-  freePoolSize: number;
+  /** 剩余可用槽位数（= 容量 − 已用） */
+  freeSlots: number;
 }
 
-/** 从 layout + meta 计算统计快照（纯函数，可单测） */
-export function regionStats(key: string, dimensionId: string, layout: RegionLayout, meta: RegionMeta): RegionStats {
+/**
+ * 从 layout + meta + 桶水位回调计算统计快照（纯函数，可单测）。
+ * @param levelUsage 某层桶水位（占用计数数组；缺失/损坏返回空数组）
+ */
+export function regionStats(
+  key: string,
+  dimensionId: string,
+  layout: RegionLayout,
+  meta: RegionMeta,
+  levelUsage: (level: number) => number[]
+): RegionStats {
   const capacity = capacityOf(layout);
+  let used = 0;
+  for (let level = 0; level < layout.maxLevels; level++) {
+    const usage = levelUsage(level);
+    for (const u of usage) {
+      if (Number.isInteger(u) && u > 0) used += Math.min(u, BARREL_SLOTS);
+    }
+  }
+  const clamped = Math.min(used, capacity);
   return {
     key,
     dimensionId,
@@ -46,10 +60,7 @@ export function regionStats(key: string, dimensionId: string, layout: RegionLayo
     capacity,
     barrels: meta.barrelCount,
     totalBarrels: totalBarrelsOf(layout),
-    // 视为已占用的槽位数：水印 − 空洞（但受可用容量约束——测试布局每桶槽数 <27 时
-    // 水印含跳过的不可用槽，clamp 到容量避免 used > capacity 的虚高显示）
-    used: Math.min(usedSlots(meta), capacity),
-    nextFree: meta.nextFree,
-    freePoolSize: meta.holeCount,
+    used: clamped,
+    freeSlots: capacity - clamped,
   };
 }

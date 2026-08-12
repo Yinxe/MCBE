@@ -1,24 +1,25 @@
 // ── 存储区域句柄（mc 适配层：对外 put/get/take/remove/transfer/stats） ──
 // 每个区域对应世界上一座"全木桶阵列"（锚定一个区块，纵向 64 层）。
-// - put：编排下沉到 core `putItem`（PutPort 注入）：O(1) 分配 + 世界真值防覆盖 + 有界重试
+// - put：编排下沉到 core `putItem`（PutPort 注入）：桶水位定位未满桶 +
+//   桶内真值探测空槽 + 物化新桶 + 占位即写（有界重试）
 // - get/take：按 ID 纯算术解码（O(1)）秒定位容器与槽位
 // - transferIn/transferOut：与原版容器一致的**原子传输**（要么成功要么保持原状）
-// - 分配/回收经 DP 读改写（RMW）持久化；空洞按层分键（level-local 索引）；
-//   已物化桶数由 meta.barrelCount 精确跟踪（真正 setBlockType 建桶时 +1）。
+// - 分配/回收经 DP 读改写（RMW）持久化：桶水位按层分键（每层一条）；已物化桶数
+//   由 meta.barrelCount 精确跟踪（真正 setBlockType 建桶时 +1）。
 import type { Container, ItemStack } from "@minecraft/server";
 import { BARREL_SLOTS, capacityOf, slotIdToPosition, type RegionLayout } from "../core/layout";
 import { createRegionMeta, type RegionMeta } from "../core/meta";
-import { putItem, releaseSlot, type PutPort } from "../core/put";
+import { putItem, decrementUsage, type PutPort } from "../core/put";
 import { createRegionRecord, type PersistedRegion } from "../core/record";
 import { checkAndRepair, type RepairPort, type RepairReport } from "../core/repair";
 import { overwriteSlot, type OverwritePort, type OverwriteResult } from "../core/overwrite";
-import { rebuildPools, resizeLayout, type ResizePatch, type ResizePort } from "../core/region";
+import { rebuildUsage, resizeLayout, type ResizePatch, type ResizePort } from "../core/region";
 import { regionStats, type RegionStats } from "../core/stats";
 import { transferIn, transferOut, type TransferPort, type TransferResult } from "../core/transfer";
 import type { StoredRef } from "../core/keys";
 import { BarrelRuntime } from "./BarrelRuntime";
 import { ItemStorageEvents } from "./events";
-import { readLevelPool, readRegionRecord, writeLevelPool, writeRegionRecord } from "./store";
+import { readLevelUsage, readRegionRecord, writeLevelUsage, writeRegionRecord } from "./store";
 
 /** 一个已注册的存储区域（同区域 ID → 同阵列，多模组共享） */
 export class StoredRegion {
@@ -53,8 +54,8 @@ export class StoredRegion {
     return {
       readRecord: () => region.readRecord(),
       writeRecord: (record) => region.writeRecord(record),
-      readLevelPool: (level) => readLevelPool(region.regionId, level),
-      writeLevelPool: (level, locals) => writeLevelPool(region.regionId, level, locals),
+      readLevelUsage: (level) => readLevelUsage(region.regionId, level),
+      writeLevelUsage: (level, usage) => writeLevelUsage(region.regionId, level, usage),
       ensureBarrel: (x, y, z) => {
         const result = region.runtime.ensureBarrel({ x, y, z, slotInBarrel: 0 });
         if (result.created) {
@@ -78,8 +79,9 @@ export class StoredRegion {
 
   /**
    * 存入一个物品（完整 NBT），成功返回取物凭据 `{ regionId, slotId }`，容量满/失败返回 null。
-   * 编排在 core `putItem`：先占位 → 物化 → 世界占用检查 → 写入；
-   * 目标槽被外部占用时不覆盖、改选下一候选；物化/写入失败槽回归空洞池下次重试。
+   * 编排在 core `putItem`：桶水位定位未满桶 → 桶内真值探测空槽 → 占位写 →
+   * 物化（如需要）→ 写入；目标槽被外部占用时不覆盖、改选下一候选；
+   * 物化/写入失败回滚计数，下次重试（不丢槽）。
    */
   put(item: ItemStack | undefined): StoredRef | null {
     const ref = putItem(this.putPort, item, this.regionId, this.dimensionId, this.layout);
@@ -102,31 +104,28 @@ export class StoredRegion {
   }
 
   /**
-   * O(1) 按 ID 取走：读出物品并清空槽位、回收空洞；槽空返回 undefined。
-   * 槽空（物品已丢失/外部取走）时**也回收进空洞池**——释放该槽容量供复用，
-   * 避免"占用虚高、永不重分配"（releaseSlotId 幂等，重复 take 不会重复入池）。
+   * O(1) 按 ID 取走：读出物品并清空槽位；槽空返回 undefined。
+   * 取走成功后该桶占用计数 -1（空槽本身**不需要登记**——分配时桶内探测
+   * 真值自然复用空槽，见 AGENTS.md 桶水位设计）。
    */
   take(slotId: number): ItemStack | undefined {
     const pos = slotIdToPosition(slotId, this.layout);
     if (!pos) return undefined;
     const item = this.runtime.readItem(pos);
-    if (!item) {
-      releaseSlot(this.putPort, slotId, this.dimensionId, this.layout); // 空槽回收（幂等）
-      return undefined;
-    }
+    if (!item) return undefined; // 槽空（已丢失/外部取走）：计数保持，巡检对齐
     if (!this.runtime.clearSlot(pos)) return undefined; // 清除失败不回收
-    releaseSlot(this.putPort, slotId, this.dimensionId, this.layout);
+    decrementUsage(this.putPort, slotId, this.layout);
     ItemStorageEvents.taken.trigger({ regionId: this.regionId, slotId, itemTypeId: item.typeId });
     return item;
   }
 
-  /** O(1) 按 ID 清空槽位并回收空洞；槽已空/清除失败返回 false */
+  /** O(1) 按 ID 清空槽位并回收计数；槽已空/清除失败返回 false */
   remove(slotId: number): boolean {
     const pos = slotIdToPosition(slotId, this.layout);
     if (!pos) return false;
     if (!this.runtime.isSlotOccupied(pos)) return false;
     if (!this.runtime.clearSlot(pos)) return false;
-    releaseSlot(this.putPort, slotId, this.dimensionId, this.layout);
+    decrementUsage(this.putPort, slotId, this.layout);
     ItemStorageEvents.removed.trigger({ regionId: this.regionId, slotId });
     return true;
   }
@@ -140,8 +139,8 @@ export class StoredRegion {
     const port: OverwritePort = {
       readRecord: () => this.readRecord(),
       writeRecord: (record) => this.writeRecord(record),
-      readLevelPool: (level) => readLevelPool(this.regionId, level),
-      writeLevelPool: (level, locals) => writeLevelPool(this.regionId, level, locals),
+      readLevelUsage: (level) => readLevelUsage(this.regionId, level),
+      writeLevelUsage: (level, usage) => writeLevelUsage(this.regionId, level, usage),
       probeSlot: (id) => {
         const pos = slotIdToPosition(id, this.layout);
         if (!pos) return "unknown";
@@ -225,19 +224,25 @@ export class StoredRegion {
     return transferOut(port, slotId);
   }
 
-  /** 区域统计快照（capacity/barrels/totalBarrels/used/水印/空洞总数） */
+  /** 区域统计快照（capacity/barrels/totalBarrels/used/freeSlots，桶水位遍历求和） */
   stats(): RegionStats {
     const record = this.readRecord();
     const meta: RegionMeta = record?.meta ?? createRegionMeta();
-    return regionStats(this.regionId, this.dimensionId, this.layout, meta);
+    return regionStats(
+      this.regionId,
+      this.dimensionId,
+      this.layout,
+      meta,
+      (level) => readLevelUsage(this.regionId, level)
+    );
   }
 
   /**
    * 动态调整测试区域布局参数（层数 1..64 / 每桶槽数 0..27；**仅 test:true 区域可用**）。
    * 解码恒按 27 槽/桶，不影响已有物品的 ID：
-   * - 层数增大：任意（≤64），后续分配向新层推进；减小：仅当高层无已分配槽位/空洞；
+   * - 层数增大：任意（≤64），后续分配向新层推进；减小：仅当被裁层无任何物化木桶；
    * - 每桶槽数：任意调整（缩小后已占用的超限槽保留可读，只是不再分配）。
-   * 成功后同步句柄布局、**重扫全部容器重建洞池**（rebuildPools，清遗留洞并对齐世界真值）、
+   * 成功后同步句柄布局、**重扫全部已物化桶重建桶水位**（rebuildUsage，对齐世界真值）、
    * 重挂常加载范围。
    * @returns null=成功；字符串=中文拒绝原因
    */
@@ -245,6 +250,7 @@ export class StoredRegion {
     const port: ResizePort = {
       readRecord: () => this.readRecord(),
       writeRecord: (record) => this.writeRecord(record),
+      readLevelUsage: (level) => readLevelUsage(this.regionId, level),
     };
     const err = resizeLayout(port, this.layout, patch);
     if (err) return err;
@@ -254,13 +260,13 @@ export class StoredRegion {
       slotPerBarrel: patch.slotPerBarrel ?? this._layout.slotPerBarrel ?? BARREL_SLOTS,
     };
     this.runtime.applyLayout(this._layout);
-    // 重扫全部已分配槽位，按新布局重建洞池（遗留超限洞清除，与世界真值对齐）
-    rebuildPools(
+    // 重扫全部已物化桶，按新布局把桶水位对齐真值（超限槽不计入）
+    rebuildUsage(
       {
         readRecord: () => this.readRecord(),
         writeRecord: (record) => this.writeRecord(record),
-        readLevelPool: (level) => readLevelPool(this.regionId, level),
-        writeLevelPool: (level, locals) => writeLevelPool(this.regionId, level, locals),
+        readLevelUsage: (level) => readLevelUsage(this.regionId, level),
+        writeLevelUsage: (level, usage) => writeLevelUsage(this.regionId, level, usage),
         probeSlot: (slotId) => {
           const pos = slotIdToPosition(slotId, this._layout);
           return pos ? this.runtime.isSlotOccupied(pos) : false;
@@ -273,20 +279,20 @@ export class StoredRegion {
   }
 
   /**
-   * 阵列巡检 + 修复（自检维护）：扫描全部已分配槽位，
+   * 阵列巡检 + 修复（自检维护）：扫描全部已物化桶（桶水位范围）的可用槽，
    * - 无数据方块（空气/普通方块）→ 重建木桶（容器内容随方块损坏已丢失，无法找回）；
    * - **其它容器方块 → 绝不覆盖**（可能承载他人数据），仅报告冲突；
-   * - 元数据占用但实物为空 → 报告丢失（区分桶损坏/外部取走）；
-   * - 完成后重建洞池：丢失槽回收为空洞，容量恢复可复用。
-   * 巡检事件（barrel-restored / item-lost / container-conflict）桥接为
-   * `ItemStorage.events.*` 供外部模组订阅。显式巡检（O(水印) 扫描），仅调用时执行。
+   * - 桶级丢失判定：桶实际占用 < 水位计数 → 差异件数报丢失（桶损坏重建全丢 /
+   *   外部取走差额），水位对齐真值（丢失槽无需登记，分配探测自然复用）。
+   * 巡检事件（barrel-restored / item-lost-barrel）桥接为
+   * `ItemStorage.events.*` 供外部模组订阅。显式巡检（O(物化桶×可用槽) 扫描），仅调用时执行。
    */
   checkAndRepair(): RepairReport {
     const port: RepairPort = {
       readRecord: () => this.readRecord(),
       writeRecord: (record) => this.writeRecord(record),
-      readLevelPool: (level) => readLevelPool(this.regionId, level),
-      writeLevelPool: (level, locals) => writeLevelPool(this.regionId, level, locals),
+      readLevelUsage: (level) => readLevelUsage(this.regionId, level),
+      writeLevelUsage: (level, usage) => writeLevelUsage(this.regionId, level, usage),
       probeSlot: (slotId) => {
         const pos = slotIdToPosition(slotId, this.layout);
         if (!pos) return "unknown";
@@ -301,9 +307,20 @@ export class StoredRegion {
     };
     return checkAndRepair(port, this.layout, (e) => {
       if (e.type === "barrel-restored") {
-        ItemStorageEvents.barrelRestored.trigger({ regionId: this.regionId, slotId: e.slotId });
+        ItemStorageEvents.barrelRestored.trigger({
+          regionId: this.regionId,
+          slotId: e.slotId,
+          level: e.level,
+          barrelInLevel: e.barrelInLevel,
+        });
       } else {
-        ItemStorageEvents.itemLost.trigger({ regionId: this.regionId, slotId: e.slotId, kind: e.kind });
+        ItemStorageEvents.itemLost.trigger({
+          regionId: this.regionId,
+          level: e.level,
+          barrelInLevel: e.barrelInLevel,
+          kind: e.kind,
+          count: e.count,
+        });
       }
     });
   }
