@@ -7,12 +7,12 @@
 //   记录 key，不碰绑定 key），持久化更灵活。
 // 物品（背包 36 格 + 装备 5 槽）存**真实 ItemStack** 到木桶阵列，完整 NBT
 // 保留（潜影盒/收纳袋内容随物品原样存取，根除旧 JSON 视图的内容丢失限制）：
-//   - 首次写某格 → region.put(item) 分配槽位 → 绑定表记录 slotId（按需分配）
-//   - 后续写该格 → region.overwrite(slotId, item) 原位覆写（slotId 不变）
+//   - 首次写某格 → itemStorage.put(item) 分配槽位 → 绑定表记录 slotId（按需分配）
+//   - 后续写该格 → itemStorage.overwrite(slotId, item) 原位覆写（slotId 不变）
 //   - 空位       → overwrite(slotId, structure_void 占位) **保持绑定**——
 //                  槽位一旦绑定永不释放（存储永远是该假人的背包备份镜像），
 //                  仅删除假人（removeInventory）时 take 释放全部绑定槽
-//   - 读取格     → region.get(slotId)（O(1) 克隆返回；占位视为空位跳过）
+//   - 读取格     → itemStorage.get(slotId)（O(1) 克隆返回；占位视为空位跳过）
 // 区域懒注册（末地固定锚点，全假人共享，幂等）；失败降级为日志告警不抛错。
 
 import { ItemStack, world } from "@minecraft/server";
@@ -48,20 +48,20 @@ function bindingKey(name: string): string {
 }
 
 export class McBotStore implements BotStore<ItemStack> {
-  private region: StoredRegion | undefined;
+  private itemStorage: StoredRegion | undefined;
   /** 绑定表内存缓存（事件驱动读写，写穿独立 DP key） */
   private readonly bindings = new Map<string, StorageBinding>();
 
-  // ── 区域（懒注册，幂等；register 缓存命中成本低，失败下轮重试） ──
-  private ensureRegion(): StoredRegion | undefined {
-    if (this.region) return this.region;
+  // ── 物品存储（懒注册，幂等；register 缓存命中成本低，失败下轮重试） ──
+  private ensureItemStorage(): StoredRegion | undefined {
+    if (this.itemStorage) return this.itemStorage;
     try {
-      this.region = ItemStorage.register(STORAGE_REGION);
-      console.info(`[MockPlayer] NBT 存储区域就绪 ${this.region.regionId}`);
+      this.itemStorage = ItemStorage.register(STORAGE_REGION);
+      console.info(`[MockPlayer] NBT 物品存储就绪 ${this.itemStorage.regionId}`);
     } catch (e: any) {
-      console.error(`[MockPlayer] NBT 存储区域注册失败: ${e?.message ?? e}`);
+      console.error(`[MockPlayer] NBT 物品存储注册失败: ${e?.message ?? e}`);
     }
-    return this.region;
+    return this.itemStorage;
   }
 
   // ── 绑定表（独立持久化，与 BotRecord 解耦） ──
@@ -96,8 +96,8 @@ export class McBotStore implements BotStore<ItemStack> {
   private bindingOf(name: string): StorageBinding | undefined {
     const existing = this.loadBinding(name);
     if (existing) return existing;
-    if (!this.ensureRegion()) return undefined;
-    const binding = createBinding(this.region!.regionId);
+    if (!this.ensureItemStorage()) return undefined;
+    const binding = createBinding(this.itemStorage!.regionId);
     this.saveBinding(name, binding);
     return binding;
   }
@@ -175,23 +175,23 @@ export class McBotStore implements BotStore<ItemStack> {
 
   /** 保存单个格子（null 写占位保持绑定；首次写分配槽位） */
   saveSlot(name: string, slot: number, item: ItemStack | null): void {
-    if (!this.ensureRegion()) return;
+    if (!this.ensureItemStorage()) return;
     const binding = this.bindingOf(name);
     if (!binding) return;
-    if (this.writeSlot(this.region!, binding, slot, item)) {
+    if (this.writeSlot(this.itemStorage!, binding, slot, item)) {
       this.saveBinding(name, binding);
     }
   }
 
   /** 保存全部背包格（空位传 null） */
   saveInventory(name: string, items: (ItemStack | null)[]): void {
-    if (!this.ensureRegion()) return;
+    if (!this.ensureItemStorage()) return;
     const binding = this.bindingOf(name);
     if (!binding) return;
-    const region = this.region!;
+    const storage = this.itemStorage!;
     let changed = false;
     for (let i = 0; i < Math.min(items.length, INVENTORY_SIZE); i++) {
-      changed = this.writeSlot(region, binding, i, items[i] ?? null) || changed;
+      changed = this.writeSlot(storage, binding, i, items[i] ?? null) || changed;
     }
     if (changed) this.saveBinding(name, binding);
   }
@@ -199,13 +199,13 @@ export class McBotStore implements BotStore<ItemStack> {
   /** 批量保存指定背包格（对账式：只写变化的格子） */
   saveSlots(name: string, items: { slot: number; item: ItemStack | null }[]): void {
     if (items.length === 0) return;
-    if (!this.ensureRegion()) return;
+    if (!this.ensureItemStorage()) return;
     const binding = this.bindingOf(name);
     if (!binding) return;
-    const region = this.region!;
+    const storage = this.itemStorage!;
     let changed = false;
     for (const { slot, item } of items) {
-      changed = this.writeSlot(region, binding, slot, item ?? null) || changed;
+      changed = this.writeSlot(storage, binding, slot, item ?? null) || changed;
     }
     if (changed) this.saveBinding(name, binding);
   }
@@ -217,14 +217,14 @@ export class McBotStore implements BotStore<ItemStack> {
   loadInventory(name: string): (ItemStack | null)[] | undefined {
     const binding = this.loadBinding(name);
     if (!binding) return undefined;
-    const region = this.ensureRegion();
-    if (!region) return undefined;
+    const storage = this.ensureItemStorage();
+    if (!storage) return undefined;
     const result: (ItemStack | null)[] = new Array(INVENTORY_SIZE).fill(null);
     let found = false;
     for (let i = 0; i < INVENTORY_SIZE; i++) {
       const sid = boundSlotId(binding, i);
       if (sid === undefined) continue;
-      const item = region.get(sid);
+      const item = storage.get(sid);
       if (item && item.typeId !== PLACEHOLDER_TYPE) {
         result[i] = item;
         found = true;
@@ -236,22 +236,22 @@ export class McBotStore implements BotStore<ItemStack> {
   // ── 装备栏（每槽 ↔ NBT 存储槽） ──
 
   saveEquipSlot(name: string, slot: string, item: ItemStack | null): void {
-    if (!this.ensureRegion()) return;
+    if (!this.ensureItemStorage()) return;
     const binding = this.bindingOf(name);
     if (!binding) return;
-    if (this.writeEquipSlot(this.region!, binding, slot, item)) {
+    if (this.writeEquipSlot(this.itemStorage!, binding, slot, item)) {
       this.saveBinding(name, binding);
     }
   }
 
   saveEquipment(name: string, equipment: Record<string, ItemStack | null>, _silent = false): void {
-    if (!this.ensureRegion()) return;
+    if (!this.ensureItemStorage()) return;
     const binding = this.bindingOf(name);
     if (!binding) return;
-    const region = this.region!;
+    const storage = this.itemStorage!;
     let changed = false;
     for (const [slot, item] of Object.entries(equipment)) {
-      changed = this.writeEquipSlot(region, binding, slot, item ?? null) || changed;
+      changed = this.writeEquipSlot(storage, binding, slot, item ?? null) || changed;
     }
     if (changed) this.saveBinding(name, binding);
   }
@@ -259,13 +259,13 @@ export class McBotStore implements BotStore<ItemStack> {
   /** 批量保存指定装备槽（对账式：只写变化的槽） */
   saveEquipSlots(name: string, items: { slot: string; item: ItemStack | null }[]): void {
     if (items.length === 0) return;
-    if (!this.ensureRegion()) return;
+    if (!this.ensureItemStorage()) return;
     const binding = this.bindingOf(name);
     if (!binding) return;
-    const region = this.region!;
+    const storage = this.itemStorage!;
     let changed = false;
     for (const { slot, item } of items) {
-      changed = this.writeEquipSlot(region, binding, slot, item ?? null) || changed;
+      changed = this.writeEquipSlot(storage, binding, slot, item ?? null) || changed;
     }
     if (changed) this.saveBinding(name, binding);
   }
@@ -274,13 +274,13 @@ export class McBotStore implements BotStore<ItemStack> {
   loadEquipment(name: string): Record<string, ItemStack> | undefined {
     const binding = this.loadBinding(name);
     if (!binding) return undefined;
-    const region = this.ensureRegion();
-    if (!region) return undefined;
+    const storage = this.ensureItemStorage();
+    if (!storage) return undefined;
     const result: Record<string, ItemStack> = {};
     for (const slotName of EQUIP_SLOT_NAMES) {
       const sid = boundEquipSlotId(binding, slotName);
       if (sid === undefined) continue;
-      const item = region.get(sid);
+      const item = storage.get(sid);
       if (item && item.typeId !== PLACEHOLDER_TYPE) result[slotName] = item;
     }
     return Object.keys(result).length > 0 ? result : undefined;
@@ -290,10 +290,10 @@ export class McBotStore implements BotStore<ItemStack> {
   removeInventory(name: string): void {
     const binding = this.loadBinding(name);
     if (!binding) return;
-    const region = this.ensureRegion();
-    if (region) {
+    const storage = this.ensureItemStorage();
+    if (storage) {
       for (const sid of allBoundSlotIds(binding)) {
-        region.take(sid);
+        storage.take(sid);
       }
     }
     this.bindings.delete(name);
@@ -302,13 +302,13 @@ export class McBotStore implements BotStore<ItemStack> {
 
   // ── 私有：单格写入（返回绑定表是否变化） ──
 
-  private writeSlot(region: StoredRegion, binding: StorageBinding, slot: number, item: ItemStack | null): boolean {
+  private writeSlot(storage: StoredRegion, binding: StorageBinding, slot: number, item: ItemStack | null): boolean {
     const bound = boundSlotId(binding, slot);
     if (!item) {
       // 空位占位：保持绑定（槽位永不漂移），写入结构空位占位物品
       // （put 分配器探测为占用，不会分给别人）；从未绑定则无操作
       if (bound !== undefined) {
-        const r = region.overwrite(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
+        const r = storage.overwrite(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
         if (!r.ok) {
           console.error(`[MockPlayer] 背包占位失败 slot=${slot}: ${r.error ?? "未知错误"}`);
         }
@@ -316,13 +316,13 @@ export class McBotStore implements BotStore<ItemStack> {
       return false;
     }
     if (bound !== undefined) {
-      const r = region.overwrite(bound, item);
+      const r = storage.overwrite(bound, item);
       if (!r.ok) {
         console.error(`[MockPlayer] 背包保存失败 slot=${slot}: ${r.error ?? "未知错误"}`);
       }
       return false;
     }
-    const ref = region.put(item);
+    const ref = storage.put(item);
     if (ref) {
       bindSlot(binding, slot, ref.slotId);
       return true;
@@ -331,12 +331,12 @@ export class McBotStore implements BotStore<ItemStack> {
     return false;
   }
 
-  private writeEquipSlot(region: StoredRegion, binding: StorageBinding, slot: string, item: ItemStack | null): boolean {
+  private writeEquipSlot(storage: StoredRegion, binding: StorageBinding, slot: string, item: ItemStack | null): boolean {
     const bound = boundEquipSlotId(binding, slot);
     if (!item) {
       // 空位占位（同背包语义）：保持绑定，写入结构空位；从未绑定则无操作
       if (bound !== undefined) {
-        const r = region.overwrite(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
+        const r = storage.overwrite(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
         if (!r.ok) {
           console.error(`[MockPlayer] 装备占位失败 ${slot}: ${r.error ?? "未知错误"}`);
         }
@@ -344,13 +344,13 @@ export class McBotStore implements BotStore<ItemStack> {
       return false;
     }
     if (bound !== undefined) {
-      const r = region.overwrite(bound, item);
+      const r = storage.overwrite(bound, item);
       if (!r.ok) {
         console.error(`[MockPlayer] 装备保存失败 ${slot}: ${r.error ?? "未知错误"}`);
       }
       return false;
     }
-    const ref = region.put(item);
+    const ref = storage.put(item);
     if (ref) {
       bindEquipSlot(binding, slot, ref.slotId);
       return true;
