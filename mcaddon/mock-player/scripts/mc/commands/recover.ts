@@ -1,22 +1,19 @@
 // ─── /mp:recover <name> — 从持久化强制恢复假人背包/装备 ──
 //
 // 当假人因 "(2)" 重复名 bug 导致 playerJoin 恢复失败时，
-// 背包/装备数据仍保留在 DynamicProperty 中未被覆盖。
-// 此命令手动从 DP 读取并写回假人实体。
+// 背包/装备数据仍保留在 NBT 木桶阵列中未被覆盖。
+// 此命令手动从存储恢复（真实 ItemStack，完整 NBT）并写回假人实体。
 
 import {
   Player,
   world,
-  EntityInventoryComponent,
-  EntityEquippableComponent,
   CustomCommandParamType,
   CommandPermissionLevel,
 } from "@minecraft/server";
 import { defineCommand, color } from "@yinxe/toolkit";
 
-import { botRegistry, botStore } from "../bootstrap/context";
+import { botRegistry, inventoryStorage } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { deserializeContainer, deserializeEquipment } from "../adapters/McItemCodec";
 import { getTotalXpForLevels } from "../../core/xp/XpMath";
 
 export function registerRecoverCommand(registry: any): void {
@@ -56,30 +53,16 @@ export function registerRecoverCommand(registry: any): void {
     const bot = entity as Player;
     let restored = false;
 
-    // ── 恢复背包 ──
-    const savedInv = botStore.loadInventory(record.name);
-    if (savedInv) {
-      const inv = bot.getComponent("minecraft:inventory") as EntityInventoryComponent;
-      if (inv?.container) {
-        deserializeContainer(inv.container, savedInv);
-        player.sendMessage(`${color.success}背包恢复成功 (${savedInv.filter((i) => i !== null).length} 格)`);
-        restored = true;
-      }
-    } else {
-      player.sendMessage(`${color.muted}无可恢复的背包数据`);
+    // ── 恢复背包/装备（复用 InventoryStorage.restoreInto：真实物品直写，占位跳过） ──
+    try {
+      restored = inventoryStorage.restoreInto(bot, record);
+    } catch (e: any) {
+      player.sendMessage(`${color.error}恢复数据失败: ${e?.message ?? e}`);
     }
-
-    // ── 恢复装备 ──
-    const savedEquip = botStore.loadEquipment(record.name);
-    if (savedEquip) {
-      const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
-      if (equip) {
-        deserializeEquipment(equip, savedEquip);
-        player.sendMessage(`${color.success}装备恢复成功 (${Object.keys(savedEquip).length} 槽)`);
-        restored = true;
-      }
+    if (restored) {
+      player.sendMessage(`${color.success}背包/装备恢复成功`);
     } else {
-      player.sendMessage(`${color.muted}无可恢复的装备数据`);
+      player.sendMessage(`${color.muted}无可恢复的背包/装备数据`);
     }
 
     // ── 恢复经验 ──

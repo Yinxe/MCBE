@@ -2,12 +2,12 @@
 // 预览计算/选项判定/离线预览在 core/service/ReclaimPlanner，
 // 实体容器读写与实际转移在这里（mc 层）
 
-import { Player, EquipmentSlot, world } from "@minecraft/server";
+import { Player, EquipmentSlot, ItemStack, world } from "@minecraft/server";
 
-import { BotRecord, ItemPreview, SerializedItemStack } from "../../core/model/Types";
+import { BotRecord, ItemPreview } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { SWAP_SLOTS } from "../adapters/EquipmentSlots";
-import { deserializeItemStack, captureExperience, itemStackToPreview } from "../adapters/McItemCodec";
+import { captureExperience, itemStackToPreview, serializeItemStack } from "../adapters/McItemCodec";
 import {
   FULL_OPTIONS,
   hasAnyArmor,
@@ -94,10 +94,14 @@ export function getReclaimPreview(record: BotRecord): {
     }
   }
 
-  // ── 离线/死亡：从持久化读取（core 纯数据计算） ──
+  // ── 离线/死亡：从持久化读取（core 纯数据计算；真实物品转预览） ──
   const savedInv = botStore.loadInventory(record.name);
   const savedEquip = botStore.loadEquipment(record.name);
-  return buildOfflineReclaimPreview(record, savedInv, savedEquip);
+  const invData = savedInv?.map((i) => (i ? serializeItemStack(i) : null));
+  const equipData = savedEquip
+    ? Object.fromEntries(Object.entries(savedEquip).map(([k, v]) => [k, serializeItemStack(v)]))
+    : undefined;
+  return buildOfflineReclaimPreview(record, invData, equipData);
 }
 
 /**
@@ -216,21 +220,20 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
       record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
     }
 
-  // ── 离线/死亡：从持久化回收 ──
+  // ── 离线/死亡：从持久化回收（真实 ItemStack，完整 NBT） ──
   } else {
     // 背包（离线时主手位置不可知，假设在 slot 0）
     if (opts.inventory || opts.mainhand) {
       const savedInv = botStore.loadInventory(record.name);
       if (savedInv) {
         // 重建剩余背包（不回收的保留，回收的置空）
-        const remainingInv: (SerializedItemStack | null)[] = [];
+        const remainingInv: (ItemStack | null)[] = [];
         for (let i = 0; i < savedInv.length; i++) {
           const isHand = i === 0; // 离线假人假设主手在 slot 0
           if (isHand && !opts.mainhand) { remainingInv.push(savedInv[i]); continue; }
           if (!isHand && !opts.inventory) { remainingInv.push(savedInv[i]); continue; }
           if (!savedInv[i]) { remainingInv.push(null); continue; }
-          const item = deserializeItemStack(savedInv[i]!);
-          if (item) transferItemToPlayer(item, pInv, player, result);
+          transferItemToPlayer(savedInv[i]!, pInv, player, result);
           remainingInv.push(null); // 已回收，清空
         }
         saveCoordinator.saveInventory(record.name, remainingInv);
@@ -240,12 +243,11 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
     // 装备（头/胸/腿/靴 + 副手）
     if (opts.offhand || hasAnyArmor(opts)) {
       const savedEquip = botStore.loadEquipment(record.name) ?? {};
-      for (const [slot, data] of Object.entries(savedEquip)) {
-        if (!data) continue;
+      for (const [slot, item] of Object.entries(savedEquip)) {
+        if (!item) continue;
         const optKey = slot as "head" | "chest" | "legs" | "feet" | "offhand";
         if (!opts[optKey]) continue;
-        const item = deserializeItemStack(data);
-        if (item) transferItemToPlayer(item, pInv, player, result);
+        transferItemToPlayer(item, pInv, player, result);
         delete savedEquip[slot];
       }
       saveCoordinator.saveEquipment(record.name, savedEquip);

@@ -6,12 +6,13 @@
 // 互斥标签：autoMine / autoPlace / autoAttack / control / idle / autoUse / vaultMode
 // 各行为通过实体标签查询筛选，确保互斥生效
 
-import { EntityEquippableComponent, Player, system, world } from "@minecraft/server";
+import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
+import { botRegistry, inventoryStorage, saveCoordinator } from "../bootstrap/context";
 import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL, TAG_VAULT_MODE } from "../../core/tags/BotTags";
-import { captureExperience, serializeEquipment } from "../adapters/McItemCodec";
+import { EQUIP_SLOT_NAMES } from "../../core/model/Types";
+import { captureExperience } from "../adapters/McItemCodec";
 import { runVaultCycle } from "./vaultMode";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../adapters/PoseGateway";
 
@@ -124,8 +125,11 @@ export function startTagBehaviors(): void {
         record.isSneaking = bot.isSneaking;
         record.experience = captureExperience(bot);
         saveCoordinator.saveRecord(record, true);
-        const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
-        if (equip) saveCoordinator.saveEquipment(bot.name, serializeEquipment(equip), true);
+        // 装备兜底：假人可能通过引擎行为（捡起自动穿上等）改变装备而无事件——
+        // 复用装备槽快照对比（无变化零写入），事件驱动的安全网
+        for (const slotName of EQUIP_SLOT_NAMES) {
+          inventoryStorage.handleEquipSlotChanged(bot.name, slotName);
+        }
       }
     }
   }, 1);

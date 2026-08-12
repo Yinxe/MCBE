@@ -18,8 +18,8 @@ export {
   swapEquipmentWithBot,
   unequipBotAll,
   equipBotArmor,
-  saveBotEquipState,
 } from "./equip";
+export { InventoryStorage } from "./inventoryStorage";
 export { setTags } from "./setTags";
 export { checkMainHandDurability } from "./toolHealth";
 export { startFollow, stopFollow, isFollowing } from "./follow";

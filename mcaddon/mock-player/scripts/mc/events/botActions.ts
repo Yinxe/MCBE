@@ -11,6 +11,7 @@
 import { world } from "@minecraft/server";
 
 import { BOT_TAG } from "../../core/tags/BotTags";
+import { EQUIP_SLOT_NAMES } from "../../core/model/Types";
 import { BotEvents } from "../../core/events/DomainEvents";
 
 /** 订阅假人行为事件（在 worldLoad 后由 registerAllEvents 调用一次） */
@@ -67,13 +68,27 @@ export function registerBotActionEvents(): void {
   world.afterEvents.entityHurt.subscribe((event) => {
     try {
       const attacker = event.damageSource.damagingEntity;
-      if (!attacker?.hasTag(BOT_TAG)) return;
-      // 假人攻击（attacker 恒为假人 Player，name 可用）
-      BotEvents.botEntityAttacked.trigger({
-        botName: (attacker as { name?: string }).name ?? attacker.id,
-        targetTypeId: event.hurtEntity.typeId,
-        damage: event.damage,
-      });
+      if (attacker?.hasTag(BOT_TAG)) {
+        // 假人攻击（attacker 恒为假人 Player，name 可用）
+        BotEvents.botEntityAttacked.trigger({
+          botName: (attacker as { name?: string }).name ?? attacker.id,
+          targetTypeId: event.hurtEntity.typeId,
+          damage: event.damage,
+        });
+      }
+
+      // 假人受伤：触发全部 5 个装备槽变化事件（不判断掉血——护甲吸收也算，
+      // 装备耐久可能损耗/被破坏；订阅方快照对比，没变的槽零写入）
+      if (event.hurtEntity.hasTag(BOT_TAG)) {
+        const botName = (event.hurtEntity as { name?: string }).name ?? event.hurtEntity.id;
+        for (const slot of EQUIP_SLOT_NAMES) {
+          BotEvents.botEquipSlotChanged.trigger({
+            botName,
+            slot,
+            via: "hurt",
+          });
+        }
+      }
     } catch {
       // 单事件异常隔离
     }

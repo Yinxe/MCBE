@@ -12,11 +12,12 @@ import { Player, EquipmentSlot, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BotRecord, DP_PREFIX, isValidBotName } from "../../core/model/Types";
+import { BotRecord, isValidBotName } from "../../core/model/Types";
 import { BOT_TAG, getTagDef } from "../../core/tags/BotTags";
+import { BotEvents } from "../../core/events/DomainEvents";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
-import { serializeContainer } from "../adapters/McItemCodec";
+import { collectContainerItems } from "../adapters/McItemCodec";
 import { getPlayerLookTarget, lookAt } from "../adapters/PoseGateway";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import {
@@ -25,7 +26,6 @@ import {
   killBot,
   swapMainhandWithBot,
 } from "../features/index";
-import { saveBotEquipState } from "../features/equip";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 import { showTridentSelector } from "./trident";
@@ -38,6 +38,26 @@ import { showTagManagement } from "./tags";
 import { sendData } from "../commands/data";
 
 // ─── 工具 ──────────────────────────────────────────────
+
+/** EquipmentSlot → 装备槽名（非装备槽返回 undefined；非装备槽不触发装备事件） */
+function equipSlotNameOf(slot: EquipmentSlot): "head" | "chest" | "legs" | "feet" | "offhand" | undefined {
+  switch (slot) {
+    case EquipmentSlot.Head: return "head";
+    case EquipmentSlot.Chest: return "chest";
+    case EquipmentSlot.Legs: return "legs";
+    case EquipmentSlot.Feet: return "feet";
+    case EquipmentSlot.Offhand: return "offhand";
+    default: return undefined;
+  }
+}
+
+/** 互换装备/副手后触发槽位粒度装备变化事件（InventoryStorage 订阅保存） */
+function triggerEquipChangeUI(bot: Player, slot: EquipmentSlot): void {
+  const name = equipSlotNameOf(slot);
+  if (name) {
+    BotEvents.botEquipSlotChanged.trigger({ botName: bot.name, slot: name, via: "swap" });
+  }
+}
 
 function getStatusIcon(record: BotRecord): string {
   if (record.death) return style("[死亡]", color.error);
@@ -252,7 +272,7 @@ function doSwap(player: Player, botName: string): void {
               bInv.container.setItem(i, pItems[i] ?? undefined);
               pInv.container.setItem(i, bItems[i] ?? undefined);
             }
-            saveCoordinator.saveInventory(r.name, serializeContainer(bInv.container));
+            saveCoordinator.saveInventory(r.name, collectContainerItems(bInv.container));
             done.push("背包");
           }
 
@@ -275,9 +295,10 @@ function doSwap(player: Player, botName: string): void {
                 const bItem = bEquip.getEquipment(slot);
                 pEquip.setEquipment(slot, bItem);
                 bEquip.setEquipment(slot, pItem);
+                // 槽位粒度装备变化事件：互换副手只触发 offhand，互换装备只触发 4 槽
+                triggerEquipChangeUI(bot, slot);
               }
             }
-            saveBotEquipState(bot, botRegistry.get(botName)!);
             if (hasOffhand) done.push("副手");
             if (hasArmor) done.push("装备");
           }
@@ -307,8 +328,9 @@ function doRename(player: Player, botName: string): void {
     if (!vals) return;
     const newName = (vals.name as string).trim();
     if (!newName || newName === botName) return;
-    // ⚠️ 名字合法性：含 :inv: / :equip: 会与 DP 槽位 key 冲突（改名后重启丢数据/误删）
-    if (!isValidBotName(newName)) { player.sendMessage(`${color.error}名字不合法：不能超过 16 字符或包含 ":inv:" / ":equip:"`); return; }
+    // ⚠️ 名字合法性：长度限制（生成 "(2)" 重名防护边界）；NBT 存储绑定表随
+    //    BotRecord 持久化，改名无需迁移物品数据（与旧 DP 槽位 key 无关）
+    if (!isValidBotName(newName)) { player.sendMessage(`${color.error}名字不合法：不能超过 16 字符`); return; }
     if (botRegistry.has(newName)) { player.sendMessage(`${color.error}假人 ${color.playerName}${newName}${color.error} 已存在`); return; }
 
     const r = botRegistry.get(botName);
@@ -321,27 +343,15 @@ function doRename(player: Player, botName: string): void {
 
     system.run(() => {
       try {
-        // ── 1. 迁移 DynamicProperty（背包/装备 key 含假人名） ──
-        const ids = world.getDynamicPropertyIds();
-        const OLD = `${DP_PREFIX}${botName}`;
-        const NEXT = `${DP_PREFIX}${newName}`;
-        for (const id of ids) {
-          if (!id.startsWith(OLD)) continue;
-          const value = world.getDynamicProperty(id);
-          if (value !== undefined) {
-            world.setDynamicProperty(NEXT + id.slice(OLD.length), value);
-          }
-          world.setDynamicProperty(id, undefined);
-        }
-
-        // ── 2. 更新实体头顶显示名 ──
+        // ── 1. 更新实体头顶显示名 ──
         // Player.name 只读无法修改，只改 nameTag（影响的头顶显示）
         if (r.online && r.entityId) {
           const entity = world.getEntity(r.entityId);
           if (entity) entity.nameTag = newName;
         }
 
-        // ── 3/4. 改名（registry 内部完成内存 key 迁移 + 恢复标记随迁 + 持久化） ──
+        // ── 2. 改名（registry 内部完成内存 key 迁移 + 恢复标记随迁 + 持久化） ──
+        // 背包/装备数据存 NBT 木桶阵列（绑定表随记录），无需迁移任何物品数据
         botRegistry.rename(botName, newName);
 
         player.sendMessage(`${color.success}已重命名为 ${color.playerName}${newName}`);

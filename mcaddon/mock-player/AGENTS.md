@@ -36,12 +36,12 @@ scripts/
 │   ├── format/      # Format（维度/罗马数字）+ EnchantZh（附魔中英映射）
 │   ├── items/       # ItemRules（装备槽）/ ToolRules（工具识别/耐久/槽位搜索）
 │   │                # MainhandPolicy（主手策略）/ TridentRules（三叉戟扫描）
-│   ├── storage/     # BotStore / IntervalScheduler 端口 + InMemory 替身
+│   ├── storage/     # BotStore 端口（泛型 TItem）+ Binding 绑定表 + InMemory 替身
 │   ├── service/     # BotRegistry（注册表生命周期+恢复标记）/ ReclaimPlanner / RaidRules
 │   └── index.ts     # barrel
 ├── mc/              # 适配层：只做 mcapi 副作用（IO/视觉/通知）
 │   ├── bootstrap/   # context.ts — botStore/botRegistry 运行时单例（组合根装配）
-│   ├── adapters/    # McBotStore（DP 持久化）/ McItemCodec（序列化）/ PlayerGateway
+│   ├── adapters/    # McBotStore（NBT 木桶阵列持久化）/ McItemCodec（预览序列化）/ PlayerGateway
 │   │                # EntityTags / PoseGateway / McIntervalScheduler / EquipmentSlots
 │   ├── features/    # 业务用例：决策调 core，副作用留本地（behavior/spawn/reclaim/raidMode…）
 │   ├── commands/    # mp:* 命令（薄壳）
@@ -87,24 +87,36 @@ scripts/
 - 新假人默认：`bot` + `respawn` + `idle`
 
 ### 持久化（McBotStore 实现 BotStore 端口）
-- `world.setDynamicProperty` 存储 `BotRecord` JSON
-- Key 格式:
-  - `mockplayer:players:<name>` — BotRecord（单条，32KB 上限内）
-  - `mockplayer:players:<name>:inv:<N>` — 背包第 N 格（每格独立 key）
-  - `mockplayer:players:<name>:equip:<X>` — 装备槽（head/chest/legs/feet/offhand）
+- **记录**（BotRecord）：`world.setDynamicProperty` 单条 JSON（`mockplayer:players:<name>`），含 `storageBinding` 绑定表
+- **物品**（背包 36 格 + 装备 5 槽）：存 **`@yinxe/nbt-data-storage` 木桶阵列**（末地固定锚点 1000,1000，懒注册幂等）——**真实 ItemStack 完整 NBT**，潜影盒/收纳袋内容随物品原样存取
+- **双向绑定**（`core/storage/Binding.ts` 纯逻辑 + `McBotStore` 维护）：
+  - 首次写某格 → `region.put(item)` 分配槽位 → `storageBinding` 记录 slotId（惰性分配，复用库分配/回收语义，绝不与他人冲突）
+  - 后续写该格 → `region.overwrite(slotId, item)` 原位覆写（slotId 不变）
+  - **空位写占位**（`minecraft:structure_void`）**保持绑定**——槽位一旦绑定永不释放（存储永远是该假人的背包备份镜像），占位是真实物品（put 分配器探测为占用不会分给别人）；恢复时按 typeId 跳过占位
+  - 读取格 → `region.get(slotId)`（O(1) 克隆）
+  - 绑定表随记录持久化 → **改名零数据迁移**（旧 DP 槽位 key 迁移代码已删）；**仅删除假人（removeInventory）时 take 释放全部绑定槽**
+- 无 `storageBinding` = 旧版记录/未绑定：`loadInventory` 返回 undefined（"无存档"契约），首次写时自动分配并清理该假人旧版 DP 背包 key（作废数据，不迁移）
 - Entity `addTag` 不持久化，从 `BotRecord.tags` 恢复
 - 恢复标记（BotRegistry.restoredBots）：防 spawnSimulatedPlayer 空背包覆盖持久化数据
 
+### 库存存储（`mc/features/inventoryStorage.ts`，独立模块，事件驱动）
+- **背包单格**：playerInventoryItemChange 薄壳 → `saveInventorySlot`（isRestored 守卫 + 变化日志；put 分配/overwrite/占位）
+- **装备单槽**：`BotEvents.botEquipSlotChanged` 领域事件（**槽位粒度**，`core/events/DomainEvents.ts`）→ `handleEquipSlotChanged`：读实体该槽 → 与**内存指纹快照**（typeId|amount|damage|nameTag）对比 → **变化才覆盖写**（受伤但没变零写入）
+  - 触发源：互换副手→仅 offhand；互换装备→仅 head/chest/legs/feet；穿卸甲→对应槽；**假人受伤（entityHurt）→ 全部 5 槽**（不判断掉血，护甲吸收也算，装备耐久可能损耗）
+- **对账式兜底** `reconcile(player, record)`：读实体全部槽 → 指纹对比 → **只写变化的格/槽**（不再全量重写 41 格）——死亡（entityDie，事件驱动唯一盲区：掉落过程无事件）/下线（offlineBot）/离开（playerLeave）/回收前（reclaim）调用
+- **恢复** `restoreInto(player, record)`：playerJoin / /mp:recover 复用（真实物品直写，占位跳过，恢复后同步指纹）
+- vaultMode 周期**不再** saveFullState（钥匙消耗已实时保存）——事件驱动已覆盖在线变化，全量保存仅剩回收/互换背包等低频业务场景
+
 ### 死亡物品存储（entityDie = 数据存储时机点）
 - **语义**：entityDie 回调时实体已处于死亡最终状态——普通物品已按游戏规则掉落（掉落物是物品离开假人的**唯一副本**），`keepOnDeath`（自带死亡不掉落）的物品仍在背包中。
-- **做法**：直接读实体背包/装备/经验，**有什么存什么**（`saveBotFullState`），不额外过滤/清空；掉落世界的普通物品自然不在实体中，keepOnDeath 物品如实保留。
+- **做法**：`saveFullState` → `reconcile` 对账（读死实体，指纹对比，只写变化格；掉落清空/keepOnDeath 保留如实落盘）。
 - **竞态防护**：`record.death = true` 在保存**之前**设置——关闭 100tick 周期保存的窗口（behavior 引擎跳过死亡假人）。
 - 正确性前提（由 `tests/inventory-lifecycle.test.ts` 锁定）：实体最终状态 = 引擎掉落后状态；若实测发现引擎在 entityDie 之后才掉落，需重新评估。
 
 ### 保存协调器（`mc/bootstrap/save.ts`，所有持久化**写**的唯一入口）
 - 读操作（loadRecord/loadInventory/loadEquipment）直接走 `botStore`；**写操作一律走 `saveCoordinator`**，禁止直接调 botStore 写方法或 botRegistry.save
-- 方法：`saveRecord`（记录写穿，周期路径 silent）/ `saveSlot`（背包单格，**带"什么变了"变化日志**：变化前 → 变化后）/ `saveInventory` / `saveEquipment` / `saveFullState`（背包+装备+经验+记录，**含 isBotRestored 守卫**）/ `removeInventory`
-- 集中收益：恢复标记守卫、变化日志、静默策略、未来防刷物校验全部单点维护
+- 方法：`saveRecord`（记录写穿，周期路径 silent）/ `saveSlot`（背包单格，**带"什么变了"变化日志**）/ `saveInventory` / `saveEquipment` / `saveEquipSlot`（装备单槽，事件驱动）/ `saveFullState`（**物品对账 reconcile + 经验 + 记录**，含 isBotRestored 守卫）/ `removeInventory`
+- 集中收益：恢复标记守卫、变化日志、静默策略、防刷物校验全部单点维护
 
 ### 保存时机点矩阵
 

@@ -6,14 +6,17 @@
 // ⚠️ 踩坑：PlayerJoinAfterEvent 只有 playerName，没有 player 实体
 // 需要用 world.getPlayers({ name, tags }) 查找对应的 Player 对象
 // 不能只用 name 过滤——加 tags 确保只操作假人，避免误操作同名的真实玩家
+//
+// 恢复数据来自 NBT 木桶阵列（InventoryStorage.restoreInto）：loadInventory/
+// loadEquipment 返回**真实 ItemStack**（完整 NBT），直接 setItem/setEquipment
+// 写入——潜影盒等嵌套容器内容随物品原样恢复（旧 JSON 视图无法做到）。
 
-import { world, system, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEquippableComponent } from "@minecraft/server";
+import { world, system, PlayerJoinAfterEvent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { BotEvents } from "../../core/events/DomainEvents";
-import { botRegistry, botStore, saveCoordinator } from "../bootstrap/context";
-import { deserializeContainer, deserializeEquipment } from "../adapters/McItemCodec";
+import { botRegistry, inventoryStorage, saveCoordinator } from "../bootstrap/context";
 import { getTotalXpForLevels } from "../../core/xp/XpMath";
 import { trackBotOnline } from "../features/tridentTracker";
 
@@ -33,21 +36,7 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
     // ⚠️ 异常隔离：恢复链中任何一步失败（坏数据/物品 typeId 失效等）都不能中断
     // 其余步骤与 markRestored——否则该假人永远卡在"未恢复"状态，所有保存被守卫拦截
     try {
-      const savedInv = botStore.loadInventory(record.name);
-      if (savedInv) {
-        const inv = player.getComponent("minecraft:inventory") as EntityInventoryComponent;
-        if (inv?.container) {
-          deserializeContainer(inv.container, savedInv);
-        }
-      }
-
-      const savedEquip = botStore.loadEquipment(record.name);
-      if (savedEquip) {
-        const equip = player.getComponent("minecraft:equippable") as EntityEquippableComponent;
-        if (equip) {
-          deserializeEquipment(equip, savedEquip);
-        }
-      }
+      inventoryStorage.restoreInto(player, record);
 
       // 恢复经验（一次性设置 totalXp，比分步 addLevels + addExperience 更精确）
       const exp = record.experience;

@@ -378,6 +378,9 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      '@yinxe/nbt-data-storage':
+        specifier: workspace:*
+        version: link:../../packages/nbt-data-storage
       '@yinxe/toolkit':
         specifier: workspace:*
         version: link:../../packages/toolkit
