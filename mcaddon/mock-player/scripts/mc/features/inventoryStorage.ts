@@ -181,6 +181,24 @@ export class InventoryStorage {
       }
     }
 
+    // 恢复 buff（效果）：离线时效果暂停，用最后保存的剩余时长重新施加；
+    // 单个效果失败不影响其余（坏数据跳过）
+    if (record.effects?.length) {
+      try {
+        const effectsComp = player.getComponent("minecraft:effects") as any;
+        for (const e of record.effects) {
+          try {
+            effectsComp?.addEffect(e.id, e.duration, { amplifier: e.amplifier });
+          } catch {
+            // 单个效果恢复失败跳过
+          }
+        }
+        restored = true;
+      } catch {
+        // 效果组件不可用：跳过（不影响背包/装备恢复）
+      }
+    }
+
     return restored;
   }
 

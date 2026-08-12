@@ -66,3 +66,11 @@ test("归一化幂等：第二次调用无改动", () => {
   const changed = normalizeRecord(legacy);
   assert.equal(changed, false);
 });
+
+test("数据升级兼容：旧记录无 effects 字段 → 保持 undefined（恢复时跳过，无效果）", () => {
+  // 1.1.52 之前的记录没有 effects 字段
+  const legacy = makeRecord("bot1");
+  assert.equal(legacy.effects, undefined); // 旧记录天然无此字段
+  normalizeRecord(legacy); // 归一化不强制补 effects（缺失即无效果，合法）
+  assert.equal(legacy.effects, undefined);
+});

@@ -16,7 +16,7 @@ import {
   ItemEnchantableComponent,
   EntityEquippableComponent,
 } from "@minecraft/server";
-import type { PositionState, ExperienceRecord, SerializedItemStack, ItemPreview } from "../../core/model/Types";
+import type { PositionState, ExperienceRecord, SerializedEffect, SerializedItemStack, ItemPreview } from "../../core/model/Types";
 import { buildExperienceRecord } from "../../core/xp/XpMath";
 import { EQUIP_SLOT_MAP } from "./EquipmentSlots";
 
@@ -45,6 +45,31 @@ export function capturePlayerStateFromRotation(
 /** 从 Player 捕获当前经验值到 ExperienceRecord */
 export function captureExperience(player: Player): ExperienceRecord {
   return buildExperienceRecord(player.level, player.xpEarnedAtCurrentLevel);
+}
+
+// ─── 效果捕获（buff 持久化） ──────────────────────────
+
+/** 流程性效果（由劫掠等业务自行管理，不持久化——避免恢复时干扰检测链） */
+const EXCLUDED_EFFECTS = new Set(["minecraft:village_hero", "minecraft:bad_omen", "minecraft:raid_omen"]);
+
+/**
+ * 捕获玩家当前效果（排除流程性效果）。
+ * 返回 undefined = 无可持久化效果（调用方保持 record.effects 原值或置空）。
+ */
+export function captureEffects(player: Player): SerializedEffect[] | undefined {
+  try {
+    const comp = player.getComponent("minecraft:effects") as any;
+    const list: { typeId?: string; duration?: number; amplifier?: number }[] = comp?.getEffects?.() ?? [];
+    const result: SerializedEffect[] = [];
+    for (const e of list) {
+      const id = e.typeId ?? "";
+      if (!id || EXCLUDED_EFFECTS.has(id)) continue;
+      result.push({ id, duration: e.duration ?? 0, amplifier: e.amplifier ?? 0 });
+    }
+    return result.length > 0 ? result : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // ─── 真实物品收集（NBT 存储全量保存用） ────────────────

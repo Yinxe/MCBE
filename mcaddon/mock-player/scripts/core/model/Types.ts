@@ -111,6 +111,20 @@ export interface SerializedEnchantment {
 }
 
 /**
+ * 序列化效果（buff 持久化用，随 BotRecord 保存/恢复）。
+ * 排除流程性效果（村庄英雄/不祥之兆/袭击之兆——由劫掠等业务自行管理）。
+ * 离线时效果暂停（实体销毁），恢复时用最后保存的剩余时长重新施加。
+ */
+export interface SerializedEffect {
+  /** 效果 ID（含命名空间，如 "minecraft:speed"） */
+  id: string;
+  /** 剩余时长（tick） */
+  duration: number;
+  /** 效果等级（0 = 1 级） */
+  amplifier: number;
+}
+
+/**
  * 序列化后的物品（ItemStack → JSON 可存）
  * Script API 的 ItemStack 不可直接 JSON.stringify，需要手动抽取可读字段
  * 详见 serializeItemStack / deserializeItemStack 的实现（mc 层）
@@ -196,6 +210,11 @@ export interface BotRecord {
   deathPoint: PositionState | null;
   /** 经验值（等级 + 进度 + 总值） */
   experience: ExperienceRecord;
+  /**
+   * 效果状态（buff 持久化；排除流程性效果；离线时效果暂停，
+   * 上线恢复时用最后保存的剩余时长重新施加）。旧记录缺失 = 无效果（升级兼容）。
+   */
+  effects?: SerializedEffect[];
   /** 生成模式：normal=普通可转向 / chunkload=强加载不可转向 */
   spawnMode?: "normal" | "chunkload";
 }

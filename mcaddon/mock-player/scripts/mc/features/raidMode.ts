@@ -271,6 +271,18 @@ function drinkNextBottle(bot: SimulatedPlayer, record: BotRecord): void {
   // 已有不祥之兆/袭击之兆排队 → 一场袭击已在酝酿，不重复喝
   if (hasEffect(bot, BAD_OMEN) || hasEffect(bot, RAID_OMEN)) return;
 
+  // ⚠️ 防御：清理残留村庄英雄（持续 40 分钟）。
+  // 正常流程胜利处理已移除；若事件丢失/清理失败导致残留，下一次袭击胜利的
+  // effectAdd 检测链会断（效果已存在无法重新获取）——喝瓶前兜底清理。
+  try {
+    if (hasEffect(bot, VILLAGE_HERO)) {
+      bot.removeEffect(VILLAGE_HERO as any);
+      console.info(`[MockPlayer] 劫掠模式 ${botName} 清理残留村庄英雄`);
+    }
+  } catch {
+    // 清理失败不影响喝瓶
+  }
+
   const container = safeGetContainer(bot);
   if (!container) return;
 

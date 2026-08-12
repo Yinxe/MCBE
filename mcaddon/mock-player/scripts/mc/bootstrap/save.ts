@@ -18,7 +18,7 @@
 import type { ItemStack, Player } from "@minecraft/server";
 
 import type { BotRecord } from "../../core/model/Types";
-import { captureExperience } from "../adapters/McItemCodec";
+import { captureExperience, captureEffects } from "../adapters/McItemCodec";
 import type { BotRegistry } from "../../core/service/BotRegistry";
 import type { BotStore } from "../../core/storage/BotStore";
 import type { InventoryStorage } from "../features/inventoryStorage";
@@ -78,6 +78,7 @@ export class SaveCoordinator {
 
     this.inventory.reconcile(bot, record);
     record.experience = captureExperience(bot);
+    record.effects = captureEffects(bot); // buff 持久化（排除流程性效果；离线时暂停，恢复时用最后时长）
     this.registry.save(record);
     console.info(`[MockPlayer] 全量状态保存完成 ${record.name}`);
   }
