@@ -19,6 +19,7 @@ import { startTagBehaviors } from "./mc/features/behavior";
 import { initGameTestContext } from "./mc/features/gametestContext";
 import { initTridentTracker } from "./mc/features/tridentTracker";
 import { initRaidModeEffects } from "./mc/features/raidMode";
+import { runMigrations } from "./mc/bootstrap/migration";
 import { botRegistry, configStore } from "./mc/bootstrap/context";
 
 // Phase 1/2: 基础设施与业务装配在 mc/bootstrap/context 模块 import 时完成
@@ -59,6 +60,10 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 从 DynamicProperty 加载所有假人记录（重启后默认 offline / 非死亡 / 无实体 ID）
   const restored = botRegistry.restoreAll();
   console.info(`[MockPlayer] 从持久化恢复 ${restored.length} 个模拟玩家记录`);
+
+  // 数据迁移：旧版本（≤1.1.48）升级通道——记录归一化 + 旧 DP 物品 → NBT 存储
+  // （必须在 restoreAll 之后：记录已在内存；存储区域此时可注册）
+  runMigrations();
 
   // 启动标签行为引擎（自动挖掘/放置/攻击/跳跃/体态控制）
   // 同时启动 100tick 周期持久化（位置/经验/装备栏）
