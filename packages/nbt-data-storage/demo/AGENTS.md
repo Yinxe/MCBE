@@ -16,8 +16,7 @@ demo/
 │   ├── storageService.ts     # 领域服务：registerTest 注册 / 凭据索引 ndsdemo:refs / 单件+批量存取 / 扩容见证
 │   ├── ui.ts                 # 主菜单 + 分页勾选组件（批量存入/取出）+ 单件存取
 │   ├── commands.ts           # nds-demo:* 命令
-│   └── version.ts            # 构建自动生成（release-only，提交时排除）
-└── just.config.ts            # build/pack（version.ts 生成 + manifest 版本同步 + esbuild 内联库）
+└── just.config.ts            # build/pack（manifest 版本同步 + esbuild 内联库）
 ```
 
 ## 命令（/nds-demo:*）
@@ -70,7 +69,7 @@ pnpm run build:nds-demo   # 根目录快捷（= pnpm --filter nds-demo run build
 pnpm run pack:nds-demo    # 产出 dist/packages/nds-demo-v<version>.mcpack
 ```
 
-- 版本在 `package.json#version` 维护；构建自动同步 manifest + 生成 `scripts/version.ts`，日常提交排除（`version.ts`/`manifest.json`/`package.json` release-only）。
+- 版本在 `package.json#version` 维护；构建自动同步 manifest，日常提交排除（`manifest.json`/`package.json` release-only）。
 - commit message：`nds-demo@<新版本>: <中文描述>`；tag：`nds-demo@<版本>`。
 
 ## 游戏内冒烟清单

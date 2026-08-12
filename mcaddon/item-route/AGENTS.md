@@ -88,5 +88,5 @@ pnpm run test:core   # tsc -p tsconfig.test.json && node --test ".test-build/tes
 ## 构建与提交
 
 - 构建：`pnpm run build`（类型 + esbuild）；打包：`pnpm run pack`（BP/RP → .mcpack/.mcaddon）。
-- 版本：`package.json#version`（构建自动同步到 BP/manifest + `version.ts`）；源码提交**排除** `version.ts`/`manifest.json`/`package.json`（release-only），只提交 `scripts/` 与 `tests/`。
+- 版本：`package.json#version`（构建自动同步到 BP/manifest）；源码提交**排除** `manifest.json`/`package.json`（release-only），只提交 `scripts/` 与 `tests/`。
 - commit message：`item-route: <中文描述>`（不强制带版本，日常源码提交即可）。

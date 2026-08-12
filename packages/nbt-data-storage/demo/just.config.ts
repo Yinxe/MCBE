@@ -1,5 +1,5 @@
 import { argv, parallel, series, task, tscTask } from "just-scripts";
-import { readFileSync, renameSync, writeFileSync } from "fs";
+import { readFileSync, renameSync } from "fs";
 import {
   bundleTask,
   cleanTask,
@@ -35,19 +35,6 @@ task("sync-version", () => {
   });
 });
 
-/** 从 package.json 生成 scripts/version.ts（release-only，日常提交排除） */
-task("generate-version", () => {
-  const buildTime = new Date().toISOString();
-  const content = [
-    "// 此文件由 just.config.ts 在构建时自动生成\n",
-    `export const VERSION = "${pkgVersion}";`,
-    `export const BUILD_TIME = "${buildTime}";`,
-    `export const PROJECT_URL = "https://github.com/Yinxe/MCBE";`,
-  ].join("\n");
-  writeFileSync(path.resolve(__dirname, "scripts/version.ts"), content + "\n");
-  console.log(`  ✓ scripts/version.ts → v${pkgVersion} (${buildTime})`);
-});
-
 const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
   "@minecraft/server",
   "@minecraft/server-ui",
@@ -59,7 +46,7 @@ const mcaddonTaskOptions = {
 };
 
 task("bundle", bundleTask(bundleTaskOptions));
-task("build", series("sync-version", "generate-version", "typescript", "bundle"));
+task("build", series("sync-version", "typescript", "bundle"));
 task("clean-local", cleanTask(DEFAULT_CLEAN_DIRECTORIES));
 task("clean-collateral", cleanCollateralTask(STANDARD_CLEAN_PATHS));
 task("clean", parallel("clean-local", "clean-collateral"));

@@ -7,7 +7,6 @@ import { system } from "@minecraft/server";
 import { installNdsCommands } from "@yinxe/nbt-data-storage";
 import { registerDemoCommands } from "./commands";
 import { storage } from "./storageService";
-import { VERSION } from "./version";
 
 // ── Phase 3：注册事件与命令（无世界访问） ─────────────────────────────
 system.beforeEvents.startup.subscribe((event) => {
@@ -21,6 +20,6 @@ system.run(() => {
   try {
     storage.init();
   } catch (e) {
-    console.warn(`[nds-demo] 初始化失败 v${VERSION}`, e);
+    console.warn("[nds-demo] 初始化失败", e);
   }
 });

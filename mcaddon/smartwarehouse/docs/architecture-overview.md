@@ -420,7 +420,6 @@ SlotOrganizer 维护容器级写锁（100 tick 超时），防止整理与分拣
 |-----------|------|
 | `scripts/main.ts` | 入口：初始化所有子系统，注册事件和命令，延迟启动 |
 | `scripts/types.ts` | 集中式类型定义（40+ 类型/接口） |
-| `scripts/version.ts` | 自动生成的版本号与构建时间 |
 | `scripts/commands/CommandRouter.ts` | 自定义命令注册与路由 |
 | `scripts/data/ItemFamilies.ts` | 物品家族分类数据 |
 | `scripts/data/ItemNameMap.ts` | 物品中文名映射 |

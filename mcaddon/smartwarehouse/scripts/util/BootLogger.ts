@@ -14,23 +14,9 @@ export class BootLogger {
   private phaseIndex = 0;
   private readonly lines: string[] = [];
 
-  constructor(
-    private readonly meta: {
-      version: string;
-      buildTime?: string;
-      projectUrl?: string;
-    }
-  ) {}
-
   /** 打印模组横幅（仅控制台，此时世界未加载） */
   banner(): void {
-    console.warn(`[SmartWarehouse] ${this.meta.version} 正在启动...`);
-    if (this.meta.projectUrl) {
-      console.warn(`[SmartWarehouse] 项目地址: ${this.meta.projectUrl}`);
-    }
-    if (this.meta.buildTime) {
-      console.warn(`[SmartWarehouse] 构建时间: ${this.meta.buildTime}`);
-    }
+    console.warn("[SmartWarehouse] 正在启动...");
   }
 
   /** 标记一个 Phase 完成（控制台 + 缓存，done 时广播） */
@@ -42,15 +28,10 @@ export class BootLogger {
   }
 
   /**
-   * 启动完成 → 控制台日志 + 世界广播（所有 Phase 消息 + 版本信息）。
+   * 启动完成 → 控制台日志 + 世界广播（所有 Phase 消息）。
    */
   done(): void {
-    console.warn(`[SmartWarehouse] ${this.meta.version} 加载完成`);
-    this.lines.unshift(`
-§a[SmartWarehouse] 构建时间:§f${this.meta.buildTime}
-§a[SmartWarehouse] 版本号:§f${this.meta.version}
-§a[SmartWarehouse] 项目地址:§f${this.meta.projectUrl}
-        `);
+    console.warn("[SmartWarehouse] 加载完成");
     try {
       for (const line of this.lines) {
         world.sendMessage(line);

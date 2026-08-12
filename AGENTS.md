@@ -59,7 +59,7 @@ pnpm run format        # prettier 全仓格式化
 pnpm run lint          # eslint（全仓；item-route 个别 addon 有环境性解析器问题，非本次改动引入）
 ```
 
-**版本同步**：构建时 `just-scripts` 会把 `package.json` 的版本同步到 `BP/manifest.json`（`version.ts` 亦自动生成）。`version.ts` / `manifest.json` / `package.json` 的版本改动是 **release-only**，日常提交源码时不纳入 commit。
+**版本同步**：构建时 `just-scripts` 会把 `package.json` 的版本同步到 `BP/manifest.json`（幂等，版本不变时不产生改动）。`manifest.json` / `package.json` 的版本改动是 **release-only**，日常提交源码时不纳入 commit。
 
 ## 测试（item-route 参考）
 
@@ -89,7 +89,7 @@ bump version (+0.01) → build → pack → commit → tag → push
 - commit message 格式：`<包名>@<新版本>: <中文描述>`（如 `mock-player@1.1.25: 回收详情表单 + 精确瞄准`）
 - tag 格式：`<包名>@<版本>`（如 `mock-player@1.1.25`）
 - 发布时同时 push commit + tag
-- 源码提交时**排除** `version.ts` / `manifest.json` / `package.json`（release-only）；仅提交 `scripts/` 源码与 `tests/`
+- 源码提交时**排除** `manifest.json` / `package.json`（release-only）；仅提交 `scripts/` 源码与 `tests/`
 
 ### 分支管理
 

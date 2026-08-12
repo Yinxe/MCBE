@@ -149,7 +149,7 @@ Minecraft Bedrock Edition 智能仓库管理 Addon。基于 Script API 实现自
 pnpm run build
 ```
 
-构建流程：generate-version（生成 version.ts）→ sync（同步 manifest 版本号）→ tsc → esbuild bundle（编译产物输出到行为包的 `scripts/` 目录）。
+构建流程：sync（同步 manifest 版本号）→ tsc → esbuild bundle（编译产物输出到行为包的 `scripts/` 目录）。
 
 ### 一键打包（.mcaddon）
 
@@ -182,7 +182,6 @@ RP/                   资源包（manifest.json + 纹理/声音）
 scripts/              TypeScript 源码
   main.ts             入口文件（初始化依赖、注册事件和命令）
   types.ts            集中式类型定义（40+ 类型/接口）
-  version.ts          自动生成的版本号与构建时间
   commands/           命令路由层（9 条自定义命令）
   data/               数据文件（51 家族物品分类、中文名映射）
   interaction/        工具交互（信物右键、方块事件处理）

@@ -9,14 +9,10 @@ import { SortingScheduler } from "./sorting/SortingScheduler";
 import { ModConfigStore } from "./storage/ModConfigStore";
 import { WarehouseRepository } from "./storage/WarehouseRepository";
 import { BootLogger } from "./util/BootLogger";
-import { PROJECT_URL, VERSION } from "./version";
 import { BoundaryDisplay } from "./warehouse/BoundaryDisplay";
 import { WarehouseService } from "./warehouse/WarehouseService";
 
-const boot = new BootLogger({
-  version: VERSION,
-  projectUrl: PROJECT_URL,
-});
+const boot = new BootLogger();
 boot.banner();
 
 const configStore = new ModConfigStore(); // 模组全局配置：信物 ID、体积上限等
