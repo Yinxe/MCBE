@@ -49,6 +49,25 @@ test("半径边界：距离恰等于 radius 算邻居（<=）", () => {
   assert.deepEqual(probs, [1, 1]);
 });
 
+test("半径 2（认主 UI 语义）：2 格内算邻居、3 格不算", () => {
+  // A(0) B(2) 边界邻居；C(5) 距 B 3 格 → 非邻居
+  const probs = computeClusterProbabilities([{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 5, y: 0, z: 0 }], 2);
+  assert.deepEqual(probs, [1 / 2, 1 / 2, 0]);
+});
+
+test("半径 2（认主 UI 语义）：多数点集中在 1~2 格内 → 概率高", () => {
+  // 正方形四角（任意两点 ≤ √2 格）+ 孤立点：四角 0.75、孤立 0
+  const points = [
+    { x: 0, y: 0, z: 0 },
+    { x: 1, y: 0, z: 0 },
+    { x: 0, y: 1, z: 0 },
+    { x: 1, y: 1, z: 0 },
+    { x: 100, y: 0, z: 0 },
+  ];
+  const probs = computeClusterProbabilities(points, 2);
+  assert.deepEqual(probs, [0.75, 0.75, 0.75, 0.75, 0]);
+});
+
 test("空数组：返回空", () => {
   assert.deepEqual(computeClusterProbabilities([], 10), []);
 });

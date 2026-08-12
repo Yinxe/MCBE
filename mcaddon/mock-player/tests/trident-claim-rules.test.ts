@@ -7,7 +7,7 @@ import {
   OWNER_TAG_PREFIX, OWNER2_TAG_PREFIX, ITEM_TAG_PREFIX, TRACKED_PROJECTILE_IDS,
   isTrackedProjectile, makeOwnerTag, makeSecondOwnerTag,
   parseClaimTags, resolveClaimOwner, isOwnedByFamily,
-  makeItemTag, parseItemTag,
+  makeItemTag, parseItemTag, projectileTypeLabel,
 } from "../scripts/core/items/TridentClaimRules";
 
 test("tag 常量：前缀格式", () => {
@@ -21,6 +21,12 @@ test("isTrackedProjectile：三叉戟与箭在列（arrow 含药水箭）", () =
   assert.ok(!isTrackedProjectile("minecraft:snowball"));
   assert.ok(!isTrackedProjectile("minecraft:egg"));
   assert.deepEqual([...TRACKED_PROJECTILE_IDS], ["minecraft:thrown_trident", "minecraft:arrow"]);
+});
+
+test("projectileTypeLabel：中文展示名兜底", () => {
+  assert.equal(projectileTypeLabel("minecraft:thrown_trident"), "三叉戟");
+  assert.equal(projectileTypeLabel("minecraft:arrow"), "箭");
+  assert.equal(projectileTypeLabel("minecraft:unknown"), "投掷物");
 });
 
 test("tag 构建", () => {

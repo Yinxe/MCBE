@@ -23,6 +23,13 @@ export function isTrackedProjectile(typeId: string): boolean {
   return (TRACKED_PROJECTILE_IDS as readonly string[]).includes(typeId);
 }
 
+/** 投掷物 typeId → 中文展示名（认主 UI 无自定义名时兜底） */
+export function projectileTypeLabel(typeId: string): string {
+  if (typeId === "minecraft:thrown_trident") return "三叉戟";
+  if (typeId === "minecraft:arrow") return "箭";
+  return "投掷物";
+}
+
 /** 构建第一任主人 tag */
 export function makeOwnerTag(name: string): string {
   return `${OWNER_TAG_PREFIX}${name}`;

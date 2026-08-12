@@ -154,7 +154,7 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     .button(style("修改名字", color.darkBlue), () => doRename(player, botName))
     // ── 战斗/工具 ──
     .button(style("投三叉戟", color.darkBlue), () => showTridentSelector(player, botName))
-    .button(style("三叉戟认主", color.darkBlue), () => showTridentClaimUI(player, botName))
+    .button(style("投掷物认主", color.darkBlue), () => showTridentClaimUI(player, botName))
     .button(style("查看数据", color.darkBlue), () => { const r = botRegistry.get(botName); if (r) sendData(player, r); })
     // ── 危险 ──
     .button(style("击杀假人", color.darkRed), () => requireActive(player, botName, (r) => {

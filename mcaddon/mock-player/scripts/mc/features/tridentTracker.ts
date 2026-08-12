@@ -5,24 +5,23 @@
 //      为第一任主人打 tag（玩家或假人皆可）。
 //   2. fallback 认主：投掷物实体加载（entityLoad）时，在主人列表中按优先级认主
 //      ——第二任（仅假人）在线则认第二任，否则第一任在线认第一任；都离线不动。
-//   3. 假人上线夺回：假人上线后 rebindBotTridents 扫描第一/第二任含自己的三叉戟，
-//      重设 owner 到当前实体（玩家下线期间被认走的击杀经验回归）。
+//   3. 假人上线夺回：假人上线后 rebindBotTridents 扫描第一/第二任含自己的投掷物
+//      （三叉戟/箭），重设 owner 到当前实体（玩家下线期间被认走的击杀经验回归）。
 //
 // tag 设计（core/items/TridentClaimRules）：
 //   mp:owner:<name>  第一任主人（玩家或假人）
 //   mp:owner2:<name> 第二任主人（仅假人，可被后续假人覆盖复写）
 //   mp:item:<...>    附魔/耐久编码（投掷时打上，认主 UI 解码展示）
 //
-// ⚠️ thrown_trident 投射物实体没有可读物品的组件（minecraft:item 仅掉落物实体），
+// ⚠️ thrown_trident / arrow 投射物实体没有可读物品的组件（minecraft:item 仅掉落物实体），
 //    附魔信息只能在投掷流程获取：优先投掷流程注册的 pending 队列，其次投掷者主手。
 
 import { world, system, EntityProjectileComponent } from "@minecraft/server";
-import type { Entity, ItemStack } from "@minecraft/server";
+import type { Dimension, Entity, ItemStack } from "@minecraft/server";
 import { botRegistry } from "../bootstrap/context";
 import { BotEvents } from "../../core/events/DomainEvents";
-import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner } from "../../core/items/TridentClaimRules";
-
-const THROWN_TRIDENT = "minecraft:thrown_trident";
+import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner, TRACKED_PROJECTILE_IDS } from "../../core/items/TridentClaimRules";
+import { queueClaimReport } from "./claimReporter";
 
 // ─── pending 附魔信息队列 ──────────────────────────────
 // 投掷流程（features/trident.ts doThrowLoop）在 useItemInSlot 前注册物品信息，
@@ -166,6 +165,11 @@ export function initTridentTracker(): void {
           `｜主人列表：第一任=${firstOwner ?? "无"} 第二任=${secondOwner ?? "无"}`
         );
         BotEvents.tridentClaimed.trigger({ tridentId: entity.id, claimedBy: target, via: "load", firstOwner, secondOwner });
+
+        // 认主汇报（集中聚合）：目标假人 → 其主人"认主"；目标玩家 → "重新获得"
+        const targetRecord = botRegistry.get(target);
+        if (targetRecord) queueClaimReport(targetRecord.ownerName ?? "", "claimed");
+        else queueClaimReport(target, "returned");
       }
     } catch (e) {
       console.info(`[MockPlayer] entityLoad 认主异常: ${e}`);
@@ -218,10 +222,25 @@ export function trackBotOffline(entityId: string): void {
   console.info(`[MockPlayer] 反查表 -= ${entityId} 剩余 ${entityOwnerMap.size} 条`);
 }
 
+// ─── 投掷物查询 ────────────────────────────────────────
+
+/** 按认主 tag 查某维度内全部受跟踪投掷物（三叉戟 + 箭，分类型查询合并） */
+function findProjectilesByTag(dim: Dimension, tag: string): Entity[] {
+  const result: Entity[] = [];
+  for (const typeId of TRACKED_PROJECTILE_IDS) {
+    try {
+      result.push(...dim.getEntities({ tags: [tag], type: typeId }));
+    } catch {
+      // 单类型查询失败跳过
+    }
+  }
+  return result;
+}
+
 // ─── 上线夺回 ─────────────────────────────────────────
 
 /**
- * 假人上线后扫描第一/第二任包含自己的三叉戟，重设 owner 到当前实体。
+ * 假人上线后扫描第一/第二任包含自己的投掷物（三叉戟/箭），重设 owner 到当前实体。
  * 覆盖场景：模式切换（chunkload↔normal）、手动重连、游戏重启。
  * 由 playerJoin / playerSpawn 调用。
  */
@@ -242,11 +261,11 @@ export function rebindBotTridents(botName: string): void {
   for (const dimId of ["overworld", "nether", "the_end"]) {
     try {
       const dim = world.getDimension(dimId);
-      const firstOwner = dim.getEntities({ tags: [makeOwnerTag(botName)], type: THROWN_TRIDENT });
-      const secondOwner = dim.getEntities({ tags: [makeSecondOwnerTag(botName)], type: THROWN_TRIDENT });
+      const firstOwner = findProjectilesByTag(dim, makeOwnerTag(botName));
+      const secondOwner = findProjectilesByTag(dim, makeSecondOwnerTag(botName));
       for (const t of [...firstOwner, ...secondOwner]) {
         // ⚠️ 优先级校验：按主人列表计算当前最优 owner（第二任在线 > 第一任在线）。
-        //   只有最优是自己才夺回——避免把"第二任是其他在线假人"的三叉戟抢过来。
+        //   只有最优是自己才夺回——避免把"第二任是其他在线假人"的投掷物抢过来。
         const { firstOwner: f, secondOwner: s } = parseClaimTags(t.getTags());
         const target = resolveClaimOwner(f, s, isOwnerOnline);
         if (target !== botName) continue;
@@ -257,6 +276,9 @@ export function rebindBotTridents(botName: string): void {
           if (proj) {
             proj.owner = newOwner;
             BotEvents.tridentClaimed.trigger({ tridentId: t.id, claimedBy: botName, via: "rebind", firstOwner: f, secondOwner: s });
+            // 认主汇报（集中聚合）：假人主人"夺回"；第一任是玩家则玩家"被覆盖"
+            queueClaimReport(record.ownerName ?? "", "claimed");
+            if (f && !botRegistry.get(f)) queueClaimReport(f, "covered");
           }
         } catch (e) {
           console.info(`[MockPlayer] 重绑定 ${t.id} 失败: ${e}`);
@@ -267,27 +289,28 @@ export function rebindBotTridents(botName: string): void {
     }
   }
   if (total > 0) {
-    console.info(`[MockPlayer] rebindBotTridents(${botName}) 完成，重绑定 ${total} 把三叉戟`);
+    console.info(`[MockPlayer] rebindBotTridents(${botName}) 完成，重绑定 ${total} 把投掷物`);
   }
 }
 
 // ─── 下线回退认主第一任 ────────────────────────────────
 
 /**
- * 假人下线时调用：名下三叉戟（第二任 = 自己）尝试回退认主**第一任**。
+ * 假人下线时调用：名下投掷物（第二任 = 自己）尝试回退认主**第一任**。
  * - 第一任在线（玩家在世界 / 假人 registry 有 entityId）→ 重设 owner 到第一任，
- *   避免三叉戟 owner 悬空导致击杀经验丢失
+ *   避免投掷物 owner 悬空导致击杀经验丢失
  * - 第一任离线 → 保持现状，等第一任上线由 rebind 认主
  * - tag 保留（第二任仍是自己）：假人上线后 rebind 会重新夺回（第二任 > 第一任）
  * 由 offlineBot / entityDie（死亡下线）/ playerLeave 调用。
  */
 export function releaseBotTridents(botName: string): void {
   let total = 0;
+  const ownerName = botRegistry.get(botName)?.ownerName ?? "";
   for (const dimId of ["overworld", "nether", "the_end"]) {
     try {
       const dim = world.getDimension(dimId);
-      const asFirst = dim.getEntities({ tags: [makeOwnerTag(botName)], type: THROWN_TRIDENT });
-      const asSecond = dim.getEntities({ tags: [makeSecondOwnerTag(botName)], type: THROWN_TRIDENT });
+      const asFirst = findProjectilesByTag(dim, makeOwnerTag(botName));
+      const asSecond = findProjectilesByTag(dim, makeSecondOwnerTag(botName));
       for (const t of [...asFirst, ...asSecond]) {
         const { firstOwner, secondOwner } = parseClaimTags(t.getTags());
 
@@ -304,8 +327,11 @@ export function releaseBotTridents(botName: string): void {
           if (proj) {
             proj.owner = targetEntity;
             total++;
-            console.info(`[MockPlayer] 下线回退 ${botName} → 三叉戟 ${t.id} 认主第一任=${firstOwner}`);
+            console.info(`[MockPlayer] 下线回退 ${botName} → 投掷物 ${t.id} 认主第一任=${firstOwner}`);
             BotEvents.tridentClaimed.trigger({ tridentId: t.id, claimedBy: firstOwner, via: "offline-fallback", firstOwner, secondOwner });
+            // 认主汇报（集中聚合）：假人主人"降级回退"；第一任是玩家则玩家"重新获得"
+            queueClaimReport(ownerName, "returned");
+            if (!botRegistry.get(firstOwner)) queueClaimReport(firstOwner, "returned");
           }
         } catch (e) {
           console.info(`[MockPlayer] 下线回退 ${t.id} 失败: ${e}`);
@@ -316,6 +342,6 @@ export function releaseBotTridents(botName: string): void {
     }
   }
   if (total > 0) {
-    console.info(`[MockPlayer] releaseBotTridents(${botName}) 完成，回退 ${total} 把三叉戟到第一任`);
+    console.info(`[MockPlayer] releaseBotTridents(${botName}) 完成，回退 ${total} 把投掷物到第一任`);
   }
 }

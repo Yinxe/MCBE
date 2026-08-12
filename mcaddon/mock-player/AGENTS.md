@@ -159,8 +159,9 @@ scripts/
 ### 双认主机制（`mc/features/tridentTracker.ts`）
 1. **投掷即标记**：entitySpawn 时以投射物 owner（投掷者）打第一任 tag（假人投掷 → 第一任即该假人）；反查表（entityOwnerMap，entityId→假人名）优先解析投掷者（实体无 name 兜底）
 2. **fallback 认主**：entityLoad 时按优先级认主——**第二任在线 > 第一任在线**（`resolveClaimOwner` 纯函数）；都离线不动等上线夺回
-3. **上线夺回**：假人上线（playerJoin/playerSpawn）→ `rebindBotTridents`，**先按优先级计算最优 owner，只有最优是自己才重设**（避免抢走"第二任是其他在线假人"的三叉戟）
-4. **下线回退**：假人下线（offlineBot/entityDie 死亡下线/playerLeave 兜底）→ `releaseBotTridents`，名下第二任=自己的三叉戟**回退认主第一任**（第一任在线才认），避免 owner 悬空丢击杀经验；tag 保留，上线后 rebind 夺回
+3. **上线夺回**：假人上线（playerJoin/playerSpawn）→ `rebindBotTridents`，**先按优先级计算最优 owner，只有最优是自己才重设**（避免抢走"第二任是其他在线假人"的投掷物）
+4. **下线回退**：假人下线（offlineBot/entityDie 死亡下线/playerLeave 兜底）→ `releaseBotTridents`，名下第二任=自己的投掷物**回退认主第一任**（第一任在线才认），避免 owner 悬空丢击杀经验；tag 保留，上线后 rebind 夺回
+- rebind/release 扫描经 `findProjectilesByTag`（遍历 `TRACKED_PROJECTILE_IDS` 分类型查询），三叉戟与箭统一覆盖
 
 ### 认主领域事件（`core/events/DomainEvents`）
 - `tridentClaimed`：所有认主动作完成触发（via: spawn/load/rebind/ui/offline-fallback，负载含 tridentId/claimedBy/第一二任）
@@ -179,11 +180,17 @@ scripts/
 - 生产端：订阅 playerHotbarSelectedSlotChange / playerBreakBlock / playerPlaceBlock / itemUse / entityHurt（damageSource.damagingEntity 是假人），全部过滤 BOT_TAG
 - 新行为领域事件一律在此文件生产，订阅方只依赖领域事件
 
-### 认主 UI（ui/tridentClaim.ts，面板"三叉戟认主"按钮）
-- 扫描假人 100 半径（当前维度）内三叉戟，过滤**自家**（第一/第二任 ∈ 家族集合 = 主人名 ∪ 主人名下假人名）
-- 附魔/耐久展示尽力经 `EntityItemComponent.itemStack` 读取；**投射物实体实测常无该组件 → 附魔段降级省略（不跳过条目、不显示"未知"），认主功能不受影响**
-- **聚集概率**（`core/coords/Cluster.ts`）：邻居密度归一化（半径 15 判定），扎堆概率大；列表按概率降序（百分比展示）
-- 批量 toggle 勾选 → 认主 = 写/覆盖第二任 tag + 重设 proj.owner
+### 认主 UI（ui/tridentClaim.ts，面板"投掷物认主"按钮）
+- 扫描假人 100 半径（当前维度）内**全部受跟踪投掷物（三叉戟 + 箭，分类型两次 getEntities 合并）**，过滤**自家**（第一/第二任 ∈ 家族集合 = 主人名 ∪ 主人名下假人名）
+- 每条展示：类型图标（🔱 三叉戟 / 🏹 箭）+ **展示名（自定义 nameTag/name 优先，否则"三叉戟"/"箭"，`projectileTypeLabel` 纯函数兜底）** + 附魔/耐久（`mp:item:` tag 解码，箭通常无编码 → 省略附魔段）+ 坐标 + 聚集概率
+- **聚集概率**（`core/coords/Cluster.ts`）：邻居密度归一化（**半径 2 格判定，投掷物集中落地 1~2 格内才算聚集**），扎堆概率大；列表按概率降序（百分比展示），并分档分组（★高≥60% / ☆中 30–59% / ·低 <30%）
+- 每条带认主状态徽标：✔ 已是本假人 / ⇄ 覆盖 {旧第二任}（`currentSecondOwner` 由扫描时解析 tag 提供）
+- 批量 toggle 勾选 → 认主 = 写/覆盖第二任 tag + 重设 proj.owner（`claimTridents` 校验 `isTrackedProjectile`，三叉戟/箭均可认主）
+
+### 认主集中汇报（`mc/features/claimReporter.ts`）
+- 认主 / 回退 / 被覆盖等认主变更（load 认主、rebind 夺回、offline 回退、UI 认主与覆盖）**不再只有日志**：按目标真实玩家聚合，同一 tick 内汇总为**一条** `[认主汇报]` 消息发送（`queueClaimReport` → system.run flush），避免每把刷屏
+- 接收者与语义：名下假人夺回/获得 → **认主 N 件**；名下假人下线降级回退或玩家重新获得 → **回退 N 件**；玩家的投掷物被假人认走/名下假人被顶替 → **被覆盖 N 件**
+- 投掷即标记（entitySpawn 首任 tag）属正常投掷行为，**不汇报**；UI 操作者已有表单结果直接消息，汇报排除操作者防重复
 
 ---
 
