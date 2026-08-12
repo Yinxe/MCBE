@@ -10,11 +10,15 @@ import { McConfigStore } from "../adapters/McConfigStore";
 import { SaveCoordinator } from "./save";
 import { InventoryStorage } from "../features/inventoryStorage";
 
+/** 内存注册表引用（延迟注入：McBotStore 物品方法需要内存 record 承载绑定表，见构造注释） */
+let registryRef: BotRegistry | undefined;
+
 /** 假人持久化后端（NBT 木桶阵列：真实 ItemStack 完整 NBT；读操作直接使用，写操作统一走 saveCoordinator） */
-export const botStore = new McBotStore();
+export const botStore = new McBotStore((name) => registryRef?.get(name));
 
 /** 假人注册表（内存 + 持久化写穿） */
 export const botRegistry = new BotRegistry(botStore);
+registryRef = botRegistry;
 
 /** 全局配置（默认配额/逐人配额/管理员名单；worldLoad 后需 refresh()） */
 export const configStore = new McConfigStore();

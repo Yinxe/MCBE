@@ -42,6 +42,16 @@ export const PLACEHOLDER_TYPE = "minecraft:structure_void";
 export class McBotStore implements BotStore<ItemStack> {
   private region: StoredRegion | undefined;
 
+  /**
+   * @param records 内存记录提供者（BotRegistry.get）——物品方法一律用**内存 record**
+   * 对象承载 storageBinding，避免与 DP loadRecord 分裂：若绑定写在临时对象上，
+   * 后续 registry.save（下线/周期等）会用无绑定的内存 record 覆盖 DP，绑定表丢失
+   * → 恢复失败 + 区域孤儿槽（实测 bug）。
+   */
+  constructor(
+    private readonly records: (name: string) => BotRecord | undefined
+  ) {}
+
   // ── 区域（懒注册，幂等；register 缓存命中成本低，失败下轮重试） ──
   private ensureRegion(): StoredRegion | undefined {
     if (this.region) return this.region;
@@ -54,11 +64,14 @@ export class McBotStore implements BotStore<ItemStack> {
     return this.region;
   }
 
-  /** 取绑定表（无则新建）；区域不可用返回 undefined */
-  private bindingOf(record: BotRecord): StorageBinding | undefined {
+  /** 取内存 record 的绑定表（无则新建并立即写穿）；区域不可用/无记录返回 undefined */
+  private bindingOf(name: string): StorageBinding | undefined {
+    const record = this.records(name);
+    if (!record) return undefined;
     if (record.storageBinding) return record.storageBinding;
     if (!this.ensureRegion()) return undefined;
     record.storageBinding = createBinding(this.region!.regionId);
+    this.saveRecord(record, true); // 立即持久化（内存 = DP 一致，防后续覆盖）
     return record.storageBinding;
   }
 
@@ -118,16 +131,17 @@ export class McBotStore implements BotStore<ItemStack> {
   }
 
   // ── 背包（每格 ↔ NBT 存储槽） ──
+  // ⚠️ 物品方法统一用内存 record（this.records）承载绑定表，不 loadRecord（防对象分裂覆盖）
 
   /** 保存单个格子（null 写占位保持绑定；首次写分配槽位） */
   saveSlot(name: string, slot: number, item: ItemStack | null): void {
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record) {
       console.error(`[MockPlayer] 保存背包失败：无记录 ${name}`);
       return;
     }
     if (!this.ensureRegion()) return;
-    const binding = this.bindingOf(record);
+    const binding = this.bindingOf(name);
     if (!binding) return;
     if (this.writeSlot(this.region!, record, binding, slot, item)) {
       this.saveRecord(record, true);
@@ -136,10 +150,10 @@ export class McBotStore implements BotStore<ItemStack> {
 
   /** 保存全部背包格（空位传 null 回收） */
   saveInventory(name: string, items: (ItemStack | null)[]): void {
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record) return;
     if (!this.ensureRegion()) return;
-    const binding = this.bindingOf(record);
+    const binding = this.bindingOf(name);
     if (!binding) return;
     const region = this.region!;
     let changed = false;
@@ -152,10 +166,10 @@ export class McBotStore implements BotStore<ItemStack> {
   /** 批量保存指定背包格（对账式：只写变化的格子；单次记录读写） */
   saveSlots(name: string, items: { slot: number; item: ItemStack | null }[]): void {
     if (items.length === 0) return;
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record) return;
     if (!this.ensureRegion()) return;
-    const binding = this.bindingOf(record);
+    const binding = this.bindingOf(name);
     if (!binding) return;
     const region = this.region!;
     let changed = false;
@@ -170,7 +184,7 @@ export class McBotStore implements BotStore<ItemStack> {
    * 返回真实 ItemStack（完整 NBT）；占位物品（structure_void）视为空位跳过。
    */
   loadInventory(name: string): (ItemStack | null)[] | undefined {
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record?.storageBinding) return undefined;
     const region = this.ensureRegion();
     if (!region) return undefined;
@@ -191,10 +205,10 @@ export class McBotStore implements BotStore<ItemStack> {
   // ── 装备栏（每槽 ↔ NBT 存储槽） ──
 
   saveEquipSlot(name: string, slot: string, item: ItemStack | null): void {
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record) return;
     if (!this.ensureRegion()) return;
-    const binding = this.bindingOf(record);
+    const binding = this.bindingOf(name);
     if (!binding) return;
     if (this.writeEquipSlot(this.region!, record, binding, slot, item)) {
       this.saveRecord(record, true);
@@ -202,10 +216,10 @@ export class McBotStore implements BotStore<ItemStack> {
   }
 
   saveEquipment(name: string, equipment: Record<string, ItemStack | null>, _silent = false): void {
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record) return;
     if (!this.ensureRegion()) return;
-    const binding = this.bindingOf(record);
+    const binding = this.bindingOf(name);
     if (!binding) return;
     const region = this.region!;
     let changed = false;
@@ -218,10 +232,10 @@ export class McBotStore implements BotStore<ItemStack> {
   /** 批量保存指定装备槽（对账式：只写变化的槽；单次记录读写） */
   saveEquipSlots(name: string, items: { slot: string; item: ItemStack | null }[]): void {
     if (items.length === 0) return;
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record) return;
     if (!this.ensureRegion()) return;
-    const binding = this.bindingOf(record);
+    const binding = this.bindingOf(name);
     if (!binding) return;
     const region = this.region!;
     let changed = false;
@@ -233,7 +247,7 @@ export class McBotStore implements BotStore<ItemStack> {
 
   /** 返回 { head?, chest?, legs?, feet?, offhand? }（真实 ItemStack；占位视为空），全空返回 undefined */
   loadEquipment(name: string): Record<string, ItemStack> | undefined {
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record?.storageBinding) return undefined;
     const region = this.ensureRegion();
     if (!region) return undefined;
@@ -249,7 +263,7 @@ export class McBotStore implements BotStore<ItemStack> {
 
   /** 删除假人的全部背包 + 装备槽数据（槽位释放回收 + 绑定表清空） */
   removeInventory(name: string): void {
-    const record = this.loadRecord(name);
+    const record = this.records(name);
     if (!record?.storageBinding) return;
     const region = this.ensureRegion();
     if (region) {
