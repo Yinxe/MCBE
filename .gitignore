@@ -38,3 +38,7 @@ item-matrix
 
 # Deepwork state
 .slim/deepwork/
+
+# Tools
+.codegraph/
+.mimosa/
