@@ -8,11 +8,12 @@
 //   由 meta.barrelCount 精确跟踪（真正 setBlockType 建桶时 +1）。
 import type { Container, ItemStack } from "@minecraft/server";
 import { system } from "@minecraft/server";
-import { BARREL_SLOTS, capacityOf, slotIdToPosition, type RegionLayout } from "../core/layout";
+import { groupSlotIdsByBarrel } from "../core/batch";
+import { BARREL_SLOTS, BARRELS_PER_LEVEL, SLOTS_PER_LEVEL, capacityOf, slotIdToPosition, usableSlotsPerBarrel, type RegionLayout, type SlotPosition } from "../core/layout";
 import { createRegionMeta, type RegionMeta } from "../core/meta";
 import { putItem, decrementUsage, type PutPort } from "../core/put";
 import { createRegionRecord, type PersistedRegion } from "../core/record";
-import { checkAndRepairLevel, createRepairReport, type RepairEvent, type RepairPort, type RepairReport } from "../core/repair";
+import { checkAndRepairLevel, createRepairReport, type RepairEvent, type RepairPort, type RepairReport, type SlotStatus } from "../core/repair";
 import { overwriteSlot, type OverwritePort, type OverwriteResult } from "../core/overwrite";
 import { rebuildUsage, resizeLayout, type ResizePatch, type ResizePort } from "../core/region";
 import { regionStats, type RegionStats } from "../core/stats";
@@ -106,6 +107,83 @@ export class StoredRegion {
     const pos = slotIdToPosition(slotId, this.layout);
     if (!pos) return undefined;
     return this.runtime.readItem(pos);
+  }
+
+  /**
+   * 批量只读取物（不影响存储阵列）：同桶格子一次容器读取（每桶一次 getBlock +
+   * 一次 getItem 循环，替代逐格 getBlock 放大）。越界 slotId 对应位置 undefined。
+   * @param slotIds 任意顺序（可重复）；输出与输入顺序对齐
+   */
+  getBatch(slotIds: number[]): (ItemStack | undefined)[] {
+    const result: (ItemStack | undefined)[] = new Array(slotIds.length);
+    const groups = groupSlotIdsByBarrel(slotIds, this.layout);
+    for (const entries of groups.values()) {
+      const pos = entries[0]!.pos;
+      const values = this.runtime.readBatch(pos, entries.map((e) => e.slotInBarrel));
+      for (let i = 0; i < entries.length; i++) {
+        result[entries[i]!.inputIndex] = values[i];
+      }
+    }
+    return result;
+  }
+
+  /** 槽位只读状态探测（occupied/empty/damaged/unknown；不影响存储） */
+  probe(slotId: number): SlotStatus {
+    const pos = slotIdToPosition(slotId, this.layout);
+    if (!pos) return "unknown";
+    return this.runtime.probeStatus(pos);
+  }
+
+  /**
+   * 单向复制：把区域格物品**复制**到外部容器槽（get 只读克隆 → setItem），
+   * 槽位不清空不回收（与 take/swap 互补——copyTo 不取走）。
+   * 槽空/位置异常 → false；目标写入失败 → false（原区域不受影响）。
+   */
+  copyTo(slotId: number, container: Container, destSlot: number): boolean {
+    const item = this.get(slotId);
+    if (!item) return false;
+    try {
+      container.setItem(destSlot, item);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 枚举区域内全部已占用槽（只读）：按层读桶水位跳过空桶，占用桶一次取容器。
+   * 用于巡检/迁移/调试总览（如统计各假人槽位分布）。
+   */
+  listOccupied(): { slotId: number; itemTypeId: string }[] {
+    const result: { slotId: number; itemTypeId: string }[] = [];
+    const layout = this.layout;
+    const usable = usableSlotsPerBarrel(layout);
+    const x0 = layout.chunkX * 16;
+    const z0 = layout.chunkZ * 16;
+    for (let level = 0; level < layout.maxLevels; level++) {
+      const usage = readLevelUsage(this.regionId, level);
+      for (let b = 0; b < usage.length && b < BARRELS_PER_LEVEL; b++) {
+        if (usage[b] === 0) continue; // 未物化/空桶：跳过
+        const pos: SlotPosition = { x: x0 + (b % 16), y: layout.baseY + level, z: z0 + Math.floor(b / 16), slotInBarrel: 0 };
+        const statuses = this.runtime.probeBarrelSlots(pos, usable);
+        const occupied: number[] = [];
+        for (let j = 0; j < statuses.length; j++) {
+          if (statuses[j] === "occupied") occupied.push(j);
+        }
+        if (occupied.length === 0) continue;
+        const items = this.runtime.readBatch(pos, occupied);
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item) {
+            result.push({
+              slotId: level * SLOTS_PER_LEVEL + b * BARREL_SLOTS + occupied[i]!,
+              itemTypeId: item.typeId,
+            });
+          }
+        }
+      }
+    }
+    return result;
   }
 
   /**

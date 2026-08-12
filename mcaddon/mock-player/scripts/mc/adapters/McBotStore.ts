@@ -213,20 +213,33 @@ export class McBotStore implements BotStore<ItemStack> {
   /**
    * 未绑定/无任何物品时返回 undefined（调用方据此判断是否需要恢复）。
    * 返回真实 ItemStack（完整 NBT）；占位物品（structure_void）视为空位跳过。
+   * 批量读取：getBatch 按桶分组一次取容器（36 格 ≈ 2 次容器读取，替代逐格方块查询）。
    */
   loadInventory(name: string): (ItemStack | null)[] | undefined {
     const binding = this.loadBinding(name);
     if (!binding) return undefined;
     const storage = this.ensureItemStorage();
     if (!storage) return undefined;
-    const result: (ItemStack | null)[] = new Array(INVENTORY_SIZE).fill(null);
-    let found = false;
+
+    // 收集已绑定格的 slotId（未绑定格保持 null）
+    const slotIds: number[] = [];
+    const slotIndexes: number[] = [];
     for (let i = 0; i < INVENTORY_SIZE; i++) {
       const sid = boundSlotId(binding, i);
-      if (sid === undefined) continue;
-      const item = storage.get(sid);
+      if (sid !== undefined) {
+        slotIds.push(sid);
+        slotIndexes.push(i);
+      }
+    }
+    if (slotIds.length === 0) return undefined;
+
+    const values = storage.getBatch(slotIds);
+    const result: (ItemStack | null)[] = new Array(INVENTORY_SIZE).fill(null);
+    let found = false;
+    for (let k = 0; k < slotIndexes.length; k++) {
+      const item = values[k];
       if (item && item.typeId !== PLACEHOLDER_TYPE) {
-        result[i] = item;
+        result[slotIndexes[k]!] = item;
         found = true;
       }
     }
@@ -270,18 +283,31 @@ export class McBotStore implements BotStore<ItemStack> {
     if (changed) this.saveBinding(name, binding);
   }
 
-  /** 返回 { head?, chest?, legs?, feet?, offhand? }（真实 ItemStack；占位视为空），全空返回 undefined */
+  /** 返回 { head?, chest?, legs?, feet?, offhand? }（真实 ItemStack；占位视为空），全空返回 undefined；批量读取 */
   loadEquipment(name: string): Record<string, ItemStack> | undefined {
     const binding = this.loadBinding(name);
     if (!binding) return undefined;
     const storage = this.ensureItemStorage();
     if (!storage) return undefined;
-    const result: Record<string, ItemStack> = {};
+
+    const slotIds: number[] = [];
+    const slotNames: string[] = [];
     for (const slotName of EQUIP_SLOT_NAMES) {
       const sid = boundEquipSlotId(binding, slotName);
-      if (sid === undefined) continue;
-      const item = storage.get(sid);
-      if (item && item.typeId !== PLACEHOLDER_TYPE) result[slotName] = item;
+      if (sid !== undefined) {
+        slotIds.push(sid);
+        slotNames.push(slotName);
+      }
+    }
+    if (slotIds.length === 0) return undefined;
+
+    const values = storage.getBatch(slotIds);
+    const result: Record<string, ItemStack> = {};
+    for (let k = 0; k < slotNames.length; k++) {
+      const item = values[k];
+      if (item && item.typeId !== PLACEHOLDER_TYPE) {
+        result[slotNames[k]!] = item;
+      }
     }
     return Object.keys(result).length > 0 ? result : undefined;
   }

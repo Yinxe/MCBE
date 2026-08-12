@@ -81,6 +81,23 @@ export class BarrelRuntime {
     }
   }
 
+  /**
+   * 批量读取同一木桶的多个格子（**一次取容器**、循环 getItem，替代逐格 getBlock 放大）。
+   * 位置不是木桶/区块未加载 → 全部 undefined（绝不读他人容器）。
+   * 返回数组与入参 slotInBarrels 顺序对齐。
+   */
+  readBatch(pos: SlotPosition, slotInBarrels: number[]): (ItemStack | undefined)[] {
+    try {
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block || block.typeId !== BARREL) return slotInBarrels.map(() => undefined);
+      const container = (block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined)?.container;
+      if (!container) return slotInBarrels.map(() => undefined);
+      return slotInBarrels.map((j) => container.getItem(j)?.clone());
+    } catch {
+      return slotInBarrels.map(() => undefined);
+    }
+  }
+
   /** 槽位是否被占用；无法确认或**位置不是木桶**时保守视为占用（绝不覆盖/写入他人方块） */
   isSlotOccupied(pos: SlotPosition): boolean {
     try {
