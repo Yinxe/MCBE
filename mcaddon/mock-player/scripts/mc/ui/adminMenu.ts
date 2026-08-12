@@ -1,6 +1,7 @@
 // ─── 管理员菜单 ────────────────────────────────────────
 // 配置：默认配额 / 逐玩家配额（0=禁止，含占用统计）/ 管理员名单。
 // 入口：主菜单"管理员菜单"按钮 或 /mp:admin（仅管理员可见/可开）。
+// 额外提供：全部假人列表 / 全部假人在线管理（管理员视角，不受主人过滤）。
 
 import { Player } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
@@ -8,6 +9,8 @@ import { ActionFormBuilder, ModalFormBuilder, MessageFormBuilder } from "@yinxe/
 
 import { botRegistry, configStore } from "../bootstrap/context";
 import { isAdmin } from "../commands/auth";
+import { showBotList } from "./bot";
+import { showOnlineManagement } from "./online";
 
 /** 概览 + 一级入口 */
 export function showAdminMenu(player: Player): void {
@@ -25,6 +28,9 @@ export function showAdminMenu(player: Player): void {
       `${color.muted}假人总数: ${color.info}${botRegistry.size} ${color.muted}（主人 ${color.info}${owners.size} ${color.muted}名）\n` +
       `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）`
     )
+    // ── 假人全览（管理员视角：不受主人过滤，全部可见） ──
+    .button("全部假人列表", () => showBotList(player, () => showAdminMenu(player)))
+    .button("全部假人在线管理", () => showOnlineManagement(player))
     .button(`默认配额 ${color.info}${cfg.defaultQuota}`, () => editDefaultQuota(player))
     .button("逐玩家配额", () => showPlayerQuotaList(player))
     .button("管理员名单", () => showAdminList(player))

@@ -6,7 +6,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { TAG_BOT, TAG_AUTO_USE, TAG_CONTROL, TAG_RAID_MODE, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../../core/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
-import { canManageBot } from "../commands/auth";
+import { canManageBot, autoClaim } from "../commands/auth";
 import { setTags } from "../features/setTags";
 import { setSneaking, startRaidMode } from "../features";
 import { switchSpawnMode, getSpawnModeInfo } from "../features/spawnMode";
@@ -24,9 +24,14 @@ export function showTagManagement(player: Player, botName: string): void {
   }
   // ⚠️ 权限守卫：本面板可改他人假人的标签/生成模式/潜行/跟随，
   // 入口可达自潜行长按假人（playerInteractWithEntity），必须校验管理权
+  // 无主假人（旧版升级数据）：首次打开 tag 菜单 → 自动认领成为主人（静默标记）
   if (!canManageBot(player, record)) {
-    player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 只允许主人或管理员操作`);
-    return;
+    if (autoClaim(player, record)) {
+      player.sendMessage(`${color.success}已自动认领假人 ${color.playerName}${botName}${color.success}（旧版数据，首次操作生效）`);
+    } else {
+      player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 只允许主人或管理员操作`);
+      return;
+    }
   }
 
   const manageableCoexist = COEXIST_TAGS.filter((t) => t.value !== TAG_BOT.value);

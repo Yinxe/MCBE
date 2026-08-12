@@ -8,7 +8,8 @@ import { BOT_TAG, getTagDef } from "../../core/tags/BotTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
 import { botRegistry } from "../bootstrap/context";
-import { canManageBot } from "../commands/auth";
+import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
+import { visibleRecords } from "../../core/service/BotVisibility";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 
@@ -29,9 +30,10 @@ function getPosSummary(record: import("../../core/model/Types").BotRecord): stri
 }
 
 export function showOnlineManagement(player: Player): void {
-  const records = botRegistry.all();
+  // 可见性过滤：管理员看全部；普通玩家看自己的 + 无主的（无主可认领）
+  const records = visibleRecords(botRegistry.all(), player.name, isAdmin(player));
   if (records.length === 0) {
-    player.sendMessage(`${color.warn}暂无模拟玩家`);
+    player.sendMessage(`${color.warn}暂无可见的模拟玩家`);
     return;
   }
 
@@ -65,9 +67,14 @@ export function showOnlineManagement(player: Player): void {
       if (!record) continue;
 
       // ── 管理权限：只有主人或管理员可以切换他人的假人上下线 ──
+      // 无主假人（旧版升级数据）：首次操作上下线 → 自动认领成为主人（静默标记）
       if (!canManageBot(player, record)) {
-        player.sendMessage(`${color.error}${record.name} 只允许主人或管理员操作，已跳过`);
-        continue;
+        if (autoClaim(player, record)) {
+          player.sendMessage(`${color.success}已自动认领假人 ${color.playerName}${record.name}`);
+        } else {
+          player.sendMessage(`${color.error}${record.name} 只允许主人或管理员操作，已跳过`);
+          continue;
+        }
       }
 
       system.runTimeout(() => {

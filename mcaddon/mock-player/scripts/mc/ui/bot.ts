@@ -30,7 +30,8 @@ import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 import { showTridentSelector } from "./trident";
 import { showTridentClaimUI } from "./tridentClaim";
-import { canManageBot, autoClaim } from "../commands/auth";
+import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
+import { visibleRecords } from "../../core/service/BotVisibility";
 import { showReclaimForm } from "./reclaim";
 import { showMainhandSelector } from "./mainhand";
 import { confirmDelete } from "./move";
@@ -193,13 +194,13 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
 // ─── 假人列表 ──────────────────────────────────────────
 
 /**
- * 展示所有模拟玩家列表
+ * 展示模拟玩家列表（可见性过滤：管理员看全部；普通玩家看自己的 + 无主的）
  * @param onMainMenu 点击「返回」时调用的回调（来自 menu.ts 的 showMainMenu）
  */
 export function showBotList(player: Player, onMainMenu?: () => void): void {
-  const records = botRegistry.all();
+  const records = visibleRecords(botRegistry.all(), player.name, isAdmin(player));
   if (records.length === 0) {
-    player.sendMessage(`${color.warn}暂无模拟玩家，请先创建`);
+    player.sendMessage(`${color.warn}暂无可见的模拟玩家，请先创建`);
     return;
   }
 
