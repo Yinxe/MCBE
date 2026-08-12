@@ -46,9 +46,10 @@ export function showTridentClaimUI(player: Player, botName: string): void {
   for (const entry of entries) {
     const pct = Math.round(entry.probability * 100);
     const probTag = pct >= 60 ? color.darkRed : pct >= 30 ? color.gold : color.darkGray;
+    const itemPart = entry.itemLabel ? ` ${color.muted}| ${entry.itemLabel}` : "";
     builder.toggle(
       `t${entry.entityId}`,
-      `${color.muted}${formatPos(entry.pos)} ${probTag}聚集${pct}% ${color.muted}| ${entry.itemLabel}`,
+      `${color.muted}${formatPos(entry.pos)} ${probTag}聚集${pct}%${itemPart}`,
       {
         defaultValue: false,
         tooltip: "勾选后该假人将成为这把三叉戟的第二任主人（覆盖原第二任）",

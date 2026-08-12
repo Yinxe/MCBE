@@ -64,18 +64,13 @@ export function scanOwnTridents(botName: string): ClaimableTrident[] | undefined
     return [];
   }
 
-  // 过滤自家 + 物品组件缺失跳过
+  // 过滤自家（物品组件缺失不跳过：附魔展示降级，认主功能必须可用）
   const entries: { entity: Entity; pos: Vec3 }[] = [];
   for (const t of tridents) {
     try {
       const { firstOwner, secondOwner } = parseClaimTags(t.getTags());
       if (!firstOwner && !secondOwner) continue;
       if (!isOwnedByFamily(firstOwner, secondOwner, family)) continue;
-
-      // 附魔组件缺失 → 直接跳过（不显示"未知"）
-      const itemComp = t.getComponent("minecraft:item") as { itemStack?: { typeId: string } } | undefined;
-      if (!itemComp?.itemStack) continue;
-
       entries.push({ entity: t, pos: t.location });
     } catch {
       // 单条读取失败跳过
@@ -87,15 +82,23 @@ export function scanOwnTridents(botName: string): ClaimableTrident[] | undefined
   const sorted = sortByClusterProbability(entries.map((e) => e.pos), CLUSTER_RADIUS);
   return sorted.map((s) => {
     const entry = entries[s.index]!;
-    const itemComp = entry.entity.getComponent("minecraft:item") as { itemStack?: { typeId: string } } | undefined;
-    const itemText = [
-      formatEnchantments(itemComp?.itemStack as never),
-      formatDurability(itemComp?.itemStack as never),
-    ].filter(Boolean).join(" ") || "无附魔";
+    // 尽力读取物品组件展示附魔/耐久；投射物实体常无该组件（实测），缺失则省略附魔段
+    let itemLabel = "";
+    try {
+      const itemComp = entry.entity.getComponent("minecraft:item") as { itemStack?: { typeId: string } } | undefined;
+      if (itemComp?.itemStack) {
+        itemLabel = [
+          formatEnchantments(itemComp.itemStack as never),
+          formatDurability(itemComp.itemStack as never),
+        ].filter(Boolean).join(" ");
+      }
+    } catch {
+      // 组件读取失败 → 附魔段省略
+    }
     return {
       entityId: entry.entity.id,
       pos: s.pos,
-      itemLabel: itemText,
+      itemLabel,
       probability: s.probability,
     };
   });

@@ -163,7 +163,7 @@ scripts/
 
 ### 认主 UI（ui/tridentClaim.ts，面板"三叉戟认主"按钮）
 - 扫描假人 100 半径（当前维度）内三叉戟，过滤**自家**（第一/第二任 ∈ 家族集合 = 主人名 ∪ 主人名下假人名）
-- 附魔/耐久展示经 `EntityItemComponent.itemStack`；**组件缺失直接跳过该条**（不显示"未知"）
+- 附魔/耐久展示尽力经 `EntityItemComponent.itemStack` 读取；**投射物实体实测常无该组件 → 附魔段降级省略（不跳过条目、不显示"未知"），认主功能不受影响**
 - **聚集概率**（`core/coords/Cluster.ts`）：邻居密度归一化（半径 15 判定），扎堆概率大；列表按概率降序（百分比展示）
 - 批量 toggle 勾选 → 认主 = 写/覆盖第二任 tag + 重设 proj.owner
 
