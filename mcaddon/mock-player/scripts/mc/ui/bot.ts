@@ -30,7 +30,7 @@ import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 import { showTridentSelector } from "./trident";
 import { showTridentClaimUI } from "./tridentClaim";
-import { canManageBot } from "../commands/auth";
+import { canManageBot, autoClaim } from "../commands/auth";
 import { showReclaimForm } from "./reclaim";
 import { showMainhandSelector } from "./mainhand";
 import { confirmDelete } from "./move";
@@ -118,8 +118,13 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
 
   // ── 管理权限：只有主人或管理员可以操作假人 ──
   if (!canManageBot(player, record)) {
-    player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 只允许主人或管理员操作`);
-    return;
+    // 无主假人（旧版升级数据）→ 自动认领：首次打开菜单即成为主人（静默添加主人）
+    if (autoClaim(player, record)) {
+      player.sendMessage(`${color.success}已自动认领假人 ${color.playerName}${botName}${color.success}（旧版数据，首次操作生效）`);
+    } else {
+      player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 只允许主人或管理员操作`);
+      return;
+    }
   }
 
   const ownerStr = record.ownerName ? `\n${color.accent}主人: ${color.playerName}${record.ownerName}` : `\n${color.muted}无主（仅管理员可管理）`;

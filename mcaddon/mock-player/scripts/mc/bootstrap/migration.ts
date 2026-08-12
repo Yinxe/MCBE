@@ -90,6 +90,17 @@ function migrateLegacyItems(): void {
       console.warn(`[MockPlayer] 迁移失败 ${name}: ${e?.message ?? e}`);
     }
   }
+
+  // 全量清扫残留：任意 :inv: / :equip: 后缀的旧 key（含超范围/损坏格式）一律删除——
+  // 迁移完成后彻底丢弃旧数据结构，DP 中不再有任何旧版物品残留
+  let swept = 0;
+  for (const id of world.getDynamicPropertyIds()) {
+    if (id.startsWith(DP_PREFIX) && (id.includes(":inv:") || id.includes(":equip:"))) {
+      world.setDynamicProperty(id, undefined);
+      swept++;
+    }
+  }
+  if (swept > 0) console.info(`[MockPlayer] 清扫残留旧物品 key ${swept} 个`);
   console.info(`[MockPlayer] 旧版背包数据迁移完成`);
 }
 
