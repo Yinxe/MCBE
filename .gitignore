@@ -6,6 +6,7 @@ dist/
 build/
 out/
 *.tsbuildinfo
+.test-build/
 
 # Environment
 .env
@@ -42,3 +43,4 @@ item-matrix
 # Tools
 .codegraph/
 .mimosa/
+.zcode/

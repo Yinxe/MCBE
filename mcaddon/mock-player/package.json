@@ -15,6 +15,7 @@
     "typescript": "5.0.2"
   },
   "scripts": {
+    "test:core": "tsc -p tsconfig.test.json && node --test \".test-build/tests/**/*.test.js\"",
     "lint": "just-scripts lint",
     "build": "just-scripts build",
     "clean": "just-scripts clean",

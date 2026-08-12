@@ -46,6 +46,7 @@
     "pack:enchanter": "pnpm --filter enchanter run pack",
     "sync-version": "node packages/toolkit-build/bin/sync-version.mjs",
     "pack:stackable": "pnpm --filter stackable run pack",
-    "test:auto-refill": "pnpm --filter auto-refill run test:core"
+    "test:auto-refill": "pnpm --filter auto-refill run test:core",
+    "test:mock-player": "pnpm --filter mock-player run test:core"
   }
 }
