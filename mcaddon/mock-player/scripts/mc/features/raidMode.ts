@@ -27,6 +27,7 @@ import {
   BAD_OMEN,
   RAID_OMEN,
   VILLAGE_HERO,
+  RAIDER_TYPE_IDS,
   DRINK_DURATION,
   RAID_STUCK_TICKS,
   RAID_SWEEP_TICKS,
@@ -253,7 +254,7 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
 //   2. 村庄英雄已施加但 effectAdd 事件丢失（假人挂着英雄却无胜利处理）→ 补记胜利并续瓶
 //   3. 喝瓶静默失败（useItemInSlot 未返回 true）→ 无效果、无窗口 → 冷却后重试
 // 「袭击可能仍在进行」的判定（满足任一即跳过续瓶）：
-//   带不祥/袭击之兆、预期窗口未过期、或附近 128 格内有袭击者。
+//   带不祥/袭击之兆、预期窗口未过期、或附近 128 格内有袭击参与生物。
 
 function raidModeSweep(): void {
   try {
@@ -298,16 +299,21 @@ function raidModeSweep(): void {
   }
 }
 
-/** 附近 128 格内是否有袭击者（raider 家族：卫道士/掠夺者/女巫/唤魔者/劫掠兽等）。
- *  有则视为袭击仍在进行，巡检不续瓶（避免同一时刻开两场袭击）。查询失败按「有袭击者」保守处理。 */
+/** 附近 128 格内是否有袭击参与生物（掠夺者/卫道士/唤魔者/劫掠兽/女巫）。
+ *  原版 type_family 里没有 "raider" 家族（实测 1.26 行为包），且 2.8.0 查询只支持单数 type 字段，
+ *  故逐 typeId 查询合并（见 core/service/RaidRules 的 RAIDER_TYPE_IDS 说明）。
+ *  有袭击者在附近 → 视为袭击仍在进行，巡检不续瓶（避免同一时刻开两场袭击）。查询失败按「有袭击者」保守处理。 */
 function hasRaiderNearby(bot: SimulatedPlayer): boolean {
   try {
-    const raiders = bot.dimension.getEntities({
-      families: ["raider"],
-      location: bot.location,
-      maxDistance: 128,
-    });
-    return raiders.length > 0;
+    for (const typeId of RAIDER_TYPE_IDS) {
+      const raiders = bot.dimension.getEntities({
+        type: typeId,
+        location: bot.location,
+        maxDistance: 128,
+      });
+      if (raiders.length > 0) return true;
+    }
+    return false;
   } catch {
     return true;
   }

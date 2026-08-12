@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 
 import {
   OMINOUS_BOTTLE_ID, BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_STUCK_TICKS,
-  RAID_SWEEP_TICKS, RAID_EXPECT_TICKS, RAID_FORCE_COOLDOWN,
+  RAID_SWEEP_TICKS, RAID_EXPECT_TICKS, RAID_FORCE_COOLDOWN, RAIDER_TYPE_IDS,
   isOminousBottle, classifyRaidEffect,
 } from "../scripts/core/service/RaidRules";
 
@@ -24,6 +24,17 @@ test("常量：兜底巡检阈值", () => {
   assert.equal(RAID_SWEEP_TICKS, 600);
   assert.equal(RAID_EXPECT_TICKS, 12000);
   assert.equal(RAID_FORCE_COOLDOWN, 1200);
+});
+
+test("常量：袭击参与生物 typeId 列表", () => {
+  // 与 vanilla-data 1.26.20 逐一核对；唤魔者用基岩版内部名 evocation_illager
+  assert.deepEqual([...RAIDER_TYPE_IDS], [
+    "minecraft:pillager",
+    "minecraft:vindicator",
+    "minecraft:evocation_illager",
+    "minecraft:ravager",
+    "minecraft:witch",
+  ]);
 });
 
 test("isOminousBottle：精确匹配", () => {

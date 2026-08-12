@@ -12,6 +12,21 @@ export const RAID_OMEN = "minecraft:raid_omen";
 /** 村庄英雄（袭击胜利获得）——劫掠结束判定 */
 export const VILLAGE_HERO = "minecraft:village_hero";
 
+/**
+ * 基岩版袭击参与生物 typeId 列表（与 vanilla-data 1.26.20 逐一核对）：
+ * 掠夺者/卫道士/唤魔者/劫掠兽/女巫；唤魔者 typeId 用基岩版内部名 evocation_illager。
+ * ⚠️ 实测当前原版行为包（Mojang/bedrock-samples 1.26）：这些生物的 type_family 里
+ * **没有 "raider" 家族**（只含 pillager/monster/illager/mob 等）——families 查询匹配不到
+ * 袭击者，巡检探测必须直接按 typeId 逐个匹配。
+ */
+export const RAIDER_TYPE_IDS = [
+  "minecraft:pillager",
+  "minecraft:vindicator",
+  "minecraft:evocation_illager",
+  "minecraft:ravager",
+  "minecraft:witch",
+] as const;
+
 /** 饮用完整时长（tick）：不祥之瓶需按住 ~1.6s（32 tick）才消耗完。
  *  留 ~8 tick 余量（= 2 秒）：防网络/调度抖动导致 stopUsingItem 在消耗完成前打断、药水没喝完 */
 export const DRINK_DURATION = 40;
