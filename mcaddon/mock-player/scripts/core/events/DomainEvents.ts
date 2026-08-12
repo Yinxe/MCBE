@@ -172,13 +172,13 @@ export const botItemUsed = new EventSignal<BotItemUsedEvent>();
 export const botEntityAttacked = new EventSignal<BotEntityAttackedEvent>();
 
 // ─── 聚合导出 ──────────────────────────────────────────
-// 领域事件统一走 domainEvents 命名空间（生命周期/认主/劫掠/行为全部信号），
-//   import { domainEvents } from ".../DomainEvents"（或 core barrel）
-//   domainEvents.botOnline.subscribe(...)
+// 领域事件统一走 BotEvents 命名空间（生命周期/认主/劫掠/行为全部信号）：
+//   import { BotEvents } from ".../DomainEvents"（或 core barrel）
+//   BotEvents.botOnline.subscribe(...)
 // 个别信号如需直接引用仍可单独 import（信号与类型保持命名导出）。
 
 /** 全部领域事件信号聚合 */
-export const domainEvents = {
+export const BotEvents = {
   // 劫掠
   raidStarted,
   raidVictory,

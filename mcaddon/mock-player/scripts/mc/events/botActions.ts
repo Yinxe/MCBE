@@ -11,7 +11,7 @@
 import { world } from "@minecraft/server";
 
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { domainEvents } from "../../core/events/DomainEvents";
+import { BotEvents } from "../../core/events/DomainEvents";
 
 /** 订阅假人行为事件（在 worldLoad 后由 registerAllEvents 调用一次） */
 export function registerBotActionEvents(): void {
@@ -21,7 +21,7 @@ export function registerBotActionEvents(): void {
       const player = event.player;
       if (!player.hasTag(BOT_TAG)) return;
       const block = event.brokenBlockPermutation;
-      domainEvents.botBlockBroken.trigger({
+      BotEvents.botBlockBroken.trigger({
         botName: player.name,
         blockTypeId: block.type.id,
         position: { x: event.block.location.x, y: event.block.location.y, z: event.block.location.z },
@@ -38,7 +38,7 @@ export function registerBotActionEvents(): void {
     try {
       const player = event.player;
       if (!player?.hasTag(BOT_TAG)) return;
-      domainEvents.botBlockPlaced.trigger({
+      BotEvents.botBlockPlaced.trigger({
         botName: player.name,
         blockTypeId: event.block.typeId,
         position: { x: event.block.location.x, y: event.block.location.y, z: event.block.location.z },
@@ -54,7 +54,7 @@ export function registerBotActionEvents(): void {
     try {
       const source = event.source;
       if (!source?.hasTag(BOT_TAG)) return;
-      domainEvents.botItemUsed.trigger({
+      BotEvents.botItemUsed.trigger({
         botName: source.name,
         itemId: event.itemStack.typeId,
       });
@@ -69,7 +69,7 @@ export function registerBotActionEvents(): void {
       const attacker = event.damageSource.damagingEntity;
       if (!attacker?.hasTag(BOT_TAG)) return;
       // 假人攻击（attacker 恒为假人 Player，name 可用）
-      domainEvents.botEntityAttacked.trigger({
+      BotEvents.botEntityAttacked.trigger({
         botName: (attacker as { name?: string }).name ?? attacker.id,
         targetTypeId: event.hurtEntity.typeId,
         damage: event.damage,
@@ -83,7 +83,7 @@ export function registerBotActionEvents(): void {
   world.afterEvents.playerHotbarSelectedSlotChange.subscribe((event) => {
     try {
       if (!event.player.hasTag(BOT_TAG)) return;
-      domainEvents.botMainhandChanged.trigger({
+      BotEvents.botMainhandChanged.trigger({
         botName: event.player.name,
         slot: event.newSlotSelected,
         itemId: event.itemStack?.typeId,

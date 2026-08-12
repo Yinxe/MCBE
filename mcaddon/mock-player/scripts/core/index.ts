@@ -7,8 +7,8 @@ export * from "./model/Types";
 // events
 export { EventSignal, type EventCallback } from "./events/EventSignal";
 // 领域事件聚合导出（生命周期/认主/劫掠/行为共 13 个信号 + 全部类型）：
-//   import { domainEvents } from "../../core";
-//   domainEvents.botOnline.subscribe(...)
+//   import { BotEvents } from "../../core";
+//   BotEvents.botOnline.subscribe(...)
 export * from "./events/DomainEvents";
 
 // tags

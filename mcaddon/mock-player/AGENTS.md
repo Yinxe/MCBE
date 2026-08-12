@@ -197,13 +197,13 @@ scripts/
 ```
 
 ### 聚合导出约定
-- 统一走 `domainEvents` 命名空间（`core/events/DomainEvents.ts` 内聚合对象，core barrel 亦导出）：
+- 统一走 `BotEvents` 命名空间（`core/events/DomainEvents.ts` 内聚合对象，PascalCase 风格；core barrel 亦导出）：
   ```ts
-  import { domainEvents } from "../../core";   // 或 "../../core/events/DomainEvents"
-  domainEvents.botOnline.subscribe((e) => { ... });
+  import { BotEvents } from "../../core";   // 或 "../../core/events/DomainEvents"
+  BotEvents.botOnline.subscribe((e) => { ... });
   ```
 - 事件类型按需单独导入（如 `import type { RaidVictoryEvent } from ".../DomainEvents"`）
-- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（`mc/events/botActions.ts`）、认主（tridentTracker/tridentClaim）、劫掠（raidMode）；新领域事件一律经 domainEvents 聚合导出
+- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（`mc/events/botActions.ts`）、认主（tridentTracker/tridentClaim）、劫掠（raidMode）；新领域事件一律经 BotEvents 聚合导出
 
 ## 踩坑记录
 

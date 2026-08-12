@@ -12,7 +12,7 @@ import { world, PlayerSpawnAfterEvent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { domainEvents } from "../../core/events/DomainEvents";
+import { BotEvents } from "../../core/events/DomainEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { trackBotOnline } from "../features/tridentTracker";
@@ -37,5 +37,5 @@ export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 重生了`);
 
   // 复活领域事件：订阅方（三叉戟认主夺回/劫掠续药等）驱动
-  domainEvents.botRespawn.trigger({ botName: record.name });
+  BotEvents.botRespawn.trigger({ botName: record.name });
 }

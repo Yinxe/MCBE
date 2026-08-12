@@ -5,7 +5,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { domainEvents } from "../../core/events/DomainEvents";
+import { BotEvents } from "../../core/events/DomainEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { trackBotOffline } from "./tridentTracker";
 
@@ -47,5 +47,5 @@ export function offlineBot(record: BotRecord): void {
   if (oldEntityId) trackBotOffline(oldEntityId);
 
   // 下线领域事件（订阅方：三叉戟回退第一任等）
-  domainEvents.botOffline.trigger({ botName: record.name });
+  BotEvents.botOffline.trigger({ botName: record.name });
 }
