@@ -1,17 +1,17 @@
 // ─── 工作流框架测试（core/service/Workflow） ───────────
-// 生命周期（init/start/stop/isRunning）+ 事件机制 + 管理器（注册/初始化/启停/隔离）。
+// 生命周期（init/start/stop/isRunning）+ 管理器（注册/初始化/启停/隔离）+ 独立引擎调度。
+// 工作流事件走领域事件模式（core/events/WorkflowEvents，每个事件独立信号），
+// 在 workflow-events.test.ts 单独覆盖。
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { EventSignal } from "../scripts/core/events/EventSignal";
 import { MemoryIntervalScheduler } from "../scripts/core/storage/IntervalScheduler";
-import { WorkflowManager, type Workflow, type WorkflowEvent } from "../scripts/core/service/Workflow";
+import { WorkflowManager, type Workflow } from "../scripts/core/service/Workflow";
 
-/** 测试用工作流：记录生命周期调用，发布事件 */
+/** 测试用工作流：记录生命周期调用 */
 class TestWorkflow implements Workflow {
   readonly name: string;
-  readonly events = new EventSignal<WorkflowEvent>();
   initCalls = 0;
   startCalls: string[] = [];
   stopCalls: string[] = [];
@@ -59,7 +59,6 @@ test("initAll：初始化全部工作流，单工作流失败隔离", () => {
   const good = new TestWorkflow("good");
   const bad: Workflow = {
     name: "bad",
-    events: new EventSignal(),
     init() { throw new Error("boom"); },
     start() {},
     stop() {},
@@ -93,31 +92,6 @@ test("未知工作流：start/stop/isRunning 安全降级", () => {
   assert.equal(manager.isRunning("unknown"), false);
 });
 
-test("工作流事件：订阅/触发/负载传递/异常隔离", () => {
-  const wf = new TestWorkflow("wf-events");
-  const received: WorkflowEvent[] = [];
-  const boom = () => { throw new Error("subscriber boom"); };
-  wf.events.subscribe(boom); // 崩溃订阅者
-  wf.events.subscribe((e) => received.push(e)); // 正常订阅者不受影响
-
-  const event: WorkflowEvent = { workflow: "wf-events", type: "victory", botName: "bot1", data: { wins: 3 } };
-  wf.events.trigger(event);
-
-  assert.equal(received.length, 1);
-  assert.equal(received[0]!.type, "victory");
-  assert.deepEqual(received[0]!.data, { wins: 3 });
-});
-
-test("取消订阅后不再收到事件", () => {
-  const wf = new TestWorkflow("wf-unsub");
-  let count = 0;
-  const unsub = wf.events.subscribe(() => count++);
-  wf.events.trigger({ workflow: "wf-unsub", type: "x" });
-  unsub();
-  wf.events.trigger({ workflow: "wf-unsub", type: "x" });
-  assert.equal(count, 1);
-});
-
 // ─── 独立引擎调度 ──────────────────────────────────────
 
 test("独立引擎：initAll 按 intervalTicks 创建独立周期，到点执行 tick", () => {
@@ -126,7 +100,6 @@ test("独立引擎：initAll 按 intervalTicks 创建独立周期，到点执行
   let engineTicks = 0;
   manager.register({
     name: "engine-wf",
-    events: new EventSignal(),
     init() {},
     start() {},
     stop() {},
@@ -149,11 +122,11 @@ test("独立引擎：多个工作流各自独立周期，互不干扰", () => {
   let a = 0;
   let b = 0;
   manager.register({
-    name: "eng-a", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    name: "eng-a", init() {}, start() {}, stop() {}, isRunning: () => false,
     engine: { intervalTicks: 5, tick: () => a++ },
   });
   manager.register({
-    name: "eng-b", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    name: "eng-b", init() {}, start() {}, stop() {}, isRunning: () => false,
     engine: { intervalTicks: 20, tick: () => b++ },
   });
   manager.initAll();
@@ -167,7 +140,7 @@ test("独立引擎：shutdown 停止全部引擎（clear 后不再执行）", ()
   const manager = new WorkflowManager(scheduler);
   let ticks = 0;
   manager.register({
-    name: "eng-shutdown", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    name: "eng-shutdown", init() {}, start() {}, stop() {}, isRunning: () => false,
     engine: { intervalTicks: 5, tick: () => ticks++ },
   });
   manager.initAll();
@@ -183,11 +156,11 @@ test("独立引擎：tick 异常隔离（单工作流崩溃不影响其他）", 
   const manager = new WorkflowManager(scheduler);
   let good = 0;
   manager.register({
-    name: "eng-bad", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    name: "eng-bad", init() {}, start() {}, stop() {}, isRunning: () => false,
     engine: { intervalTicks: 5, tick: () => { throw new Error("tick boom"); } },
   });
   manager.register({
-    name: "eng-good", events: new EventSignal(), init() {}, start() {}, stop() {}, isRunning: () => false,
+    name: "eng-good", init() {}, start() {}, stop() {}, isRunning: () => false,
     engine: { intervalTicks: 5, tick: () => good++ },
   });
   manager.initAll();

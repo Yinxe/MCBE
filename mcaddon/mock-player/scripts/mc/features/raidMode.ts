@@ -71,19 +71,16 @@ export function initRaidModeEffects(): void {
 //   start  = 开模式/上线/重生 → 喝第一瓶
 //   stop   = 关模式（移除标签即停用）
 //   isRunning = 假人带劫掠标签且在线
-//   events = 对外发布 raid-started / raid-victory（可序列化负载）
+// 对外事件走领域事件模式（BotWorkflowEvent.raidStarted / raidVictory，
+// 每个事件一个独立信号，见 core/events/WorkflowEvents）
 
-import { EventSignal } from "../../core/events/EventSignal";
-import type { Workflow, WorkflowEvent } from "../../core/service/Workflow";
-
-/** 劫掠工作流事件总线（供其他模块订阅联动，如统计/通知） */
-const raidWorkflowEvents = new EventSignal<WorkflowEvent>();
+import type { Workflow } from "../../core/service/Workflow";
+import { workflowRaidStarted, workflowRaidVictory } from "../../core/events/WorkflowEvents";
 
 /** 劫掠工作流：喝不祥之瓶 → 袭击 → 胜利 → 下一瓶（事件驱动循环） */
 export const raidWorkflow: Workflow = {
   name: "raid-mode",
   description: "劫掠模式：喝不祥之瓶触发袭击，胜利后把村庄英雄叠加给主人并续喝下一瓶",
-  events: raidWorkflowEvents,
 
   init(): void {
     initRaidModeEffects();
@@ -110,11 +107,6 @@ export const raidWorkflow: Workflow = {
     return !!record && record.tags.includes(TAG_RAID_MODE.value) && record.online && !record.death;
   },
 };
-
-/** 发布劫掠工作流事件（内部事件点调用） */
-function emitRaidEvent(type: string, botName: string, data?: unknown): void {
-  raidWorkflowEvents.trigger({ workflow: "raid-mode", type, botName, data });
-}
 
 /**
  * 清理假人劫掠状态（删除假人时调用）：胜利计数/胜利时刻/饮用中标记/袭击窗口，
@@ -178,7 +170,7 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
     // 不祥之兆 = 喝瓶成功，袭击即将开始
     if (kind === "bad-omen") {
       BotEvents.raidStarted.trigger({ botName: name, amplifier: amp });
-      emitRaidEvent("raid-started", name, { amplifier: amp });
+      workflowRaidStarted.trigger({ botName: name, amplifier: amp });
       scheduleRaidStuckCheck(name);
       return;
     }
@@ -222,7 +214,7 @@ function processVictory(record: BotRecord, amplifier: number, bot: SimulatedPlay
     `${color.muted}[${color.success}假人${color.muted}] ${color.success}${botName} 获得村庄英雄 Lv.${amplifier}，本次劫掠胜利！` +
     `${color.muted}（第 ${wins} 胜）`
   );
-  emitRaidEvent("raid-victory", botName, { wins });
+  workflowRaidVictory.trigger({ botName, wins });
 
   if (!bot) return;
 

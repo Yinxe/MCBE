@@ -9,23 +9,10 @@
 // 事件机制复用 core/events/EventSignal（订阅者异常隔离）；事件负载只用
 // 可序列化的 string/number——保持 core 纯净可单测。
 
-import { EventSignal } from "../events/EventSignal";
 import type { IntervalScheduler } from "../storage/IntervalScheduler";
 
 /** 工作流整体状态 */
 export type WorkflowStatus = "idle" | "running" | "stopped";
-
-/** 工作流对外事件（可序列化负载） */
-export interface WorkflowEvent {
-  /** 工作流名（如 "raid-mode"） */
-  workflow: string;
-  /** 事件类型（如 "raid-victory"、"vault-opened"） */
-  type: string;
-  /** 关联假人名（无则省略） */
-  botName?: string;
-  /** 附加数据（只用可序列化 string/number/数组/对象） */
-  data?: unknown;
-}
 
 /**
  * 工作流独立引擎：每个工作流自带周期调度（不共享统一行为引擎）。
@@ -44,6 +31,8 @@ export interface WorkflowEngine {
  * 每个工作流一个实现文件，导出单例（如 `export const raidWorkflow: Workflow`）。
  * 简单重复功能（autoMine 等）留在统一行为引擎（feature 层）；
  * 复杂组合功能（劫掠/宝库循环）封装为工作流，**自带独立引擎**（engine 可选）。
+ * 工作流对外事件走**领域事件模式**（core/events/WorkflowEvents，BotWorkflowEvent.xxx
+ * 每个事件一个独立信号），不在接口内合并总线。
  */
 export interface Workflow {
   /** 工作流唯一名（注册键，如 "raid-mode"） */
@@ -61,8 +50,6 @@ export interface Workflow {
   stop(botName?: string): void;
   /** 是否处于运行状态 */
   isRunning(botName?: string): boolean;
-  /** 工作流对外事件总线（其他模块订阅联动） */
-  readonly events: EventSignal<WorkflowEvent>;
   /** 独立引擎（可选）：由 WorkflowManager 统一调度，每个工作流独立 interval */
   readonly engine?: WorkflowEngine;
 }

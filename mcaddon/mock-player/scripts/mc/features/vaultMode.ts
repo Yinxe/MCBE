@@ -12,20 +12,16 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG, TAG_VAULT_MODE } from "../../core/tags/BotTags";
-import { EventSignal } from "../../core/events/EventSignal";
-import type { Workflow, WorkflowEvent } from "../../core/service/Workflow";
+import type { Workflow } from "../../core/service/Workflow";
+import { workflowVaultOpened } from "../../core/events/WorkflowEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { safeReconnect } from "./pendingRespawn";
 import { color } from "@yinxe/toolkit";
-
-/** 宝库工作流事件总线（供其他模块订阅联动） */
-const vaultWorkflowEvents = new EventSignal<WorkflowEvent>();
 
 /** 宝库工作流：钥匙开宝库 → 保存 → 重连 → 继续（自带独立引擎，不共享统一行为引擎） */
 export const vaultWorkflow: Workflow = {
   name: "vault-mode",
   description: "宝库模式：手持钥匙开 Trial Chambers 宝库，成功后下线重连循环",
-  events: vaultWorkflowEvents,
 
   init(): void {
     // 引擎由 WorkflowManager 调度（initAll 时按 intervalTicks 创建独立 interval）
@@ -78,9 +74,9 @@ export const vaultWorkflow: Workflow = {
   },
 };
 
-/** 发布宝库工作流事件 */
-function emitVaultEvent(type: string, botName: string, data?: unknown): void {
-  vaultWorkflowEvents.trigger({ workflow: "vault-mode", type, botName, data });
+/** 发布宝库工作流事件（领域事件信号） */
+function emitVaultEvent(botName: string, keyType: string, remaining: number): void {
+  workflowVaultOpened.trigger({ botName, keyType, remaining });
 }
 
 // ─── 可用的宝库钥匙 ──────────────────────────────────
@@ -160,7 +156,7 @@ export function runVaultCycle(bot: SimulatedPlayer, record: BotRecord): void {
   keyInfo.totalInInventory = afterInfo!.totalInInventory;
 
   // 发布宝库工作流事件（开箱成功，供统计/通知联动）
-  emitVaultEvent("vault-opened", record.name, { keyType: keyInfo.typeId, remaining: keyInfo.count });
+  emitVaultEvent(record.name, keyInfo.typeId, keyInfo.count);
 
   // ── 4. 下线 + 重新上线 ─────────────────────────────
   // 使用 safeReconnect：自动等待旧实体完全释放后再 spawn，
