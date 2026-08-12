@@ -385,7 +385,7 @@ export class StorageService {
     const item = container.getItem(player.selectedSlotIndex);
     if (!item) return { ok: false, message: "手中没有可覆写的物品" };
 
-    const r = this.region!.overwrite(slotId, item);
+    const r = this.region!.write(slotId, item);
     if (!r.ok) return { ok: false, message: `覆写失败：${r.error ?? "未知原因"}` };
     // 成功后清空手持槽（防复制），并同步凭据索引（overwritten 不触发 stored/taken）
     container.setItem(player.selectedSlotIndex, undefined);

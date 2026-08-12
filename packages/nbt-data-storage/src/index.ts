@@ -9,8 +9,8 @@
 //     anchor: { x: 0, y: 120, z: -1024 },
 //   });
 //   const ref = region.put(item);          // -> { regionId, slotId } | null（满）
-//   const stored = ItemStorage.get(ref);   // -> ItemStack | undefined（O(1)）
-//   const took = ItemStorage.take(ref);    // -> 取走并回收槽位
+//   const stored = ItemStorage.read(ref);   // -> ItemStack | undefined（O(1) 只读）
+//   const took = ItemStorage.take(ref);     // -> 取走并回收槽位
 //   ItemStorage.events.stored.subscribe(({ slotId, itemTypeId }) => { ... });
 export { ItemStorage } from "./mc/ItemStorage";
 export type { RegisterOptions, RegionWorldInfo } from "./mc/ItemStorage";

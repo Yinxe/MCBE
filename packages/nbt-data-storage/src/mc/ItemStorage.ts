@@ -151,9 +151,9 @@ export function listRegions(): StoredRegion[] {
   return [...regions.values()];
 }
 
-/** 按取物凭据 O(1) 取物（只读不回收；跨模组可用） */
-export function get(ref: StoredRef): ItemStack | undefined {
-  return getRegion(ref.regionId)?.get(ref.slotId);
+/** 按取物凭据 O(1) 只读取物（不回收槽位、不影响存储阵列；跨模组可用；想取走请用 take） */
+export function read(ref: StoredRef): ItemStack | undefined {
+  return getRegion(ref.regionId)?.read(ref.slotId);
 }
 
 /** 按取物凭据 O(1) 取走（读出 + 清空 + 回收空洞；跨模组可用） */
@@ -188,13 +188,13 @@ export function totalStats(): { regionCount: number; totalCapacity: number; tota
   };
 }
 
-/** 对外公开的存储命名空间（注册/凭据取物/管理/事件） */
+/** 对外公开的存储命名空间（注册/凭据存取/管理/事件） */
 export const ItemStorage = {
   register,
   registerTest,
   getRegion,
   listRegions,
-  get,
+  read,
   take,
   queryWorld,
   totalStats,

@@ -102,8 +102,8 @@ export class StoredRegion {
     return ref;
   }
 
-  /** O(1) 按 ID 取物（只读不回收槽位；想取走请用 take） */
-  get(slotId: number): ItemStack | undefined {
+  /** O(1) 按 ID 只读取物（不回收槽位、不影响存储阵列；想取走请用 take） */
+  read(slotId: number): ItemStack | undefined {
     const pos = slotIdToPosition(slotId, this.layout);
     if (!pos) return undefined;
     return this.runtime.readItem(pos);
@@ -114,7 +114,7 @@ export class StoredRegion {
    * 一次 getItem 循环，替代逐格 getBlock 放大）。越界 slotId 对应位置 undefined。
    * @param slotIds 任意顺序（可重复）；输出与输入顺序对齐
    */
-  getBatch(slotIds: number[]): (ItemStack | undefined)[] {
+  readBatch(slotIds: number[]): (ItemStack | undefined)[] {
     const result: (ItemStack | undefined)[] = new Array(slotIds.length);
     const groups = groupSlotIdsByBarrel(slotIds, this.layout);
     for (const entries of groups.values()) {
@@ -132,22 +132,6 @@ export class StoredRegion {
     const pos = slotIdToPosition(slotId, this.layout);
     if (!pos) return "unknown";
     return this.runtime.probeStatus(pos);
-  }
-
-  /**
-   * 单向复制：把区域格物品**复制**到外部容器槽（get 只读克隆 → setItem），
-   * 槽位不清空不回收（与 take/swap 互补——copyTo 不取走）。
-   * 槽空/位置异常 → false；目标写入失败 → false（原区域不受影响）。
-   */
-  copyTo(slotId: number, container: Container, destSlot: number): boolean {
-    const item = this.get(slotId);
-    if (!item) return false;
-    try {
-      container.setItem(destSlot, item);
-      return true;
-    } catch {
-      return false;
-    }
   }
 
   /**
@@ -214,11 +198,11 @@ export class StoredRegion {
   }
 
   /**
-   * 原位覆写（安全）：在**已有格子**上覆盖写入（slotId 不变），旧物品读出返回（不丢）。
-   * 护栏：仅位置有实物才允许（空槽请用 put；非木桶/未加载请先巡检）。
+   * 指定槽覆写（安全，read 的写对）：**写入已有格子**（slotId 不变），旧物品读出返回（不丢）。
+   * 空槽也允许（写入 + 桶水位 +1）；非木桶/区块未加载（damaged/unknown）→ 拒绝（请先巡检）。
    * 成功后触发 `ItemStorage.events.overwritten`。
    */
-  overwrite(slotId: number, item: ItemStack | undefined): OverwriteResult {
+  write(slotId: number, item: ItemStack | undefined): OverwriteResult {
     const port: OverwritePort = {
       readRecord: () => this.readRecord(),
       writeRecord: (record) => this.writeRecord(record),

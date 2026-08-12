@@ -43,12 +43,15 @@ installNdsCommands(); // 可选：注册 nds:regions / nds:stats 管理命令（
 // 存入 → 拿到取物凭据 { regionId, slotId }（满/失败返回 null）
 const ref = region.put(item); // item: ItemStack
 if (ref) {
-  const stored = ItemStorage.get(ref); // 取物（O(1)，只读不回收）
+  const stored = ItemStorage.read(ref); // 只读取物（O(1)，不回收槽位、不影响存储）
   const took = ItemStorage.take(ref); // 取走（读出 + 清空格子）
 }
 
 // 也可直接对区域操作（已知 slotId 时）
 const ok = region.remove(slotId); // 仅清空
+const item = region.read(slotId); // 只读取物（与 take 的区别：不取走不回收）
+const r = region.write(slotId, item); // 指定槽覆写（旧物读出返回，不丢）
+const items = region.readBatch([0, 1, 2]); // 批量只读（同桶一次容器读取，输出与输入对齐）
 
 // 原子传输：源容器格 → 区域（要么成功要么保持原状）
 const tr = region.transferIn(container, sourceSlot);
@@ -82,21 +85,23 @@ const stats = region.stats();
 | `getRegion(regionId)`                     | 按区域 ID 取/采纳区域（跨模组凭据取物）                   |
 | `queryWorld()`                            | 只读世界上的**全部**区域统计（无需本上下文注册）          |
 | `totalStats()`                            | 全库汇总 `{ regionCount, totalCapacity, totalUsed }`      |
-| `get(ref)` / `take(ref)`                  | 凭 `{ regionId, slotId }` 取物 / 取走（O(1)，跨模组可用） |
+| `read(ref)` / `take(ref)`                 | 凭 `{ regionId, slotId }` 只读取物 / 取走（O(1)，跨模组可用） |
 | `events`                                  | 存储事件总线（stored / taken / removed，可订阅）          |
-
 ### `StoredRegion`
 
 | 成员                                       | 说明                                                   |
 | ------------------------------------------ | ------------------------------------------------------ |
 | `put(item)`                                | 存入物品 → `{ regionId, slotId } \| null`（O(1) 分配） |
-| `get(slotId)`                              | 按 ID 取物（O(1)，不回收）                             |
+| `read(slotId)`                             | 只读取物（O(1)，不回收槽位、不影响存储阵列）           |
+| `readBatch(slotIds)`                       | 批量只读（同桶一次容器读取，输出与输入顺序对齐）       |
 | `take(slotId)`                             | 取走（读出 + 清空）                                    |
 | `remove(slotId)`                           | 清空                                                   |
-| `overwrite(slotId, item)`                  | 单向覆写（手持/外部物品 → 指定格，旧物读出返回调用方处置；空格也允许，实时数据保存用） |
+| `write(slotId, item)`                      | 指定槽覆写（read 的写对；旧物读出返回调用方处置；空槽也允许，实时数据保存用） |
+| `probe(slotId)`                            | 槽位只读状态探测（occupied/empty/damaged/unknown）     |
+| `listOccupied()`                           | 枚举区域内全部已占用槽（巡检/迁移/调试）               |
 | `swap(slotId, container, destSlot)`        | 安全交换（区域格 ↔ 外部容器格，引擎级原子，双方都保留；触发 taken+stored 事件） |
-| `transferIn(container, sourceSlot)`        | 原子存入（源容器格 → 区域）                            |
-| `transferOut(slotId, container, destSlot)` | 原子取出（区域格 → 目标格）                            |
+| `transferIn(container, sourceSlot)`        | 原子存入（源容器格 → 区域，防丢物：失败回滚/重存/dropped 兜底） |
+| `transferOut(slotId, container, destSlot)` | 原子取出（区域格 → 目标格，防丢物：失败重存/dropped 兜底） |
 | `stats()`                                  | 区域统计快照（barrels 为真值：各层账本长度之和）       |
 | `checkAndRepair(onDone?)`                  | 盘点 + 修复（**分批**：每 tick 盘一层，完成回调报告；进行中返回 false） |
 

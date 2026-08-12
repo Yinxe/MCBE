@@ -8,11 +8,11 @@
 // 物品（背包 36 格 + 装备 5 槽）存**真实 ItemStack** 到木桶阵列，完整 NBT
 // 保留（潜影盒/收纳袋内容随物品原样存取，根除旧 JSON 视图的内容丢失限制）：
 //   - 首次写某格 → itemStorage.put(item) 分配槽位 → 绑定表记录 slotId（按需分配）
-//   - 后续写该格 → itemStorage.overwrite(slotId, item) 原位覆写（slotId 不变）
-//   - 空位       → overwrite(slotId, structure_void 占位) **保持绑定**——
+//   - 后续写该格 → itemStorage.write(slotId, item) 指定槽覆写（slotId 不变）
+//   - 空位       → write(slotId, structure_void 占位) **保持绑定**——
 //                  槽位一旦绑定永不释放（存储永远是该假人的背包备份镜像），
 //                  仅删除假人（removeInventory）时 take 释放全部绑定槽
-//   - 读取格     → itemStorage.get(slotId)（O(1) 克隆返回；占位视为空位跳过）
+//   - 读取格     → itemStorage.read(slotId)（O(1) 克隆返回；占位视为空位跳过）
 // 区域懒注册（末地固定锚点，全假人共享，幂等）；失败降级为日志告警不抛错。
 
 import { ItemStack, world } from "@minecraft/server";
@@ -213,7 +213,7 @@ export class McBotStore implements BotStore<ItemStack> {
   /**
    * 未绑定/无任何物品时返回 undefined（调用方据此判断是否需要恢复）。
    * 返回真实 ItemStack（完整 NBT）；占位物品（structure_void）视为空位跳过。
-   * 批量读取：getBatch 按桶分组一次取容器（36 格 ≈ 2 次容器读取，替代逐格方块查询）。
+   * 批量读取：readBatch 按桶分组一次取容器（36 格 ≈ 2 次容器读取，替代逐格方块查询）。
    */
   loadInventory(name: string): (ItemStack | null)[] | undefined {
     const binding = this.loadBinding(name);
@@ -233,7 +233,7 @@ export class McBotStore implements BotStore<ItemStack> {
     }
     if (slotIds.length === 0) return undefined;
 
-    const values = storage.getBatch(slotIds);
+    const values = storage.readBatch(slotIds);
     const result: (ItemStack | null)[] = new Array(INVENTORY_SIZE).fill(null);
     let found = false;
     for (let k = 0; k < slotIndexes.length; k++) {
@@ -301,7 +301,7 @@ export class McBotStore implements BotStore<ItemStack> {
     }
     if (slotIds.length === 0) return undefined;
 
-    const values = storage.getBatch(slotIds);
+    const values = storage.readBatch(slotIds);
     const result: Record<string, ItemStack> = {};
     for (let k = 0; k < slotNames.length; k++) {
       const item = values[k];
@@ -334,7 +334,7 @@ export class McBotStore implements BotStore<ItemStack> {
       // 空位占位：保持绑定（槽位永不漂移），写入结构空位占位物品
       // （put 分配器探测为占用，不会分给别人）；从未绑定则无操作
       if (bound !== undefined) {
-        const r = storage.overwrite(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
+        const r = storage.write(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
         if (!r.ok) {
           console.error(`[MockPlayer] 背包占位失败 slot=${slot}: ${r.error ?? "未知错误"}`);
         }
@@ -342,7 +342,7 @@ export class McBotStore implements BotStore<ItemStack> {
       return false;
     }
     if (bound !== undefined) {
-      const r = storage.overwrite(bound, item);
+      const r = storage.write(bound, item);
       if (!r.ok) {
         console.error(`[MockPlayer] 背包保存失败 slot=${slot}: ${r.error ?? "未知错误"}`);
       }
@@ -362,7 +362,7 @@ export class McBotStore implements BotStore<ItemStack> {
     if (!item) {
       // 空位占位（同背包语义）：保持绑定，写入结构空位；从未绑定则无操作
       if (bound !== undefined) {
-        const r = storage.overwrite(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
+        const r = storage.write(bound, new ItemStack(PLACEHOLDER_TYPE, 1));
         if (!r.ok) {
           console.error(`[MockPlayer] 装备占位失败 ${slot}: ${r.error ?? "未知错误"}`);
         }
@@ -370,7 +370,7 @@ export class McBotStore implements BotStore<ItemStack> {
       return false;
     }
     if (bound !== undefined) {
-      const r = storage.overwrite(bound, item);
+      const r = storage.write(bound, item);
       if (!r.ok) {
         console.error(`[MockPlayer] 装备保存失败 ${slot}: ${r.error ?? "未知错误"}`);
       }
