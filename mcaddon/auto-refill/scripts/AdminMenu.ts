@@ -14,7 +14,15 @@ import { playerOf } from "./PlayerPolicy";
 const ADMIN_MENU_COMMAND = "ar:menu";
 
 /** 开关行（含全局）；与表单组件添加顺序一致 */
-const SWITCHES: readonly ("global" | Feature)[] = ["global", "refill", "weapon", "tool", "antiTouch", "durability"];
+const SWITCHES: readonly ("global" | Feature)[] = [
+  "global",
+  "refill",
+  "weapon",
+  "tool",
+  "totem",
+  "antiTouch",
+  "durability",
+];
 
 /** 各开关/滑条的 tooltip（悬停感叹号显示；面向玩家中文说明机制） */
 const TOOLTIPS: Readonly<Record<string, string>> = {
@@ -22,6 +30,8 @@ const TOOLTIPS: Readonly<Record<string, string>> = {
   refill: "主手消耗品用尽或留下残留（空瓶/空桶/碗）时自动补同类并回收残留。吃食物、喝药水、射箭后生效",
   weapon: "攻击实体自动换正确武器：亡灵→亡灵杀手、其它→锋利（附魔优先，其次 剑>斧）；已持任意武器不切换",
   tool: "挖掘自动换正确工具；叠加方块偏好：农作物→时运、树叶·玻璃→精准采集（锄>剪>其它）",
+  totem:
+    "图腾补充：不死图腾触发（死亡保护生效）后，自动从背包把备用图腾换入副手，触发的瞬间即可续命；副手仍持图腾则不动",
   antiTouch:
     "挖掘防误触：第一次用错误工具/空手挖方块时不切换（防空手误拆建筑）；2.5 秒内同样操作再挖一次才确认有意·允许切换",
   durability: "工具耐久低于阈值未碎也提前收起换同类（绝不降级，旧带精准优先换带精准同款）",
@@ -38,6 +48,7 @@ function openMenu(player: Player, settings: SettingsService): void {
     .toggle("物品补充（使用后自动补货）", { defaultValue: s.refillEnabled, tooltip: TOOLTIPS.refill })
     .toggle("武器替换（攻击时换正确武器）", { defaultValue: s.weaponSwapEnabled, tooltip: TOOLTIPS.weapon })
     .toggle("工具替换（挖掘换正确工具）", { defaultValue: s.toolSwapEnabled, tooltip: TOOLTIPS.tool })
+    .toggle("图腾补充（触发后自动换入备用不死图腾）", { defaultValue: s.totemEnabled, tooltip: TOOLTIPS.totem })
     .toggle("挖掘防误触（防误拆）", { defaultValue: s.antiTouchEnabled, tooltip: TOOLTIPS.antiTouch })
     .toggle("耐久保护（低耐久提前收起同类）", {
       defaultValue: s.durabilityProtectEnabled,
@@ -57,11 +68,12 @@ function openMenu(player: Player, settings: SettingsService): void {
 
   form.show(player).then((response) => {
     if (response.canceled || response.formValues === undefined) return;
-    const [global, refill, weapon, tool, antiTouch, durability, thresholdPct, floor] = response.formValues;
+    const [global, refill, weapon, tool, totem, antiTouch, durability, thresholdPct, floor] = response.formValues;
     settings.setFeature("global", global === true);
     settings.setFeature("refill", refill === true);
     settings.setFeature("weapon", weapon === true);
     settings.setFeature("tool", tool === true);
+    settings.setFeature("totem", totem === true);
     settings.setFeature("antiTouch", antiTouch === true);
     settings.setFeature("durability", durability === true);
     if (typeof thresholdPct === "number") settings.setDurabilityThreshold(thresholdPct / 100);
@@ -76,7 +88,7 @@ export function registerAdminMenu(settings: SettingsService): void {
     event.customCommandRegistry.registerCommand(
       {
         name: ADMIN_MENU_COMMAND,
-        description: "打开「自动替换」管理员配置菜单（全局/物品补充/武器替换/工具替换/耐久保护/阈值）",
+        description: "打开「自动替换」管理员配置菜单（全局/物品补充/武器替换/工具替换/图腾补充/耐久保护/阈值）",
         permissionLevel: CommandPermissionLevel.GameDirectors, // 操作员/游戏导演
         cheatsRequired: false,
         mandatoryParameters: [],

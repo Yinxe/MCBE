@@ -1,6 +1,6 @@
 {
   "name": "auto-refill",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "自动替换主手消耗物品——保留成就",
   "private": true,
   "devDependencies": {
@@ -26,7 +26,8 @@
   },
   "dependencies": {
     "@minecraft/server": "2.0.0",
-    "@minecraft/server-ui": "2.0.0"
+    "@minecraft/server-ui": "2.0.0",
+    "@yinxe/toolkit": "workspace:*"
   },
   "mcbe": {
     "packName": "自动替换",

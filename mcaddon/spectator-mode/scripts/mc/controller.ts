@@ -1,9 +1,10 @@
 // ── 旁观控制器：组合 core 状态机与 mc 副作用，驱动活跃灵魂会话 ──
 import { GameMode, system, world, type Player } from "@minecraft/server";
+import { HudManager } from "@yinxe/toolkit";
 import { clampMaxDistance, DEFAULT_MAX_DISTANCE } from "../core/config";
 import type { SpConfig, SoulAnchor } from "../core/types";
 import { SoulEngine } from "../core/engine";
-import { buildSoulHud } from "../core/hud";
+import { buildSoulHud, type SoulHudState } from "../core/hud";
 import { readConfig, writeConfig, readSoulAnchor, writeSoulAnchor, clearSoulAnchor } from "./store";
 import { spawnBodyGlow, spawnSoulGlow, spawnTetherLine } from "./particles";
 import { allUsablePlayers, findAnyPlayer } from "./playerUtil";
@@ -43,6 +44,10 @@ export class SoulController {
   private readonly particleWarned = new Set<string>();
   /** 无人出窍时的低频扫描计数 */
   private idleCounter = 0;
+  /** 每灵魂玩家最新 HUD 状态（tick 更新；公用 HudManager 渲染 + 跨包仲裁） */
+  private readonly soulStates = new Map<string, SoulHudState>();
+  /** 公共 actionbar 显示管理器（/scriptevent 总线，priority 200 抢 actionbar） */
+  private readonly hud = new HudManager({ modId: "spectator-mode", intervalTicks: TICK_INTERVAL_TICKS });
 
   constructor() {
     // 世界 DP 须在 Phase 4 后读取，构造期先用默认值
@@ -54,6 +59,17 @@ export class SoulController {
     this.config = readConfig();
     if (this.intervalId !== undefined) system.clearRun(this.intervalId);
     this.intervalId = system.runInterval(() => this.tick(), TICK_INTERVAL_TICKS);
+    // 公共 actionbar 总线：灵魂 HUD 以 priority 200 抢占（他包自动让位），渲染交给 HudManager
+    this.hud.register({
+      id: "soul",
+      slot: "actionbar",
+      priority: 200,
+      render: (p: Player) => {
+        const st = this.soulStates.get(p.id);
+        return st !== undefined ? buildSoulHud(st) : undefined;
+      },
+    });
+    this.hud.start();
   }
 
   /** 当前配置（拷贝，防外部改） */
@@ -218,7 +234,8 @@ export class SoulController {
   /** 统一回归：清 HUD/锚点 → 传送回真身 → 还原游戏模式 → 标记粒子 → 提示 */
   private returnToAnchor(player: Player, anchor: SoulAnchor, reason: string): void {
     clearSoulAnchor(player);
-    player.onScreenDisplay.setActionBar("");
+    // HUD 状态移除：公共 HudManager 感知"无灵魂内容"后自动清 actionbar / 让位其它模组
+    this.soulStates.delete(player.id);
 
     const dimension = safeDimension(anchor.dimensionId);
     if (dimension !== undefined) {
@@ -295,14 +312,13 @@ export class SoulController {
         continue;
       }
 
-      player.onScreenDisplay.setActionBar(
-        buildSoulHud({
-          inRange: result.inRange,
-          dist: distance,
-          maxDistance: this.config.maxDistance,
-          remainingMs: result.remainingMs,
-        })
-      );
+      // HUD：把最新状态交给公共 HudManager（actionbar 槽 priority 200）渲染/仲裁，不在本层直写屏幕
+      this.soulStates.set(player.id, {
+        inRange: result.inRange,
+        dist: distance,
+        maxDistance: this.config.maxDistance,
+        remainingMs: result.remainingMs,
+      });
 
       // 视觉：灵魂光环每帧（隔离失败，不影响其他）；真身侧低频且真身未加载则跳过
       session.run++;

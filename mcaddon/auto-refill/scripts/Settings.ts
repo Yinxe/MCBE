@@ -8,7 +8,7 @@
 import { world } from "@minecraft/server";
 
 /** 功能开关标识（不含全局） */
-export type Feature = "refill" | "weapon" | "tool" | "antiTouch" | "durability";
+export type Feature = "refill" | "weapon" | "tool" | "totem" | "antiTouch" | "durability";
 
 /** 当前配置快照（菜单展示用） */
 export interface AutoRefillSettings {
@@ -16,6 +16,8 @@ export interface AutoRefillSettings {
   refillEnabled: boolean;
   weaponSwapEnabled: boolean;
   toolSwapEnabled: boolean;
+  /** 图腾补充：不死图腾触发（死亡保护）后自动从背包换入备用到副手 */
+  totemEnabled: boolean;
   /** 挖掘防误触：首次用错误工具挖方块不切换（防误拆），窗口内同信号二次才启用 */
   antiTouchEnabled: boolean;
   durabilityProtectEnabled: boolean;
@@ -29,6 +31,7 @@ const DP_GLOBAL = "autorefill:global";
 const DP_REFILL = "autorefill:refill";
 const DP_WEAPON = "autorefill:weapon";
 const DP_TOOL = "autorefill:tool";
+const DP_TOTEM = "autorefill:totem";
 const DP_ANTI_TOUCH = "autorefill:antiTouch";
 const DP_DURABILITY = "autorefill:durability";
 const DP_DURABILITY_THRESHOLD = "autorefill:durabilityThreshold";
@@ -47,6 +50,7 @@ const DEFAULTS: AutoRefillSettings = {
   refillEnabled: true,
   weaponSwapEnabled: true,
   toolSwapEnabled: true,
+  totemEnabled: true,
   antiTouchEnabled: true,
   durabilityProtectEnabled: true,
   durabilityThreshold: 0.05,
@@ -59,6 +63,7 @@ type BooleanField =
   | "refillEnabled"
   | "weaponSwapEnabled"
   | "toolSwapEnabled"
+  | "totemEnabled"
   | "antiTouchEnabled"
   | "durabilityProtectEnabled";
 
@@ -68,6 +73,7 @@ const DP_BY_FEATURE: Record<"global" | Feature, string> = {
   refill: DP_REFILL,
   weapon: DP_WEAPON,
   tool: DP_TOOL,
+  totem: DP_TOTEM,
   antiTouch: DP_ANTI_TOUCH,
   durability: DP_DURABILITY,
 };
@@ -78,6 +84,7 @@ const FIELD_BY_FEATURE: Record<"global" | Feature, BooleanField> = {
   refill: "refillEnabled",
   weapon: "weaponSwapEnabled",
   tool: "toolSwapEnabled",
+  totem: "totemEnabled",
   antiTouch: "antiTouchEnabled",
   durability: "durabilityProtectEnabled",
 };
@@ -95,6 +102,7 @@ export class SettingsService {
         refillEnabled: world.getDynamicProperty(DP_REFILL) !== false,
         weaponSwapEnabled: world.getDynamicProperty(DP_WEAPON) !== false,
         toolSwapEnabled: world.getDynamicProperty(DP_TOOL) !== false,
+        totemEnabled: world.getDynamicProperty(DP_TOTEM) !== false,
         antiTouchEnabled: world.getDynamicProperty(DP_ANTI_TOUCH) !== false,
         durabilityProtectEnabled: world.getDynamicProperty(DP_DURABILITY) !== false,
         durabilityThreshold:

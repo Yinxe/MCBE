@@ -1,6 +1,6 @@
 {
   "name": "mock-player",
-  "version": "1.1.40",
+  "version": "1.1.48",
   "description": "创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
   "private": true,
   "devDependencies": {
@@ -15,6 +15,7 @@
     "typescript": "5.0.2"
   },
   "scripts": {
+    "test:core": "tsc -p tsconfig.test.json && node --test \".test-build/tests/**/*.test.js\"",
     "lint": "just-scripts lint",
     "build": "just-scripts build",
     "clean": "just-scripts clean",

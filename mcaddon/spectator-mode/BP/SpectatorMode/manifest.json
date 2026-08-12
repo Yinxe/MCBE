@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "灵魂出窍 v1.0.7",
-    "description": "灵魂出窍 · 旁观模式",
+    "name": "灵魂出窍 v1.0.10",
+    "description": "灵魂出窍 · 旁观模式\n作者：Yinx\n邮箱：1423716216@qq.com\n主页：https://github.com/Yinxe/\nQQ群：632178498\n仓库：https://github.com/Yinxe/MCBE",
     "uuid": "67c0e536-82f7-459d-a15f-d4cd9b229bf8",
     "version": [
       1,
       0,
-      7
+      10
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         1,
         0,
-        7
+        10
       ],
       "uuid": "bd2e3fa2-017d-4af4-91d2-cca0fff38cf0",
       "type": "data"
@@ -34,7 +34,7 @@
       "version": [
         1,
         0,
-        7
+        10
       ],
       "entry": "scripts/main.js"
     }

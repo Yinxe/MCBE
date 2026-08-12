@@ -35,13 +35,15 @@ export class ToolManager {
    * @param settings       全局设置（耐久保护开关 + 阈值、防误触开关）
    * @param playPop        换工具成功后的反馈音效（注入便于维护，默认 random.pop）
    * @param antiTouch      挖掘防误触守卫（首次错误工具命中不切，窗口内二次才启用）
+   * @param onAntiTouch    防误触状态通知（intercepted=true 拦截 / false 确认放行）；主线程接 HUD
    */
   constructor(
     private readonly minerSelector: ToolSelector,
     private readonly weaponSelector: ToolSelector,
     private readonly settings: SettingsService,
     private readonly playPop: (player: Player) => void = (p) => p.playSound("random.pop"),
-    private readonly antiTouch: AccidentalGuard = new AccidentalGuard()
+    private readonly antiTouch: AccidentalGuard = new AccidentalGuard(),
+    private readonly onAntiTouch: (player: Player, intercepted: boolean) => void = () => undefined
   ) {}
 
   /**
@@ -78,8 +80,10 @@ export class ToolManager {
       const hand = mainhand ? mainhand.typeId : "空手";
       if (this.antiTouch.shouldIntercept(player.id, mainhand?.typeId, block.typeId, system.currentTick)) {
         logger.info(`防误触 ${player.name}: ${block.typeId}（${hand}）→ 已拦截切换，2.5 秒内再挖一次将启用`);
+        this.onAntiTouch(player, true); // 拦截 → 通知 HUD 提示（含倒计时）
         return;
       }
+      this.onAntiTouch(player, false); // 同窗口二次确认 → 放行，通知 HUD 清除提示
     }
     this.execute(player, inv, decision);
   }

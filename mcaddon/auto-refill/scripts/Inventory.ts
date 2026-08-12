@@ -10,8 +10,10 @@
 import {
   EntityComponentTypes,
   EntityInventoryComponent,
+  EquipmentSlot,
   ItemLockMode,
   type Container,
+  type EntityEquippableComponent,
   type ItemStack,
   type Player,
 } from "@minecraft/server";
@@ -92,6 +94,42 @@ export class InventoryService {
       return this.container.transferItem(slot, this.container) === undefined;
     } catch (e) {
       logger.warn(`stack failed ${this.player.name}: slot ${slot} - ${e}`);
+      return false;
+    }
+  }
+
+  // ─── 副手（equipment） ─────────────────────────────────
+
+  /** 玩家副手当前物品；取不到装备组件或异常返回 undefined */
+  readOffhand(): ItemStack | undefined {
+    try {
+      const equipment = this.player.getComponent(EntityComponentTypes.Equippable) as
+        EntityEquippableComponent | undefined;
+      return equipment?.getEquipment(EquipmentSlot.Offhand);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * 将背包某槽物品原子迁移到副手（防刷物）：
+   *   副手非空 → 返回 false（尊重玩家不覆盖；低版本误报也在此安全短路）；
+   *   否则"先铺目标（offhandSlot.setItem 存活句柄）、后清源（container 置空）"——
+   *   无论引擎按 move 还是 copy 处理，铺了目标即清源 → 最终仅 1 份，不复制不刷物。
+   * @param slot 背包源槽位（必须非空）
+   */
+  refillOffhand(slot: number): boolean {
+    try {
+      const equipment = this.player.getComponent(EntityComponentTypes.Equippable) as
+        EntityEquippableComponent | undefined;
+      if (!equipment) return false;
+      const offhandSlot = equipment.getEquipmentSlot(EquipmentSlot.Offhand);
+      if (offhandSlot.hasItem()) return false; // 副手非空：尊重玩家，不覆盖
+      offhandSlot.setItem(this.container.getItem(slot)); // 先铺目标
+      this.container.setItem(slot, undefined); // 后清源
+      return true;
+    } catch (e) {
+      logger.error(`offhand refill failed ${this.player.name}: slot ${slot} - ${e}`);
       return false;
     }
   }
