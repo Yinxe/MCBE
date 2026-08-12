@@ -5,7 +5,7 @@ import { world } from "@minecraft/server";
 import { BotRecord } from "../../core/model/Types";
 import { TAG_CONTROL, TAG_VAULT_MODE, BOT_TAG } from "../../core/tags/BotTags";
 import { syncEntityTags } from "../adapters/EntityTags";
-import { botRegistry } from "../bootstrap/context";
+import { saveCoordinator } from "../bootstrap/context";
 import { color } from "@yinxe/toolkit";
 
 export function setTags(record: BotRecord, newTags: string[], controllerPlayer?: any): void {
@@ -34,5 +34,5 @@ export function setTags(record: BotRecord, newTags: string[], controllerPlayer?:
     }
   }
 
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
 }

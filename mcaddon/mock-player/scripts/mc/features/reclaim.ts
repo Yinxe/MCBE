@@ -16,8 +16,7 @@ import {
   buildInventorySummary,
   type ReclaimOptions,
 } from "../../core/service/ReclaimPlanner";
-import { botRegistry, botStore } from "../bootstrap/context";
-import { saveBotFullState } from "./saveState";
+import { botRegistry, botStore, saveCoordinator } from "../bootstrap/context";
 import { color } from "@yinxe/toolkit";
 
 export interface ReclaimResult {
@@ -209,7 +208,7 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
     }
 
     // 保存剩余状态到持久化（此时假人实体上的经验已清零）
-    saveBotFullState(bot, record);
+    saveCoordinator.saveFullState(bot, record);
 
     // ⚠️ 兜底：saveBotFullState 会重新 captureExperience 覆盖 record.experience。
     //    若实体经验清除失败（低版本 API 限制），此处强制归零，杜绝重复回收
@@ -234,7 +233,7 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
           if (item) transferItemToPlayer(item, pInv, player, result);
           remainingInv.push(null); // 已回收，清空
         }
-        botStore.saveInventory(record.name, remainingInv);
+        saveCoordinator.saveInventory(record.name, remainingInv);
       }
     }
 
@@ -249,7 +248,7 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
         if (item) transferItemToPlayer(item, pInv, player, result);
         delete savedEquip[slot];
       }
-      botStore.saveEquipment(record.name, savedEquip);
+      saveCoordinator.saveEquipment(record.name, savedEquip);
     }
 
     // 经验
@@ -262,11 +261,11 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
 
     // 全量回收且无剩余 → 彻底清理持久化
     if (isFullReclaim(opts)) {
-      botStore.removeInventory(record.name);
+      saveCoordinator.removeInventory(record.name);
     }
   }
 
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
 
   return result;
 }

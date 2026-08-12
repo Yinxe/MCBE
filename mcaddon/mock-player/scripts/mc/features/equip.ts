@@ -6,7 +6,7 @@ import { BotRecord } from "../../core/model/Types";
 import { SWAP_SLOTS, EQUIP_SLOT_MAP } from "../adapters/EquipmentSlots";
 import { serializeEquipment, captureExperience } from "../adapters/McItemCodec";
 import { getEquipmentSlot } from "../../core/items/ItemRules";
-import { botRegistry, botStore } from "../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 
 // ─── 内部工具 ──────────────────────────────────────────
 
@@ -135,9 +135,9 @@ export function equipBotArmor(bot: Player, player: Player, armorItem: any): bool
 export function saveBotEquipState(bot: Player, record: BotRecord): void {
   const equip = bot.getComponent("minecraft:equippable") as any;
   if (equip) {
-    botStore.saveEquipment(record.name, serializeEquipment(equip));
+    saveCoordinator.saveEquipment(record.name, serializeEquipment(equip));
   }
   record.experience = captureExperience(bot);
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
   console.info(`[MockPlayer] 装备状态保存完成 ${record.name}`);
 }

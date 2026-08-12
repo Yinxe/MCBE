@@ -6,7 +6,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { syncEntityTags } from "../adapters/EntityTags";
-import { botRegistry } from "../bootstrap/context";
+import { saveCoordinator } from "../bootstrap/context";
 
 export function setSneaking(record: BotRecord, sneaking: boolean): void {
   record.isSneaking = sneaking;
@@ -19,5 +19,5 @@ export function setSneaking(record: BotRecord, sneaking: boolean): void {
     }
   }
 
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
 }

@@ -18,7 +18,7 @@ import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
 import { serializeContainer } from "../adapters/McItemCodec";
 import { getPlayerLookTarget, lookAt } from "../adapters/PoseGateway";
-import { botRegistry, botStore } from "../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import {
   tpBotToPlayer,
   tpPlayerToBot,
@@ -252,7 +252,7 @@ function doSwap(player: Player, botName: string): void {
               bInv.container.setItem(i, pItems[i] ?? undefined);
               pInv.container.setItem(i, bItems[i] ?? undefined);
             }
-            botStore.saveInventory(r.name, serializeContainer(bInv.container));
+            saveCoordinator.saveInventory(r.name, serializeContainer(bInv.container));
             done.push("背包");
           }
 
@@ -416,7 +416,7 @@ function updateSpawn(player: Player, botName: string): void {
           });
         }
       }
-      botRegistry.save(r);
+      saveCoordinator.saveRecord(r);
       player.sendMessage(`${color.success}已更新 ${color.playerName}${botName}${color.success} 的重生点`);
     } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
   });

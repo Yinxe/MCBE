@@ -12,8 +12,7 @@
 import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { botRegistry } from "../bootstrap/context";
-import { saveBotFullState } from "../features/saveState";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { offlineBot } from "../features/offlineBot";
 import { reconnectingBots } from "../features/pendingRespawn";
 import { color } from "@yinxe/toolkit";
@@ -67,7 +66,7 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
     try {
       const bot = world.getEntity(record.entityId);
       if (bot?.hasTag(BOT_TAG)) {
-        saveBotFullState(bot as Player, record);
+        saveCoordinator.saveFullState(bot as Player, record);
       }
     } catch {
       // 实体已不可访问，忽略——主保存路径在 entityDie / offlineBot 已完成
@@ -76,7 +75,7 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
 
   record.online = false;
   record.entityId = undefined;
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
   botRegistry.removeRestored(record.name);
 
   // 重连周期（宝库/模式切换）不发送"离开游戏"消息

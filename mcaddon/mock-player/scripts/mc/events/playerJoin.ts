@@ -11,7 +11,7 @@ import { world, system, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEq
 import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG, TAG_RAID_MODE } from "../../core/tags/BotTags";
-import { botRegistry, botStore } from "../bootstrap/context";
+import { botRegistry, botStore, saveCoordinator } from "../bootstrap/context";
 import { deserializeContainer, deserializeEquipment } from "../adapters/McItemCodec";
 import { getTotalXpForLevels } from "../../core/xp/XpMath";
 import { rebindBotTridents, trackBotOnline } from "../features/tridentTracker";
@@ -23,7 +23,7 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
 
   console.info(`[MockPlayer] 事件 playerJoin ${event.playerName}`);
   record.online = true;
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
 
   // 恢复背包/装备/经验（仅首次加入世界时，死亡重生不走这）
   // ⚠️ 用 name + tags 双重过滤防止误操作

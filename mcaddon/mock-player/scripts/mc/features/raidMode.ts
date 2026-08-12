@@ -14,7 +14,7 @@ import { Container, EffectAddAfterEvent, Entity, Player, system, world } from "@
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import { botRegistry } from "../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { TAG_RAID_MODE } from "../../core/tags/BotTags";
@@ -373,7 +373,7 @@ function probeRaidOmenDp(entity: Entity, name: string): void {
 /** 关闭劫掠模式（移除标签即停用；劫掠为独立开关，与其它行为可共存，不额外切回空闲） */
 function disableRaidMode(botName: string, record: BotRecord, message?: string): void {
   record.tags = record.tags.filter((t) => t !== TAG_RAID_MODE.value);
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
 
   const bot = resolveBotPlayer(botName);
   if (bot) syncEntityTags(bot, record.tags);

@@ -101,9 +101,26 @@ scripts/
 - **竞态防护**：`record.death = true` 在保存**之前**设置——关闭 100tick 周期保存的窗口（behavior 引擎跳过死亡假人）。
 - 正确性前提（由 `tests/inventory-lifecycle.test.ts` 锁定）：实体最终状态 = 引擎掉落后状态；若实测发现引擎在 entityDie 之后才掉落，需重新评估。
 
-### 运行时单例
-- `mc/bootstrap/context.ts` 导出 `botStore` / `botRegistry` / `configStore` 单例（mc 层共享，等价旧 persistence.ts 的模块级 botRegistry）
-- core 测试不经过 context：自行 `new BotRegistry(new InMemoryBotStore())`
+### 保存协调器（`mc/bootstrap/save.ts`，所有持久化**写**的唯一入口）
+- 读操作（loadRecord/loadInventory/loadEquipment）直接走 `botStore`；**写操作一律走 `saveCoordinator`**，禁止直接调 botStore 写方法或 botRegistry.save
+- 方法：`saveRecord`（记录写穿，周期路径 silent）/ `saveSlot`（背包单格，**带"什么变了"变化日志**：变化前 → 变化后）/ `saveInventory` / `saveEquipment` / `saveFullState`（背包+装备+经验+记录，**含 isBotRestored 守卫**）/ `removeInventory`
+- 集中收益：恢复标记守卫、变化日志、静默策略、未来防刷物校验全部单点维护
+
+### 保存时机点矩阵
+
+| 时机 | 写什么 | 入口 |
+|------|--------|------|
+| 背包单格变化（playerInventoryItemChange） | 单格 + 变化日志（beforeItemStack） | saveSlot |
+| 100tick 周期（behavior） | 位置/经验（silent）+ 装备（silent） | saveRecord / saveEquipment |
+| 下线（offlineBot） | 背包+装备+经验+记录 | saveFullState |
+| 死亡（entityDie，**存储时机点**） | 实体最终状态（有什么存什么） | saveFullState |
+| 离开兜底（playerLeave） | 尽力保存 | saveFullState |
+| 在线回收前（reclaim） | 全量 | saveFullState |
+| 回收（在线/离线） | 转移后的剩余 | saveInventory/saveEquipment/saveRecord |
+| 互换背包/装备（ui/equip） | 互换后状态 | saveInventory/saveEquipment/saveRecord |
+| 创建/上线/重生/改名/标签/潜行/传送/重生点/劫掠开关 | 记录 | saveRecord |
+| 删除/回收清空 | 背包+装备清理 | removeInventory |
+| 配置修改（管理员菜单） | mockplayer:config | configStore（写穿） |
 
 ---
 

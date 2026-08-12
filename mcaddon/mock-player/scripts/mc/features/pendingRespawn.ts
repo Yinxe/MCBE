@@ -12,7 +12,7 @@ import type { BotRecord } from "../../core/model/Types";
 import { offlineBot } from "./offlineBot";
 import { onlineBot } from "./onlineBot";
 import { waitForNameAvailable } from "../adapters/PlayerGateway";
-import { botRegistry } from "../bootstrap/context";
+import { saveCoordinator } from "../bootstrap/context";
 
 export const reconnectingBots = new Set<string>();
 
@@ -80,7 +80,7 @@ async function doConnect(
     console.error(`[MockPlayer] safeReconnect 上线失败 ${record.name}: ${e?.message ?? e}`);
     record.online = false;
     record.entityId = undefined;
-    botRegistry.save(record);
+    saveCoordinator.saveRecord(record);
     return;
   }
 

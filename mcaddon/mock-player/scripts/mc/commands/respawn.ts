@@ -2,7 +2,7 @@ import { world, CommandPermissionLevel, CustomCommandParamType } from "@minecraf
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { TAG_RESPAWN, TAG_BOT } from "../../core/tags/BotTags";
-import { botRegistry } from "../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
 import { setTags } from "../features/setTags";
 import { getPlayerLookTarget } from "../adapters/PoseGateway";
@@ -52,7 +52,7 @@ export function registerSetRespawnCommand(registry: any): void {
         (e as any).setSpawnPoint({ dimension: world.getDimension(record.respawnPoint.dimension), x: record.respawnPoint.location.x, y: record.respawnPoint.location.y, z: record.respawnPoint.location.z });
       }
     }
-    botRegistry.save(record);
+    saveCoordinator.saveRecord(record);
     player.sendMessage(`${color.success}已更新 ${color.playerName}${targetName}${color.success} 的重生点`);
   });
 }

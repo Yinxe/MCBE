@@ -5,7 +5,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { botRegistry } from "../bootstrap/context";
+import { saveCoordinator } from "../bootstrap/context";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../adapters/PoseGateway";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
@@ -40,5 +40,5 @@ export function tpBotToPlayer(record: BotRecord, player: Player): void {
     setPose(bot, player.getRotation(), lookTarget);
     savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
   }
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
 }

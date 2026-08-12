@@ -5,8 +5,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { botRegistry } from "../bootstrap/context";
-import { saveBotFullState } from "./saveState";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { trackBotOffline } from "./tridentTracker";
 
 /**
@@ -35,14 +34,14 @@ export function offlineBot(record: BotRecord): void {
     console.info(
       `[MockPlayer] 下线保存 ${record.name}（${record.lastPoint.dimension} ${Math.floor(record.lastPoint.location.x)} ${Math.floor(record.lastPoint.location.y)} ${Math.floor(record.lastPoint.location.z)}）`,
     );
-    saveBotFullState(online, record);
+    saveCoordinator.saveFullState(online, record);
 
     online.disconnect();
   }
 
   record.online = false;
   record.entityId = undefined;
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
 
   if (oldEntityId) trackBotOffline(oldEntityId);
 }

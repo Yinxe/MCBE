@@ -13,7 +13,7 @@ import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG, TAG_RAID_MODE } from "../../core/tags/BotTags";
 import { syncEntityTags } from "../adapters/EntityTags";
-import { botRegistry } from "../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { trackBotOnline } from "../features/tridentTracker";
 import { startRaidMode } from "../features/raidMode";
 
@@ -33,7 +33,7 @@ export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   trackBotOnline(player.id, record.name);
   syncEntityTags(player, record.tags);
 
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 重生了`);
 
   // 劫掠模式开启 → 死亡重生后补喝一瓶（死亡会清掉效果，重新拉起的袭击/续杯）

@@ -7,8 +7,9 @@
 import { BotRegistry } from "../../core/service/BotRegistry";
 import { McBotStore } from "../adapters/McBotStore";
 import { McConfigStore } from "../adapters/McConfigStore";
+import { SaveCoordinator } from "./save";
 
-/** 假人持久化后端（DynamicProperty） */
+/** 假人持久化后端（DynamicProperty；读操作直接使用，写操作统一走 saveCoordinator） */
 export const botStore = new McBotStore();
 
 /** 假人注册表（内存 + 持久化写穿） */
@@ -16,3 +17,6 @@ export const botRegistry = new BotRegistry(botStore);
 
 /** 全局配置（默认配额/逐人配额/管理员名单；worldLoad 后需 refresh()） */
 export const configStore = new McConfigStore();
+
+/** 保存协调器：所有持久化写的统一入口 */
+export const saveCoordinator = new SaveCoordinator(botRegistry, botStore);

@@ -20,7 +20,6 @@ export {
   equipBotArmor,
   saveBotEquipState,
 } from "./equip";
-export { saveBotFullState } from "./saveState";
 export { setTags } from "./setTags";
 export { checkMainHandDurability } from "./toolHealth";
 export { startFollow, stopFollow, isFollowing } from "./follow";

@@ -9,7 +9,7 @@
 import { EntityEquippableComponent, Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { botRegistry, botStore } from "../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL, TAG_VAULT_MODE } from "../../core/tags/BotTags";
 import { captureExperience, serializeEquipment } from "../adapters/McItemCodec";
 import { runVaultCycle } from "./vaultMode";
@@ -115,9 +115,9 @@ export function startTagBehaviors(): void {
         }
         record.isSneaking = bot.isSneaking;
         record.experience = captureExperience(bot);
-        botRegistry.save(record, true);
+        saveCoordinator.saveRecord(record, true);
         const equip = bot.getComponent("minecraft:equippable") as EntityEquippableComponent;
-        if (equip) botStore.saveEquipment(bot.name, serializeEquipment(equip), true);
+        if (equip) saveCoordinator.saveEquipment(bot.name, serializeEquipment(equip), true);
       }
     }
   }, 1);

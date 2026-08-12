@@ -7,7 +7,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "../../core/model/Types";
 import { syncEntityTags } from "../adapters/EntityTags";
-import { botRegistry } from "../bootstrap/context";
+import { saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";
 
 export function finalizeBotSpawn(
@@ -21,6 +21,6 @@ export function finalizeBotSpawn(
   bot.isSneaking = record.isSneaking;
   if (!noPose) setPose(bot, rotation, lookTarget);
 
-  botRegistry.set(record);
-  botRegistry.save(record);
+  // 注册 + 写穿（saveRecord 内含内存 set）
+  saveCoordinator.saveRecord(record);
 }

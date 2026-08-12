@@ -20,8 +20,7 @@ import { BOT_TAG, TAG_RESPAWN } from "../../core/tags/BotTags";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
-import { botRegistry } from "../bootstrap/context";
-import { saveBotFullState } from "../features/saveState";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";
 import { trackBotOffline } from "../features/tridentTracker";
 
@@ -53,13 +52,13 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   //    entityDie 回调时实体已处于死亡最终状态——普通物品已按游戏规则掉落
   //    （掉落物是物品离开假人的唯一副本），keepOnDeath（自带死亡不掉落）
   //    的物品仍在背包中，一并如实保存。不做额外过滤/清空，顺应游戏规则。
-  saveBotFullState(bot, record);
+  saveCoordinator.saveFullState(bot, record);
   console.info(`[MockPlayer] 死亡存储 ${record.name}（实体当前状态，含死亡不掉落物品）`);
 
   // 2. 记录死亡信息
   record.deathPoint = deathState;
   record.lastPoint = null;
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
 
   world.sendMessage(
     `${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 死亡了 ${color.muted}@ ${formatPos(deathState.location)} ${color.darkGray}${formatDimensionId(deathState.dimension)}`,
@@ -84,7 +83,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
       record.death = false;
       record.deathPoint = null;
       record.lastPoint = { ...record.respawnPoint };
-      botRegistry.save(record);
+      saveCoordinator.saveRecord(record);
       world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 已自动复活`);
       return;
     } catch (e: any) {
@@ -97,7 +96,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   trackBotOffline(record.entityId!);
   record.online = false;
   record.entityId = undefined;
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
   bot.disconnect();
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 已死亡下线`);
 }

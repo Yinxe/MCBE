@@ -9,7 +9,7 @@ import { world, system, EquipmentSlot, type Player, ItemStack } from "@minecraft
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
-import { saveBotFullState } from "./saveState";
+import { saveCoordinator } from "../bootstrap/context";
 import { safeReconnect } from "./pendingRespawn";
 import { color } from "@yinxe/toolkit";
 
@@ -80,7 +80,7 @@ export function runVaultCycle(bot: SimulatedPlayer, record: BotRecord): void {
   // ── 4. 保存状态 + 下线 + 重新上线 ───────────────────
   // 使用 safeReconnect：自动等待旧实体完全释放后再 spawn，
   // 成功后通过 onOnline 通知最近玩家
-  saveBotFullState(bot, record);
+  saveCoordinator.saveFullState(bot, record);
   safeReconnect(record, {
     onOnline: (fresh, r) => notifyNearestPlayer(fresh, r, keyInfo),
   });
