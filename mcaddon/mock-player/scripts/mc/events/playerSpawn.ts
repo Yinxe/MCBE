@@ -11,11 +11,11 @@
 import { world, PlayerSpawnAfterEvent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { BOT_TAG, TAG_RAID_MODE } from "../../core/tags/BotTags";
+import { BOT_TAG } from "../../core/tags/BotTags";
+import { botRespawn } from "../../core/events/DomainEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { trackBotOnline } from "../features/tridentTracker";
-import { startRaidMode } from "../features/raidMode";
 
 export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   // 首次生成不处理（由 playerJoin 负责恢复）
@@ -36,8 +36,6 @@ export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   saveCoordinator.saveRecord(record);
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 重生了`);
 
-  // 劫掠模式开启 → 死亡重生后补喝一瓶（死亡会清掉效果，重新拉起的袭击/续杯）
-  if (record.tags.includes(TAG_RAID_MODE.value)) {
-    startRaidMode(record.name);
-  }
+  // 复活领域事件：订阅方（三叉戟认主夺回/劫掠续药等）驱动
+  botRespawn.trigger({ botName: record.name });
 }

@@ -17,12 +17,13 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { PositionState } from "../../core/model/Types";
 import { BOT_TAG, TAG_RESPAWN } from "../../core/tags/BotTags";
+import { botDeath, botOffline } from "../../core/events/DomainEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";
-import { trackBotOffline, releaseBotTridents } from "../features/tridentTracker";
+import { trackBotOffline } from "../features/tridentTracker";
 
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;
@@ -59,6 +60,13 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   record.deathPoint = deathState;
   record.lastPoint = null;
   saveCoordinator.saveRecord(record);
+
+  // 死亡领域事件（自动重生仍触发，复活由 botRespawn 表达）
+  botDeath.trigger({
+    botName: record.name,
+    position: { x: deathState.location.x, y: deathState.location.y, z: deathState.location.z },
+    dimension: deathState.dimension,
+  });
 
   world.sendMessage(
     `${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 死亡了 ${color.muted}@ ${formatPos(deathState.location)} ${color.darkGray}${formatDimensionId(deathState.dimension)}`,
@@ -98,7 +106,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   record.entityId = undefined;
   saveCoordinator.saveRecord(record);
   bot.disconnect();
-  // 三叉戟下线回退：名下三叉戟认主第一任（避免 owner 悬空丢击杀经验）
-  releaseBotTridents(record.name);
+  // 下线领域事件（订阅方：三叉戟回退第一任等）
+  botOffline.trigger({ botName: record.name });
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 已死亡下线`);
 }

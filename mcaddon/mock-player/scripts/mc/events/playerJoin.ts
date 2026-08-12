@@ -10,12 +10,12 @@
 import { world, system, PlayerJoinAfterEvent, EntityInventoryComponent, EntityEquippableComponent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { BOT_TAG, TAG_RAID_MODE } from "../../core/tags/BotTags";
+import { BOT_TAG } from "../../core/tags/BotTags";
+import { botOnline } from "../../core/events/DomainEvents";
 import { botRegistry, botStore, saveCoordinator } from "../bootstrap/context";
 import { deserializeContainer, deserializeEquipment } from "../adapters/McItemCodec";
 import { getTotalXpForLevels } from "../../core/xp/XpMath";
-import { rebindBotTridents, trackBotOnline } from "../features/tridentTracker";
-import { startRaidMode } from "../features/raidMode";
+import { trackBotOnline } from "../features/tridentTracker";
 
 export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   const record = botRegistry.get(event.playerName);
@@ -63,15 +63,12 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   if (player) {
     botRegistry.markRestored(record.name);
 
-    // 更新 entityId 并认主三叉戟（覆盖所有上线方式）
+    // 更新 entityId + 反查表
     record.entityId = player.id;
     trackBotOnline(player.id, record.name);
-    system.run(() => rebindBotTridents(record.name));
+
+    // 上线领域事件：订阅方（三叉戟认主夺回/劫掠续药等）驱动
+    botOnline.trigger({ botName: record.name });
   }
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.success}${record.name} 加入了游戏`);
-
-  // 劫掠模式开启 → 背包已恢复，喝第一瓶（不祥之瓶在背包里）
-  if (record.tags.includes(TAG_RAID_MODE.value)) {
-    startRaidMode(record.name);
-  }
 }

@@ -5,8 +5,9 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
+import { botOffline } from "../../core/events/DomainEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { trackBotOffline, releaseBotTridents } from "./tridentTracker";
+import { trackBotOffline } from "./tridentTracker";
 
 /**
  * 主动下线假人
@@ -45,6 +46,6 @@ export function offlineBot(record: BotRecord): void {
 
   if (oldEntityId) trackBotOffline(oldEntityId);
 
-  // 三叉戟下线回退：名下三叉戟认主第一任（避免 owner 悬空丢击杀经验）
-  releaseBotTridents(record.name);
+  // 下线领域事件（订阅方：三叉戟回退第一任等）
+  botOffline.trigger({ botName: record.name });
 }

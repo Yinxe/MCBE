@@ -16,10 +16,10 @@
 // ⚠️ thrown_trident 投射物实体没有可读物品的组件（minecraft:item 仅掉落物实体），
 //    附魔信息只能在投掷流程获取：优先投掷流程注册的 pending 队列，其次投掷者主手。
 
-import { world, EntityProjectileComponent } from "@minecraft/server";
+import { world, system, EntityProjectileComponent } from "@minecraft/server";
 import type { Entity, ItemStack } from "@minecraft/server";
 import { botRegistry } from "../bootstrap/context";
-import { tridentClaimed } from "../../core/events/DomainEvents";
+import { botOnline, botOffline, botRespawn, tridentClaimed } from "../../core/events/DomainEvents";
 import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner } from "../../core/items/TridentClaimRules";
 
 const THROWN_TRIDENT = "minecraft:thrown_trident";
@@ -91,10 +91,19 @@ function readMainhandItem(owner: Entity): { tag: string } | undefined {
 // ─── 初始化 ─────────────────────────────────────────────
 
 /**
- * 订阅 entitySpawn + entityLoad，给投掷物打第一任 tag / 附魔信息 / fallback 认主。
+ * 订阅 entitySpawn + entityLoad + 假人生命周期事件。
+ * - entitySpawn：打第一任 tag / 附魔信息
+ * - entityLoad：fallback 认主（第二任在线优先）
+ * - botOnline / botRespawn：假人上线/复活 → rebindBotTridents 夺回
+ * - botOffline：假人下线 → releaseBotTridents 回退第一任
  * 在 worldLoad 后调用一次。
  */
 export function initTridentTracker(): void {
+  // ── 生命周期事件订阅（事件驱动认主，业务模块不再硬编码互相调用） ──
+  botOnline.subscribe((e) => system.run(() => rebindBotTridents(e.botName)));
+  botRespawn.subscribe((e) => system.run(() => rebindBotTridents(e.botName)));
+  botOffline.subscribe((e) => system.run(() => releaseBotTridents(e.botName)));
+
   // ── 投掷即标记：第一任主人 = 实际投掷者（玩家或假人）+ 附魔信息 ──
   world.afterEvents.entitySpawn.subscribe((event) => {
     const entity = event.entity;

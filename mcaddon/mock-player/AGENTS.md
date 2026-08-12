@@ -167,6 +167,13 @@ scripts/
 - `tridentOwnerChanged`：**第二任覆盖复写时触发**（1任→2任 或 2任→新2任；负载含 firstOwner/previousSecondOwner/newSecondOwner）
 - 生产端：tridentTracker（spawn/load/rebind/offline-fallback）+ tridentClaim（ui）；订阅方做通知/统计/联动
 
+### 假人生命周期事件（`core/events/DomainEvents`）
+- `botOnline`（加入世界/实体重建上线）/ `botOffline`（主动下线/死亡下线/离开兜底）/ `botDeath`（死亡标记，含位置）/ `botRespawn`（死亡重生）
+- 生产端：playerJoin（botOnline）/ playerSpawn（botRespawn）/ entityDie（botDeath + 死亡下线 botOffline）/ offlineBot（botOffline）/ playerLeave（botOffline，幂等）
+- **订阅驱动**（业务模块不硬编码互相调用）：
+  - tridentTracker 订阅 botOnline/botRespawn → rebindBotTridents（夺回）；botOffline → releaseBotTridents（回退第一任）
+  - raidMode 订阅 botOnline/botRespawn → startRaidMode（续喝第一瓶，替代 playerJoin/playerSpawn 硬编码）
+
 ### 认主 UI（ui/tridentClaim.ts，面板"三叉戟认主"按钮）
 - 扫描假人 100 半径（当前维度）内三叉戟，过滤**自家**（第一/第二任 ∈ 家族集合 = 主人名 ∪ 主人名下假人名）
 - 附魔/耐久展示尽力经 `EntityItemComponent.itemStack` 读取；**投射物实体实测常无该组件 → 附魔段降级省略（不跳过条目、不显示"未知"），认主功能不受影响**

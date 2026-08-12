@@ -70,3 +70,42 @@ export interface TridentOwnerChangedEvent {
 
 /** 三叉戟主人更替信号 */
 export const tridentOwnerChanged = new EventSignal<TridentOwnerChangedEvent>();
+
+// ─── 假人生命周期事件 ──────────────────────────────────
+// 死亡/复活/上线/下线封装为领域事件：认主机制、劫掠续药等订阅驱动，
+// 业务模块不再硬编码互相调用（负载只用可序列化 string/number）。
+
+/** 假人上线事件：实体进入在线状态（加入世界 / 重生后实体重建） */
+export interface BotOnlineEvent {
+  botName: string;
+}
+
+/** 假人下线事件：主动下线 / 死亡下线 / 离开兜底 */
+export interface BotOfflineEvent {
+  botName: string;
+}
+
+/** 假人死亡事件：死亡标记落定时触发（自动重生仍触发，复活由 botRespawn 表达） */
+export interface BotDeathEvent {
+  botName: string;
+  /** 死亡点坐标（可序列化） */
+  position: { x: number; y: number; z: number };
+  dimension: string;
+}
+
+/** 假人复活事件：死亡后重生（playerSpawn initialSpawn=false） */
+export interface BotRespawnEvent {
+  botName: string;
+}
+
+/** 假人上线信号 */
+export const botOnline = new EventSignal<BotOnlineEvent>();
+
+/** 假人下线信号 */
+export const botOffline = new EventSignal<BotOfflineEvent>();
+
+/** 假人死亡信号 */
+export const botDeath = new EventSignal<BotDeathEvent>();
+
+/** 假人复活信号 */
+export const botRespawn = new EventSignal<BotRespawnEvent>();

@@ -8,8 +8,10 @@ export * from "./model/Types";
 export { EventSignal, type EventCallback } from "./events/EventSignal";
 export {
   raidStarted, raidVictory, tridentClaimed, tridentOwnerChanged,
+  botOnline, botOffline, botDeath, botRespawn,
   type RaidStartedEvent, type RaidVictoryEvent,
   type TridentClaimedEvent, type TridentClaimVia, type TridentOwnerChangedEvent,
+  type BotOnlineEvent, type BotOfflineEvent, type BotDeathEvent, type BotRespawnEvent,
 } from "./events/DomainEvents";
 
 // tags

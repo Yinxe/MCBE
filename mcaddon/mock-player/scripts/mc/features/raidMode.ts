@@ -17,10 +17,10 @@ import { color } from "@yinxe/toolkit";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { syncEntityTags } from "../adapters/EntityTags";
+import { botOnline, botRespawn, raidStarted, raidVictory } from "../../core/events/DomainEvents";
+import type { RaidVictoryEvent } from "../../core/events/DomainEvents";
 import { TAG_RAID_MODE } from "../../core/tags/BotTags";
 import { BotRecord } from "../../core/model/Types";
-import { raidStarted, raidVictory } from "../../core/events/DomainEvents";
-import type { RaidVictoryEvent } from "../../core/events/DomainEvents";
 import {
   BAD_OMEN,
   RAID_OMEN,
@@ -50,6 +50,7 @@ let raidEventsReady = false;
  * 初始化劫掠事件系统。由 main.ts 在 worldLoad 后调用一次：
  *   1. effectAdd 监听不祥之兆/袭击之兆/村庄英雄 → 触发 raidStarted / raidVictory
  *   2. 订阅 raidVictory → 喝下一瓶不祥之瓶
+ *   3. 订阅假人上线/复活 → 喝第一瓶（替代 playerJoin/playerSpawn 硬编码调用）
  */
 export function initRaidModeEffects(): void {
   if (raidEventsReady) return;
@@ -57,6 +58,8 @@ export function initRaidModeEffects(): void {
 
   world.afterEvents.effectAdd.subscribe(handleEffectAdd);
   raidVictory.subscribe(handleRaidVictory);
+  botOnline.subscribe((e) => startRaidMode(e.botName));
+  botRespawn.subscribe((e) => startRaidMode(e.botName));
 }
 
 /**
