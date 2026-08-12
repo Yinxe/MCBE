@@ -37,7 +37,8 @@ function resolveBotPlayer(record: BotRecord): SimulatedPlayer | undefined {
 /** 找一个当前可用的物品槽位：优先当前选中的手；其次快捷栏第一个非空 */
 function findUsableSlot(sim: SimulatedPlayer): number {
   try {
-    const container = (sim.getComponent("inventory") as
+    // ⚠️ 组件 ID 必须带 minecraft: 前缀（不带前缀的调用返回 undefined，容器永远拿不到）
+    const container = (sim.getComponent("minecraft:inventory") as
       | { container?: { getItem: (i: number) => unknown } }
       | undefined)?.container;
     const sel = sim.selectedSlotIndex ?? 0;
@@ -54,7 +55,7 @@ function findUsableSlot(sim: SimulatedPlayer): number {
 /** 槽位里物品的 typeId（用于日志/校验），取不到返回 undefined */
 function slotItemType(sim: SimulatedPlayer, slot: number): string | undefined {
   try {
-    const container = (sim.getComponent("inventory") as
+    const container = (sim.getComponent("minecraft:inventory") as
       | { container?: { getItem: (i: number) => { typeId?: string } } }
       | undefined)?.container;
     return container?.getItem(slot)?.typeId;

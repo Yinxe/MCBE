@@ -100,8 +100,8 @@ function ensureEngine(): void {
       }
 
       if (record.death) {
-        followMap.delete(botName);
-        try { bot.stopMoving(); } catch { /* ignore */ }
+        // ⚠️ 死亡不删除跟随关系：自动重生假人复活后（playerSpawn 清 death）继续跟随，
+        //   与"跟随关系应存活跨 offline/online 周期"的注释语义一致（记录被删才清除）
         continue;
       }
 

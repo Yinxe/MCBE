@@ -13,7 +13,7 @@ import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametes
 
 import type { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { botRegistry } from "../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { finalizeBotSpawn } from "./spawn";
 import { globalTest } from "./gametestContext";
 import { color } from "@yinxe/toolkit";
@@ -93,6 +93,8 @@ function waitNameFree(name: string): Promise<void> {
       // 可安全释放的残留实体（无 record 认领）→ 强制 disconnect 以加速
       for (const p of blockers) {
         if (isTrackedEntity(p.id)) continue; // 在线假人，不碰
+        // ⚠️ 真实玩家同名（改名撞名边缘场景）不可 disconnect（会把真人踢下线），等超时兜底
+        if (!p.hasTag(BOT_TAG)) continue;
         try { (p as unknown as SimulatedPlayer).disconnect(); } catch { /* 实体可能刚消失 */ }
       }
 
@@ -247,4 +249,6 @@ export function spawnBot(
 
 export function switchSpawnMode(record: BotRecord, newMode: SpawnMode): void {
   record.spawnMode = newMode;
+  // ⚠️ 离线路径（行为面板直接切换）无 playerJoin 兜底，必须显式写穿持久化
+  saveCoordinator.saveRecord(record);
 }

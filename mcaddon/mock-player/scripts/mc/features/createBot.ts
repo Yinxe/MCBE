@@ -2,7 +2,7 @@
 
 import { Vector3, Dimension, world } from "@minecraft/server";
 
-import { BotRecord } from "../../core/model/Types";
+import { BotRecord, isValidBotName } from "../../core/model/Types";
 import { botRegistry, configStore } from "../bootstrap/context";
 import { isNameOccupiedInWorld } from "../adapters/PlayerGateway";
 import { canCreateBot, remainingQuota } from "../../core/service/QuotaRules";
@@ -33,6 +33,10 @@ export interface CreateBotOptions {
 export async function createBot(options: CreateBotOptions): Promise<BotRecord> {
   const { name, ownerName, location, dimension, initialTags, rotation, lookTarget, isSneaking, spawnMode } = options;
 
+  // 名字校验：空名/超长/含 DP 子 key 分隔符（:inv: :equip: → 持久化 key 冲突，重启丢数据/误删）
+  if (!isValidBotName(name)) {
+    throw new Error(`假人名字不合法：不能为空、超过 16 字符或包含 ":inv:" / ":equip:"`);
+  }
   // 注册表已有同名记录 → 覆盖会丢旧数据，直接拒绝
   if (botRegistry.has(name)) {
     throw new Error(`假人 ${name} 已存在，请更换名字`);

@@ -44,6 +44,17 @@ export function registerPendingTridentItem(botName: string, item: ItemStack): vo
   pendingItemTags.set(botName, list);
 }
 
+/**
+ * 投掷失败/中止时丢弃刚注册的物品信息（投掷未发生，防止旧附魔错配到下一把投掷物）。
+ * 投掷为逐把串行（isThrowing 互斥），刚注册的是队尾条目，pop 即可。
+ */
+export function discardPendingTridentItem(botName: string): void {
+  const list = pendingItemTags.get(botName);
+  if (!list || list.length === 0) return;
+  list.pop();
+  if (list.length === 0) pendingItemTags.delete(botName);
+}
+
 function consumePendingItem(ownerName: string): { tag: string } | undefined {
   const list = pendingItemTags.get(ownerName);
   if (!list || list.length === 0) return undefined;

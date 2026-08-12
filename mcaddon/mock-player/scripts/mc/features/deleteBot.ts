@@ -5,8 +5,10 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
+import { BotEvents } from "../../core/events/DomainEvents";
 import { botRegistry } from "../bootstrap/context";
 import { reclaimBot } from "./reclaim";
+import { cleanupRaidMode } from "./raidMode";
 import { color } from "@yinxe/toolkit";
 import { trackBotOffline } from "./tridentTracker";
 
@@ -32,16 +34,22 @@ export function deleteBot(record: BotRecord, reclaimTo?: Player): void {
     }
   }
 
-  // 断开连接
+  // 断开连接（删除在线假人场景）
   if (record.online) {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
       trackBotOffline(record.entityId!);
       (entity as SimulatedPlayer).disconnect();
     }
+    // 下线领域事件（订阅方：三叉戟回退第一任等）——删除路径 disconnect 不派发 playerLeave 前的事件链，
+    // 必须显式触发，否则被删假人的投掷物第二任 tag 悬空、owner 指向已移除实体
+    BotEvents.botOffline.trigger({ botName: record.name });
   }
   // 删除：内存 + 持久化记录 + 背包/装备 + 恢复标记（registry.remove 一步完成）
   // 离线删除：disconnect() 不会触发 playerLeave，必须手动清除恢复标记
   // 否则同名新假人会被 isBotRestored 误判为已恢复，空背包覆盖持久化数据
   botRegistry.remove(record.name);
+
+  // 清理劫掠内存状态（胜利计数/饮用互斥），防止同名重建假人继承
+  cleanupRaidMode(record.name);
 }

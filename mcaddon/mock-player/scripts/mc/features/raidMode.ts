@@ -63,6 +63,16 @@ export function initRaidModeEffects(): void {
 }
 
 /**
+ * 清理假人劫掠状态（删除假人时调用）：胜利计数/胜利时刻/饮用中标记，
+ * 防止同名重建假人继承旧胜利次数或残留饮用互斥。
+ */
+export function cleanupRaidMode(botName: string): void {
+  victoryCounts.delete(botName);
+  lastVictoryTick.delete(botName);
+  drinking.delete(botName);
+}
+
+/**
  * 启动劫掠模式：喝下一瓶不祥之瓶（首次开启 / 续瓶 / 死亡重生恢复）。
  * 幂等：已在喝、已有不祥之兆排队、假人不在线/死亡时安全跳过。
  * 由「行为表单开启劫掠开关」「假人上线」「假人重生」三处触发。

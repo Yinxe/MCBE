@@ -3,8 +3,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE, SWAP_SLOT_NAMES, TAG_PREFIX, createDefaultConfig, DEFAULT_QUOTA } from "../scripts/core/model/Types";
+import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE, SWAP_SLOT_NAMES, TAG_PREFIX, createDefaultConfig, DEFAULT_QUOTA, isValidBotName, MAX_BOT_NAME_LENGTH } from "../scripts/core/model/Types";
 import type { ModConfig } from "../scripts/core/model/Types";
+
+test("isValidBotName：合法名字通过", () => {
+  assert.ok(isValidBotName("bot1"));
+  assert.ok(isValidBotName("Steve"));
+  assert.ok(isValidBotName("a".repeat(MAX_BOT_NAME_LENGTH)));
+});
+
+test("isValidBotName：空名/超长/DP 分隔符拒绝", () => {
+  assert.ok(!isValidBotName(""));
+  assert.ok(!isValidBotName("a".repeat(MAX_BOT_NAME_LENGTH + 1)));
+  // :inv: / :equip: 会与 DynamicProperty 背包/装备槽 key 冲突（重启丢数据/误删他人数据）
+  assert.ok(!isValidBotName("bot:inv:1"));
+  assert.ok(!isValidBotName("bot:equip:head"));
+  assert.ok(!isValidBotName(":inv:bot"));
+});
 
 test("常量：DP 前缀与标签前缀互不相同", () => {
   assert.equal(DP_PREFIX, "mockplayer:players:");

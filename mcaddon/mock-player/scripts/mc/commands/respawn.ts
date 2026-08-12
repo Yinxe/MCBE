@@ -22,7 +22,8 @@ export function registerRespawnCommand(registry: any): void {
     const newTags = has
       ? record.tags.filter(t => t !== TAG_RESPAWN.value)
       : [...record.tags, TAG_RESPAWN.value];
-    setTags(record, newTags);
+    const rejected = setTags(record, newTags);
+    if (rejected) { player.sendMessage(`${color.error}${rejected}`); return; }
     player.sendMessage(has
       ? `${color.playerName}假人 ${color.playerName}${record.name}${color.playerName} 已关闭自动重生`
       : `${color.success}假人 ${color.playerName}${record.name}${color.success} 已开启自动重生`);
@@ -46,11 +47,15 @@ export function registerSetRespawnCommand(registry: any): void {
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     const lookTarget = getPlayerLookTarget(player);
     record.respawnPoint = { location: player.location, dimension: player.dimension.id, rotation: player.getRotation(), lookTarget };
-    if (record.online && record.entityId) {
-      const e = world.getEntity(record.entityId);
-      if (e?.hasTag(TAG_BOT.value)) {
-        (e as any).setSpawnPoint({ dimension: world.getDimension(record.respawnPoint.dimension), x: record.respawnPoint.location.x, y: record.respawnPoint.location.y, z: record.respawnPoint.location.z });
+    try {
+      if (record.online && record.entityId) {
+        const e = world.getEntity(record.entityId);
+        if (e?.hasTag(TAG_BOT.value)) {
+          (e as any).setSpawnPoint({ dimension: world.getDimension(record.respawnPoint.dimension), x: record.respawnPoint.location.x, y: record.respawnPoint.location.y, z: record.respawnPoint.location.z });
+        }
       }
+    } catch (e: any) {
+      console.warn(`[MockPlayer] setSpawnPoint 失败 ${record.name}: ${e?.message ?? e}`);
     }
     saveCoordinator.saveRecord(record);
     player.sendMessage(`${color.success}已更新 ${color.playerName}${targetName}${color.success} 的重生点`);

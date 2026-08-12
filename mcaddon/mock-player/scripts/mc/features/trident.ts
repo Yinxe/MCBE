@@ -9,11 +9,11 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { pauseFollow, resumeFollow, isFollowing } from "./follow";
-import { registerPendingTridentItem } from "./tridentTracker";
+import { registerPendingTridentItem, discardPendingTridentItem } from "./tridentTracker";
 import { TRIDENT_ID, isTrident, scanTridentSlots } from "../../core/items/TridentRules";
 
-// ─── 投掷互斥 ──────────────────────────────────────────
-let isThrowing = false;
+// ─── 投掷互斥（按假人：A 假人投掷不阻塞 B 假人） ─────────
+const throwingBots = new Set<string>();
 
 // ─── 公开类型 ──────────────────────────────────────────
 
@@ -89,7 +89,7 @@ export function throwTridents(
   slots: number[],
   onComplete?: () => void,
 ): void {
-  if (isThrowing) {
+  if (throwingBots.has(botName)) {
     console.warn(`[MockPlayer] 投掷已在进行中 ${botName}`);
     onComplete?.();
     return;
@@ -101,13 +101,13 @@ export function throwTridents(
   // 常加载模式拒绝投掷（useItemInSlot 需要普通模式）
   if (record.spawnMode === "chunkload") { onComplete?.(); return; }
 
-  isThrowing = true;
+  throwingBots.add(botName);
 
   const wasFollowing = isFollowing(botName);
   if (wasFollowing) pauseFollow();
 
   const done = () => {
-    isThrowing = false;
+    throwingBots.delete(botName);
     if (wasFollowing) resumeFollow();
     onComplete?.();
   };
@@ -135,16 +135,26 @@ function doThrowLoop(
   // 保存当前主手物品
   const savedMainhand = container.getItem(mainhandSlot);
 
+  // ⚠️ 收尾统一出口：任何断链路径（实体失效/投掷失败/异常）都必须走到这里，
+  // 否则 isThrowing 永久为 true（全服投掷被拒）+ resumeFollow 永不执行（跟随被永久暂停）
+  function finishThrow(): void {
+    try {
+      // 若 savedMainhand 本身就是被投掷的三叉戟（如快速路径），不恢复
+      const mainhandConsumed = savedMainhand?.typeId === TRIDENT_ID
+        && slots.includes(mainhandSlot);
+      restoreMainhand(container, mainhandSlot, mainhandConsumed ? undefined : savedMainhand);
+    } catch (e) {
+      console.warn(`[MockPlayer] 投掷收尾恢复主手失败: ${e}`);
+    }
+    onDone();
+  }
+
   // 逐把投掷
   let index = 0;
 
   function throwNext(): void {
     if (index >= slots.length) {
-      // 若 savedMainhand 本身就是被投掷的三叉戟（如快速路径），不恢复
-      const mainhandConsumed = savedMainhand?.typeId === TRIDENT_ID
-        && slots.includes(mainhandSlot);
-      restoreMainhand(container, mainhandSlot, mainhandConsumed ? undefined : savedMainhand);
-      onDone();
+      finishThrow();
       return;
     }
 
@@ -169,9 +179,20 @@ function doThrowLoop(
     // ── 投掷 ──
     // 不扭头：保持假人当前朝向投掷
     system.runTimeout(() => {
-      const used = b.useItemInSlot(mainhandSlot);
+      let used = false;
+      try {
+        used = b.useItemInSlot(mainhandSlot);
+      } catch (e) {
+        // 实体瞬间失效等异常：丢弃本次物品信息，稍后继续下一把（链不断，最终走到 finishThrow）
+        console.warn(`[MockPlayer] ⚠️ useItemInSlot 异常 (slot ${mainhandSlot}): ${e}`);
+        discardPendingTridentItem(botName);
+        system.runTimeout(throwNext, 20);
+        return;
+      }
       if (!used) {
         console.warn(`[MockPlayer] ⚠️ useItemInSlot 失败 (slot ${mainhandSlot})`);
+        // 投掷未发生：丢弃本次注册的物品信息，防止旧附魔错配到下一把投掷物
+        discardPendingTridentItem(botName);
         // 可能已失败，等短时间后继续下一把
         system.runTimeout(throwNext, 20);
         return;
@@ -179,11 +200,15 @@ function doThrowLoop(
       // 蓄力后释放（trident 约需 15-20 tick 蓄力）
       system.runTimeout(() => {
         try {
-          // ⚠️ 实体有效性防护：假人死亡/下线瞬间实体失效
-          if (!b.isValid) return;
+          // ⚠️ 实体有效性防护：假人死亡/下线瞬间实体失效 → 收尾整个投掷链
+          if (!b.isValid) {
+            discardPendingTridentItem(botName);
+            finishThrow();
+            return;
+          }
           b.stopUsingItem();
         } catch {
-          // 释放失败时继续
+          // 释放失败时继续（物品信息仍可能被 entitySpawn 消费，不丢弃）
         }
         system.runTimeout(throwNext, 20);
       }, 20);

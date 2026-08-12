@@ -114,18 +114,15 @@ export function serializeItemStack(item: ItemStack): SerializedItemStack {
   //    在运行时返回 false，getComponent 返回 undefined。
   //    ItemInventoryComponent 实际只对自定义 BP 物品
   //   （含 minecraft:storage_item 组件）生效。
-  //    此 try-catch 永远走空分支，仅保留诊断日志便于追踪 Mojang 修复。
-  // 解决思路：对特殊物品（typeId 白名单）使用 structureManager 做结构快照，
-  //    见 scripts/lib/ItemStorage.ts 预留模块。
+  //    此 try-catch 几乎永远走空分支（保留结构，待 Mojang 修复或启用结构存储方案）。
+  //    注意：不在此打日志——全量保存 36 格 × 每格一行会日志洪泛。
   try {
     const invComp = item.getComponent("minecraft:inventory") as any;
     if (invComp?.container) {
       data.container = serializeContainer(invComp.container);
-    } else {
-      console.info(`[MockPlayer] 序列化容器 ${item.typeId} hasComp=${item.hasComponent("minecraft:inventory")} invComp=${typeof invComp} container=${typeof invComp?.container}`);
     }
-  } catch (e: any) {
-    console.info(`[MockPlayer] 序列化容器异常 ${item.typeId}: ${e.message}`);
+  } catch {
+    // 单物品容器读取失败不影响其他物品
   }
 
   return data;

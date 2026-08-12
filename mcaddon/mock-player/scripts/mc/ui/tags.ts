@@ -6,6 +6,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { TAG_BOT, TAG_AUTO_USE, TAG_CONTROL, TAG_RAID_MODE, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../../core/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
+import { canManageBot } from "../commands/auth";
 import { setTags } from "../features/setTags";
 import { setSneaking, startRaidMode } from "../features";
 import { switchSpawnMode, getSpawnModeInfo } from "../features/spawnMode";
@@ -19,6 +20,12 @@ export function showTagManagement(player: Player, botName: string): void {
   const record = botRegistry.get(botName);
   if (!record) {
       player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
+    return;
+  }
+  // ⚠️ 权限守卫：本面板可改他人假人的标签/生成模式/潜行/跟随，
+  // 入口可达自潜行长按假人（playerInteractWithEntity），必须校验管理权
+  if (!canManageBot(player, record)) {
+    player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 只允许主人或管理员操作`);
     return;
   }
 

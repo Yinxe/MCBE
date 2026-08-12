@@ -16,11 +16,15 @@ export function registerReclaimCommand(registry: any): void {
     if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
-    const r = reclaimBot(player, record);
-    const parts = [];
-    if (r.items > 0) parts.push(`${color.success}${r.items}${color.muted} 件物品`);
-    if (r.overflow > 0) parts.push(`${color.playerName}${r.overflow}${color.muted} 件溢出掉落`);
-    if (r.xp > 0) parts.push(`${color.accent}${r.xp} XP${color.muted}（Lv.${r.xpLevel}）`);
-    player.sendMessage(parts.length ? `${color.success}已从 ${color.playerName}${targetName}${color.success} 回收: ${parts.join("、")}` : `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 背包是空的`);
+    try {
+      const r = reclaimBot(player, record);
+      const parts = [];
+      if (r.items > 0) parts.push(`${color.success}${r.items}${color.muted} 件物品`);
+      if (r.overflow > 0) parts.push(`${color.playerName}${r.overflow}${color.muted} 件溢出掉落`);
+      if (r.xp > 0) parts.push(`${color.accent}${r.xp} XP${color.muted}（Lv.${r.xpLevel}）`);
+      player.sendMessage(parts.length ? `${color.success}已从 ${color.playerName}${targetName}${color.success} 回收: ${parts.join("、")}` : `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 背包是空的`);
+    } catch (e: any) {
+      player.sendMessage(`${color.error}回收失败: ${e?.message ?? e}`);
+    }
   });
 }

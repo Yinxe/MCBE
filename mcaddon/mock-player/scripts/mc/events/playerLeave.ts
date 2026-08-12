@@ -55,6 +55,15 @@ export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {
   }
   console.info(`[MockPlayer] 事件 playerLeave ${event.playerName}`);
 
+  // ⚠️ 幂等防护：entityDie（死亡下线）/ offlineBot（主动下线）已先行处理
+  // （保存 + online=false + 触发 botOffline + 消息），disconnect 派发的
+  // playerLeave 只是残留事件——重复触发会导致 releaseBotTridents 双扫描、
+  // 认主汇报重复入队、聊天双消息。重连周期标记在此顺带清理。
+  if (!record.online) {
+    if (reconnectingBots.has(record.name)) reconnectingBots.delete(record.name);
+    return;
+  }
+
   // ⚠️ 旧实体残留：如果 record 已指向新实体（safeReconnect 已完成），
   // 忽略此事件——避免覆写新实体的 online/entityId/restore 标记
   if (record.entityId && event.playerId !== record.entityId) {

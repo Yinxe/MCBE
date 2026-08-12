@@ -12,7 +12,7 @@ import { Player, EquipmentSlot, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BotRecord, DP_PREFIX } from "../../core/model/Types";
+import { BotRecord, DP_PREFIX, isValidBotName } from "../../core/model/Types";
 import { BOT_TAG, getTagDef } from "../../core/tags/BotTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
@@ -307,6 +307,8 @@ function doRename(player: Player, botName: string): void {
     if (!vals) return;
     const newName = (vals.name as string).trim();
     if (!newName || newName === botName) return;
+    // ⚠️ 名字合法性：含 :inv: / :equip: 会与 DP 槽位 key 冲突（改名后重启丢数据/误删）
+    if (!isValidBotName(newName)) { player.sendMessage(`${color.error}名字不合法：不能超过 16 字符或包含 ":inv:" / ":equip:"`); return; }
     if (botRegistry.has(newName)) { player.sendMessage(`${color.error}假人 ${color.playerName}${newName}${color.error} 已存在`); return; }
 
     const r = botRegistry.get(botName);

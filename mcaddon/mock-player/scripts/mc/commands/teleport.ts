@@ -16,8 +16,12 @@ export function registerTpCommand(registry: any): void {
     if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
-    tpPlayerToBot(player, record);
-    player.sendMessage(`${color.success}已传送到假人 ${color.playerName}${targetName}${color.success} 身边`);
+    try {
+      tpPlayerToBot(player, record);
+      player.sendMessage(`${color.success}已传送到假人 ${color.playerName}${targetName}${color.success} 身边`);
+    } catch (e: any) {
+      player.sendMessage(`${color.error}传送失败: ${e?.message ?? e}`);
+    }
   });
 }
 export function registerTpHereCommand(registry: any): void {
@@ -32,7 +36,11 @@ export function registerTpHereCommand(registry: any): void {
     if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
-    tpBotToPlayer(record, player);
-    player.sendMessage(`${color.success}假人 ${color.playerName}${targetName}${color.success} 已传送到你身边`);
+    try {
+      tpBotToPlayer(record, player);
+      player.sendMessage(`${color.success}假人 ${color.playerName}${targetName}${color.success} 已传送到你身边`);
+    } catch (e: any) {
+      player.sendMessage(`${color.error}传送失败: ${e?.message ?? e}`);
+    }
   });
 }

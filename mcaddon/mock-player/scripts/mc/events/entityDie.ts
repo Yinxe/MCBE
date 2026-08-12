@@ -12,7 +12,7 @@
 //   - 死亡后 world.getPlayers({ tags }) 不再返回该假人
 
 import { color } from "@yinxe/toolkit";
-import { world, EntityDieAfterEvent } from "@minecraft/server";
+import { world, system, EntityDieAfterEvent } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { PositionState } from "../../core/model/Types";
@@ -25,6 +25,9 @@ import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";
 import { trackBotOffline } from "../features/tridentTracker";
 
+/** 自动重生延迟（tick）：复活后延迟 1 秒再传送回重生点 */
+const RESPAWN_DELAY_TICKS = 20;
+
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;
   try {
@@ -35,7 +38,10 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   const record = botRegistry.get(entity.nameTag);
   if (!record) return;
 
-  console.info(`[MockPlayer] 事件 entityDie ${record.name}（${entity.dimension.id} ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y)} ${Math.floor(entity.location.z)}）`);
+  // ⚠️ 整体异常隔离：死亡存储链任何一步失败都不能中断后续清理
+  // （死亡点记录/重生/下线），否则 record 状态与实体不一致
+  try {
+    console.info(`[MockPlayer] 事件 entityDie ${record.name}（${entity.dimension.id} ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y)} ${Math.floor(entity.location.z)}）`);
 
   const bot = entity as SimulatedPlayer;
   const deathState: PositionState = {
@@ -73,26 +79,40 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   );
 
   // 3. 有自动重生标签 → 自动复活到重生点
-  if (entity.hasTag(TAG_RESPAWN.value)) {
+  // ⚠️ 用 record.tags 判定（实体 tag 在死亡重建后可能漂移，导致自动重生静默失效）
+  // ⚠️ 重生延迟 1 秒再传送回重生点：重生点致死（岩浆/窒息）时循环从"瞬间"降频为
+  //    "每秒一次"，消息/写风暴大幅缓解，且玩家能更快发现异常并处理
+  if (record.tags.includes(TAG_RESPAWN.value)) {
     try {
       trackBotOffline(record.entityId!);
       bot.respawn();
-      const dim = world.getDimension(record.respawnPoint.dimension);
-      bot.teleport(record.respawnPoint.location, { dimension: dim });
-      if (record.spawnMode !== "chunkload") {
-        setPose(bot, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
-      }
 
-      // 复活后更新 entityId 并恢复标签（死亡可能导致实体重建，标签丢失）
-      record.entityId = bot.id;
-      syncEntityTags(bot, record.tags);
+      // respawn() 必须在 entityDie 回调内调用（离开事件后实体 ID 失效），
+      // 但回传送/恢复可延迟：respawn 后实体重建为有效的新实体
+      system.runTimeout(() => {
+        try {
+          if (!bot.isValid) return; // 延迟期间再次死亡/下线 → 放弃本次恢复（entityDie 会重新处理）
 
-      // 清空死亡状态
-      record.death = false;
-      record.deathPoint = null;
-      record.lastPoint = { ...record.respawnPoint };
-      saveCoordinator.saveRecord(record);
-      world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 已自动复活`);
+          const dim = world.getDimension(record.respawnPoint.dimension);
+          bot.teleport(record.respawnPoint.location, { dimension: dim });
+          if (record.spawnMode !== "chunkload") {
+            setPose(bot, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
+          }
+
+          // 复活后更新 entityId 并恢复标签（死亡可能导致实体重建，标签丢失）
+          record.entityId = bot.id;
+          syncEntityTags(bot, record.tags);
+
+          // 清空死亡状态
+          record.death = false;
+          record.deathPoint = null;
+          record.lastPoint = { ...record.respawnPoint };
+          saveCoordinator.saveRecord(record);
+          world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 已自动复活`);
+        } catch (e: any) {
+          world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动复活完成失败: ${e.message}`);
+        }
+      }, RESPAWN_DELAY_TICKS);
       return;
     } catch (e: any) {
       // 重生失败→继续走死亡下线流程
@@ -100,7 +120,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
     }
   }
 
-  // 4. 无自动重生 / 自动重生失败 → 死亡下线
+  // 4. 无自动重生 / 自动重生失败 / 熔断 → 死亡下线
   trackBotOffline(record.entityId!);
   record.online = false;
   record.entityId = undefined;
@@ -109,4 +129,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   // 下线领域事件（订阅方：三叉戟回退第一任等）
   BotEvents.botOffline.trigger({ botName: record.name });
   world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 已死亡下线`);
+  } catch (e: any) {
+    console.warn(`[MockPlayer] 死亡处理异常 ${record.name}: ${e?.message ?? e}`);
+  }
 }

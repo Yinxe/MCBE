@@ -130,11 +130,16 @@ export function checkMainHandDurability(bot: Player, changedSlot: number): void 
     const candidate = findReplacementIndex(itemView, handItem.typeId, handSlot, isToolHealthyItem);
 
     if (candidate !== undefined) {
-      // 将候选工具换到 slot 0（固定主手位）
-      if (handSlot !== 0) {
+      // 将候选健康工具换到 slot 0（固定主手位）
+      if (candidate === 0) {
+        // 健康工具已在主手位（slot 0）：仅切换选中，受损工具留在原槽
+        // ⚠️ 原实现 swap(0,0) 自交换会把受损工具留在主手、健康工具挤到原槽
+      } else if (handSlot !== 0) {
         swapSlots(container, 0, handSlot); // 受损工具 → slot 0，原 slot 0 物品 → handSlot
+        swapSlots(container, 0, candidate); // 健康工具 → slot 0，受损工具 → candidate
+      } else {
+        swapSlots(container, 0, candidate); // 受损工具在 0（handSlot=0）：与健康工具互换
       }
-      swapSlots(container, 0, candidate); // 健康工具 → slot 0，受损工具 → candidate.slot
 
       const newItem = container.getItem(0);
       const newName = newItem ? getItemDisplayName(newItem) : currentName;
@@ -143,7 +148,13 @@ export function checkMainHandDurability(bot: Player, changedSlot: number): void 
     } else {
       // 2) 无可用替代工具 → 保护性移出主手
       const emptySlot = findEmptySlotIndex(itemView, handSlot);
-      const targetSlot = emptySlot ?? findAnySlot(handSlot, container.size);
+      let targetSlot = emptySlot ?? findAnySlot(handSlot, container.size);
+      // ⚠️ 防御：目标槽不能是主手位 slot 0——swap 后受损工具回到主手，保护失效
+      if (targetSlot === 0 && handSlot !== 0) {
+        for (let i = 1; i < container.size; i++) {
+          if (i !== handSlot) { targetSlot = i; break; }
+        }
+      }
 
       swapSlots(container, handSlot, targetSlot);
       broadcast(bot.name, `${color.error}${currentName} 耐久不足，背包中无替代工具，已保护性收起`);

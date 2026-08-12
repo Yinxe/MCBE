@@ -45,6 +45,26 @@ export const SWAP_SLOT_NAMES: EquipSlotName[] = ["head", "chest", "legs", "feet"
 /** 假人背包格数（快捷栏 9 + 主背包 27） */
 export const INVENTORY_SIZE = 36;
 
+// ─── 假人名字校验 ──────────────────────────────────────
+
+/** DP 子 key 分隔符（背包/装备槽 key 用），名字含这些子串会与槽位 key 冲突 */
+export const INVALID_NAME_SEGMENTS = [":inv:", ":equip:"] as const;
+
+/** MC 假人名最大长度（玩家名上限） */
+export const MAX_BOT_NAME_LENGTH = 16;
+
+/**
+ * 假人名字是否合法。
+ * 拒绝：空名、超长（>16，生成 "(2)" 重名防护的边界）、
+ *      含 `:inv:` / `:equip:` 子串（会与 DynamicProperty 背包/装备槽 key 冲突，
+ *      导致 loadAllRecords 跳过主记录 / removeInventory 误删他人数据）。
+ */
+export function isValidBotName(name: string): boolean {
+  if (!name) return false;
+  if (name.length > MAX_BOT_NAME_LENGTH) return false;
+  return !INVALID_NAME_SEGMENTS.some((seg) => name.includes(seg));
+}
+
 // ─── 类型定义 ──────────────────────────────────────────
 
 export interface TagDef {

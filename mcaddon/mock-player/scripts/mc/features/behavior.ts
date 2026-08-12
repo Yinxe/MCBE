@@ -26,11 +26,22 @@ export function startTagBehaviors(): void {
     tick++;
     const bots = world.getPlayers({ tags: [BOT_TAG] });
 
+    // ── 状态清理收集（每 40 tick；复用主循环的 bots，避免第二次全量 getPlayers） ──
+    const collectState = tick % 40 === 0;
+    const miningIds = collectState ? new Set<string>() : undefined;
+    const placingIds = collectState ? new Set<string>() : undefined;
+
     for (const bot of bots) {
       const record = botRegistry.get(bot.name);
       if (!record) continue;
 
       const sim = bot as SimulatedPlayer;
+
+      // ── 状态清理收集 ──
+      if (collectState) {
+        if (bot.hasTag(TAG_AUTO_MINE.value)) miningIds!.add(bot.id);
+        if (bot.hasTag(TAG_AUTO_PLACE.value)) placingIds!.add(bot.id);
+      }
 
       // ── 自动挖掘 ── 每 1 tick ──
       if (bot.hasTag(TAG_AUTO_MINE.value)) {
@@ -89,14 +100,11 @@ export function startTagBehaviors(): void {
 
     // ── 状态清理 ── 每 40 tick ──
     // 只清理自动挖掘/放置的残留。使用物品是一次性动作（主菜单/行为开关触发），不进此循环。
-    if (tick % 40 === 0) {
-      const miningIds = new Set<string>();
-      const placingIds = new Set<string>();
-      for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
-        if (bot.hasTag(TAG_AUTO_MINE.value)) miningIds.add(bot.id);
-        if (bot.hasTag(TAG_AUTO_PLACE.value)) placingIds.add(bot.id);
-        if (!miningIds.has(bot.id)) { try { (bot as SimulatedPlayer).stopBreakingBlock(); } catch {} }
-        if (!placingIds.has(bot.id)) { try { (bot as SimulatedPlayer).stopBuild(); } catch {} }
+    // 复用主循环收集的 miningIds/placingIds（不再第二次全量 getPlayers）
+    if (collectState) {
+      for (const bot of bots) {
+        if (!miningIds!.has(bot.id)) { try { (bot as SimulatedPlayer).stopBreakingBlock(); } catch {} }
+        if (!placingIds!.has(bot.id)) { try { (bot as SimulatedPlayer).stopBuild(); } catch {} }
       }
     }
 

@@ -35,7 +35,17 @@ system.beforeEvents.startup.subscribe((event) => {
 // Phase 4: 世界加载：恢复持久化 + 启动引擎 + 注册事件
 // worldLoad 在 world 完全加载后触发，此时可以安全读写动态属性
 
+// ⚠️ 幂等守卫：同 runtime 内 worldLoad 可能触发多次（换世界不重启脚本/部分版本重载），
+// 重复执行会叠加注册全部事件/订阅 + 启动第二个行为引擎 + restoreAll 误清在线状态
+let worldLoadReady = false;
+
 world.afterEvents.worldLoad.subscribe(() => {
+  if (worldLoadReady) {
+    console.info(`[MockPlayer] worldLoad 已初始化，跳过重复启动`);
+    return;
+  }
+  worldLoadReady = true;
+
   // 加载全局配置（默认配额/逐人配额/管理员名单）
   configStore.refresh();
 

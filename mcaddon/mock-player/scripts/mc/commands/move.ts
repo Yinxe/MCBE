@@ -18,9 +18,13 @@ export function registerMoveCommand(registry: any): void {
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     const loc = (params.location as Vector3 | undefined) ?? player.location;
-    const ok = moveBot(record, loc);
-    player.sendMessage(ok
-      ? `${color.success}假人 ${color.playerName}${targetName}${color.success} 正在前往 ${color.playerName}${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}`
-      : `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 无法完全到达目标位置，但已开始移动`);
+    try {
+      const ok = moveBot(record, loc);
+      player.sendMessage(ok
+        ? `${color.success}假人 ${color.playerName}${targetName}${color.success} 正在前往 ${color.playerName}${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}`
+        : `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 无法完全到达目标位置，但已开始移动`);
+    } catch (e: any) {
+      player.sendMessage(`${color.error}移动假人失败: ${e?.message ?? e}`);
+    }
   });
 }

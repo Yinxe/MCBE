@@ -30,31 +30,40 @@ export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   const players = world.getPlayers({ name: event.playerName, tags: [BOT_TAG] });
   const player = players[0];
   if (player) {
-    const savedInv = botStore.loadInventory(record.name);
-    if (savedInv) {
-      const inv = player.getComponent("minecraft:inventory") as EntityInventoryComponent;
-      if (inv?.container) {
-        deserializeContainer(inv.container, savedInv);
+    // ⚠️ 异常隔离：恢复链中任何一步失败（坏数据/物品 typeId 失效等）都不能中断
+    // 其余步骤与 markRestored——否则该假人永远卡在"未恢复"状态，所有保存被守卫拦截
+    try {
+      const savedInv = botStore.loadInventory(record.name);
+      if (savedInv) {
+        const inv = player.getComponent("minecraft:inventory") as EntityInventoryComponent;
+        if (inv?.container) {
+          deserializeContainer(inv.container, savedInv);
+        }
       }
-    }
 
-    const savedEquip = botStore.loadEquipment(record.name);
-    if (savedEquip) {
-      const equip = player.getComponent("minecraft:equippable") as EntityEquippableComponent;
-      if (equip) {
-        deserializeEquipment(equip, savedEquip);
+      const savedEquip = botStore.loadEquipment(record.name);
+      if (savedEquip) {
+        const equip = player.getComponent("minecraft:equippable") as EntityEquippableComponent;
+        if (equip) {
+          deserializeEquipment(equip, savedEquip);
+        }
       }
-    }
 
-    // 恢复经验（一次性设置 totalXp，比分步 addLevels + addExperience 更精确）
-    const exp = record.experience;
-    if (exp.totalXp > 0) {
-      try {
-        const current = getTotalXpForLevels(player.level) + player.xpEarnedAtCurrentLevel;
-        player.addExperience(exp.totalXp - current);
-      } catch {
-        // 经验恢复失败不影响上线
+      // 恢复经验（一次性设置 totalXp，比分步 addLevels + addExperience 更精确）
+      const exp = record.experience;
+      if (exp.totalXp > 0) {
+        try {
+          const current = getTotalXpForLevels(player.level) + player.xpEarnedAtCurrentLevel;
+          // 防御：当前经验多于存档时不再扣减（数据异常保护）
+          if (exp.totalXp > current) {
+            player.addExperience(exp.totalXp - current);
+          }
+        } catch {
+          // 经验恢复失败不影响上线
+        }
       }
+    } catch (e: any) {
+      console.warn(`[MockPlayer] ⚠️ 恢复 ${record.name} 背包/装备失败（已跳过）：${e?.message ?? e}`);
     }
   }
 

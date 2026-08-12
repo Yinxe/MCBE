@@ -73,9 +73,21 @@ export function runVaultCycle(bot: SimulatedPlayer, record: BotRecord): void {
 
   if (!success) return;
 
-  // ── 交互成功 → 消耗了一把钥匙，调整计数 ────────────
-  keyInfo.totalInInventory = Math.max(0, keyInfo.totalInInventory - 1);
-  keyInfo.count = Math.max(0, keyInfo.count - 1);
+  // ── 交互成功 → 回读验证钥匙是否真实消耗 ──────────────
+  // ⚠️ 防"假成功"无限重连循环：宝库已对该账号开过时 interactWithBlock 可能
+  //    返回 true（动画成功）但钥匙不消耗——若仍走 safeReconnect，假人每 10 tick
+  //    断开→重连一次，永不停止。回读主手确认钥匙确实 -1 才进入重连周期。
+  const afterInfo = getHeldKeyInfo(bot);
+  const consumed = afterInfo !== null && afterInfo.count < keyInfo.count;
+  if (!consumed) {
+    console.warn(`[MockPlayer] 宝库 ${record.name} 交互未消耗钥匙（宝库可能已开过），停止本轮`);
+    notifyNearestPlayer(bot, record, null);
+    return;
+  }
+
+  // ── 钥匙已消耗 → 用回读的实际数量更新计数 ────────────
+  keyInfo.count = afterInfo!.count;
+  keyInfo.totalInInventory = afterInfo!.totalInInventory;
 
   // ── 4. 保存状态 + 下线 + 重新上线 ───────────────────
   // 使用 safeReconnect：自动等待旧实体完全释放后再 spawn，

@@ -18,7 +18,11 @@ export function registerKillCommand(registry: any): void {
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     if (!record.online) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 不在线，无法杀死`); return; }
     if (record.death) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已经死亡，无需重复杀死`); return; }
-    killBot(record);
-    player.sendMessage(`${color.success}已杀死假人 ${color.playerName}${targetName}`);
+    try {
+      killBot(record);
+      player.sendMessage(`${color.success}已杀死假人 ${color.playerName}${targetName}`);
+    } catch (e: any) {
+      player.sendMessage(`${color.error}杀死假人失败: ${e?.message ?? e}`);
+    }
   });
 }

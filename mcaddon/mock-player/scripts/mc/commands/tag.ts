@@ -73,7 +73,8 @@ export function registerTagCommand(registry: any): void {
       const newTags = EXCLUSIVE_SET.has(tagDef.value)
         ? [...record.tags.filter(t => !EXCLUSIVE_SET.has(t)), tagDef.value]
         : [...record.tags, tagDef.value];
-      setTags(record, newTags);
+      const rejected = setTags(record, newTags);
+      if (rejected) { player.sendMessage(`${color.error}${rejected}`); return; }
       player.sendMessage(`${color.success}已为假人 ${color.playerName}${targetName}${color.success} 添加标签 ${color.playerName}${tagDef.label}`);
       return;
     }
