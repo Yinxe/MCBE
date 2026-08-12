@@ -89,7 +89,7 @@ scripts/
 ### 持久化（McBotStore 实现 BotStore 端口）
 - **记录**（BotRecord）：`world.setDynamicProperty` 单条 JSON（`mockplayer:players:<name>`）
 - **绑定表**（StorageBinding）：独立 key `mockplayer:players:<name>:bind`（与记录解耦，记录覆盖不影响绑定；对象结构 key-value）
-- **物品**（背包 36 格 + 装备 5 槽）：存 **`@yinxe/nbt-data-storage` 木桶阵列**（末地偏远锚点 500000,500000，懒注册幂等）——**真实 ItemStack 完整 NBT**，潜影盒/收纳袋内容随物品原样存取
+- **物品**（背包 36 格 + 装备 5 槽）：存 **`@yinxe/nbt-data-storage` 木桶阵列**（末地偏远锚点 100000,0,100000，懒注册幂等）——**真实 ItemStack 完整 NBT**，潜影盒/收纳袋内容随物品原样存取
 - **双向绑定**（`core/storage/Binding.ts` 纯逻辑 + `McBotStore` 维护）：
   - 首次写某格 → `region.put(item)` 分配槽位 → `storageBinding` 记录 slotId（惰性分配，复用库分配/回收语义，绝不与他人冲突）
   - 后续写该格 → `region.overwrite(slotId, item)` 原位覆写（slotId 不变）

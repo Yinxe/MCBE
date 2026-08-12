@@ -31,8 +31,8 @@ import {
   createBinding,
 } from "../../core/storage/Binding";
 
-/** 存储区域锚点：末地偏远坐标（50 万格距，远离主岛/常规活动区，区块即区域，全假人共享；容量 442,368 格 ≈ 1 万假人） */
-const STORAGE_REGION = { dimension: "minecraft:the_end", anchor: { x: 500000, y: 120, z: 500000 } };
+/** 存储区域锚点：末地偏远坐标（10 万格距，远离主岛/常规活动区，区块即区域，全假人共享；容量 442,368 格 ≈ 1 万假人） */
+const STORAGE_REGION = { dimension: "minecraft:the_end", anchor: { x: 100000, y: 0, z: 100000 } };
 
 /**
  * 空位占位物品：空槽保持绑定时写入（"结构空位"）。
