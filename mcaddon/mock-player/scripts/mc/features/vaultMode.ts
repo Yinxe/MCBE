@@ -4,14 +4,60 @@
 // 流程：检测钥匙 → 交互方块 → 成功 → 保存状态 → 下线 → 上线 → 继续
 //
 // 只有手持 trial_key（普通钥匙）或 ominous_trial_key（不详钥匙）时才与方块交互。
+// 宝库模式封装为工作流（vaultWorkflow）：行为引擎（behavior.ts）每 10 tick
+// 驱动 runVaultCycle；工作流提供生命周期（start/stop 管理标签）与事件（vault-opened）。
 
 import { world, system, EquipmentSlot, type Player, ItemStack } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../core/model/Types";
-import { saveCoordinator } from "../bootstrap/context";
+import { TAG_VAULT_MODE } from "../../core/tags/BotTags";
+import { EventSignal } from "../../core/events/EventSignal";
+import type { Workflow, WorkflowEvent } from "../../core/service/Workflow";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { safeReconnect } from "./pendingRespawn";
 import { color } from "@yinxe/toolkit";
+
+/** 宝库工作流事件总线（供其他模块订阅联动） */
+const vaultWorkflowEvents = new EventSignal<WorkflowEvent>();
+
+/** 宝库工作流：钥匙开宝库 → 保存 → 重连 → 继续（行为引擎驱动，runVaultCycle） */
+export const vaultWorkflow: Workflow = {
+  name: "vault-mode",
+  description: "宝库模式：手持钥匙开 Trial Chambers 宝库，成功后下线重连循环",
+  events: vaultWorkflowEvents,
+
+  init(): void {
+    // 宝库周期由行为引擎（behavior.ts 标签驱动）调用 runVaultCycle，无需全局订阅
+  },
+
+  start(botName?: string): void {
+    if (!botName) return;
+    const record = botRegistry.get(botName);
+    if (!record || record.tags.includes(TAG_VAULT_MODE.value)) return;
+    record.tags.push(TAG_VAULT_MODE.value);
+    saveCoordinator.saveRecord(record);
+  },
+
+  stop(botName?: string): void {
+    if (!botName) return;
+    const record = botRegistry.get(botName);
+    if (!record) return;
+    record.tags = record.tags.filter((t) => t !== TAG_VAULT_MODE.value);
+    saveCoordinator.saveRecord(record);
+  },
+
+  isRunning(botName?: string): boolean {
+    if (!botName) return false;
+    const record = botRegistry.get(botName);
+    return !!record && record.tags.includes(TAG_VAULT_MODE.value) && record.online && !record.death;
+  },
+};
+
+/** 发布宝库工作流事件 */
+function emitVaultEvent(type: string, botName: string, data?: unknown): void {
+  vaultWorkflowEvents.trigger({ workflow: "vault-mode", type, botName, data });
+}
 
 // ─── 可用的宝库钥匙 ──────────────────────────────────
 
@@ -88,6 +134,9 @@ export function runVaultCycle(bot: SimulatedPlayer, record: BotRecord): void {
   // ── 钥匙已消耗 → 用回读的实际数量更新计数 ────────────
   keyInfo.count = afterInfo!.count;
   keyInfo.totalInInventory = afterInfo!.totalInInventory;
+
+  // 发布宝库工作流事件（开箱成功，供统计/通知联动）
+  emitVaultEvent("vault-opened", record.name, { keyType: keyInfo.typeId, remaining: keyInfo.count });
 
   // ── 4. 下线 + 重新上线 ─────────────────────────────
   // 使用 safeReconnect：自动等待旧实体完全释放后再 spawn，

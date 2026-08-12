@@ -65,6 +65,57 @@ export function initRaidModeEffects(): void {
   BotEvents.botRespawn.subscribe((e) => startRaidMode(e.botName));
 }
 
+// ─── 劫掠工作流（Workflow 封装） ───────────────────────
+// 每个工作流单独一份文件（本文件即 raid 工作流实现）：
+//   init   = 注册效果/上线/重生监听（worldLoad 后 initAll 调用）
+//   start  = 开模式/上线/重生 → 喝第一瓶
+//   stop   = 关模式（移除标签即停用）
+//   isRunning = 假人带劫掠标签且在线
+//   events = 对外发布 raid-started / raid-victory（可序列化负载）
+
+import { EventSignal } from "../../core/events/EventSignal";
+import type { Workflow, WorkflowEvent } from "../../core/service/Workflow";
+
+/** 劫掠工作流事件总线（供其他模块订阅联动，如统计/通知） */
+const raidWorkflowEvents = new EventSignal<WorkflowEvent>();
+
+/** 劫掠工作流：喝不祥之瓶 → 袭击 → 胜利 → 下一瓶（事件驱动循环） */
+export const raidWorkflow: Workflow = {
+  name: "raid-mode",
+  description: "劫掠模式：喝不祥之瓶触发袭击，胜利后把村庄英雄叠加给主人并续喝下一瓶",
+  events: raidWorkflowEvents,
+
+  init(): void {
+    initRaidModeEffects();
+  },
+
+  start(botName?: string): void {
+    if (!botName) {
+      console.warn(`[Workflow] raid-mode start 需要指定假人`);
+      return;
+    }
+    startRaidMode(botName);
+  },
+
+  stop(botName?: string): void {
+    if (!botName) return;
+    const record = botRegistry.get(botName);
+    if (!record) return;
+    disableRaidMode(botName, record);
+  },
+
+  isRunning(botName?: string): boolean {
+    if (!botName) return false;
+    const record = botRegistry.get(botName);
+    return !!record && record.tags.includes(TAG_RAID_MODE.value) && record.online && !record.death;
+  },
+};
+
+/** 发布劫掠工作流事件（内部事件点调用） */
+function emitRaidEvent(type: string, botName: string, data?: unknown): void {
+  raidWorkflowEvents.trigger({ workflow: "raid-mode", type, botName, data });
+}
+
 /**
  * 清理假人劫掠状态（删除假人时调用）：胜利计数/胜利时刻/饮用中标记/袭击窗口，
  * 防止同名重建假人继承旧胜利次数或残留饮用互斥。
@@ -127,6 +178,7 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
     // 不祥之兆 = 喝瓶成功，袭击即将开始
     if (kind === "bad-omen") {
       BotEvents.raidStarted.trigger({ botName: name, amplifier: amp });
+      emitRaidEvent("raid-started", name, { amplifier: amp });
       scheduleRaidStuckCheck(name);
       return;
     }
@@ -170,6 +222,7 @@ function processVictory(record: BotRecord, amplifier: number, bot: SimulatedPlay
     `${color.muted}[${color.success}假人${color.muted}] ${color.success}${botName} 获得村庄英雄 Lv.${amplifier}，本次劫掠胜利！` +
     `${color.muted}（第 ${wins} 胜）`
   );
+  emitRaidEvent("raid-victory", botName, { wins });
 
   if (!bot) return;
 

@@ -18,8 +18,8 @@ import { registerAllEvents } from "./mc/events/index";
 import { startTagBehaviors } from "./mc/features/behavior";
 import { initGameTestContext } from "./mc/features/gametestContext";
 import { initTridentTracker } from "./mc/features/tridentTracker";
-import { initRaidModeEffects } from "./mc/features/raidMode";
 import { runMigrations } from "./mc/bootstrap/migration";
+import { workflowManager } from "./mc/bootstrap/workflows";
 import { botRegistry, configStore } from "./mc/bootstrap/context";
 
 // Phase 1/2: 基础设施与业务装配在 mc/bootstrap/context 模块 import 时完成
@@ -75,6 +75,6 @@ world.afterEvents.worldLoad.subscribe(() => {
   initTridentTracker();
 
   // 初始化劫掠事件系统（effectAdd → raidStarted/raidVictory 自定义事件）
-  console.info(`[MockPlayer] 初始化劫掠事件系统`);
-  initRaidModeEffects();
+  console.info(`[MockPlayer] 初始化工作流（劫掠/宝库）`);
+  workflowManager.initAll();
 });
