@@ -10,8 +10,8 @@ MCBE 原版无法直接持久化物品的 NBT 数据（掉落物/背包等在部
 
 ## 特性
 
-- **完整 NBT**：物品以 `ItemStack` 存入木桶容器槽位，自定义 NBT / 附魔 / 组件全部保留。
-- **O(1) 寻址**：格子 ID 采用稠密编号，`slotIdToPosition` 纯整数算术解码 → 木桶坐标 + 槽内索引，无查表、无扫描。
+- **完整 NBT**：物品以 `ItemStack` 存入木桶容器格子，自定义 NBT / 附魔 / 组件全部保留。
+- **O(1) 寻址**：格子 ID 采用稠密编号，`slotIdToPosition` 纯整数算术解码 → 木桶坐标 + 格内索引，无查表、无扫描。
 - **凭据取物**：`put` 成功返回 `{ regionId, slotId }`，凭这个二元组 `ItemStorage.get/take(ref)` O(1) 秒定位（跨模组可用）。
 - **动态扩容**：阵列**不预生成**，按使用逐桶物化；纵向固定 64 层（0..63，无需配置），堆满上限后 `put` 拒绝存入返回 `null`。
 - **原子传输**：`transferIn/transferOut` 提供与原版容器一致的**安全传输**——要么整体成功，要么保持原状，物品不丢不重复。
@@ -44,16 +44,18 @@ installNdsCommands(); // 可选：注册 nds:regions / nds:stats 管理命令（
 const ref = region.put(item); // item: ItemStack
 if (ref) {
   const stored = ItemStorage.get(ref); // 取物（O(1)，只读不回收）
-  const took = ItemStorage.take(ref); // 取走（读出 + 清空槽位）
+  const took = ItemStorage.take(ref); // 取走（读出 + 清空格子）
 }
 
 // 也可直接对区域操作（已知 slotId 时）
 const ok = region.remove(slotId); // 仅清空
 
-// 原子传输：源容器槽 → 区域（要么成功要么保持原状）
+// 原子传输：源容器格 → 区域（要么成功要么保持原状）
 const tr = region.transferIn(container, sourceSlot);
-// 原子取出：区域槽 → 目标容器槽
+// 原子取出：区域格 → 目标容器格
 const tx = region.transferOut(slotId, container, destSlot);
+// 安全交换（引擎级原子）：区域格 ↔ 外部容器格对调，双方都保留
+const sw = region.swap(slotId, container, destSlot); // => { ok, oldTypeId?, newTypeId?, error? }
 
 // 订阅存储事件（复用 toolkit EventSignal；事件负载只用可序列化 string/number）
 ItemStorage.events.stored.subscribe(({ regionId, slotId, itemTypeId }) => {});
@@ -75,7 +77,7 @@ const stats = region.stats();
 | 成员                                      | 说明                                                      |
 | ----------------------------------------- | --------------------------------------------------------- |
 | `register({ dimension, anchor, baseY? })` | 注册/获取一个存储区域（幂等；同区块 → 共享）              |
-| `registerTest({ ... , slotPerBarrel?, maxLevels? })` | ⚠️ 仅测试/演示：额外接受每桶可分配槽数 1..27、层数 1..64（解码恒按 27 槽/桶，ID 不漂移；同区块布局参数不一致抛错拒绝，请换锚点） |
+| `registerTest({ ... , slotPerBarrel?, maxLevels? })` | ⚠️ 仅测试/演示：额外接受每桶可用格数 1..27、层数 1..64（解码恒按 27 格/桶，ID 不漂移；同区块布局参数不一致抛错拒绝，请换锚点） |
 | `listRegions()`                           | 本模组上下文已注册的区域列表                              |
 | `getRegion(regionId)`                     | 按区域 ID 取/采纳区域（跨模组凭据取物）                   |
 | `queryWorld()`                            | 只读世界上的**全部**区域统计（无需本上下文注册）          |
@@ -91,9 +93,12 @@ const stats = region.stats();
 | `get(slotId)`                              | 按 ID 取物（O(1)，不回收）                             |
 | `take(slotId)`                             | 取走（读出 + 清空）                                    |
 | `remove(slotId)`                           | 清空                                                   |
-| `transferIn(container, sourceSlot)`        | 原子存入（源容器槽 → 区域）                            |
-| `transferOut(slotId, container, destSlot)` | 原子取出（区域槽 → 目标槽）                            |
-| `stats()`                                  | 区域统计快照                                           |
+| `overwrite(slotId, item)`                  | 单向覆写（手持/外部物品 → 指定格，旧物读出返回调用方处置；空格也允许，实时数据保存用） |
+| `swap(slotId, container, destSlot)`        | 安全交换（区域格 ↔ 外部容器格，引擎级原子，双方都保留；触发 taken+stored 事件） |
+| `transferIn(container, sourceSlot)`        | 原子存入（源容器格 → 区域）                            |
+| `transferOut(slotId, container, destSlot)` | 原子取出（区域格 → 目标格）                            |
+| `stats()`                                  | 区域统计快照（barrels 为真值：各层账本长度之和）       |
+| `checkAndRepair(onDone?)`                  | 盘点 + 修复（**分批**：每 tick 盘一层，完成回调报告；进行中返回 false） |
 
 ## 存储设计（用"仓库"来理解）
 
@@ -105,7 +110,7 @@ const stats = region.stats();
 ### 格子 ID → 物理位置（纯算术 O(1)）
 
 ```
-槽内索引   = slotId % 27
+格内索引   = slotId % 27
 桶序号     = floor(slotId / 27) % 256     // 该层内第几个木桶 0..255
 层号       = floor(slotId / (27*256))     // 第几层
 x = chunkX*16 + (桶序号 % 16)
@@ -140,11 +145,20 @@ y = baseY + 层号
 **盘点**就是把仓库对一遍账：数每个已建木桶实际有几格有东西，和账本比对：
 
 - 桶被挖掉/变成别的方块 → **重建木桶**（桶里的东西随方块损坏无法找回，如实报告；重建事件 `barrelRestored`）；
-- 桶还在但格子里东西少了（外部取走）→ 按桶报告"丢失 N 件"（`itemLost` 桶级事件），账本对平；
+- 桶还在但格子里东西少了（外部取走）→ 按桶报告"丢失 N 件"（`itemLost` 桶级事件 `{level, barrelInLevel, count, kind}`），账本对平；
 - 账本比实物多记了（计数失真）→ 静默对平，不误报；
 - 区块没加载 → 跳过，下次再盘。
 
-盘点后账本与实物完全一致。这是显式操作（命令/UI 触发），不是热路径。
+**分批执行**：盘点**每 tick 盘一层**（`system.runInterval` 调度，满阵列 64 层约 3 秒完成）——不把全部扫描堆在一个 tick 卡死游戏；完成时回调报告（demo 会提示"开始盘点…完成后自动汇报"）。盘点中重复触发会被忽略。这是显式操作（命令/UI 触发），不是热路径。
+
+### 性能设计（看实物是必要的，但少查方块）
+
+"以实物为真值"意味着每次存入都要看实物——优化空间在于**少查方块、复用容器句柄**：
+
+- **桶内找空格子**：一次取容器（1 次方块查询）后循环查格，替代逐格重新查方块（每件存入从约"桶已用格数+1 次方块查询"降到 1 次）；
+- **新桶不探测**：刚物化的桶必空（同 tick 内外部无法插入），直接写格 0，跳过探测（也规避了"物化后容器未就绪 → 误判被塞满 → 桶数虚增"的坑）；
+- **盘点分批**：见上（每 tick 一层 + 每桶一次取容器）；
+- **统计轻量**：`barrelCount` 用各层账本长度之和（真值，不受物化计数漂移影响）；扩容见证等高频场景用真值而非全量遍历。
 
 ### 跨模组共享与数据安全
 
@@ -152,6 +166,18 @@ y = baseY + 层号
 - **共享单元是区块**：锚点经 `chunkFromAnchor`（`Math.floor(x/16)`，负数精确归块）定到 16×16 区块；同维度**同区块**（16 块一格）内的任意锚点共享同一阵列，跨区块各自独立。
 - **布局共享**：首个注册者把 `layout + 维度` 写进 DP 主记录，后续模组直接采纳，不覆盖不改变。
 - **以世界为真值**：账本（已用格数）是软状态，丢了也能从实物自愈；`put` 永远先看实物再写，绝不覆盖他人物品。
+
+### 世界高度按维度（baseY 与层数的上限）
+
+**只有主世界能到 320**——各维度 y 轴合法范围不同（`worldHeightRangeOf`，注册与调整布局时按维度校验）：
+
+| 维度 | 最低 Y | 最高 Y |
+| ---- | ------ | ------ |
+| 主世界 `minecraft:overworld` | -64 | 320 |
+| 下界 `minecraft:nether` | 0 | 128 |
+| 末地 `minecraft:the_end` | 0 | 256 |
+
+`baseY + 层数 - 1` 不得超过所选维度的最高 Y（如末地 64 层阵列的 baseY 最高 193）；未知维度（自定义）不做高度限制。
 
 ### 常加载
 
@@ -185,7 +211,7 @@ pnpm --filter nbt-data-storage run test   # 或根目录 pnpm run test:nbt-data-
 
 | 模式                            | 状态      | 思路                                                           |
 | ------------------------------- | --------- | -------------------------------------------------------------- |
-| **物品保存** `ItemStorage`      | ✅ 已实现 | ItemStack 直接存木桶槽位                                       |
+| **物品保存** `ItemStorage`      | ✅ 已实现 | ItemStack 直接存木桶格子                                       |
 | **生物保存** `EntityStorage`    | 🔜 规划   | 实体 NBT 序列化 → 存为自定义记录物品（`nds:record`）进同一阵列 |
 | **结构保存** `StructureStorage` | 🔜 规划   | 结构区域序列化 → 同上                                          |
 
