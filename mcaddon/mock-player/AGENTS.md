@@ -95,12 +95,11 @@ scripts/
 - Entity `addTag` 不持久化，从 `BotRecord.tags` 恢复
 - 恢复标记（BotRegistry.restoredBots）：防 spawnSimulatedPlayer 空背包覆盖持久化数据
 
-### 刷物防护（死亡物品策略，`core/service/InventoryLifecycle`）
-- 假人死亡时以**世界游戏规则为准**（`world.gameRules.keepInventory`，不依赖 entityDie 时实体背包的运行时状态）：
-  - `keepInventory=false`（死亡掉落）→ 引擎掉落物是物品离开假人的**唯一副本**，持久化背包/装备**显式清空**（`botStore.removeInventory`）——无论 entityDie 回调时实体背包是否已被引擎清空（时序差异），都不会出现"掉落 + 重连恢复"双份
-  - `keepInventory=true`（死亡不掉落）→ 物品继续属于假人，保存当前背包，重生/重连不丢物
-- entityDie 中**先置 `record.death=true` 再处理物品**：关闭 100tick 周期保存的竞态窗口（behavior 引擎跳过死亡假人）
-- 决策函数 `decideDeathInventoryPolicy(keepInventory)` 为 core 纯函数；物品守恒由 `tests/inventory-lifecycle.test.ts` 模拟测试锁定（4 组合：keepInventory × 引擎时序 + 重复击杀序列）
+### 死亡物品存储（entityDie = 数据存储时机点）
+- **语义**：entityDie 回调时实体已处于死亡最终状态——普通物品已按游戏规则掉落（掉落物是物品离开假人的**唯一副本**），`keepOnDeath`（自带死亡不掉落）的物品仍在背包中。
+- **做法**：直接读实体背包/装备/经验，**有什么存什么**（`saveBotFullState`），不额外过滤/清空；掉落世界的普通物品自然不在实体中，keepOnDeath 物品如实保留。
+- **竞态防护**：`record.death = true` 在保存**之前**设置——关闭 100tick 周期保存的窗口（behavior 引擎跳过死亡假人）。
+- 正确性前提（由 `tests/inventory-lifecycle.test.ts` 锁定）：实体最终状态 = 引擎掉落后状态；若实测发现引擎在 entityDie 之后才掉落，需重新评估。
 
 ### 运行时单例
 - `mc/bootstrap/context.ts` 导出 `botStore` / `botRegistry` / `configStore` 单例（mc 层共享，等价旧 persistence.ts 的模块级 botRegistry）

@@ -20,12 +20,10 @@ import { BOT_TAG, TAG_RESPAWN } from "../../core/tags/BotTags";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
-import { botRegistry, botStore } from "../bootstrap/context";
+import { botRegistry } from "../bootstrap/context";
 import { saveBotFullState } from "../features/saveState";
-import { captureExperience } from "../adapters/McItemCodec";
 import { setPose } from "../adapters/PoseGateway";
 import { trackBotOffline } from "../features/tridentTracker";
-import { decideDeathInventoryPolicy } from "../../core/service/InventoryLifecycle";
 
 export function onEntityDie(event: EntityDieAfterEvent): void {
   const entity = event.deadEntity;
@@ -51,21 +49,12 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   // （否则窗口内周期保存会用死亡实体背包覆盖下面的持久化结果）
   record.death = true;
 
-  // 1. 死亡时物品持久化策略（刷物防护，core 纯函数决策）：
-  //    - 死亡掉落开启（keepInventory=false）→ 引擎掉落物是唯一副本，持久化清空，
-  //      无论 entityDie 时 deadEntity 背包是否已被清空（时序差异）都不会双份
-  //    - 死亡不掉落（keepInventory=true）→ 物品保留，保存当前背包，重生/重连不丢物
-  const policy = decideDeathInventoryPolicy(world.gameRules.keepInventory);
-  if (policy === "persist") {
-    // 死亡不掉落：保存当前背包/装备/经验（实体仍可访问）
-    saveBotFullState(bot, record);
-  } else {
-    // 死亡掉落：背包/装备持久化清空（掉落物是唯一副本）；经验照存（无交易价值，防不了刷也不丢）
-    botStore.removeInventory(record.name);
-    record.experience = captureExperience(bot);
-    botRegistry.save(record);
-    console.info(`[MockPlayer] 死亡清空背包持久化 ${record.name}（死亡掉落开启，掉落物为唯一副本）`);
-  }
+  // 1. 死亡事件 = 数据存储时机点：直接读实体背包/装备/经验，有什么存什么。
+  //    entityDie 回调时实体已处于死亡最终状态——普通物品已按游戏规则掉落
+  //    （掉落物是物品离开假人的唯一副本），keepOnDeath（自带死亡不掉落）
+  //    的物品仍在背包中，一并如实保存。不做额外过滤/清空，顺应游戏规则。
+  saveBotFullState(bot, record);
+  console.info(`[MockPlayer] 死亡存储 ${record.name}（实体当前状态，含死亡不掉落物品）`);
 
   // 2. 记录死亡信息
   record.deathPoint = deathState;
