@@ -107,9 +107,12 @@ scripts/
 - **恢复** `restoreInto(player, record)`：playerJoin / /mp:recover 复用（真实物品直写，占位跳过，恢复后同步指纹）
 - vaultMode 周期**不再** saveFullState（钥匙消耗已实时保存）——事件驱动已覆盖在线变化，全量保存仅剩回收/互换背包等低频业务场景
 
-### 死亡物品存储（entityDie = 数据存储时机点）
+### 死亡物品存储（entityDie = 数据存储时机点，事件驱动）
 - **语义**：entityDie 回调时实体已处于死亡最终状态——普通物品已按游戏规则掉落（掉落物是物品离开假人的**唯一副本**），`keepOnDeath`（自带死亡不掉落）的物品仍在背包中。
-- **做法**：`saveFullState` → `reconcile` 对账（读死实体，指纹对比，只写变化格；掉落清空/keepOnDeath 保留如实落盘）。
+- **做法**（全事件驱动，无对账保存）：
+  - 背包：死亡掉落触发 `playerInventoryItemChange` → 实时单格保存（掉落 → 槽写占位；keepOnDeath 保留 → 无变化零写入）
+  - **装备（4 槽 + 副手）：死亡掉落没有原版事件 → entityDie 显式触发全部 5 个 `botEquipSlotChanged`（via: "death"）** → 订阅方读死亡实体装备（deadEntity 组件仍可访问）→ 指纹对比保存——无论是否掉落（keepInventory 开启装备保留 → 指纹无变化零写入）
+  - 经验：直接捕获写 record
 - **竞态防护**：`record.death = true` 在保存**之前**设置——关闭 100tick 周期保存的窗口（behavior 引擎跳过死亡假人）。
 - 正确性前提（由 `tests/inventory-lifecycle.test.ts` 锁定）：实体最终状态 = 引擎掉落后状态；若实测发现引擎在 entityDie 之后才掉落，需重新评估。
 

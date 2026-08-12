@@ -15,12 +15,13 @@ import { color } from "@yinxe/toolkit";
 import { world, system, EntityDieAfterEvent } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { PositionState } from "../../core/model/Types";
+import { PositionState, EQUIP_SLOT_NAMES } from "../../core/model/Types";
 import { BOT_TAG, TAG_RESPAWN } from "../../core/tags/BotTags";
 import { BotEvents } from "../../core/events/DomainEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
+import { captureExperience } from "../adapters/McItemCodec";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";
 import { trackBotOffline } from "../features/tridentTracker";
@@ -55,12 +56,19 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   // （否则窗口内周期保存会用死亡实体背包覆盖下面的持久化结果）
   record.death = true;
 
-  // 1. 死亡事件 = 数据存储时机点：直接读实体背包/装备/经验，有什么存什么。
-  //    entityDie 回调时实体已处于死亡最终状态——普通物品已按游戏规则掉落
-  //    （掉落物是物品离开假人的唯一副本），keepOnDeath（自带死亡不掉落）
-  //    的物品仍在背包中，一并如实保存。不做额外过滤/清空，顺应游戏规则。
-  saveCoordinator.saveFullState(bot, record);
-  console.info(`[MockPlayer] 死亡存储 ${record.name}（实体当前状态，含死亡不掉落物品）`);
+  // 1. 死亡事件 = 数据存储时机点（事件驱动，全槽覆盖）：
+  //    - 背包：死亡掉落会触发 playerInventoryItemChange → 实时单格保存
+  //      （普通物品掉落 → 槽写占位；keepOnDeath 保留 → 无变化零写入）
+  //    - 装备（4 槽 + 副手）：死亡掉落**没有原版事件** → 显式触发
+  //      全部 5 个 botEquipSlotChanged（via: "death"）→ 订阅方读死亡实体
+  //      装备（entityDie 时 deadEntity 组件仍可访问）→ 指纹对比保存，
+  //      无论是否掉落（keepInventory 开启时装备保留 → 指纹无变化零写入）
+  //    - 经验：直接捕获（实体当前最终经验）
+  record.experience = captureExperience(bot);
+  for (const slot of EQUIP_SLOT_NAMES) {
+    BotEvents.botEquipSlotChanged.trigger({ botName: record.name, slot, via: "death" });
+  }
+  console.info(`[MockPlayer] 死亡存储 ${record.name}（事件驱动：背包掉落实时保存，装备 5 槽变化已触发）`);
 
   // 2. 记录死亡信息
   record.deathPoint = deathState;

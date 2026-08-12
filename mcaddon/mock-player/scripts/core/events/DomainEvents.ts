@@ -179,7 +179,7 @@ export const botEntityAttacked = new EventSignal<BotEntityAttackedEvent>();
 // 受伤触发全部 5 槽（不判断掉血——护甲吸收也算，装备耐久可能损耗）。
 
 /** 装备槽变化触发来源 */
-export type EquipChangeVia = "swap" | "equip" | "unequip" | "hurt";
+export type EquipChangeVia = "swap" | "equip" | "unequip" | "hurt" | "death";
 
 /** 单个装备槽变化事件：该槽装备可能变化（互换/穿卸/受伤耐久），订阅方重读并保存 */
 export interface BotEquipSlotChangedEvent {
