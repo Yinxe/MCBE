@@ -30,7 +30,28 @@ export interface ItemRemovedEvent {
   slotId: number;
 }
 
-/** 存储事件总线（存入/取走/移除） */
+/** 新建木桶事件（put 物化新桶时触发；扩容可见性） */
+export interface BarrelCreatedEvent {
+  regionId: string;
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** 巡检修复事件：木桶方块被破坏后重建（桶内物品随方块损坏已丢失） */
+export interface BarrelRestoredEvent {
+  regionId: string;
+  slotId: number;
+}
+
+/** 巡检确认丢失事件（无法修复）：barrel-destroyed=桶损坏重建后为空 / taken-externally=外部取走 */
+export interface ItemLostEvent {
+  regionId: string;
+  slotId: number;
+  kind: "barrel-destroyed" | "taken-externally";
+}
+
+/** 存储事件总线（存入/取走/移除/建桶/巡检修复/丢失） */
 export const ItemStorageEvents = {
   /** 物品成功存入区域后触发 */
   stored: new EventSignal<ItemStoredEvent>(),
@@ -38,4 +59,10 @@ export const ItemStorageEvents = {
   taken: new EventSignal<ItemTakenEvent>(),
   /** 物品成功移除后触发 */
   removed: new EventSignal<ItemRemovedEvent>(),
+  /** put 物化新木桶后触发（扩容可见） */
+  barrelCreated: new EventSignal<BarrelCreatedEvent>(),
+  /** 巡检重建损坏木桶后触发（阵列坐标内任何非木桶方块一律重建覆盖） */
+  barrelRestored: new EventSignal<BarrelRestoredEvent>(),
+  /** 巡检确认物品丢失后触发（桶损坏/外部取走） */
+  itemLost: new EventSignal<ItemLostEvent>(),
 };

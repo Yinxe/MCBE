@@ -8,9 +8,12 @@
 // 这样即使层数很多（如 64 层），单键值的数字也始终 ≤ 4 位，DP 单值大小有界（≤ 一层 6912 条）。
 // 全局 slotId = level × SLOTS_PER_LEVEL + local，用时现算。
 //
+// ⚠️ ID 语义恒定：水印推进按 27 槽/桶解码（BARREL_SLOTS），"每桶可用槽数"
+// （usablePerBarrel）只跳过桶内索引 ≥ 上限的候选——已存物品的 ID 永不漂移。
+//
 // 元数据是软状态（可被世界真值自愈）：meta 丢失时从 0 重新分配，
 // put 侧的世界占用检查会跳过已被占用的槽位，不会覆盖他人物品。
-import { SLOTS_PER_LEVEL, levelOf } from "./layout";
+import { BARREL_SLOTS, SLOTS_PER_LEVEL, levelOf } from "./layout";
 
 /** 区域分配元数据（可 JSON 持久化；空洞本体按层独立持久化，不在本结构内） */
 export interface RegionMeta {
@@ -42,10 +45,18 @@ export function createRegionMeta(): RegionMeta {
 }
 
 /**
- * 分配一个槽位 ID（O(1)）：优先复用**最低层**空洞（层号经 holeLevels 索引 O(1) 定位），
- * 否则推进 nextFree 水印。容量已满返回 null。
+ * 分配一个槽位 ID（O(1) 有界）：优先复用**最低层**空洞（层号经 holeLevels 索引 O(1) 定位），
+ * 否则推进 nextFree 水印并跳过"桶内索引 ≥ usablePerBarrel"的不可用槽位
+ * （每 27 个 ID 至多跳 26 个 → 常量级循环）。水印触及解码硬上限且无空洞 → null。
+ * @param hardLimit 解码硬上限（= maxLevels × SLOTS_PER_LEVEL；ID 从此不可再分配）
+ * @param usablePerBarrel 每桶可分配槽位上限（1..27，缺省 27 = 全部可用）
  */
-export function allocateSlotId(meta: RegionMeta, pools: LevelPools, capacity: number): number | null {
+export function allocateSlotId(
+  meta: RegionMeta,
+  pools: LevelPools,
+  hardLimit: number,
+  usablePerBarrel: number = BARREL_SLOTS
+): number | null {
   const lowest = meta.holeLevels[0];
   if (lowest !== undefined) {
     const pool = pools.byLevel[lowest];
@@ -58,13 +69,19 @@ export function allocateSlotId(meta: RegionMeta, pools: LevelPools, capacity: nu
     // 索引指向的层没有数据（异常：该层池丢失）→ 丢弃该索引，走水印
     meta.holeLevels.shift();
   }
-  if (meta.nextFree >= capacity) return null;
-  return meta.nextFree++;
+  while (meta.nextFree < hardLimit) {
+    const candidate = meta.nextFree++;
+    if (candidate % BARREL_SLOTS < usablePerBarrel) return candidate;
+  }
+  return null;
 }
 
 /**
- * 回收一个槽位 ID 到其所在层的空洞池（O(1)）。
- * 保护：槽位 ID 必须小于水印（即曾被分配过），否则忽略。
+ * 回收一个槽位 ID 到其所在层的空洞池（O(1) 有界；池 ≤ 一层 6912 条）。
+ * 保护：
+ * - 槽位 ID 必须小于水印（即曾被分配过），否则忽略；
+ * - **幂等**：该槽已在洞池（重复回收，如重复 take 同一空槽）→ 忽略，
+ *   防止洞池重复项导致同一槽被分配两次/统计虚高。
  * 副作用：同步维护 holeLevels（升序）与 holeCount。
  */
 export function releaseSlotId(meta: RegionMeta, pools: LevelPools, slotId: number): void {
@@ -73,6 +90,7 @@ export function releaseSlotId(meta: RegionMeta, pools: LevelPools, slotId: numbe
   const level = levelOf(slotId);
   const local = slotId - level * SLOTS_PER_LEVEL;
   const pool = (pools.byLevel[level] ??= []);
+  if (pool.includes(local)) return; // 已在洞池：重复回收忽略
   if (pool.length === 0 && !meta.holeLevels.includes(level)) {
     meta.holeLevels.push(level);
     meta.holeLevels.sort((a, b) => a - b);

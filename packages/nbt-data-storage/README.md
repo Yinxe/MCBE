@@ -4,6 +4,8 @@ MCBE 原版无法直接持久化物品的 NBT 数据（掉落物/背包等在部
 
 这不是一个完整的模组，而是**模组工具库 / 存储的基石**：消费模组在自己的 `main.ts` 里调用 `ItemStorage.register(...)` 注册一块存储区域，随后 `put / get / take / remove` 即用即存。
 
+> 想进游戏亲手验证能力？仓库自带演示 addon `demo/`（包名 `nds-demo`，显示名"NBT存储测试"）：完整配置 UI + 命令/UI 双通道存取，`pnpm run pack:nds-demo` 打包进游戏即可冒烟（见 `demo/README.md`）。
+
 > **三种存储模式（路线图）**：物品保存（本库，已实现）/ 生物保存 / 结构保存。后两者将把实体/结构序列化成带 NBT 的自定义记录物品，存进**同一套桶阵列**，共用本库的 O(1) 寻址与动态扩容设施。
 
 ## 特性
@@ -53,8 +55,13 @@ const tr = region.transferIn(container, sourceSlot);
 // 原子取出：区域槽 → 目标容器槽
 const tx = region.transferOut(slotId, container, destSlot);
 
-// 订阅存储事件（复用 toolkit EventSignal）
+// 订阅存储事件（复用 toolkit EventSignal；事件负载只用可序列化 string/number）
 ItemStorage.events.stored.subscribe(({ regionId, slotId, itemTypeId }) => {});
+// 事件总线一览（全部可订阅）：
+//   stored / taken / removed      —— 存入 / 取走 / 移除
+//   barrelCreated                 —— put 物化新木桶（扩容可见）
+//   barrelRestored                —— 巡检重建损坏木桶（阵列坐标内任何非木桶方块一律覆盖重建）
+//   itemLost { kind }             —— 巡检确认丢失（barrel-destroyed=桶损坏 / taken-externally=外部取走）
 
 // 统计
 const stats = region.stats();
@@ -68,6 +75,7 @@ const stats = region.stats();
 | 成员                                      | 说明                                                      |
 | ----------------------------------------- | --------------------------------------------------------- |
 | `register({ dimension, anchor, baseY? })` | 注册/获取一个存储区域（幂等；同区块 → 共享）              |
+| `registerTest({ ... , slotPerBarrel?, maxLevels? })` | ⚠️ 仅测试/演示：额外接受每桶可分配槽数 1..27、层数 1..64（解码恒按 27 槽/桶，ID 不漂移；同区块布局参数不一致抛错拒绝，请换锚点） |
 | `listRegions()`                           | 本模组上下文已注册的区域列表                              |
 | `getRegion(regionId)`                     | 按区域 ID 取/采纳区域（跨模组凭据取物）                   |
 | `queryWorld()`                            | 只读世界上的**全部**区域统计（无需本上下文注册）          |

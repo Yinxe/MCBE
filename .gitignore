@@ -41,3 +41,7 @@ item-matrix
 
 # CodeGraph index
 .codegraph/
+
+# Tool index / state (mimosa security-scan history, zcode cli workspace)
+.mimosa/
+.zcode/

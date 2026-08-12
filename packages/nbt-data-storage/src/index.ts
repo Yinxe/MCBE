@@ -17,5 +17,12 @@ export type { RegisterOptions, RegionWorldInfo } from "./mc/ItemStorage";
 export { installNdsCommands } from "./mc/commands";
 export type { StoredRegion } from "./mc/StoredRegion";
 export { ItemStorageEvents } from "./mc/events";
-export type { ItemStoredEvent, ItemTakenEvent, ItemRemovedEvent } from "./mc/events";
+export type {
+  ItemStoredEvent,
+  ItemTakenEvent,
+  ItemRemovedEvent,
+  BarrelCreatedEvent,
+  BarrelRestoredEvent,
+  ItemLostEvent,
+} from "./mc/events";
 export * from "./core";

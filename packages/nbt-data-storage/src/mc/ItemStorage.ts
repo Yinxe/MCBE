@@ -11,7 +11,7 @@ import type { ItemStack, Vector3 } from "@minecraft/server";
 import { chunkFromAnchor, validateLayout } from "../core/layout";
 import { regionId, shortDimension, type StoredRef } from "../core/keys";
 import { createRegionRecord } from "../core/record";
-import { resolveRegistration } from "../core/region";
+import { assertLayoutConsistent, resolveRegistration } from "../core/region";
 import { regionStats, type RegionStats } from "../core/stats";
 import { StoredRegion } from "./StoredRegion";
 import { ItemStorageEvents } from "./events";
@@ -25,6 +25,12 @@ export interface RegisterOptions {
   anchor: Vector3;
   /** 最底层木桶 Y（默认 120；仅首个注册该区块的模组生效） */
   baseY?: number;
+  /** 每桶可分配槽位上限 0..27（仅测试渠道 registerTest 使用，默认 27 = 全部可用） */
+  slotPerBarrel?: number;
+  /** 纵向层数上限 1..64（仅测试渠道 registerTest 使用，默认 64） */
+  maxLevels?: number;
+  /** ⚠️ 测试区域特权标记（仅 registerTest 内部置 true；正式 register 不传） */
+  test?: boolean;
 }
 
 /** 世界视角的区域统计（只读，供其他模组管理读取） */
@@ -36,23 +42,63 @@ const regions = new Map<string, StoredRegion>();
 /**
  * 注册/获取一个存储区域（幂等）。
  * - 已在本上下文注册 → 直接返回既有实例；
- * - 世界已有该区域记录（其他模组先建）→ 采纳其维度与布局，共享同一阵列；
+ * - 世界已有该区域记录（其他模组先建）→ 采纳其维度与布局（布局参数不一致会抛错拒绝），共享同一阵列；
  * - 全新 → 按传入参数创建并持久化。
  *
- * @throws 维度无效 / 布局非法时抛中文错误
+ * @throws 维度无效 / 布局非法 / 布局参数与既有记录不一致时抛中文错误
  */
 export function register(opts: RegisterOptions): StoredRegion {
+  return registerWith(opts);
+}
+
+/**
+ * ⚠️ 仅测试/演示用（如 nds-demo 容量模拟）：注册一个布局可覆盖的存储区域。
+ * 比 `register` 多接受 `slotPerBarrel`（每桶可用槽数 1..27）与 `maxLevels`（层数 1..64），
+ * 用于快速模拟满容量 / 见证扩容。**正式模组请用 `register`**（不传新参数时行为与 register 完全一致）。
+ *
+ * ID 语义恒定：解码永远按 27 槽/桶，slotPerBarrel 只限制每桶可分配槽数（分配跳过超限槽），
+ * 已存物品的 ID 永不漂移。同一区块布局参数与既有记录不一致时抛错（拒绝混用），请更换锚点开新区块。
+ */
+export function registerTest(opts: RegisterOptions): StoredRegion {
+  return registerWith({ ...opts, test: true });
+}
+
+/** register / registerTest 共用实现 */
+function registerWith(opts: RegisterOptions): StoredRegion {
   const { cx, cz } = chunkFromAnchor(opts.anchor.x, opts.anchor.z);
   const id = regionId(shortDimension(opts.dimension), cx, cz);
 
   const existing = regions.get(id);
-  if (existing) return existing;
+  if (existing) {
+    // 缓存命中也必须校验布局一致性：否则测试渠道改参数后仍拿旧布局句柄继续用
+    // （新物品会按旧布局分配，看起来"不扩容/写入旧桶末尾"），必须拒绝并提示换锚点
+    assertLayoutConsistent(
+      existing.layout,
+      {
+        dimensionId: opts.dimension,
+        baseY: opts.baseY,
+        maxLevels: opts.maxLevels,
+        slotPerBarrel: opts.slotPerBarrel,
+        test: opts.test,
+      },
+      cx,
+      cz
+    );
+    return existing;
+  }
 
-  // 已有持久化记录 → 采纳其维度/布局（后注册者传的 baseY 等被忽略）；否则按传入参数新建
+  // 已有持久化记录 → 校验一致性并采纳其维度/布局（后注册者传的 baseY 等被忽略）；
+  // 否则按传入参数新建（resolveRegistration 内部对不一致的 slotPerBarrel/maxLevels 抛错）
   const persisted = readRegionRecord(id);
   const { dimensionId, layout } = resolveRegistration(
     persisted,
-    { dimensionId: opts.dimension, baseY: opts.baseY },
+    {
+      dimensionId: opts.dimension,
+      baseY: opts.baseY,
+      maxLevels: opts.maxLevels,
+      slotPerBarrel: opts.slotPerBarrel,
+      test: opts.test,
+    },
     { cx, cz }
   );
   const invalid = validateLayout(layout);
@@ -135,6 +181,7 @@ export function totalStats(): { regionCount: number; totalCapacity: number; tota
 /** 对外公开的存储命名空间（注册/凭据取物/管理/事件） */
 export const ItemStorage = {
   register,
+  registerTest,
   getRegion,
   listRegions,
   get,

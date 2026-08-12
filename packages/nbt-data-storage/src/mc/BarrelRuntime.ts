@@ -5,15 +5,25 @@
 import { world } from "@minecraft/server";
 import type { BlockInventoryComponent, Container, Dimension, ItemStack } from "@minecraft/server";
 import type { RegionLayout, SlotPosition } from "../core/layout";
+import type { SlotStatus } from "../core/repair";
 
 const BARREL = "minecraft:barrel";
 
 /** 低层桶阵列 IO：物化 / 读写 / 清空 / 常加载 */
 export class BarrelRuntime {
+  private layout: RegionLayout;
+
   constructor(
     private readonly dimensionId: string,
-    private readonly layout: RegionLayout
-  ) {}
+    layout: RegionLayout
+  ) {
+    this.layout = layout;
+  }
+
+  /** 布局变更后同步（resizeLevels 调整层数时更新常加载范围） */
+  applyLayout(layout: RegionLayout): void {
+    this.layout = layout;
+  }
 
   private get dimension(): Dimension {
     return world.getDimension(this.dimensionId);
@@ -56,19 +66,25 @@ export class BarrelRuntime {
     }
   }
 
-  /** 槽位是否被占用；无法确认时保守视为占用（绝不覆盖他人物品） */
+  /** 槽位是否被占用；无法确认或**位置不是木桶**时保守视为占用（绝不覆盖/写入他人方块） */
   isSlotOccupied(pos: SlotPosition): boolean {
     try {
-      return this.containerOf(pos)?.getItem(pos.slotInBarrel) !== undefined;
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block) return true; // 区块未加载：保守占用
+      if (block.typeId !== BARREL) return true; // 非木桶（含其它容器/空气）：保守占用，put 绝不写入
+      const inv = block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined;
+      return inv?.container?.getItem(pos.slotInBarrel) !== undefined;
     } catch {
       return true;
     }
   }
 
-  /** 写入物品（克隆源栈，保留完整 NBT/组件） */
+  /** 写入物品（克隆源栈，保留完整 NBT/组件）；位置不是木桶时拒绝（绝不写入他人方块） */
   writeItem(pos: SlotPosition, item: ItemStack): boolean {
     try {
-      const container = this.containerOf(pos);
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block || block.typeId !== BARREL) return false;
+      const container = (block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined)?.container;
       if (!container) return false;
       container.setItem(pos.slotInBarrel, item.clone());
       return true;
@@ -86,6 +102,24 @@ export class BarrelRuntime {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * 巡检探测：槽位世界状态（修复流程用）。
+   * 阵列坐标范围内的**任何非木桶方块都是预期之外的干扰**（含其它容器）→ damaged，
+   * 巡检会一律重建覆盖；区块未加载 → unknown（跳过不误修）。
+   */
+  probeStatus(pos: SlotPosition): SlotStatus {
+    try {
+      const block = this.dimension.getBlock({ x: pos.x, y: pos.y, z: pos.z });
+      if (!block) return "unknown"; // 区块未加载：不可判定
+      if (block.typeId !== BARREL) return "damaged"; // 任何非木桶（空气/其它容器/普通方块）→ 重建
+      const inv = block.getComponent("minecraft:inventory") as BlockInventoryComponent | undefined;
+      if (!inv?.container) return "unknown"; // 容器组件缺失：保守不可判定
+      return inv.container.getItem(pos.slotInBarrel) ? "occupied" : "empty";
+    } catch {
+      return "unknown";
     }
   }
 

@@ -7,3 +7,4 @@ export * from "./stats";
 export * from "./transfer";
 export * from "./put";
 export * from "./region";
+export * from "./repair";

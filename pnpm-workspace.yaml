@@ -4,6 +4,8 @@
 packages:
   # all packages in subdirectories of packages/
   - "packages/*"
+  # nbt-data-storage 的内嵌演示 addon（可打包进游戏冒烟）
+  - "packages/nbt-data-storage/demo"
   # all packages in subdirectories of apps/
   - "apps/*"
   # addon projects (Minecraft behavior/resource packs)

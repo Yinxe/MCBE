@@ -7,7 +7,7 @@
 //     由调用方下个周期重试（不烧水印、不丢空槽）；
 //   - 真正 setBlockType 建了新桶 → meta.barrelCount +1。
 import type { RegionLayout } from "./layout";
-import { capacityOf, levelOf, slotIdToPosition } from "./layout";
+import { SLOTS_PER_LEVEL, levelOf, slotIdToPosition, usableSlotsPerBarrel } from "./layout";
 import { allocateSlotId, createLevelPools, releaseSlotId, type LevelPools } from "./meta";
 import { createRegionRecord, type PersistedRegion } from "./record";
 import type { StoredRef } from "./keys";
@@ -45,7 +45,9 @@ export function putItem(
   layout: RegionLayout
 ): StoredRef | null {
   if (item === undefined || item === null) return null;
-  const capacity = capacityOf(layout);
+  // 解码硬上限（ID 以 27 槽/桶解码，容量上限 = 层数 × 6912）；可用容量由每桶可用槽数约束
+  const hardLimit = layout.maxLevels * SLOTS_PER_LEVEL;
+  const usable = usableSlotsPerBarrel(layout);
   for (let attempt = 0; attempt < MAX_ALLOC_RETRY; attempt++) {
     const record = port.readRecord() ?? createRegionRecord(dimensionId, layout);
     const meta = record.meta;
@@ -53,7 +55,7 @@ export function putItem(
     const lowest = meta.holeLevels[0];
     const pools: LevelPools = createLevelPools(layout.maxLevels);
     if (lowest !== undefined) pools.byLevel[lowest] = port.readLevelPool(lowest);
-    const slotId = allocateSlotId(meta, pools, capacity);
+    const slotId = allocateSlotId(meta, pools, hardLimit, usable);
     if (slotId === null) return null; // 真满
     const pos = slotIdToPosition(slotId, layout);
     if (!pos) return null;

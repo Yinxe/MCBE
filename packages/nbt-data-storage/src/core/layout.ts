@@ -10,8 +10,15 @@
 //   z = chunkZ*16 + floor(barrelLocal / 16)
 //   y = baseY + level
 // 解码全程纯整数运算，无查表 → O(1) 秒定位容器与槽位。
+//
+// ⚠️ ID 语义恒定：解码**永远按 27 槽/桶**，不随布局参数漂移。`slotPerBarrel`
+// 只是**每桶可分配槽位上限**（测试渠道用，默认 27 = 全部可用）：分配时跳过
+// 桶内索引 ≥ 上限的槽位，但 ID 仍按 27 解码——已存物品的 ID 在任何配置下
+// 都指向同一物理位置，永不偏移（见 meta.allocateSlotId 的跳过逻辑）。
+// 测试区域（test:true）可在 resize 后经 rebuildPools 重扫容器重建洞池，
+// 保证"每桶可用槽数/层数"动态调整后分配状态与参数一致。
 
-/** 单个木桶的槽位数 */
+/** 单个木桶的槽位数（解码公式恒用此值，永不参数化） */
 export const BARREL_SLOTS = 27;
 /** 区块水平边长（阵列每个层面占满一个区块） */
 export const LEVEL_EDGE = 16;
@@ -21,8 +28,11 @@ export const BARRELS_PER_LEVEL = LEVEL_EDGE * LEVEL_EDGE;
 export const SLOTS_PER_LEVEL = BARRELS_PER_LEVEL * BARREL_SLOTS;
 /** 阵列默认纵向层数（固定，无需配置）：0..63 层 → 容量 442368 槽；不够再注册新集群 */
 export const MAX_LEVELS = 64;
+/** 每桶可分配槽位上限的合法范围（0..27；0 = 容量 0 的"瞬满"测试布局；仅测试渠道可配） */
+export const SLOT_PER_BARREL_MIN = 0;
+export const SLOT_PER_BARREL_MAX = BARREL_SLOTS;
 
-/** 存储区域布局（不可变几何参数；由首个注册该区块的模组定下，后续模组共享） */
+/** 存储区域布局（几何参数；由首个注册该区块的模组定下，后续模组共享；测试区域可调） */
 export interface RegionLayout {
   /** 锚定区块坐标 X */
   readonly chunkX: number;
@@ -30,8 +40,17 @@ export interface RegionLayout {
   readonly chunkZ: number;
   /** 最底层木桶的 Y 坐标 */
   readonly baseY: number;
-  /** 纵向木桶层数上限 */
+  /** 纵向木桶层数上限（1..64，默认 64；仅测试渠道可配，可动态调整） */
   readonly maxLevels: number;
+  /**
+   * 每桶可分配槽位上限（0..27，缺省 27）。**仅测试渠道（registerTest）可配**：
+   * 解码恒按 27 槽/桶，此值只让分配跳过桶内超限槽位（见 meta.allocateSlotId），
+   * 用于快速模拟满容量/见证扩容；0 = 容量 0（put 全拒，瞬见"已满"）。
+   * 正式 register 不传此值。
+   */
+  readonly slotPerBarrel?: number;
+  /** ⚠️ 测试区域特权标记（仅 registerTest 创建；正式 register 拒绝进入；可动态调整布局参数） */
+  readonly test?: boolean;
 }
 
 /** 一个槽位解码后的物理位置（物化木桶 / 读写容器用） */
@@ -43,9 +62,14 @@ export interface SlotPosition {
   slotInBarrel: number;
 }
 
-/** 阵列理论总槽位数（= 最满时的容量上限） */
+/** 该布局每桶实际可分配的槽位数（缺省 27 = 全部可用） */
+export function usableSlotsPerBarrel(layout: RegionLayout): number {
+  return layout.slotPerBarrel ?? BARREL_SLOTS;
+}
+
+/** 阵列理论总槽位数（= 最满时的可用容量上限；解码上限仍是 27×256×层） */
 export function capacityOf(layout: RegionLayout): number {
-  return layout.maxLevels * SLOTS_PER_LEVEL;
+  return layout.maxLevels * BARRELS_PER_LEVEL * usableSlotsPerBarrel(layout);
 }
 
 /** 阵列满容量时的木桶总数（静态可预知：层数 × 每层 256 桶） */
@@ -53,9 +77,14 @@ export function totalBarrelsOf(layout: RegionLayout): number {
   return layout.maxLevels * BARRELS_PER_LEVEL;
 }
 
-/** slotId 是否落在有效范围 [0, capacity) 内 */
+/** 解码范围上限（物理可寻址的槽位数 = 层数 × 每层 27×256 槽；与可用容量无关） */
+export function decodeCapacityOf(layout: RegionLayout): number {
+  return layout.maxLevels * SLOTS_PER_LEVEL;
+}
+
+/** slotId 是否落在有效解码范围 [0, decodeCapacityOf) 内（恒按 27 槽/桶判定，不受 slotPerBarrel 影响） */
 export function isValidSlotId(slotId: number, layout: RegionLayout): boolean {
-  return Number.isInteger(slotId) && slotId >= 0 && slotId < capacityOf(layout);
+  return Number.isInteger(slotId) && slotId >= 0 && slotId < decodeCapacityOf(layout);
 }
 
 /**
@@ -104,6 +133,15 @@ export function validateLayout(layout: RegionLayout): string | null {
   }
   if (!Number.isInteger(layout.maxLevels) || layout.maxLevels < 1) {
     return "maxLevels 必须为 >= 1 的整数";
+  }
+  if (layout.slotPerBarrel !== undefined) {
+    if (
+      !Number.isInteger(layout.slotPerBarrel) ||
+      layout.slotPerBarrel < SLOT_PER_BARREL_MIN ||
+      layout.slotPerBarrel > SLOT_PER_BARREL_MAX
+    ) {
+      return `slotPerBarrel 必须为 ${SLOT_PER_BARREL_MIN}..${SLOT_PER_BARREL_MAX} 的整数（仅测试渠道可用）`;
+    }
   }
   const topY = layout.baseY + layout.maxLevels - 1;
   if (topY > 320) {

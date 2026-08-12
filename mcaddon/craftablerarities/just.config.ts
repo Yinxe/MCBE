@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
 import { series, task } from "just-scripts";
 import path from "path";
@@ -36,7 +36,8 @@ task("mcaddon", series("clean", "build", () => {
 
   const outFile = `${PACKAGE_NAME}-v${pkgVersion}.mcpack`;
   const bpDir = path.resolve(__dirname, `BP/${PROJECT_NAME}`);
-  execSync(`(cd "${bpDir}" && zip -X -r "${path.resolve(outDir, outFile)}" .)`, { stdio: "inherit" });
+  // 参数数组 + cwd 不经 shell 解析（无命令注入面；路径含特殊字符也安全）
+  execFileSync("zip", ["-X", "-r", path.resolve(outDir, outFile), "."], { cwd: bpDir, stdio: "inherit" });
 
   const size = existsSync(path.resolve(outDir, outFile))
     ? readFileSync(path.resolve(outDir, outFile)).length : 0;

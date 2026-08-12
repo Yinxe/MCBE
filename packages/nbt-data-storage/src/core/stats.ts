@@ -2,7 +2,7 @@
 // 供运行时 stats() / 管理命令 / queryWorld() 共用，可脱离游戏 mock 断言。
 
 import type { RegionLayout } from "./layout";
-import { capacityOf, totalBarrelsOf } from "./layout";
+import { capacityOf, totalBarrelsOf, usableSlotsPerBarrel } from "./layout";
 import type { RegionMeta } from "./meta";
 import { usedSlots } from "./meta";
 
@@ -16,6 +16,8 @@ export interface RegionStats {
   chunkZ: number;
   baseY: number;
   maxLevels: number;
+  /** 每桶可分配槽位上限（生效值；缺省 27 = 全部可用） */
+  slotPerBarrel: number;
   /** 阵列总槽位数（上限） */
   capacity: number;
   /** 已物化的木桶数（当前；空桶常驻不回收） */
@@ -39,6 +41,7 @@ export function regionStats(key: string, dimensionId: string, layout: RegionLayo
     chunkZ: layout.chunkZ,
     baseY: layout.baseY,
     maxLevels: layout.maxLevels,
+    slotPerBarrel: usableSlotsPerBarrel(layout),
     capacity: capacityOf(layout),
     barrels: meta.barrelCount,
     totalBarrels: totalBarrelsOf(layout),
