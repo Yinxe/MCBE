@@ -1,0 +1,23 @@
+{
+  "name": "@yinxe/nbt-data-storage",
+  "version": "0.1.21",
+  "private": true,
+  "description": "MCBE 存储基石：区块锚定的全木桶阵列，按格存 ItemStack（完整 NBT），O(1) 槽位 ID 存取，动态扩容，多模组共享",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "tsc -p tsconfig.test.json && node --test \".test-build/tests/**/*.test.js\"",
+    "build:demo": "pnpm --filter nds-demo run build",
+    "pack:demo": "pnpm --filter nds-demo run pack"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "5.0.2"
+  },
+  "dependencies": {
+    "@yinxe/toolkit": "workspace:*"
+  },
+  "peerDependencies": {
+    "@minecraft/server": ">=2.0.0"
+  }
+}

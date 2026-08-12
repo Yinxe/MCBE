@@ -1,0 +1,8 @@
+node_modules/
+dist/
+lib/
+.test-build/
+.slim/
+.env
+*.js.map
+scripts/version.ts
