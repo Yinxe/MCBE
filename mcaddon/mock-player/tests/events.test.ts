@@ -7,6 +7,7 @@ import { EventSignal } from "../scripts/core/events/EventSignal";
 import {
   raidStarted, raidVictory, tridentClaimed, tridentOwnerChanged,
   botOnline, botOffline, botDeath, botRespawn,
+  botMainhandChanged, botBlockBroken, botBlockPlaced, botItemUsed, botEntityAttacked,
 } from "../scripts/core/events/DomainEvents";
 
 test("EventSignal：订阅/触发/退订", () => {
@@ -133,4 +134,35 @@ test("领域事件：假人生命周期（上线/下线/死亡/复活）可触�
   off2();
   off3();
   off4();
+});
+
+test("领域事件：假人行为事件（主手切换/破坏/放置/使用/攻击）可触发", () => {
+  const mainhand: string[] = [];
+  const broken: string[] = [];
+  const placed: string[] = [];
+  const used: string[] = [];
+  const attacked: string[] = [];
+  const off1 = botMainhandChanged.subscribe((e) => mainhand.push(`${e.botName}:${e.slot}:${e.itemId ?? "空"}`));
+  const off2 = botBlockBroken.subscribe((e) => broken.push(`${e.botName}:${e.blockTypeId}@${e.position.x},${e.position.y},${e.position.z}`));
+  const off3 = botBlockPlaced.subscribe((e) => placed.push(`${e.botName}:${e.blockTypeId}`));
+  const off4 = botItemUsed.subscribe((e) => used.push(`${e.botName}:${e.itemId}`));
+  const off5 = botEntityAttacked.subscribe((e) => attacked.push(`${e.botName}→${e.targetTypeId}:${e.damage}`));
+
+  botMainhandChanged.trigger({ botName: "bot1", slot: 5, itemId: "minecraft:diamond_sword" });
+  botBlockBroken.trigger({ botName: "bot1", blockTypeId: "minecraft:stone", position: { x: 1, y: 2, z: 3 }, dimension: "minecraft:overworld" });
+  botBlockPlaced.trigger({ botName: "bot1", blockTypeId: "minecraft:cobblestone", position: { x: 1, y: 2, z: 3 }, dimension: "minecraft:overworld" });
+  botItemUsed.trigger({ botName: "bot1", itemId: "minecraft:milk_bucket" });
+  botEntityAttacked.trigger({ botName: "bot1", targetTypeId: "minecraft:zombie", damage: 7 });
+
+  assert.deepEqual(mainhand, ["bot1:5:minecraft:diamond_sword"]);
+  assert.deepEqual(broken, ["bot1:minecraft:stone@1,2,3"]);
+  assert.deepEqual(placed, ["bot1:minecraft:cobblestone"]);
+  assert.deepEqual(used, ["bot1:minecraft:milk_bucket"]);
+  assert.deepEqual(attacked, ["bot1→minecraft:zombie:7"]);
+
+  off1();
+  off2();
+  off3();
+  off4();
+  off5();
 });

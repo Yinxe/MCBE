@@ -109,3 +109,64 @@ export const botDeath = new EventSignal<BotDeathEvent>();
 
 /** 假人复活信号 */
 export const botRespawn = new EventSignal<BotRespawnEvent>();
+
+// ─── 假人行为事件 ──────────────────────────────────────
+// 假人成功执行动作时触发（主手切换/破坏方块/放置方块/使用物品/攻击实体），
+// 供订阅方统计/通知/联动（负载只用可序列化 string/number）。
+
+/** 主手切换事件：假人选中热栏槽位变化 */
+export interface BotMainhandChangedEvent {
+  botName: string;
+  /** 新选中的热栏槽位（0-8） */
+  slot: number;
+  /** 新主手物品 ID（空手为 undefined） */
+  itemId?: string;
+}
+
+/** 成功破坏方块事件 */
+export interface BotBlockBrokenEvent {
+  botName: string;
+  blockTypeId: string;
+  position: { x: number; y: number; z: number };
+  dimension: string;
+  /** 破坏后的物品（如有） */
+  itemId?: string;
+}
+
+/** 成功放置方块事件 */
+export interface BotBlockPlacedEvent {
+  botName: string;
+  blockTypeId: string;
+  position: { x: number; y: number; z: number };
+  dimension: string;
+}
+
+/** 成功使用物品事件（itemUse） */
+export interface BotItemUsedEvent {
+  botName: string;
+  itemId: string;
+}
+
+/** 成功攻击实体事件（造成伤害） */
+export interface BotEntityAttackedEvent {
+  botName: string;
+  /** 被攻击实体 typeId */
+  targetTypeId: string;
+  /** 造成的伤害 */
+  damage: number;
+}
+
+/** 主手切换信号 */
+export const botMainhandChanged = new EventSignal<BotMainhandChangedEvent>();
+
+/** 破坏方块信号 */
+export const botBlockBroken = new EventSignal<BotBlockBrokenEvent>();
+
+/** 放置方块信号 */
+export const botBlockPlaced = new EventSignal<BotBlockPlacedEvent>();
+
+/** 使用物品信号 */
+export const botItemUsed = new EventSignal<BotItemUsedEvent>();
+
+/** 攻击实体信号 */
+export const botEntityAttacked = new EventSignal<BotEntityAttackedEvent>();

@@ -174,6 +174,11 @@ scripts/
   - tridentTracker 订阅 botOnline/botRespawn → rebindBotTridents（夺回）；botOffline → releaseBotTridents（回退第一任）
   - raidMode 订阅 botOnline/botRespawn → startRaidMode（续喝第一瓶，替代 playerJoin/playerSpawn 硬编码）
 
+### 假人行为事件（`core/events/DomainEvents`，`mc/events/botActions.ts` 生产端）
+- `botMainhandChanged`（热栏槽位切换，含新主手物品）/ `botBlockBroken`（成功破坏方块，含方块/位置/破坏后物品）/ `botBlockPlaced`（成功放置）/ `botItemUsed`（成功使用物品）/ `botEntityAttacked`（造成伤害，含目标/伤害量）
+- 生产端：订阅 playerHotbarSelectedSlotChange / playerBreakBlock / playerPlaceBlock / itemUse / entityHurt（damageSource.damagingEntity 是假人），全部过滤 BOT_TAG
+- 新行为领域事件一律在此文件生产，订阅方只依赖领域事件
+
 ### 认主 UI（ui/tridentClaim.ts，面板"三叉戟认主"按钮）
 - 扫描假人 100 半径（当前维度）内三叉戟，过滤**自家**（第一/第二任 ∈ 家族集合 = 主人名 ∪ 主人名下假人名）
 - 附魔/耐久展示尽力经 `EntityItemComponent.itemStack` 读取；**投射物实体实测常无该组件 → 附魔段降级省略（不跳过条目、不显示"未知"），认主功能不受影响**

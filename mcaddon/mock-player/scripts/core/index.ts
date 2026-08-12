@@ -9,9 +9,12 @@ export { EventSignal, type EventCallback } from "./events/EventSignal";
 export {
   raidStarted, raidVictory, tridentClaimed, tridentOwnerChanged,
   botOnline, botOffline, botDeath, botRespawn,
+  botMainhandChanged, botBlockBroken, botBlockPlaced, botItemUsed, botEntityAttacked,
   type RaidStartedEvent, type RaidVictoryEvent,
   type TridentClaimedEvent, type TridentClaimVia, type TridentOwnerChangedEvent,
   type BotOnlineEvent, type BotOfflineEvent, type BotDeathEvent, type BotRespawnEvent,
+  type BotMainhandChangedEvent, type BotBlockBrokenEvent, type BotBlockPlacedEvent,
+  type BotItemUsedEvent, type BotEntityAttackedEvent,
 } from "./events/DomainEvents";
 
 // tags
