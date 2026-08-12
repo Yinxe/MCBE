@@ -54,21 +54,10 @@ export class McBotStore implements BotStore<ItemStack> {
     return this.region;
   }
 
-  /** 首次绑定：清理该假人旧版 DP 背包/装备 key（作废数据，防 DP 膨胀） */
-  private clearLegacyItemKeys(name: string): void {
-    const base = `${DP_PREFIX}${name}`;
-    for (const id of world.getDynamicPropertyIds()) {
-      if (id.startsWith(base + ":inv:") || id.startsWith(base + ":equip:")) {
-        world.setDynamicProperty(id, undefined);
-      }
-    }
-  }
-
-  /** 取绑定表（无则新建并清理旧数据）；区域不可用返回 undefined */
+  /** 取绑定表（无则新建）；区域不可用返回 undefined */
   private bindingOf(record: BotRecord): StorageBinding | undefined {
     if (record.storageBinding) return record.storageBinding;
     if (!this.ensureRegion()) return undefined;
-    this.clearLegacyItemKeys(record.name);
     record.storageBinding = createBinding(this.region!.regionId);
     return record.storageBinding;
   }
@@ -104,7 +93,8 @@ export class McBotStore implements BotStore<ItemStack> {
 
   /**
    * 世界重启时加载所有假人记录。
-   * 跳过历史残留的 :inv: / :equip: 子 key（旧版 DP 物品数据，新后端不再产生）。
+   * 跳过含 :inv: / :equip: 的历史残留子 key（旧版 DP 物品数据已不受支持——
+   * 新后端不产生此类 key，但旧世界的残留 key 若被当记录解析会产生垃圾条目，防御性跳过）。
    */
   loadAllRecords(): BotRecord[] {
     const ids = world.getDynamicPropertyIds();

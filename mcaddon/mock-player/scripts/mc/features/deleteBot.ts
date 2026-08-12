@@ -6,7 +6,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { BotEvents } from "../../core/events/DomainEvents";
-import { botRegistry } from "../bootstrap/context";
+import { botRegistry, inventoryStorage } from "../bootstrap/context";
 import { reclaimBot } from "./reclaim";
 import { cleanupRaidMode } from "./raidMode";
 import { color } from "@yinxe/toolkit";
@@ -49,6 +49,8 @@ export function deleteBot(record: BotRecord, reclaimTo?: Player): void {
   // 离线删除：disconnect() 不会触发 playerLeave，必须手动清除恢复标记
   // 否则同名新假人会被 isBotRestored 误判为已恢复，空背包覆盖持久化数据
   botRegistry.remove(record.name);
+  // 清空库存存储的指纹快照（防内存残留）
+  inventoryStorage.forget(record.name);
 
   // 清理劫掠内存状态（胜利计数/饮用互斥），防止同名重建假人继承
   cleanupRaidMode(record.name);

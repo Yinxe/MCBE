@@ -47,6 +47,15 @@ export class InventoryStorage {
     });
   }
 
+  /** 清空某假人的全部指纹快照（删除假人时调用，防内存残留） */
+  forget(botName: string): void {
+    for (const key of [...this.snapshots.keys()]) {
+      if (key.startsWith(`${botName}:`)) {
+        this.snapshots.delete(key);
+      }
+    }
+  }
+
   // ── 背包单格（playerInventoryItemChange 薄壳转发） ──
 
   /**
