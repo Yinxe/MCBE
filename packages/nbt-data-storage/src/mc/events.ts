@@ -51,7 +51,15 @@ export interface ItemLostEvent {
   kind: "barrel-destroyed" | "taken-externally";
 }
 
-/** 存储事件总线（存入/取走/移除/建桶/巡检修复/丢失） */
+/** 原位覆写事件（overwrite：指定槽位替换，slotId 不变，旧物已返回调用方） */
+export interface ItemOverwrittenEvent {
+  regionId: string;
+  slotId: number;
+  oldTypeId?: string;
+  newTypeId?: string;
+}
+
+/** 存储事件总线（存入/取走/移除/覆写/建桶/巡检修复/丢失） */
 export const ItemStorageEvents = {
   /** 物品成功存入区域后触发 */
   stored: new EventSignal<ItemStoredEvent>(),
@@ -59,6 +67,8 @@ export const ItemStorageEvents = {
   taken: new EventSignal<ItemTakenEvent>(),
   /** 物品成功移除后触发 */
   removed: new EventSignal<ItemRemovedEvent>(),
+  /** 原位覆写成功后触发（slotId 不变，旧物已返回调用方） */
+  overwritten: new EventSignal<ItemOverwrittenEvent>(),
   /** put 物化新木桶后触发（扩容可见） */
   barrelCreated: new EventSignal<BarrelCreatedEvent>(),
   /** 巡检重建损坏木桶后触发（阵列坐标内任何非木桶方块一律重建覆盖） */

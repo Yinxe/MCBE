@@ -21,6 +21,7 @@ export type {
   ItemStoredEvent,
   ItemTakenEvent,
   ItemRemovedEvent,
+  ItemOverwrittenEvent,
   BarrelCreatedEvent,
   BarrelRestoredEvent,
   ItemLostEvent,

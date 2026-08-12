@@ -99,6 +99,26 @@ export function registerDemoCommands(registry: CustomCommandRegistry): void {
   defineCommand(
     registry,
     {
+      name: "nds-demo:overwrite",
+      description: "手持物品原位覆写到指定格子（旧物品返回背包，slotId 不变）",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      mandatoryParameters: [{ name: "slotId", type: CustomCommandParamType.Integer }],
+    },
+    ({ player, params }) => {
+      const slotId = Number(params.slotId);
+      if (!Number.isInteger(slotId) || slotId < 0) {
+        player.sendMessage("§c格子号必须是非负整数");
+        return;
+      }
+      const r = storage.overwriteToSlot(player, slotId);
+      player.sendMessage(`${colorOf(r)}${r.message}`);
+    }
+  );
+
+  defineCommand(
+    registry,
+    {
       name: "nds-demo:check",
       description: "阵列自检 + 修复（损坏桶重建/丢失槽回收）",
       cheatsRequired: false,

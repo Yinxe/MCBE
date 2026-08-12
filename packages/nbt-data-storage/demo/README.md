@@ -5,6 +5,7 @@
 - 打开管理菜单：`/nds-demo:ui`
 - 完整配置 UI：`/nds-demo:config`（维度 / 锚点 X,Z / 底层 Y / 启用开关 / **每桶槽数** / **层数**）
 - 单件存取：`/nds-demo:store`、`/nds-demo:take <格子号>`
+- 原位覆写：`/nds-demo:overwrite <格子号>`（手持物品覆写到已有格子，slotId 不变，旧物返回背包）
 - 批量存取：`/nds-demo:store-all`（背包物品**单页全量开关勾选，默认全选**）、`/nds-demo:take-all`（凭据勾选）
 - 自检维护：`/nds-demo:check`（**损坏木桶自动重建 + 丢失槽回收**，主菜单「自检修复」同入口）
 - 盘点：`/nds-demo:list`、`/nds-demo:stats`，以及库自带的 `/nds:regions`、`/nds:stats <区域ID>`

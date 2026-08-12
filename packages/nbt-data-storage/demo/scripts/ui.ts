@@ -42,6 +42,7 @@ export async function showMainMenu(player: Player): Promise<void> {
     .button("§l取出（凭据列表）§r", () => showTakeList(player))
     .button("§l批量取出（勾选）§r", () => showBatchTake(player))
     .button("§l取出（按格子号）§r", () => showTakeBySlot(player))
+    .button("§l覆写（手持→格子）§r", () => showOverwriteBySlot(player))
     .button("§l自检修复§r", () => storage.checkAndRepair(player))
     .button("存储统计", () => storage.showStats(player))
     .button("配置", () => showConfigForm(player, { onApply: (cfg) => storage.applyConfig(cfg, true) }))
@@ -177,5 +178,25 @@ export async function showTakeBySlot(player: Player): Promise<void> {
     return;
   }
   const res = storage.takeToPlayer(player, slotId);
+  player.sendMessage(`${colorOf(res)}${res.message}`);
+}
+
+/** 原位覆写（ModalForm 文本输入）：手持物品覆写到指定格子，旧物品进背包/存回。 */
+export async function showOverwriteBySlot(player: Player): Promise<void> {
+  const vals = await new ModalFormBuilder()
+    .title("§l覆写 · 手持物品 → 格子")
+    .label("_hint", "§7把手中物品覆写到指定格子（slotId 不变），旧物品返回背包或存回存储")
+    .textFieldWithPlaceholder("slotId", "格子号（slotId）", "已有物品的格号，如 3")
+    .divider()
+    .submitButton("覆写")
+    .show(player);
+  if (!vals) return;
+
+  const slotId = Number(vals.slotId);
+  if (!Number.isInteger(slotId) || slotId < 0) {
+    notifyError(player, "格子号必须是非负整数");
+    return;
+  }
+  const res = storage.overwriteToSlot(player, slotId);
   player.sendMessage(`${colorOf(res)}${res.message}`);
 }

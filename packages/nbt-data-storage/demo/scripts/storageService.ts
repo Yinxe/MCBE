@@ -9,7 +9,7 @@
 // - 扩容见证：存入前后对比 stats().barrels，汇报新物化桶数（快速满箱时可亲见扩容过程）
 // - 事件订阅：stored/taken 事件驱动同步索引与区域真值一致
 import { world } from "@minecraft/server";
-import type { Player } from "@minecraft/server";
+import type { ItemStack, Player } from "@minecraft/server";
 import { ItemStorage, chunkFromAnchor, regionId, shortDimension, type StoredRegion } from "@yinxe/nbt-data-storage";
 import { loadConfig, saveConfig, type DemoConfig } from "./config";
 
@@ -284,6 +284,36 @@ export class StorageService {
     return {
       ok: back ? true : false,
       message: `#${slotId} 已取出但背包空间不足：${leftover.typeId} ×${leftover.amount} 放回存储${
+        back ? `（新槽位 #${back.slotId}）` : "（放回失败，请尽快手动处理！）"
+      }`,
+    };
+  }
+
+  /**
+   * 原位覆写：手持物品覆写到指定格子（slotId 不变），旧物品进背包（放不下 → 存回存储新槽）。
+   * 护栏：目标位置必须已有实物（空槽请用 put；异常位置请先 /nds-demo:check）。
+   */
+  overwriteToSlot(player: Player, slotId: number): OpResult {
+    const notReady = this.notReadyResult();
+    if (notReady) return notReady;
+    const container = player.getComponent("minecraft:inventory")?.container;
+    if (!container) return { ok: false, message: "无法读取背包容器" };
+    const item = container.getItem(player.selectedSlotIndex);
+    if (!item) return { ok: false, message: "手中没有可覆写的物品" };
+
+    const r = this.region!.overwrite(slotId, item);
+    if (!r.ok) return { ok: false, message: `覆写失败：${r.error ?? "未知原因"}` };
+    // 旧物品处置：先放背包，放不下 → 存回存储（新槽），不丢
+    const old = r.old as ItemStack | undefined;
+    if (!old) return { ok: true, message: `已覆写 #${slotId}（原位置为空物品，新物品已写入）` };
+    const leftover = container.addItem(old);
+    if (!leftover) {
+      return { ok: true, message: `已覆写 #${slotId}：${old.typeId} ×${old.amount} 已放入背包` };
+    }
+    const back = this.region!.put(leftover);
+    return {
+      ok: true,
+      message: `已覆写 #${slotId}（${item.typeId} 替换 ${old.typeId}）；背包空间不足，旧物品已存回存储${
         back ? `（新槽位 #${back.slotId}）` : "（放回失败，请尽快手动处理！）"
       }`,
     };

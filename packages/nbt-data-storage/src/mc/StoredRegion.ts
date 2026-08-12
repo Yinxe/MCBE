@@ -11,6 +11,7 @@ import { createRegionMeta, type RegionMeta } from "../core/meta";
 import { putItem, releaseSlot, type PutPort } from "../core/put";
 import { createRegionRecord, type PersistedRegion } from "../core/record";
 import { checkAndRepair, type RepairPort, type RepairReport } from "../core/repair";
+import { overwriteSlot, type OverwritePort, type OverwriteResult } from "../core/overwrite";
 import { rebuildPools, resizeLayout, type ResizePatch, type ResizePort } from "../core/region";
 import { regionStats, type RegionStats } from "../core/stats";
 import { transferIn, transferOut, type TransferPort, type TransferResult } from "../core/transfer";
@@ -128,6 +129,39 @@ export class StoredRegion {
     releaseSlot(this.putPort, slotId, this.dimensionId, this.layout);
     ItemStorageEvents.removed.trigger({ regionId: this.regionId, slotId });
     return true;
+  }
+
+  /**
+   * 原位覆写（安全）：在**已有格子**上覆盖写入（slotId 不变），旧物品读出返回（不丢）。
+   * 护栏：仅位置有实物才允许（空槽请用 put；非木桶/未加载请先巡检）。
+   * 成功后触发 `ItemStorage.events.overwritten`。
+   */
+  overwrite(slotId: number, item: ItemStack | undefined): OverwriteResult {
+    const port: OverwritePort = {
+      probeSlot: (id) => {
+        const pos = slotIdToPosition(id, this.layout);
+        if (!pos) return "unknown";
+        return this.runtime.probeStatus(pos);
+      },
+      readItem: (id) => {
+        const pos = slotIdToPosition(id, this.layout);
+        return pos ? this.runtime.readItem(pos) : undefined;
+      },
+      writeItem: (id, it) => {
+        const pos = slotIdToPosition(id, this.layout);
+        return pos ? this.runtime.writeItem(pos, it as ItemStack) : false;
+      },
+    };
+    const result = overwriteSlot(port, slotId, item, this.layout);
+    if (result.ok && item) {
+      ItemStorageEvents.overwritten.trigger({
+        regionId: this.regionId,
+        slotId,
+        oldTypeId: (result.old as ItemStack | undefined)?.typeId,
+        newTypeId: item.typeId,
+      });
+    }
+    return result;
   }
 
   /**
