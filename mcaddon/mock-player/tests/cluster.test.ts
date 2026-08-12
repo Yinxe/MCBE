@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { computeClusterProbabilities, sortByClusterProbability } from "../scripts/core/coords/Cluster";
+import { computeClusterProbabilities, sortByClusterProbability, groupPointsByProximity } from "../scripts/core/coords/Cluster";
 
 test("单点：概率为 0", () => {
   assert.deepEqual(computeClusterProbabilities([{ x: 0, y: 0, z: 0 }], 10), [0]);
@@ -144,4 +144,49 @@ test("边界：概率为 0 的孤立点排在扎堆点之后", () => {
   assert.equal(sorted[1]!.index, 2);
   assert.equal(sorted[2]!.index, 0);
   assert.equal(sorted[2]!.probability, 0);
+});
+
+// ─── 聚集分组（groupPointsByProximity） ────────────────
+
+const P = (x: number, y = 0, z = 0) => ({ pos: { x, y, z } });
+
+test("分组：半径 3 内同组（边界距离 3 含入）", () => {
+  const groups = groupPointsByProximity([P(0), P(3), P(10)], 3);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0]!.length, 2); // 0 与 3 同组
+  assert.equal(groups[1]!.length, 1); // 10 孤立
+});
+
+test("分组：链式连通（A-B 邻、B-C 邻 → 同一组）", () => {
+  // A(0) B(3) C(6)：A-B=3 邻，B-C=3 邻，A-C=6 不邻但链式连通
+  const groups = groupPointsByProximity([P(0), P(3), P(6)], 3);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0]!.length, 3);
+});
+
+test("分组：距离 3 之外不同组", () => {
+  const groups = groupPointsByProximity([P(0), P(4)], 3);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0]!.length, 1);
+  assert.equal(groups[1]!.length, 1);
+});
+
+test("分组：组内保持原顺序，组序按首点出现次序", () => {
+  const groups = groupPointsByProximity([P(50), P(0), P(2), P(60)], 3);
+  // 组1: [50]（首点 index0）；组2: [0,2]（首点 index1）；组3: [60]
+  assert.equal(groups.length, 3);
+  assert.deepEqual(groups[0]!.map((g) => g.pos.x), [50]);
+  assert.deepEqual(groups[1]!.map((g) => g.pos.x), [0, 2]);
+  assert.deepEqual(groups[2]!.map((g) => g.pos.x), [60]);
+});
+
+test("分组：空数组返回空", () => {
+  assert.deepEqual(groupPointsByProximity([], 3), []);
+});
+
+test("分组：负数半径等价 0（仅完全同坐标同组）", () => {
+  const groups = groupPointsByProximity([P(1), P(1), P(2)], -1);
+  assert.equal(groups.length, 2);
+  assert.equal(groups[0]!.length, 2); // 同坐标
+  assert.equal(groups[1]!.length, 1);
 });

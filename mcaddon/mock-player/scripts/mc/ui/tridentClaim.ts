@@ -1,6 +1,7 @@
 // ─── 投掷物认主 UI ────────────────────────────────────
 // 扫描假人 100 半径内自家投掷物（三叉戟/箭，主人或同主假人投掷的），
-// 按聚集概率分档分组展示，批量勾选后认主为第二任。
+// 按聚集分组展示（半径 3 格链式聚集）：A01/A02...=三叉戟组、B01/B02...=箭组，
+// 组按组内数量降序排列；批量勾选后认主为第二任。
 // 附魔组件缺失的投掷物在 feature 层已跳过。
 //
 // ⚠️ ModalForm 背景为深色：文字只用亮色系（白/青/绿/黄），
@@ -11,9 +12,10 @@ import { color } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { botRegistry } from "../bootstrap/context";
-import { scanOwnTridents, claimTridents, type ClaimableTrident } from "../features/tridentClaim";
+import { scanOwnTridents, claimTridents, type ClaimableTrident, type ClaimGroup } from "../features/tridentClaim";
+import { projectileTypeLabel } from "../../core/items/TridentClaimRules";
 
-/** 聚集概率分档阈值（与 feature 层扫描一致） */
+/** 聚集概率分档阈值（组内邻居密度归一化） */
 const TIER_HIGH = 0.6;
 const TIER_MID = 0.3;
 
@@ -46,11 +48,16 @@ function entryLabel(botName: string, e: ClaimableTrident): string {
   return `${icon} ${color.accent}${e.label}${itemPart} ${color.info}${pos} ${probColor}${pct}%${status}`;
 }
 
+/** 组标题：A01 · 三叉戟 × 3（亮色系） */
+function groupLabel(g: ClaimGroup): string {
+  return `${color.accent}${g.id} ${color.muted}${projectileTypeLabel(g.typeId)} × ${color.info}${g.entries.length}`;
+}
+
 // ─── 表单 ─────────────────────────────────────────────
 
 /**
  * 展示投掷物认主表单。
- * 批量 toggle 勾选 → 认主（假人成为第二任，覆盖旧第二任）。
+ * 按聚集分组展示（组按数量降序），批量 toggle 勾选 → 认主（假人成为第二任，覆盖旧第二任）。
  */
 export function showTridentClaimUI(player: Player, botName: string): void {
   const record = botRegistry.get(botName);
@@ -67,12 +74,13 @@ export function showTridentClaimUI(player: Player, botName: string): void {
     return;
   }
 
-  const entries = scanOwnTridents(botName);
-  if (entries === undefined) {
+  const groups = scanOwnTridents(botName);
+  if (groups === undefined) {
     player.sendMessage(`${color.error}无法获取假人实体`);
     return;
   }
-  if (entries.length === 0) {
+  const total = groups.reduce((sum, g) => sum + g.entries.length, 0);
+  if (total === 0) {
     player.sendMessage(`${color.warn}${color.playerName}${botName}${color.warn} 100 范围内没有可认主的自家投掷物（主人/同主假人投掷的三叉戟或箭）`);
     return;
   }
@@ -81,19 +89,12 @@ export function showTridentClaimUI(player: Player, botName: string): void {
     .title(`投掷物认主 · ${botName}`)
     .label(
       "summary",
-      `${color.info}主人 ${color.playerName}${record.ownerName}${color.info} · 共 ${color.accent}${entries.length}${color.info} 个 · 勾选后认主为第二任（可覆盖）`
+      `${color.info}主人 ${color.playerName}${record.ownerName}${color.info} · 共 ${color.accent}${total}${color.info} 个 · ${color.info}${groups.length}${color.info} 个聚集组 · 勾选后认主为第二任（可覆盖）`
     );
 
-  // 按聚集概率分档分组（保持降序内序；分组标题用小字 label，不用大号 header）
-  const groups: { label: string; entries: ClaimableTrident[] }[] = [
-    { label: `${color.success}★ 高聚集（≥60%）`, entries: entries.filter((e) => e.probability >= TIER_HIGH) },
-    { label: `${color.warn}☆ 中等（30%–59%）`, entries: entries.filter((e) => e.probability >= TIER_MID && e.probability < TIER_HIGH) },
-    { label: `${color.info}· 分散（<30%）`, entries: entries.filter((e) => e.probability < TIER_MID) },
-  ];
-
+  // 聚集分组展示：组标题（A01/B01...，组按数量降序）+ 组内 toggle
   for (const g of groups) {
-    if (g.entries.length === 0) continue;
-    builder.label(`h-${g.label}`, `${g.label} · ${color.info}${g.entries.length}${color.info} 个`);
+    builder.label(`h-${g.id}`, groupLabel(g));
     for (const entry of g.entries) {
       builder.toggle(`t${entry.entityId}`, entryLabel(botName, entry), {
         defaultValue: false,
@@ -106,9 +107,12 @@ export function showTridentClaimUI(player: Player, botName: string): void {
 
   builder.show(player).then((vals) => {
     if (!vals) return;
-    const selected = entries
-      .filter((e) => vals[`t${e.entityId}`] === true)
-      .map((e) => e.entityId);
+    const selected: string[] = [];
+    for (const g of groups) {
+      for (const e of g.entries) {
+        if (vals[`t${e.entityId}`] === true) selected.push(e.entityId);
+      }
+    }
     if (selected.length === 0) {
       player.sendMessage(`${color.warn}未选择任何投掷物`);
       return;

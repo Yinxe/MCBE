@@ -15,15 +15,21 @@ import {
   makeSecondOwnerTag, parseClaimTags, parseItemTag, isOwnedByFamily,
   OWNER2_TAG_PREFIX, TRACKED_PROJECTILE_IDS, isTrackedProjectile, projectileTypeLabel,
 } from "../../core/items/TridentClaimRules";
-import { sortByClusterProbability } from "../../core/coords/Cluster";
+import { computeClusterProbabilities, groupPointsByProximity } from "../../core/coords/Cluster";
 import { enchantDisplayName } from "../../core/format/EnchantZh";
 import { levelToRoman } from "../../core/format/Format";
 import type { Vec3 } from "../../core/model/Types";
 
 /** 认主扫描半径（方块） */
 export const CLAIM_SCAN_RADIUS = 100;
-/** 聚集概率的邻居判定半径（方块）：投掷物集中落地 1~2 格内才算"聚集"（2 格为边界） */
-const CLUSTER_RADIUS = 2;
+/** 聚集分组半径（方块）：距离 ≤ 3 格（链式连通）的投掷物聚为一组 */
+const CLUSTER_RADIUS = 3;
+
+/** 聚集分组前缀：A 类 = 三叉戟，B 类 = 箭 */
+const GROUP_PREFIX: Record<string, string> = {
+  "minecraft:thrown_trident": "A",
+  "minecraft:arrow": "B",
+};
 
 /** 可认主的投掷物条目（UI 展示用） */
 export interface ClaimableTrident {
@@ -34,19 +40,31 @@ export interface ClaimableTrident {
   label: string;
   /** 附魔/耐久文本（无附魔时显示"无附魔"） */
   itemLabel: string;
-  /** 聚集概率 0-1 */
+  /** 组内聚集概率 0-1（组内邻居密度归一化） */
   probability: number;
   /** 当前第二任主人（认主时会覆盖；等于目标假人 = 已认主） */
   currentSecondOwner?: string;
 }
 
+/** 聚集分组（认主 UI 展示用）：同类型投掷物按半径 3 链式聚集为一组 */
+export interface ClaimGroup {
+  /** 组名：A01/A02...（A=三叉戟）B01/B02...（B=箭），按组内数量降序编号 */
+  id: string;
+  /** 投掷物类型 id */
+  typeId: string;
+  /** 组内条目（按组内聚集概率降序） */
+  entries: ClaimableTrident[];
+}
+
 /**
- * 扫描假人 100 半径内自家投掷物（三叉戟/箭，当前维度）。
+ * 扫描假人 100 半径内自家投掷物（三叉戟/箭，当前维度）并按聚集分组。
  * - 自家 = 第一/第二任 ∈ 家族集合（主人名 + 主人名下全部假人名）
+ * - 聚集分组：同类型投掷物按半径 3 格链式连通聚类；组按组内数量降序编号
+ *   （A01/A02...=三叉戟组、B01/B02...=箭组）；组内条目按聚集概率降序
  * - 读不到物品组件（附魔/耐久）的投掷物直接跳过
  * @returns undefined = 假人不可用；[] = 无自家投掷物
  */
-export function scanOwnTridents(botName: string): ClaimableTrident[] | undefined {
+export function scanOwnTridents(botName: string): ClaimGroup[] | undefined {
   const bot = resolveBotPlayer(botName);
   const record = botRegistry.get(botName);
   if (!bot || !record) return undefined;
@@ -89,20 +107,42 @@ export function scanOwnTridents(botName: string): ClaimableTrident[] | undefined
   }
   if (entries.length === 0) return [];
 
-  // 聚集概率（扎堆 → 概率大）→ 降序
-  const sorted = sortByClusterProbability(entries.map((e) => e.pos), CLUSTER_RADIUS);
-  return sorted.map((s) => {
-    const entry = entries[s.index]!;
-    return {
+  // 按类型分组 → 各自按半径 3 链式聚集 → 组按数量降序编号（A 类三叉戟 / B 类箭）
+  const groups: ClaimGroup[] = [];
+  for (const typeId of TRACKED_PROJECTILE_IDS) {
+    const ofType = entries.filter((e) => e.entity.typeId === typeId);
+    if (ofType.length === 0) continue;
+    const rawGroups = groupPointsByProximity(ofType, CLUSTER_RADIUS)
+      .sort((a, b) => b.length - a.length); // 组内数量降序（稳定排序）
+    rawGroups.forEach((g, idx) => {
+      groups.push({
+        id: `${GROUP_PREFIX[typeId] ?? "C"}${String(idx + 1).padStart(2, "0")}`,
+        typeId,
+        entries: buildGroupEntries(g),
+      });
+    });
+  }
+  return groups;
+}
+
+/** 组装组内条目：组内聚集概率（邻居密度归一化）→ 降序 */
+function buildGroupEntries(group: { entity: Entity; pos: Vec3; secondOwner?: string }[]): ClaimableTrident[] {
+  const probs = computeClusterProbabilities(group.map((e) => e.pos), CLUSTER_RADIUS);
+  return group
+    .map((entry, i) => ({
+      entry,
+      probability: probs[i] ?? 0,
+    }))
+    .sort((a, b) => b.probability - a.probability)
+    .map(({ entry, probability }) => ({
       entityId: entry.entity.id,
       typeId: entry.entity.typeId,
-      pos: s.pos,
+      pos: entry.pos,
       label: readProjectileLabel(entry.entity),
       itemLabel: readItemLabel(entry.entity),
-      probability: s.probability,
+      probability,
       currentSecondOwner: entry.secondOwner,
-    };
-  });
+    }));
 }
 
 /**
@@ -196,7 +236,8 @@ export function claimTridents(botName: string, entityIds: string[], operatorName
       // 认主汇报（集中聚合；操作者已有 UI 直接消息，排除防重复）：
       // - 认主假人的主人：认领明细
       // - 旧第二任假人的主人：名下假人被顶替（victim）
-      // - 第一任是玩家（被假人认走）：玩家视角"被认领"
+      // - 第一任是玩家且不是认主假人的主人（被假人认走）：玩家视角"被认领"
+      // ⚠️ firstOwner === botOwner（主人自己投掷的）时只发主人一路，避免重复计数
       if (botOwner && botOwner !== operatorName) {
         queueClaimReport({ to: botOwner, bot: botName, kind: "claimed", typeId: t.typeId });
       }
@@ -204,7 +245,7 @@ export function claimTridents(botName: string, entityIds: string[], operatorName
       if (prevRecord?.ownerName && prevRecord.ownerName !== operatorName) {
         queueClaimReport({ to: prevRecord.ownerName, bot: botName, kind: "covered", typeId: t.typeId, victim: previousSecond });
       }
-      if (firstOwner && !botRegistry.get(firstOwner) && firstOwner !== operatorName) {
+      if (firstOwner && !botRegistry.get(firstOwner) && firstOwner !== operatorName && firstOwner !== botOwner) {
         queueClaimReport({ to: firstOwner, bot: botName, kind: "covered", typeId: t.typeId });
       }
     } catch {

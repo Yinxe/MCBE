@@ -290,9 +290,12 @@ export function rebindBotTridents(botName: string): void {
           if (proj) {
             proj.owner = newOwner;
             BotEvents.tridentClaimed.trigger({ tridentId: t.id, claimedBy: botName, via: "rebind", firstOwner: f, secondOwner: s });
-            // 认主汇报（集中聚合）：假人主人"认领"；第一任是玩家则玩家"被认走"
+            // 认主汇报（集中聚合）：假人主人"认领"；第一任是玩家且不是假人主人 → 玩家"被认走"
+            // ⚠️ firstOwner === ownerName（主人自己投掷的）时只发主人一路，避免同一玩家重复计数
             queueClaimReport({ to: record.ownerName ?? "", bot: botName, kind: "claimed", typeId: t.typeId });
-            if (f && !botRegistry.get(f)) queueClaimReport({ to: f, bot: botName, kind: "covered", typeId: t.typeId });
+            if (f && !botRegistry.get(f) && f !== record.ownerName) {
+              queueClaimReport({ to: f, bot: botName, kind: "covered", typeId: t.typeId });
+            }
           }
         } catch (e) {
           console.info(`[MockPlayer] 重绑定 ${t.id} 失败: ${e}`);
@@ -343,9 +346,10 @@ export function releaseBotTridents(botName: string): void {
             total++;
             console.info(`[MockPlayer] 下线回退 ${botName} → 投掷物 ${t.id} 认主第一任=${firstOwner}`);
             BotEvents.tridentClaimed.trigger({ tridentId: t.id, claimedBy: firstOwner, via: "offline-fallback", firstOwner, secondOwner });
-            // 认主汇报（集中聚合）：假人主人"降级回退"；第一任是玩家则"重新获得（→ 你）"
+            // 认主汇报（集中聚合）：假人主人"降级回退"；第一任是玩家且不是假人主人 → "重新获得（→ 你）"
+            // ⚠️ firstOwner === ownerName 时只发主人一路，避免同一玩家重复计数（回退通知翻倍）
             queueClaimReport({ to: ownerName, bot: botName, kind: "returned", typeId: t.typeId, target: firstOwner });
-            if (!botRegistry.get(firstOwner)) {
+            if (!botRegistry.get(firstOwner) && firstOwner !== ownerName) {
               queueClaimReport({ to: firstOwner, bot: botName, kind: "returned", typeId: t.typeId, target: firstOwner });
             }
           }
