@@ -12,6 +12,8 @@
 export const OWNER_TAG_PREFIX = "mp:owner:";
 /** 第二任主人 tag 前缀 */
 export const OWNER2_TAG_PREFIX = "mp:owner2:";
+/** 投掷物物品信息 tag 前缀（附魔/耐久编码，投掷时打上，认主 UI 解码展示） */
+export const ITEM_TAG_PREFIX = "mp:item:";
 
 /** 受认主机制覆盖的投掷物实体 typeId（arrow 含药水箭，API 无法细分） */
 export const TRACKED_PROJECTILE_IDS = ["minecraft:thrown_trident", "minecraft:arrow"] as const;
@@ -29,6 +31,46 @@ export function makeOwnerTag(name: string): string {
 /** 构建第二任主人 tag */
 export function makeSecondOwnerTag(name: string): string {
   return `${OWNER2_TAG_PREFIX}${name}`;
+}
+
+/**
+ * 构建投掷物物品信息 tag：`mp:item:<附魔id:等级,附魔id:等级|耐久cur/max>`
+ * 投掷时从投掷者主手 ItemStack 提取编码（投射物实体无可读物品组件）。
+ * 段说明：附魔段（可空）与耐久段（可空）以 | 分隔。
+ */
+export function makeItemTag(
+  enchantments: readonly { id: string; level: number }[],
+  durability?: { current: number; max: number }
+): string {
+  const enchPart = enchantments.map((e) => `${e.id}:${e.level}`).join(",");
+  const durPart = durability ? `${durability.current}/${durability.max}` : "";
+  return `${ITEM_TAG_PREFIX}${enchPart}|${durPart}`;
+}
+
+/** 解码投掷物物品信息 tag；非 mp:item: 前缀返回 undefined */
+export function parseItemTag(tag: string): { enchantments: { id: string; level: number }[]; durability?: { current: number; max: number } } | undefined {
+  if (!tag.startsWith(ITEM_TAG_PREFIX)) return undefined;
+  const body = tag.slice(ITEM_TAG_PREFIX.length);
+  const [enchPart = "", durPart = ""] = body.split("|");
+
+  const enchantments: { id: string; level: number }[] = [];
+  if (enchPart) {
+    for (const seg of enchPart.split(",")) {
+      const [id = "", levelStr = ""] = seg.split(":");
+      const level = parseInt(levelStr, 10);
+      if (id && !isNaN(level) && level > 0) enchantments.push({ id, level });
+    }
+  }
+
+  let durability: { current: number; max: number } | undefined;
+  if (durPart) {
+    const [curStr = "", maxStr = ""] = durPart.split("/");
+    const current = parseInt(curStr, 10);
+    const max = parseInt(maxStr, 10);
+    if (!isNaN(current) && !isNaN(max) && max > 0) durability = { current, max };
+  }
+
+  return { enchantments, durability };
 }
 
 /** 解析实体 tags 中的双任主人（不含旧格式；空名 tag 忽略） */

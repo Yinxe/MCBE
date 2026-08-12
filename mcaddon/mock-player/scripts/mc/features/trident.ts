@@ -9,6 +9,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { pauseFollow, resumeFollow, isFollowing } from "./follow";
+import { registerPendingTridentItem } from "./tridentTracker";
 import { TRIDENT_ID, isTrident, scanTridentSlots } from "../../core/items/TridentRules";
 
 // ─── 投掷互斥 ──────────────────────────────────────────
@@ -154,6 +155,9 @@ function doThrowLoop(
       throwNext();
       return;
     }
+
+    // 投掷前注册物品信息（entitySpawn 消费 → 打 mp:item: tag 供认主 UI 展示附魔）
+    registerPendingTridentItem(botName, tridentItem);
 
     // 换到主手
     if (tridentSlot !== mainhandSlot) {

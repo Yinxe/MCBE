@@ -11,28 +11,90 @@
 // tag 设计（core/items/TridentClaimRules）：
 //   mp:owner:<name>  第一任主人（玩家或假人）
 //   mp:owner2:<name> 第二任主人（仅假人，可被后续假人覆盖复写）
+//   mp:item:<...>    附魔/耐久编码（投掷时打上，认主 UI 解码展示）
+//
+// ⚠️ thrown_trident 投射物实体没有可读物品的组件（minecraft:item 仅掉落物实体），
+//    附魔信息只能在投掷流程获取：优先投掷流程注册的 pending 队列，其次投掷者主手。
 
 import { world, EntityProjectileComponent } from "@minecraft/server";
-import type { Entity } from "@minecraft/server";
+import type { Entity, ItemStack } from "@minecraft/server";
 import { botRegistry } from "../bootstrap/context";
-import {
-  isTrackedProjectile,
-  makeOwnerTag,
-  makeSecondOwnerTag,
-  parseClaimTags,
-  resolveClaimOwner,
-} from "../../core/items/TridentClaimRules";
+import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner } from "../../core/items/TridentClaimRules";
 
 const THROWN_TRIDENT = "minecraft:thrown_trident";
+
+// ─── pending 附魔信息队列 ──────────────────────────────
+// 投掷流程（features/trident.ts doThrowLoop）在 useItemInSlot 前注册物品信息，
+// entitySpawn 回调消费（FIFO，投掷为逐把串行）。玩家手动投掷走主手读取兜底。
+
+const pendingItemTags = new Map<string, { tag: string }[]>();
+
+// ─── 反查表（entityId → botName） ──────────────────────
+// 实体 ID → 假人名映射：实体重建/改名后仍可追踪假人归属；
+// entitySpawn 认主时优先反查（投掷者实体无 name 属性时兜底），并输出认主日志。
+
+const entityOwnerMap = new Map<string, string>();
+
+/** 投掷流程注册：投掷前把三叉戟物品信息编码入队（ownerName → 队列） */
+export function registerPendingTridentItem(botName: string, item: ItemStack): void {
+  const tag = encodeItemTag(item);
+  if (!tag) return;
+  const list = pendingItemTags.get(botName) ?? [];
+  list.push({ tag });
+  pendingItemTags.set(botName, list);
+}
+
+function consumePendingItem(ownerName: string): { tag: string } | undefined {
+  const list = pendingItemTags.get(ownerName);
+  if (!list || list.length === 0) return undefined;
+  const item = list.shift()!;
+  if (list.length === 0) pendingItemTags.delete(ownerName);
+  return item;
+}
+
+/** ItemStack → mp:item: tag（附魔/耐久编码；非三叉戟或无附魔也编码耐久） */
+function encodeItemTag(item: ItemStack): string | undefined {
+  try {
+    const enchantments: { id: string; level: number }[] = [];
+    if (item.hasComponent("minecraft:enchantable")) {
+      const ench = item.getComponent("minecraft:enchantable") as { getEnchantments: () => { type: { id: string }; level: number }[] } | undefined;
+      for (const e of ench?.getEnchantments() ?? []) {
+        enchantments.push({ id: e.type.id, level: e.level });
+      }
+    }
+    let durability: { current: number; max: number } | undefined;
+    const dur = item.getComponent("minecraft:durability") as { damage?: number; maxDurability?: number } | undefined;
+    if (dur && dur.maxDurability) {
+      durability = { current: Math.max(0, dur.maxDurability - (dur.damage ?? 0)), max: dur.maxDurability };
+    }
+    return makeItemTag(enchantments, durability);
+  } catch {
+    return undefined;
+  }
+}
+
+/** 兜底：从投掷者主手读取三叉戟物品（引擎可能尚未消耗主手物品） */
+function readMainhandItem(owner: Entity): { tag: string } | undefined {
+  try {
+    const inv = owner.getComponent("minecraft:inventory") as { container?: { getItem: (slot: number) => ItemStack | undefined } } | undefined;
+    const handSlot = (owner as { selectedSlotIndex?: number }).selectedSlotIndex ?? 0;
+    const item = inv?.container?.getItem(handSlot);
+    if (!item || item.typeId !== "minecraft:trident") return undefined;
+    const tag = encodeItemTag(item);
+    return tag ? { tag } : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // ─── 初始化 ─────────────────────────────────────────────
 
 /**
- * 订阅 entitySpawn + entityLoad，给投掷物打第一任 tag / fallback 认主。
+ * 订阅 entitySpawn + entityLoad，给投掷物打第一任 tag / 附魔信息 / fallback 认主。
  * 在 worldLoad 后调用一次。
  */
 export function initTridentTracker(): void {
-  // ── 投掷即标记：第一任主人 = 实际投掷者（玩家或假人） ──
+  // ── 投掷即标记：第一任主人 = 实际投掷者（玩家或假人）+ 附魔信息 ──
   world.afterEvents.entitySpawn.subscribe((event) => {
     const entity = event.entity;
     if (!isTrackedProjectile(entity.typeId)) return;
@@ -41,12 +103,27 @@ export function initTridentTracker(): void {
       if (parseClaimTags(entity.getTags()).firstOwner) return;
 
       const proj = entity.getComponent("minecraft:projectile") as EntityProjectileComponent | undefined;
-      // 投掷者恒为玩家/假人（Player 子类），取 name 作为第一任主人
-      const ownerName = proj?.owner ? (proj.owner as { name?: string }).name : undefined;
+      const owner = proj?.owner;
+      if (!owner) return;
+
+      // 认主来源：反查表优先（假人实体 ID → 假人名，实体无 name 时兜底），
+      // 其次投掷者实体的 name（玩家/假人皆可）
+      const mappedName = entityOwnerMap.get(owner.id);
+      const ownerName = mappedName ?? (owner as { name?: string }).name;
       if (!ownerName) return;
 
       entity.addTag(makeOwnerTag(ownerName));
-      console.info(`[MockPlayer] 投掷物 ${entity.typeId} ${entity.id} 第一任=${ownerName}`);
+      console.info(
+        `[MockPlayer] 投掷物 ${entity.typeId} ${entity.id} 认主日志：第一任=${ownerName}` +
+        (mappedName ? `（反查表 ${owner.id}）` : "")
+      );
+
+      // 附魔/耐久编码：优先投掷流程 pending 队列，其次投掷者主手
+      const itemInfo = consumePendingItem(ownerName) ?? readMainhandItem(owner);
+      if (itemInfo) {
+        entity.addTag(itemInfo.tag);
+        console.info(`[MockPlayer] 投掷物 ${entity.id} 附魔信息已标记`);
+      }
     } catch (e) {
       console.info(`[MockPlayer] entitySpawn 认主异常: ${e}`);
     }
@@ -71,7 +148,12 @@ export function initTridentTracker(): void {
       const proj = entity.getComponent("minecraft:projectile") as EntityProjectileComponent;
       if (proj) {
         proj.owner = targetEntity;
-        console.info(`[MockPlayer] entityLoad 认主 ${entity.typeId} ${entity.id} → ${target}`);
+        // 认主日志：注明优先级（第二任在线 > 第一任离线回退）
+        const via = secondOwner && secondOwner === target ? "第二任" : "第一任";
+        console.info(
+          `[MockPlayer] entityLoad 认主 ${entity.typeId} ${entity.id} → ${target}（${via}${secondOwner && secondOwner !== target ? "离线回退" : ""}）` +
+          `｜主人列表：第一任=${firstOwner ?? "无"} 第二任=${secondOwner ?? "无"}`
+        );
       }
     } catch (e) {
       console.info(`[MockPlayer] entityLoad 认主异常: ${e}`);
@@ -110,16 +192,18 @@ function resolveOwnerEntity(name: string): Entity | undefined {
   }
 }
 
-// ─── 上线/下线跟踪（兼容旧调用方） ─────────────────────
-// 投掷物认主直接用投射物 owner.name，不再需要实体反查表；
-// 保留函数签名供 onlineBot/playerJoin/offlineBot 等调用（仅记录日志）。
+// ─── 上线/下线跟踪（维护反查表） ───────────────────────
+// 反查表（entityId → botName）供 entitySpawn 认主时解析假人投掷者；
+// 由 onlineBot/playerJoin/playerSpawn（在线）与 offlineBot/entityDie/deleteBot（离线）维护。
 
-export function trackBotOnline(_entityId: string, botName: string): void {
-  console.info(`[MockPlayer] 跟踪假人在线 ${botName}`);
+export function trackBotOnline(entityId: string, botName: string): void {
+  entityOwnerMap.set(entityId, botName);
+  console.info(`[MockPlayer] 反查表 += ${botName}（${entityId}）共 ${entityOwnerMap.size} 条`);
 }
 
-export function trackBotOffline(_entityId: string): void {
-  // no-op
+export function trackBotOffline(entityId: string): void {
+  entityOwnerMap.delete(entityId);
+  console.info(`[MockPlayer] 反查表 -= ${entityId} 剩余 ${entityOwnerMap.size} 条`);
 }
 
 // ─── 上线夺回 ─────────────────────────────────────────

@@ -4,9 +4,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  OWNER_TAG_PREFIX, OWNER2_TAG_PREFIX, TRACKED_PROJECTILE_IDS,
+  OWNER_TAG_PREFIX, OWNER2_TAG_PREFIX, ITEM_TAG_PREFIX, TRACKED_PROJECTILE_IDS,
   isTrackedProjectile, makeOwnerTag, makeSecondOwnerTag,
   parseClaimTags, resolveClaimOwner, isOwnedByFamily,
+  makeItemTag, parseItemTag,
 } from "../scripts/core/items/TridentClaimRules";
 
 test("tag 常量：前缀格式", () => {
@@ -114,4 +115,44 @@ test("isOwnedByFamily：双任都不在家族返回 false", () => {
 
 test("isOwnedByFamily：空家族恒 false", () => {
   assert.equal(isOwnedByFamily("Steve", undefined, new Set()), false);
+});
+
+// ─── 物品信息 tag 编码/解码（附魔/耐久） ───────────────
+
+test("makeItemTag：附魔 + 耐久编码", () => {
+  const tag = makeItemTag(
+    [{ id: "sharpness", level: 5 }, { id: "loyalty", level: 3 }],
+    { current: 120, max: 250 }
+  );
+  assert.equal(tag, "mp:item:sharpness:5,loyalty:3|120/250");
+});
+
+test("makeItemTag：无附魔仅耐久 / 无耐久仅附魔", () => {
+  assert.equal(makeItemTag([], { current: 250, max: 250 }), "mp:item:|250/250");
+  assert.equal(makeItemTag([{ id: "mending", level: 1 }], undefined), "mp:item:mending:1|");
+});
+
+test("parseItemTag：完整往返", () => {
+  const tag = makeItemTag([{ id: "sharpness", level: 5 }], { current: 120, max: 250 });
+  const parsed = parseItemTag(tag);
+  assert.deepEqual(parsed, { enchantments: [{ id: "sharpness", level: 5 }], durability: { current: 120, max: 250 } });
+});
+
+test("parseItemTag：非 mp:item: 前缀返回 undefined", () => {
+  assert.equal(parseItemTag("mp:owner:Steve"), undefined);
+  assert.equal(parseItemTag("随便什么"), undefined);
+});
+
+test("parseItemTag：空段容忍（无附魔/无耐久）", () => {
+  assert.deepEqual(parseItemTag("mp:item:|250/250"), { enchantments: [], durability: { current: 250, max: 250 } });
+  assert.deepEqual(parseItemTag("mp:item:mending:1|"), { enchantments: [{ id: "mending", level: 1 }], durability: undefined });
+});
+
+test("parseItemTag：坏格式容忍（非法等级/耐久丢弃）", () => {
+  const parsed = parseItemTag("mp:item:sharpness:abc,loyalty:3|120/xyz");
+  assert.deepEqual(parsed, { enchantments: [{ id: "loyalty", level: 3 }], durability: undefined });
+});
+
+test("parseItemTag：空 body 返回空附魔", () => {
+  assert.deepEqual(parseItemTag("mp:item:|"), { enchantments: [], durability: undefined });
 });

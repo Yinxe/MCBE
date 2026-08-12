@@ -10,9 +10,11 @@ import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { formatEnchantments, formatDurability } from "../format";
 import {
-  makeSecondOwnerTag, parseClaimTags, isOwnedByFamily, OWNER2_TAG_PREFIX,
+  makeSecondOwnerTag, parseClaimTags, parseItemTag, isOwnedByFamily, OWNER2_TAG_PREFIX,
 } from "../../core/items/TridentClaimRules";
 import { sortByClusterProbability } from "../../core/coords/Cluster";
+import { enchantDisplayName } from "../../core/format/EnchantZh";
+import { levelToRoman } from "../../core/format/Format";
 import type { Vec3 } from "../../core/model/Types";
 
 const THROWN_TRIDENT = "minecraft:thrown_trident";
@@ -82,26 +84,48 @@ export function scanOwnTridents(botName: string): ClaimableTrident[] | undefined
   const sorted = sortByClusterProbability(entries.map((e) => e.pos), CLUSTER_RADIUS);
   return sorted.map((s) => {
     const entry = entries[s.index]!;
-    // 尽力读取物品组件展示附魔/耐久；投射物实体常无该组件（实测），缺失则省略附魔段
-    let itemLabel = "";
-    try {
-      const itemComp = entry.entity.getComponent("minecraft:item") as { itemStack?: { typeId: string } } | undefined;
-      if (itemComp?.itemStack) {
-        itemLabel = [
-          formatEnchantments(itemComp.itemStack as never),
-          formatDurability(itemComp.itemStack as never),
-        ].filter(Boolean).join(" ");
-      }
-    } catch {
-      // 组件读取失败 → 附魔段省略
-    }
     return {
       entityId: entry.entity.id,
       pos: s.pos,
-      itemLabel,
+      itemLabel: readItemLabel(entry.entity),
       probability: s.probability,
     };
   });
+}
+
+/**
+ * 读取三叉戟的附魔/耐久展示文本。
+ * 数据源优先级：投掷时编码的 mp:item: tag（可靠）→ minecraft:item 组件（仅掉落物实体有）→ 空（省略）。
+ */
+function readItemLabel(entity: Entity): string {
+  // 1) mp:item: tag（投掷流程编码，thrown_trident 可靠数据源）
+  for (const tag of entity.getTags()) {
+    const info = parseItemTag(tag);
+    if (info) {
+      const parts: string[] = [];
+      if (info.enchantments.length > 0) {
+        parts.push(info.enchantments.map((e) => `${enchantDisplayName(e.id)}${levelToRoman(e.level)}`).join(" "));
+      }
+      if (info.durability) {
+        parts.push(`(${info.durability.current}/${info.durability.max})`);
+      }
+      return parts.join(" ");
+    }
+  }
+
+  // 2) minecraft:item 组件（兜底：仅当实体带物品组件时可用）
+  try {
+    const itemComp = entity.getComponent("minecraft:item") as { itemStack?: { typeId: string } } | undefined;
+    if (itemComp?.itemStack) {
+      return [
+        formatEnchantments(itemComp.itemStack as never),
+        formatDurability(itemComp.itemStack as never),
+      ].filter(Boolean).join(" ");
+    }
+  } catch {
+    // 组件读取失败 → 省略附魔段
+  }
+  return "";
 }
 
 /**
