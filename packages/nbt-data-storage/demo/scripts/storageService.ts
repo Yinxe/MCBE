@@ -94,6 +94,15 @@ export class StorageService {
     ItemStorage.events.taken.subscribe((e) => {
       this.removeRef(e.regionId, e.slotId);
     });
+    // 巡检确认丢失（桶损坏/外部取走）：槽位已释放回洞池，凭据立即失效——
+    // 否则 UI 列表残留"无法取出且已损坏"的物品记录（用户点取出永远报"没有物品"）
+    ItemStorage.events.itemLost.subscribe((e) => {
+      this.removeRef(e.regionId, e.slotId);
+    });
+    // 任何渠道移除（remove/transferOut）：索引与区域真值保持一致
+    ItemStorage.events.removed.subscribe((e) => {
+      this.removeRef(e.regionId, e.slotId);
+    });
     console.warn(
       `[nds-demo] 初始化完成：${this.region ? `区域 ${this.region.regionId}（容量 ${this.region.capacity}）` : "存储未启用"}，凭据 ${this.refs.length} 条`
     );
@@ -273,7 +282,12 @@ export class StorageService {
     const notReady = this.notReadyResult();
     if (notReady) return notReady;
     const took = this.region!.take(slotId);
-    if (!took) return { ok: false, message: `格子 #${slotId} 没有物品` };
+    if (!took) {
+      // 槽空（已丢失/外部取走）：take 不触发 taken 事件，主动清凭据，
+      // 防止 UI 列表残留"取不出"的损坏记录
+      this.removeRef(this.region!.regionId, slotId);
+      return { ok: false, message: `格子 #${slotId} 没有物品` };
+    }
 
     const container = player.getComponent("minecraft:inventory")?.container;
     const leftover = container ? container.addItem(took) : took;
