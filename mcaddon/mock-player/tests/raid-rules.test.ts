@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 import {
   OMINOUS_BOTTLE_ID, BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_STUCK_TICKS,
+  RAID_SWEEP_TICKS, RAID_EXPECT_TICKS, RAID_FORCE_COOLDOWN, RAIDER_TYPE_IDS,
   isOminousBottle, classifyRaidEffect,
 } from "../scripts/core/service/RaidRules";
 
@@ -13,8 +14,27 @@ test("常量：效果 ID 精确值", () => {
   assert.equal(BAD_OMEN, "minecraft:bad_omen");
   assert.equal(RAID_OMEN, "minecraft:raid_omen");
   assert.equal(VILLAGE_HERO, "minecraft:village_hero");
-  assert.equal(DRINK_DURATION, 32);
+  // 饮用时长 40 tick（2 秒）：比消耗所需 32 tick 多 ~8 tick 余量，防调度抖动导致药水没喝完
+  assert.equal(DRINK_DURATION, 40);
   assert.equal(RAID_STUCK_TICKS, 1200);
+});
+
+test("常量：兜底巡检阈值", () => {
+  // 巡检间隔 30 秒；预期窗口 10 分钟（基岩版困难最多 7 波足够打完）；续瓶冷却 1 分钟
+  assert.equal(RAID_SWEEP_TICKS, 600);
+  assert.equal(RAID_EXPECT_TICKS, 12000);
+  assert.equal(RAID_FORCE_COOLDOWN, 1200);
+});
+
+test("常量：袭击参与生物 typeId 列表", () => {
+  // 与 vanilla-data 1.26.20 逐一核对；唤魔者用基岩版内部名 evocation_illager
+  assert.deepEqual([...RAIDER_TYPE_IDS], [
+    "minecraft:pillager",
+    "minecraft:vindicator",
+    "minecraft:evocation_illager",
+    "minecraft:ravager",
+    "minecraft:witch",
+  ]);
 });
 
 test("isOminousBottle：精确匹配", () => {
