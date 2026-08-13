@@ -35,6 +35,9 @@ const pendingItemTags = new Map<string, { tag: string }[]>();
 
 const entityOwnerMap = new Map<string, string>();
 
+/** 初始化幂等守卫（main.ts worldLoad 调用一次；防重复订阅） */
+let tridentTrackerReady = false;
+
 /** 投掷流程注册：投掷前把三叉戟物品信息编码入队（ownerName → 队列） */
 export function registerPendingTridentItem(botName: string, item: ItemStack): void {
   const tag = encodeItemTag(item);
@@ -109,6 +112,13 @@ function readMainhandItem(owner: Entity): { tag: string } | undefined {
  * 在 worldLoad 后调用一次。
  */
 export function initTridentTracker(): void {
+  // ⚠️ 幂等守卫：重复调用会叠加订阅（entitySpawn/entityLoad 双跑、事件双触发）
+  if (tridentTrackerReady) {
+    console.warn(`[MockPlayer] initTridentTracker 重复调用，跳过`);
+    return;
+  }
+  tridentTrackerReady = true;
+
   // ── 生命周期事件订阅（事件驱动认主，业务模块不再硬编码互相调用） ──
   BotEvents.botOnline.subscribe((e) => system.run(() => rebindBotTridents(e.botName)));
   BotEvents.botRespawn.subscribe((e) => system.run(() => rebindBotTridents(e.botName)));

@@ -7,7 +7,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { Blackboard, type AiContext } from "../scripts/core/ai";
-import { createVaultTaskTree, type VaultInteractResult, type VaultPorts, type Vec3 } from "../scripts/core/ai/VaultTask";
+import { createVaultTaskTree, type VaultInteractResult, type VaultPorts } from "../scripts/core/tasks/VaultTask";
+import type { Vec3 } from "../scripts/core/model/Types";
 
 const VAULT_POS: Vec3 = { x: 10, y: 64, z: 20 };
 

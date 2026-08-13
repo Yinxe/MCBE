@@ -50,3 +50,6 @@ export * from "./service/ModConfigRules";
 
 // ai 行为树框架
 export * from "./ai";
+
+// tasks 任务型模块（构建于 core/ai 之上）
+export * from "./tasks";

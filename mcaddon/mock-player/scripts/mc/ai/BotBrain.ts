@@ -10,11 +10,11 @@ import { system, world } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { Blackboard, BehaviorTree, type AiContext } from "../../core/ai";
-import { createVaultTaskTree, type VaultPorts } from "../../core/ai/VaultTask";
+import { createVaultTaskTree, type VaultPorts } from "../../core/tasks/VaultTask";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 import { reconnectingBots } from "../features/pendingRespawn";
-import { vaultPorts } from "./McVaultPorts";
+import { vaultPorts } from "../tasks/McVaultPorts";
 
 interface BrainEntry {
   tree: BehaviorTree;

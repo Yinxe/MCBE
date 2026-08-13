@@ -1,15 +1,16 @@
-// ─── 劫掠模式（事件驱动 + 兜底巡检） ──────────────────
+// ─── 劫掠模式（纯事件驱动 + 一次性卡死提醒） ─────────────
 // 假人持续刷袭击（raid）farm：喝不祥之瓶 → 触发袭击 → 击败袭击获得村庄英雄 → 再喝下一瓶
 //
-// 以事件驱动为主（无 tick 轮询），辅以 30 秒一次的兜底巡检（raidModeSweep）：
+// 以事件驱动为主（无 tick 轮询），辅以一次性卡死提醒（scheduleRaidStuckCheck）：
 //   开启/上线/重生 → startRaidMode 喝第一瓶
-//   喝下成功       → 获得不祥之兆 → 触发 raidStarted（袭击开始）→ 记录袭击预期窗口
+//   喝下成功       → 获得不祥之兆 → 触发 raidStarted（袭击开始）
 //   袭击获胜       → 获得村庄英雄 → 触发 raidVictory → 订阅者把英雄叠加给主人并喝下一瓶
-//   胜利但无英雄   → 巡检发现「无任何效果 + 窗口过期 + 附近无袭击者」→ 兜底续喝下一瓶
-//   英雄事件丢失   → 巡检发现假人挂着村庄英雄却未处理 → 补记胜利并续瓶
+//   卡死提醒       → 1 分钟后仍带不祥/袭击之兆 → 仅世界消息提醒（零恢复动作）
 //
+// ⚠️ 语义（用户拍板 713e8da）：纯事件驱动，**不引入任何定期巡检/恢复机制**——
+//    卡死原因只有一个（没拿到村庄英雄 BUFF），提醒玩家即可。
 // 劫掠信号（raidStarted / raidVictory）定义在 core/events/DomainEvents（假人模块私有）。
-// 规则常量/识别（不祥之瓶、效果分类、饮用/卡死/巡检阈值）在 core/service/RaidRules。
+// 规则常量/识别（不祥之瓶、效果分类、饮用/卡死阈值）在 core/service/RaidRules。
 // 与假人加载模式无关（普通/强加载均可 useItemInSlot 使用物品）。
 
 import { Container, Effect, EffectAddAfterEvent, Player, system, world } from "@minecraft/server";

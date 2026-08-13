@@ -1,5 +1,7 @@
-// ─── 宝库任务端口实现（mc/ai） ───────────────────────────
-// VaultPorts 的 mc 适配，对齐 dev 1.3.20 宝库规格（1.3.10~1.3.19 用户实测修复）：
+// ─── 宝库任务端口实现（mc/tasks） ────────────────────────
+// 任务型模块的执行层：VaultPorts 的 mc 适配（core/tasks/VaultTask 声明端口）。
+// 分层约定：mc/ai = AI 引擎（BotBrain 驱动树）；mc/tasks = 具体任务执行。
+// 对齐 dev 1.3.20 宝库规格（1.3.10~1.3.19 用户实测修复）：
 //   - 扫描：半径 15、y clamp(-64,320)、allowUnloadedChunks=false，只扫
 //     minecraft:vault（ominous 是 block state，不是独立方块）
 //   - 站立点：**优先宝库正面**（cardinal_direction 反方向 1~2 格可站立）——
@@ -11,13 +13,14 @@
 //     优先（interactWithBlock 空手交互不消耗钥匙=假成功）→ 交互前记录**总量**
 //     基准 → 回读总量<基准=真消耗；未消耗=宝库冷却/动画中 → 持续点击不放弃
 //   - 朝向：lookAt 宝库中心 + **同步 lastPoint.lookTarget**（重连恢复姿态）
-// 决策逻辑全部在 core/ai/VaultTask（可单测），本文件只做副作用。
+// 决策逻辑全部在 core/tasks/VaultTask（可单测），本文件只做副作用。
 
 import { system, world, Direction, BlockVolume, EquipmentSlot, type ItemStack, type Player } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { VaultInteractResult, VaultPorts, Vec3 } from "../../core/ai/VaultTask";
+import type { VaultInteractResult, VaultPorts } from "../../core/tasks/VaultTask";
+import type { Vec3 } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { workflowVaultOpened } from "../../core/events/WorkflowEvents";
 import { botRegistry } from "../bootstrap/context";

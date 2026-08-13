@@ -5,14 +5,15 @@
 // （main.ts Phase 4）。
 //
 // 工作流 vs feature：feature 是基本简单原子功能（setSneaking/tpBotToPlayer/
-// throwTridents），工作流是复杂组合功能（劫掠循环/宝库循环/三叉戟认主体系）
+// throwTridents），工作流是复杂组合功能（劫掠循环/宝库循环）
 // ——有生命周期（init/start/stop）、运行状态、独立引擎（可选）与领域事件。
+// ⚠️ 三叉戟认主不属于工作流：纯事件驱动的世界机制（实体 tag + owner 归属），
+//    由 main.ts 直接 initTridentTracker() 初始化（见 mc/features/tridentTracker）。
 
 import { WorkflowManager } from "../../core/service/Workflow";
 import { McIntervalScheduler } from "../adapters/McIntervalScheduler";
 import { raidWorkflow } from "../workflows/raidWorkflow";
 import { vaultWorkflow } from "../workflows/vaultWorkflow";
-import { tridentWorkflow } from "../workflows/tridentWorkflow";
 
 /**
  * 工作流管理器（单例）：注册 / 初始化 / 启停 / 查询。
@@ -23,4 +24,3 @@ export const workflowManager = new WorkflowManager(new McIntervalScheduler());
 
 workflowManager.register(raidWorkflow);
 workflowManager.register(vaultWorkflow);
-workflowManager.register(tridentWorkflow);

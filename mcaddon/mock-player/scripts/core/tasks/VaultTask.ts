@@ -1,5 +1,8 @@
-// ─── 宝库任务（core/ai） ─────────────────────────────────
-// 行为树定义 + 动作端口接口（零 @minecraft，可单测）。
+// ─── 宝库任务（core/tasks） ──────────────────────────────
+// 任务型模块：构建于 core/ai 行为树框架之上的具体任务（端口接口 + 树装配，
+// 零 @minecraft，可单测）。分层约定：
+//   core/ai     生物 AI 框架（行为树节点，不含任何具体任务）
+//   core/tasks  任务型模块（本文件：宝库任务；后续砍树/钓鱼同此目录）
 // 决策语义（自动寻路开宝库，对齐 1.3.20 宝库规格）：
 //   优先级（根 Selector 每 tick 重评，无记忆）：
 //     1. 开箱：有钥匙 + 有目标 + 距离近 + 交互冷却过 → 交互开箱（总量基准回读）
@@ -14,14 +17,8 @@
 //     未消耗 → 冷却后继续点击，**不放弃目标、不判断宝库已开过**
 //     （重连后是新实体，同一宝库可重复开直到钥匙用完）。
 
-import { Action, BehaviorTree, Cooldown, Condition, Selector, Sequence, type AiContext } from "./index";
-
-/** 结构化三维坐标（core 层不依赖 @minecraft/server 的 Vector3 类型） */
-export interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
+import { Action, BehaviorTree, Cooldown, Condition, Selector, Sequence, type AiContext } from "../ai";
+import type { Vec3 } from "../model/Types";
 
 /**
  * 开箱交互结果：

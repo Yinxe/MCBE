@@ -5,7 +5,6 @@
 // 事件负载只用可序列化的 string/number——保持 core 纯净。
 
 import { EventSignal } from "./EventSignal";
-import { tridentClaimed, tridentOwnerChanged } from "./DomainEvents";
 
 // ─── 劫掠工作流（raid-mode） ──────────────────────────
 
@@ -47,6 +46,7 @@ export const workflowVaultOpened = new EventSignal<WorkflowVaultOpenedEvent>();
 // 工作流领域事件统一走 BotWorkflowEvent 命名空间：
 //   import { BotWorkflowEvent } from ".../WorkflowEvents"
 //   BotWorkflowEvent.raidVictory.subscribe(({ botName, wins }) => { ... })
+// ⚠️ 三叉戟认主不属于工作流事件（自定义机制）：信号唯一真源在 DomainEvents（BotEvents）。
 
 /** 全部工作流领域事件聚合（每个事件一个独立信号） */
 export const BotWorkflowEvent = {
@@ -55,7 +55,4 @@ export const BotWorkflowEvent = {
   raidVictory: workflowRaidVictory,
   // 宝库
   vaultOpened: workflowVaultOpened,
-  // 三叉戟认主（复用 DomainEvents 信号——同一实例，订阅方可从任一命名空间访问）
-  tridentClaimed,
-  tridentOwnerChanged,
 };
