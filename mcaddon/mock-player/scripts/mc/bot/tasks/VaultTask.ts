@@ -188,8 +188,23 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       notify("附近 15 格内没有宝库，请将假人带到宝库附近");
       return; // 继续定期重扫
     }
-    // 找宝库旁 1~2 格可站立点（宝库方块本身人走不进去）
-    const standSpot = findStandSpotNear(sim, found);
+    // ⚠️ 站立点**优先宝库正面**（cardinal_direction 反方向 1~2 格）：宝库开箱必须
+    //    面对钥匙孔正面使用钥匙——从侧面/背面右键不开箱（interactWithBlock 仍
+    //    返回 true = 假成功，1.1.34 玩家摆位时站在正面的原因）；正面不可站再回退
+    //    任意方向候选
+    const facing = vaultFacing(sim, found);
+    let standSpot: Vector3 | undefined;
+    if (facing) {
+      for (const pos of frontStandCandidates(found, facing)) {
+        if (isStandable(sim, pos)) {
+          standSpot = pos;
+          break;
+        }
+      }
+    }
+    if (!standSpot) {
+      standSpot = findStandSpotNear(sim, found);
+    }
     if (!standSpot) {
       notify("宝库周围没有可站立的位置，请调整假人位置");
       return;
@@ -211,8 +226,8 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       return;
     }
     console.info(
-      `[MockPlayer] 宝库 ${bot.name} 扫描命中：最近宝库 @(${found.x},${found.y},${found.z})，` +
-      `站立点 @(${standSpot.x},${standSpot.y},${standSpot.z})，开始导航`,
+      `[MockPlayer] 宝库 ${bot.name} 扫描命中：最近宝库 @(${found.x},${found.y},${found.z})` +
+      `（朝向 ${facing ?? "未知"}），站立点 @(${standSpot.x},${standSpot.y},${standSpot.z})，开始导航`,
     );
   }
 
@@ -307,14 +322,19 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     // 交互前确保持续注视宝库（+ 同步 lastPoint.lookTarget，重连恢复看向宝库）
     lookAtVault();
 
-    // 交互一次（看向后视线命中面，Down 兜底）
-    const ok = bot.interactWithBlock(vaultPos);
+    // ⚠️ 手持钥匙**使用**于宝库（useItemInSlotOnBlock = 右键使用，开箱消耗钥匙；
+    //    interactWithBlock 只是空手交互可能"假成功"——1.1.34 验证在正确姿势
+    //    （面对宝库正面）下 interactWithBlock 也能开箱，故失败时回退双通道）
+    let ok = bot.useItemOnBlock(vaultPos);
+    if (!ok) {
+      ok = bot.interactWithBlock(vaultPos);
+    }
     if (!ok) {
       console.info(
-        `[MockPlayer] 宝库 ${bot.name} 交互未执行（interactWithBlock=false，${viewStatusString(sim)}），` +
-        `${INTERACT_RETRY_TICK}tick 后重试`,
+        `[MockPlayer] 宝库 ${bot.name} 使用钥匙未执行（useItemInSlotOnBlock=false 且 interactWithBlock=false，` +
+        `${viewStatusString(sim)}），${INTERACT_RETRY_TICK}tick 后重试`,
       );
-      notify("与宝库交互未成功，请调整假人位置后重试");
+      notify("使用钥匙开宝库未成功，请调整假人位置后重试");
       return;
     }
 
@@ -350,18 +370,43 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     }
   }
 
-  /** 宝库旁 1~2 格可站立点（格内空气 + 下方有支撑） */
+  /** 宝库朝向（minecraft:cardinal_direction state；读取失败返回 undefined） */
+  function vaultFacing(sim: SimulatedPlayer, vault: Vector3): string | undefined {
+    try {
+      const block = sim.dimension.getBlock(vault);
+      if (!block || block.typeId !== VAULT_BLOCK) return undefined;
+      return block.permutation.getState("minecraft:cardinal_direction") as string | undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** 宝库正面站立点候选（朝向反方向 1~2 格：朝北 → 站南侧 z+1，面对钥匙孔） */
+  function frontStandCandidates(vault: Vector3, facing: string): Vector3[] {
+    const dx = facing === "east" ? -1 : facing === "west" ? 1 : 0;
+    const dz = facing === "north" ? 1 : facing === "south" ? -1 : 0;
+    const candidates: Vector3[] = [];
+    for (const dist of [1, 2]) {
+      candidates.push({ x: vault.x + dx * dist, y: vault.y, z: vault.z + dz * dist });
+    }
+    return candidates;
+  }
+
+  /** 该格可站立：格内空气 + 下方有支撑 */
+  function isStandable(sim: SimulatedPlayer, pos: Vector3): boolean {
+    try {
+      const here = sim.dimension.getBlock(pos);
+      const below = sim.dimension.getBlock({ x: pos.x, y: pos.y - 1, z: pos.z });
+      if (!here || !below) return false;
+      return here.typeId === "minecraft:air" && below.typeId !== "minecraft:air";
+    } catch {
+      return false;
+    }
+  }
+
+  /** 宝库旁 1~2 格可站立点（任意方向兜底；正面候选优先见 scan） */
   function findStandSpotNear(sim: SimulatedPlayer, vault: Vector3): Vector3 | undefined {
-    return findStandSpot(vault, (pos) => {
-      try {
-        const here = sim.dimension.getBlock(pos);
-        const below = sim.dimension.getBlock({ x: pos.x, y: pos.y - 1, z: pos.z });
-        if (!here || !below) return false;
-        return here.typeId === "minecraft:air" && below.typeId !== "minecraft:air";
-      } catch {
-        return false;
-      }
-    });
+    return findStandSpot(vault, (pos) => isStandable(sim, pos));
   }
 
   /** 视线命中详情字符串（状态日志用：看到什么方块） */

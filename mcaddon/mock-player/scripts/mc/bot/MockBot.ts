@@ -195,6 +195,40 @@ export class MockBot {
     }
   }
 
+  /**
+   * 手持主手物品**使用**于方块（useItemInSlotOnBlock——右键使用，如钥匙开宝库）。
+   * ⚠️ 与 interactWithBlock（空手交互）不同：宝库开箱必须 use item on block
+   *    才会消耗钥匙（interactWithBlock 返回 true 但宝库不触发开箱 = "假成功"）。
+   * @returns 物品是否被使用（true 不保证生效，由调用方做效果判定）
+   */
+  useItemOnBlock(pos: Vector3): boolean {
+    const bot = this.getEntity();
+    if (!bot) return false;
+    this.lookAt({ x: pos.x + 0.5, y: pos.y + 0.5, z: pos.z + 0.5 });
+    let face: Direction = Direction.Down;
+    let viewInfo = "视线读取失败（用兜底面 Down）";
+    try {
+      const hit = bot.getBlockFromViewDirection({ maxDistance: 8 });
+      if (hit) {
+        face = hit.face;
+        viewInfo = `视线命中 ${hit.block.typeId} face=${hit.face}`;
+      } else {
+        viewInfo = "视线未命中任何方块（用兜底面 Down）";
+      }
+    } catch {
+      /* 视线读取失败用兜底面 */
+    }
+    try {
+      const slot = this.heldSlotIndex();
+      const ok = bot.useItemInSlotOnBlock(slot, pos, face);
+      console.info(`[MockPlayer] ${this.name} useItemInSlotOnBlock slot=${slot} @(${pos.x},${pos.y},${pos.z}) face=${face} 返回=${ok}｜${viewInfo}`);
+      return ok;
+    } catch (e: any) {
+      console.warn(`[MockPlayer] ${this.name} useItemInSlotOnBlock 异常 @(${pos.x},${pos.y},${pos.z}): ${e?.message ?? e}`);
+      return false;
+    }
+  }
+
   /** 设置姿态（teleport 朝向 + 持续注视；内部 try-catch 降级） */
   setPose(rotation: { x: number; y: number }, lookTarget?: Vector3): void {
     const bot = this.getEntity();
