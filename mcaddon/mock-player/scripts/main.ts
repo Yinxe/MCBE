@@ -15,7 +15,6 @@ import { system, world } from "@minecraft/server";
 
 import { registerAllCommands } from "./mc/commands/index";
 import { registerAllEvents } from "./mc/events/index";
-import { startTagBehaviors } from "./mc/features/behavior";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
 import { registerUiDrivers } from "./mc/bootstrap/uiDrivers";
 import { botManager } from "./mc/bot/BotManager";
@@ -71,12 +70,9 @@ world.afterEvents.worldLoad.subscribe(() => {
   // （必须在 restoreAll 之后：记录已在内存；存储区域此时可注册）
   runMigrations();
 
-  // 启动标签行为引擎（自动挖掘/放置/攻击/跳跃/体态控制）
-  // 同时启动 100tick 周期持久化（位置/经验/装备栏）
+  // 启动 BotManager 驱动器（每假人独立引擎：标签行为能力 + 任务 + 100tick 周期持久化）
+  // 持续能力（自动挖掘/放置/攻击/跳跃/体态控制）由标签状态驱动启停（1.3.2 重构）
   console.info(`[MockPlayer] 启动引擎`);
-  startTagBehaviors();
-
-  // 启动 BotManager 驱动器（每假人独立引擎：能力/任务，1.3.x 逐步迁移）
   botManager.start();
 
   // 初始化三叉戟追踪（entitySpawn 标记假人抛出的三叉戟）——由 trident 工作流 init 负责

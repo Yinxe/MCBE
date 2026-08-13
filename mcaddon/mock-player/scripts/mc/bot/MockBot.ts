@@ -41,6 +41,7 @@ import { startUseItem, stopUseItem } from "../features/useItem";
 import { tpPlayerToBot, tpBotToPlayer } from "../features/teleport";
 import { sendData } from "../commands/data";
 import { switchSpawnMode, type SpawnMode } from "../features/spawnMode";
+import { installDefaultCapabilities } from "./capabilities";
 
 /** 引擎执行上下文（mc 实现：tags 读 record、tick 读引擎计数） */
 class MockBotContext implements BotContext {
@@ -66,6 +67,8 @@ export class MockBot {
   constructor(record: BotRecord) {
     this.record = record;
     this.context = new MockBotContext(this);
+    // 安装默认能力（标签状态驱动启停；注册表可扩展）
+    installDefaultCapabilities(this);
   }
 
   /** 按名字取实例（registry 无记录 → undefined） */
