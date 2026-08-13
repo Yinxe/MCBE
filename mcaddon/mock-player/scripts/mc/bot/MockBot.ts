@@ -344,8 +344,15 @@ export class MockBot {
 
   // ── 引擎 ────────────────────────────────────────────
 
-  /** 启动复杂任务（一次一活跃任务；已有活跃 → false） */
-  startTask(task: BotTask): boolean {
+  /** 启动复杂任务（一次一活跃任务；已有活跃 → false；onComplete 挂完成回调） */
+  startTask(task: BotTask, onComplete?: (taskId: string) => void): boolean {
+    if (onComplete) {
+      const prev = this.engine.onTaskComplete;
+      this.engine.onTaskComplete = (id) => {
+        prev?.(id);
+        onComplete(id);
+      };
+    }
     return this.engine.startTask(task, this.context);
   }
 
