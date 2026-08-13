@@ -33,6 +33,12 @@ const SCAN_RADIUS = 15;
 const SCAN_RETRY_TICK = 40;
 /** 到达判定距离（格）：假人可靠近宝库且 r < 2 */
 const ARRIVE_DIST = 2;
+/** 注视就绪阈值（tick）：进入 navigate 后持续注视累计该时长，即使视线判定
+ *  未命中也放行交互（lookAtLocation 只保证外观转头，视线方向可能与头部朝向
+ *  脱钩；位置交互不依赖瞄准，宝库交互 face 不敏感） */
+const LOOK_READY_TICKS = 20;
+/** wait 阶段超时（tick）：钥匙判定事件异常未触发时兜底回 scan 重试（≈30 秒） */
+const WAIT_TIMEOUT_TICKS = 600;
 /** 导航停滞判定（tick）：距离连续无进展超过该时长（≈10 秒）→ 放弃重扫 */
 const STALL_TICKS = 200;
 /** 交互重试间隔（tick）：无钥匙/交互失败时定期重试 */
@@ -88,6 +94,8 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
   let lastDist = Infinity;
   let navTarget: Vector3 | undefined; // 站立点（导航目标）
   let vaultPos: Vector3 | undefined; // 宝库坐标（看向/交互）
+  let lookReadyTicks = 0; // 进入 navigate 后累计注视 tick（转头就绪判定）
+  let waitTicks = 0; // wait 阶段累计（超时兜底回 scan）
 
   /** 宝库中心（持续注视目标点） */
   const vaultCenter = (): Vector3 => ({
@@ -150,7 +158,16 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
 
         case "wait":
           // 纯事件驱动：钥匙消耗判定由 vaultFlow 的 playerInventoryItemChange
-          // 订阅完成（handle.success() 标记后任务完成）
+          // 订阅完成（handle.success() 标记后任务完成）。
+          // ⚠️ 超时兜底：判定事件异常未触发（事件丢失等）→ 回 scan 重试，
+          //    避免任务永久卡死在等待阶段
+          waitTicks++;
+          if (waitTicks >= WAIT_TIMEOUT_TICKS) {
+            console.info(`[MockPlayer] 宝库 ${bot.name} 等待判定超时（${WAIT_TIMEOUT_TICKS}tick），重扫`);
+            handle.baseline = undefined;
+            phase = "scan";
+            scanCounter = SCAN_RETRY_TICK; // 立即重扫
+          }
           break;
       }
     },
@@ -182,6 +199,7 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     handle.target = found;
     stallCount = 0;
     lastDist = Infinity;
+    lookReadyTicks = 0;
     phase = "navigate";
     // 一次性下发导航（持续导航，绝不重复下发）
     try {
@@ -202,11 +220,9 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       phase = "scan";
       return;
     }
-    // ⚠️ 持续注视宝库中心（MockBot.lookAt = PoseGateway lookAtLocation +
-    //    LookDuration.Continuous——瞬时 lookAt 看一眼会回正/GameTest 下被重置，
-    //    必须持续注视才能让视线命中判定成立；chunkload 降级内部 try-catch）
-    //    + 同步 lastPoint.lookTarget（重连恢复看向宝库）
+    // 持续注视宝库（+ 同步 lastPoint.lookTarget，重连恢复看向宝库）
     lookAtVault();
+    lookReadyTicks++;
 
     // 距离判定（站立点）；停滞判定：距离无进展累计 STALL_TICKS → 放弃重扫
     const dist = Math.sqrt(
@@ -226,8 +242,11 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     }
     lastDist = dist;
 
-    // 可靠近宝库（r<2）且视线命中的方块也是宝库 → 进入交互
-    if (isArrived(dist, ARRIVE_DIST) && lookingAtVault(sim)) {
+    // 可靠近宝库（r<2）→ 进入交互：
+    //   - 视线命中的方块也是宝库 → 立即进入（用户规格）
+    //   - 或持续注视已就绪（LOOK_READY_TICKS）→ 放行（lookAtLocation 只保证
+    //     外观转头，视线判定可能与头部朝向脱钩；位置交互不依赖瞄准）
+    if (isArrived(dist, ARRIVE_DIST) && (lookingAtVault(sim) || lookReadyTicks >= LOOK_READY_TICKS)) {
       try {
         sim.stopMoving();
       } catch {

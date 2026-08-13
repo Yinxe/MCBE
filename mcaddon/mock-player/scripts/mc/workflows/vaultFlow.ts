@@ -167,10 +167,11 @@ function handleInventoryChange(event: PlayerInventoryItemChangeAfterEvent): void
     const handle = activeVaultHandles.get(player.name);
     if (!handle) return; // 非宝库任务假人
     if (!beforeItemStack || !isVaultKey(beforeItemStack.typeId)) return;
-    // 只考虑「数量被 -1 了」且「-1 后不是空手」：
+    // 只考虑「数量被 -1 了」：恰好 -1（含 1→0 清空 = 正常消耗；整组拿走差 >1 排除）。
+    // ⚠️ 不能排除「-1 后空手」——主手 1 把钥匙开箱后主手必空（最常见场景），
+    //    清空槽是移走还是消耗由下方的**总量基准**最终判定（权威）。
     const afterAmount = itemStack?.amount ?? 0;
     if (beforeItemStack.amount - afterAmount !== 1) return; // 恰好 -1（排除其它变化）
-    if (!itemStack) return; // -1 后空手（清空槽 = 移走/换走，不算交互成功）
     // 交互基准（刚交互过才可能开箱）
     if (handle.baseline === undefined) return;
 
@@ -188,7 +189,7 @@ function handleInventoryChange(event: PlayerInventoryItemChangeAfterEvent): void
         // 判定成功！
         h.baseline = undefined; // 消费基准，防重复判定
         const keyType = h.keyType || "minecraft:trial_key";
-        console.info(`[MockPlayer] 宝库 ${botName} 开箱成功判定（钥匙 -1 且非空 + 总量减少）`);
+        console.info(`[MockPlayer] 宝库 ${botName} 开箱成功判定（钥匙恰好 -1 + 总量减少）`);
         // 任务完成标记（引擎下一次 tick → isDone → onComplete 清理句柄）
         h.success();
         // 领域事件 → 订阅方通知附近玩家 + 安全重连
