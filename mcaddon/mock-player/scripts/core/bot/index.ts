@@ -4,3 +4,4 @@
 export * from "./Engine";
 export * from "./Inventory";
 export * from "./Navigation";
+export * from "./Task";

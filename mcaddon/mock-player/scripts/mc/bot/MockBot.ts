@@ -20,6 +20,12 @@ import type { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { BotEngine, type BotContext, type BotTask } from "../../core/bot/Engine";
 import {
+  AsyncTaskRunner,
+  CancellationToken,
+  type BotAsyncTask,
+  type AsyncTaskCallback,
+} from "../../core/bot/Task";
+import {
   countItemTotal,
   findEmptySlot as findEmptySlotPure,
   findFirstItemByPriority as findFirstByPriority,
@@ -62,8 +68,10 @@ class MockBotContext implements BotContext {
 export class MockBot {
   /** 假人记录引用（botRegistry 单例对象，改动即时生效） */
   readonly record: BotRecord;
-  /** 独立行为引擎（持续能力 + 复杂任务） */
+  /** 独立行为引擎（持续能力 Capability 的 tick 调度） */
   readonly engine = new BotEngine();
+  /** 异步任务运行器（Promise/await 阻塞式复杂流程，一次一活跃互斥） */
+  private readonly taskRunner = new AsyncTaskRunner();
   /** 引擎执行上下文 */
   readonly context: BotContext;
 
@@ -453,7 +461,26 @@ export class MockBot {
     sendData(player, this.record);
   }
 
-  // ── 引擎 ────────────────────────────────────────────
+  // ── 引擎 / 任务 ─────────────────────────────────────
+
+  /**
+   * 启动异步任务（**Promise/await 阻塞式工作流循环**，用户拍板）：
+   * 一次一活跃任务（互斥）；onDone 在完成/取消/异常后触发。
+   * @returns 是否成功启动（已有活跃任务 → false）
+   */
+  startAsyncTask(task: BotAsyncTask, onDone?: AsyncTaskCallback): boolean {
+    return this.taskRunner.start(task, new CancellationToken(), onDone);
+  }
+
+  /** 取消当前活跃异步任务（挂起的 await 经 onCancel 立即放行） */
+  cancelAsyncTask(): boolean {
+    return this.taskRunner.cancel();
+  }
+
+  /** 当前活跃任务 id（异步任务优先；同步引擎任务兜底） */
+  get activeTaskId(): string | undefined {
+    return this.taskRunner.activeTaskId ?? this.engine.activeTaskId;
+  }
 
   /** 启动复杂任务（一次一活跃任务；已有活跃 → false；onComplete 挂完成回调） */
   startTask(task: BotTask, onComplete?: (taskId: string) => void): boolean {
@@ -467,14 +494,9 @@ export class MockBot {
     return this.engine.startTask(task, this.context);
   }
 
-  /** 取消当前活跃任务 */
+  /** 取消当前活跃同步任务 */
   cancelTask(): boolean {
     return this.engine.cancelTask(this.context);
-  }
-
-  /** 当前活跃任务 id */
-  get activeTaskId(): string | undefined {
-    return this.engine.activeTaskId;
   }
 
   // ── 异步（Promise 化，await 顺序写流程；永不 reject） ──
