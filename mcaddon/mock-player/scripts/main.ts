@@ -18,6 +18,7 @@ import { registerAllEvents } from "./mc/events/index";
 import { startTagBehaviors } from "./mc/features/behavior";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
 import { registerUiDrivers } from "./mc/bootstrap/uiDrivers";
+import { botManager } from "./mc/bot/BotManager";
 import { runMigrations } from "./mc/bootstrap/migration";
 import { workflowManager } from "./mc/bootstrap/workflows";
 import { botRegistry, configStore } from "./mc/bootstrap/context";
@@ -74,6 +75,9 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 同时启动 100tick 周期持久化（位置/经验/装备栏）
   console.info(`[MockPlayer] 启动引擎`);
   startTagBehaviors();
+
+  // 启动 BotManager 驱动器（每假人独立引擎：能力/任务，1.3.x 逐步迁移）
+  botManager.start();
 
   // 初始化三叉戟追踪（entitySpawn 标记假人抛出的三叉戟）——由 trident 工作流 init 负责
   console.info(`[MockPlayer] 初始化工作流（劫掠/宝库/三叉戟认主）`);
