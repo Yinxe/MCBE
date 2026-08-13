@@ -47,3 +47,6 @@ export * from "./service/ReclaimPlanner";
 export * from "./service/RaidRules";
 export * from "./service/QuotaRules";
 export * from "./service/ModConfigRules";
+
+// bot（假人独立引擎：能力/任务调度 + 背包纯逻辑）
+export * from "./bot";
