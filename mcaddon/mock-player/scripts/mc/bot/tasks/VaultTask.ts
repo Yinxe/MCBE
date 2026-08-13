@@ -210,10 +210,13 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       phase = "scan";
       return;
     }
-    console.info(`[MockPlayer] 宝库 ${bot.name} 找到最近宝库 @(${found.x},${found.y},${found.z})，开始导航`);
+    console.info(
+      `[MockPlayer] 宝库 ${bot.name} 扫描命中：最近宝库 @(${found.x},${found.y},${found.z})，` +
+      `站立点 @(${standSpot.x},${standSpot.y},${standSpot.z})，开始导航`,
+    );
   }
 
-  /** navigate：持续注视宝库 + 只算距离；r<2 且视线命中宝库 → 交互 */
+  /** navigate：持续注视宝库 + 只算距离；r<2 且视线命中/注视就绪 → 交互 */
   function navigateTick(): void {
     const sim = bot.getEntity();
     if (!sim || !vaultPos || !navTarget) {
@@ -233,7 +236,7 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     if (dist >= lastDist) {
       stallCount++;
       if (stallCount >= STALL_TICKS) {
-        console.info(`[MockPlayer] 宝库 ${bot.name} 导航停滞，重扫`);
+        console.info(`[MockPlayer] 宝库 ${bot.name} 导航停滞（${STALL_TICKS}tick 无进展），重扫`);
         phase = "scan";
         return;
       }
@@ -242,17 +245,29 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     }
     lastDist = dist;
 
+    // ⚠️ 状态日志（每 20 tick 一条，防刷屏）：距离 + 视线命中详情——看到什么方块
+    if (lookReadyTicks % 20 === 0) {
+      console.info(
+        `[MockPlayer] 宝库 ${bot.name} 导航状态：距离站立点=${dist.toFixed(2)}（阈值 ${ARRIVE_DIST}）` +
+        ` 注视=${lookReadyTicks}tick ${viewStatusString(sim)}`,
+      );
+    }
+
     // 可靠近宝库（r<2）→ 进入交互：
     //   - 视线命中的方块也是宝库 → 立即进入（用户规格）
     //   - 或持续注视已就绪（LOOK_READY_TICKS）→ 放行（lookAtLocation 只保证
     //     外观转头，视线判定可能与头部朝向脱钩；位置交互不依赖瞄准）
-    if (isArrived(dist, ARRIVE_DIST) && (lookingAtVault(sim) || lookReadyTicks >= LOOK_READY_TICKS)) {
+    const viewHit = lookingAtVault(sim);
+    if (isArrived(dist, ARRIVE_DIST) && (viewHit || lookReadyTicks >= LOOK_READY_TICKS)) {
       try {
         sim.stopMoving();
       } catch {
         /* ignore */
       }
-      console.info(`[MockPlayer] 宝库 ${bot.name} 已靠近宝库且视线命中，开始交互`);
+      console.info(
+        `[MockPlayer] 宝库 ${bot.name} 已靠近宝库（距离 ${dist.toFixed(2)} < ${ARRIVE_DIST}）` +
+        `，进入交互${viewHit ? "（视线命中宝库）" : `（注视就绪 ${lookReadyTicks}tick 放行）`}`,
+      );
       phase = "interact";
       interactCounter = 0;
     }
@@ -269,6 +284,7 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     // 识别宝库类型（普通/不详：block state ominous）
     const block = sim.dimension.getBlock(vaultPos);
     if (!block) {
+      console.warn(`[MockPlayer] 宝库 ${bot.name} 交互：宝库方块 @(${vaultPos.x},${vaultPos.y},${vaultPos.z}) 读取失败，回 scan`);
       phase = "scan";
       return;
     }
@@ -281,9 +297,12 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     const keyType = bot.ensureMainhand(candidates);
     if (!keyType) {
       const missing = candidates.length > 1 ? "普通钥匙或不详钥匙" : "不详钥匙";
+      console.info(`[MockPlayer] 宝库 ${bot.name} 背包无候选钥匙（${missing}），等待玩家放入`);
       notify(`手上没有${missing}，请放入背包后重试`);
       return; // 每 INTERACT_RETRY_TICK 重试换钥匙
     }
+    const held = bot.getHeldItem()?.typeId;
+    console.info(`[MockPlayer] 宝库 ${bot.name} 主手钥匙就绪：${held ?? keyType}`);
 
     // 交互前确保持续注视宝库（+ 同步 lastPoint.lookTarget，重连恢复看向宝库）
     lookAtVault();
@@ -291,6 +310,10 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     // 交互一次（看向后视线命中面，Down 兜底）
     const ok = bot.interactWithBlock(vaultPos);
     if (!ok) {
+      console.info(
+        `[MockPlayer] 宝库 ${bot.name} 交互未执行（interactWithBlock=false，${viewStatusString(sim)}），` +
+        `${INTERACT_RETRY_TICK}tick 后重试`,
+      );
       notify("与宝库交互未成功，请调整假人位置后重试");
       return;
     }
@@ -298,8 +321,11 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     // 记录钥匙总量基准：此后总量减少且 -1 后非空 → 判定开箱成功（事件驱动）
     handle.baseline = countKeyTotal();
     handle.keyType = keyType;
-    console.info(`[MockPlayer] 宝库 ${bot.name} 交互成功，钥匙总量基准=${handle.baseline}（等待消耗事件判定）`);
+    console.info(
+      `[MockPlayer] 宝库 ${bot.name} 交互成功，钥匙总量基准=${handle.baseline}（等待钥匙消耗事件判定）`,
+    );
     phase = "wait";
+    waitTicks = 0;
   }
 
   // ── 辅助 ────────────────────────────────────────────
@@ -336,6 +362,18 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
         return false;
       }
     });
+  }
+
+  /** 视线命中详情字符串（状态日志用：看到什么方块） */
+  function viewStatusString(sim: SimulatedPlayer): string {
+    try {
+      const hit = sim.getBlockFromViewDirection({ maxDistance: VIEW_MAX_DIST });
+      if (!hit) return "视线未命中任何方块";
+      const b = hit.block;
+      return `视线命中 ${b.typeId}@(${Math.floor(b.location.x)},${Math.floor(b.location.y)},${Math.floor(b.location.z)}) face=${hit.face}`;
+    } catch (e: any) {
+      return `视线读取异常: ${e?.message ?? e}`;
+    }
   }
 
   /** 视线命中的方块是否就是目标宝库（用户规格：视线命中也是宝库才算可交互） */

@@ -171,9 +171,18 @@ function handleInventoryChange(event: PlayerInventoryItemChangeAfterEvent): void
     // ⚠️ 不能排除「-1 后空手」——主手 1 把钥匙开箱后主手必空（最常见场景），
     //    清空槽是移走还是消耗由下方的**总量基准**最终判定（权威）。
     const afterAmount = itemStack?.amount ?? 0;
-    if (beforeItemStack.amount - afterAmount !== 1) return; // 恰好 -1（排除其它变化）
+    const diff = beforeItemStack.amount - afterAmount;
+    if (diff !== 1) {
+      console.info(
+        `[MockPlayer] 宝库 ${player.name} 钥匙槽变化 ${beforeItemStack.amount}→${afterAmount}（差 ${diff}≠1，整组拿走/其他变化），忽略`,
+      );
+      return; // 恰好 -1（排除其它变化）
+    }
     // 交互基准（刚交互过才可能开箱）
-    if (handle.baseline === undefined) return;
+    if (handle.baseline === undefined) {
+      console.info(`[MockPlayer] 宝库 ${player.name} 钥匙槽 -1（${beforeItemStack.amount}→${afterAmount}）但无交互基准，忽略`);
+      return;
+    }
 
     const botName = player.name;
     // ⚠️ 延迟 1 tick：等槽间移动（换钥匙）完成后再对比总量
@@ -183,13 +192,15 @@ function handleInventoryChange(event: PlayerInventoryItemChangeAfterEvent): void
         if (!h || h.baseline === undefined) return;
         const total = countKeyTotal(player as SimulatedPlayer);
         if (total === undefined || total >= h.baseline) {
-          console.info(`[MockPlayer] 宝库 ${botName} 钥匙槽 -1 但总量未减少（槽间移动/拆分），忽略`);
+          console.info(
+            `[MockPlayer] 宝库 ${botName} 钥匙槽 -1 但总量未减少（总量=${total ?? "?"} 基准=${h.baseline}，槽间移动/拆分），忽略`,
+          );
           return;
         }
         // 判定成功！
         h.baseline = undefined; // 消费基准，防重复判定
         const keyType = h.keyType || "minecraft:trial_key";
-        console.info(`[MockPlayer] 宝库 ${botName} 开箱成功判定（钥匙恰好 -1 + 总量减少）`);
+        console.info(`[MockPlayer] 宝库 ${botName} 开箱成功判定（钥匙恰好 -1 + 总量 ${total} < 基准，触发重连循环）`);
         // 任务完成标记（引擎下一次 tick → isDone → onComplete 清理句柄）
         h.success();
         // 领域事件 → 订阅方通知附近玩家 + 安全重连

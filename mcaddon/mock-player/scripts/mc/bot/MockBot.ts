@@ -173,15 +173,24 @@ export class MockBot {
     if (!bot) return false;
     this.lookAt({ x: pos.x + 0.5, y: pos.y + 0.5, z: pos.z + 0.5 });
     let face: Direction = Direction.Down;
+    let viewInfo = "视线读取失败（用兜底面 Down）";
     try {
       const hit = bot.getBlockFromViewDirection({ maxDistance: 8 });
-      if (hit) face = hit.face;
+      if (hit) {
+        face = hit.face;
+        viewInfo = `视线命中 ${hit.block.typeId} face=${hit.face}`;
+      } else {
+        viewInfo = "视线未命中任何方块（用兜底面 Down）";
+      }
     } catch {
       /* 视线读取失败用兜底面 */
     }
     try {
-      return bot.interactWithBlock(pos, face);
-    } catch {
+      const ok = bot.interactWithBlock(pos, face);
+      console.info(`[MockPlayer] ${this.name} interactWithBlock @(${pos.x},${pos.y},${pos.z}) face=${face} 返回=${ok}｜${viewInfo}`);
+      return ok;
+    } catch (e: any) {
+      console.warn(`[MockPlayer] ${this.name} interactWithBlock 异常 @(${pos.x},${pos.y},${pos.z}): ${e?.message ?? e}`);
       return false;
     }
   }
