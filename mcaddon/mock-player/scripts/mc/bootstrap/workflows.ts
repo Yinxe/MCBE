@@ -10,9 +10,9 @@
 
 import { WorkflowManager } from "../../core/service/Workflow";
 import { McIntervalScheduler } from "../adapters/McIntervalScheduler";
-import { raidWorkflow } from "../workflows/raidWorkflow";
-import { vaultWorkflow } from "../workflows/vaultWorkflow";
-import { tridentWorkflow } from "../workflows/tridentWorkflow";
+import { raidFlow } from "../workflows/raidFlow";
+import { vaultFlow } from "../workflows/vaultFlow";
+import { tridentFlow } from "../workflows/tridentFlow";
 
 /**
  * 工作流管理器（单例）：注册 / 初始化 / 启停 / 查询。
@@ -21,6 +21,6 @@ import { tridentWorkflow } from "../workflows/tridentWorkflow";
  */
 export const workflowManager = new WorkflowManager(new McIntervalScheduler());
 
-workflowManager.register(raidWorkflow);
-workflowManager.register(vaultWorkflow);
-workflowManager.register(tridentWorkflow);
+workflowManager.register(raidFlow);
+workflowManager.register(vaultFlow);
+workflowManager.register(tridentFlow);

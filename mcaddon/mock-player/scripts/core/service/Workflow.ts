@@ -4,8 +4,9 @@
 //   - 工作流：复杂组合功能——有生命周期（init/start/stop）+ 运行状态 + 事件机制
 //             （如劫掠模式：喝瓶 → 袭击 → 胜利 → 下一瓶 的循环组合；
 //              宝库模式：钥匙消耗 → 重连 → 再开 的组合）
-// 每个工作流单独定义一份实现文件（如 raidWorkflow.ts / vaultWorkflow.ts），
-// 实现 Workflow 接口，由 WorkflowManager 统一注册/初始化/启停。
+// 每个工作流单独一份**完整实现文件**（mc/workflows/，如 raidFlow.ts / vaultFlow.ts /
+// tridentFlow.ts，业务实现内聚），实现 Workflow 接口，由 WorkflowManager 统一
+// 注册/初始化/启停。
 // 事件机制复用 core/events/EventSignal（订阅者异常隔离）；事件负载只用
 // 可序列化的 string/number——保持 core 纯净可单测。
 

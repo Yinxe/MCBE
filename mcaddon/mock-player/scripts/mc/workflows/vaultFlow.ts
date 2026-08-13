@@ -1,21 +1,21 @@
-// ─── 宝库模式 ──────────────────────────────────────────
-// 用于持续开 Trial Chambers 宝库的场景：
-// MC 宝库一个玩家只能开一次，假人的 registry 是账号表，spawn 生成不同躯体。
-// 流程：检测钥匙 → 交互方块 → 成功 → 保存状态 → 下线 → 上线 → 继续
-//
-// 只有手持 trial_key（普通钥匙）或 ominous_trial_key（不详钥匙）时才与方块交互。
-// 工作流生命周期（vaultWorkflow，含独立引擎）在 mc/workflows/vaultWorkflow.ts 定义，
-// 本文件只保留开箱周期实现（runVaultCycle）与事件发布。
+// ─── 宝库工作流（mc/workflows，完整实现内聚） ─────────
+// 宝库模式 = 手持钥匙开 Trial Chambers 宝库循环（1.3.8 内聚：原
+// features/vaultMode.ts 实现 + workflows/vaultWorkflow.ts 壳合并）：
+//   独立引擎（WorkflowManager 按 intervalTicks 创建周期）每 10 tick 遍历
+//   宝库标签在线假人 → runVaultCycle：检测钥匙 → 交互方块 → 回读验证钥匙
+//   真实消耗（防"假成功"无限重连）→ 保存 → 下线重连 → 继续。
+// 工作流提供生命周期（start/stop 管理标签）与事件（vault-opened）。
 
 import { world, system, EquipmentSlot, type Player, ItemStack } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
+import { color } from "@yinxe/toolkit";
 
+import type { Workflow } from "../../core/service/Workflow";
 import { BotRecord } from "../../core/model/Types";
-import { TAG_VAULT_MODE } from "../../core/tags/BotTags";
+import { BOT_TAG, TAG_VAULT_MODE } from "../../core/tags/BotTags";
 import { workflowVaultOpened } from "../../core/events/WorkflowEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { safeReconnect } from "./pendingRespawn";
-import { color } from "@yinxe/toolkit";
+import { safeReconnect } from "../features/pendingRespawn";
 
 /** 发布宝库工作流事件（领域事件信号） */
 function emitVaultEvent(botName: string, keyType: string, remaining: number): void {
@@ -46,13 +46,13 @@ function tryNotifyNoKey(bot: SimulatedPlayer, record: BotRecord): void {
 
 /**
  * 执行一次宝库交互周期。
- * 由 behavior.ts 的宝库模式 interval 每 10 tick 调用。
+ * 由 vaultFlow 的独立引擎每 10 tick 调用。
  *
  * 流程：
  *   1. 检查主手是否为钥匙 → 否，跳过
  *   2. 获取面前的方块 → 尝试 interactWithBlock
  *   3. 失败 → 下次重试
- *   4. 成功 → 保存全量状态 → offlineBot → onlineBot → 通知
+ *   4. 成功 → 回读验证钥匙真实消耗 → 下线重连 → 通知
  *
  * @param bot    - 当前假人实体
  * @param record - 假人记录
@@ -209,3 +209,60 @@ function distance(a: { x: number; y: number; z: number }, b: { x: number; y: num
   const dz = a.z - b.z;
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
+
+// ─── 工作流定义（生命周期 + 独立引擎，1.3.8 内聚） ────
+
+/** 宝库工作流：手持钥匙开 Trial Chambers 宝库，成功后下线重连循环（自带独立引擎） */
+export const vaultFlow: Workflow = {
+  name: "vault-mode",
+  description: "宝库模式：手持钥匙开 Trial Chambers 宝库，成功后下线重连循环",
+
+  init(): void {
+    // 引擎由 WorkflowManager 调度（initAll 时按 intervalTicks 创建独立 interval）
+  },
+
+  start(botName?: string): void {
+    if (!botName) return;
+    const record = botRegistry.get(botName);
+    if (!record || record.tags.includes(TAG_VAULT_MODE.value)) return;
+    record.tags.push(TAG_VAULT_MODE.value);
+    saveCoordinator.saveRecord(record);
+  },
+
+  stop(botName?: string): void {
+    if (!botName) return;
+    const record = botRegistry.get(botName);
+    if (!record) return;
+    record.tags = record.tags.filter((t) => t !== TAG_VAULT_MODE.value);
+    saveCoordinator.saveRecord(record);
+  },
+
+  isRunning(botName?: string): boolean {
+    if (!botName) return false;
+    const record = botRegistry.get(botName);
+    return !!record && record.tags.includes(TAG_VAULT_MODE.value) && record.online && !record.death;
+  },
+
+  // ── 独立引擎：每 10 tick 遍历宝库标签在线假人，执行一次开箱周期 ──
+  engine: {
+    intervalTicks: 10,
+    tick(): void {
+      let players;
+      try {
+        players = world.getPlayers({ tags: [BOT_TAG] });
+      } catch {
+        return;
+      }
+      for (const player of players) {
+        try {
+          if (!player.hasTag(TAG_VAULT_MODE.value)) continue;
+          const record = botRegistry.get(player.name);
+          if (!record || record.death || !record.online) continue;
+          runVaultCycle(player as SimulatedPlayer, record);
+        } catch (e: any) {
+          console.warn(`[MockPlayer] 宝库模式异常 ${player.name}: ${e?.message ?? e}`);
+        }
+      }
+    },
+  },
+};

@@ -1,21 +1,20 @@
-// ─── 劫掠模式（事件驱动 + 兜底巡检） ──────────────────
-// 假人持续刷袭击（raid）farm：喝不祥之瓶 → 触发袭击 → 击败袭击获得村庄英雄 → 再喝下一瓶
-//
-// 以事件驱动为主（无 tick 轮询），辅以 30 秒一次的兜底巡检（raidModeSweep）：
-//   开启/上线/重生 → startRaidMode 喝第一瓶
+// ─── 劫掠工作流（mc/workflows，完整实现内聚） ─────────
+// 劫掠模式 = 复杂组合功能 → 工作流：生命周期（init/start/stop/isRunning）
+// + 领域事件（raidStarted / raidVictory，见 core/events/WorkflowEvents）。
+// **本文件自包含完整业务实现**（1.3.8 内聚：原 features/raidMode.ts +
+// workflows/raidWorkflow.ts 壳合并）：
+//   行为菜单开启/上线/重生 → startRaidMode 喝第一瓶
 //   喝下成功       → 获得不祥之兆 → 触发 raidStarted（袭击开始）→ 记录袭击预期窗口
-//   袭击获胜       → 获得村庄英雄 → 触发 raidVictory → 订阅者把英雄叠加给主人并喝下一瓶
-//   胜利但无英雄   → 巡检发现「无任何效果 + 窗口过期 + 附近无袭击者」→ 兜底续喝下一瓶
-//   英雄事件丢失   → 巡检发现假人挂着村庄英雄却未处理 → 补记胜利并续瓶
-//
-// 劫掠信号（raidStarted / raidVictory）定义在 core/events/DomainEvents（假人模块私有）。
-// 规则常量/识别（不祥之瓶、效果分类、饮用/卡死/巡检阈值）在 core/service/RaidRules。
+//   袭击获胜       → 获得村庄英雄 → 触发 raidVictory → 英雄叠加给主人并喝下一瓶
+//   喝瓶后卡死     → 一次性提醒（带不祥之兆久未触发袭击 → 提示玩家检查村庄/难度）
+// 规则常量/识别（不祥之瓶、效果分类、饮用/卡死阈值）在 core/service/RaidRules。
 // 与假人加载模式无关（普通/强加载均可 useItemInSlot 使用物品）。
 
 import { Container, Effect, EffectAddAfterEvent, Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
+import type { Workflow } from "../../core/service/Workflow";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { syncEntityTags } from "../adapters/EntityTags";
@@ -51,7 +50,7 @@ let raidEventsReady = false;
 // ─── 公开 API ──────────────────────────────────────────
 
 /**
- * 初始化劫掠事件系统。由 main.ts 在 worldLoad 后调用一次：
+ * 初始化劫掠事件系统。由工作流 init 在 worldLoad 后调用一次：
  *   1. effectAdd 监听不祥之兆/袭击之兆/村庄英雄 → 触发 raidStarted / raidVictory
  *   2. 订阅 raidVictory → 把村庄英雄叠加给主人并喝下一瓶不祥之瓶
  *   3. 订阅假人上线/复活 → 喝第一瓶（替代 playerJoin/playerSpawn 硬编码调用）
@@ -242,12 +241,7 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
   }
 }
 
-// ─── 兜底巡检 ──────────────────────────────────────────
-// 事件驱动链可能因三类原因断裂，巡检每 30 秒恢复一次：
-//   1. 袭击胜利但假人未获得村庄英雄（未参与击杀 / 死亡时获胜）→ 无任何效果且窗口过期 → 续瓶
-//   2. 村庄英雄已施加但 effectAdd 事件丢失（假人挂着英雄却无胜利处理）→ 补记胜利并续瓶
-//   3. 喝瓶静默失败（useItemInSlot 未返回 true）→ 无效果、无窗口 → 冷却后重试
-// 判定依据（袭击可能仍在进行）：带不祥/袭击之兆、预期窗口未过期、或附近 128 格内有袭击参与生物。
+// ─── 卡死提醒（一次性的，非轮询） ──────────────────────
 
 /** 喝瓶后 1 分钟仍带不祥之兆 → 袭击未触发，提醒玩家（一次性的，非轮询） */
 function scheduleRaidStuckCheck(botName: string): void {
@@ -452,3 +446,36 @@ export function disableRaidMode(botName: string, record: BotRecord, message?: st
     world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName}: ${message}`);
   }
 }
+
+// ─── 工作流定义（生命周期壳，1.3.8 内聚） ──────────────
+
+/** 劫掠工作流：喝不祥之瓶 → 袭击 → 胜利 → 下一瓶（事件驱动循环） */
+export const raidFlow: Workflow = {
+  name: "raid-mode",
+  description: "劫掠模式：喝不祥之瓶触发袭击，胜利后把村庄英雄叠加给主人并续喝下一瓶",
+
+  init(): void {
+    initRaidModeEffects();
+  },
+
+  start(botName?: string): void {
+    if (!botName) {
+      console.warn(`[Workflow] raid-mode start 需要指定假人`);
+      return;
+    }
+    startRaidMode(botName);
+  },
+
+  stop(botName?: string): void {
+    if (!botName) return;
+    const record = botRegistry.get(botName);
+    if (!record) return;
+    disableRaidMode(botName, record);
+  },
+
+  isRunning(botName?: string): boolean {
+    if (!botName) return false;
+    const record = botRegistry.get(botName);
+    return !!record && record.tags.includes(TAG_RAID_MODE.value) && record.online && !record.death;
+  },
+};

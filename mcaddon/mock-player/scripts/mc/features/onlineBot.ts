@@ -9,7 +9,7 @@ import { BotUiEvent } from "../../core/events/UiEvents";
 import { botManager } from "../bot/BotManager";
 import { botRegistry } from "../bootstrap/context";
 import { spawnBot } from "./spawnMode";
-import { trackBotOnline } from "./tridentTracker";
+import { trackBotOnline } from "../workflows/tridentFlow";
 
 /**
  * 恢复离线假人上线（异步：生成前会等待名称唯一，见 spawnMode）

@@ -14,7 +14,7 @@ import { registerUiSubscriptions as registerSpawnPointUi } from "../features/spa
 import { registerUiSubscriptions as registerRenameUi } from "../features/rename";
 import { registerUiSubscriptions as registerKillUi } from "../features/killBot";
 import { registerUiSubscriptions as registerFollowUi } from "../features/follow";
-import { registerUiSubscriptions as registerRaidUi } from "../features/raidMode";
+import { registerUiSubscriptions as registerRaidUi } from "../workflows/raidFlow";
 import { registerUiSubscriptions as registerSwapUi } from "../ui/swap";
 import { registerUiSubscriptions as registerMainhandUi } from "../ui/mainhand";
 import { registerUiSubscriptions as registerReclaimUi } from "../ui/reclaim";

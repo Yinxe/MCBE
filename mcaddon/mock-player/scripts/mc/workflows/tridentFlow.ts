@@ -1,4 +1,6 @@
-// ─── 投掷物双任认主追踪（mc 层） ──────────────────────
+// ─── 三叉戟认主工作流（mc/workflows，完整实现内聚） ────
+// 投掷物双任认主追踪体系（1.3.8 内聚：原 features/tridentTracker.ts +
+// workflows/tridentWorkflow.ts 壳合并）——投掷标记 → 实体追踪 → 认主/回退/夺回。
 //
 // 双认主机制（两个方向互补）：
 //   1. 投掷即标记：投掷物生成（entitySpawn）时，以投射物 owner（实际投掷者）
@@ -15,13 +17,16 @@
 //
 // ⚠️ thrown_trident / arrow 投射物实体没有可读物品的组件（minecraft:item 仅掉落物实体），
 //    附魔信息只能在投掷流程获取：优先投掷流程注册的 pending 队列，其次投掷者主手。
+// 对外事件复用领域事件信号：BotWorkflowEvent.tridentClaimed / tridentOwnerChanged
+// （与 DomainEvents 同一信号实例，每个事件独立信号）。
 
 import { world, system, EntityProjectileComponent } from "@minecraft/server";
 import type { Dimension, Entity, ItemStack } from "@minecraft/server";
+import type { Workflow } from "../../core/service/Workflow";
 import { botRegistry } from "../bootstrap/context";
 import { BotEvents } from "../../core/events/DomainEvents";
 import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner, TRACKED_PROJECTILE_IDS } from "../../core/items/TridentClaimRules";
-import { queueClaimReport } from "./claimReporter";
+import { queueClaimReport } from "../features/claimReporter";
 
 // ─── pending 附魔信息队列 ──────────────────────────────
 // 投掷流程（features/trident.ts doThrowLoop）在 useItemInSlot 前注册物品信息，
@@ -374,3 +379,32 @@ export function releaseBotTridents(botName: string): void {
     console.info(`[MockPlayer] releaseBotTridents(${botName}) 完成，回退 ${total} 把投掷物到第一任`);
   }
 }
+
+// ─── 工作流定义（生命周期壳，1.3.8 内聚） ────────────
+
+/** 三叉戟认主工作流：投掷标记 → 实体追踪 → 认主/回退/夺回（事件驱动 + 生命周期壳） */
+export const tridentFlow: Workflow = {
+  name: "trident",
+  description: "三叉戟认主：假人投掷三叉戟自动标记归属，上线恢复认主、下线回退第一任",
+
+  init(): void {
+    initTridentTracker();
+  },
+
+  start(botName?: string): void {
+    if (!botName) return;
+    const record = botRegistry.get(botName);
+    if (!record || record.death || !record.online) return;
+    rebindBotTridents(botName); // 幂等：重复调用安全
+  },
+
+  stop(botName?: string): void {
+    if (!botName) return;
+    releaseBotTridents(botName); // 幂等：重复调用安全
+  },
+
+  isRunning(botName?: string): boolean {
+    if (!botName) return false;
+    return countOwnedTridents(botName) > 0;
+  },
+};
