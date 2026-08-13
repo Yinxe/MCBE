@@ -130,7 +130,7 @@ test("优先不详宝库：有不详钥匙 + 两种宝库 → 选不详宝库（
   assert.equal(ports.reconnectCalls, 1);
 });
 
-test("不详钥匙兜底开普通宝库：只有不详钥匙 + 普通宝库 → 选普通宝库（不详钥匙）", async () => {
+test("普通宝库钥匙专用：只有不详钥匙 + 普通宝库 → 选不出目标，idle 报 no-trial-key", async () => {
   const { ports, bb, tick } = makeHarness();
   ports.knowledge = {
     keys: { trial: 0, ominous: 1 },
@@ -138,9 +138,10 @@ test("不详钥匙兜底开普通宝库：只有不详钥匙 + 普通宝库 → 
     position: { x: 0, y: 0, z: 0 },
   };
 
-  assert.equal(await tick(100), Status.Success);
-  assert.deepEqual(bb.get<Vec3>("vaultTarget"), NORMAL_VAULT);
-  assert.equal(bb.get<string>("vaultTargetKey"), OMINOUS_TRIAL_KEY); // 不详钥匙兜底
+  assert.equal(await tick(100), "success");
+  assert.equal(bb.has("vaultTarget"), false); // 不详钥匙开不了普通宝库
+  assert.deepEqual(ports.idleReasons, ["no-trial-key"]);
+  assert.equal(ports.interactCalls, 0);
 });
 
 // ─── 缺因诊断（开不了宝库的通知原因） ────────────────────
@@ -170,8 +171,7 @@ test("缺因：有钥匙但附近无宝库 → idle 报 no-vault", async () => {
   assert.deepEqual(ports.idleReasons, ["no-vault"]);
 });
 
-test("缺因：只有不详宝库 + 无不详钥匙 → idle 报 no-ominous-key（感知冷却后重试）", async () => {
-  const { ports, tick } = makeHarness();
+test("缺因：只有不详宝库 + 无不详钥匙 → idle 报 no-ominous-key（感知冷却后重试）", async () => {  const { ports, tick } = makeHarness();
   ports.knowledge = {
     keys: { trial: 1, ominous: 0 },
     vaults: { normal: [], ominous: [OMINOUS_VAULT] },

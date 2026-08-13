@@ -1,8 +1,9 @@
 // ─── 领域事件（core 层） ────────────────────────────────
-// 劫掠信号只属于假人模块（raid 是 mock-player 业务，非通用机制，不放进共享 toolkit）：
+// 假人模块领域信号统一收口（劫掠/宝库/认主/生命周期/行为/装备槽）：
 //   喝下不祥之瓶 → 获得不祥之兆 → 触发 raidStarted（袭击开始）
-//   袭击获胜     → 获得村庄英雄 → 触发 raidVictory（袭击结束）→ 订阅者喝下一瓶
-// 订阅方通过 raidStarted / raidVictory 信号解耦，不直接依赖 raidMode 内部实现。
+//   袭击获胜     → 获得村庄英雄 → 触发 raidVictory（袭击结束）→ 树处理胜利
+//   宝库开箱     → 钥匙消耗 → 触发 vaultOpened（开箱成功，供通知/统计联动）
+// 订阅方通过信号解耦，不直接依赖任务内部实现。
 // 事件负载只用可序列化的 string/number，不携带 mc 对象——保证 core 纯净。
 
 import { EventSignal } from "./EventSignal";
@@ -29,6 +30,21 @@ export const raidStarted = new EventSignal<RaidStartedEvent>();
 
 /** 劫掠胜利信号 */
 export const raidVictory = new EventSignal<RaidVictoryEvent>();
+
+// ─── 宝库事件 ────────────────────────────────────────────
+
+/** 宝库开箱成功事件：钥匙消耗并打开宝库 */
+export interface VaultOpenedEvent {
+  /** 假人名 */
+  botName: string;
+  /** 消耗的钥匙类型 ID */
+  keyType: string;
+  /** 剩余钥匙数量 */
+  remaining: number;
+}
+
+/** 宝库开箱成功信号 */
+export const vaultOpened = new EventSignal<VaultOpenedEvent>();
 
 // ─── 三叉戟认主事件 ────────────────────────────────────
 // 认主机制的所有动作（投掷标记/加载回退/上线夺回/UI 认主/下线回退）完成时触发，
@@ -204,6 +220,8 @@ export const BotEvents = {
   // 劫掠
   raidStarted,
   raidVictory,
+  // 宝库
+  vaultOpened,
   // 认主
   tridentClaimed,
   tridentOwnerChanged,

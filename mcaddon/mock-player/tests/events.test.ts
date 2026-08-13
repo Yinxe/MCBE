@@ -64,6 +64,16 @@ test("领域事件：raidStarted/raidVictory 信号可触发并携带序列化�
   off2();
 });
 
+test("领域事件：vaultOpened 信号可触发并携带序列化负载（开箱成功通知/统计联动）", () => {
+  const events: string[] = [];
+  const off = BotEvents.vaultOpened.subscribe((e) => events.push(`${e.botName}:${e.keyType}:${e.remaining}`));
+
+  BotEvents.vaultOpened.trigger({ botName: "bot1", keyType: "minecraft:trial_key", remaining: 3 });
+
+  assert.deepEqual(events, ["bot1:minecraft:trial_key:3"]);
+  off();
+});
+
 test("领域事件：三叉戟认主事件（各途径可触发）", () => {
   const events: string[] = [];
   const off = BotEvents.tridentClaimed.subscribe((e) => events.push(`${e.tridentId}:${e.claimedBy}:${e.via}`));

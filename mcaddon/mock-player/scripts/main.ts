@@ -17,10 +17,11 @@ import { registerAllCommands } from "./mc/commands/index";
 import { registerAllEvents } from "./mc/events/index";
 import { startTagBehaviors } from "./mc/features/behavior";
 import { initTridentTracker } from "./mc/features/tridentTracker";
+import { initRaidPorts } from "./mc/tasks/McRaidPorts";
+import { startBrainEngine } from "./mc/ai/BotBrain";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
 import { registerUiDrivers } from "./mc/bootstrap/uiDrivers";
 import { runMigrations } from "./mc/bootstrap/migration";
-import { workflowManager } from "./mc/bootstrap/workflows";
 import { botRegistry, configStore } from "./mc/bootstrap/context";
 
 // Phase 1/2: 基础设施与业务装配在 mc/bootstrap/context 模块 import 时完成
@@ -77,9 +78,13 @@ world.afterEvents.worldLoad.subscribe(() => {
   startTagBehaviors();
 
   // 初始化三叉戟认主机制（entitySpawn/entityLoad 标记 + 上线夺回/下线回退）——
-  // 纯事件驱动的自定义世界机制，不属于工作流体系，独立初始化
+  // 纯事件驱动的自定义世界机制，独立初始化
   initTridentTracker();
 
-  console.info(`[MockPlayer] 初始化工作流（劫掠/宝库）`);
-  workflowManager.initAll();
+  // 初始化劫掠机制（effectAdd 事件订阅 → 公共信号 + 一次性卡死提醒）——
+  // 事件驱动感知喂给 AI 行为树（core/tasks/RaidTask），独立初始化
+  initRaidPorts();
+
+  // 启动 AI 行为引擎（宝库/劫掠任务：每 10 tick 驱动各自行为树 + 标签对账）
+  startBrainEngine();
 });

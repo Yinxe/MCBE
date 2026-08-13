@@ -30,9 +30,10 @@ scripts/
 ├── core/            # 领域层：零 @minecraft 依赖，可 node 单测
 │   ├── model/       # Types.ts — BotRecord/SerializedItemStack/常量（Vec3/Vec2 本地化；
 │   │                #   normalizeBotName $ 前缀 + isValidBotName）
-│   ├── events/      # EventSignal（零依赖信号）+ DomainEvents（raidStarted/raidVictory）
-│   │                # + WorkflowEvents + UiEvents（BotUiEvent：panelAction 14 动作 /
-│   │                #   behaviorSubmitted 行为菜单提交，负载可序列化）
+│   ├── events/      # EventSignal（零依赖信号）+ DomainEvents（raidStarted/raidVictory/
+│   │                #   vaultOpened/认主/生命周期/行为/装备槽，BotEvents 聚合）
+│   │                # + UiEvents（BotUiEvent：panelAction 14 动作 / behaviorSubmitted
+│   │                #   行为菜单提交，负载可序列化）
 │   ├── tags/        # BotTags — 标签定义/分组/四级解析（resolveTag）+
 │   │                #   computeTagsFromBehaviorForm（表单 → 完整标签集纯函数）
 │   ├── coords/      # Coordinate（容错坐标解析）+ Direction（旋转→方向）
@@ -51,15 +52,15 @@ scripts/
 │   │                # uiDrivers — UI 领域事件订阅统一装配（18 模块）
 │   ├── adapters/    # McBotStore（NBT 木桶阵列持久化）/ McItemCodec（预览序列化）/ PlayerGateway
 │   │                # EntityTags / PoseGateway / McIntervalScheduler / EquipmentSlots
-│   ├── features/    # 业务用例：决策调 core，副作用留本地（behavior/spawn/reclaim/raidMode…）
+│   ├── features/    # 业务用例：决策调 core，副作用留本地（behavior/spawn/reclaim…）
 │   ├── commands/    # mp:* 命令（薄壳；data 兼 UI 订阅 viewData）
 │   ├── events/      # 世界事件订阅（薄壳）
 │   ├── ui/          # toolkit 表单（**只发布 UI 领域事件，不 import 业务动作函数**；
 │   │                #   表单提交后直接调 feature 的例外：mainhand/reclaim/trident/swap）
-│   ├── ai/          # **AI 引擎**：BotBrain — 每假人一棵行为树（惰性创建/防重入/标签对账）
-│   ├── tasks/       # **任务执行**：McVaultPorts — 宝库感知/导航/交互副作用
-│   ├── workflows/   # raidWorkflow（事件驱动）/ vaultWorkflow（行为树引擎壳）——
-│   │                #   三叉戟认主已拆出为自定义机制（main.ts 直接 initTridentTracker）
+│   ├── ai/          # **AI 引擎**：BotBrain — 每假人每任务一棵行为树（惰性创建/防重入/
+│   │                #   标签对账）+ startBrainEngine（10 tick 引擎 + UI 不在线提示）
+│   ├── tasks/       # **任务执行**：McVaultPorts（宝库感知/导航/交互）+ McRaidPorts
+│   │                #   （劫掠事件订阅/喝瓶/胜利处理/卡死提醒）
 │   └── format.ts    # 带色文本格式化（§ 色码）
 └── tests/           # node:test 单测（只测 core；mc 层靠游戏内冒烟）
     ├── helpers/     # factories（构造 BotRecord/物品）
@@ -73,9 +74,9 @@ scripts/
 | 层 | 位置 | 职责 |
 |----|------|------|
 | 编排框架 | `core/ai/` | 行为树节点（零 @minecraft，可单测）：组合 Sequence/Selector/RandomSelector、装饰 Cooldown/Inverter/AlwaysSucceed/AlwaysFail/RepeatUntilSuccess、叶子 Condition/Action、等待 WaitForTicks、黑板 Blackboard、入口 BehaviorTree |
-| 任务模块 | `core/tasks/` | 具体任务：感知快照类型 + 端口接口 + 树装配（VaultTask 宝库；砍树/钓鱼照此模式）。**决策纯声明，注入 Fake 端口可单测** |
-| 引擎 | `mc/ai/BotBrain.ts` | 每假人一棵树：惰性创建、防重入（协程 tick 未完成跳过）、不可用（离线/死亡）跳过、标签对账（移除标签 → 停止导航+清黑板；**重连中跳过**） |
-| 任务执行 | `mc/tasks/` | 端口实现：世界感知（getBlocks/背包扫描）、导航、交互、通知（McVaultPorts） |
+| 任务模块 | `core/tasks/` | 具体任务：感知快照类型 + 端口接口 + 树装配（VaultTask 宝库 / RaidTask 劫掠；砍树/钓鱼照此模式）。**决策纯声明，注入 Fake 端口可单测** |
+| 引擎 | `mc/ai/BotBrain.ts` | 每假人**每任务**一棵树（vault/raid 可共存）：惰性创建、防重入（协程 tick 未完成跳过）、不可用（离线/死亡）跳过、标签对账（移除标签 → 停止导航+清黑板；**宝库重连中跳过**）。`startBrainEngine()` 10 tick 引擎 + UI 不在线提示 |
+| 任务执行 | `mc/tasks/` | 端口实现：世界感知（getBlocks/背包扫描/效果查询）、导航、交互、通知（McVaultPorts / McRaidPorts） |
 
 **核心机制**：
 - **Selector 无记忆抢占**（goal 反应式选择，仿 Bedrock priority 组件）：每 tick 从第一个子节点重评，条件满足的分支胜出、条件变化立即切换。failure 是决策信号（降级下一个分支），不是异常
@@ -89,11 +90,22 @@ scripts/
 Selector（每 tick 重评）
 ├─ 开箱：有目标 + 距离近 + 交互冷却过 → interactVault（总量基准回读，持续点击不放弃）
 ├─ 寻路：有目标 + 距离远 → navigateToVault（协程，目标消失/停滞即弃）
-├─ 感知：无目标 → sense + selectVaultTarget（失败冷却 40tick）
-└─ idle：按 diagnoseVaultIdle 原因通知（缺钥匙/缺宝库/缺不详钥匙）
+├─ 感知：无目标 → sense + selectVaultTarget（**优先不详宝库**；失败冷却 40tick）
+└─ idle：按 diagnoseVaultIdle 原因通知（缺钥匙/缺宝库/缺不详钥匙/缺普通钥匙——
+    普通宝库只能用普通钥匙）
 ```
 
-**新任务接入指南**：① `core/tasks/XxxTask.ts` 定义感知快照 + 端口接口 + 树装配（复用 core/ai 节点）；② `mc/tasks/McXxxPorts.ts` 实现端口（世界副作用）；③ 引擎挂载（BotBrain 或新 Workflow.engine）；④ `tests/` 注入 Fake 端口断言场景序列。核心约束：core 零 @minecraft、决策可单测、mc 只做副作用。
+**劫掠任务决策树**（事件驱动黑板 + 树决策，语义 713e8da：零巡检/零恢复）：
+```
+Selector（每 tick 重评）
+├─ 胜利处理：带村庄英雄效果且事件窗口内 → handleVictory（计胜+叠加主人+移除英雄）
+├─ 喝瓶：无坏兆/袭击兆 + 有药水 → drinkBottle（协程；无瓶自动关模式）
+└─ 等待：袭击中静默 / 无药水通知（diagnoseRaidIdle）
+```
+- 事件感知：`effectAdd` 订阅（McRaidPorts）更新 `lastHeroTick` + 触发公共信号（raidStarted/raidVictory）+ **一次性卡死提醒**（1 分钟后仍带兆头仅发消息）；树每 10 tick 经 `sense()` 读取——袭击等待（分钟级）零轮询负担
+- 胜利处理幂等：`handledHeroTick` 防 removeEffect 失败重复叠加；事件窗口 20 tick 防过期残留重复处理
+
+**新任务接入指南**：① `core/tasks/XxxTask.ts` 定义感知快照 + 端口接口 + 树装配（复用 core/ai 节点）；② `mc/tasks/McXxxPorts.ts` 实现端口（世界副作用）；③ BotBrain 注册任务（tickXxxBrain + reconcileXxxBrains + startBrainEngine 标签分发）；④ `tests/` 注入 Fake 端口断言场景序列。核心约束：core 零 @minecraft、决策可单测、mc 只做副作用。
 
 ### 依赖纪律（core 层强约束）
 
@@ -129,9 +141,9 @@ Selector（每 tick 重评）
 
 ### UI 事件驱动（1.2.6，BotUiEvent 双领域事件）
 - **UI 只发布事件，零功能 import**：ui/bot.ts 面板按钮 → `BotUiEvent.panelAction.trigger({playerId, botName, action})`（14 动作）；ui/tags.ts 行为菜单提交 → **① setTags 先落库 ② 发布 `behaviorSubmitted`**（负载带表单快照 + tags）——订阅方按事件负载或 record.tags 判断结果相同，无时序依赖
-- **功能模块各自 `registerUiSubscriptions()` 分散订阅**（sneak/spawnMode/useItem/onlineBot/teleport/spawnPoint/rename/killBot/follow/raidMode + ui swap/mainhand/reclaim/tags/trident/tridentClaim/move + commands/data 共 18 个），`bootstrap/uiDrivers.ts` 统一装配（esbuild bundle 可达）
+- **功能模块各自 `registerUiSubscriptions()` 分散订阅**（sneak/spawnMode/useItem/onlineBot/teleport/spawnPoint/rename/killBot/follow + ui swap/mainhand/reclaim/tags/trident/tridentClaim/move + commands/data 共 17 个），`bootstrap/uiDrivers.ts` 统一装配（esbuild bundle 可达）
 - setTags 不放事件（避免重复发布重复执行）；`syncEntityTags` 唯一实体同步渠道（自动 diff 增量）
-- 工作流（raidWorkflow 等）内订阅由各自 init 注册（workflowManager.initAll）；create/online/menu/adminMenu 保持直接调用不事件化（UI 内部导航/纯展示例外）
+- AI 任务的 UI 反馈订阅（宝库/劫掠不在线提示）在 `mc/ai/BotBrain.startBrainEngine`（引擎启动时注册）；create/online/menu/adminMenu 保持直接调用不事件化（UI 内部导航/纯展示例外）
 - 表单布局：自动重生置顶 → 强加载第 2 → 潜行/使用物品/自动跳跃/自动跟随/劫掠 → 互斥行为下拉（仅选一项）；标签计算走 core 纯函数 `computeTagsFromBehaviorForm`
 
 ### 测试维度与常加载（1.2.0~1.2.3）
@@ -248,13 +260,13 @@ Selector（每 tick 重评）
 - 生产端：playerJoin（botOnline）/ playerSpawn（botRespawn）/ entityDie（botDeath + 死亡下线 botOffline）/ offlineBot（botOffline）/ playerLeave（botOffline，幂等）
 - **订阅驱动**（业务模块不硬编码互相调用）：
   - tridentTracker 订阅 botOnline/botRespawn → rebindBotTridents（夺回）；botOffline → releaseBotTridents（回退第一任）
-  - raidMode 订阅 botOnline/botRespawn → startRaidMode（续喝第一瓶，替代 playerJoin/playerSpawn 硬编码）
+  - 劫掠上线/重生续喝由 AI 引擎接管（树每 10 tick 按标签驱动，见编排层章节）
 
-### 劫掠模式兜底（`mc/features/raidMode.ts`，事件驱动 + 巡检）
-- 事件链：喝瓶→不祥之兆（raidStarted）→袭击胜利→村庄英雄（raidVictory）→英雄叠加给主人→续瓶；`system.runInterval` 30 秒巡检（raidModeSweep）恢复链断裂：
-  - 胜利但无英雄（未参与击杀/死亡时获胜）→「无任何效果 + 预期窗口过期（10 分钟）+ 附近 128 格无袭击者」→ 兜底续瓶
-  - 村庄英雄已施加但 effectAdd 丢失 → 兜底补记胜利（`processVictory` viaSweep）并续瓶
-  - 喝瓶静默失败 → 冷却 1 分钟重试
+### 劫掠模式（`mc/tasks/McRaidPorts.ts` + `core/tasks/RaidTask.ts`，纯事件驱动 + 一次性卡死提醒）
+- 事件链：喝瓶（树）→不祥之兆（effectAdd → raidStarted 信号）→袭击胜利→村庄英雄（effectAdd → raidVictory 信号 + lastHeroTick）→树胜利处理（叠加给主人→移除英雄→自然喝下一瓶）
+- ⚠️ **语义（用户拍板 713e8da）：纯事件驱动，零巡检/零恢复机制**——袭击等待靠事件唤醒（树条件全 false 时等待分支无副作用）；卡死提醒 = 一次性 runTimeout（1 分钟后仍带兆头仅发消息，不自动恢复）
+- 胜利处理幂等：`handledHeroTick` 防 removeEffect 失败重复叠加；喝瓶前防御清理残留村庄英雄（断 effectAdd 检测链兜底）
+- 无药水自动关模式（disableRaidMode：移除标签即停用，树随后被引擎对账清理）
 - 村庄英雄清除前 `grantVillageHeroToOwner` 叠加给主人：剩余时长相加、等级取高（`getEffect` 读 tick 后显式相加，不依赖引擎刷新语义）；主人不在线则不转移
 
 ### 假人行为事件（`core/events/DomainEvents`，`mc/events/botActions.ts` 生产端）
@@ -292,7 +304,7 @@ Selector（每 tick 重评）
   BotEvents.botOnline.subscribe((e) => { ... });
   ```
 - 事件类型按需单独导入（如 `import type { RaidVictoryEvent } from ".../DomainEvents"`）
-- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（`mc/events/botActions.ts`）、认主（tridentTracker/tridentClaim）、劫掠（raidMode）；新领域事件一律经 BotEvents 聚合导出
+- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（`mc/events/botActions.ts`）、认主（tridentTracker/tridentClaim）、劫掠（McRaidPorts effectAdd 订阅）、宝库（McVaultPorts 开箱成功）；新领域事件一律经 BotEvents 聚合导出
 
 ## 踩坑记录
 

@@ -26,7 +26,7 @@ import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, 
 import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "../../core/tasks/VaultTask";
 import type { Vec3 } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { workflowVaultOpened } from "../../core/events/WorkflowEvents";
+import { BotEvents } from "../../core/events/DomainEvents";
 import { botRegistry } from "../bootstrap/context";
 import { lookAt } from "../adapters/PoseGateway";
 import { safeReconnect, reconnectingBots } from "../features/pendingRespawn";
@@ -192,7 +192,7 @@ export const vaultPorts: VaultPorts = {
     if (total >= baseline) return "not-consumed";
 
     // 真消耗 → 发布领域事件 + **立即通知剩余钥匙数（下线前背包准确）**
-    workflowVaultOpened.trigger({ botName, keyType: keyTypeId, remaining: total });
+    BotEvents.vaultOpened.trigger({ botName, keyType: keyTypeId, remaining: total });
     sendNearest(bot, record.name, `${color.success}开箱成功！${color.muted}剩余 ${color.info}${total} ${color.playerName}把钥匙${color.muted}，下线重连继续`);
     return "consumed";
   },
@@ -215,7 +215,9 @@ export const vaultPorts: VaultPorts = {
         ? "背包没有宝库钥匙（普通/不详），请放入钥匙"
         : reason === "no-vault"
           ? "附近 15 格内没有宝库，请将假人带到宝库附近"
-          : "附近只有不详宝库，背包没有不详钥匙（普通钥匙无法开不详宝库）";
+          : reason === "no-ominous-key"
+            ? "附近只有不详宝库，背包没有不详钥匙（普通钥匙无法开不详宝库）"
+            : "背包没有普通钥匙（普通宝库只能使用普通钥匙），请放入普通钥匙";
     notifyNoKey(bot, record.name, message);
   },
 };

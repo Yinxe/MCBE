@@ -1,0 +1,123 @@
+// ─── 劫掠任务（core/tasks） ──────────────────────────────
+// 任务型模块：构建于 core/ai 行为树框架之上（零 @minecraft，可单测）。
+// **事件驱动黑板 + 树决策**：效果事件（effectAdd）在 mc 层更新状态，
+//   树每 10 tick 经 sense() 读取——分钟级袭击等待零轮询负担。
+//
+// 决策语义（根 Selector 每 tick 重评，无记忆）：
+//   优先级：
+//     1. 胜利处理：假人带村庄英雄效果 → 计胜 + 叠加给主人 + 移除英雄
+//     2. 喝瓶：无坏兆/袭击兆 + 背包有不祥之瓶 → 喝瓶（协程链）
+//     3. 等待：袭击中静默等待 / 无药水通知（diagnoseRaidIdle）
+//   ⚠️ 语义约束（用户拍板 713e8da）：**纯事件驱动 + 一次性卡死提醒**——
+//     袭击等待靠事件唤醒（效果实时查询，树条件全 false 时等待分支无副作用），
+//     卡死提醒由 mc 事件层一次性 schedule（只发消息），**不引入任何巡检/恢复机制**。
+//   ⚠️ 无药水自动关模式（原 raidMode 语义）：drinkBottle 返回 "no-bottle" 时
+//     端口内移除劫掠标签（自动停用），树随后被引擎对账清理。
+
+import { Action, BehaviorTree, Condition, Selector, Sequence, Status } from "../ai";
+
+// ─── 感知快照 ────────────────────────────────────────────
+
+/** 劫掠感知快照（事件驱动 + 实时查询，编排层唯一决策输入） */
+export interface RaidKnowledge {
+  effects: {
+    /** 不祥之兆（喝瓶后获得；进入村庄后转为袭击之兆）——袭击酝酿中 */
+    badOmen: boolean;
+    /** 袭击之兆（村庄转化，30 秒后触发袭击）——袭击进行中 */
+    raidOmen: boolean;
+    /** 村庄英雄（袭击胜利获得）——胜利待处理 */
+    villageHero: boolean;
+  };
+  /** 背包不祥之瓶数量 */
+  bottles: number;
+  /** 最近村庄英雄事件 tick（effectAdd 时刻；"胜利已处理"幂等判定用） */
+  lastHeroEventTick: number;
+}
+
+/** 等待原因（idle 通知用；"waiting"= 袭击中/待处理，静默等待） */
+export type RaidIdleReason = "no-bottle" | "waiting";
+
+/** 喝瓶结果 */
+export type RaidDrinkResult = "drunk" | "no-bottle" | "error";
+
+/** 劫掠任务动作端口：core 层只声明决策契约，mc 层注入世界副作用 */
+export interface RaidPorts {
+  /** 假人可用（在线/非死亡）——引擎据此决定是否推进树 */
+  isBotAvailable(botName: string): boolean;
+  /** 一次感知：效果状态（实时查询实体）+ 药水数 + 最近英雄事件时刻 */
+  sense(botName: string): RaidKnowledge;
+  /** 喝瓶协程链（互斥 + 换瓶 + 按住饮用）；无瓶 → "no-bottle"（端口内自动关模式） */
+  drinkBottle(botName: string): Promise<RaidDrinkResult>;
+  /** 胜利处理：计胜 + 村庄英雄叠加给主人 + 移除英雄（幂等：事件时刻防重） */
+  handleVictory(botName: string): void;
+  /** 等待：no-bottle → 通知（节流）；waiting → 静默 */
+  idle(botName: string, reason: RaidIdleReason): void;
+}
+
+/** 胜利处理判定窗口（tick）：英雄事件后多久内必须处理（引擎周期 10 tick 的余量） */
+export const VICTORY_WINDOW_TICKS = 20;
+
+/**
+ * 等待原因诊断（core 纯函数，可单测）：开不了瓶时区分
+ * "背包没有不祥之瓶"（通知）与"袭击进行中/胜利待处理"（静默等待）。
+ */
+export function diagnoseRaidIdle(knowledge: RaidKnowledge): RaidIdleReason {
+  const { badOmen, raidOmen, villageHero } = knowledge.effects;
+  if (!badOmen && !raidOmen && !villageHero && knowledge.bottles === 0) return "no-bottle";
+  return "waiting";
+}
+
+/**
+ * 创建劫掠任务行为树。
+ *
+ * @param ports - 动作端口（mc 层实现）
+ * @returns 行为树实例（每假人一棵，黑板独立）
+ */
+export function createRaidTaskTree(ports: RaidPorts): BehaviorTree {
+  // ── 条件节点 ─────────────────────────────────────────
+
+  /** 胜利待处理：假人带村庄英雄效果且事件尚未处理（幂等由端口 handleVictory 保证） */
+  const victoryPending = new Condition((ctx) => {
+    const k = ports.sense(ctx.botName);
+    return k.effects.villageHero && ctx.tick - k.lastHeroEventTick <= VICTORY_WINDOW_TICKS;
+  });
+
+  /** 可喝瓶：无坏兆/袭击兆（一场袭击已在酝酿/进行则不重复喝）且背包有药水 */
+  const canDrink = new Condition((ctx) => {
+    const k = ports.sense(ctx.botName);
+    return !k.effects.badOmen && !k.effects.raidOmen && k.bottles > 0;
+  });
+
+  // ── 动作节点 ─────────────────────────────────────────
+
+  /** 胜利处理：计胜 + 叠加英雄给主人 + 移除英雄（处理完效果消失，下 tick 不再触发） */
+  const handleVictory = new Action((ctx) => {
+    ports.handleVictory(ctx.botName);
+    return Status.Success;
+  });
+
+  /** 喝瓶：协程链（互斥/换瓶/按住饮用）；无瓶 → 端口自动关模式，树降级 */
+  const drink = new Action(async (ctx) => {
+    const result = await ports.drinkBottle(ctx.botName);
+    return result === "drunk" ? Status.Success : Status.Failure;
+  });
+
+  /** 等待：袭击中静默；无药水通知（诊断在 core，翻译在端口） */
+  const idle = new Action((ctx) => {
+    ports.idle(ctx.botName, diagnoseRaidIdle(ports.sense(ctx.botName)));
+    return Status.Success;
+  });
+
+  // ── 树装配（优先级从高到低） ─────────────────────────
+
+  const root = new Selector([
+    // 1. 胜利处理（村庄英雄效果 → 叠加给主人 + 移除 + 自然进入下一瓶）
+    new Sequence([victoryPending, handleVictory]),
+    // 2. 喝瓶（无兆头 + 有药水）
+    new Sequence([canDrink, drink]),
+    // 3. 等待（袭击中静默 / 无药水通知）
+    idle,
+  ]);
+
+  return new BehaviorTree(root);
+}
