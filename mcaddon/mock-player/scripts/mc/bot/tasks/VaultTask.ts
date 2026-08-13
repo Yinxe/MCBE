@@ -27,11 +27,6 @@ import type { MockBot } from "../MockBot";
 
 /** 宝库方块 ID（普通/不详共用同一方块，block state ominous 区分） */
 const VAULT_BLOCK = "minecraft:vault";
-
-/** 注视节流（tick）：导航进行中每 N tick 转头一次——**每 tick 转头会干扰导航**
- *  （GameTest 导航引擎控制身体朝向移动方向，头部每 tick 被拉向宝库导致
- *   距离无进展 → 停滞重扫循环，用户实测 BUG1）；试错分支导航检查也是
- *   每 10 tick 才 lookAt 一次 */
   const LOOK_TICK = 10;
 /** 宝库扫描半径（格，以假人为中心的正方体半边长；用户规格 15） */
 const SCAN_RADIUS = 15;
@@ -39,10 +34,6 @@ const SCAN_RADIUS = 15;
 const SCAN_RETRY_TICK = 40;
 /** 到达判定距离（格）：假人可靠近宝库且 r < 2 */
 const ARRIVE_DIST = 2;
-/** 注视就绪阈值（tick）：进入 navigate 后持续注视累计该时长，即使视线判定
- *  未命中也放行交互（lookAtLocation 只保证外观转头，视线方向可能与头部朝向
- *  脱钩；位置交互不依赖瞄准，宝库交互 face 不敏感） */
-const LOOK_READY_TICKS = 20;
 /** wait 阶段超时（tick）：钥匙判定事件异常未触发时兜底回 scan 重试（≈30 秒） */
 const WAIT_TIMEOUT_TICKS = 600;
 /** 导航停滞判定（tick）：距离连续无进展超过该时长（≈10 秒）→ 放弃重扫 */
@@ -100,7 +91,6 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
   let lastDist = Infinity;
   let navTarget: Vector3 | undefined; // 站立点（导航目标）
   let vaultPos: Vector3 | undefined; // 宝库坐标（看向/交互）
-  let lookReadyTicks = 0; // 进入 navigate 后累计注视 tick（转头就绪判定）
   let waitTicks = 0; // wait 阶段累计（超时兜底回 scan）
 
   /** 宝库中心（持续注视目标点） */
@@ -111,7 +101,8 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
   });
 
   /** 持续注视宝库中心，并**同步 lastPoint.lookTarget**（重连恢复时看向宝库——
-   *  lookAtLocation 只改实体头部朝向，不写记录；重连 spawn 用 lastPoint 恢复姿态） */
+   *  lookAtLocation 只改实体头部朝向，不写记录；重连 spawn 用 lastPoint 恢复姿态）。
+   *  ⚠️ 只在到达开箱位置后的 interact 阶段调用（导航中零注视不干扰导航）。 */
   const lookAtVault = (): void => {
     if (!vaultPos) return;
     const center = vaultCenter();
@@ -120,12 +111,6 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     if (record.lastPoint) {
       record.lastPoint.lookTarget = center;
     }
-  };
-
-  /** 节流注视（导航中每 LOOK_TICK tick 一次，避免转头干扰导航；到达交互前密集注视） */
-  const throttledLookAtVault = (): void => {
-    if (lookReadyTicks % LOOK_TICK !== 0) return;
-    lookAtVault();
   };
 
   const handle: VaultTaskHandle = {
@@ -163,6 +148,9 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
           break;
 
         case "interact":
+          // ⚠️ 每次 tick 转头对准宝库（到位后调整视线姿态——用户指示：先移动到
+          //    合适的开宝库位置，再调整视线和姿态；导航中零注视不干扰导航）
+          lookAtVault();
           interactCounter++;
           if (interactCounter % INTERACT_RETRY_TICK !== 0) return;
           interact();
@@ -226,7 +214,6 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     handle.target = found;
     stallCount = 0;
     lastDist = Infinity;
-    lookReadyTicks = 0;
     phase = "navigate";
     // 一次性下发导航（持续导航，绝不重复下发）
     try {
@@ -243,17 +230,15 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     );
   }
 
-  /** navigate：持续注视宝库 + 只算距离；r<2 且视线命中/注视就绪 → 交互 */
+  /** navigate：**导航中零注视**（不转头，避免干扰 GameTest 导航——用户指示：
+   * 先移动到合适的开宝库位置，再调整视线和姿态）；每 tick 只算距离 + 停滞判定；
+   * r<2 到达 → 进入 interact（interact 内密集转头 + 调整姿态后交互） */
   function navigateTick(): void {
     const sim = bot.getEntity();
     if (!sim || !vaultPos || !navTarget) {
       phase = "scan";
       return;
     }
-    // ⚠️ 节流注视宝库（每 LOOK_TICK tick 一次——**导航中每 tick 转头会干扰导航**
-    //    导致距离无进展停滞，用户实测 BUG1）+ 同步 lastPoint.lookTarget（重连恢复看向宝库）
-    throttledLookAtVault();
-    lookReadyTicks++;
 
     // 距离判定（站立点）；停滞判定：距离无进展累计 STALL_TICKS → 放弃重扫
     const dist = Math.sqrt(
@@ -274,27 +259,22 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     lastDist = dist;
 
     // ⚠️ 状态日志（每 20 tick 一条，防刷屏）：距离 + 视线命中详情——看到什么方块
-    if (lookReadyTicks % 20 === 0) {
+    if (elapsed % 20 === 0) {
       console.info(
         `[MockPlayer] 宝库 ${bot.name} 导航状态：距离站立点=${dist.toFixed(2)}（阈值 ${ARRIVE_DIST}）` +
-        ` 注视=${lookReadyTicks}tick ${viewStatusString(sim)}`,
+        ` ${viewStatusString(sim)}`,
       );
     }
 
-    // 可靠近宝库（r<2）→ 进入交互：
-    //   - 视线命中的方块也是宝库 → 立即进入（用户规格）
-    //   - 或持续注视已就绪（LOOK_READY_TICKS）→ 放行（lookAtLocation 只保证
-    //     外观转头，视线判定可能与头部朝向脱钩；位置交互不依赖瞄准）
-    const viewHit = lookingAtVault(sim);
-    if (isArrived(dist, ARRIVE_DIST) && (viewHit || lookReadyTicks >= LOOK_READY_TICKS)) {
+    // 可靠近宝库（r<2）→ 进入交互（interact 内转头调整姿态再交互）
+    if (isArrived(dist, ARRIVE_DIST)) {
       try {
         sim.stopMoving();
       } catch {
         /* ignore */
       }
       console.info(
-        `[MockPlayer] 宝库 ${bot.name} 已靠近宝库（距离 ${dist.toFixed(2)} < ${ARRIVE_DIST}）` +
-        `，进入交互${viewHit ? "（视线命中宝库）" : `（注视就绪 ${lookReadyTicks}tick 放行）`}`,
+        `[MockPlayer] 宝库 ${bot.name} 已到达开箱位置（距离 ${dist.toFixed(2)} < ${ARRIVE_DIST}），调整视线姿态后交互`,
       );
       phase = "interact";
       interactCounter = 0;
@@ -331,9 +311,6 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     }
     const held = bot.getHeldItem()?.typeId;
     console.info(`[MockPlayer] 宝库 ${bot.name} 主手钥匙就绪：${held ?? keyType}`);
-
-    // 交互前确保持续注视宝库（+ 同步 lastPoint.lookTarget，重连恢复看向宝库）
-    lookAtVault();
 
     // ⚠️ **交互前**记录钥匙总量基准（用户实测 BUG3：useItemInSlotOnBlock 同步
     //    消耗钥匙，交互后记录 baseline 已是消耗后的值 → 事件判定"总量 < 基准"
@@ -437,16 +414,6 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       return `视线命中 ${b.typeId}@(${Math.floor(b.location.x)},${Math.floor(b.location.y)},${Math.floor(b.location.z)}) face=${hit.face}`;
     } catch (e: any) {
       return `视线读取异常: ${e?.message ?? e}`;
-    }
-  }
-
-  /** 视线命中的方块是否就是目标宝库（用户规格：视线命中也是宝库才算可交互） */
-  function lookingAtVault(sim: SimulatedPlayer): boolean {
-    try {
-      const hit = sim.getBlockFromViewDirection({ maxDistance: VIEW_MAX_DIST });
-      return !!hit && hit.block.typeId === VAULT_BLOCK;
-    } catch {
-      return false;
     }
   }
 
