@@ -22,7 +22,7 @@ import { BOT_TAG } from "../../core/tags/BotTags";
 import { workflowVaultOpened } from "../../core/events/WorkflowEvents";
 import { botRegistry } from "../bootstrap/context";
 import { lookAt } from "../adapters/PoseGateway";
-import { safeReconnect } from "../features/pendingRespawn";
+import { safeReconnect, reconnectingBots } from "../features/pendingRespawn";
 
 // ─── 常量 ────────────────────────────────────────────────
 
@@ -170,10 +170,16 @@ export const vaultPorts: VaultPorts = {
     if (!bot) return "error";
     const record = botRegistry.get(botName);
     if (!record) return "error";
+    // ⚠️ 重连进行中不交互（safeReconnect 异步生效前，避免二次点击消耗钥匙）
+    if (reconnectingBots.has(botName)) return "error";
 
     // ── 1. 识别宝库类型（普通/不详：block state ominous）→ 候选钥匙 ──
     const vaultKind = readVaultKind(bot, target); // "normal" | "ominous" | undefined
-    if (!vaultKind) return "error";
+    if (!vaultKind) {
+      // 宝库被拆/读取失败 → 目标失效，通知后由树清目标重扫
+      notifyNoKey(bot, record.name, "目标宝库已不存在，重新搜索附近宝库");
+      return "target-gone";
+    }
     const candidates = KEY_CANDIDATES[vaultKind];
 
     // ── 2. 按优先级确保主手（slot 0）是候选钥匙 ──
@@ -214,18 +220,17 @@ export const vaultPorts: VaultPorts = {
     const total = countKeyTotal(bot);
     if (total >= baseline) return "not-consumed";
 
-    // 真消耗 → 发布领域事件（剩余钥匙数）+ 判定成功
+    // 真消耗 → 发布领域事件 + **立即通知剩余钥匙数（下线前背包准确）**
     workflowVaultOpened.trigger({ botName, keyType, remaining: total });
+    sendNearest(bot, record.name, `${color.success}开箱成功！${color.muted}剩余 ${color.info}${total} ${color.playerName}把钥匙${color.muted}，下线重连继续`);
     return "consumed";
   },
 
   tryReconnect(botName: string): void {
     const record = botRegistry.get(botName);
     if (!record) return;
-    // 黑板目标保留 → 重连完成后树继续同一宝库
-    safeReconnect(record, {
-      onOnline: (fresh, r) => notify(fresh, r.name, `已重连，继续开箱（剩余 ${countKeyTotal(fresh)} 把钥匙）`),
-    });
+    // 数量通知已在交互成功时发出（下线前背包准确）；重连后黑板目标保留 → 树继续同一宝库
+    safeReconnect(record);
   },
 
   idle(botName: string): void {

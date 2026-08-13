@@ -23,8 +23,14 @@ export interface Vec3 {
   z: number;
 }
 
-/** 开箱交互结果：consumed 钥匙消耗（真开箱）/ not-consumed 点击了但未消耗（冷却中，继续点）/ error 交互未执行 */
-export type VaultInteractResult = "consumed" | "not-consumed" | "error";
+/**
+ * 开箱交互结果：
+ *   consumed      钥匙消耗（真开箱）
+ *   not-consumed  点击了但未消耗（宝库冷却/动画中，继续点）
+ *   error         交互未执行（方块在，可重试）
+ *   target-gone   目标失效（宝库被拆/读取失败，清目标重扫）
+ */
+export type VaultInteractResult = "consumed" | "not-consumed" | "error" | "target-gone";
 
 /** 宝库任务动作端口：core 层只声明，mc 层注入实现 */
 export interface VaultPorts {
@@ -114,7 +120,8 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
     return "failure";
   });
 
-  /** 开箱：消耗 → 重连（黑板保留）；未消耗/异常 → 冷却后继续点击（不放弃目标） */
+  /** 开箱：消耗 → 重连（黑板保留）；未消耗/异常 → 冷却后继续点击（不放弃目标）；
+   *  目标失效（宝库被拆）→ 清目标重扫 */
   const interact = new Action((ctx) => {
     const target = ctx.blackboard.get<Vec3>(BB_TARGET);
     if (!target) return "failure";
@@ -123,6 +130,10 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
     if (result === "consumed") {
       ports.tryReconnect(ctx.botName);
       return "success";
+    }
+    if (result === "target-gone") {
+      ctx.blackboard.delete(BB_TARGET);
+      return "failure";
     }
     return "failure";
   });

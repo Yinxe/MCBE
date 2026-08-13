@@ -179,6 +179,30 @@ test("寻路失败：清目标 → 重扫（无可达宝库则进入冷却）", 
 
 // ─── 交互异常 ────────────────────────────────────────────
 
+test("宝库被拆：interact 返回 target-gone → 清目标重扫", async () => {
+  const { ports, bb, tick } = makeHarness();
+  ports.distance = 1;
+  ports.interactResult = "target-gone";
+
+  assert.equal(await tick(100), "success"); // 首次：扫描写目标
+  // 交互 target-gone → 目标清 + 同 tick 内重扫（没有其他宝库 → 扫描失败）
+  ports.scanResult = undefined;
+  assert.equal(await tick(120), "success");
+  assert.equal(bb.has("vaultTarget"), false); // 目标已清
+  assert.equal(ports.scanCalls, 2); // 失败后立即重扫了一次
+
+  // 扫描进入冷却（40 tick），不再疯狂重扫
+  assert.equal(await tick(140), "success");
+  assert.equal(ports.scanCalls, 2);
+
+  // 冷却到期重扫 → 找到新宝库 → 重新开箱
+  ports.scanResult = VAULT_POS;
+  ports.interactResult = "consumed";
+  assert.equal(await tick(180), "success");
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS);
+  assert.equal(ports.scanCalls, 3);
+});
+
 test("交互异常：failure 后受交互冷却约束再重试", async () => {
   const { ports, bb, tick } = makeHarness();
   ports.distance = 1;
