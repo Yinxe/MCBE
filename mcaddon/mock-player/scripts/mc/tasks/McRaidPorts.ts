@@ -39,6 +39,8 @@ const lastHeroTick = new Map<string, number>();
 const handledHeroTick = new Map<string, number>();
 /** 已转化为袭击之兆的 tick（不祥之兆结束检查防误报：转化后袭击酝酿/进行中无兆头 ≠ 不在村庄） */
 const convertedToRaidTick = new Map<string, number>();
+/** 获得袭击之兆的 tick（袭击即将开始；30 秒后 buff 结束 = 袭击完全开始） */
+const raidOmenSince = new Map<string, number>();
 /** 通知节流（tick，≈10 秒） */
 const notifyAt = new Map<string, number>();
 const NOTIFY_COOLDOWN_TICKS = 200;
@@ -68,6 +70,7 @@ export function cleanupRaidMode(botName: string): void {
   lastHeroTick.delete(botName);
   handledHeroTick.delete(botName);
   convertedToRaidTick.delete(botName);
+  raidOmenSince.delete(botName);
   drinking.delete(botName);
 }
 
@@ -96,10 +99,14 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
       // ⚠️ 转化时刻记录：不祥之兆结束检查据此区分"已转化（袭击酝酿/进行中）"
       //    与"未转化（不在村庄）"——袭击开始后 raid_omen 移除但无兆头 ≠ 不在村庄
       convertedToRaidTick.set(name, system.currentTick);
+      // ⚠️ 袭击即将开始：获得袭击之兆 = 30 秒后 buff 结束、袭击完全开始
+      //    （基岩版机制：袭击之兆 0:30，结束后在获得位置触发袭击）
+      raidOmenSince.set(name, system.currentTick);
       const loc = e.entity.location;
       console.info(
-        `[MockPlayer] ${name} 袭击之兆 → 袭击触发点 (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`,
+        `[MockPlayer] ${name} 袭击即将开始（袭击之兆 30 秒后完全开始）——触发点 (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`,
       );
+      scheduleRaidStartCheck(name);
       return;
     }
 
@@ -287,6 +294,38 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
 
 /** 不祥之兆持续时间（tick）：基岩版 bad_omen 30 秒 = 600 tick（0:30） */
 const BAD_OMEN_DURATION_TICKS = 600;
+/** 袭击之兆持续时间（tick）：基岩版 raid_omen 30 秒 = 600 tick；结束后袭击完全开始 */
+const RAID_OMEN_DURATION_TICKS = 600;
+
+/**
+ * 袭击完全开始检查（一次性，非轮询）：获得袭击之兆 30 秒后——
+ * buff 结束（实体不再带袭击之兆）= 袭击已完全开始（基岩版机制：
+ * 袭击之兆结束后在玩家获得效果的位置开始袭击）。
+ * ⚠️ 2.8.0 无 effectRemove 事件，用一次性定时检测对齐"只记录/提醒"语义；
+ *    若 30 秒后 raid_omen 仍在（异常）→ 由 scheduleRaidStuckCheck 覆盖提醒。
+ */
+function scheduleRaidStartCheck(botName: string): void {
+  const scheduledAt = system.currentTick;
+
+  system.runTimeout(() => {
+    try {
+      const record = botRegistry.get(botName);
+      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+      const bot = resolveBotPlayer(botName);
+      if (!bot || !bot.isValid) return;
+
+      // buff 已结束 → 袭击完全开始
+      if (!hasEffect(bot, RAID_OMEN)) {
+        console.info(`[MockPlayer] ${botName} 袭击之兆已结束，袭击完全开始`);
+        return;
+      }
+      // buff 仍在（30 秒后未消失，异常）→ 记录，由 stuck check 兜底提醒
+      console.warn(`[MockPlayer] ${botName} 袭击之兆超时未结束（${RAID_OMEN_DURATION_TICKS}tick 后仍在），等待卡死提醒`);
+    } catch (err) {
+      console.warn(`[MockPlayer] 劫掠袭击开始检查异常: ${err}`);
+    }
+  }, RAID_OMEN_DURATION_TICKS);
+}
 
 /**
  * 不祥之兆结束检查（一次性，非轮询）：喝瓶 30 秒后——
