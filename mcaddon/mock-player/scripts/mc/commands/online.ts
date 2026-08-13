@@ -2,8 +2,8 @@ import { system, CommandPermissionLevel, CustomCommandParamType } from "@minecra
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry, botStore } from "../bootstrap/context";
+import { botManager } from "../bot/BotManager";
 import { guardBotCommand } from "./auth";
-import { onlineBot } from "../features/onlineBot";
 export function registerOnlineCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:online", description: "将一个已创建的假人上线并恢复所有状态",
@@ -17,9 +17,10 @@ export function registerOnlineCommand(registry: any): void {
     const record = botRegistry.get(targetName) ?? botStore.loadRecord(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     if (record.online) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已经在线`); return; }
+    const bot = botManager.getOrCreate(record);
     system.run(async () => {
       try {
-        await onlineBot(record);
+        await bot.online();
         player.sendMessage(`${color.success}假人 ${color.playerName}${record.name}${color.success} 已上线`);
       } catch (e: any) {
         player.sendMessage(`${color.error}${record.name} 上线失败: ${e.message}`);

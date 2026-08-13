@@ -2,8 +2,8 @@ import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/serve
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../bootstrap/context";
+import { botManager } from "../bot/BotManager";
 import { guardBotCommand } from "./auth";
-import { killBot } from "../features/killBot";
 export function registerKillCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:kill", description: "杀死一个在线的假人",
@@ -19,7 +19,7 @@ export function registerKillCommand(registry: any): void {
     if (!record.online) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 不在线，无法杀死`); return; }
     if (record.death) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已经死亡，无需重复杀死`); return; }
     try {
-      killBot(record);
+      botManager.getOrCreate(record).kill();
       player.sendMessage(`${color.success}已杀死假人 ${color.playerName}${targetName}`);
     } catch (e: any) {
       player.sendMessage(`${color.error}杀死假人失败: ${e?.message ?? e}`);

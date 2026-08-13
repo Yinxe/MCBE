@@ -41,16 +41,25 @@ scripts/
 │   ├── items/       # ItemRules（装备槽）/ ToolRules（工具识别/耐久/槽位搜索）
 │   │                # MainhandPolicy（主手策略）/ TridentRules（三叉戟扫描）
 │   ├── storage/     # BotStore 端口（泛型 TItem）+ Binding 绑定表 + InMemory 替身
+│   ├── bot/         # **假人独立引擎**：BotEngine（BotCapability 持续能力 + BotTask
+│   │                #   复杂任务，间隔计数/标签驱动启停/异常隔离）+ Inventory（槽位视图
+│   │                #   查找/计数纯函数）+ Navigation（距离/到达/超时判定）
 │   ├── service/     # BotRegistry（注册表生命周期+恢复标记）/ ReclaimPlanner / RaidRules
 │   └── index.ts     # barrel
 ├── mc/              # 适配层：只做 mcapi 副作用（IO/视觉/通知）
 │   ├── bootstrap/   # context.ts — botStore/botRegistry 运行时单例（组合根装配）
 │   │                # gametestContext — 测试维度注册 + 装置初始化（0,0,0 结构方块）
 │   │                # uiDrivers — UI 领域事件订阅统一装配（18 模块）
+│   ├── bot/         # **MockBot 面向对象实例**（new MockBot(record)：生命周期/移动/交互/
+│   │                #   背包装备/使用/传送信息全部实例化，薄门面封装 features 单一事实源；
+│   │                #   每实例独立 BotEngine）+ BotManager（懒实例注册表 + 全局 1tick 驱动器，
+│   │                #   只 tick 在线未死亡实例）+ capabilities/（默认能力：autoMine/autoAttack/
+│   │                #   autoJump/control/autoPlace 标签驱动 + persist 100tick 周期持久化，
+│   │                #   注册表可扩展）+ tasks/（任务工厂：NavigateToTask 范式，扩展=新文件+导出一行）
 │   ├── adapters/    # McBotStore（NBT 木桶阵列持久化）/ McItemCodec（预览序列化）/ PlayerGateway
 │   │                # EntityTags / PoseGateway / McIntervalScheduler / EquipmentSlots
-│   ├── features/    # 业务用例：决策调 core，副作用留本地（behavior/spawn/reclaim/raidMode…）
-│   ├── commands/    # mp:* 命令（薄壳；data 兼 UI 订阅 viewData）
+│   ├── features/    # 业务用例：决策调 core，副作用留本地（spawn/reclaim/raidMode/vaultMode…）
+│   ├── commands/    # mp:* 命令（薄壳；简单动作经 MockBot 实例，data 兼 UI 订阅 viewData）
 │   ├── events/      # 世界事件订阅（薄壳）
 │   ├── ui/          # toolkit 表单（**只发布 UI 领域事件，不 import 业务动作函数**；
 │   │                #   表单提交后直接调 feature 的例外：mainhand/reclaim/trident/swap）
@@ -58,7 +67,7 @@ scripts/
 │   └── format.ts    # 带色文本格式化（§ 色码）
 └── tests/           # node:test 单测（只测 core；mc 层靠游戏内冒烟）
     ├── helpers/     # factories（构造 BotRecord/物品）
-    └── *.test.ts    # model/tags/coords/xp/items/services/storage/events/format
+    └── *.test.ts    # model/tags/coords/xp/items/services/storage/events/format/bot
 ```
 
 ### 依赖纪律（core 层强约束）
@@ -92,6 +101,14 @@ scripts/
 - 全入口统一 `normalizeBotName`：去空白 + 无前缀自动加 `$`（"刷铁机" → "$刷铁机"，防与未上线真人撞名——真人默认名不带 $）
 - `isValidBotName`（规范化后完整名）：非空、≤16 字符、不含 `:inv:` / `:equip:`（旧 DP 槽位 key 兼容）
 - 创建/重命名双重真人冲突检查：输入原始名 + 规范化完整名都查 `isNameOccupiedInWorld`
+
+### 假人独立引擎（1.3.x，MockBot + BotManager）
+- **MockBot** = `new MockBot(record)`（或 `MockBot.from(name)` / `botManager.getOrCreate(record)`）：持有 botRegistry 单例 record 引用（改动即时生效，实例跨下线/重连持续可用——实体每次操作惰性解析全守卫）；**基础操作全部实例化**（生命周期/移动/交互/背包装备/使用/传送信息），薄门面封装 features 单一事实源（不双实现）；新增实例方法 = 薄封装对应 feature
+- **每假人独立引擎**（core/bot/BotEngine）：`BotCapability`（id/tickInterval/enabled 标签状态驱动/onDisabled 停用清理）+ `BotTask`（start/tick/isDone/cancel，**一次一活跃任务**，onComplete 经 `MockBot.startTask(task, onComplete)`）；单能力/单任务异常隔离
+- **BotManager**：懒实例注册表 + 全局 `runInterval(1)` 驱动器（只 tick 在线未死亡实例——引擎对象按假人独立，驱动集中）；main.ts `botManager.start()`；删除假人 `botManager.remove(name)`
+- **默认能力**（capabilities/index.ts 注册表，**可扩展**=工厂文件+注册一行）：autoMine（1tick）/autoAttack（3tick）/autoJump（3tick）/control（2tick）/autoPlace（5tick）由标签状态驱动启停 + persist（100tick 周期持久化，isRestored 守卫 + 静默保存 + 装备槽指纹兜底）——**原全局 behavior.ts 引擎已删除**（1.3.2）
+- **任务**（tasks/index.ts 工厂 barrel，**可扩展**=新文件+导出一行）：NavigateToTask 范式（start 一次性下发导航绝不重复 → tick 只算距离 → 到达/超时/实体失效结束）；`/mp:move` 已改用实例任务示范
+- 简单动作命令/UI 订阅经 MockBot 实例（online/offline/kill/sneak/tp/tphere/respawn/setrespawn/delete/move）；复杂表单流程保留 feature 直接调用
 
 ### UI 事件驱动（1.2.6，BotUiEvent 双领域事件）
 - **UI 只发布事件，零功能 import**：ui/bot.ts 面板按钮 → `BotUiEvent.panelAction.trigger({playerId, botName, action})`（14 动作）；ui/tags.ts 行为菜单提交 → **① setTags 先落库 ② 发布 `behaviorSubmitted`**（负载带表单快照 + tags）——订阅方按事件负载或 record.tags 判断结果相同，无时序依赖

@@ -8,6 +8,7 @@ import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { BotUiEvent } from "../../core/events/UiEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
+import { botManager } from "../bot/BotManager";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 
 export function setSneaking(record: BotRecord, sneaking: boolean): void {
@@ -26,7 +27,7 @@ export function setSneaking(record: BotRecord, sneaking: boolean): void {
 
 // ─── UI 事件订阅（行为菜单提交 → 感知潜行字段） ────────
 
-/** 订阅行为菜单提交事件：潜行开关 diff 后同步 */
+/** 订阅行为菜单提交事件：潜行开关 diff 后同步（经 MockBot 实例） */
 export function registerUiSubscriptions(): void {
   BotUiEvent.behaviorSubmitted.subscribe((e) => {
     const record = botRegistry.get(e.botName);
@@ -34,7 +35,7 @@ export function registerUiSubscriptions(): void {
     const player = world.getEntity(e.playerId) as Player | undefined;
     system.run(() => {
       try {
-        setSneaking(record, e.sneaking);
+        botManager.getOrCreate(record).setSneaking(e.sneaking);
       } catch (err: any) {
         player?.sendMessage(`${color.error}切换潜行失败: ${err?.message ?? err}`);
       }

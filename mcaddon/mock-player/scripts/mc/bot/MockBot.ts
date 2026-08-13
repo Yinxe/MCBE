@@ -26,7 +26,7 @@ import {
   isValidSlot,
   type SlotView,
 } from "../../core/bot/Inventory";
-import { botRegistry } from "../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 import { killBot } from "../features/killBot";
@@ -34,7 +34,8 @@ import { deleteBot } from "../features/deleteBot";
 import { setTags } from "../features/setTags";
 import { moveBot } from "../features/move";
 import { setSneaking } from "../features/sneak";
-import { lookAt as poseLookAt, setPose } from "../adapters/PoseGateway";
+import { toggleControl as toggleControlFeature } from "../features/control";
+import { lookAt as poseLookAt, setPose, getPlayerLookTarget } from "../adapters/PoseGateway";
 import { getMainhandOptions, setMainhandSlot } from "../features/mainhand";
 import { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "../features/equip";
 import { startUseItem, stopUseItem } from "../features/useItem";
@@ -192,6 +193,39 @@ export class MockBot {
   /** 潜行开关（记录 + 实体同步 + 持久化） */
   setSneaking(sneaking: boolean): void {
     setSneaking(this.record, sneaking);
+  }
+
+  /** 体态控制开关（互斥标签切换 + 立即同步体态） */
+  toggleControl(player: Player): void {
+    toggleControlFeature(this.record, player);
+  }
+
+  /** 设置重生点为玩家当前位置和姿态（在线实体同步 setSpawnPoint） */
+  setRespawnPoint(player: Player): void {
+    const record = this.record;
+    const lookTarget = getPlayerLookTarget(player);
+    record.respawnPoint = {
+      location: player.location,
+      dimension: player.dimension.id,
+      rotation: player.getRotation(),
+      lookTarget,
+    };
+    if (record.online && record.entityId) {
+      const e = world.getEntity(record.entityId);
+      if (e?.hasTag(BOT_TAG)) {
+        try {
+          (e as Player).setSpawnPoint({
+            dimension: world.getDimension(record.respawnPoint.dimension),
+            x: record.respawnPoint.location.x,
+            y: record.respawnPoint.location.y,
+            z: record.respawnPoint.location.z,
+          });
+        } catch {
+          /* 个别版本 API 缺失 */
+        }
+      }
+    }
+    saveCoordinator.saveRecord(record);
   }
 
   // ── 背包 ────────────────────────────────────────────
