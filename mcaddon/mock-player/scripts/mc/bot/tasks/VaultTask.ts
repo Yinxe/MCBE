@@ -309,21 +309,18 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       notify(`手上没有${missing}，请放入背包后重试`);
       return; // 每 INTERACT_RETRY_TICK 重试换钥匙
     }
-    const held = bot.getHeldItem()?.typeId;
-    console.info(`[MockPlayer] 宝库 ${bot.name} 主手钥匙就绪：${held ?? keyType}`);
+    console.info(`[MockPlayer] 宝库 ${bot.name} 主手 slot 0 钥匙就绪：${keyType}`);
 
-    // ⚠️ **交互前**记录钥匙总量基准（用户实测 BUG3：useItemInSlotOnBlock 同步
-    //    消耗钥匙，交互后记录 baseline 已是消耗后的值 → 事件判定"总量 < 基准"
-    //    永不满足 → 不重连）；此后总量减少且恰好 -1 → 判定开箱成功（事件驱动）
+    // ⚠️ **交互前**记录钥匙总量基准（useItemInSlotOnBlock 同步消耗钥匙，
+    //    交互后记录 baseline 已是消耗后的值 → 判定永不满足）；此后总量减少
+    //    且恰好 -1 → 判定开箱成功（事件驱动）
     handle.baseline = countKeyTotal();
     handle.keyType = keyType;
-    console.info(
-      `[MockPlayer] 宝库 ${bot.name} 交互前钥匙总量基准=${handle.baseline}（${vaultKind}，主手 ${held ?? keyType}）`,
-    );
 
-    // ⚠️ 手持钥匙**使用**于宝库（useItemInSlotOnBlock = 右键使用，开箱消耗钥匙；
-    //    interactWithBlock 只是空手交互可能"假成功"——1.1.34 验证在正确姿势
-    //    （面对宝库正面）下 interactWithBlock 也能开箱，故失败时回退双通道）
+    // ⚠️ 手持钥匙**使用**于宝库（useItemInSlotOnBlock = 右键使用；interactWithBlock
+    //    失败时回退双通道）。**持续点击语义（用户规格）**：宝库冷却/出掉落动画中
+    //    点击返回 true 但钥匙不消耗（假成功）——每次点击后**回读钥匙总量**，
+    //    真的被消耗（总量 < 基准）才进入等待判定；未消耗 → 下一轮继续点击
     let ok = bot.useItemOnBlock(vaultPos);
     if (!ok) {
       ok = bot.interactWithBlock(vaultPos);
@@ -337,8 +334,17 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       return;
     }
 
+    // 回读验证：钥匙真的被消耗了吗（宝库冷却中点击 = 假成功，不扣钥匙）
+    const total = countKeyTotal();
+    if (total >= handle.baseline) {
+      console.info(
+        `[MockPlayer] 宝库 ${bot.name} 点击未消耗钥匙（总量=${total} 基准=${handle.baseline}，` +
+        `宝库冷却/出掉落中？），${INTERACT_RETRY_TICK}tick 后继续点击`,
+      );
+      return; // 继续 interact 循环（每 20 tick 再点，直到真消耗）
+    }
     console.info(
-      `[MockPlayer] 宝库 ${bot.name} 交互成功，等待钥匙消耗事件判定（基准=${handle.baseline}）`,
+      `[MockPlayer] 宝库 ${bot.name} 钥匙已消耗（总量 ${total} < 基准 ${handle.baseline}），等待事件判定触发重连`,
     );
     phase = "wait";
     waitTicks = 0;

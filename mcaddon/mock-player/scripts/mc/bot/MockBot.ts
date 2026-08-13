@@ -199,7 +199,9 @@ export class MockBot {
    * 手持主手物品**使用**于方块（useItemInSlotOnBlock——右键使用，如钥匙开宝库）。
    * ⚠️ 与 interactWithBlock（空手交互）不同：宝库开箱必须 use item on block
    *    才会消耗钥匙（interactWithBlock 返回 true 但宝库不触发开箱 = "假成功"）。
-   * @returns 物品是否被使用（true 不保证生效，由调用方做效果判定）
+   * ⚠️ 主手固定 **slot 0**（用户规格——ensureMainhand 已把钥匙换到 slot 0 并选中）。
+   * @returns 物品是否被使用（true 不保证生效——冷却中点击返回 true 但钥匙不消耗，
+   *          由调用方回读/事件判定）
    */
   useItemOnBlock(pos: Vector3): boolean {
     const bot = this.getEntity();
@@ -219,9 +221,8 @@ export class MockBot {
       /* 视线读取失败用兜底面 */
     }
     try {
-      const slot = this.heldSlotIndex();
-      const ok = bot.useItemInSlotOnBlock(slot, pos, face);
-      console.info(`[MockPlayer] ${this.name} useItemInSlotOnBlock slot=${slot} @(${pos.x},${pos.y},${pos.z}) face=${face} 返回=${ok}｜${viewInfo}`);
+      const ok = bot.useItemInSlotOnBlock(0, pos, face);
+      console.info(`[MockPlayer] ${this.name} useItemInSlotOnBlock slot=0 @(${pos.x},${pos.y},${pos.z}) face=${face} 返回=${ok}｜${viewInfo}`);
       return ok;
     } catch (e: any) {
       console.warn(`[MockPlayer] ${this.name} useItemInSlotOnBlock 异常 @(${pos.x},${pos.y},${pos.z}): ${e?.message ?? e}`);
@@ -370,18 +371,26 @@ export class MockBot {
   }
 
   /**
-   * 确保主手是候选物品之一（主手已是 → 返回类型；否则按优先级换到主手）。
-   * ⚠️ 用 setItem 手动交换（swapItems 原生 API 在 GameTest 假人容器上可能
-   *    不生效——raidFlow 验证过的模式；用户实测 BUG2 换钥匙失败）。
+   * 确保主手（**固定 slot 0**，用户规格）是候选物品之一：
+   * 主手已是 → 返回类型；否则按优先级从背包找钥匙 → setItem 手动交换到
+   * slot 0 → 选中 slot 0。⚠️ 用 setItem 手动交换（swapItems 原生 API 在
+   * GameTest 假人容器上可能不生效——raidFlow 验证过的模式）。
    */
   ensureMainhand(typeIds: string[]): string | undefined {
-    const held = this.getHeldItem();
-    if (held && typeIds.includes(held.typeId)) return held.typeId;
-    const slot = this.findFirstItem(typeIds);
-    if (slot === undefined) return undefined;
-    const handSlot = this.heldSlotIndex();
-    if (!this.swapItemsManual(slot, handSlot)) return undefined;
-    return this.getHeldItem()?.typeId ?? typeIds[0];
+    const container = this.getContainer();
+    if (!container) return undefined;
+    try {
+      const held = container.getItem(0);
+      if (held && typeIds.includes(held.typeId)) return held.typeId;
+      const slot = this.findFirstItem(typeIds);
+      if (slot === undefined) return undefined;
+      if (!this.swapItemsManual(slot, 0)) return undefined;
+      const entity = this.getEntity();
+      if (entity) entity.selectedSlotIndex = 0; // 主手 = slot 0（选中）
+      return container.getItem(0)?.typeId ?? typeIds[0];
+    } catch {
+      return undefined;
+    }
   }
 
   /** 主手选择列表（决策在 core/items/MainhandPolicy） */
