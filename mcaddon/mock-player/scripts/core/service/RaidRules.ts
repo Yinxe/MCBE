@@ -16,7 +16,7 @@ export const VILLAGE_HERO = "minecraft:village_hero";
  *  留 ~8 tick 余量（= 2 秒）：防网络/调度抖动导致 stopUsingItem 在消耗完成前打断、药水没喝完 */
 export const DRINK_DURATION = 40;
 
-/** 袭击未触发卡死提醒：1 分钟 = 1200 tick（带不祥之兆却久未触发 → 提醒玩家） */
+/** 袭击未触发卡死提醒：1 分钟 = 1200 tick（带袭击之兆却久未触发 → 提醒玩家） */
 export const RAID_STUCK_TICKS = 1200;
 
 /** 物品类型匹配：Script API typeId 恒带命名空间前缀，直接精确比对 */

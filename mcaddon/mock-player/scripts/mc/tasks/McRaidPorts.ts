@@ -366,7 +366,9 @@ function scheduleBadOmenEndCheck(botName: string): void {
   }, CONVERT_CHECK_TICKS);
 }
 
-/** 喝瓶后 1 分钟仍带不祥/袭击之兆 → 袭击未触发，提醒玩家（只发消息，零恢复动作） */
+/** 喝瓶后 1 分钟仍带袭击之兆 → 转化了但袭击未触发，提醒玩家（只发消息，零恢复动作）
+ *  ⚠️ 只查**袭击之兆**（30 秒后该消失、袭击开始）：不祥之兆 100 分钟挂着是
+ *     正常状态（未转化场景已由"不在村庄检查"在 600 tick 通知过），不在此判断。 */
 function scheduleRaidStuckCheck(botName: string): void {
   const scheduledAt = system.currentTick;
 
@@ -377,13 +379,13 @@ function scheduleRaidStuckCheck(botName: string): void {
       const bot = resolveBotPlayer(botName);
       if (!bot || !bot.isValid) return;
 
-      // 这瓶之后已胜利过（自动进入下一瓶）→ 正常推进，跳过
+      // 这瓶之后已胜利过（自动进入下一瓶，正握着新不祥之兆）→ 正常推进，跳过
       if ((lastVictoryTick.get(botName) ?? 0) > scheduledAt) return;
 
-      // 1 分钟后仍带不祥/袭击之兆 → 袭击未触发
-      if (hasEffect(bot, BAD_OMEN) || hasEffect(bot, RAID_OMEN)) {
+      // 仍带袭击之兆（30 秒后未消失 = 转化了但袭击没开始）→ 异常提醒
+      if (hasEffect(bot, RAID_OMEN)) {
         world.sendMessage(
-          `${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName} 带不祥之兆超 1 分钟仍未触发袭击` +
+          `${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName} 带袭击之兆超 1 分钟仍未触发袭击` +
             `，请确认假人在村庄内且非和平难度`,
         );
       }
