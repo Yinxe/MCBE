@@ -12,13 +12,14 @@ import { Player, EquipmentSlot, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BotRecord, isValidBotName } from "../../core/model/Types";
+import { BotRecord, isValidBotName, normalizeBotName } from "../../core/model/Types";
 import { BOT_TAG, getTagDef } from "../../core/tags/BotTags";
 import { BotEvents } from "../../core/events/DomainEvents";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
 import { collectContainerItems } from "../adapters/McItemCodec";
 import { getPlayerLookTarget, lookAt } from "../adapters/PoseGateway";
+import { isNameOccupiedInWorld } from "../adapters/PlayerGateway";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import {
   tpBotToPlayer,
@@ -329,15 +330,26 @@ function doSwap(player: Player, botName: string): void {
  */
 function doRename(player: Player, botName: string): void {
   ModalFormBuilder.showQuick(player, `${color.bold}修改名字`, (f) => {
-    f.textField("name", "新名字", { defaultValue: botName });
+    f.textField("name", "新名字", { defaultValue: botName, tooltip: "自动加假人前缀 $，无需手动输入" });
   }).then((vals) => {
     if (!vals) return;
-    const newName = (vals.name as string).trim();
+    // 名字规范化：自动加假人前缀（"刷铁机" → "$刷铁机"）
+    const newName = normalizeBotName(vals.name as string);
     if (!newName || newName === botName) return;
     // ⚠️ 名字合法性：长度限制（生成 "(2)" 重名防护边界）；NBT 存储绑定表随
     //    BotRecord 持久化，改名无需迁移物品数据（与旧 DP 槽位 key 无关）
-    if (!isValidBotName(newName)) { player.sendMessage(`${color.error}名字不合法：不能超过 16 字符`); return; }
+    if (!isValidBotName(newName)) { player.sendMessage(`${color.error}名字不合法：不能为空、超过 16 字符或包含 ":inv:" / ":equip:"`); return; }
     if (botRegistry.has(newName)) { player.sendMessage(`${color.error}假人 ${color.playerName}${newName}${color.error} 已存在`); return; }
+    // 真实玩家冲突检查（双重）：输入原始名 / 规范化完整名 与在线真人同名都拒绝
+    const rawName = (vals.name as string).trim();
+    if (rawName !== newName && isNameOccupiedInWorld(rawName)) {
+      player.sendMessage(`${color.error}名字 ${color.playerName}${rawName}${color.error} 与真实玩家相同，请更换名字`);
+      return;
+    }
+    if (isNameOccupiedInWorld(newName)) {
+      player.sendMessage(`${color.error}世界中已存在同名玩家实体 ${color.playerName}${newName}${color.error}，请更换名字`);
+      return;
+    }
 
     const r = botRegistry.get(botName);
     if (!r) { player.sendMessage(`${color.error}假人已不存在`); return; }

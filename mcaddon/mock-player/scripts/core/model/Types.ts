@@ -53,8 +53,21 @@ export const INVALID_NAME_SEGMENTS = [":inv:", ":equip:"] as const;
 /** MC 假人名最大长度（玩家名上限） */
 export const MAX_BOT_NAME_LENGTH = 16;
 
+/** 假人名字前缀：与真实玩家区分（防止与未上线真人撞名——真人默认名不带 $） */
+export const BOT_NAME_PREFIX = "$";
+
 /**
- * 假人名字是否合法。
+ * 规范化假人名字：去空白 + 无前缀时自动加前缀（"刷铁机" → "$刷铁机"）。
+ * 已有前缀不重复加；空输入原样返回。
+ */
+export function normalizeBotName(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.startsWith(BOT_NAME_PREFIX) ? trimmed : `${BOT_NAME_PREFIX}${trimmed}`;
+}
+
+/**
+ * 假人名字是否合法（**规范化后**的完整名，含前缀）。
  * 拒绝：空名、超长（>16，生成 "(2)" 重名防护的边界）、
  *      含 `:inv:` / `:equip:` 子串（历史遗留限制：旧版 DP 槽位 key 冲突；
  *      新 NBT 存储后端已无此冲突，但保留校验以兼容旧数据格式）。

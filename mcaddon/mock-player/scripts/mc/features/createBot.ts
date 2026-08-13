@@ -2,7 +2,7 @@
 
 import { Vector3, Dimension, world } from "@minecraft/server";
 
-import { BotRecord, isValidBotName } from "../../core/model/Types";
+import { BotRecord, isValidBotName, normalizeBotName, MAX_BOT_NAME_LENGTH } from "../../core/model/Types";
 import { botRegistry, configStore } from "../bootstrap/context";
 import { isNameOccupiedInWorld } from "../adapters/PlayerGateway";
 import { canCreateBot, remainingQuota } from "../../core/service/QuotaRules";
@@ -31,17 +31,25 @@ export interface CreateBotOptions {
  * - 背包/装备/经验由 playerJoin 事件从持久化恢复
  */
 export async function createBot(options: CreateBotOptions): Promise<BotRecord> {
-  const { name, ownerName, location, dimension, initialTags, rotation, lookTarget, isSneaking, spawnMode } = options;
+  const { name: rawName, ownerName, location, dimension, initialTags, rotation, lookTarget, isSneaking, spawnMode } = options;
+
+  // 名字规范化：自动加假人前缀（"刷铁机" → "$刷铁机"，防与真人撞名）
+  const name = normalizeBotName(rawName);
 
   // 名字校验：空名/超长/含 DP 子 key 分隔符（:inv: :equip: → 持久化 key 冲突，重启丢数据/误删）
   if (!isValidBotName(name)) {
-    throw new Error(`假人名字不合法：不能为空、超过 16 字符或包含 ":inv:" / ":equip:"`);
+    throw new Error(`假人名字不合法：不能为空、超过 ${MAX_BOT_NAME_LENGTH} 字符或包含 ":inv:" / ":equip:"`);
   }
   // 注册表已有同名记录 → 覆盖会丢旧数据，直接拒绝
   if (botRegistry.has(name)) {
     throw new Error(`假人 ${name} 已存在，请更换名字`);
   }
-  // 世界中已有同名玩家实体（真人/在线假人）→ spawn 必然生成 "(2)"，提前拒绝
+  // 真实玩家冲突检查（双重）：
+  // 1. 输入原始名与在线真人同名 → 直接拒绝（用户要求）
+  // 2. 规范化后完整名与世界中玩家实体（真人/在线假人）同名 → 拒绝（spawn 必生成 "(2)"）
+  if (rawName.trim() !== name && isNameOccupiedInWorld(rawName.trim())) {
+    throw new Error(`名字 ${rawName.trim()} 与真实玩家相同，请更换名字`);
+  }
   if (isNameOccupiedInWorld(name)) {
     throw new Error(`世界中已存在同名玩家实体 ${name}，请更换名字`);
   }

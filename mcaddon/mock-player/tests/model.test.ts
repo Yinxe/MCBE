@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE, SWAP_SLOT_NAMES, TAG_PREFIX, createDefaultConfig, DEFAULT_QUOTA, isValidBotName, MAX_BOT_NAME_LENGTH } from "../scripts/core/model/Types";
+import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE, SWAP_SLOT_NAMES, TAG_PREFIX, createDefaultConfig, DEFAULT_QUOTA, isValidBotName, normalizeBotName, BOT_NAME_PREFIX, MAX_BOT_NAME_LENGTH } from "../scripts/core/model/Types";
 import type { ModConfig } from "../scripts/core/model/Types";
 
 test("isValidBotName：合法名字通过", () => {
@@ -19,6 +19,27 @@ test("isValidBotName：空名/超长/DP 分隔符拒绝", () => {
   assert.ok(!isValidBotName("bot:inv:1"));
   assert.ok(!isValidBotName("bot:equip:head"));
   assert.ok(!isValidBotName(":inv:bot"));
+});
+
+test("normalizeBotName：无前缀自动加 $", () => {
+  assert.equal(normalizeBotName("刷铁机"), `${BOT_NAME_PREFIX}刷铁机`);
+  assert.equal(normalizeBotName("Steve"), "$Steve");
+});
+
+test("normalizeBotName：已有前缀不重复加 + 去空白", () => {
+  assert.equal(normalizeBotName("$刷铁机"), "$刷铁机");
+  assert.equal(normalizeBotName("  刷铁机  "), "$刷铁机");
+});
+
+test("normalizeBotName：空输入原样返回", () => {
+  assert.equal(normalizeBotName(""), "");
+  assert.equal(normalizeBotName("   "), "");
+});
+
+test("normalizeBotName：规范化后名字仍符合长度限制（$ 前缀占 1 字符）", () => {
+  // 16 字符原始名 + $ 前缀 = 17 字符 → 规范化后超限（isValidBotName 拒绝）
+  const normalized = normalizeBotName("a".repeat(MAX_BOT_NAME_LENGTH));
+  assert.ok(isValidBotName(normalized) === false);
 });
 
 test("常量：DP 前缀与标签前缀互不相同", () => {
