@@ -4,3 +4,4 @@
 // 任务经 MockBot.startTask(task, onComplete?) 挂到假人独立引擎。
 
 export { navigateToTask, type NavigateToTaskOptions } from "./NavigateToTask";
+export { followTask, pauseFollow, resumeFollow } from "./FollowTask";
