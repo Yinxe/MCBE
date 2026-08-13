@@ -175,19 +175,17 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     console.info(`[MockPlayer] 宝库 ${bot.name} 找到最近宝库 @(${found.x},${found.y},${found.z})，开始导航`);
   }
 
-  /** navigate：持续看向宝库 + 只算距离；r<2 且视线命中宝库 → 交互 */
+  /** navigate：持续注视宝库 + 只算距离；r<2 且视线命中宝库 → 交互 */
   function navigateTick(): void {
     const sim = bot.getEntity();
     if (!sim || !vaultPos || !navTarget) {
       phase = "scan";
       return;
     }
-    // 持续看向宝库中心（chunkload 降级忽略）
-    try {
-      sim.lookAt({ x: vaultPos.x + 0.5, y: vaultPos.y + 0.5, z: vaultPos.z + 0.5 });
-    } catch {
-      /* 降级：交互用 interactWithBlock 直接指定位置 */
-    }
+    // ⚠️ 持续注视宝库中心（MockBot.lookAt = PoseGateway lookAtLocation +
+    //    LookDuration.Continuous——瞬时 lookAt 看一眼会回正/GameTest 下被重置，
+    //    必须持续注视才能让视线命中判定成立；chunkload 降级内部 try-catch）
+    bot.lookAt({ x: vaultPos.x + 0.5, y: vaultPos.y + 0.5, z: vaultPos.z + 0.5 });
 
     // 距离判定（站立点）；停滞判定：距离无进展累计 STALL_TICKS → 放弃重扫
     const dist = Math.sqrt(
