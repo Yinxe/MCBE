@@ -5,7 +5,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { Action, Blackboard, Cooldown, Condition, Selector, Sequence, type AiContext, type Status } from "../scripts/core/ai";
+import {
+  Action, AlwaysFail, AlwaysSucceed, Blackboard, Cooldown, Condition, Inverter, RandomSelector,
+  RepeatUntilSuccess, Selector, Sequence, WaitForTicks, type AiContext, type Status,
+} from "../scripts/core/ai";
 
 function makeCtx(tick: number, blackboard = new Blackboard()): AiContext {
   return { botName: "bot1", blackboard, tick };
@@ -157,4 +160,93 @@ test("Blackboard：多棵树实例隔离", async () => {
   assert.equal(await new Sequence([reader]).tick(makeCtx(9, bbB)), "failure"); // 另一棵树黑板无值
   assert.equal(bbA.get<number>("v"), 7);
   assert.equal(bbB.get<number>("v"), undefined);
+});
+
+// ─── Inverter ────────────────────────────────────────────
+
+test("Inverter：success ↔ failure，running 保持", async () => {
+  const inv = new Inverter(new Action(() => "success"));
+  assert.equal(await inv.tick(makeCtx(0)), "failure");
+  const inv2 = new Inverter(new Action(() => "failure"));
+  assert.equal(await inv2.tick(makeCtx(0)), "success");
+  const inv3 = new Inverter(new Action(() => "running"));
+  assert.equal(await inv3.tick(makeCtx(0)), "running");
+});
+
+// ─── AlwaysSucceed / AlwaysFail ──────────────────────────
+
+test("AlwaysSucceed：子节点失败也强制成功（可选步骤包装）", async () => {
+  const node = new AlwaysSucceed(new Action(() => "failure"));
+  assert.equal(await node.tick(makeCtx(0)), "success");
+});
+
+test("AlwaysFail：子节点成功也强制失败", async () => {
+  const node = new AlwaysFail(new Action(() => "success"));
+  assert.equal(await node.tick(makeCtx(0)), "failure");
+});
+
+// ─── RepeatUntilSuccess ──────────────────────────────────
+
+test("RepeatUntilSuccess：子节点 failure → running（跨 tick 重试），直到 success", async () => {
+  let calls = 0;
+  const node = new RepeatUntilSuccess(
+    new Action(() => {
+      calls++;
+      return calls < 3 ? "failure" : "success";
+    }),
+  );
+  assert.equal(await node.tick(makeCtx(100)), "running"); // 第 1 次失败 → 保持
+  assert.equal(await node.tick(makeCtx(110)), "running"); // 第 2 次失败 → 保持
+  assert.equal(await node.tick(makeCtx(120)), "success"); // 第 3 次成功
+  assert.equal(calls, 3);
+});
+
+test("RepeatUntilSuccess：maxAttempts 到达仍失败 → failure", async () => {
+  let calls = 0;
+  const node = new RepeatUntilSuccess(
+    new Action(() => {
+      calls++;
+      return "failure";
+    }),
+    3,
+  );
+  assert.equal(await node.tick(makeCtx(100)), "running");
+  assert.equal(await node.tick(makeCtx(110)), "running");
+  assert.equal(await node.tick(makeCtx(120)), "failure"); // 达到上限
+  assert.equal(calls, 3);
+});
+
+// ─── RandomSelector ──────────────────────────────────────
+
+test("RandomSelector：随机执行其中一个子节点（结果 ∈ 子节点集合）", async () => {
+  const node = new RandomSelector([
+    new Action(() => "a" as Status),
+    new Action(() => "b" as Status),
+  ]);
+  const seen = new Set<string>();
+  for (let i = 0; i < 20; i++) {
+    seen.add(await node.tick(makeCtx(i)));
+  }
+  // 两种结果都出现过（随机分布）
+  assert.ok(seen.has("a"));
+  assert.ok(seen.has("b"));
+});
+
+test("RandomSelector：空子节点列表 → failure", async () => {
+  const node = new RandomSelector([]);
+  assert.equal(await node.tick(makeCtx(0)), "failure");
+});
+
+// ─── WaitForTicks ────────────────────────────────────────
+
+test("WaitForTicks：等待 N tick 后 success（期间 running 保持，完成后可重新计时）", async () => {
+  const node = new WaitForTicks(20);
+  const bb = new Blackboard();
+  assert.equal(await node.tick(makeCtx(100, bb)), "running");
+  assert.equal(await node.tick(makeCtx(110, bb)), "running");
+  assert.equal(await node.tick(makeCtx(119, bb)), "running"); // 未到
+  assert.equal(await node.tick(makeCtx(120, bb)), "success"); // 到点
+  // 完成后清理黑板键 → 再次等待重新计时
+  assert.equal(await node.tick(makeCtx(121, bb)), "running");
+  assert.equal(await node.tick(makeCtx(150, bb)), "success");
 });

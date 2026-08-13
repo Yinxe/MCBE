@@ -3,6 +3,14 @@
 // Selector：按优先级（数组顺序）执行，子节点 success/running → 短路返回；
 //   failure → 降级下一个。无记忆：每 tick 从第一个子节点重新评估，
 //   高优先级条件变化立即抢占（如"开箱"优于"寻路"）。
+// RandomSelector：随机挑一个子节点执行（行为多样化/巡逻）。
+//
+// 抢占组合示例（goal 反应式选择，仿 Bedrock priority 组件）：
+//   new Selector([
+//     new Sequence([紧急条件, 逃跑动作]),      // 最高优先级：受击逃跑
+//     new Sequence([任务条件, 任务动作]),      // 功能 goal
+//     new Sequence([空闲条件, 空闲动作]),      // 兜底
+//   ])——条件满足的分支胜出，条件变化下 tick 立即切换
 
 import type { AiContext, Node } from "./Node";
 import type { Status } from "./Status";
@@ -30,5 +38,18 @@ export class Selector implements Node {
       if (status !== "failure") return status;
     }
     return "failure";
+  }
+}
+
+/** 随机选择：每次 tick 随机挑一个子节点执行（巡逻/行为多样化） */
+export class RandomSelector implements Node {
+  constructor(private readonly children: Node[]) {}
+
+  async tick(ctx: AiContext): Promise<Status> {
+    if (this.children.length === 0) return "failure";
+    const index = Math.floor(Math.random() * this.children.length);
+    const child = this.children[index];
+    if (!child) return "failure";
+    return child.tick(ctx);
   }
 }

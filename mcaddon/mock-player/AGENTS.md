@@ -42,6 +42,8 @@ scripts/
 │   │                # MainhandPolicy（主手策略）/ TridentRules（三叉戟扫描）
 │   ├── storage/     # BotStore 端口（泛型 TItem）+ Binding 绑定表 + InMemory 替身
 │   ├── service/     # BotRegistry（注册表生命周期+恢复标记）/ ReclaimPlanner / RaidRules
+│   ├── ai/          # **生物 AI 编排框架**（行为树节点/组合/装饰/黑板，零具体任务）
+│   ├── tasks/       # **任务型模块**（VaultTask 宝库任务：感知端口 + 树装配，可单测）
 │   └── index.ts     # barrel
 ├── mc/              # 适配层：只做 mcapi 副作用（IO/视觉/通知）
 │   ├── bootstrap/   # context.ts — botStore/botRegistry 运行时单例（组合根装配）
@@ -54,12 +56,44 @@ scripts/
 │   ├── events/      # 世界事件订阅（薄壳）
 │   ├── ui/          # toolkit 表单（**只发布 UI 领域事件，不 import 业务动作函数**；
 │   │                #   表单提交后直接调 feature 的例外：mainhand/reclaim/trident/swap）
-│   ├── workflows/   # raidWorkflow / vaultWorkflow / tridentWorkflow（复杂组合工作流）
+│   ├── ai/          # **AI 引擎**：BotBrain — 每假人一棵行为树（惰性创建/防重入/标签对账）
+│   ├── tasks/       # **任务执行**：McVaultPorts — 宝库感知/导航/交互副作用
+│   ├── workflows/   # raidWorkflow（事件驱动）/ vaultWorkflow（行为树引擎壳）——
+│   │                #   三叉戟认主已拆出为自定义机制（main.ts 直接 initTridentTracker）
 │   └── format.ts    # 带色文本格式化（§ 色码）
 └── tests/           # node:test 单测（只测 core；mc 层靠游戏内冒烟）
     ├── helpers/     # factories（构造 BotRecord/物品）
     └── *.test.ts    # model/tags/coords/xp/items/services/storage/events/format
 ```
+
+### AI 编排层（1.1.57，core/ai + core/tasks）
+
+**分层**（任务型模块与生物 AI 分开定义）：
+
+| 层 | 位置 | 职责 |
+|----|------|------|
+| 编排框架 | `core/ai/` | 行为树节点（零 @minecraft，可单测）：组合 Sequence/Selector/RandomSelector、装饰 Cooldown/Inverter/AlwaysSucceed/AlwaysFail/RepeatUntilSuccess、叶子 Condition/Action、等待 WaitForTicks、黑板 Blackboard、入口 BehaviorTree |
+| 任务模块 | `core/tasks/` | 具体任务：感知快照类型 + 端口接口 + 树装配（VaultTask 宝库；砍树/钓鱼照此模式）。**决策纯声明，注入 Fake 端口可单测** |
+| 引擎 | `mc/ai/BotBrain.ts` | 每假人一棵树：惰性创建、防重入（协程 tick 未完成跳过）、不可用（离线/死亡）跳过、标签对账（移除标签 → 停止导航+清黑板；**重连中跳过**） |
+| 任务执行 | `mc/tasks/` | 端口实现：世界感知（getBlocks/背包扫描）、导航、交互、通知（McVaultPorts） |
+
+**核心机制**：
+- **Selector 无记忆抢占**（goal 反应式选择，仿 Bedrock priority 组件）：每 tick 从第一个子节点重评，条件满足的分支胜出、条件变化立即切换。failure 是决策信号（降级下一个分支），不是异常
+- **黑板**：每树独立实例，键值共享（如 vaultTarget / vaultKnowledge）——任务间状态、重连保留（实体换新黑板不丢）
+- **感知驱动决策**：`sense()` 一次返回完整感知快照（背包有哪种钥匙 + 周围有哪种宝库，分类排序），core 纯函数 `selectVaultTarget` / `diagnoseVaultIdle` 决策（优先不详宝库 / 缺因通知），mc 只做副作用
+- **长动作 = 协程式 Action**（Promise await）：导航等异步叶子内部自检查取消条件；引擎层防重入
+- **三态语义**：success / failure / running（保持待续）；装饰器改变子节点结果或重试语义
+
+**宝库任务决策树**（参考示例）：
+```
+Selector（每 tick 重评）
+├─ 开箱：有目标 + 距离近 + 交互冷却过 → interactVault（总量基准回读，持续点击不放弃）
+├─ 寻路：有目标 + 距离远 → navigateToVault（协程，目标消失/停滞即弃）
+├─ 感知：无目标 → sense + selectVaultTarget（失败冷却 40tick）
+└─ idle：按 diagnoseVaultIdle 原因通知（缺钥匙/缺宝库/缺不详钥匙）
+```
+
+**新任务接入指南**：① `core/tasks/XxxTask.ts` 定义感知快照 + 端口接口 + 树装配（复用 core/ai 节点）；② `mc/tasks/McXxxPorts.ts` 实现端口（世界副作用）；③ 引擎挂载（BotBrain 或新 Workflow.engine）；④ `tests/` 注入 Fake 端口断言场景序列。核心约束：core 零 @minecraft、决策可单测、mc 只做副作用。
 
 ### 依赖纪律（core 层强约束）
 

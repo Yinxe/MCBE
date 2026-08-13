@@ -1,41 +1,47 @@
-// ─── 宝库任务行为树测试（core/ai/VaultTask） ─────────────
-// 决策语义验证（FakeVaultPorts 注入，树 tick 手动推进）：
-//   扫描 → 寻路 → 开箱 → 重连（黑板目标保留 = 一直开同一个宝库）
-//   无钥匙 → idle；无宝库 → 冷却重扫；宝库已开过 → 3 次放弃换目标；寻路失败 → 清目标。
+// ─── 宝库任务行为树测试（core/tasks/VaultTask） ─────────────
+// 感知驱动决策验证（FakeVaultPorts 注入，树 tick 手动推进）：
+//   感知分类 → 目标选择（**优先不详宝库**）→ 寻路 → 开箱 → 重连（黑板保留）
+//   缺因诊断（缺钥匙/缺宝库/缺不详钥匙）→ idle 通知精确原因
+//   持续点击（未消耗不放弃）/ 宝库消失（target-gone 清目标重扫）
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { Blackboard, type AiContext } from "../scripts/core/ai";
-import { createVaultTaskTree, type VaultInteractResult, type VaultPorts } from "../scripts/core/tasks/VaultTask";
+import {
+  createVaultTaskTree, OMINOUS_TRIAL_KEY, TRIAL_KEY,
+  type VaultIdleReason, type VaultInteractResult, type VaultKnowledge, type VaultPorts,
+} from "../scripts/core/tasks/VaultTask";
 import type { Vec3 } from "../scripts/core/model/Types";
 
-const VAULT_POS: Vec3 = { x: 10, y: 64, z: 20 };
+const NORMAL_VAULT: Vec3 = { x: 10, y: 64, z: 20 };
+const OMINOUS_VAULT: Vec3 = { x: -10, y: 64, z: 20 };
 
-/** 可控测试端口：记录调用 + 可切换场景状态 */
+/** 可控测试端口：感知快照可切换 + 记录调用 */
 class FakeVaultPorts implements VaultPorts {
   available = true;
-  key = true;
-  scanResult: Vec3 | undefined = VAULT_POS;
+  knowledge: VaultKnowledge = {
+    keys: { trial: 1, ominous: 0 },
+    vaults: { normal: [NORMAL_VAULT], ominous: [] },
+    position: { x: 0, y: 0, z: 0 },
+  };
   distance = 10; // 默认远（触发寻路）
   navigateResult = true;
   interactResult: VaultInteractResult = "consumed";
 
-  scanCalls = 0;
+  senseCalls = 0;
   navigateCalls = 0;
   interactCalls = 0;
   reconnectCalls = 0;
-  idleCalls = 0;
+  idleReasons: VaultIdleReason[] = [];
+  lastKeyType: string | undefined;
 
   isBotAvailable(): boolean {
     return this.available;
   }
-  hasKey(): boolean {
-    return this.key;
-  }
-  scanVault(): Vec3 | undefined {
-    this.scanCalls++;
-    return this.scanResult;
+  sense(): VaultKnowledge {
+    this.senseCalls++;
+    return this.knowledge;
   }
   distanceToTarget(): number {
     return this.distance;
@@ -44,15 +50,16 @@ class FakeVaultPorts implements VaultPorts {
     this.navigateCalls++;
     return this.navigateResult;
   }
-  interactVault(): VaultInteractResult {
+  interactVault(_botName: string, _target: Vec3, keyType: string): VaultInteractResult {
     this.interactCalls++;
+    this.lastKeyType = keyType;
     return this.interactResult;
   }
   tryReconnect(): void {
     this.reconnectCalls++;
   }
-  idle(): void {
-    this.idleCalls++;
+  idle(_botName: string, reason: VaultIdleReason): void {
+    this.idleReasons.push(reason);
   }
 }
 
@@ -69,84 +76,135 @@ function makeHarness(ports = new FakeVaultPorts()): { ports: FakeVaultPorts; bb:
   };
 }
 
-// ─── 完整闭环 ────────────────────────────────────────────
+// ─── 完整闭环（普通宝库） ─────────────────────────────────
 
-test("完整链：扫描 → 寻路 → 开箱消耗 → 重连（黑板目标保留 → 重连后继续同一宝库）", async () => {
+test("完整链：感知 → 选普通宝库（普通钥匙）→ 寻路 → 开箱消耗 → 重连（黑板保留）", async () => {
   const { ports, bb, tick } = makeHarness();
 
-  // 第一次 tick：无目标 → 扫描成功，写入黑板
+  // 第一次 tick：无目标 → 感知 + 选目标（普通宝库，key=普通钥匙）
   assert.equal(await tick(100), "success");
-  assert.equal(ports.scanCalls, 1);
-  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS);
+  assert.equal(ports.senseCalls, 1);
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), NORMAL_VAULT);
+  assert.equal(bb.get<string>("vaultTargetKey"), TRIAL_KEY);
+  assert.equal(bb.get<"normal" | "ominous">("vaultTargetKind"), "normal");
 
-  // 第二次 tick：距离远（10 > 2.5）→ 寻路成功
+  // 第二次 tick：距离远 → 寻路成功
   assert.equal(await tick(110), "success");
   assert.equal(ports.navigateCalls, 1);
   assert.equal(ports.interactCalls, 0);
 
-  // 第三次 tick：距离近（1 ≤ 2.5）→ 开箱消耗 → 重连
+  // 第三次 tick：距离近 → 开箱消耗（选定钥匙类型）→ 重连
   ports.distance = 1;
   assert.equal(await tick(120), "success");
   assert.equal(ports.interactCalls, 1);
+  assert.equal(ports.lastKeyType, TRIAL_KEY);
   assert.equal(ports.reconnectCalls, 1);
   // 黑板目标保留（重连后继续同一宝库）
-  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS);
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), NORMAL_VAULT);
 
-  // 模拟重连完成（假人回归、距离又变远）→ 再次寻路到同一目标
+  // 模拟重连完成（距离又变远）→ 再次寻路到同一目标
   ports.distance = 10;
   assert.equal(await tick(130), "success");
   assert.equal(ports.navigateCalls, 2);
-  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS); // 目标未换
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), NORMAL_VAULT); // 目标未换
 });
 
-// ─── 无钥匙 ──────────────────────────────────────────────
+// ─── 优先不详宝库 ────────────────────────────────────────
 
-test("无钥匙：不扫描不开箱，走 idle", async () => {
-  const { ports, tick } = makeHarness();
-  ports.key = false;
-
-  for (const t of [100, 110, 120]) {
-    assert.equal(await tick(t), "success");
-  }
-  assert.equal(ports.scanCalls, 0);
-  assert.equal(ports.interactCalls, 0);
-  assert.equal(ports.idleCalls, 3);
-});
-
-// ─── 无宝库冷却重扫 ──────────────────────────────────────
-
-test("无宝库：扫描失败 → 冷却 40 tick → 到期重扫", async () => {
-  const { ports, tick } = makeHarness();
-  ports.scanResult = undefined;
+test("优先不详宝库：有不详钥匙 + 两种宝库 → 选不详宝库（不详钥匙）", async () => {
+  const { ports, bb, tick } = makeHarness();
+  ports.knowledge = {
+    keys: { trial: 1, ominous: 1 },
+    vaults: { normal: [NORMAL_VAULT], ominous: [OMINOUS_VAULT] },
+    position: { x: 0, y: 0, z: 0 },
+  };
 
   assert.equal(await tick(100), "success");
-  assert.equal(ports.scanCalls, 1);
-  assert.equal(ports.idleCalls, 1);
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), OMINOUS_VAULT); // 优先不详
+  assert.equal(bb.get<string>("vaultTargetKey"), OMINOUS_TRIAL_KEY);
+  assert.equal(bb.get<"normal" | "ominous">("vaultTargetKind"), "ominous");
 
-  // 冷却期内不再扫描
+  ports.distance = 1;
   assert.equal(await tick(120), "success");
-  assert.equal(ports.scanCalls, 1);
-  assert.equal(ports.idleCalls, 2);
-
-  // 到期重扫（tick 140 = 100 + 40）
-  assert.equal(await tick(140), "success");
-  assert.equal(ports.scanCalls, 2);
+  assert.equal(ports.lastKeyType, OMINOUS_TRIAL_KEY);
+  assert.equal(ports.reconnectCalls, 1);
 });
 
-// ─── 宝库已开过（假成功免疫） ────────────────────────────
+test("不详钥匙兜底开普通宝库：只有不详钥匙 + 普通宝库 → 选普通宝库（不详钥匙）", async () => {
+  const { ports, bb, tick } = makeHarness();
+  ports.knowledge = {
+    keys: { trial: 0, ominous: 1 },
+    vaults: { normal: [NORMAL_VAULT], ominous: [] },
+    position: { x: 0, y: 0, z: 0 },
+  };
+
+  assert.equal(await tick(100), "success");
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), NORMAL_VAULT);
+  assert.equal(bb.get<string>("vaultTargetKey"), OMINOUS_TRIAL_KEY); // 不详钥匙兜底
+});
+
+// ─── 缺因诊断（开不了宝库的通知原因） ────────────────────
+
+test("缺因：背包无任何钥匙 → idle 报 no-key（不感知不重扫）", async () => {
+  const { ports, tick } = makeHarness();
+  ports.knowledge = {
+    keys: { trial: 0, ominous: 0 },
+    vaults: { normal: [NORMAL_VAULT], ominous: [] },
+    position: { x: 0, y: 0, z: 0 },
+  };
+
+  assert.equal(await tick(100), "success");
+  assert.deepEqual(ports.idleReasons, ["no-key"]);
+  assert.equal(ports.interactCalls, 0);
+});
+
+test("缺因：有钥匙但附近无宝库 → idle 报 no-vault", async () => {
+  const { ports, tick } = makeHarness();
+  ports.knowledge = {
+    keys: { trial: 1, ominous: 0 },
+    vaults: { normal: [], ominous: [] },
+    position: { x: 0, y: 0, z: 0 },
+  };
+
+  assert.equal(await tick(100), "success");
+  assert.deepEqual(ports.idleReasons, ["no-vault"]);
+});
+
+test("缺因：只有不详宝库 + 无不详钥匙 → idle 报 no-ominous-key（感知冷却后重试）", async () => {
+  const { ports, tick } = makeHarness();
+  ports.knowledge = {
+    keys: { trial: 1, ominous: 0 },
+    vaults: { normal: [], ominous: [OMINOUS_VAULT] },
+    position: { x: 0, y: 0, z: 0 },
+  };
+
+  assert.equal(await tick(100), "success");
+  assert.deepEqual(ports.idleReasons, ["no-ominous-key"]);
+  assert.equal(ports.senseCalls, 1);
+
+  // 冷却期（40 tick）内不重感知
+  assert.equal(await tick(130), "success");
+  assert.equal(ports.senseCalls, 1);
+  assert.equal(ports.idleReasons.length, 2); // 持续按原因提醒（节流在 mc 层）
+
+  // 到期重感知
+  assert.equal(await tick(140), "success");
+  assert.equal(ports.senseCalls, 2);
+});
+
+// ─── 持续点击（未消耗不放弃目标） ─────────────────────────
 
 test("持续点击语义：interact 未消耗（宝库冷却/动画中）→ 冷却后继续点击，不放弃目标", async () => {
   const { ports, bb, tick } = makeHarness();
   ports.distance = 1;
   ports.interactResult = "not-consumed";
 
-  assert.equal(await tick(100), "success"); // 首次：扫描写目标
-  // 多次点击未消耗（每次间隔 20 tick 冷却）→ 目标始终保留
+  assert.equal(await tick(100), "success"); // 感知选目标
   for (const t of [120, 140, 160, 180]) {
     assert.equal(await tick(t), "success");
   }
   assert.equal(ports.interactCalls, 4);
-  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS); // 不放弃目标
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), NORMAL_VAULT); // 不放弃目标
   assert.equal(ports.reconnectCalls, 0); // 未消耗不重连
 
   // 宝库冷却结束 → 点击真消耗 → 重连（同一目标）
@@ -154,72 +212,70 @@ test("持续点击语义：interact 未消耗（宝库冷却/动画中）→ 冷
   assert.equal(await tick(200), "success");
   assert.equal(ports.interactCalls, 5);
   assert.equal(ports.reconnectCalls, 1);
-  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS); // 重连后目标保留
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), NORMAL_VAULT); // 重连后目标保留
 });
 
-// ─── 寻路失败 ────────────────────────────────────────────
-
-test("寻路失败：清目标 → 重扫（无可达宝库则进入冷却）", async () => {
-  const { ports, bb, tick } = makeHarness();
-  ports.navigateResult = false;
-
-  assert.equal(await tick(100), "success"); // 扫描
-  assert.equal(ports.navigateCalls, 0);
-
-  // 寻路失败且没有其他宝库（扫描也失败）→ 目标已清 + 扫描进入冷却
-  ports.scanResult = undefined;
-  assert.equal(await tick(110), "success");
-  assert.equal(ports.navigateCalls, 1);
-  assert.equal(bb.has("vaultTarget"), false); // 目标已清
-  assert.equal(ports.scanCalls, 2); // 失败后立即重扫了一次
-
-  // 冷却期内不重扫（不疯狂扫描）
-  assert.equal(await tick(130), "success");
-  assert.equal(ports.scanCalls, 2);
-});
-
-// ─── 交互异常 ────────────────────────────────────────────
+// ─── 目标失效（宝库被拆） ────────────────────────────────
 
 test("宝库被拆：interact 返回 target-gone → 清目标重扫", async () => {
   const { ports, bb, tick } = makeHarness();
   ports.distance = 1;
   ports.interactResult = "target-gone";
 
-  assert.equal(await tick(100), "success"); // 首次：扫描写目标
-  // 交互 target-gone → 目标清 + 同 tick 内重扫（没有其他宝库 → 扫描失败）
-  ports.scanResult = undefined;
+  assert.equal(await tick(100), "success"); // 感知选目标
+  // 交互 target-gone → 目标清 + 同 tick 内重扫（没有其他宝库 → 感知失败）
+  ports.knowledge = {
+    keys: { trial: 1, ominous: 0 },
+    vaults: { normal: [], ominous: [] },
+    position: { x: 0, y: 0, z: 0 },
+  };
   assert.equal(await tick(120), "success");
   assert.equal(bb.has("vaultTarget"), false); // 目标已清
-  assert.equal(ports.scanCalls, 2); // 失败后立即重扫了一次
+  assert.equal(ports.senseCalls, 2); // 失败后立即重感知了一次
 
-  // 扫描进入冷却（40 tick），不再疯狂重扫
+  // 感知进入冷却（40 tick），不再疯狂重扫
   assert.equal(await tick(140), "success");
-  assert.equal(ports.scanCalls, 2);
-
-  // 冷却到期重扫 → 找到新宝库 → 重新开箱
-  ports.scanResult = VAULT_POS;
-  ports.interactResult = "consumed";
-  assert.equal(await tick(180), "success");
-  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS);
-  assert.equal(ports.scanCalls, 3);
+  assert.equal(ports.senseCalls, 2);
 });
+
+// ─── 寻路失败 ────────────────────────────────────────────
+
+test("寻路失败：清目标 → 重感知（无可达宝库则进入冷却）", async () => {
+  const { ports, bb, tick } = makeHarness();
+  ports.navigateResult = false;
+
+  assert.equal(await tick(100), "success"); // 感知选目标
+  assert.equal(ports.navigateCalls, 0);
+
+  // 寻路失败且没有其他宝库（感知也拿不到目标）→ 目标已清 + 感知进入冷却
+  ports.knowledge = {
+    keys: { trial: 1, ominous: 0 },
+    vaults: { normal: [], ominous: [] },
+    position: { x: 0, y: 0, z: 0 },
+  };
+  assert.equal(await tick(110), "success");
+  assert.equal(ports.navigateCalls, 1);
+  assert.equal(bb.has("vaultTarget"), false); // 目标已清
+  assert.equal(ports.senseCalls, 2); // 失败后立即重感知了一次
+});
+
+// ─── 交互异常 ────────────────────────────────────────────
 
 test("交互异常：failure 后受交互冷却约束再重试", async () => {
   const { ports, bb, tick } = makeHarness();
   ports.distance = 1;
   ports.interactResult = "error";
 
-  assert.equal(await tick(100), "success"); // 首次：扫描写目标
-  // 第一次交互异常
-  assert.equal(await tick(110), "success");
+  assert.equal(await tick(100), "success"); // 感知选目标
+  assert.equal(await tick(120), "success"); // 第一次交互异常（交互冷却 20tick：120-100 不足？首次无记录 → 放行）
   assert.equal(ports.interactCalls, 1);
   assert.equal(bb.has("vaultTarget"), true); // 目标保留（重试不放弃）
 
   // 冷却期（20 tick）内不重试
-  assert.equal(await tick(120), "success");
+  assert.equal(await tick(130), "success");
   assert.equal(ports.interactCalls, 1);
 
   // 冷却到期重试
-  assert.equal(await tick(140), "success");
+  assert.equal(await tick(150), "success");
   assert.equal(ports.interactCalls, 2);
 });

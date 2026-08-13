@@ -1,17 +1,20 @@
 // ─── 宝库任务端口实现（mc/tasks） ────────────────────────
-// 任务型模块的执行层：VaultPorts 的 mc 适配（core/tasks/VaultTask 声明端口）。
+// 任务型模块的执行层：VaultPorts 的 mc 适配（core/tasks/VaultTask 声明决策契约）。
 // 分层约定：mc/ai = AI 引擎（BotBrain 驱动树）；mc/tasks = 具体任务执行。
-// 对齐 dev 1.3.20 宝库规格（1.3.10~1.3.19 用户实测修复）：
-//   - 扫描：半径 15、y clamp(-64,320)、allowUnloadedChunks=false，只扫
-//     minecraft:vault（ominous 是 block state，不是独立方块）
+// 感知驱动（用户规格 1.1.57）：sense() 一次返回完整感知快照——背包钥匙分类
+//   （普通/不详各多少）+ 附近宝库分类（普通/不详，按距离排序），编排层据此
+//   精确决策（优先不详宝库）；开不了宝库时按 core 诊断原因翻译通知。
+// 交互规格（对齐 dev 1.3.20，1.3.10~1.3.19 用户实测修复）：
 //   - 站立点：**优先宝库正面**（cardinal_direction 反方向 1~2 格可站立）——
 //     宝库开箱必须面对钥匙孔正面，侧面/背面点击是假成功；正面不可站再任意兜底
 //   - 导航：零注视（lookAt 干扰 GameTest 导航）；到达判定 2 格；停滞判定
-//     （距离无进展 200 tick → 放弃重扫）
-//   - 交互：识别普通/不详 → 候选钥匙（普通=trial_key 优先+不详兜底 / 不详=仅
-//     不详）→ ensureMainhand 换主手 slot 0 → **useItemInSlotOnBlock 右键使用**
-//     优先（interactWithBlock 空手交互不消耗钥匙=假成功）→ 交互前记录**总量**
-//     基准 → 回读总量<基准=真消耗；未消耗=宝库冷却/动画中 → 持续点击不放弃
+//     （距离无进展 200 tick → 放弃重扫）；**开头验证目标方块存在**
+//   - 交互：ensureMainhand 换主手 slot 0（swapItems → 手动双写降级）→
+//     **useItemInSlotOnBlock 右键使用**优先（interactWithBlock 空手交互不消耗
+//     钥匙=假成功）→ 交互前记录**总量**基准 → 回读总量<基准=真消耗；
+//     未消耗=宝库冷却/动画中 → 持续点击不放弃
+//   - **readVaultKind 必须验证 typeId**（宝库被替换成其他方块 → target-gone，
+//     绝不重复对空气/错误方块交互）
 //   - 朝向：lookAt 宝库中心 + **同步 lastPoint.lookTarget**（重连恢复姿态）
 // 决策逻辑全部在 core/tasks/VaultTask（可单测），本文件只做副作用。
 
@@ -19,7 +22,8 @@ import { system, world, Direction, BlockVolume, EquipmentSlot, type ItemStack, t
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { VaultInteractResult, VaultPorts } from "../../core/tasks/VaultTask";
+import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, VaultKnowledge, VaultPorts } from "../../core/tasks/VaultTask";
+import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "../../core/tasks/VaultTask";
 import type { Vec3 } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { workflowVaultOpened } from "../../core/events/WorkflowEvents";
@@ -46,14 +50,10 @@ const NOTIFY_COOLDOWN_TICKS = 200;
 
 /** 宝库方块 ID（普通/不详共用同一方块，block state ominous 区分） */
 const VAULT_BLOCK = "minecraft:vault";
-/** 钥匙类型（宝库类型识别后按优先级选） */
-const KEY_CANDIDATES: Record<"normal" | "ominous", string[]> = {
-  normal: ["minecraft:trial_key", "minecraft:ominous_trial_key"],
-  ominous: ["minecraft:ominous_trial_key"],
-};
+/** 钥匙中文名（提示用） */
 const KEY_LABELS: Record<string, string> = {
-  "minecraft:trial_key": "普通钥匙",
-  "minecraft:ominous_trial_key": "不详钥匙",
+  [TRIAL_KEY]: "普通钥匙",
+  [OMINOUS_TRIAL_KEY]: "不详钥匙",
 };
 
 // ─── 假人解析 ────────────────────────────────────────────
@@ -79,46 +79,14 @@ export const vaultPorts: VaultPorts = {
     return !!record && record.online && !record.death;
   },
 
-  hasKey(botName: string): boolean {
+  sense(botName: string): VaultKnowledge {
     const bot = getBot(botName);
-    if (!bot) return false;
-    // 背包有任一宝库钥匙（普通/不详均可；类型匹配在交互时按宝库类型处理）
-    return countKeyTotal(bot) > 0;
-  },
-
-  scanVault(botName: string): Vec3 | undefined {
-    const bot = getBot(botName);
-    if (!bot) return undefined;
-    const c = bot.location;
-    try {
-      // y 范围 clamp 到世界高度，allowUnloadedChunks=false（未加载区块等下一次重扫）
-      const volume = new BlockVolume(
-        {
-          x: Math.floor(c.x) - SCAN_RADIUS,
-          y: Math.max(-64, Math.floor(c.y) - SCAN_RADIUS),
-          z: Math.floor(c.z) - SCAN_RADIUS,
-        },
-        {
-          x: Math.floor(c.x) + SCAN_RADIUS,
-          y: Math.min(320, Math.floor(c.y) + SCAN_RADIUS),
-          z: Math.floor(c.z) + SCAN_RADIUS,
-        },
-      );
-      const found = bot.dimension.getBlocks(volume, { includeTypes: [VAULT_BLOCK] }, false);
-      // 最近优先
-      let best: Vec3 | undefined;
-      let bestDist = Infinity;
-      for (const loc of found.getBlockLocationIterator()) {
-        const dist = horizontalDistance(c, loc);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = { x: loc.x, y: loc.y, z: loc.z };
-        }
-      }
-      return best;
-    } catch {
-      return undefined;
-    }
+    if (!bot) return emptyKnowledge();
+    return {
+      keys: scanKeys(bot),
+      vaults: scanVaults(bot),
+      position: { x: bot.location.x, y: bot.location.y, z: bot.location.z },
+    };
   },
 
   distanceToTarget(botName: string, target: Vec3): number {
@@ -130,6 +98,8 @@ export const vaultPorts: VaultPorts = {
   async navigateToVault(botName: string, target: Vec3): Promise<boolean> {
     const bot = getBot(botName);
     if (!bot) return false;
+    // ⚠️ 目标方块被拆/被替换 → 直接放弃（树清目标重扫），不导航到空气
+    if (!isVaultBlock(bot, target)) return false;
     // 站立点：优先宝库正面（面对钥匙孔），正面不可站再任意方向兜底
     const stand = pickStandSpot(bot, target);
     if (!stand) return false;
@@ -143,15 +113,16 @@ export const vaultPorts: VaultPorts = {
       return false;
     }
     // 轮询等待到达：停滞判定（距离无进展 STALL_TICKS）+ 总超时兜底；
-    // 协程内自检查（离线/死亡/钥匙丢失 → 提前失败）
+    // 协程内自检查（离线/死亡/钥匙丢失/目标消失 → 提前失败）
     const startTick = system.currentTick;
     let stallCount = 0;
     let lastDist = Infinity;
     while (true) {
       await waitTicks(NAVIGATE_POLL_TICKS);
-      if (!vaultPorts.isBotAvailable(botName) || !vaultPorts.hasKey(botName)) return false;
+      if (!vaultPorts.isBotAvailable(botName)) return false;
       const current = getBot(botName);
       if (!current) return false;
+      if (!isVaultBlock(current, target)) return false; // 导航途中宝库被拆
       const dist = distance3d(current.location, navTarget);
       if (dist >= lastDist) {
         stallCount++;
@@ -168,7 +139,7 @@ export const vaultPorts: VaultPorts = {
     }
   },
 
-  interactVault(botName: string, target: Vec3): VaultInteractResult {
+  interactVault(botName: string, target: Vec3, keyType: string): VaultInteractResult {
     const bot = getBot(botName);
     if (!bot) return "error";
     const record = botRegistry.get(botName);
@@ -176,21 +147,18 @@ export const vaultPorts: VaultPorts = {
     // ⚠️ 重连进行中不交互（safeReconnect 异步生效前，避免二次点击消耗钥匙）
     if (reconnectingBots.has(botName)) return "error";
 
-    // ── 1. 识别宝库类型（普通/不详：block state ominous）→ 候选钥匙 ──
-    const vaultKind = readVaultKind(bot, target); // "normal" | "ominous" | undefined
+    // ── 1. 验证目标仍是宝库方块（被拆/被替换 → target-gone 防对空气交互） ──
+    const vaultKind = readVaultKind(bot, target);
     if (!vaultKind) {
-      // 宝库被拆/读取失败 → 目标失效，通知后由树清目标重扫
       notifyNoKey(bot, record.name, "目标宝库已不存在，重新搜索附近宝库");
       return "target-gone";
     }
-    const candidates = KEY_CANDIDATES[vaultKind];
 
-    // ── 2. 按优先级确保主手（slot 0）是候选钥匙 ──
+    // ── 2. 确保主手（slot 0）是选定钥匙（swapItems → 手动双写降级） ──
     // ⚠️ 玩家只需把钥匙放入背包，主手自动换（用户规格 1.3.19：主手固定 slot 0）
-    const keyType = ensureMainhand(bot, candidates);
-    if (!keyType) {
-      const missing = candidates.length > 1 ? "普通钥匙或不详钥匙" : "不详钥匙";
-      notifyNoKey(bot, record.name, `背包没有${missing}，请放入背包后重试`);
+    const keyTypeId = ensureMainhand(bot, [keyType]);
+    if (!keyTypeId) {
+      notifyNoKey(bot, record.name, `背包没有${KEY_LABELS[keyType] ?? keyType}，请放入背包后重试`);
       return "error";
     }
 
@@ -224,7 +192,7 @@ export const vaultPorts: VaultPorts = {
     if (total >= baseline) return "not-consumed";
 
     // 真消耗 → 发布领域事件 + **立即通知剩余钥匙数（下线前背包准确）**
-    workflowVaultOpened.trigger({ botName, keyType, remaining: total });
+    workflowVaultOpened.trigger({ botName, keyType: keyTypeId, remaining: total });
     sendNearest(bot, record.name, `${color.success}开箱成功！${color.muted}剩余 ${color.info}${total} ${color.playerName}把钥匙${color.muted}，下线重连继续`);
     return "consumed";
   },
@@ -236,19 +204,82 @@ export const vaultPorts: VaultPorts = {
     safeReconnect(record);
   },
 
-  idle(botName: string): void {
+  idle(botName: string, reason: VaultIdleReason): void {
     const bot = getBot(botName);
     if (!bot) return;
     const record = botRegistry.get(botName);
     if (!record) return;
-    if (countKeyTotal(bot) === 0) {
-      notifyNoKey(bot, record.name, "背包没有宝库钥匙，请放入钥匙（普通/不详均可）");
-      return;
-    }
-    // 有钥匙但无宝库/扫描冷却中：低频提示
-    notifyNoKey(bot, record.name, "附近 15 格内没有宝库，请将假人带到宝库附近");
+    // 原因判定在 core（diagnoseVaultIdle），本层只翻译文案（节流防刷屏）
+    const message =
+      reason === "no-key"
+        ? "背包没有宝库钥匙（普通/不详），请放入钥匙"
+        : reason === "no-vault"
+          ? "附近 15 格内没有宝库，请将假人带到宝库附近"
+          : "附近只有不详宝库，背包没有不详钥匙（普通钥匙无法开不详宝库）";
+    notifyNoKey(bot, record.name, message);
   },
 };
+
+// ─── 感知实现 ────────────────────────────────────────────
+
+function emptyKnowledge(): VaultKnowledge {
+  return { keys: { trial: 0, ominous: 0 }, vaults: { normal: [], ominous: [] }, position: { x: 0, y: 0, z: 0 } };
+}
+
+/** 背包钥匙分类统计（普通/不详各多少） */
+function scanKeys(bot: SimulatedPlayer): KeyInventory {
+  const keys: KeyInventory = { trial: 0, ominous: 0 };
+  try {
+    const inv = bot.getComponent("minecraft:inventory") as
+      | { container: { getItem: (slot: number) => ItemStack | undefined; size: number } }
+      | undefined;
+    if (inv?.container) {
+      for (let i = 0; i < inv.container.size; i++) {
+        const item = inv.container.getItem(i);
+        if (item?.typeId === TRIAL_KEY) keys.trial += item.amount;
+        else if (item?.typeId === OMINOUS_TRIAL_KEY) keys.ominous += item.amount;
+      }
+    }
+  } catch {
+    /* 感知失败返回空 */
+  }
+  return keys;
+}
+
+/** 附近宝库分类扫描（普通/不详，按距离近 → 远排序） */
+function scanVaults(bot: SimulatedPlayer): NearbyVaults {
+  const vaults: NearbyVaults = { normal: [], ominous: [] };
+  const origin = bot.location;
+  try {
+    // y 范围 clamp 到世界高度，allowUnloadedChunks=false（未加载区块等下一次重扫）
+    const volume = new BlockVolume(
+      {
+        x: Math.floor(origin.x) - SCAN_RADIUS,
+        y: Math.max(-64, Math.floor(origin.y) - SCAN_RADIUS),
+        z: Math.floor(origin.z) - SCAN_RADIUS,
+      },
+      {
+        x: Math.floor(origin.x) + SCAN_RADIUS,
+        y: Math.min(320, Math.floor(origin.y) + SCAN_RADIUS),
+        z: Math.floor(origin.z) + SCAN_RADIUS,
+      },
+    );
+    const found = bot.dimension.getBlocks(volume, { includeTypes: [VAULT_BLOCK] }, false);
+    for (const loc of found.getBlockLocationIterator()) {
+      const kind = readVaultKind(bot, loc);
+      const pos: Vec3 = { x: loc.x, y: loc.y, z: loc.z };
+      if (kind === "ominous") vaults.ominous.push(pos);
+      else if (kind === "normal") vaults.normal.push(pos);
+      // kind undefined（异常）→ 跳过
+    }
+  } catch {
+    /* 感知失败返回空 */
+  }
+  const byDist = (a: Vec3, b: Vec3): number => horizontalDistance(origin, a) - horizontalDistance(origin, b);
+  vaults.normal.sort(byDist);
+  vaults.ominous.sort(byDist);
+  return vaults;
+}
 
 // ─── 工具函数 ────────────────────────────────────────────
 
@@ -271,6 +302,16 @@ function distance3d(a: Vec3, b: Vec3): number {
   const dy = a.y - b.y;
   const dz = a.z - b.z;
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+/** 目标坐标是否仍是宝库方块（被拆/被替换 → false） */
+function isVaultBlock(bot: SimulatedPlayer, pos: Vec3): boolean {
+  try {
+    const block = bot.dimension.getBlock(pos);
+    return !!block && block.typeId === VAULT_BLOCK;
+  } catch {
+    return false;
+  }
 }
 
 // ─── 站立点（优先宝库正面） ──────────────────────────────
@@ -335,11 +376,16 @@ function isStandable(bot: SimulatedPlayer, pos: Vec3): boolean {
   }
 }
 
-/** 宝库类型（普通/不详） */
+/**
+ * 宝库类型（普通/不详）。
+ * ⚠️ **必须验证 typeId**：宝库被替换成其他方块时 getBlock 仍返回方块，
+ *    若只读 ominous state 会误判为普通宝库 → 对错误方块持续交互卡死。
+ *    验证失败返回 undefined → 上层走 target-gone 清目标重扫。
+ */
 function readVaultKind(bot: SimulatedPlayer, vault: Vec3): "normal" | "ominous" | undefined {
   try {
     const block = bot.dimension.getBlock(vault);
-    if (!block) return undefined;
+    if (!block || block.typeId !== VAULT_BLOCK) return undefined;
     const ominous = block.permutation.getState("ominous") as boolean | undefined;
     return ominous ? "ominous" : "normal";
   } catch {
@@ -359,7 +405,7 @@ function countKeyTotal(bot: SimulatedPlayer): number {
     if (inv?.container) {
       for (let i = 0; i < inv.container.size; i++) {
         const item = inv.container.getItem(i);
-        if (item?.typeId === "minecraft:trial_key" || item?.typeId === "minecraft:ominous_trial_key") {
+        if (item?.typeId === TRIAL_KEY || item?.typeId === OMINOUS_TRIAL_KEY) {
           total += item.amount;
         }
       }
@@ -370,22 +416,45 @@ function countKeyTotal(bot: SimulatedPlayer): number {
   }
 }
 
-/** 确保主手（slot 0）为候选钥匙：已是 → 直接返回；否则从背包交换 + 选中 slot 0 */
+/**
+ * 确保主手（slot 0）为候选钥匙，三级降级：
+ *   ① 主手已是候选 → 直接返回
+ *   ② container.swapItems(i, 0) 交换（首选）
+ *   ③ swapItems 失败 → **手动双写降级**（读两槽 → setItem 互写，防丢物品）
+ * 全部失败 → undefined（通知玩家等待手动放入）。
+ */
 function ensureMainhand(bot: SimulatedPlayer, candidates: string[]): string | undefined {
   try {
     const inv = bot.getComponent("minecraft:inventory") as
-      | { container: { getItem: (slot: number) => ItemStack | undefined; swapItems: (a: number, b: number) => boolean; size: number } }
+      | { container: { getItem: (slot: number) => ItemStack | undefined; setItem: (slot: number, item?: ItemStack) => boolean; swapItems: (a: number, b: number) => boolean; size: number } }
       | undefined;
     const container = inv?.container;
     if (!container) return undefined;
+
     const held = container.getItem(0);
     if (held && candidates.includes(held.typeId)) return held.typeId;
+
     for (let i = 0; i < container.size; i++) {
       const item = container.getItem(i);
-      if (item && candidates.includes(item.typeId)) {
-        if (!container.swapItems(i, 0)) return undefined;
-        bot.selectedSlotIndex = 0; // 主手 = slot 0（选中）
-        return container.getItem(0)?.typeId ?? candidates[0];
+      if (!item || !candidates.includes(item.typeId)) continue;
+      // ② swapItems 首选
+      try {
+        if (container.swapItems(i, 0)) {
+          bot.selectedSlotIndex = 0; // 主手 = slot 0（选中）
+          return container.getItem(0)?.typeId ?? candidates[0];
+        }
+      } catch {
+        /* 落到手动双写 */
+      }
+      // ③ 手动双写降级（读两槽 → 互写；swapItems 失败/抛错时兜底）
+      try {
+        const slot0 = container.getItem(0);
+        if (container.setItem(0, item) && container.setItem(i, slot0 ?? undefined)) {
+          bot.selectedSlotIndex = 0;
+          return container.getItem(0)?.typeId ?? candidates[0];
+        }
+      } catch {
+        /* 降级失败，继续找下一个候选槽 */
       }
     }
     return undefined;
