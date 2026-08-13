@@ -105,6 +105,17 @@ test("Condition：谓词 true → Success，false → Failure", async () => {
   assert.equal(await tree.tick(makeCtx(0)), Status.Success);
 });
 
+test("Condition.not()：取反便捷方法（等价 Inverter 包装）", async () => {
+  const c = new Condition(() => true);
+  assert.equal(await c.tick(makeCtx(0)), Status.Success);
+  assert.equal(await c.not().tick(makeCtx(0)), Status.Failure); // 取反
+  const c2 = new Condition(() => false);
+  assert.equal(await c2.not().tick(makeCtx(0)), Status.Success); // 双重语义
+  // 与 Inverter 行为一致
+  const c3 = new Condition(() => true);
+  assert.equal(await new Inverter(c3).tick(makeCtx(0)), await c3.not().tick(makeCtx(0)));
+});
+
 test("Action：支持异步（Promise 状态）", async () => {
   const tree = new Sequence([
     new Action(async (): Promise<Status> => Status.Running),

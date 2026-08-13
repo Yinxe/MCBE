@@ -4,12 +4,12 @@
 //   core/ai     生物 AI 编排框架（行为树节点，不含任何具体任务）
 //   core/tasks  任务型模块（本文件：宝库任务；后续砍树/钓鱼同此目录）
 //
-// 感知驱动决策（用户规格 1.1.57）：不再是布尔 hasKey，而是完整感知快照
+// 感知驱动决策（用户规格 1.1.57/1.1.59）：不再是布尔 hasKey，而是完整感知快照
 //   VaultKnowledge（背包有哪种钥匙 + 周围有哪种宝库）——编排层据此精确决策：
 //   - 目标选择 selectVaultTarget：**优先不详宝库**（有不详钥匙时）；
-//     其次普通宝库（普通钥匙优先，不详钥匙兜底）
+//     其次普通宝库（⚠️ **普通宝库只能用普通钥匙**，不详钥匙不可替代）
 //   - 缺因诊断 diagnoseVaultIdle：开不了宝库时通知精确原因
-//     （缺钥匙 / 缺宝库 / 缺不详钥匙）
+//     （缺钥匙 / 缺宝库 / 缺不详钥匙 / 缺普通钥匙）
 //
 // 决策语义（根 Selector 每 tick 重评，无记忆）：
 //   优先级：
@@ -58,7 +58,7 @@ export interface VaultKnowledge {
 }
 
 /** 开不了宝库的原因（idle 通知用，core 判定、mc 翻译文案） */
-export type VaultIdleReason = "no-key" | "no-vault" | "no-ominous-key";
+export type VaultIdleReason = "no-key" | "no-vault" | "no-ominous-key" | "no-trial-key";
 
 /** 目标选择结果 */
 export interface VaultTargetSelection {
@@ -119,7 +119,7 @@ export const OMINOUS_TRIAL_KEY = "minecraft:ominous_trial_key";
 
 /**
  * 目标选择：**优先不详宝库**（有不详钥匙时）；其次普通宝库
- * （普通钥匙优先，无则不详钥匙兜底——1.3.20 普通宝库候选语义）。
+ * （⚠️ 普通宝库**只能使用普通钥匙**——用户规格 1.1.59，不详钥匙不能开普通宝库）。
  *
  * @param knowledge - 感知快照
  * @returns 目标选择；无满足条件的目标返回 undefined
@@ -130,21 +130,18 @@ export function selectVaultTarget(knowledge: VaultKnowledge): VaultTargetSelecti
   if (ominousVault && knowledge.keys.ominous > 0) {
     return { target: ominousVault, kind: "ominous", key: OMINOUS_TRIAL_KEY };
   }
-  // ② 普通宝库 + 任一钥匙 → 最近普通宝库（普通钥匙优先，不详兜底）
+  // ② 普通宝库 + 普通钥匙 → 最近普通宝库（普通钥匙专用，不详钥匙不可替代）
   const normalVault = knowledge.vaults.normal[0];
-  if (normalVault && (knowledge.keys.trial > 0 || knowledge.keys.ominous > 0)) {
-    return {
-      target: normalVault,
-      kind: "normal",
-      key: knowledge.keys.trial > 0 ? TRIAL_KEY : OMINOUS_TRIAL_KEY,
-    };
+  if (normalVault && knowledge.keys.trial > 0) {
+    return { target: normalVault, kind: "normal", key: TRIAL_KEY };
   }
   return undefined;
 }
 
 /**
  * 开不了宝库的原因诊断（idle 通知用）：按感知快照精确区分——
- * 缺钥匙 / 缺宝库 / 缺不详钥匙（只有不详宝库但背包无不详钥匙）。
+ * 缺钥匙 / 缺宝库 / 缺不详钥匙（只有不详宝库）/ 缺普通钥匙（有普通宝库但不祥
+ * 钥匙开不了）。注意：两种宝库都有且有不详钥匙时 select ① 成功，不会走到 idle。
  *
  * @param knowledge - 感知快照
  * @returns 原因；选得出目标（理论上不会 idle）返回 undefined
@@ -154,9 +151,13 @@ export function diagnoseVaultIdle(knowledge: VaultKnowledge): VaultIdleReason | 
   if (knowledge.keys.trial === 0 && knowledge.keys.ominous === 0) return "no-key";
   // ② 有钥匙但附近无任何宝库
   if (knowledge.vaults.normal.length === 0 && knowledge.vaults.ominous.length === 0) return "no-vault";
-  // ③ 附近只有不详宝库且背包无不详钥匙（普通钥匙开不了不详宝库）
+  // ③ 只有不详宝库且背包无不详钥匙（普通钥匙开不了不详宝库）
   if (knowledge.vaults.normal.length === 0 && knowledge.vaults.ominous.length > 0 && knowledge.keys.ominous === 0) {
     return "no-ominous-key";
+  }
+  // ④ 有普通宝库但背包无普通钥匙（仅有不详钥匙；无钥匙已归 ①）
+  if (knowledge.vaults.normal.length > 0 && knowledge.keys.trial === 0) {
+    return "no-trial-key";
   }
   return undefined;
 }
@@ -183,7 +184,7 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
 
   const hasTarget = new Condition((ctx) => ctx.blackboard.has(BB_TARGET));
 
-  const noTarget = new Condition((ctx) => !ctx.blackboard.has(BB_TARGET));
+  const noTarget = hasTarget.not();
 
   const isClose = new Condition((ctx) => {
     const target = ctx.blackboard.get<Vec3>(BB_TARGET);
