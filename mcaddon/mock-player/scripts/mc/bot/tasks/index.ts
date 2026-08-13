@@ -9,3 +9,4 @@ export {
   type NavigateToTaskOptions,
 } from "./NavigateToTask";
 export { followTask, pauseFollow, resumeFollow } from "./FollowTask";
+export { vaultTask, type VaultTaskHandle, type VaultTaskOptions } from "./VaultTask";
