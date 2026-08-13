@@ -15,7 +15,7 @@ import { color } from "@yinxe/toolkit";
 
 import type { RaidDrinkResult, RaidIdleReason, RaidKnowledge, RaidPorts } from "../../core/tasks/RaidTask";
 import {
-  BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_STUCK_TICKS,
+  BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION,
   isOminousBottle, classifyRaidEffect,
 } from "../../core/service/RaidRules";
 import { BotEvents } from "../../core/events/DomainEvents";
@@ -31,8 +31,6 @@ import { syncEntityTags } from "../adapters/EntityTags";
 const drinking = new Set<string>();
 /** 本次会话劫掠胜利次数（仅内存，不持久化） */
 const victoryCounts = new Map<string, number>();
-/** 最近一次胜利 tick（卡死检查区分「本瓶尚未触发」与「已胜利进入下一瓶」） */
-const lastVictoryTick = new Map<string, number>();
 /** 最近村庄英雄效果事件 tick（胜利处理窗口与幂等判定） */
 const lastHeroTick = new Map<string, number>();
 /** 已处理的英雄事件 tick（handleVictory 幂等：防 removeEffect 失败重复叠加） */
@@ -66,7 +64,6 @@ export function initRaidPorts(): void {
  */
 export function cleanupRaidMode(botName: string): void {
   victoryCounts.delete(botName);
-  lastVictoryTick.delete(botName);
   lastHeroTick.delete(botName);
   handledHeroTick.delete(botName);
   convertedToRaidTick.delete(botName);
@@ -110,10 +107,9 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
       return;
     }
 
-    // 不祥之兆 = 喝瓶成功，袭击即将开始
+    // 不祥之兆 = 喝瓶成功，袭击即将开始（在村庄内会转化为袭击之兆）
     if (kind === "bad-omen") {
       BotEvents.raidStarted.trigger({ botName: name, amplifier: amp });
-      scheduleRaidStuckCheck(name);
       scheduleBadOmenEndCheck(name); // 30 秒后检查是否转化为袭击之兆（不在村庄提醒）
       return;
     }
@@ -238,7 +234,6 @@ function processVictory(record: BotRecord, bot: SimulatedPlayer | undefined): vo
 
   const wins = (victoryCounts.get(botName) ?? 0) + 1;
   victoryCounts.set(botName, wins);
-  lastVictoryTick.set(botName, system.currentTick);
 
   const amplifier = bot ? (tryGetEffect(bot, VILLAGE_HERO)?.amplifier ?? 0) : 0;
   world.sendMessage(
@@ -307,8 +302,8 @@ const RAID_OMEN_DURATION_TICKS = 600;
  * 袭击完全开始检查（一次性，非轮询）：获得袭击之兆 30 秒后——
  * buff 结束（实体不再带袭击之兆）= 袭击已完全开始（基岩版机制：
  * 袭击之兆结束后在玩家获得效果的位置开始袭击）。
- * ⚠️ 2.8.0 无 effectRemove 事件，用一次性定时检测对齐"只记录/提醒"语义；
- *    若 30 秒后 raid_omen 仍在（异常）→ 由 scheduleRaidStuckCheck 覆盖提醒。
+ * ⚠️ 2.8.0 无 effectRemove 事件，用一次性定时检测记录"袭击完全开始"。
+ *    带袭击之兆本身是正常状态（30 秒后必然触发袭击），不报警。
  */
 function scheduleRaidStartCheck(botName: string): void {
   const scheduledAt = system.currentTick;
@@ -320,13 +315,14 @@ function scheduleRaidStartCheck(botName: string): void {
       const bot = resolveBotPlayer(botName);
       if (!bot || !bot.isValid) return;
 
-      // buff 已结束 → 袭击完全开始
+      // buff 已结束 → 袭击完全开始（记录；若期间已胜利则无影响）
       if (!hasEffect(bot, RAID_OMEN)) {
         console.info(`[MockPlayer] ${botName} 袭击之兆已结束，袭击完全开始`);
-        return;
       }
-      // buff 仍在（30 秒后未消失，异常）→ 记录，由 stuck check 兜底提醒
-      console.warn(`[MockPlayer] ${botName} 袭击之兆超时未结束（${RAID_OMEN_DURATION_TICKS}tick 后仍在），等待卡死提醒`);
+      // buff 仍在（异常，游戏机制下 30 秒后必然开始）→ 仅记录，不打扰玩家
+      else {
+        console.warn(`[MockPlayer] ${botName} 袭击之兆超时未结束（${RAID_OMEN_DURATION_TICKS}tick 后仍在）`);
+      }
     } catch (err) {
       console.warn(`[MockPlayer] 劫掠袭击开始检查异常: ${err}`);
     }
@@ -364,35 +360,6 @@ function scheduleBadOmenEndCheck(botName: string): void {
       console.warn(`[MockPlayer] 劫掠不在村庄检查异常: ${err}`);
     }
   }, CONVERT_CHECK_TICKS);
-}
-
-/** 喝瓶后 1 分钟仍带袭击之兆 → 转化了但袭击未触发，提醒玩家（只发消息，零恢复动作）
- *  ⚠️ 只查**袭击之兆**（30 秒后该消失、袭击开始）：不祥之兆 100 分钟挂着是
- *     正常状态（未转化场景已由"不在村庄检查"在 600 tick 通知过），不在此判断。 */
-function scheduleRaidStuckCheck(botName: string): void {
-  const scheduledAt = system.currentTick;
-
-  system.runTimeout(() => {
-    try {
-      const record = botRegistry.get(botName);
-      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
-      const bot = resolveBotPlayer(botName);
-      if (!bot || !bot.isValid) return;
-
-      // 这瓶之后已胜利过（自动进入下一瓶，正握着新不祥之兆）→ 正常推进，跳过
-      if ((lastVictoryTick.get(botName) ?? 0) > scheduledAt) return;
-
-      // 仍带袭击之兆（30 秒后未消失 = 转化了但袭击没开始）→ 异常提醒
-      if (hasEffect(bot, RAID_OMEN)) {
-        world.sendMessage(
-          `${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName} 带袭击之兆超 1 分钟仍未触发袭击` +
-            `，请确认假人在村庄内且非和平难度`,
-        );
-      }
-    } catch (err) {
-      console.warn(`[MockPlayer] 劫掠卡死检查异常: ${err}`);
-    }
-  }, RAID_STUCK_TICKS);
 }
 
 // ─── 饮用不祥之瓶（Promise 协程） ────────────────────────

@@ -271,8 +271,7 @@ Selector（每 tick 重评）
   - **袭击中阶段不喝药水**（树 canDrink 拦兆头 + 黑板 raidWaiting 保证，不浪费药水）
 - **一次性提醒检查**（只发消息，零恢复动作）：
   - `scheduleBadOmenEndCheck`（喝瓶后 600 tick）：**未转化为袭击之兆**（convertedToRaidTick 判定）→ 通知主人"**假人不在村庄/试炼之地范围内**，请带到村庄后重开劫掠模式"
-  - `scheduleRaidStartCheck`（获得袭击之兆后 600 tick）：buff 结束 = **袭击完全开始**（记录）；仍在 = 异常交给 stuck check
-  - `scheduleRaidStuckCheck`（喝瓶后 1200 tick）：仍带 raid_omen（转化后袭击未开始）→ 提醒"请确认假人在村庄内且非和平难度"
+  - `scheduleRaidStartCheck`（获得袭击之兆后 600 tick）：buff 结束 = **袭击完全开始**（仅记录，不报警——带袭击之兆是正常状态，30 秒后必然触发袭击）
 - ⚠️ **语义（用户拍板 713e8da）：纯事件驱动，零巡检/零恢复机制**——袭击等待靠事件唤醒（树条件全 false 时等待分支无副作用）
 - 喝瓶周期（用户规格 1.1.60）：**只在启动/胜利后喝**——黑板 `raidWaiting` 标记（drink 成功写、handleVictory 清），兆头消失也不重复喝
 - 胜利处理幂等：`handledHeroTick` 防 removeEffect 失败重复叠加；喝瓶前防御清理残留村庄英雄（断 effectAdd 检测链兜底）

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  OMINOUS_BOTTLE_ID, BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_STUCK_TICKS,
+  OMINOUS_BOTTLE_ID, BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION,
   isOminousBottle, classifyRaidEffect,
 } from "../scripts/core/service/RaidRules";
 
@@ -15,7 +15,6 @@ test("常量：效果 ID 精确值", () => {
   assert.equal(VILLAGE_HERO, "minecraft:village_hero");
   // 饮用时长 40 tick（2 秒）：比消耗所需 32 tick 多 ~8 tick 余量，防调度抖动导致药水没喝完
   assert.equal(DRINK_DURATION, 40);
-  assert.equal(RAID_STUCK_TICKS, 1200);
 });
 
 test("isOminousBottle：精确匹配", () => {
