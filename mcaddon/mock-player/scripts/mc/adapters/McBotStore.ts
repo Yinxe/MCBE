@@ -31,8 +31,13 @@ import {
   createBinding,
 } from "../../core/storage/Binding";
 
-/** 存储区域锚点：末地偏远坐标（10 万格距，远离主岛/常规活动区，区块即区域，全假人共享；容量 442,368 格 ≈ 1 万假人） */
-const STORAGE_REGION = { dimension: "minecraft:the_end", anchor: { x: 100000, y: 0, z: 100000 } };
+/**
+ * 存储区域锚点：自定义测试维度 (16,0,16)——玩家不可达，与装置 (0,0) 区块列
+ * 相邻不重叠（区块即区域，全假人共享；容量 442,368 格 ≈ 1 万假人）。
+ * ⚠️ 桶的实际 Y 层由 baseY 决定（默认 120，anchor.y 被忽略）——显式指定
+ * baseY: 0 让阵列与装置同层（结构方块 y=0）。
+ */
+const STORAGE_REGION = { dimension: "mockplayer:test", anchor: { x: 16, y: 0, z: 16 }, baseY: 0 };
 
 /**
  * 空位占位物品：空槽保持绑定时写入（"结构空位"）。
