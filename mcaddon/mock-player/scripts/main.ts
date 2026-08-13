@@ -16,7 +16,7 @@ import { system, world } from "@minecraft/server";
 import { registerAllCommands } from "./mc/commands/index";
 import { registerAllEvents } from "./mc/events/index";
 import { startTagBehaviors } from "./mc/features/behavior";
-import { initGameTestContext } from "./mc/features/gametestContext";
+import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
 import { runMigrations } from "./mc/bootstrap/migration";
 import { workflowManager } from "./mc/bootstrap/workflows";
 import { botRegistry, configStore } from "./mc/bootstrap/context";
@@ -30,6 +30,8 @@ import { botRegistry, configStore } from "./mc/bootstrap/context";
 
 system.beforeEvents.startup.subscribe((event) => {
   registerAllCommands(event);
+  // 自定义测试维度必须在 startup 事件注册（early-execution mode）
+  registerTestDimension(event);
 });
 
 // Phase 4: 世界加载：恢复持久化 + 启动引擎 + 注册事件

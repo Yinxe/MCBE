@@ -15,7 +15,7 @@ import type { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { finalizeBotSpawn } from "./spawn";
-import { globalTest } from "./gametestContext";
+import { globalTest } from "../bootstrap/gametestContext";
 import { color } from "@yinxe/toolkit";
 
 export type SpawnMode = "normal" | "chunkload";
