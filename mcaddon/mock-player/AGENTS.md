@@ -63,7 +63,9 @@ scripts/
 │   ├── events/      # 世界事件订阅（薄壳）
 │   ├── ui/          # toolkit 表单（**只发布 UI 领域事件，不 import 业务动作函数**；
 │   │                #   表单提交后直接调 feature 的例外：mainhand/reclaim/trident/swap）
-│   ├── workflows/   # raidWorkflow / vaultWorkflow / tridentWorkflow（复杂组合工作流）
+│   ├── workflows/   # **工作流完整实现内聚**（1.3.8）：raidFlow（劫掠循环）/
+│   │                #   vaultFlow（宝库开箱+独立引擎）/ tridentFlow（投掷认主体系）
+│   │                #   ——生命周期壳 + 业务实现同文件，删壳-实现分裂
 │   └── format.ts    # 带色文本格式化（§ 色码）
 └── tests/           # node:test 单测（只测 core；mc 层靠游戏内冒烟）
     ├── helpers/     # factories（构造 BotRecord/物品）
@@ -108,6 +110,7 @@ scripts/
 - **BotManager**：懒实例注册表 + 全局 `runInterval(1)` 驱动器（只 tick 在线未死亡实例——引擎对象按假人独立，驱动集中）；main.ts `botManager.start()`；删除假人 `botManager.remove(name)`
 - **默认能力**（capabilities/index.ts 注册表，**可扩展**=工厂文件+注册一行）：autoMine（1tick）/autoAttack（3tick）/autoJump（3tick）/control（2tick）/autoPlace（5tick）由标签状态驱动启停 + persist（100tick 周期持久化，isRestored 守卫 + 静默保存 + 装备槽指纹兜底）——**原全局 behavior.ts 引擎已删除**（1.3.2）
 - **任务**（tasks/index.ts 工厂 barrel，**可扩展**=新文件+导出一行）：NavigateToTask 范式（start 一次性下发导航绝不重复 → tick 只算距离 → 到达/超时/实体失效，onFinish(outcome) 幂等结束回调）；**FollowTask**（每 10tick 周期重下发跟随移动目标，离线/死亡不结束跨周期存活，投掷期间 pauseFollow 全局暂停——1.3.6 已迁移，全局 followMap 引擎删除）；`/mp:move` 已改用实例任务示范
+- **工作流内聚**（1.3.8）：`mc/workflows/` 每工作流**一份完整实现文件**（raidFlow/vaultFlow/tridentFlow——生命周期壳 + 业务实现同文件，删壳-实现分裂；对齐试错分支拍板方向）；`features/` 不再放工作流实现
 - **异步 API**（1.3.7）：`waitTicks(ticks)`（Promise 版 runTimeout）/ `waitUntil(condition,{intervalTicks?,timeoutTicks})`（轮询等待，只用于轻量条件，高频事件场景仍事件驱动）/ `navigateNearAsync(target,opts?)` → `{ok, reason?: "timeout"|"entity-lost"|"busy"}`（**永不 reject**，任务占用互斥返回 busy）
 - 简单动作命令/UI 订阅经 MockBot 实例（online/offline/kill/sneak/tp/tphere/respawn/setrespawn/delete/move）；复杂表单流程保留 feature 直接调用
 

@@ -22,9 +22,19 @@ export {
 export { InventoryStorage } from "./inventoryStorage";
 export { setTags } from "./setTags";
 export { checkMainHandDurability } from "./toolHealth";
-export { startFollow, stopFollow, isFollowing } from "./follow";
+export { startFollow, stopFollow, isFollowing, pauseFollow, resumeFollow, getFollowCount } from "./follow";
 export { scanTridents, isMainhandTrident, throwTridents } from "./trident";
 export { getMainhandOptions, setMainhandSlot } from "./mainhand";
 export { startUseItem, stopUseItem } from "./useItem";
 export { startRaidMode } from "../workflows/raidFlow";
 export { runVaultCycle } from "../workflows/vaultFlow";
+export {
+  spawnBot,
+  switchSpawnMode,
+  getSpawnModeInfo,
+  finalizeBotSpawn,
+  MODE_NORMAL_INFO,
+  MODE_CHUNKLOAD_INFO,
+  type SpawnMode,
+} from "./spawnMode";
+export { safeReconnect } from "./pendingRespawn";

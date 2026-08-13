@@ -11,19 +11,39 @@
 //    生成 "sim001(2)" 重名假人，事件按 Player.name 查注册表
 //    全部失配 → 状态保存失败 → 数据丢失。
 
-import { GameMode, Player, system, world } from "@minecraft/server";
+import { GameMode, Player, system, world, type Vector2, type Vector3 } from "@minecraft/server";
 import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { finalizeBotSpawn } from "./spawn";
 import { safeReconnect } from "./pendingRespawn";
 import { globalTest } from "../bootstrap/gametestContext";
+import { syncEntityTags } from "../adapters/EntityTags";
+import { setPose } from "../adapters/PoseGateway";
 import { color } from "@yinxe/toolkit";
 
 export type SpawnMode = "normal" | "chunkload";
+
+// ─── 生成公共尾部（createBot 和 onlineBot 共用） ───────
+// 设置标签 + 潜行 + 体态 + 注册（1.3.9 合并自 features/spawn.ts）
+
+/** 生成收尾：标签同步 → 潜行 → 姿态（chunkload 降级回退时 noPose）→ 注册写穿 */
+export function finalizeBotSpawn(
+  bot: SimulatedPlayer,
+  record: BotRecord,
+  rotation: Vector2,
+  lookTarget?: Vector3,
+  noPose?: boolean,
+): void {
+  syncEntityTags(bot, record.tags);
+  bot.isSneaking = record.isSneaking;
+  if (!noPose) setPose(bot, rotation, lookTarget);
+
+  // 注册 + 写穿（saveRecord 内含内存 set）
+  saveCoordinator.saveRecord(record);
+}
 
 export interface SpawnModeInfo {
   value: SpawnMode;
