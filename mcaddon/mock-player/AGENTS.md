@@ -28,9 +28,13 @@ pnpm run test:core   # tsc -p tsconfig.test.json → node --test .test-build/tes
 scripts/
 ├── main.ts          # 4-Phase DI 组合根（只装配，不含业务）
 ├── core/            # 领域层：零 @minecraft 依赖，可 node 单测
-│   ├── model/       # Types.ts — BotRecord/SerializedItemStack/常量（Vec3/Vec2 本地化）
+│   ├── model/       # Types.ts — BotRecord/SerializedItemStack/常量（Vec3/Vec2 本地化；
+│   │                #   normalizeBotName $ 前缀 + isValidBotName）
 │   ├── events/      # EventSignal（零依赖信号）+ DomainEvents（raidStarted/raidVictory）
-│   ├── tags/        # BotTags — 标签定义/分组/四级解析（resolveTag）
+│   │                # + WorkflowEvents + UiEvents（BotUiEvent：panelAction 14 动作 /
+│   │                #   behaviorSubmitted 行为菜单提交，负载可序列化）
+│   ├── tags/        # BotTags — 标签定义/分组/四级解析（resolveTag）+
+│   │                #   computeTagsFromBehaviorForm（表单 → 完整标签集纯函数）
 │   ├── coords/      # Coordinate（容错坐标解析）+ Direction（旋转→方向）
 │   ├── xp/          # XpMath — MC 经验公式
 │   ├── format/      # Format（维度/罗马数字）+ EnchantZh（附魔中英映射）
@@ -41,12 +45,16 @@ scripts/
 │   └── index.ts     # barrel
 ├── mc/              # 适配层：只做 mcapi 副作用（IO/视觉/通知）
 │   ├── bootstrap/   # context.ts — botStore/botRegistry 运行时单例（组合根装配）
+│   │                # gametestContext — 测试维度注册 + 装置初始化（0,0,0 结构方块）
+│   │                # uiDrivers — UI 领域事件订阅统一装配（18 模块）
 │   ├── adapters/    # McBotStore（NBT 木桶阵列持久化）/ McItemCodec（预览序列化）/ PlayerGateway
 │   │                # EntityTags / PoseGateway / McIntervalScheduler / EquipmentSlots
 │   ├── features/    # 业务用例：决策调 core，副作用留本地（behavior/spawn/reclaim/raidMode…）
-│   ├── commands/    # mp:* 命令（薄壳）
+│   ├── commands/    # mp:* 命令（薄壳；data 兼 UI 订阅 viewData）
 │   ├── events/      # 世界事件订阅（薄壳）
-│   ├── ui/          # toolkit 表单（纯展示）
+│   ├── ui/          # toolkit 表单（**只发布 UI 领域事件，不 import 业务动作函数**；
+│   │                #   表单提交后直接调 feature 的例外：mainhand/reclaim/trident/swap）
+│   ├── workflows/   # raidWorkflow / vaultWorkflow / tridentWorkflow（复杂组合工作流）
 │   └── format.ts    # 带色文本格式化（§ 色码）
 └── tests/           # node:test 单测（只测 core；mc 层靠游戏内冒烟）
     ├── helpers/     # factories（构造 BotRecord/物品）
@@ -80,6 +88,23 @@ scripts/
 - 在 `system.beforeEvents.startup` 注册
 - 受限 API 用 `system.run()` 包装
 
+### 假人命名（1.2.4）
+- 全入口统一 `normalizeBotName`：去空白 + 无前缀自动加 `$`（"刷铁机" → "$刷铁机"，防与未上线真人撞名——真人默认名不带 $）
+- `isValidBotName`（规范化后完整名）：非空、≤16 字符、不含 `:inv:` / `:equip:`（旧 DP 槽位 key 兼容）
+- 创建/重命名双重真人冲突检查：输入原始名 + 规范化完整名都查 `isNameOccupiedInWorld`
+
+### UI 事件驱动（1.2.6，BotUiEvent 双领域事件）
+- **UI 只发布事件，零功能 import**：ui/bot.ts 面板按钮 → `BotUiEvent.panelAction.trigger({playerId, botName, action})`（14 动作）；ui/tags.ts 行为菜单提交 → **① setTags 先落库 ② 发布 `behaviorSubmitted`**（负载带表单快照 + tags）——订阅方按事件负载或 record.tags 判断结果相同，无时序依赖
+- **功能模块各自 `registerUiSubscriptions()` 分散订阅**（sneak/spawnMode/useItem/onlineBot/teleport/spawnPoint/rename/killBot/follow/raidMode + ui swap/mainhand/reclaim/tags/trident/tridentClaim/move + commands/data 共 18 个），`bootstrap/uiDrivers.ts` 统一装配（esbuild bundle 可达）
+- setTags 不放事件（避免重复发布重复执行）；`syncEntityTags` 唯一实体同步渠道（自动 diff 增量）
+- 工作流（raidWorkflow 等）内订阅由各自 init 注册（workflowManager.initAll）；create/online/menu/adminMenu 保持直接调用不事件化（UI 内部导航/纯展示例外）
+- 表单布局：自动重生置顶 → 强加载第 2 → 潜行/使用物品/自动跳跃/自动跟随/劫掠 → 互斥行为下拉（仅选一项）；标签计算走 core 纯函数 `computeTagsFromBehaviorForm`
+
+### 测试维度与常加载（1.2.0~1.2.3）
+- 自定义维度 `mockplayer:test`：startup 事件注册（`registerTestDimension`，事件外抛错）+ worldLoad 后 `getDimension` 验证（失败回退 normal）
+- 装置初始化（`bootstrap/gametestContext.ts`）：**结构方块必须位于 0,0,0**（强加载假人扭头完全正常的前提）；y=-1 层 5x5 草坪 + (0,-1,-3) 物化 + (1,0,-1) runthis 复用（不重复物化）；createTickingArea 4 区块列（覆盖负坐标）→ getBlock 探测 → 初始化完移除（运行中 GameTest 保持常驻）；register 后 40t 就绪延迟 + 物化重试 3 次；保存/恢复被篡改的游戏规则
+- **常加载限制全解除**：chunkload 假人姿态/扭头/投掷三叉戟/宝库模式与 normal 完全一致（生成流程统一骨架 makeSpawnResult，差异仅生成 API 与生成点）
+
 ### 标签系统
 - 共存标签：`bot` / `respawn` / `autoJump`
 - 互斥标签：`idle` / `autoMine` / `autoPlace` / `autoAttack` / `control` / `autoUse` / `vaultMode`
@@ -89,7 +114,7 @@ scripts/
 ### 持久化（McBotStore 实现 BotStore 端口）
 - **记录**（BotRecord）：`world.setDynamicProperty` 单条 JSON（`mockplayer:players:<name>`）
 - **绑定表**（StorageBinding）：独立 key `mockplayer:players:<name>:bind`（与记录解耦，记录覆盖不影响绑定；对象结构 key-value）
-- **物品**（背包 36 格 + 装备 5 槽）：存 **`@yinxe/nbt-data-storage` 木桶阵列**（末地偏远锚点 100000,0,100000，懒注册幂等）——**真实 ItemStack 完整 NBT**，潜影盒/收纳袋内容随物品原样存取
+- **物品**（背包 36 格 + 装备 5 槽）：存 **`@yinxe/nbt-data-storage` 木桶阵列**（**自定义测试维度 `mockplayer:test` 锚点 (16,0,16) `baseY:0`**——baseY 显式指定（默认 120 悬空、anchor.y 被忽略），与装置 (0,0) 区块列相邻不重叠，玩家不可达；旧末地数据经 storageOf 绑定表 regionId 跨区域兼容）——**真实 ItemStack 完整 NBT**，潜影盒/收纳袋内容随物品原样存取
 - **双向绑定**（`core/storage/Binding.ts` 纯逻辑 + `McBotStore` 维护）：
   - 首次写某格 → `region.put(item)` 分配槽位 → `storageBinding` 记录 slotId（惰性分配，复用库分配/回收语义，绝不与他人冲突）
   - 后续写该格 → `region.overwrite(slotId, item)` 原位覆写（slotId 不变）
