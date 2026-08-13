@@ -1,7 +1,10 @@
 // ─── 生成模式管理 ──────────────────────────────────────
 //
-// normal → 模块级 spawnSimulatedPlayer（完全体态控制，无常加载）
-// chunkload → test.spawnSimulatedPlayer（强加载区块，不可转向）
+// 两种模式**生成流程完全一致**，差异仅两处：
+//   1. 生成 API：normal → 模块级 spawnSimulatedPlayer；
+//      chunkload → globalTest.spawnSimulatedPlayer（测试实例方法，常加载能力来源）
+//   2. 生成点：normal → 目标位置直生；chunkload → 测试维度 (0,8,0) 中转
+//      （test.spawnSimulatedPlayer 只能在测试维度生成，finalize 统一传送目标）
 //
 // ⚠️ 重名防护：任何生成必须先确保名称唯一可用（异步轮询 +
 //    残留实体清理），否则旧实体尚未释放时立即 spawn，引擎会
@@ -33,18 +36,15 @@ const MODE_CHUNKLOAD = "chunkload" as const;
 export const MODE_NORMAL_INFO: SpawnModeInfo = {
   value: MODE_NORMAL,
   label: `${color.success}普通模式`,
-  desc: "完全体态可操控",
+  desc: "不能加载区块，玩家离开后周围区块会被卸载",
   limitations: [],
 };
 
 export const MODE_CHUNKLOAD_INFO: SpawnModeInfo = {
   value: MODE_CHUNKLOAD,
   label: `${color.accent}强加载模式`,
-  desc: "区块持续加载，但不可转向",
+  desc: "可以加载区块，远程挂机",
   limitations: [
-    "不支持体态同步",
-    "TP 时不会设置朝向",
-    "扭头不可用（GameTest 限制）",
     "异地上线仅加载当前区块附近，需玩家靠近后补足模拟距离",
     "假人重新上线后，之前辅助加载的区块会失效，需玩家再次靠近",
   ],
@@ -121,75 +121,58 @@ interface SpawnResult {
   finalize: () => void;
 }
 
-// ─── 普通模式（含 chunkload 失败回退） ────────────────
+// ─── 生成（统一流程：差异仅生成 API 与生成点） ────────
 
-function normalResult(
+/** 强加载模式生成点：测试维度 (0,8,0)（test.spawnSimulatedPlayer 只能在测试维度生成，finalize 统一传送目标） */
+const CHUNKLOAD_SPAWN_POS = { x: 0, y: 8, z: 0 };
+
+/** 生成函数签名（normal=模块级 / chunkload=test 实例方法，唯一 API 差异点） */
+type Spawner = (at: { x: number; y: number; z: number }, dimension: any, name: string, gm: GameMode) => SimulatedPlayer;
+
+/** 模块级生成器（normal）：目标位置直生 */
+const moduleSpawner: Spawner = (at, dimension, name, gm) =>
+  spawnSimulatedPlayer({ x: at.x, y: at.y, z: at.z, dimension }, name, gm);
+
+/**
+ * 统一生成骨架（normal / chunkload 共用）：
+ * 生成（经 spawner，位置 spawnAt）→ 名称校验（调用方）→ finalize 统一收尾：
+ * 传送目标位置 → 更新重生点 → 注册 entityId → 标签/潜行/姿态。
+ * ⚠️ 常加载限制已解除：chunkload 正常路径姿态与 normal 完全一致（noPose 仅
+ * GameTest 未就绪的临时降级回退使用）。
+ */
+function makeSpawnResult(
   record: BotRecord,
   location: any,
   dimension: any,
   rotation: { x: number; y: number },
-  lookTarget?: any,
+  lookTarget: any,
+  spawner: Spawner,
+  spawnAt: { x: number; y: number; z: number },
   noPose?: boolean,
 ): SpawnResult {
   const rot2 = noPose ? { x: 0, y: 0 } : rotation;
   const target = noPose ? undefined : lookTarget;
-  const bot = spawnSimulatedPlayer(
-    { x: location.x, y: location.y, z: location.z, dimension },
-    record.name,
-    GameMode.Survival,
-  );
+  const bot = spawner(spawnAt, dimension, record.name, GameMode.Survival);
   return {
     bot,
     finalize: (): void => {
       bot.teleport(location, { dimension });
+      try {
+        (bot as any).setSpawnPoint({ ...location, dimension });
+      } catch {
+        // 防个别版本 API 缺失
+      }
       record.entityId = bot.id;
       finalizeBotSpawn(bot, record, rot2, target, noPose);
     },
   };
 }
 
-function chunkloadResult(
-  record: BotRecord,
-  location: any,
-  dimension: any,
-): SpawnResult {
-  if (!globalTest) {
-    console.warn(`[MockPlayer] GameTest 未就绪，${record.name} 改用普通模式`);
-    return normalFallbackResult(record, location, dimension);
-  }
-
-  const bot = globalTest.spawnSimulatedPlayer({ x: 0, y: 8, z: 0 }, record.name, GameMode.Survival);
-  const okTeleport = ((): boolean => {
-    try {
-      (bot as any).setSpawnPoint({ ...location, dimension });
-      bot.teleport(location, { dimension });
-      return true;
-    } catch (e: any) {
-      console.warn(`[MockPlayer] chunkload 传送失败 ${record.name}，改普通模式`);
-      return false;
-    }
-  })();
-
-  if (!okTeleport) {
-    try { bot.disconnect(); } catch { /* ignore */ }
-    return normalFallbackResult(record, location, dimension);
-  }
-
-  return {
-    bot,
-    finalize: (): void => {
-      record.entityId = bot.id;
-      finalizeBotSpawn(bot, record, { x: 0, y: 0 }, undefined, true);
-    },
-  };
-}
-
-function normalFallbackResult(
-  record: BotRecord,
-  location: any,
-  dimension: any,
-): SpawnResult {
-  return normalResult(record, location, dimension, { x: 0, y: 0 }, undefined, true);
+/** 强加载模式生成器（GameTest 未就绪时返回 null → 调用方回退普通模式） */
+function chunkloadSpawner(): Spawner | null {
+  const test = globalTest;
+  if (!test) return null;
+  return (at, _dimension, name, gm) => test.spawnSimulatedPlayer(at, name, gm);
 }
 
 // ─── 生成入口（异步 + 重名防护） ───────────────────────
@@ -210,8 +193,18 @@ export function spawnBot(
 ): Promise<SimulatedPlayer> {
   const mode = record.spawnMode ?? MODE_NORMAL;
   const makeResult = (): SpawnResult => {
-    if (mode === MODE_CHUNKLOAD) return chunkloadResult(record, location, dimension);
-    return normalResult(record, location, dimension, rotation, lookTarget);
+    // 流程完全一致，仅两处差异：
+    // 1. 生成 API：normal=模块级 / chunkload=test 实例方法
+    // 2. 生成点：normal=目标位置直生 / chunkload=测试维度中转
+    if (mode === MODE_CHUNKLOAD) {
+      const spawner = chunkloadSpawner();
+      if (!spawner) {
+        console.warn(`[MockPlayer] GameTest 未就绪，${record.name} 改用普通模式`);
+        return makeSpawnResult(record, location, dimension, { x: 0, y: 0 }, undefined, moduleSpawner, location, true);
+      }
+      return makeSpawnResult(record, location, dimension, rotation, lookTarget, spawner, CHUNKLOAD_SPAWN_POS);
+    }
+    return makeSpawnResult(record, location, dimension, rotation, lookTarget, moduleSpawner, location);
   };
 
   // 前一个任务失败（reject）也必须放行后续生成，否则同名假人会被永久卡死
