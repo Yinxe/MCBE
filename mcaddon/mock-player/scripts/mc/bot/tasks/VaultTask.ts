@@ -81,12 +81,32 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
   let phase: VaultPhase = "scan";
   let successFlag = false;
   let elapsed = 0;
-  let scanCounter = 0;
+  // ⚠️ 首次立即扫描（重连后快速恢复寻路），之后每 SCAN_RETRY_TICK 一次
+  let scanCounter = SCAN_RETRY_TICK;
   let interactCounter = 0;
   let stallCount = 0;
   let lastDist = Infinity;
   let navTarget: Vector3 | undefined; // 站立点（导航目标）
   let vaultPos: Vector3 | undefined; // 宝库坐标（看向/交互）
+
+  /** 宝库中心（持续注视目标点） */
+  const vaultCenter = (): Vector3 => ({
+    x: (vaultPos?.x ?? 0) + 0.5,
+    y: (vaultPos?.y ?? 0) + 0.5,
+    z: (vaultPos?.z ?? 0) + 0.5,
+  });
+
+  /** 持续注视宝库中心，并**同步 lastPoint.lookTarget**（重连恢复时看向宝库——
+   *  lookAtLocation 只改实体头部朝向，不写记录；重连 spawn 用 lastPoint 恢复姿态） */
+  const lookAtVault = (): void => {
+    if (!vaultPos) return;
+    const center = vaultCenter();
+    bot.lookAt(center);
+    const record = bot.record;
+    if (record.lastPoint) {
+      record.lastPoint.lookTarget = center;
+    }
+  };
 
   const handle: VaultTaskHandle = {
     success: (): void => {
@@ -113,7 +133,7 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       switch (phase) {
         case "scan":
           scanCounter++;
-          // 每 SCAN_RETRY_TICK tick 扫描一次（避免每 tick getBlocks）
+          // 首次立即扫描（scanCounter 初始 = SCAN_RETRY_TICK），之后每 SCAN_RETRY_TICK 一次
           if (scanCounter % SCAN_RETRY_TICK !== 0) return;
           scan();
           break;
@@ -185,7 +205,8 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     // ⚠️ 持续注视宝库中心（MockBot.lookAt = PoseGateway lookAtLocation +
     //    LookDuration.Continuous——瞬时 lookAt 看一眼会回正/GameTest 下被重置，
     //    必须持续注视才能让视线命中判定成立；chunkload 降级内部 try-catch）
-    bot.lookAt({ x: vaultPos.x + 0.5, y: vaultPos.y + 0.5, z: vaultPos.z + 0.5 });
+    //    + 同步 lastPoint.lookTarget（重连恢复看向宝库）
+    lookAtVault();
 
     // 距离判定（站立点）；停滞判定：距离无进展累计 STALL_TICKS → 放弃重扫
     const dist = Math.sqrt(
@@ -244,6 +265,9 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       notify(`手上没有${missing}，请放入背包后重试`);
       return; // 每 INTERACT_RETRY_TICK 重试换钥匙
     }
+
+    // 交互前确保持续注视宝库（+ 同步 lastPoint.lookTarget，重连恢复看向宝库）
+    lookAtVault();
 
     // 交互一次（看向后视线命中面，Down 兜底）
     const ok = bot.interactWithBlock(vaultPos);
