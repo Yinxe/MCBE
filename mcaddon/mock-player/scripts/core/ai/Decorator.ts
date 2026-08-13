@@ -7,9 +7,9 @@
 //   new RepeatUntilSuccess(child, 3)           —— 重试直到成功（最多 3 次）
 
 import type { AiContext, Node } from "./Node";
-import type { Status } from "./Status";
+import { Status } from "./Status";
 
-/** 失败冷却：子节点 failure 后，冷却期内直接返回 failure（上层 Selector 降级） */
+/** 失败冷却：子节点 Failure 后，冷却期内直接返回 Failure（上层 Selector 降级） */
 export class Cooldown implements Node {
   private failedAtTick = Number.NEGATIVE_INFINITY;
 
@@ -19,22 +19,22 @@ export class Cooldown implements Node {
   ) {}
 
   async tick(ctx: AiContext): Promise<Status> {
-    if (ctx.tick - this.failedAtTick < this.ticks) return "failure";
+    if (ctx.tick - this.failedAtTick < this.ticks) return Status.Failure;
     const status = await this.child.tick(ctx);
-    if (status === "failure") this.failedAtTick = ctx.tick;
+    if (status === Status.Failure) this.failedAtTick = ctx.tick;
     return status;
   }
 }
 
-/** 取反：success ↔ failure（running 保持） */
+/** 取反：Success ↔ Failure（Running 保持） */
 export class Inverter implements Node {
   constructor(private readonly child: Node) {}
 
   async tick(ctx: AiContext): Promise<Status> {
     const status = await this.child.tick(ctx);
-    if (status === "success") return "failure";
-    if (status === "failure") return "success";
-    return "running";
+    if (status === Status.Success) return Status.Failure;
+    if (status === Status.Failure) return Status.Success;
+    return Status.Running;
   }
 }
 
@@ -44,7 +44,7 @@ export class AlwaysSucceed implements Node {
 
   async tick(ctx: AiContext): Promise<Status> {
     await this.child.tick(ctx);
-    return "success";
+    return Status.Success;
   }
 }
 
@@ -54,16 +54,16 @@ export class AlwaysFail implements Node {
 
   async tick(ctx: AiContext): Promise<Status> {
     await this.child.tick(ctx);
-    return "failure";
+    return Status.Failure;
   }
 }
 
 /**
  * 重试直到成功：每次 tick 执行一次子节点——
- * success → success（完成）；failure → running（保持，下次 tick 再试）；
- * running → running（子节点自身进行中）。
+ * Success → Success（完成）；Failure → Running（保持，下次 tick 再试）；
+ * Running → Running（子节点自身进行中）。
  * ⚠️ 注意与"同 tick 内循环"不同：本节点跨 tick 重试，天然防 CPU 风暴；
- *   maxAttempts 到达仍失败 → failure。
+ *   maxAttempts 到达仍失败 → Failure。
  */
 export class RepeatUntilSuccess implements Node {
   private attempts = 0;
@@ -74,14 +74,13 @@ export class RepeatUntilSuccess implements Node {
   ) {}
 
   async tick(ctx: AiContext): Promise<Status> {
-    if (this.attempts >= this.maxAttempts) return "failure";
+    if (this.attempts >= this.maxAttempts) return Status.Failure;
     this.attempts++;
     const status = await this.child.tick(ctx);
-    if (status === "failure") {
-      // 尝试次数已用完 → failure；否则 running（下次 tick 再试）
-      return this.attempts >= this.maxAttempts ? "failure" : "running";
+    if (status === Status.Failure) {
+      // 尝试次数已用完 → Failure；否则 Running（下次 tick 再试）
+      return this.attempts >= this.maxAttempts ? Status.Failure : Status.Running;
     }
     return status;
   }
 }
-

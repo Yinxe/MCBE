@@ -28,7 +28,7 @@
 //   ⚠️ 目标失效防卡死：宝库被拆/被替换成其他方块 → interactVault 返回
 //     "target-gone" → 清目标重扫（绝不重复对空气/错误方块交互）。
 
-import { Action, BehaviorTree, Cooldown, Condition, Selector, Sequence, type AiContext } from "../ai";
+import { Action, BehaviorTree, Cooldown, Condition, Selector, Sequence, Status, type AiContext } from "../ai";
 import type { Vec3 } from "../model/Types";
 
 // ─── 感知快照（编排层唯一决策输入） ─────────────────────
@@ -201,31 +201,31 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
   const sense = new Action((ctx) => {
     const knowledge = ports.sense(ctx.botName);
     ctx.blackboard.set(BB_KNOWLEDGE, knowledge);
-    return "success";
+    return Status.Success;
   });
 
-  /** 选目标：按感知快照决策（优先不详宝库）；无满足目标 → failure（触发冷却） */
+  /** 选目标：按感知快照决策（优先不详宝库）；无满足目标 → Failure（触发冷却） */
   const selectTarget = new Action((ctx) => {
     const knowledge = ctx.blackboard.get<VaultKnowledge>(BB_KNOWLEDGE);
-    if (!knowledge) return "failure";
+    if (!knowledge) return Status.Failure;
     const selection = selectVaultTarget(knowledge);
-    if (!selection) return "failure";
+    if (!selection) return Status.Failure;
     ctx.blackboard.set(BB_TARGET, selection.target);
     ctx.blackboard.set(BB_TARGET_KIND, selection.kind);
     ctx.blackboard.set(BB_TARGET_KEY, selection.key);
-    return "success";
+    return Status.Success;
   });
 
-  /** 寻路到宝库旁：成功 → success；失败（无路径/停滞/目标消失/取消）→ 清目标重扫 */
+  /** 寻路到宝库旁：成功 → Success；失败（无路径/停滞/目标消失/取消）→ 清目标重扫 */
   const navigate = new Action(async (ctx) => {
     const target = ctx.blackboard.get<Vec3>(BB_TARGET);
-    if (!target) return "failure";
+    if (!target) return Status.Failure;
     const ok = await ports.navigateToVault(ctx.botName, target);
-    if (ok) return "success";
+    if (ok) return Status.Success;
     ctx.blackboard.delete(BB_TARGET);
     ctx.blackboard.delete(BB_TARGET_KIND);
     ctx.blackboard.delete(BB_TARGET_KEY);
-    return "failure";
+    return Status.Failure;
   });
 
   /** 开箱：消耗 → 重连（黑板保留）；未消耗/异常 → 冷却后继续点击（不放弃目标）；
@@ -233,20 +233,20 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
   const interact = new Action((ctx) => {
     const target = ctx.blackboard.get<Vec3>(BB_TARGET);
     const keyType = ctx.blackboard.get<string>(BB_TARGET_KEY);
-    if (!target || !keyType) return "failure";
+    if (!target || !keyType) return Status.Failure;
     ctx.blackboard.set(BB_LAST_INTERACT, ctx.tick);
     const result = ports.interactVault(ctx.botName, target, keyType);
     if (result === "consumed") {
       ports.tryReconnect(ctx.botName);
-      return "success";
+      return Status.Success;
     }
     if (result === "target-gone") {
       ctx.blackboard.delete(BB_TARGET);
       ctx.blackboard.delete(BB_TARGET_KIND);
       ctx.blackboard.delete(BB_TARGET_KEY);
-      return "failure";
+      return Status.Failure;
     }
-    return "failure";
+    return Status.Failure;
   });
 
   /** 兜底：开不了宝库 → 按诊断原因通知（缺钥匙/缺宝库/缺不详钥匙） */
@@ -254,7 +254,7 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
     const knowledge = ctx.blackboard.get<VaultKnowledge>(BB_KNOWLEDGE);
     const reason = (knowledge && diagnoseVaultIdle(knowledge)) ?? "no-key";
     ports.idle(ctx.botName, reason);
-    return "success";
+    return Status.Success;
   });
 
   // ── 树装配（优先级从高到低） ─────────────────────────

@@ -3,7 +3,7 @@
 // 分层约定：core/ai = 生物 AI 编排框架（节点/组合/装饰，不含具体任务）；
 //   具体任务（宝库/砍树/钓鱼）在 core/tasks/。
 
-export type { Status } from "./Status";
+export { Status } from "./Status"; // 字符串枚举（值 + 类型）
 export { Blackboard } from "./Blackboard";
 export type { AiContext, Node } from "./Node";
 export { Sequence, Selector, RandomSelector } from "./Composite";
