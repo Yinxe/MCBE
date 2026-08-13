@@ -1,17 +1,18 @@
 // ─── 宝库任务（core/ai） ─────────────────────────────────
 // 行为树定义 + 动作端口接口（零 @minecraft，可单测）。
-// 决策语义（自动寻路开宝库）：
+// 决策语义（自动寻路开宝库，对齐 1.3.20 宝库规格）：
 //   优先级（根 Selector 每 tick 重评，无记忆）：
-//     1. 开箱：有钥匙 + 有目标 + 距离近 + 交互冷却过 → 交互开箱（回读验证）
-//     2. 寻路：有钥匙 + 有目标 + 距离远 → 导航到宝库旁（协程式，自检查）
+//     1. 开箱：有钥匙 + 有目标 + 距离近 + 交互冷却过 → 交互开箱（总量基准回读）
+//     2. 寻路：有钥匙 + 有目标 + 距离远 → 导航到宝库旁站立点（协程式，自检查）
 //     3. 扫描：有钥匙 + 无目标 → 扫描附近宝库（失败冷却 40 tick）
 //     4. 兜底 idle：无钥匙/冷却中 → 等待 + 节流通知
-//   黑板键：vaultTarget（目标宝库坐标）/ vaultAttempts（开箱尝试次数）/
-//     vaultLastInteractTick（上次交互 tick，节流防连点）。
+//   黑板键：vaultTarget（目标宝库坐标）/ vaultLastInteractTick（交互节流）。
 //   "一直开同一个宝库"：交互消耗钥匙成功后发起重连，黑板目标**保留**，
 //     重连完成（新实体上线）后树从黑板取同一目标继续寻路/开箱。
-//   宝库已开过（interact 返回 true 但不消耗钥匙）：尝试 maxAttempts 次后
-//     清黑板目标，重扫换下一个宝库。
+//   ⚠️ 持续点击语义（用户规格 1.3.19）：宝库冷却/出掉落动画中点击返回 true
+//     但钥匙不消耗（假成功）——每次点击后回读总量，真消耗才判定成功；
+//     未消耗 → 冷却后继续点击，**不放弃目标、不判断宝库已开过**
+//     （重连后是新实体，同一宝库可重复开直到钥匙用完）。
 
 import { Action, BehaviorTree, Cooldown, Condition, Selector, Sequence, type AiContext } from "./index";
 
@@ -22,14 +23,14 @@ export interface Vec3 {
   z: number;
 }
 
-/** 开箱交互结果：consumed 钥匙消耗（真开箱）/ not-consumed 未消耗（宝库已开过）/ error 交互异常 */
+/** 开箱交互结果：consumed 钥匙消耗（真开箱）/ not-consumed 点击了但未消耗（冷却中，继续点）/ error 交互未执行 */
 export type VaultInteractResult = "consumed" | "not-consumed" | "error";
 
 /** 宝库任务动作端口：core 层只声明，mc 层注入实现 */
 export interface VaultPorts {
   /** 假人可用（在线/非死亡）——引擎据此决定是否推进树 */
   isBotAvailable(botName: string): boolean;
-  /** 主手持有宝库钥匙（trial_key / ominous_trial_key） */
+  /** 背包有任一宝库钥匙（普通/不详均可，类型匹配在交互时处理） */
   hasKey(botName: string): boolean;
   /** 扫描附近宝库方块，返回最近候选（未找到 undefined） */
   scanVault(botName: string): Vec3 | undefined;
@@ -37,7 +38,7 @@ export interface VaultPorts {
   distanceToTarget(botName: string, target: Vec3): number;
   /** 寻路到宝库旁站立点（协程式，内部自检查取消条件）；到达 true / 失败 false */
   navigateToVault(botName: string, target: Vec3): Promise<boolean>;
-  /** 开箱交互（面朝宝库 + interactWithBlock + 回读验证钥匙消耗） */
+  /** 开箱交互（识别类型换钥匙 + 右键使用 + 总量基准回读验证） */
   interactVault(botName: string, target: Vec3): VaultInteractResult;
   /** 开箱成功后的安全重连（safeReconnect，黑板目标保留） */
   tryReconnect(botName: string): void;
@@ -50,23 +51,19 @@ export interface VaultTaskOptions {
   scanCooldownTicks?: number;
   /** 交互尝试冷却（tick），默认 20 */
   interactCooldownTicks?: number;
-  /** 同一宝库"未消耗钥匙"最大尝试次数，默认 3 */
-  maxAttempts?: number;
-  /** 到达判定距离（格），默认 2.5 */
+  /** 到达判定距离（格），默认 2 */
   arriveDistance?: number;
 }
 
 export const DEFAULT_VAULT_OPTIONS: Required<VaultTaskOptions> = {
   scanCooldownTicks: 40,
   interactCooldownTicks: 20,
-  maxAttempts: 3,
-  arriveDistance: 2.5,
+  arriveDistance: 2,
 };
 
 // ─── 黑板键 ──────────────────────────────────────────────
 
 const BB_TARGET = "vaultTarget";
-const BB_ATTEMPTS = "vaultAttempts";
 const BB_LAST_INTERACT = "vaultLastInteractTick";
 
 /**
@@ -99,16 +96,15 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
 
   // ── 动作节点 ─────────────────────────────────────────
 
-  /** 扫描附近宝库：找到 → 写黑板目标 + 重置尝试次数；未找到 → failure（触发冷却） */
+  /** 扫描附近宝库：找到 → 写黑板目标；未找到 → failure（触发冷却） */
   const scan = new Action((ctx) => {
     const found = ports.scanVault(ctx.botName);
     if (!found) return "failure";
     ctx.blackboard.set(BB_TARGET, found);
-    ctx.blackboard.set(BB_ATTEMPTS, 0);
     return "success";
   });
 
-  /** 寻路到宝库旁：成功 → success；失败（无路径/超时/取消）→ 清目标换下一个 */
+  /** 寻路到宝库旁：成功 → success；失败（无路径/停滞/取消）→ 清目标换下一个 */
   const navigate = new Action(async (ctx) => {
     const target = ctx.blackboard.get<Vec3>(BB_TARGET);
     if (!target) return "failure";
@@ -118,24 +114,15 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
     return "failure";
   });
 
-  /** 开箱：消耗 → 重连（黑板保留）；未消耗 → 计次，超限清目标；异常 → 冷却重试 */
+  /** 开箱：消耗 → 重连（黑板保留）；未消耗/异常 → 冷却后继续点击（不放弃目标） */
   const interact = new Action((ctx) => {
     const target = ctx.blackboard.get<Vec3>(BB_TARGET);
     if (!target) return "failure";
     ctx.blackboard.set(BB_LAST_INTERACT, ctx.tick);
     const result = ports.interactVault(ctx.botName, target);
     if (result === "consumed") {
-      ctx.blackboard.set(BB_ATTEMPTS, 0);
       ports.tryReconnect(ctx.botName);
       return "success";
-    }
-    if (result === "not-consumed") {
-      const attempts = (ctx.blackboard.get<number>(BB_ATTEMPTS) ?? 0) + 1;
-      ctx.blackboard.set(BB_ATTEMPTS, attempts);
-      if (attempts >= opt.maxAttempts) {
-        ctx.blackboard.delete(BB_TARGET);
-      }
-      return "failure";
     }
     return "failure";
   });
@@ -163,9 +150,8 @@ export function createVaultTaskTree(ports: VaultPorts, options: VaultTaskOptions
 }
 
 /** 黑板快捷读：当前任务状态摘要（日志/调试用） */
-export function getVaultTaskState(ctx: AiContext): { target: Vec3 | undefined; attempts: number } {
+export function getVaultTaskState(ctx: AiContext): { target: Vec3 | undefined } {
   return {
     target: ctx.blackboard.get<Vec3>(BB_TARGET),
-    attempts: ctx.blackboard.get<number>(BB_ATTEMPTS) ?? 0,
   };
 }

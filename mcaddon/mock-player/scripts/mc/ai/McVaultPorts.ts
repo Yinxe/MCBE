@@ -1,6 +1,16 @@
 // ─── 宝库任务端口实现（mc/ai） ───────────────────────────
-// VaultPorts 的 mc 适配：世界感知（getBlocks 扫描宝库）/ 导航（SimulatedPlayer
-// navigateToLocation 协程）/ 开箱（交互 + 回读验证防假成功）/ 安全重连。
+// VaultPorts 的 mc 适配，对齐 dev 1.3.20 宝库规格（1.3.10~1.3.19 用户实测修复）：
+//   - 扫描：半径 15、y clamp(-64,320)、allowUnloadedChunks=false，只扫
+//     minecraft:vault（ominous 是 block state，不是独立方块）
+//   - 站立点：**优先宝库正面**（cardinal_direction 反方向 1~2 格可站立）——
+//     宝库开箱必须面对钥匙孔正面，侧面/背面点击是假成功；正面不可站再任意兜底
+//   - 导航：零注视（lookAt 干扰 GameTest 导航）；到达判定 2 格；停滞判定
+//     （距离无进展 200 tick → 放弃重扫）
+//   - 交互：识别普通/不详 → 候选钥匙（普通=trial_key 优先+不详兜底 / 不详=仅
+//     不详）→ ensureMainhand 换主手 slot 0 → **useItemInSlotOnBlock 右键使用**
+//     优先（interactWithBlock 空手交互不消耗钥匙=假成功）→ 交互前记录**总量**
+//     基准 → 回读总量<基准=真消耗；未消耗=宝库冷却/动画中 → 持续点击不放弃
+//   - 朝向：lookAt 宝库中心 + **同步 lastPoint.lookTarget**（重连恢复姿态）
 // 决策逻辑全部在 core/ai/VaultTask（可单测），本文件只做副作用。
 
 import { system, world, Direction, BlockVolume, EquipmentSlot, type ItemStack, type Player } from "@minecraft/server";
@@ -16,19 +26,28 @@ import { safeReconnect } from "../features/pendingRespawn";
 
 // ─── 常量 ────────────────────────────────────────────────
 
-/** 扫描半径（格）：17³ = 4913 < getBlocks 体积上限 10000 */
-const SCAN_RADIUS = 8;
+/** 扫描半径（格，以假人为中心的正方体半边长；用户规格 15） */
+const SCAN_RADIUS = 15;
 /** 导航轮询间隔（tick） */
 const NAVIGATE_POLL_TICKS = 10;
-/** 导航超时（tick，≈15 秒） */
-const NAVIGATE_TIMEOUT_TICKS = 300;
-/** 到达判定距离（格） */
-const ARRIVE_DISTANCE = 2.5;
-/** 无钥匙通知节流（tick，≈10 秒） */
-const NO_KEY_COOLDOWN_TICKS = 200;
+/** 导航停滞判定（tick）：距离连续无进展超过该时长 → 放弃重扫（≈10 秒） */
+const STALL_TICKS = 200;
+/** 导航总超时（tick，≈30 秒，极端兜底） */
+const NAVIGATE_TIMEOUT_TICKS = 600;
+/** 到达判定距离（格）：假人可靠近宝库且 r < 2 */
+const ARRIVE_DISTANCE = 2;
+/** 视线命中判定最大距离（格） */
+const VIEW_MAX_DIST = 8;
+/** 通知节流（tick，≈10 秒） */
+const NOTIFY_COOLDOWN_TICKS = 200;
 
-const VAULT_TYPE_IDS = ["minecraft:vault", "minecraft:ominous_vault"];
-const KEY_ITEMS = new Set(["minecraft:trial_key", "minecraft:ominous_trial_key"]);
+/** 宝库方块 ID（普通/不详共用同一方块，block state ominous 区分） */
+const VAULT_BLOCK = "minecraft:vault";
+/** 钥匙类型（宝库类型识别后按优先级选） */
+const KEY_CANDIDATES: Record<"normal" | "ominous", string[]> = {
+  normal: ["minecraft:trial_key", "minecraft:ominous_trial_key"],
+  ominous: ["minecraft:ominous_trial_key"],
+};
 const KEY_LABELS: Record<string, string> = {
   "minecraft:trial_key": "普通钥匙",
   "minecraft:ominous_trial_key": "不详钥匙",
@@ -60,26 +79,34 @@ export const vaultPorts: VaultPorts = {
   hasKey(botName: string): boolean {
     const bot = getBot(botName);
     if (!bot) return false;
-    const held = getHeldItem(bot);
-    return !!held && KEY_ITEMS.has(held.typeId);
+    // 背包有任一宝库钥匙（普通/不详均可；类型匹配在交互时按宝库类型处理）
+    return countKeyTotal(bot) > 0;
   },
 
   scanVault(botName: string): Vec3 | undefined {
     const bot = getBot(botName);
     if (!bot) return undefined;
-    const origin = bot.location;
+    const c = bot.location;
     try {
-      // 2.8.0 API：getBlocks(volume, filter)——BlockVolume + BlockFilter（includeTypes）
+      // y 范围 clamp 到世界高度，allowUnloadedChunks=false（未加载区块等下一次重扫）
       const volume = new BlockVolume(
-        { x: origin.x - SCAN_RADIUS, y: origin.y - SCAN_RADIUS, z: origin.z - SCAN_RADIUS },
-        { x: origin.x + SCAN_RADIUS, y: origin.y + SCAN_RADIUS, z: origin.z + SCAN_RADIUS },
+        {
+          x: Math.floor(c.x) - SCAN_RADIUS,
+          y: Math.max(-64, Math.floor(c.y) - SCAN_RADIUS),
+          z: Math.floor(c.z) - SCAN_RADIUS,
+        },
+        {
+          x: Math.floor(c.x) + SCAN_RADIUS,
+          y: Math.min(320, Math.floor(c.y) + SCAN_RADIUS),
+          z: Math.floor(c.z) + SCAN_RADIUS,
+        },
       );
-      const result = bot.dimension.getBlocks(volume, { includeTypes: VAULT_TYPE_IDS });
+      const found = bot.dimension.getBlocks(volume, { includeTypes: [VAULT_BLOCK] }, false);
       // 最近优先
       let best: Vec3 | undefined;
       let bestDist = Infinity;
-      for (const loc of result.getBlockLocationIterator()) {
-        const dist = horizontalDistance(origin, loc);
+      for (const loc of found.getBlockLocationIterator()) {
+        const dist = horizontalDistance(c, loc);
         if (dist < bestDist) {
           bestDist = dist;
           best = { x: loc.x, y: loc.y, z: loc.z };
@@ -100,24 +127,40 @@ export const vaultPorts: VaultPorts = {
   async navigateToVault(botName: string, target: Vec3): Promise<boolean> {
     const bot = getBot(botName);
     if (!bot) return false;
-    // 目标 = 宝库旁可站立点（宝库是实心方块，从假人一侧接近偏移 1.5 格）
-    const stand = standSpotNear(target, bot.location);
-    if (horizontalDistance(bot.location, stand) <= ARRIVE_DISTANCE) return true;
+    // 站立点：优先宝库正面（面对钥匙孔），正面不可站再任意方向兜底
+    const stand = pickStandSpot(bot, target);
+    if (!stand) return false;
+    const navTarget = { x: stand.x + 0.5, y: stand.y, z: stand.z + 0.5 };
+    if (distance3d(bot.location, navTarget) <= ARRIVE_DISTANCE) return true;
     try {
       bot.stopMoving();
-      const result = bot.navigateToLocation(stand, 1);
+      const result = bot.navigateToLocation(navTarget, 1);
       if (!result.isFullPath) return false; // 无路径 → 放弃换下一个
     } catch {
       return false;
     }
-    // 轮询等待到达；协程内自检查（离线/死亡/钥匙丢失 → 提前失败）
+    // 轮询等待到达：停滞判定（距离无进展 STALL_TICKS）+ 总超时兜底；
+    // 协程内自检查（离线/死亡/钥匙丢失 → 提前失败）
     const startTick = system.currentTick;
+    let stallCount = 0;
+    let lastDist = Infinity;
     while (true) {
       await waitTicks(NAVIGATE_POLL_TICKS);
       if (!vaultPorts.isBotAvailable(botName) || !vaultPorts.hasKey(botName)) return false;
       const current = getBot(botName);
       if (!current) return false;
-      if (horizontalDistance(current.location, stand) <= ARRIVE_DISTANCE) return true;
+      const dist = distance3d(current.location, navTarget);
+      if (dist >= lastDist) {
+        stallCount++;
+        if (stallCount * NAVIGATE_POLL_TICKS >= STALL_TICKS) {
+          console.info(`[MockPlayer] 宝库 ${botName} 导航停滞（${STALL_TICKS}tick 无进展），重扫`);
+          return false;
+        }
+      } else {
+        stallCount = 0;
+      }
+      lastDist = dist;
+      if (dist <= ARRIVE_DISTANCE) return true;
       if (system.currentTick - startTick > NAVIGATE_TIMEOUT_TICKS) return false;
     }
   },
@@ -125,36 +168,54 @@ export const vaultPorts: VaultPorts = {
   interactVault(botName: string, target: Vec3): VaultInteractResult {
     const bot = getBot(botName);
     if (!bot) return "error";
-    // 交互前记录钥匙信息（成功后钥匙会被消耗）
-    const keyInfo = getHeldKeyInfo(bot);
-    if (!keyInfo) return "error";
+    const record = botRegistry.get(botName);
+    if (!record) return "error";
 
-    // 面朝宝库（chunkload 模式可能不支持，降级不影响交互）
-    try {
-      lookAt(bot, { x: target.x, y: target.y + 0.5, z: target.z });
-    } catch {
-      /* 忽略 */
-    }
+    // ── 1. 识别宝库类型（普通/不详：block state ominous）→ 候选钥匙 ──
+    const vaultKind = readVaultKind(bot, target); // "normal" | "ominous" | undefined
+    if (!vaultKind) return "error";
+    const candidates = KEY_CANDIDATES[vaultKind];
 
-    // 直接按方位交互宝库的面（不依赖 getBlockFromViewDirection 的朝向生效时机）
-    const face = faceToward(bot.location, target);
-    let success = false;
-    try {
-      success = bot.interactWithBlock({ x: target.x, y: target.y, z: target.z }, face);
-    } catch {
+    // ── 2. 按优先级确保主手（slot 0）是候选钥匙 ──
+    // ⚠️ 玩家只需把钥匙放入背包，主手自动换（用户规格 1.3.19：主手固定 slot 0）
+    const keyType = ensureMainhand(bot, candidates);
+    if (!keyType) {
+      const missing = candidates.length > 1 ? "普通钥匙或不详钥匙" : "不详钥匙";
+      notifyNoKey(bot, record.name, `背包没有${missing}，请放入背包后重试`);
       return "error";
     }
-    if (!success) return "error";
 
-    // 回读验证防"假成功"：interact 返回 true 但钥匙不消耗 = 宝库已对该账号开过
-    const afterInfo = getHeldKeyInfo(bot);
-    const consumed = afterInfo !== null && afterInfo.count < keyInfo.count;
-    if (!consumed) return "not-consumed";
+    // ── 3. 持续注视宝库中心 + 同步 lastPoint.lookTarget（重连恢复朝向） ──
+    const center = { x: target.x + 0.5, y: target.y + 0.5, z: target.z + 0.5 };
+    try {
+      lookAt(bot, center);
+      if (record.lastPoint) record.lastPoint.lookTarget = center;
+    } catch {
+      /* chunkload 模式可能不支持，降级不影响交互 */
+    }
 
-    // 钥匙已消耗 → 用回读的实际数量更新并发布事件
-    keyInfo.count = afterInfo!.count;
-    keyInfo.totalInInventory = afterInfo!.totalInInventory;
-    workflowVaultOpened.trigger({ botName, keyType: keyInfo.typeId, remaining: keyInfo.count });
+    // ── 4. 交互前记录钥匙总量基准（交互后记录已是消耗后的值 → 判定永不满足） ──
+    const baseline = countKeyTotal(bot);
+
+    // ── 5. 手持钥匙**使用**于宝库（右键使用 = useItemInSlotOnBlock；空手交互
+    //       interactWithBlock 返回 true 但不触发开箱 = 假成功）──
+    let ok = useItemOnVault(bot, target);
+    if (!ok) {
+      ok = interactBlock(bot, target);
+    }
+    if (!ok) {
+      notify(bot, record.name, "使用钥匙开宝库未成功，请调整假人位置后重试");
+      return "error";
+    }
+
+    // ── 6. 回读验证：钥匙真的被消耗了吗 ──
+    // ⚠️ 持续点击语义（用户规格 1.3.19）：宝库冷却/出掉落动画中点击返回 true
+    //    但钥匙不消耗（假成功）——未消耗 → 冷却后继续点击，不放弃目标
+    const total = countKeyTotal(bot);
+    if (total >= baseline) return "not-consumed";
+
+    // 真消耗 → 发布领域事件（剩余钥匙数）+ 判定成功
+    workflowVaultOpened.trigger({ botName, keyType, remaining: total });
     return "consumed";
   },
 
@@ -163,17 +224,21 @@ export const vaultPorts: VaultPorts = {
     if (!record) return;
     // 黑板目标保留 → 重连完成后树继续同一宝库
     safeReconnect(record, {
-      onOnline: (fresh, r) => notifyNearestPlayer(fresh, r, getHeldKeyInfo(fresh)),
+      onOnline: (fresh, r) => notify(fresh, r.name, `已重连，继续开箱（剩余 ${countKeyTotal(fresh)} 把钥匙）`),
     });
   },
 
   idle(botName: string): void {
     const bot = getBot(botName);
     if (!bot) return;
-    if (!vaultPorts.hasKey(botName)) {
-      tryNotifyNoKey(bot);
+    const record = botRegistry.get(botName);
+    if (!record) return;
+    if (countKeyTotal(bot) === 0) {
+      notifyNoKey(bot, record.name, "背包没有宝库钥匙，请放入钥匙（普通/不详均可）");
+      return;
     }
-    // 有钥匙但无宝库/扫描冷却中：安静等待（不刷屏）
+    // 有钥匙但无宝库/扫描冷却中：低频提示
+    notifyNoKey(bot, record.name, "附近 15 格内没有宝库，请将假人带到宝库附近");
   },
 };
 
@@ -185,138 +250,207 @@ function waitTicks(ticks: number): Promise<void> {
   });
 }
 
-/** 水平距离（导航/到达判定用，忽略高度差） */
+/** 水平距离（扫描排序用） */
 function horizontalDistance(a: Vec3, b: Vec3): number {
   const dx = a.x - b.x;
   const dz = a.z - b.z;
   return Math.hypot(dx, dz);
 }
 
-/** 宝库旁可站立点：从假人一侧水平偏移 1.5 格（宝库实心，不能站进去） */
-function standSpotNear(vault: Vec3, from: Vec3): Vec3 {
-  const dx = from.x - vault.x;
-  const dz = from.z - vault.z;
-  const len = Math.hypot(dx, dz) || 1;
-  return { x: vault.x + (dx / len) * 1.5, y: vault.y, z: vault.z + (dz / len) * 1.5 };
+/** 三维距离（到达判定用） */
+function distance3d(a: Vec3, b: Vec3): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-/** 计算交互宝库的哪个面（假人所在方位 → 宝库对应面） */
-function faceToward(from: Vec3, to: Vec3): Direction {
-  const dx = to.x - from.x;
-  const dz = to.z - from.z;
-  if (Math.abs(dx) > Math.abs(dz)) {
-    return dx > 0 ? Direction.West : Direction.East;
+// ─── 站立点（优先宝库正面） ──────────────────────────────
+
+/**
+ * 站立点：**优先宝库正面**（cardinal_direction 反方向 1~2 格可站立）——宝库
+ * 开箱必须面对钥匙孔正面使用钥匙（侧面/背面点击不消耗钥匙）；正面不可站再
+ * 任意方向兜底。
+ */
+function pickStandSpot(bot: SimulatedPlayer, vault: Vec3): Vec3 | undefined {
+  const facing = vaultFacing(bot, vault);
+  if (facing) {
+    for (const pos of frontStandCandidates(vault, facing)) {
+      if (isStandable(bot, pos)) return pos;
+    }
   }
-  return dz > 0 ? Direction.North : Direction.South;
+  // 任意方向兜底：宝库旁 1~2 格可站立点（靠近假人一侧优先）
+  for (const dist of [1, 2]) {
+    const candidates = [
+      { x: vault.x + dist, y: vault.y, z: vault.z },
+      { x: vault.x - dist, y: vault.y, z: vault.z },
+      { x: vault.x, y: vault.y, z: vault.z + dist },
+      { x: vault.x, y: vault.y, z: vault.z - dist },
+    ];
+    for (const pos of candidates) {
+      if (isStandable(bot, pos)) return pos;
+    }
+  }
+  return undefined;
 }
 
-function getHeldItem(bot: SimulatedPlayer): ItemStack | undefined {
+/** 宝库朝向（minecraft:cardinal_direction state；读取失败返回 undefined） */
+function vaultFacing(bot: SimulatedPlayer, vault: Vec3): string | undefined {
   try {
-    const equip = bot.getComponent("minecraft:equippable") as
-      | { getEquipment: (slot: string) => ItemStack | undefined }
-      | undefined;
-    return equip?.getEquipment(EquipmentSlot.Mainhand);
+    const block = bot.dimension.getBlock(vault);
+    if (!block || block.typeId !== VAULT_BLOCK) return undefined;
+    return block.permutation.getState("minecraft:cardinal_direction") as string | undefined;
   } catch {
     return undefined;
   }
 }
 
-interface KeyInfo {
-  typeId: string;
-  label: string;
-  count: number;
-  totalInInventory: number;
+/** 宝库正面站立点候选（朝向反方向 1~2 格：朝北 → 站南侧 z+1，面对钥匙孔） */
+function frontStandCandidates(vault: Vec3, facing: string): Vec3[] {
+  const dx = facing === "east" ? -1 : facing === "west" ? 1 : 0;
+  const dz = facing === "north" ? 1 : facing === "south" ? -1 : 0;
+  return [
+    { x: vault.x + dx, y: vault.y, z: vault.z + dz },
+    { x: vault.x + dx * 2, y: vault.y, z: vault.z + dz * 2 },
+  ];
 }
 
-/** 主手钥匙信息（含背包同种钥匙总数；主手武器格 = 热键栏格，避免重复计数） */
-function getHeldKeyInfo(bot: SimulatedPlayer): KeyInfo | null {
+/** 该格可站立：格内空气 + 下方有支撑 */
+function isStandable(bot: SimulatedPlayer, pos: Vec3): boolean {
   try {
-    const equip = bot.getComponent("minecraft:equippable") as
-      | { getEquipment: (slot: string) => ItemStack | undefined }
-      | undefined;
-    if (!equip) return null;
+    const here = bot.dimension.getBlock(pos);
+    const below = bot.dimension.getBlock({ x: pos.x, y: pos.y - 1, z: pos.z });
+    if (!here || !below) return false;
+    return here.typeId === "minecraft:air" && below.typeId !== "minecraft:air";
+  } catch {
+    return false;
+  }
+}
 
-    const held = equip.getEquipment(EquipmentSlot.Mainhand);
-    if (!held) return null;
+/** 宝库类型（普通/不详） */
+function readVaultKind(bot: SimulatedPlayer, vault: Vec3): "normal" | "ominous" | undefined {
+  try {
+    const block = bot.dimension.getBlock(vault);
+    if (!block) return undefined;
+    const ominous = block.permutation.getState("ominous") as boolean | undefined;
+    return ominous ? "ominous" : "normal";
+  } catch {
+    return undefined;
+  }
+}
 
-    let totalInInventory = 0;
+// ─── 钥匙操作 ────────────────────────────────────────────
+
+/** 背包+主手钥匙总量（普通+不详之和，交互基准与判定权威） */
+function countKeyTotal(bot: SimulatedPlayer): number {
+  try {
     const inv = bot.getComponent("minecraft:inventory") as
       | { container: { getItem: (slot: number) => ItemStack | undefined; size: number } }
       | undefined;
+    let total = 0;
     if (inv?.container) {
       for (let i = 0; i < inv.container.size; i++) {
         const item = inv.container.getItem(i);
-        if (item?.typeId === held.typeId) {
-          totalInInventory += item.amount;
+        if (item?.typeId === "minecraft:trial_key" || item?.typeId === "minecraft:ominous_trial_key") {
+          total += item.amount;
         }
       }
     }
-
-    return {
-      typeId: held.typeId,
-      label: KEY_LABELS[held.typeId] ?? held.typeId.replace("minecraft:", ""),
-      count: held.amount,
-      totalInInventory,
-    };
+    return total;
   } catch {
-    return null;
+    return 0;
   }
 }
 
-// ─── 无钥匙通知节流 ──────────────────────────────────────
-// 避免每 tick 疯狂刷消息，同一个 bot 10 秒内只提醒一次
+/** 确保主手（slot 0）为候选钥匙：已是 → 直接返回；否则从背包交换 + 选中 slot 0 */
+function ensureMainhand(bot: SimulatedPlayer, candidates: string[]): string | undefined {
+  try {
+    const inv = bot.getComponent("minecraft:inventory") as
+      | { container: { getItem: (slot: number) => ItemStack | undefined; swapItems: (a: number, b: number) => boolean; size: number } }
+      | undefined;
+    const container = inv?.container;
+    if (!container) return undefined;
+    const held = container.getItem(0);
+    if (held && candidates.includes(held.typeId)) return held.typeId;
+    for (let i = 0; i < container.size; i++) {
+      const item = container.getItem(i);
+      if (item && candidates.includes(item.typeId)) {
+        if (!container.swapItems(i, 0)) return undefined;
+        bot.selectedSlotIndex = 0; // 主手 = slot 0（选中）
+        return container.getItem(0)?.typeId ?? candidates[0];
+      }
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
 
-const noKeyNotifiedAt = new Map<string, number>();
+/** 手持钥匙右键使用于宝库（useItemInSlotOnBlock slot 0；视线命中的 face） */
+function useItemOnVault(bot: SimulatedPlayer, target: Vec3): boolean {
+  let face: Direction = Direction.Down;
+  try {
+    const hit = bot.getBlockFromViewDirection({ maxDistance: VIEW_MAX_DIST });
+    if (hit) face = hit.face;
+  } catch {
+    /* 视线读取失败用兜底面 */
+  }
+  try {
+    return bot.useItemInSlotOnBlock(0, { x: target.x, y: target.y, z: target.z }, face);
+  } catch {
+    return false;
+  }
+}
 
-function tryNotifyNoKey(bot: SimulatedPlayer): void {
+/** 回退通道：interactWithBlock（空手交互；宝库开箱不消耗钥匙，仅兜底） */
+function interactBlock(bot: SimulatedPlayer, target: Vec3): boolean {
+  const dx = target.x - bot.location.x;
+  const dz = target.z - bot.location.z;
+  let face: Direction = Direction.Down;
+  if (Math.abs(dx) > Math.abs(dz)) {
+    face = dx > 0 ? Direction.West : Direction.East;
+  } else if (dz !== 0) {
+    face = dz > 0 ? Direction.North : Direction.South;
+  }
+  try {
+    return bot.interactWithBlock({ x: target.x, y: target.y, z: target.z }, face);
+  } catch {
+    return false;
+  }
+}
+
+// ─── 通知（节流） ────────────────────────────────────────
+// 同一个 bot 10 秒内只提醒一次，避免每 tick 刷屏
+
+const notifyAt = new Map<string, number>();
+
+function notify(bot: SimulatedPlayer, botName: string, message: string): void {
   const now = system.currentTick;
-  const last = noKeyNotifiedAt.get(bot.name) ?? 0;
-  if (now - last < NO_KEY_COOLDOWN_TICKS) return;
-  noKeyNotifiedAt.set(bot.name, now);
-
-  try {
-    const players = world.getPlayers();
-    let nearest: Player | null = null;
-    let minDist = Infinity;
-    for (const p of players) {
-      if (p.name === bot.name) continue;
-      const dist = horizontalDistance(bot.location, p.location);
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = p;
-      }
-    }
-    nearest?.sendMessage(
-      `${color.playerName}[宝库] ${color.success}${bot.name} ${color.muted}手上没有钥匙，请放入钥匙到主手`,
-    );
-  } catch {
-    /* 通知失败不影响主流程 */
-  }
+  const last = notifyAt.get(botName) ?? 0;
+  if (now - last < NOTIFY_COOLDOWN_TICKS) return;
+  notifyAt.set(botName, now);
+  sendNearest(bot, botName, message);
 }
 
-/** 通知最近玩家开箱结果（含剩余钥匙数） */
-function notifyNearestPlayer(bot: SimulatedPlayer, record: { name: string }, keyInfo: KeyInfo | null): void {
+function notifyNoKey(bot: SimulatedPlayer, botName: string, message: string): void {
+  notify(bot, botName, message);
+}
+
+/** 通知最近玩家（[宝库] 前缀 + 假人名 + 详情） */
+function sendNearest(bot: SimulatedPlayer, botName: string, message: string): void {
   try {
     const players = world.getPlayers();
     let nearest: Player | null = null;
     let minDist = Infinity;
     for (const p of players) {
-      if (p.name === record.name) continue;
+      if (p.name === botName) continue;
       const dist = horizontalDistance(bot.location, p.location);
       if (dist < minDist) {
         minDist = dist;
         nearest = p;
       }
     }
-    if (!nearest) return;
-
-    if (keyInfo) {
-      nearest.sendMessage(
-        `${color.playerName}[宝库] ${color.success}${record.name} ${color.muted}手中还有 ${color.info}${keyInfo.totalInInventory} ${color.playerName}${keyInfo.label}${color.muted}（手持 ${color.info}${keyInfo.count}${color.muted}）`,
-      );
-    } else {
-      nearest.sendMessage(`${color.playerName}[宝库] ${color.success}${record.name} ${color.muted}手上没有钥匙，请放入钥匙到主手`);
-    }
+    nearest?.sendMessage(`${color.playerName}[宝库] ${color.success}${botName} ${color.muted}${message}`);
   } catch {
     /* 通知失败不影响主流程 */
   }

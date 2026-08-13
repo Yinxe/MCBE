@@ -134,26 +134,26 @@ test("无宝库：扫描失败 → 冷却 40 tick → 到期重扫", async () =>
 
 // ─── 宝库已开过（假成功免疫） ────────────────────────────
 
-test("宝库已开过：interact 不消耗钥匙 → 3 次尝试后换下一个宝库", async () => {
+test("持续点击语义：interact 未消耗（宝库冷却/动画中）→ 冷却后继续点击，不放弃目标", async () => {
   const { ports, bb, tick } = makeHarness();
   ports.distance = 1;
   ports.interactResult = "not-consumed";
 
   assert.equal(await tick(100), "success"); // 首次：扫描写目标
-  // 3 次尝试（交互冷却 20 tick）
-  for (const t of [120, 140, 160]) {
+  // 多次点击未消耗（每次间隔 20 tick 冷却）→ 目标始终保留
+  for (const t of [120, 140, 160, 180]) {
     assert.equal(await tick(t), "success");
   }
-  assert.equal(ports.interactCalls, 3);
-  // 超限后同 tick 内重扫 → 换下一个宝库（新目标写入，尝试次数重置）
-  assert.equal(ports.scanCalls, 2);
-  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS);
-
-  // 新目标可正常开箱（不再被旧宝库"假成功"卡住）
-  ports.interactResult = "consumed";
-  assert.equal(await tick(180), "success");
   assert.equal(ports.interactCalls, 4);
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS); // 不放弃目标
+  assert.equal(ports.reconnectCalls, 0); // 未消耗不重连
+
+  // 宝库冷却结束 → 点击真消耗 → 重连（同一目标）
+  ports.interactResult = "consumed";
+  assert.equal(await tick(200), "success");
+  assert.equal(ports.interactCalls, 5);
   assert.equal(ports.reconnectCalls, 1);
+  assert.deepEqual(bb.get<Vec3>("vaultTarget"), VAULT_POS); // 重连后目标保留
 });
 
 // ─── 寻路失败 ────────────────────────────────────────────
