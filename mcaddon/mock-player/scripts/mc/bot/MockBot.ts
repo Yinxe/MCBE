@@ -342,6 +342,25 @@ export class MockBot {
     }
   }
 
+  /**
+   * 交换两个槽位（**setItem 手动交换**——GameTest 假人容器的原生 swapItems
+   * 可能不生效/抛错（raidFlow 换药水即用此模式）；两段式写入保证原子性）。
+   */
+  swapItemsManual(slotA: number, slotB: number): boolean {
+    const container = this.getContainer();
+    const view = this.slotView();
+    if (!container || !isValidSlot(view, slotA) || !isValidSlot(view, slotB)) return false;
+    try {
+      const a = container.getItem(slotA);
+      const b = container.getItem(slotB);
+      container.setItem(slotA, b ?? undefined);
+      container.setItem(slotB, a ?? undefined);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** 将背包中的某个物品交换到指定槽位（默认 slot 0；已在目标槽算成功） */
   swapItemToSlot(typeId: string, toSlot = 0): boolean {
     const fromSlot = this.findItem(typeId);
@@ -350,14 +369,18 @@ export class MockBot {
     return this.swapItems(fromSlot, toSlot);
   }
 
-  /** 确保主手是候选物品之一（主手已是 → 返回类型；否则按优先级换到主手） */
+  /**
+   * 确保主手是候选物品之一（主手已是 → 返回类型；否则按优先级换到主手）。
+   * ⚠️ 用 setItem 手动交换（swapItems 原生 API 在 GameTest 假人容器上可能
+   *    不生效——raidFlow 验证过的模式；用户实测 BUG2 换钥匙失败）。
+   */
   ensureMainhand(typeIds: string[]): string | undefined {
     const held = this.getHeldItem();
     if (held && typeIds.includes(held.typeId)) return held.typeId;
     const slot = this.findFirstItem(typeIds);
     if (slot === undefined) return undefined;
     const handSlot = this.heldSlotIndex();
-    if (!this.swapItems(slot, handSlot)) return undefined;
+    if (!this.swapItemsManual(slot, handSlot)) return undefined;
     return this.getHeldItem()?.typeId ?? typeIds[0];
   }
 

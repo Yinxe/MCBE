@@ -27,6 +27,12 @@ import type { MockBot } from "../MockBot";
 
 /** 宝库方块 ID（普通/不详共用同一方块，block state ominous 区分） */
 const VAULT_BLOCK = "minecraft:vault";
+
+/** 注视节流（tick）：导航进行中每 N tick 转头一次——**每 tick 转头会干扰导航**
+ *  （GameTest 导航引擎控制身体朝向移动方向，头部每 tick 被拉向宝库导致
+ *   距离无进展 → 停滞重扫循环，用户实测 BUG1）；试错分支导航检查也是
+ *   每 10 tick 才 lookAt 一次 */
+  const LOOK_TICK = 10;
 /** 宝库扫描半径（格，以假人为中心的正方体半边长；用户规格 15） */
 const SCAN_RADIUS = 15;
 /** 扫描重试间隔（tick）：没找到宝库时定期重扫 */
@@ -114,6 +120,12 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     if (record.lastPoint) {
       record.lastPoint.lookTarget = center;
     }
+  };
+
+  /** 节流注视（导航中每 LOOK_TICK tick 一次，避免转头干扰导航；到达交互前密集注视） */
+  const throttledLookAtVault = (): void => {
+    if (lookReadyTicks % LOOK_TICK !== 0) return;
+    lookAtVault();
   };
 
   const handle: VaultTaskHandle = {
@@ -238,8 +250,9 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       phase = "scan";
       return;
     }
-    // 持续注视宝库（+ 同步 lastPoint.lookTarget，重连恢复看向宝库）
-    lookAtVault();
+    // ⚠️ 节流注视宝库（每 LOOK_TICK tick 一次——**导航中每 tick 转头会干扰导航**
+    //    导致距离无进展停滞，用户实测 BUG1）+ 同步 lastPoint.lookTarget（重连恢复看向宝库）
+    throttledLookAtVault();
     lookReadyTicks++;
 
     // 距离判定（站立点）；停滞判定：距离无进展累计 STALL_TICKS → 放弃重扫
@@ -322,6 +335,15 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
     // 交互前确保持续注视宝库（+ 同步 lastPoint.lookTarget，重连恢复看向宝库）
     lookAtVault();
 
+    // ⚠️ **交互前**记录钥匙总量基准（用户实测 BUG3：useItemInSlotOnBlock 同步
+    //    消耗钥匙，交互后记录 baseline 已是消耗后的值 → 事件判定"总量 < 基准"
+    //    永不满足 → 不重连）；此后总量减少且恰好 -1 → 判定开箱成功（事件驱动）
+    handle.baseline = countKeyTotal();
+    handle.keyType = keyType;
+    console.info(
+      `[MockPlayer] 宝库 ${bot.name} 交互前钥匙总量基准=${handle.baseline}（${vaultKind}，主手 ${held ?? keyType}）`,
+    );
+
     // ⚠️ 手持钥匙**使用**于宝库（useItemInSlotOnBlock = 右键使用，开箱消耗钥匙；
     //    interactWithBlock 只是空手交互可能"假成功"——1.1.34 验证在正确姿势
     //    （面对宝库正面）下 interactWithBlock 也能开箱，故失败时回退双通道）
@@ -338,11 +360,8 @@ export function vaultTask(bot: MockBot, opts: VaultTaskOptions = {}): { task: Bo
       return;
     }
 
-    // 记录钥匙总量基准：此后总量减少且 -1 后非空 → 判定开箱成功（事件驱动）
-    handle.baseline = countKeyTotal();
-    handle.keyType = keyType;
     console.info(
-      `[MockPlayer] 宝库 ${bot.name} 交互成功，钥匙总量基准=${handle.baseline}（等待钥匙消耗事件判定）`,
+      `[MockPlayer] 宝库 ${bot.name} 交互成功，等待钥匙消耗事件判定（基准=${handle.baseline}）`,
     );
     phase = "wait";
     waitTicks = 0;
