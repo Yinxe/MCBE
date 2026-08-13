@@ -34,11 +34,9 @@ export function tpBotToPlayer(record: BotRecord, player: Player): void {
   bot.isSneaking = player.isSneaking;
   record.isSneaking = player.isSneaking;
 
-  // 强加载模式不可转向，但扭头仍可用（由 lookAt 独立处理）
-  if (record.spawnMode !== "chunkload") {
-    const lookTarget = getPlayerLookTarget(player);
-    setPose(bot, player.getRotation(), lookTarget);
-    savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
-  }
+  // 姿态/视角/朝向：普通与常加载模式统一应用（setPose 内部 try-catch 防御，位置照常保存）
+  const lookTarget = getPlayerLookTarget(player);
+  setPose(bot, player.getRotation(), lookTarget);
+  savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
   saveCoordinator.saveRecord(record);
 }

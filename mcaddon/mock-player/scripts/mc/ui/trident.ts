@@ -42,10 +42,6 @@ export function showTridentSelector(player: Player, botName: string): void {
   const record = botRegistry.get(botName);
   if (!record) { player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 已不存在`); return; }
   if (!record.online || record.death) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
-  if (record.spawnMode === "chunkload") {
-    player.sendMessage(`${color.error}常加载假人 ${color.playerName}${botName}${color.error} 无法投掷三叉戟（扭头不可用，无法瞄准）`);
-    return;
-  }
 
   const tridents = scanTridents(botName);
   if (!tridents) { player.sendMessage(`${color.error}无法获取假人实体`); return; }

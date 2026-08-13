@@ -37,13 +37,9 @@ export function toggleControl(record: BotRecord, player: Player): void {
       const bot = entity as SimulatedPlayer;
       bot.teleport(player.location, { dimension: player.dimension });
 
-      // 强加载模式不可转向
-      if (record.spawnMode !== "chunkload") {
-        setPose(bot, player.getRotation(), getPlayerLookTarget(player));
-        savePoseToRecord(record, player.location, player.dimension.id, player.getRotation());
-      } else {
-        savePoseToRecord(record, player.location, player.dimension.id);
-      }
+      // 姿态统一应用（setPose 内部 try-catch 防御，位置照常保存）
+      setPose(bot, player.getRotation(), getPlayerLookTarget(player));
+      savePoseToRecord(record, player.location, player.dimension.id, player.getRotation());
     }
   }
 }

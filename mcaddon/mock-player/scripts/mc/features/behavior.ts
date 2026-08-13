@@ -68,14 +68,11 @@ export function startTagBehaviors(): void {
             const controller = world.getEntity(record.controllerId);
             if (controller) {
               sim.teleport(controller.location, { dimension: controller.dimension });
-              if (record.spawnMode !== "chunkload") {
-                const playerRot = (controller as Player).getRotation();
-                const lookTarget = getPlayerLookTarget(controller as Player);
-                setPose(sim, playerRot, lookTarget);
-                savePoseToRecord(record, controller.location, controller.dimension.id, playerRot, lookTarget);
-              } else {
-                savePoseToRecord(record, controller.location, controller.dimension.id);
-              }
+              // 姿态统一应用（setPose 内部 try-catch 防御，位置照常保存）
+              const playerRot = (controller as Player).getRotation();
+              const lookTarget = getPlayerLookTarget(controller as Player);
+              setPose(sim, playerRot, lookTarget);
+              savePoseToRecord(record, controller.location, controller.dimension.id, playerRot, lookTarget);
               sim.isSneaking = (controller as Player).isSneaking;
               record.isSneaking = sim.isSneaking;
             }

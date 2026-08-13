@@ -98,9 +98,6 @@ export function throwTridents(
   const record = botRegistry.get(botName);
   if (!record || !record.online || record.death) { onComplete?.(); return; }
 
-  // 常加载模式拒绝投掷（useItemInSlot 需要普通模式）
-  if (record.spawnMode === "chunkload") { onComplete?.(); return; }
-
   throwingBots.add(botName);
 
   const wasFollowing = isFollowing(botName);
