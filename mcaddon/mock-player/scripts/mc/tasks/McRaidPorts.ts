@@ -290,10 +290,16 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
   }
 }
 
-// ─── 卡死提醒（一次性，非轮询） ──────────────────────────
+// ─── 一次性检查（非轮询，只记录/提醒） ──────────────────
+// ⚠️ 基岩版药水机制（用户规格 1.1.63）：
+//   - 喝不祥之瓶 → 不祥之兆（bad_omen）
+//   - **不在村庄/试炼之地**：bad_omen 挂 **100 分钟**（不转化，袭击不触发）
+//   - **在村庄/试炼之地内喝**：bad_omen 转化为**袭击之兆（raid_omen，30 秒）**→ 袭击
+//   - **已有凶兆不转化**：带着 bad_omen 进村庄不会自动转化，需在村庄内**重复喝**才转化
+//   - 袭击中阶段（raid_omen 或袭击进行中）不喝药水（树 canDrink + raidWaiting 保证）
 
-/** 不祥之兆持续时间（tick）：基岩版 bad_omen 30 秒 = 600 tick（0:30） */
-const BAD_OMEN_DURATION_TICKS = 600;
+/** 转化等待检查窗口（tick）：喝瓶后 30 秒 = 600 tick 内未转化为袭击之兆 → 不在村庄 */
+const CONVERT_CHECK_TICKS = 600;
 /** 袭击之兆持续时间（tick）：基岩版 raid_omen 30 秒 = 600 tick；结束后袭击完全开始 */
 const RAID_OMEN_DURATION_TICKS = 600;
 
@@ -328,12 +334,11 @@ function scheduleRaidStartCheck(botName: string): void {
 }
 
 /**
- * 不祥之兆结束检查（一次性，非轮询）：喝瓶 30 秒后——
- * bad_omen 已自然结束且**未转化为袭击之兆** = 假人不在村庄范围
- * （基岩版机制：带不祥之兆进入村庄才转化为袭击之兆；30 秒内没进村庄
- *   则效果结束、袭击不触发）→ **通知主人"假人不在村庄范围内"**。
- * ⚠️ 只发消息，零恢复动作（对齐"一次性卡死提醒"语义）；与 raid_omen
- *    残留检查（scheduleRaidStuckCheck）互补。
+ * 不在村庄检查（一次性，非轮询）：喝瓶 30 秒后——
+ * **未转化为袭击之兆**（bad_omen 挂着 100 分钟是正常的，转化只发生在
+ * 村庄/试炼之地内喝）→ 假人不在村庄/试炼之地范围 → **通知主人**。
+ * ⚠️ 只发消息，零恢复动作；已有凶兆不会自动转化，需玩家把假人带到
+ *    村庄/试炼之地后**重新开启劫掠模式**（树重建 → 在村庄内喝 → 转化）。
  */
 function scheduleBadOmenEndCheck(botName: string): void {
   const scheduledAt = system.currentTick;
@@ -347,18 +352,18 @@ function scheduleBadOmenEndCheck(botName: string): void {
 
       // 已转化（本次喝瓶之后出现过袭击之兆）→ 袭击酝酿/进行中 → 正常，跳过
       if ((convertedToRaidTick.get(botName) ?? 0) > scheduledAt) return;
-      // 兆头还在（喝瓶被打断等异常）→ 跳过，交给 raid_omen 残留检查
-      if (hasEffect(bot, BAD_OMEN) || hasEffect(bot, RAID_OMEN)) return;
+      // 袭击之兆还在（转化后尚未开始）→ 正常，跳过
+      if (hasEffect(bot, RAID_OMEN)) return;
 
-      // bad_omen 已结束且未转化 → 30 秒内没进村庄 → 通知主人
+      // 未转化 → 假人不在村庄/试炼之地（bad_omen 100 分钟挂着不会转化）→ 通知主人
       world.sendMessage(
-        `${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName} 不祥之兆已结束但未转化为袭击之兆——` +
-          `${color.muted}假人不在村庄范围内，袭击未触发。请把假人带到村庄后重开劫掠模式`,
+        `${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName} 不祥之兆未转化为袭击之兆——` +
+          `${color.muted}假人不在村庄/试炼之地范围内，袭击不会触发。请把假人带到村庄/试炼之地后重新开启劫掠模式`,
       );
     } catch (err) {
       console.warn(`[MockPlayer] 劫掠不在村庄检查异常: ${err}`);
     }
-  }, BAD_OMEN_DURATION_TICKS);
+  }, CONVERT_CHECK_TICKS);
 }
 
 /** 喝瓶后 1 分钟仍带不祥/袭击之兆 → 袭击未触发，提醒玩家（只发消息，零恢复动作） */

@@ -263,10 +263,15 @@ Selector（每 tick 重评）
   - 劫掠上线/重生续喝由 AI 引擎接管（树每 10 tick 按标签驱动，见编排层章节）
 
 ### 劫掠模式（`mc/tasks/McRaidPorts.ts` + `core/tasks/RaidTask.ts`，纯事件驱动 + 一次性提醒）
-- 事件链：喝瓶（树）→不祥之兆（effectAdd → raidStarted 信号）→袭击胜利→村庄英雄（effectAdd → raidVictory 信号 + lastHeroTick）→树胜利处理（叠加给主人→移除英雄→自然喝下一瓶）
-- ⚠️ **基岩版机制**：不祥之兆只持续 **30 秒**（0:30）——带兆头进入村庄才转化为袭击之兆（30 秒后袭击开始）；**30 秒内没进村庄 → 效果结束、袭击不触发**
-- **一次性提醒双检查**（只发消息，零恢复动作）：
-  - `scheduleBadOmenEndCheck`（喝瓶后 600 tick）：bad_omen 已结束且**未转化**（convertedToRaidTick 判定）→ 通知主人"**假人不在村庄范围内**，请带到村庄"
+- 事件链：喝瓶（树）→不祥之兆（effectAdd → raidStarted 信号）→袭击之兆（转化记录 + "袭击即将开始"）→袭击完全开始（buff 结束检测）→胜利→村庄英雄（effectAdd → raidVictory 信号 + lastHeroTick）→树胜利处理（叠加给主人→移除英雄→自然喝下一瓶）
+- ⚠️ **基岩版机制（用户实测 1.1.63）**：
+  - 喝不祥之瓶 → **不祥之兆（bad_omen）**；**不在村庄/试炼之地**喝 → 挂着 **100 分钟**不转化（袭击不触发）
+  - **在村庄/试炼之地内喝** → 转化为**袭击之兆（raid_omen，30 秒）**→ buff 结束 = 袭击完全开始（于获得效果的位置）
+  - **已有凶兆不自动转化**：带 bad_omen 进村庄不会自动转，需在村庄内**重复喝（重开劫掠模式）**才转化
+  - **袭击中阶段不喝药水**（树 canDrink 拦兆头 + 黑板 raidWaiting 保证，不浪费药水）
+- **一次性提醒检查**（只发消息，零恢复动作）：
+  - `scheduleBadOmenEndCheck`（喝瓶后 600 tick）：**未转化为袭击之兆**（convertedToRaidTick 判定）→ 通知主人"**假人不在村庄/试炼之地范围内**，请带到村庄后重开劫掠模式"
+  - `scheduleRaidStartCheck`（获得袭击之兆后 600 tick）：buff 结束 = **袭击完全开始**（记录）；仍在 = 异常交给 stuck check
   - `scheduleRaidStuckCheck`（喝瓶后 1200 tick）：仍带 raid_omen（转化后袭击未开始）→ 提醒"请确认假人在村庄内且非和平难度"
 - ⚠️ **语义（用户拍板 713e8da）：纯事件驱动，零巡检/零恢复机制**——袭击等待靠事件唤醒（树条件全 false 时等待分支无副作用）
 - 喝瓶周期（用户规格 1.1.60）：**只在启动/胜利后喝**——黑板 `raidWaiting` 标记（drink 成功写、handleVictory 清），兆头消失也不重复喝
