@@ -1,65 +1,23 @@
 // ─── 统一假人操作面板（v3） ──────────────────────────
-// 主菜单：移动/物品/状态/行为标签/传送
-// showTagManagement 模态表单中统一管理。
-// 主菜单保留移动/物品/回收/传送等直接操作。
 //
-// 已弃用功能移除此面板：
-//   - 一键卸甲（合并至回收资源）
-//   - 传送到身边（已合并至移动→同步姿态）
-//   - 互换副手（合并至互换装备，SWAP_SLOTS 已含 Offhand）
+// ⚠️ UI 事件驱动：按钮点击只发布 panelAction 领域事件（负载 操作者/假人/动作），
+//    各功能模块独立订阅执行——本文件不 import 任何业务动作函数。
+//    「返回列表」是 UI 内部导航，保持内联回调（不事件化）。
 
-import { Player, EquipmentSlot, system, world } from "@minecraft/server";
+import { Player } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
-import { ActionFormBuilder, ModalFormBuilder } from "@yinxe/toolkit";
+import { ActionFormBuilder } from "@yinxe/toolkit";
 
-import { BotRecord, isValidBotName, normalizeBotName } from "../../core/model/Types";
+import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG, getTagDef } from "../../core/tags/BotTags";
-import { BotEvents } from "../../core/events/DomainEvents";
+import { BotUiEvent, type BotPanelAction } from "../../core/events/UiEvents";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
-import { collectContainerItems } from "../adapters/McItemCodec";
-import { getPlayerLookTarget, lookAt } from "../adapters/PoseGateway";
-import { isNameOccupiedInWorld } from "../adapters/PlayerGateway";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import {
-  tpBotToPlayer,
-  tpPlayerToBot,
-  killBot,
-  swapMainhandWithBot,
-} from "../features/index";
-import { onlineBot } from "../features/onlineBot";
-import { offlineBot } from "../features/offlineBot";
-import { showTridentSelector } from "./trident";
-import { showTridentClaimUI } from "./tridentClaim";
+import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
 import { visibleRecords } from "../../core/service/BotVisibility";
-import { showReclaimForm } from "./reclaim";
-import { showMainhandSelector } from "./mainhand";
-import { confirmDelete } from "./move";
-import { showTagManagement } from "./tags";
-import { sendData } from "../commands/data";
 
 // ─── 工具 ──────────────────────────────────────────────
-
-/** EquipmentSlot → 装备槽名（非装备槽返回 undefined；非装备槽不触发装备事件） */
-function equipSlotNameOf(slot: EquipmentSlot): "head" | "chest" | "legs" | "feet" | "offhand" | undefined {
-  switch (slot) {
-    case EquipmentSlot.Head: return "head";
-    case EquipmentSlot.Chest: return "chest";
-    case EquipmentSlot.Legs: return "legs";
-    case EquipmentSlot.Feet: return "feet";
-    case EquipmentSlot.Offhand: return "offhand";
-    default: return undefined;
-  }
-}
-
-/** 互换装备/副手后触发槽位粒度装备变化事件（InventoryStorage 订阅保存） */
-function triggerEquipChangeUI(bot: Player, slot: EquipmentSlot): void {
-  const name = equipSlotNameOf(slot);
-  if (name) {
-    BotEvents.botEquipSlotChanged.trigger({ botName: bot.name, slot: name, via: "swap" });
-  }
-}
 
 function getStatusIcon(record: BotRecord): string {
   if (record.death) return style("[死亡]", color.error);
@@ -76,41 +34,6 @@ function getPosSummary(record: BotRecord): string {
   }
   return `${formatPos(record.respawnPoint.location)} ${color.gold}${formatDimensionId(record.respawnPoint.dimension)} ${style("(重生点)", color.gold)}`;
 }
-
-function resolveBotEntity(record: BotRecord): Player | undefined {
-  if (!record.entityId) return undefined;
-  const entity = world.getEntity(record.entityId);
-  if (!entity?.isValid) return undefined;
-  try {
-    return entity.hasTag(BOT_TAG) ? (entity as Player) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** 检查假人是否在线且未死亡 */
-function isActive(record: BotRecord): boolean {
-  return record.online && !record.death;
-}
-
-/** 检查假人是否可交互（在线且未死亡），然后执行 */
-function requireActive(player: Player, botName: string, fn: (r: BotRecord) => void): void {
-  const r = botRegistry.get(botName);
-  if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`); return; }
-  if (!r.online || r.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
-  fn(r);
-}
-
-/** 获取假人 + 玩家双实体并安全执行装备操作 */
-function equip(player: Player, botName: string, fn: (p: Player, b: Player) => void): void {
-  const r = botRegistry.get(botName);
-  if (!r || !r.online || r.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
-  const bot = resolveBotEntity(r);
-  if (!bot) { player.sendMessage(`${color.error}无法获取假人实体`); return; }
-  system.run(() => { try { fn(player, bot); } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); } });
-}
-
-/** 使用物品/停止使用：已移回行为菜单，用普通开关控制（见 tags.ts） */
 
 // ─── 统一假人操作面板（v3，showBotPanel 主菜单） ──────
 
@@ -134,60 +57,36 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
   const tagStr = tagLabels.length > 0 ? `\n${color.accent}标签: ${color.playerName}${tagLabels.join(`${color.accent} | ${color.playerName}`)}` : "";
   const expStr = record.experience ? `\n${color.accent}经验: ${color.playerName}Lv.${record.experience.level} ${color.accent}(${record.experience.totalXp} XP)` : "";
 
+  // 发布 panelAction 领域事件（订阅方：各功能模块按 action 过滤执行）
+  const trigger = (action: BotPanelAction): void => {
+    BotUiEvent.panelAction.trigger({ playerId: player.id, botName, action });
+  };
+
   new ActionFormBuilder()
     .title(`${color.bold}${botName} ${getStatusIcon(record)}`)
     .body(`${getPosSummary(record)}${ownerStr}${tagStr}${expStr}`)
     // ── 上线/下线（置顶） ──
-    .button(record.online ? style("设为离线", color.darkGreen) : style("设为在线", color.darkGreen), () => toggleOnline(player, botName))
+    .button(record.online ? style("设为离线", color.darkGreen) : style("设为在线", color.darkGreen), () => trigger("toggleOnline"))
     // ── 传送 ──
-    .button(style("传送过去", color.darkBlue), () => tpToBot(player, botName))
+    .button(style("传送过去", color.darkBlue), () => trigger("tpToBot"))
     // ── 同步/操作 ──
-    .button(style("同步姿态", color.darkBlue), () => requireActive(player, botName, (r) => {
-      system.run(() => {
-        try {
-          tpBotToPlayer(r, player);
-          const bot = resolveBotEntity(r);
-          if (!bot) { player.sendMessage(`${color.success}已同步 ${color.playerName}${botName}`); return; }
-          const rot = bot.getRotation();
-          const dim = formatDimensionId(bot.dimension.id);
-          const loc = bot.location;
-          let lookMsg = "";
-          try {
-            const hit = bot.getBlockFromViewDirection({ maxDistance: 64 });
-            if (hit) {
-              const b = hit.block;
-              lookMsg = `${color.accent}注视目标: ${color.info}${b.typeId} ${color.accent}@ ${color.info}${Math.floor(b.location.x)} ${Math.floor(b.location.y)} ${Math.floor(b.location.z)}`;
-            }
-          } catch { /* ignore */ }
-          const sneak = bot.isSneaking ? `${color.success}潜行` : `${color.info}站立`;
-          player.sendMessage(
-            `${color.success}已同步 ${color.playerName}${botName}${color.success}\n` +
-            `${color.accent}维度: ${dim}\n` +
-            `${color.accent}坐标: ${color.info}${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}\n` +
-            `${color.accent}朝向: ${color.info}${Math.floor(rot.x)}° ${Math.floor(rot.y)}°\n` +
-            `${color.accent}体态: ${sneak}` +
-            (lookMsg ? `\n${lookMsg}` : "")
-          );
-        } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
-      });
-    }))
-    .button(style("选择主手", color.darkBlue), () => showMainhandSelector(player, botName))
+    .button(style("同步姿态", color.darkBlue), () => trigger("syncPose"))
+    .button(style("选择主手", color.darkBlue), () => trigger("selectMainhand"))
     // ── 互换/回收 ──
-    .button(style("物品互换", color.darkBlue), () => doSwap(player, botName))
-    .button(style("回收资源", color.darkBlue), () => doReclaim(player, botName))
+    .button(style("物品互换", color.darkBlue), () => trigger("swap"))
+    .button(style("回收资源", color.darkBlue), () => trigger("reclaim"))
     // ── 标签/设置 ──
-    .button(style("行为标签", color.darkGreen), () => showTagManagement(player, botName))
-    .button(style("设置重生", color.darkBlue), () => updateSpawn(player, botName))
-    .button(style("修改名字", color.darkBlue), () => doRename(player, botName))
+    .button(style("行为标签", color.darkGreen), () => trigger("openBehavior"))
+    .button(style("设置重生", color.darkBlue), () => trigger("updateSpawn"))
+    .button(style("修改名字", color.darkBlue), () => trigger("rename"))
     // ── 战斗/工具 ──
-    .button(style("投三叉戟", color.darkBlue), () => showTridentSelector(player, botName))
-    .button(style("投掷物认主", color.darkBlue), () => showTridentClaimUI(player, botName))
-    .button(style("查看数据", color.darkBlue), () => { const r = botRegistry.get(botName); if (r) sendData(player, r); })
+    .button(style("投三叉戟", color.darkBlue), () => trigger("throwTrident"))
+    .button(style("投掷物认主", color.darkBlue), () => trigger("claimTrident"))
+    .button(style("查看数据", color.darkBlue), () => trigger("viewData"))
     // ── 危险 ──
-    .button(style("击杀假人", color.darkRed), () => requireActive(player, botName, (r) => {
-      system.run(() => { try { killBot(r); player.sendMessage(`${color.success}已杀死 ${color.playerName}${botName}`); } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); } });
-    }))
-    .buttonWithIcon(style("删除假人", color.darkRed), "textures/ui/icon_trash", () => confirmDelete(player, botName))
+    .button(style("击杀假人", color.darkRed), () => trigger("kill"))
+    .buttonWithIcon(style("删除假人", color.darkRed), "textures/ui/icon_trash", () => trigger("delete"))
+    // ── UI 内部导航（不事件化） ──
     .button(style("返回列表", color.darkBlue), () => { if (onBack) onBack(); })
     .show(player);
 }
@@ -225,236 +124,4 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
   }
 
   builder.button(style("← 返回", color.darkBlue), () => { if (onMainMenu) onMainMenu(); }).show(player);
-}
-
-// ─── 操作实现 ──────────────────────────────────────────
-
-/**
- * 互换面板（ModalForm 选择项目）
- * 可选：主手 / 副手 / 装备（头/胸/腿/靴）/ 背包（含主手）
- * 所有操作在同一 system.run 内执行，避免竞态
- */
-function doSwap(player: Player, botName: string): void {
-  const r = botRegistry.get(botName);
-  if (!r || !r.online || r.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
-  const bot = resolveBotEntity(r);
-  if (!bot) { player.sendMessage(`${color.error}无法获取假人实体`); return; }
-
-  new ModalFormBuilder()
-    .title(`${color.bold}互换项目`)
-    .toggle("mainhand", "互换主手", { defaultValue: false })
-    .toggle("offhand", "互换副手", { defaultValue: false })
-    .toggle("armor", "互换装备（头/胸/腿/靴）", { defaultValue: false })
-    .toggle("inventory", "互换背包（含主手）", { defaultValue: false })
-    .submitButton("互换")
-    .show(player)
-    .then((vals) => {
-      if (!vals) return;
-      const hasInv = vals.inventory as boolean;
-      const hasMainhand = vals.mainhand as boolean;
-      const hasOffhand = vals.offhand as boolean;
-      const hasArmor = vals.armor as boolean;
-      if (!hasInv && !hasMainhand && !hasOffhand && !hasArmor) {
-        player.sendMessage(`${color.warn}未选择任何互换项目`);
-        return;
-      }
-
-      system.run(() => {
-        try {
-          const done: string[] = [];
-
-          // ── 背包（含主手）优先执行 ──
-          if (hasInv) {
-            const pInv = player.getComponent("inventory") as any;
-            const bInv = bot.getComponent("inventory") as any;
-            if (!pInv?.container || !bInv?.container) throw new Error("无法获取背包容器");
-            const size = Math.min(pInv.container.size, bInv.container.size);
-            const pItems: any[] = [];
-            const bItems: any[] = [];
-            for (let i = 0; i < size; i++) {
-              pItems.push(pInv.container.getItem(i));
-              bItems.push(bInv.container.getItem(i));
-            }
-            for (let i = 0; i < size; i++) {
-              bInv.container.setItem(i, pItems[i] ?? undefined);
-              pInv.container.setItem(i, bItems[i] ?? undefined);
-            }
-            saveCoordinator.saveInventory(r.name, collectContainerItems(bInv.container));
-            done.push("背包");
-          }
-
-          // ── 主手（背包未涵盖时才单独互换） ──
-          if (hasMainhand && !hasInv) {
-            swapMainhandWithBot(player, bot);
-            done.push("主手");
-          }
-
-          // ── 副手 & 装备（头/胸/腿/靴） ──
-          if (hasOffhand || hasArmor) {
-            const pEquip = player.getComponent("minecraft:equippable") as any;
-            const bEquip = bot.getComponent("minecraft:equippable") as any;
-            if (pEquip && bEquip) {
-              for (const slot of [EquipmentSlot.Offhand, EquipmentSlot.Head, EquipmentSlot.Chest, EquipmentSlot.Legs, EquipmentSlot.Feet]) {
-                const isOffhand = slot === EquipmentSlot.Offhand;
-                if (isOffhand && !hasOffhand) continue;
-                if (!isOffhand && !hasArmor) continue;
-                const pItem = pEquip.getEquipment(slot);
-                const bItem = bEquip.getEquipment(slot);
-                pEquip.setEquipment(slot, bItem);
-                bEquip.setEquipment(slot, pItem);
-                // 槽位粒度装备变化事件：互换副手只触发 offhand，互换装备只触发 4 槽
-                triggerEquipChangeUI(bot, slot);
-              }
-            }
-            if (hasOffhand) done.push("副手");
-            if (hasArmor) done.push("装备");
-          }
-
-          player.sendMessage(`${color.success}已与 ${color.playerName}${botName}${color.success} 互换${done.join("、")}`);
-        } catch (e: any) { player.sendMessage(`${color.error}互换失败: ${e.message}`); }
-      });
-    });
-}
-
-/**
- * 改名（含数据安全迁移）
- *
- * 改名涉及的数据迁移：
- *   1. 背包/装备 DynamicProperty 的 key 含假人名 →
- *      遍历所有带旧名前缀的 key，写入新名前缀后删除旧 key
- *   2. 在线实体的 nameTag（Player.name 只读无法修改）
- *   3. restoredBots 状态标记迁移（否则 saveBotFullState 误拦截）
- *
- * ⚠️ Minecraft API 限制：Player.name 只读，实体内部标识不变。
- *    不影响功能，仅头顶显示名和 registry key 更新。
- */
-function doRename(player: Player, botName: string): void {
-  ModalFormBuilder.showQuick(player, `${color.bold}修改名字`, (f) => {
-    f.textField("name", "新名字", { defaultValue: botName, tooltip: "自动加假人前缀 $，无需手动输入" });
-  }).then((vals) => {
-    if (!vals) return;
-    // 名字规范化：自动加假人前缀（"刷铁机" → "$刷铁机"）
-    const newName = normalizeBotName(vals.name as string);
-    if (!newName || newName === botName) return;
-    // ⚠️ 名字合法性：长度限制（生成 "(2)" 重名防护边界）；NBT 存储绑定表随
-    //    BotRecord 持久化，改名无需迁移物品数据（与旧 DP 槽位 key 无关）
-    if (!isValidBotName(newName)) { player.sendMessage(`${color.error}名字不合法：不能为空、超过 16 字符或包含 ":inv:" / ":equip:"`); return; }
-    if (botRegistry.has(newName)) { player.sendMessage(`${color.error}假人 ${color.playerName}${newName}${color.error} 已存在`); return; }
-    // 真实玩家冲突检查（双重）：输入原始名 / 规范化完整名 与在线真人同名都拒绝
-    const rawName = (vals.name as string).trim();
-    if (rawName !== newName && isNameOccupiedInWorld(rawName)) {
-      player.sendMessage(`${color.error}名字 ${color.playerName}${rawName}${color.error} 与真实玩家相同，请更换名字`);
-      return;
-    }
-    if (isNameOccupiedInWorld(newName)) {
-      player.sendMessage(`${color.error}世界中已存在同名玩家实体 ${color.playerName}${newName}${color.error}，请更换名字`);
-      return;
-    }
-
-    const r = botRegistry.get(botName);
-    if (!r) { player.sendMessage(`${color.error}假人已不存在`); return; }
-
-    // ⚠️ 在线改名会导致 Player.name（只读）与 registry key 不一致，
-    //    事件处理器（playerLeave、背包保存等）用 Player.name 查 registry 失败，
-    //    造成数据泄露或写错前缀。
-    if (r.online) { player.sendMessage(`${color.error}请先将假人下线后再改名`); return; }
-
-    system.run(() => {
-      try {
-        // ── 1. 更新实体头顶显示名 ──
-        // Player.name 只读无法修改，只改 nameTag（影响的头顶显示）
-        if (r.online && r.entityId) {
-          const entity = world.getEntity(r.entityId);
-          if (entity) entity.nameTag = newName;
-        }
-
-        // ── 2. 改名（registry 内部完成内存 key 迁移 + 恢复标记随迁 + 持久化） ──
-        // 背包/装备数据存 NBT 木桶阵列（绑定表随记录），无需迁移任何物品数据
-        botRegistry.rename(botName, newName);
-
-        player.sendMessage(`${color.success}已重命名为 ${color.playerName}${newName}`);
-      } catch (e: any) { player.sendMessage(`${color.error}改名失败: ${e.message}`); }
-    });
-  });
-}
-
-/** 上线/下线切换 */
-function toggleOnline(player: Player, botName: string): void {
-  const r = botRegistry.get(botName);
-  if (!r) return;
-  system.run(() => {
-    try {
-      if (r.online) {
-        offlineBot(r);
-        player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已下线`);
-      } else {
-        onlineBot(r)
-          .then(() => player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已上线`))
-          .catch((e: any) => player.sendMessage(`${color.error}${e.message}`));
-      }
-    } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
-  });
-}
-
-/**
- * 传送到假人（TPA）：若假人未上线则先上线再传送
- */
-function tpToBot(player: Player, botName: string): void {
-  const r = botRegistry.get(botName);
-  if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已不存在`); return; }
-
-  system.run(() => {
-    if (!r.online || r.death) {
-        // 先上线（异步等待名称唯一），完成后传送
-        onlineBot(r)
-          .then(() => {
-            player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已上线`);
-            // 等 1 tick 让实体就绪后再传送
-            system.run(() => {
-              tpPlayerToBot(player, botRegistry.get(botName)!);
-              player.sendMessage(`${color.success}已传送到 ${color.playerName}${botName}${color.success} 身边`);
-            });
-          })
-          .catch((e: any) => player.sendMessage(`${color.error}${e.message}`));
-      } else {
-        tpPlayerToBot(player, r);
-        player.sendMessage(`${color.success}已传送到 ${color.playerName}${botName}${color.success} 身边`);
-      }
-  });
-}
-
-/** 设置重生点 */
-function updateSpawn(player: Player, botName: string): void {
-  const r = botRegistry.get(botName);
-  if (!r) return;
-  system.run(() => {
-    try {
-      r.respawnPoint = {
-        location: player.location,
-        dimension: player.dimension.id,
-        rotation: player.getRotation(),
-        lookTarget: getPlayerLookTarget(player),
-      };
-      if (r.online && r.entityId) {
-        const e = world.getEntity(r.entityId);
-        if (e?.hasTag(BOT_TAG)) {
-          (e as Player).setSpawnPoint({
-            dimension: world.getDimension(r.respawnPoint.dimension),
-            x: r.respawnPoint.location.x,
-            y: r.respawnPoint.location.y,
-            z: r.respawnPoint.location.z,
-          });
-        }
-      }
-      saveCoordinator.saveRecord(r);
-      player.sendMessage(`${color.success}已更新 ${color.playerName}${botName}${color.success} 的重生点`);
-    } catch (e: any) { player.sendMessage(`${color.error}${e.message}`); }
-  });
-}
-
-/** 显示回收详情表单并执行选择性回收 */
-function doReclaim(player: Player, botName: string): void {
-  const r = botRegistry.get(botName);
-  if (!r) return;
-  showReclaimForm(player, r);
 }

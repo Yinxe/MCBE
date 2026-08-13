@@ -6,14 +6,29 @@
 //
 // ⚠️ ModalForm 背景为深色：文字只用亮色系（白/青/绿/黄），
 //    不用深色调（§7 灰、§9 深蓝等）与粗体大字号。
+// ⚠️ UI 事件驱动：面板按钮只发布 panelAction（ui/bot.ts），本文件订阅
+//    claimTrident 动作 → 弹表单。
 
-import { Player } from "@minecraft/server";
+import { Player, world } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { scanOwnTridents, claimTridents, type ClaimableTrident, type ClaimGroup } from "../features/tridentClaim";
 import { projectileTypeLabel } from "../../core/items/TridentClaimRules";
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知认主动作） ──────────
+
+/** 订阅 BOT 主菜单动作事件：投掷物认主 → 弹表单 */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "claimTrident") return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    showTridentClaimUI(player, e.botName);
+  });
+}
 
 /** 聚集概率分档阈值（组内邻居密度归一化） */
 const TIER_HIGH = 0.6;

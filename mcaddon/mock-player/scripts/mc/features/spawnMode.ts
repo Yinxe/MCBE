@@ -16,8 +16,10 @@ import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametes
 
 import type { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { finalizeBotSpawn } from "./spawn";
+import { safeReconnect } from "./pendingRespawn";
 import { globalTest } from "../bootstrap/gametestContext";
 import { color } from "@yinxe/toolkit";
 
@@ -244,4 +246,28 @@ export function switchSpawnMode(record: BotRecord, newMode: SpawnMode): void {
   record.spawnMode = newMode;
   // ⚠️ 离线路径（行为面板直接切换）无 playerJoin 兜底，必须显式写穿持久化
   saveCoordinator.saveRecord(record);
+}
+
+// ─── UI 事件订阅（行为菜单提交 → 感知强加载字段） ───────
+
+/** 订阅行为菜单提交事件：强加载开关 diff 后切换（在线假人走安全重连） */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.behaviorSubmitted.subscribe((e) => {
+    const record = botRegistry.get(e.botName);
+    if (!record) return;
+    const currentMode = record.spawnMode ?? "normal";
+    const targetMode = e.chunkload ? "chunkload" : "normal";
+    if (targetMode === currentMode) return;
+
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    const wasOnline = record.online && !record.death;
+    if (wasOnline) {
+      safeReconnect(record, {
+        onOffline: () => switchSpawnMode(record, targetMode),
+        onOnline: () => player?.sendMessage(`${color.success}已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`),
+      });
+    } else {
+      switchSpawnMode(record, targetMode);
+    }
+  });
 }

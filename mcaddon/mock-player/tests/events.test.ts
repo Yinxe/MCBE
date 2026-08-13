@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 
 import { EventSignal } from "../scripts/core/events/EventSignal";
 import { BotEvents } from "../scripts/core/events/DomainEvents";
+import { BotUiEvent } from "../scripts/core/events/UiEvents";
 
 test("EventSignal：订阅/触发/退订", () => {
   const signal = new EventSignal<number>();
@@ -161,4 +162,58 @@ test("领域事件：假人行为事件（主手切换/破坏/放置/使用/攻�
   off3();
   off4();
   off5();
+});
+
+// ─── UiEvents（UI 领域事件：面板动作 + 行为菜单提交） ──
+
+test("BotUiEvent.panelAction：发布动作 → 订阅方按 action 过滤执行，退订生效", () => {
+  const actions: string[] = [];
+  const off = BotUiEvent.panelAction.subscribe((e) => actions.push(`${e.playerId}:${e.botName}:${e.action}`));
+
+  BotUiEvent.panelAction.trigger({ playerId: "p1", botName: "$矿工", action: "kill" });
+  BotUiEvent.panelAction.trigger({ playerId: "p1", botName: "$矿工", action: "rename" });
+
+  assert.deepEqual(actions, ["p1:$矿工:kill", "p1:$矿工:rename"]);
+
+  off();
+  BotUiEvent.panelAction.trigger({ playerId: "p1", botName: "$矿工", action: "delete" });
+  assert.equal(actions.length, 2);
+});
+
+test("BotUiEvent.behaviorSubmitted：负载全字段可序列化 + 多订阅者独立接收", () => {
+  const received: string[] = [];
+  const off1 = BotUiEvent.behaviorSubmitted.subscribe((e) => received.push(`a:${e.botName}:${e.tags.length}:${e.exclusive ?? "无"}`));
+  const off2 = BotUiEvent.behaviorSubmitted.subscribe((e) => received.push(`b:${e.botName}:${e.raidMode}:${e.follow}`));
+
+  BotUiEvent.behaviorSubmitted.trigger({
+    playerId: "p1",
+    botName: "$矿工",
+    sneaking: false,
+    chunkload: true,
+    follow: false,
+    useItem: true,
+    coexist: ["mockplayer:tag:respawn"],
+    exclusive: "mockplayer:tag:vaultMode",
+    raidMode: true,
+    tags: ["mockplayer:tag:bot", "mockplayer:tag:respawn", "mockplayer:tag:vaultMode", "mockplayer:tag:raidMode"],
+  });
+
+  assert.deepEqual(received, ["a:$矿工:4:mockplayer:tag:vaultMode", "b:$矿工:true:false"]);
+
+  off1();
+  off2();
+});
+
+test("BotUiEvent.behaviorSubmitted：订阅者异常隔离（单个崩溃不影响其他）", () => {
+  const received: string[] = [];
+  BotUiEvent.behaviorSubmitted.subscribe(() => { throw new Error("boom"); });
+  const off = BotUiEvent.behaviorSubmitted.subscribe((e) => received.push(e.botName));
+
+  BotUiEvent.behaviorSubmitted.trigger({
+    playerId: "p1", botName: "$矿工", sneaking: false, chunkload: false, follow: false, useItem: false,
+    coexist: [], exclusive: undefined, raidMode: false, tags: ["mockplayer:tag:bot"],
+  });
+
+  assert.deepEqual(received, ["$矿工"]);
+  off();
 });

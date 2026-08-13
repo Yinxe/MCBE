@@ -4,6 +4,7 @@
 import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { color } from "@yinxe/toolkit";
@@ -69,6 +70,29 @@ export function resumeFollow(): void {
  */
 export function getFollowCount(): number {
   return followMap.size;
+}
+
+// ─── UI 事件订阅（行为菜单提交 → 感知跟随开关） ────────
+
+/** 订阅行为菜单提交事件：跟随开关 diff 后启动/停止（record.following 状态，不落标签） */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.behaviorSubmitted.subscribe((e) => {
+    const wantFollow = e.follow;
+    if (wantFollow === isFollowing(e.botName)) return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    system.run(() => {
+      try {
+        if (wantFollow) {
+          startFollow(e.botName, player.id);
+          player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 正在跟随你`);
+        } else {
+          stopFollow(e.botName);
+          player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已停止跟随`);
+        }
+      } catch (err: any) { player.sendMessage(`${color.error}切换跟随失败: ${err?.message ?? err}`); }
+    });
+  });
 }
 
 // ─── 内部 ──────────────────────────────────────────────

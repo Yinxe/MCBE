@@ -17,6 +17,7 @@ import { registerAllCommands } from "./mc/commands/index";
 import { registerAllEvents } from "./mc/events/index";
 import { startTagBehaviors } from "./mc/features/behavior";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
+import { registerUiDrivers } from "./mc/bootstrap/uiDrivers";
 import { runMigrations } from "./mc/bootstrap/migration";
 import { workflowManager } from "./mc/bootstrap/workflows";
 import { botRegistry, configStore } from "./mc/bootstrap/context";
@@ -57,6 +58,9 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
   console.info(`[MockPlayer] 注册事件`);
   registerAllEvents();
+
+  // 注册 UI 领域事件订阅（各功能模块感知 panelAction / behaviorSubmitted）
+  registerUiDrivers();
 
   // 从 DynamicProperty 加载所有假人记录（重启后默认 offline / 非死亡 / 无实体 ID）
   const restored = botRegistry.restoreAll();

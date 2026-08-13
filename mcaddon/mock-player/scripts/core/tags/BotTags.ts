@@ -84,3 +84,26 @@ export interface TagGroups {
 export function getTagGroups(): TagGroups {
   return { coexist: COEXIST_TAGS, standalone: STANDALONE_TAGS, exclusive: EXCLUSIVE_TAGS };
 }
+
+// ─── 行为表单标签计算（core 纯函数，可单测） ────────────
+
+/** 行为菜单表单输入（勾选的共存标签 / 互斥下拉选中 / 劫掠独立开关） */
+export interface BehaviorFormInput {
+  /** 勾选的共存标签（不含 bot 标识标签） */
+  coexist: string[];
+  /** 互斥下拉选中标签（未选 = undefined） */
+  exclusive: string | undefined;
+  /** 劫掠模式独立开关（与互斥行为可并存） */
+  raidMode: boolean;
+}
+
+/**
+ * 由行为菜单表单输入计算完整新标签集（含 bot 标识标签）。
+ * 结构与 UI 表单布局一一对应：bot 标识打底 + 共存勾选 + 互斥单选 + 劫掠独立开关。
+ */
+export function computeTagsFromBehaviorForm(input: BehaviorFormInput): string[] {
+  const tags = [TAG_BOT.value, ...input.coexist];
+  if (input.exclusive) tags.push(input.exclusive);
+  if (input.raidMode) tags.push(TAG_RAID_MODE.value);
+  return tags;
+}

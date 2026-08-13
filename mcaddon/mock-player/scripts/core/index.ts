@@ -10,6 +10,10 @@ export { EventSignal, type EventCallback } from "./events/EventSignal";
 //   import { BotEvents } from "../../core";
 //   BotEvents.botOnline.subscribe(...)
 export * from "./events/DomainEvents";
+// UI 领域事件（BOT 主菜单动作 / 行为菜单提交）：
+//   import { BotUiEvent } from "../../core";
+//   BotUiEvent.behaviorSubmitted.subscribe(...)
+export * from "./events/UiEvents";
 
 // tags
 export * from "./tags/BotTags";

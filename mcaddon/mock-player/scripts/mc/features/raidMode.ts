@@ -21,6 +21,7 @@ import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { BotEvents } from "../../core/events/DomainEvents";
 import type { RaidVictoryEvent } from "../../core/events/DomainEvents";
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { workflowRaidStarted, workflowRaidVictory } from "../../core/events/WorkflowEvents";
 import { TAG_RAID_MODE } from "../../core/tags/BotTags";
 import { BotRecord } from "../../core/model/Types";
@@ -90,6 +91,23 @@ export function startRaidMode(botName: string): void {
   const bot = resolveBotPlayer(botName);
   if (!bot || !bot.isValid) return;
   drinkNextBottle(bot, record);
+}
+
+// ─── UI 事件订阅（行为菜单提交 → 感知劫掠标签，喝第一瓶） ──
+
+/** 订阅行为菜单提交事件：标签已由 UI 先落库，含劫掠标签 → 立即喝第一瓶 */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.behaviorSubmitted.subscribe((e) => {
+    if (!e.tags.includes(TAG_RAID_MODE.value)) return;
+    const record = botRegistry.get(e.botName);
+    if (record && (!record.online || record.death)) {
+      // 假人不在线：上线/重生后自动喝第一瓶（见 botOnline/botRespawn 订阅），此处先告知操作者
+      (world.getEntity(e.playerId) as Player | undefined)?.sendMessage(
+        `${color.playerName}[劫掠] ${color.warn}${e.botName}${color.muted} 不在线，上线后将自动喝第一瓶`,
+      );
+    }
+    startRaidMode(e.botName);
+  });
 }
 
 // ─── 事件监听 ──────────────────────────────────────────

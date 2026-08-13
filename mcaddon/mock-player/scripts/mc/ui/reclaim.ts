@@ -1,13 +1,31 @@
 // ─── 回收资源预览表单 ──────────────────────────────────
+// ⚠️ UI 事件驱动：面板按钮只发布 panelAction（ui/bot.ts），本文件订阅
+//    reclaim 动作 → 弹表单 → 提交后直接调 reclaimBot。
 
-import { Player, system } from "@minecraft/server";
+import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import type { BotRecord, ItemPreview } from "../../core/model/Types";
 import type { ReclaimOptions } from "../../core/service/ReclaimPlanner";
+import { BotUiEvent } from "../../core/events/UiEvents";
+import { botRegistry } from "../bootstrap/context";
 import { getReclaimPreview, reclaimBot, type ReclaimResult } from "../features/reclaim";
 import { formatItemPreview } from "../../core/service/ReclaimPlanner";
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知回收动作） ──────────
+
+/** 订阅 BOT 主菜单动作事件：回收资源 → 弹表单 */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "reclaim") return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    const record = botRegistry.get(e.botName);
+    if (!record) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已被删除`); return; }
+    showReclaimForm(player, record);
+  });
+}
 
 // ─── 行内辅助 ──────────────────────────────────────────
 

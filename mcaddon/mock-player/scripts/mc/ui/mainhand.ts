@@ -1,12 +1,27 @@
 // ─── 主手物品选择 UI ──────────────────────────────────
 // 模态表单用下拉选择框选择假人的主手物品
+// ⚠️ UI 事件驱动：面板按钮只发布 panelAction（ui/bot.ts），本文件订阅
+//    selectMainhand 动作 → 弹表单 → 提交后直接调 setMainhandSlot。
 
-import { Player, system } from "@minecraft/server";
+import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { getMainhandOptions, setMainhandSlot } from "../features/mainhand";
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知选择主手动作） ──────
+
+/** 订阅 BOT 主菜单动作事件：选择主手 → 弹表单 */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "selectMainhand") return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    showMainhandSelector(player, e.botName);
+  });
+}
 
 /**
  * 展示主手物品选择表单。

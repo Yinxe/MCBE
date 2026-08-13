@@ -19,6 +19,8 @@ import { color } from "@yinxe/toolkit";
 
 import type { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
+import { BotUiEvent } from "../../core/events/UiEvents";
+import { botRegistry } from "../bootstrap/context";
 
 /** 使用后自动停下前的蓄力/延迟（tick）：饮用/进食需 ~32tick 才完成，取 40tick(≈2s) 一并覆盖 */
 const USE_AUTO_STOP_DELAY = 40;
@@ -128,6 +130,23 @@ export function stopUseItem(player: Player, record: BotRecord): void {
     } catch (e: any) {
       console.warn(`[MockPlayer] 停止使用异常 ${record.name}: ${e?.message ?? e}`);
       player.sendMessage(`${color.error}停止使用失败: ${e.message}`);
+    }
+  });
+}
+
+// ─── UI 事件订阅（行为菜单提交 → 感知使用物品字段） ─────
+
+/** 订阅行为菜单提交事件：使用物品勾选=使用一次 / 取消=停止（一次性动作，不落库） */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.behaviorSubmitted.subscribe((e) => {
+    const record = botRegistry.get(e.botName);
+    if (!record) return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    if (e.useItem) {
+      startUseItem(player, record);
+    } else {
+      stopUseItem(player, record);
     }
   });
 }

@@ -1,18 +1,34 @@
 // ─── 行为标签 + 帮助 ──────────────────────────────────
+// 行为菜单（ModalForm）：提交时 **① setTags 先落库**（标签首先更新，
+// record.tags 已是最新 + 实体同步 + 持久化），**② 发布 behaviorSubmitted
+// 领域事件**（负载带表单参数 + tags）——各功能模块独立订阅，感知自己
+// 感兴趣的字段执行，UI 不再直接调用任何业务动作函数。
+//
+// 表单布局（用户拍板）：自动重生置顶、强加载第 2；
+// 自动跳跃/宝库等全部在互斥行为下拉（仅选一项），劫掠模式独立开关可并存。
 
-import { Player, system } from "@minecraft/server";
+import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_AUTO_USE, TAG_CONTROL, TAG_RAID_MODE, COEXIST_TAGS, EXCLUSIVE_TAGS, getTagDef } from "../../core/tags/BotTags";
+import { TAG_BOT, TAG_AUTO_USE, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, EXCLUSIVE_TAGS, getTagDef, computeTagsFromBehaviorForm } from "../../core/tags/BotTags";
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim } from "../commands/auth";
 import { setTags } from "../features/setTags";
-import { setSneaking, startRaidMode } from "../features";
-import { switchSpawnMode, getSpawnModeInfo } from "../features/spawnMode";
-import { safeReconnect } from "../features/pendingRespawn";
-import { startFollow, stopFollow, isFollowing } from "../features/follow";
-import { startUseItem, stopUseItem } from "../features/useItem";
+import { isFollowing } from "../features/follow";
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
+
+/** 订阅 BOT 主菜单动作事件：行为标签 → 弹表单 */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "openBehavior") return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    showTagManagement(player, e.botName);
+  });
+}
 
 // ─── 行为标签管理（含 上线/潜行 快捷开关） ───────────
 
@@ -34,7 +50,7 @@ export function showTagManagement(player: Player, botName: string): void {
     }
   }
 
-  const manageableCoexist = COEXIST_TAGS.filter((t) => t.value !== TAG_BOT.value);
+  // 共存标签（除 bot 标识外）：自动重生置顶单独开关，其余（自动跳跃）进共存区
 
   // 「使用物品」是独立的普通开关（一次性使用），不进互斥行为下拉
   const behaviorExclusive = EXCLUSIVE_TAGS.filter((t) => t.value !== TAG_AUTO_USE.value);
@@ -54,46 +70,47 @@ export function showTagManagement(player: Player, botName: string): void {
   const builder = new ModalFormBuilder()
     .title(`${color.bold}行为 · ${botName}`)
     .label("current", `${color.accent}当前: ${color.black}${currentTagsText}`)
-    // ── 快捷开关 ──
+    // ── 置顶：自动重生（最常用开关） ──
+    .toggle("respawn", style("自动重生", color.playerName), {
+      defaultValue: record.tags.includes(TAG_RESPAWN.value),
+      tooltip: "死亡后自动复活到重生点",
+    })
+    // ── 第 2：强加载模式 ──
+    .toggle("chunkload", style("强加载模式", color.playerName), {
+      defaultValue: record.spawnMode === "chunkload",
+      tooltip: "区块持续加载，体态完全可操控。异地上线仅加载当前区块附近，需玩家靠近补足模拟距离；重新上线后需再次靠近。切换时自动重新上线",
+    })
+    .label("sep1", style("━━ 其他开关 ────", color.accent))
+    // ── 潜行 ──
     .toggle("sneaking", style("潜行", color.playerName), {
       defaultValue: record.isSneaking,
       tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
     })
-    .toggle("chunkload", style("强加载模式", color.playerName), {
-      defaultValue: record.spawnMode === "chunkload",
-      tooltip: "区块持续加载，但不可转向。异地上线仅加载当前区块附近，需玩家靠近补足模拟距离；重新上线后需再次靠近。切换时自动重新上线",
+    // ── 使用物品（独立普通开关，每次打开默认关） ──
+    .toggle("useItem", style("使用物品", color.accent), {
+      defaultValue: false,
+      tooltip: "勾选提交＝使用主手物品并约 2 秒后自动停下（吃完喝完）；取消提交＝立即停止。一次性动作，默认关闭",
     })
-    .label("sep1", style("━━ 标签设置 ────", color.accent))
-    // ── 跟随 ──
+    // ── 自动跳跃（共存标签） ──
+    .toggle("autoJump", style("自动跳跃", color.playerName), {
+      defaultValue: record.tags.includes(TAG_AUTO_JUMP.value),
+      tooltip: "每 3 tick 自动跳跃",
+    })
+    // ── 自动跟随（独立开关，record.following 状态） ──
     .toggle("follow", style("自动跟随", color.playerName), {
       defaultValue: isFollowing(botName),
       tooltip: "开启后假人会持续跟随你",
     })
-    // ── 使用物品（独立普通开关，每次打开默认关） ──
-    .label("sepUse", style("━━ 一次性使用 ──", color.accent))
-    .toggle("useItem", style("使用物品", color.accent), {
-      defaultValue: false,
-      tooltip: "勾选提交＝使用主手物品并约 2 秒后自动停下（吃完喝完）；取消提交＝立即停止。一次性动作，默认关闭",
+    // ── 劫掠模式（独立开关，与其它行为可共存） ──
+    .toggle("raidMode", style("劫掠模式", color.warn), {
+      defaultValue: record.tags.includes(TAG_RAID_MODE.value),
+      tooltip: "持续喝不祥之瓶刷袭击：获得村庄英雄视为本次袭击胜利，自动喝下一瓶。与其它行为可共存",
+    })
+    .label("sep2", style("━━ 互斥行为 ────", color.accent))
+    .dropdown("exclusive", style("行为（仅选一项）", color.warn), exclusiveOptions, {
+      defaultValueIndex: exclusiveIndex,
+      tooltip: "空闲/自动挖掘/放置/攻击/体态控制/宝库模式等，互斥只能选一项（使用物品是上方独立开关）",
     });
-
-  for (const tag of manageableCoexist) {
-    builder.toggle(tag.value, tag.label, {
-      defaultValue: record.tags.includes(tag.value),
-      tooltip: tag.value === "mockplayer:tag:respawn" ? "死亡后自动复活到重生点" : "每 3 tick 自动跳跃",
-    });
-  }
-
-  // ── 劫掠模式（独立开关，与其它行为可共存） ──
-  builder.toggle("raidMode", style("劫掠模式", color.warn), {
-    defaultValue: record.tags.includes(TAG_RAID_MODE.value),
-    tooltip: "持续喝不祥之瓶刷袭击：获得村庄英雄视为本次袭击胜利，自动喝下一瓶。与其它行为可共存",
-  });
-
-  const shortNames = EXCLUSIVE_TAGS.map((t) => t.value.replace("mockplayer:tag:", ""));
-  builder.dropdown("exclusive", style("行为（仅选一项）", color.warn), exclusiveOptions, {
-    defaultValueIndex: exclusiveIndex,
-    tooltip: "自动挖掘/放置/攻击/宝库模式等，互斥只能选一项（使用物品是上方独立开关）",
-  });
 
   builder.show(player).then((vals) => {
     if (!vals) return;
@@ -102,81 +119,43 @@ export function showTagManagement(player: Player, botName: string): void {
     player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
       return;
     }
-    // ── 处理快捷开关 ──
-    const wantSneaking = vals.sneaking as boolean;
-    if (wantSneaking !== currentRecord.isSneaking) {
-      system.run(() => {
-        try { setSneaking(currentRecord, wantSneaking); } catch (e: any) { player.sendMessage(`${color.error}切换潜行失败: ${e.message}`); }
-      });
-    }
 
-    // ── 处理生成模式切换 ──
-    const wantChunkload = vals.chunkload as boolean;
-    const currentMode = currentRecord.spawnMode ?? "normal";
-    const targetMode = wantChunkload ? "chunkload" : "normal";
-    if (targetMode !== currentMode) {
-      const wasOnline = currentRecord.online && !currentRecord.death;
-      if (wasOnline) {
-        safeReconnect(currentRecord, {
-          onOffline: () => switchSpawnMode(currentRecord, targetMode),
-          onOnline: () => player.sendMessage(`${color.success}已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`),
-        });
-      } else {
-        switchSpawnMode(currentRecord, targetMode);
-      }
-    }
-
-    // ── 处理跟随 ──
-    const wantFollow = vals.follow as boolean;
-    if (wantFollow !== isFollowing(botName)) {
-      system.run(() => {
-        try {
-          if (wantFollow) {
-            startFollow(botName, player.id);
-            player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 正在跟随你`);
-          } else {
-            stopFollow(botName);
-            player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已停止跟随`);
-          }
-        } catch (e: any) { player.sendMessage(`${color.error}切换跟随失败: ${e.message}`); }
-      });
-    }
-
-    // ── 处理标签 ──
+    // ── 表单 → 标签计算（core 纯函数） ──
     const exclusiveSel = vals.exclusive as number;
     const pickedExclusive = exclusiveSel > 0 ? behaviorExclusive[exclusiveSel - 1].value : undefined;
-
-    const newTags: string[] = [TAG_BOT.value];
-    for (const tag of manageableCoexist) {
-      if (vals[tag.value]) newTags.push(tag.value);
-    }
-    if (pickedExclusive) {
-      newTags.push(pickedExclusive);
-    }
-    // 劫掠模式为独立开关，可与互斥行为并存（如 劫掠 + 自动攻击 = 边喝药边反击袭击者）
-    if (vals.raidMode as boolean) {
-      newTags.push(TAG_RAID_MODE.value);
-    }
-
-    // 「使用物品」独立开关：勾选提交=使用一次（自动停下），取消提交=停止一次。
-    // 开关本身不落库（用后即停，无持续状态），每次打开行为菜单都默认关。
-    const useItemOn = vals.useItem as boolean;
-
-    system.run(() => {
-      setTags(currentRecord, newTags, player);
-
-      // 劫掠模式开启 → 立即喝第一瓶（假人在线时）
-      if (newTags.includes(TAG_RAID_MODE.value)) {
-        startRaidMode(botName);
-      }
+    const coexist: string[] = [];
+    if (vals.respawn as boolean) coexist.push(TAG_RESPAWN.value);
+    if (vals.autoJump as boolean) coexist.push(TAG_AUTO_JUMP.value);
+    const newTags = computeTagsFromBehaviorForm({
+      coexist,
+      exclusive: pickedExclusive,
+      raidMode: vals.raidMode as boolean,
     });
 
-    // 一次性动作（不在 tick 循环里）：勾选=开始使用，取消=停止使用
-    if (useItemOn) {
-      startUseItem(player, currentRecord);
-    } else {
-      stopUseItem(player, currentRecord);
-    }
+    // 一次性使用开关：勾选提交=使用一次（自动停下），取消提交=停止一次。
+    // 开关本身不落库（用后即停，无持续状态），每次打开行为菜单都默认关。
+    const useItemOn = vals.useItem as boolean;
+    const wantSneaking = vals.sneaking as boolean;
+    const wantChunkload = vals.chunkload as boolean;
+    const wantFollow = vals.follow as boolean;
+
+    system.run(() => {
+      // ── ① 标签先落库（record.tags 最新 + 实体同步 + 持久化） ──
+      setTags(currentRecord, newTags, player);
+      // ── ② 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
+      BotUiEvent.behaviorSubmitted.trigger({
+        playerId: player.id,
+        botName,
+        sneaking: wantSneaking,
+        chunkload: wantChunkload,
+        follow: wantFollow,
+        useItem: useItemOn,
+        coexist,
+        exclusive: pickedExclusive,
+        raidMode: vals.raidMode as boolean,
+        tags: newTags,
+      });
+    });
 
     player.sendMessage(`${color.success}已更新 ${color.playerName}${botName}${color.success} 的行为设置`);
   });

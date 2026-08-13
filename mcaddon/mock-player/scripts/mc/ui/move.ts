@@ -1,13 +1,26 @@
 // ─── 移动表单 + 删除确认 ──────────────────────────────
 
-import { Player, system, Vector3 } from "@minecraft/server";
+import { Player, system, world, Vector3 } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { moveBot } from "../features/move";
 import { deleteBot } from "../features/deleteBot";
 import { parseCoordinateInput } from "../../core/coords/Coordinate";
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知删除动作） ──────────
+
+/** 订阅 BOT 主菜单动作事件：删除假人 → 弹确认框（确认后直接调 deleteBot） */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "delete") return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    confirmDelete(player, e.botName);
+  });
+}
 
 /**
  * 移动至坐标表单

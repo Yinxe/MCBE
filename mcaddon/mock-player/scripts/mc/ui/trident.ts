@@ -1,16 +1,31 @@
 // ─── 三叉戟选择 UI ────────────────────────────────────
 // 模态表单展示假人背包中所有三叉戟，玩家勾选后提交投掷
 // 标签格式化在此层完成，trident.ts 只返回原始槽位数据
+// ⚠️ UI 事件驱动：面板按钮只发布 panelAction（ui/bot.ts），本文件订阅
+//    throwTrident 动作 → 弹表单。
 
-import { Player, system, ItemStack } from "@minecraft/server";
+import { Player, system, world, ItemStack } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { scanTridents, isMainhandTrident, throwTridents, type TridentSlot } from "../features/trident";
 import { formatEnchantments, formatDurability } from "../format";
 
 const SLOT_HOTBAR = 9;
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知投三叉戟动作） ──────
+
+/** 订阅 BOT 主菜单动作事件：投三叉戟 → 弹表单 */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "throwTrident") return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    showTridentSelector(player, e.botName);
+  });
+}
 
 /**
  * 根据原始槽位数据构造模态表单用的彩色标签。

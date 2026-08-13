@@ -1,10 +1,14 @@
 // ─── 恢复假人上线 ──────────────────────────────────────
 
-import { system, world } from "@minecraft/server";
+import { system, world, type Player } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
+import { color } from "@yinxe/toolkit";
 
 import { BotRecord } from "../../core/model/Types";
+import { BotUiEvent } from "../../core/events/UiEvents";
+import { botRegistry } from "../bootstrap/context";
 import { spawnBot } from "./spawnMode";
+import { offlineBot } from "./offlineBot";
 import { trackBotOnline } from "./tridentTracker";
 
 /**
@@ -32,4 +36,29 @@ export async function onlineBot(record: BotRecord): Promise<SimulatedPlayer> {
     `（${state.dimension} ${Math.floor(state.location.x)} ${Math.floor(state.location.y)} ${Math.floor(state.location.z)}）`,
   );
   return bot;
+}
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知上线/下线动作） ──────
+
+/** 订阅 BOT 主菜单动作事件：上线/下线切换 */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "toggleOnline") return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    const r = botRegistry.get(e.botName);
+    if (!r) return;
+    system.run(() => {
+      try {
+        if (r.online) {
+          offlineBot(r);
+          player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已下线`);
+        } else {
+          onlineBot(r)
+            .then(() => player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已上线`))
+            .catch((err: any) => player.sendMessage(`${color.error}${err?.message ?? err}`));
+        }
+      } catch (err: any) { player.sendMessage(`${color.error}${err?.message ?? err}`); }
+    });
+  });
 }

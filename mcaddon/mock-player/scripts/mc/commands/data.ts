@@ -1,4 +1,6 @@
 // ─── /mp:data <name> — 查看模拟玩家完整数据 ────────────
+// ⚠️ UI 事件驱动：面板按钮只发布 panelAction（ui/bot.ts），本文件订阅
+//    viewData 动作 → sendData（命令与 UI 共用）。
 
 import { Player, world, EntityInventoryComponent, EntityEquippableComponent, EquipmentSlot, CustomCommandParamType, CommandPermissionLevel } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
@@ -6,12 +8,27 @@ import { color } from "@yinxe/toolkit";
 
 import { BotRecord } from "../../core/model/Types";
 import { getTagDef } from "../../core/tags/BotTags";
+import { BotUiEvent } from "../../core/events/UiEvents";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
 import { serializeItemStack } from "../adapters/McItemCodec";
 import { getTotalXpForLevels } from "../../core/xp/XpMath";
 import { botRegistry, botStore } from "../bootstrap/context";
 import { isChunkLoaded } from "../adapters/PlayerGateway";
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知查看数据动作） ──────
+
+/** 订阅 BOT 主菜单动作事件：查看数据 → sendData */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "viewData") return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    const record = botRegistry.get(e.botName);
+    if (!record) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已被删除`); return; }
+    sendData(player, record);
+  });
+}
 
 export function sendData(player: Player, record: BotRecord): void {
   const lines: string[] = [];

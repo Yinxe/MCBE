@@ -4,9 +4,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  TAG_BOT, TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_JUMP, TAG_CONTROL, TAG_VAULT_MODE, TAG_RAID_MODE,
+  TAG_BOT, TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_CONTROL, TAG_VAULT_MODE, TAG_RAID_MODE, TAG_RESPAWN,
   COEXIST_TAGS, EXCLUSIVE_TAGS, STANDALONE_TAGS, ALL_TAGS, DEFAULT_TAGS,
-  EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG, getTagDef, resolveTag, getTagGroups,
+  EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG, getTagDef, resolveTag, getTagGroups, computeTagsFromBehaviorForm,
 } from "../scripts/core/tags/BotTags";
 
 test("标签分组：可共存/互斥/独立开关互不重叠", () => {
@@ -69,4 +69,26 @@ test("getTagGroups：三分组结构与定义一致", () => {
   assert.equal(groups.coexist.length, COEXIST_TAGS.length);
   assert.equal(groups.standalone.length, STANDALONE_TAGS.length);
   assert.equal(groups.exclusive.length, EXCLUSIVE_TAGS.length);
+});
+
+// ─── computeTagsFromBehaviorForm（行为菜单表单 → 标签集） ──
+
+test("computeTagsFromBehaviorForm：bot 标识打底 + 共存勾选", () => {
+  const tags = computeTagsFromBehaviorForm({ coexist: [TAG_RESPAWN.value, TAG_AUTO_JUMP.value], exclusive: undefined, raidMode: false });
+  assert.deepEqual(tags, [TAG_BOT.value, TAG_RESPAWN.value, TAG_AUTO_JUMP.value]);
+});
+
+test("computeTagsFromBehaviorForm：互斥单选追加", () => {
+  const tags = computeTagsFromBehaviorForm({ coexist: [], exclusive: TAG_VAULT_MODE.value, raidMode: false });
+  assert.deepEqual(tags, [TAG_BOT.value, TAG_VAULT_MODE.value]);
+});
+
+test("computeTagsFromBehaviorForm：劫掠独立开关与互斥并存", () => {
+  const tags = computeTagsFromBehaviorForm({ coexist: [TAG_RESPAWN.value], exclusive: TAG_AUTO_ATTACK.value, raidMode: true });
+  assert.deepEqual(tags, [TAG_BOT.value, TAG_RESPAWN.value, TAG_AUTO_ATTACK.value, TAG_RAID_MODE.value]);
+});
+
+test("computeTagsFromBehaviorForm：全空表单仅 bot 标识", () => {
+  const tags = computeTagsFromBehaviorForm({ coexist: [], exclusive: undefined, raidMode: false });
+  assert.deepEqual(tags, [TAG_BOT.value]);
 });

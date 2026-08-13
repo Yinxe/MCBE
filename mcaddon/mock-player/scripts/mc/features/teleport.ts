@@ -1,12 +1,15 @@
 // ─── 传送 ──────────────────────────────────────────────
 
-import { Player, world } from "@minecraft/server";
+import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
+import { color } from "@yinxe/toolkit";
 
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
-import { saveCoordinator } from "../bootstrap/context";
+import { BotUiEvent } from "../../core/events/UiEvents";
+import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../adapters/PoseGateway";
+import { onlineBot } from "./onlineBot";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
   if (!record.online || record.death) {
@@ -39,4 +42,50 @@ export function tpBotToPlayer(record: BotRecord, player: Player): void {
   setPose(bot, player.getRotation(), lookTarget);
   savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);
   saveCoordinator.saveRecord(record);
+}
+
+// ─── UI 事件订阅（BOT 主菜单 → 感知传送/同步动作） ──────
+
+/** 订阅 BOT 主菜单动作事件：tpToBot=传送到假人身边（离线先上线）；syncPose=假人拉到身边+姿态同步 */
+export function registerUiSubscriptions(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+
+    // ── 传送过去：离线先上线，等 1 tick 实体就绪后传送 ──
+    if (e.action === "tpToBot") {
+      const r = botRegistry.get(e.botName);
+      if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已不存在`); return; }
+      system.run(() => {
+        if (!r.online || r.death) {
+          onlineBot(r)
+            .then(() => {
+              player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已上线`);
+              system.run(() => {
+                tpPlayerToBot(player, botRegistry.get(e.botName)!);
+                player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);
+              });
+            })
+            .catch((err: any) => player.sendMessage(`${color.error}${err?.message ?? err}`));
+        } else {
+          tpPlayerToBot(player, r);
+          player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);
+        }
+      });
+      return;
+    }
+
+    // ── 同步姿态：假人拉到玩家身边 + 复制姿态/朝向 ──
+    if (e.action === "syncPose") {
+      const r = botRegistry.get(e.botName);
+      if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已不存在`); return; }
+      if (!r.online || r.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
+      system.run(() => {
+        try {
+          tpBotToPlayer(r, player);
+          player.sendMessage(`${color.success}已同步 ${color.playerName}${e.botName}${color.success} 姿态与朝向`);
+        } catch (err: any) { player.sendMessage(`${color.error}${err?.message ?? err}`); }
+      });
+    }
+  });
 }
