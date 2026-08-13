@@ -262,9 +262,14 @@ Selector（每 tick 重评）
   - tridentTracker 订阅 botOnline/botRespawn → rebindBotTridents（夺回）；botOffline → releaseBotTridents（回退第一任）
   - 劫掠上线/重生续喝由 AI 引擎接管（树每 10 tick 按标签驱动，见编排层章节）
 
-### 劫掠模式（`mc/tasks/McRaidPorts.ts` + `core/tasks/RaidTask.ts`，纯事件驱动 + 一次性卡死提醒）
+### 劫掠模式（`mc/tasks/McRaidPorts.ts` + `core/tasks/RaidTask.ts`，纯事件驱动 + 一次性提醒）
 - 事件链：喝瓶（树）→不祥之兆（effectAdd → raidStarted 信号）→袭击胜利→村庄英雄（effectAdd → raidVictory 信号 + lastHeroTick）→树胜利处理（叠加给主人→移除英雄→自然喝下一瓶）
-- ⚠️ **语义（用户拍板 713e8da）：纯事件驱动，零巡检/零恢复机制**——袭击等待靠事件唤醒（树条件全 false 时等待分支无副作用）；卡死提醒 = 一次性 runTimeout（1 分钟后仍带兆头仅发消息，不自动恢复）
+- ⚠️ **基岩版机制**：不祥之兆只持续 **30 秒**（0:30）——带兆头进入村庄才转化为袭击之兆（30 秒后袭击开始）；**30 秒内没进村庄 → 效果结束、袭击不触发**
+- **一次性提醒双检查**（只发消息，零恢复动作）：
+  - `scheduleBadOmenEndCheck`（喝瓶后 600 tick）：bad_omen 已结束且**未转化**（convertedToRaidTick 判定）→ 通知主人"**假人不在村庄范围内**，请带到村庄"
+  - `scheduleRaidStuckCheck`（喝瓶后 1200 tick）：仍带 raid_omen（转化后袭击未开始）→ 提醒"请确认假人在村庄内且非和平难度"
+- ⚠️ **语义（用户拍板 713e8da）：纯事件驱动，零巡检/零恢复机制**——袭击等待靠事件唤醒（树条件全 false 时等待分支无副作用）
+- 喝瓶周期（用户规格 1.1.60）：**只在启动/胜利后喝**——黑板 `raidWaiting` 标记（drink 成功写、handleVictory 清），兆头消失也不重复喝
 - 胜利处理幂等：`handledHeroTick` 防 removeEffect 失败重复叠加；喝瓶前防御清理残留村庄英雄（断 effectAdd 检测链兜底）
 - 无药水自动关模式（disableRaidMode：移除标签即停用，树随后被引擎对账清理）
 - 村庄英雄清除前 `grantVillageHeroToOwner` 叠加给主人：剩余时长相加、等级取高（`getEffect` 读 tick 后显式相加，不依赖引擎刷新语义）；主人不在线则不转移

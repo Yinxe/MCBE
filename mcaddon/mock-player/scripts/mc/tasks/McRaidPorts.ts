@@ -37,6 +37,8 @@ const lastVictoryTick = new Map<string, number>();
 const lastHeroTick = new Map<string, number>();
 /** 已处理的英雄事件 tick（handleVictory 幂等：防 removeEffect 失败重复叠加） */
 const handledHeroTick = new Map<string, number>();
+/** 已转化为袭击之兆的 tick（不祥之兆结束检查防误报：转化后袭击酝酿/进行中无兆头 ≠ 不在村庄） */
+const convertedToRaidTick = new Map<string, number>();
 /** 通知节流（tick，≈10 秒） */
 const notifyAt = new Map<string, number>();
 const NOTIFY_COOLDOWN_TICKS = 200;
@@ -65,6 +67,7 @@ export function cleanupRaidMode(botName: string): void {
   lastVictoryTick.delete(botName);
   lastHeroTick.delete(botName);
   handledHeroTick.delete(botName);
+  convertedToRaidTick.delete(botName);
   drinking.delete(botName);
 }
 
@@ -90,6 +93,9 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
     if (!kind) return;
 
     if (kind === "raid-omen") {
+      // ⚠️ 转化时刻记录：不祥之兆结束检查据此区分"已转化（袭击酝酿/进行中）"
+      //    与"未转化（不在村庄）"——袭击开始后 raid_omen 移除但无兆头 ≠ 不在村庄
+      convertedToRaidTick.set(name, system.currentTick);
       const loc = e.entity.location;
       console.info(
         `[MockPlayer] ${name} 袭击之兆 → 袭击触发点 (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`,
@@ -101,6 +107,7 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
     if (kind === "bad-omen") {
       BotEvents.raidStarted.trigger({ botName: name, amplifier: amp });
       scheduleRaidStuckCheck(name);
+      scheduleBadOmenEndCheck(name); // 30 秒后检查是否转化为袭击之兆（不在村庄提醒）
       return;
     }
 
@@ -278,7 +285,44 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
 
 // ─── 卡死提醒（一次性，非轮询） ──────────────────────────
 
-/** 喝瓶后 1 分钟仍带不祥之兆 → 袭击未触发，提醒玩家（只发消息，零恢复动作） */
+/** 不祥之兆持续时间（tick）：基岩版 bad_omen 30 秒 = 600 tick（0:30） */
+const BAD_OMEN_DURATION_TICKS = 600;
+
+/**
+ * 不祥之兆结束检查（一次性，非轮询）：喝瓶 30 秒后——
+ * bad_omen 已自然结束且**未转化为袭击之兆** = 假人不在村庄范围
+ * （基岩版机制：带不祥之兆进入村庄才转化为袭击之兆；30 秒内没进村庄
+ *   则效果结束、袭击不触发）→ **通知主人"假人不在村庄范围内"**。
+ * ⚠️ 只发消息，零恢复动作（对齐"一次性卡死提醒"语义）；与 raid_omen
+ *    残留检查（scheduleRaidStuckCheck）互补。
+ */
+function scheduleBadOmenEndCheck(botName: string): void {
+  const scheduledAt = system.currentTick;
+
+  system.runTimeout(() => {
+    try {
+      const record = botRegistry.get(botName);
+      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+      const bot = resolveBotPlayer(botName);
+      if (!bot || !bot.isValid) return;
+
+      // 已转化（本次喝瓶之后出现过袭击之兆）→ 袭击酝酿/进行中 → 正常，跳过
+      if ((convertedToRaidTick.get(botName) ?? 0) > scheduledAt) return;
+      // 兆头还在（喝瓶被打断等异常）→ 跳过，交给 raid_omen 残留检查
+      if (hasEffect(bot, BAD_OMEN) || hasEffect(bot, RAID_OMEN)) return;
+
+      // bad_omen 已结束且未转化 → 30 秒内没进村庄 → 通知主人
+      world.sendMessage(
+        `${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName} 不祥之兆已结束但未转化为袭击之兆——` +
+          `${color.muted}假人不在村庄范围内，袭击未触发。请把假人带到村庄后重开劫掠模式`,
+      );
+    } catch (err) {
+      console.warn(`[MockPlayer] 劫掠不在村庄检查异常: ${err}`);
+    }
+  }, BAD_OMEN_DURATION_TICKS);
+}
+
+/** 喝瓶后 1 分钟仍带不祥/袭击之兆 → 袭击未触发，提醒玩家（只发消息，零恢复动作） */
 function scheduleRaidStuckCheck(botName: string): void {
   const scheduledAt = system.currentTick;
 
