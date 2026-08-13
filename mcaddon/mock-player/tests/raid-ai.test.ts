@@ -58,24 +58,37 @@ function makeHarness(ports = new FakeRaidPorts()): { ports: FakeRaidPorts; tick:
   };
 }
 
-// ─── 胜利 → 喝瓶闭环 ─────────────────────────────────────
+// ─── 启动喝瓶 → 周期等待 → 胜利后喝下一瓶（闭环） ────────
 
-test("闭环：村庄英雄事件 → 胜利处理 → 效果移除 → 下 tick 自然喝下一瓶", async () => {
+test("闭环：启动喝第一瓶 → 周期等待（兆头消失也不重复喝）→ 胜利 → 清标记 → 喝下一瓶", async () => {
   const { ports, tick } = makeHarness();
 
-  // 英雄事件（effectAdd 已写 lastHeroEventTick）
-  ports.knowledge.effects.villageHero = true;
-  ports.knowledge.lastHeroEventTick = 100;
-
-  // 胜利处理（handleVictory 复位效果）
+  // 启动（黑板空）：无兆头 + 有药水 → 喝第一瓶
   assert.equal(await tick(100), Status.Success);
-  assert.equal(ports.victoryCalls, 1);
-  assert.equal(ports.drinkCalls, 0); // 本轮只处理胜利
+  assert.equal(ports.drinkCalls, 1);
 
-  // 下 tick：无兆头 + 有药水 → 喝下一瓶（自然闭环，无需事件链驱动）
+  // 喝瓶后获得不祥之兆（袭击酝酿）→ 不喝
+  ports.knowledge.effects.badOmen = true;
   assert.equal(await tick(110), Status.Success);
   assert.equal(ports.drinkCalls, 1);
-  assert.equal(ports.victoryCalls, 1); // 不重复处理
+
+  // ⚠️ 核心修复：兆头过期消失（袭击未触发/被打断）→ 周期等待中，**不重复喝**
+  ports.knowledge.effects.badOmen = false;
+  assert.equal(await tick(120), Status.Success);
+  assert.equal(await tick(130), Status.Success);
+  assert.equal(ports.drinkCalls, 1); // 修复前会反复喝第 2 瓶
+  assert.ok(ports.idleReasons.every((r) => r === "waiting")); // 静默等待（不通知无药水）
+
+  // 袭击胜利：村庄英雄事件 → 胜利处理（清周期标记）
+  ports.knowledge.effects.villageHero = true;
+  ports.knowledge.lastHeroEventTick = 140;
+  assert.equal(await tick(140), Status.Success);
+  assert.equal(ports.victoryCalls, 1);
+  assert.equal(ports.drinkCalls, 1); // 本轮只处理胜利
+
+  // 下 tick：胜利处理完成 → 自然喝下一瓶
+  assert.equal(await tick(150), Status.Success);
+  assert.equal(ports.drinkCalls, 2); // 胜利后才喝第 2 瓶
 });
 
 // ─── 缺药水通知 ──────────────────────────────────────────

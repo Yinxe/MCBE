@@ -5,16 +5,19 @@
 //
 // 决策语义（根 Selector 每 tick 重评，无记忆）：
 //   优先级：
-//     1. 胜利处理：假人带村庄英雄效果 → 计胜 + 叠加给主人 + 移除英雄
-//     2. 喝瓶：无坏兆/袭击兆 + 背包有不祥之瓶 → 喝瓶（协程链）
-//     3. 等待：袭击中静默等待 / 无药水通知（diagnoseRaidIdle）
-//   ⚠️ 语义约束（用户拍板 713e8da）：**纯事件驱动 + 一次性卡死提醒**——
-//     袭击等待靠事件唤醒（效果实时查询，树条件全 false 时等待分支无副作用），
-//     卡死提醒由 mc 事件层一次性 schedule（只发消息），**不引入任何巡检/恢复机制**。
+//     1. 胜利处理：假人带村庄英雄效果 → 计胜 + 叠加给主人 + 移除英雄（清周期标记）
+//     2. 喝瓶：**只在启动时与胜利后**——无兆头 + 无英雄 + 有药水 + 黑板无
+//        raidWaiting 标记（本周期已喝过 → 等袭击/胜利，兆头消失也不重复喝）
+//     3. 等待：袭击中/周期等待静默；无药水通知（diagnoseRaidIdle）
+//   黑板键：raidWaiting（本周期已喝过，胜利处理时清除 → 允许下一瓶）。
+//   ⚠️ 语义约束（用户拍板 713e8da + 1.1.60 补充）：**纯事件驱动 + 一次性卡死
+//     提醒**——袭击等待靠事件唤醒（效果实时查询，树条件全 false 时等待分支
+//     无副作用），卡死提醒由 mc 事件层一次性 schedule（只发消息），
+//     **不引入任何巡检/恢复机制**。
 //   ⚠️ 无药水自动关模式（原 raidMode 语义）：drinkBottle 返回 "no-bottle" 时
 //     端口内移除劫掠标签（自动停用），树随后被引擎对账清理。
 
-import { Action, BehaviorTree, Condition, Selector, Sequence, Status } from "../ai";
+import { Action, BehaviorTree, Condition, Selector, Sequence, Status, type AiContext } from "../ai";
 
 // ─── 感知快照 ────────────────────────────────────────────
 
@@ -34,7 +37,7 @@ export interface RaidKnowledge {
   lastHeroEventTick: number;
 }
 
-/** 等待原因（idle 通知用；"waiting"= 袭击中/待处理，静默等待） */
+/** 等待原因（idle 通知用；"waiting"= 袭击中/周期等待，静默等待） */
 export type RaidIdleReason = "no-bottle" | "waiting";
 
 /** 喝瓶结果 */
@@ -57,9 +60,16 @@ export interface RaidPorts {
 /** 胜利处理判定窗口（tick）：英雄事件后多久内必须处理（引擎周期 10 tick 的余量） */
 export const VICTORY_WINDOW_TICKS = 20;
 
+// ─── 黑板键 ──────────────────────────────────────────────
+
+/** 本周期已喝过不祥之瓶（等待袭击/胜利；胜利处理时清除 → 允许下一瓶） */
+const BB_WAITING_RAID = "raidWaiting";
+
 /**
  * 等待原因诊断（core 纯函数，可单测）：开不了瓶时区分
  * "背包没有不祥之瓶"（通知）与"袭击进行中/胜利待处理"（静默等待）。
+ * ⚠️ 周期等待（已喝过）由 idle 动作结合黑板 raidWaiting 判定为 waiting，
+ *    本函数只负责无标记时的诊断。
  */
 export function diagnoseRaidIdle(knowledge: RaidKnowledge): RaidIdleReason {
   const { badOmen, raidOmen, villageHero } = knowledge.effects;
@@ -82,42 +92,62 @@ export function createRaidTaskTree(ports: RaidPorts): BehaviorTree {
     return k.effects.villageHero && ctx.tick - k.lastHeroEventTick <= VICTORY_WINDOW_TICKS;
   });
 
-  /** 可喝瓶：无坏兆/袭击兆（一场袭击已在酝酿/进行则不重复喝）且背包有药水 */
+  /**
+   * 可喝瓶（用户规格 1.1.60：**只在启动时与胜利后喝**）：
+   *   无坏兆/袭击兆（一场袭击已在酝酿/进行则不重复喝）
+   *   + 背包有药水
+   *   + 黑板无 raidWaiting（本周期已喝过 → 等袭击/胜利，兆头消失也不重复喝）
+   * ⚠️ 不拦村庄英雄：正常流程胜利处理分支（更高优先级）窗口内先处理并移除英雄；
+   *    事件丢失（窗口过期）时残留英雄由喝瓶前的端口防御清理兜底（原 raidMode
+   *    语义，防 effectAdd 检测链断裂卡死）。
+   */
   const canDrink = new Condition((ctx) => {
     const k = ports.sense(ctx.botName);
-    return !k.effects.badOmen && !k.effects.raidOmen && k.bottles > 0;
+    return (
+      !k.effects.badOmen &&
+      !k.effects.raidOmen &&
+      k.bottles > 0 &&
+      !ctx.blackboard.has(BB_WAITING_RAID)
+    );
   });
 
   // ── 动作节点 ─────────────────────────────────────────
 
-  /** 胜利处理：计胜 + 叠加英雄给主人 + 移除英雄（处理完效果消失，下 tick 不再触发） */
+  /** 胜利处理：计胜 + 叠加英雄给主人 + 移除英雄 + **清周期标记（允许下一瓶）** */
   const handleVictory = new Action((ctx) => {
     ports.handleVictory(ctx.botName);
+    ctx.blackboard.delete(BB_WAITING_RAID);
     return Status.Success;
   });
 
-  /** 喝瓶：协程链（互斥/换瓶/按住饮用）；无瓶 → 端口自动关模式，树降级 */
+  /** 喝瓶：协程链（互斥/换瓶/按住饮用）；成功 → 记周期标记（进入等待）；
+   *  无瓶 → 端口自动关模式，树降级 */
   const drink = new Action(async (ctx) => {
     const result = await ports.drinkBottle(ctx.botName);
-    return result === "drunk" ? Status.Success : Status.Failure;
+    if (result !== "drunk") return Status.Failure;
+    ctx.blackboard.set(BB_WAITING_RAID, true); // 本周期已喝 → 等袭击/胜利
+    return Status.Success;
   });
 
-  /** 等待：袭击中静默；无药水通知（诊断在 core，翻译在端口） */
-  const idle = new Action((ctx) => {
-    ports.idle(ctx.botName, diagnoseRaidIdle(ports.sense(ctx.botName)));
+  /** 等待：周期等待/袭击中静默；无药水通知（诊断在 core，翻译在端口） */
+  const idle = new Action((ctx: AiContext) => {
+    const waiting = ctx.blackboard.has(BB_WAITING_RAID);
+    const reason = waiting ? "waiting" : diagnoseRaidIdle(ports.sense(ctx.botName));
+    ports.idle(ctx.botName, reason);
     return Status.Success;
   });
 
   // ── 树装配（优先级从高到低） ─────────────────────────
 
   const root = new Selector([
-    // 1. 胜利处理（村庄英雄效果 → 叠加给主人 + 移除 + 自然进入下一瓶）
+    // 1. 胜利处理（村庄英雄效果 → 叠加给主人 + 移除 + 清周期标记 → 下 tick 自然喝下一瓶）
     new Sequence([victoryPending, handleVictory]),
-    // 2. 喝瓶（无兆头 + 有药水）
+    // 2. 喝瓶（启动/胜利后：无兆头 + 无英雄 + 有药水 + 未在周期等待）
     new Sequence([canDrink, drink]),
-    // 3. 等待（袭击中静默 / 无药水通知）
+    // 3. 等待（袭击中/周期等待静默 / 无药水通知）
     idle,
   ]);
 
   return new BehaviorTree(root);
 }
+
