@@ -27,7 +27,6 @@ export { scanTridents, isMainhandTrident, throwTridents } from "./trident";
 export { getMainhandOptions, setMainhandSlot } from "./mainhand";
 export { startUseItem, stopUseItem } from "./useItem";
 export { startRaidMode } from "../workflows/raidFlow";
-export { runVaultCycle } from "../workflows/vaultFlow";
 export {
   spawnBot,
   switchSpawnMode,
