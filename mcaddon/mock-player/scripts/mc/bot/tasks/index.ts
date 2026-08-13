@@ -3,5 +3,9 @@
 // 实现 BotTask：start/tick/isDone/cancel）+ 在此导出一行。
 // 任务经 MockBot.startTask(task, onComplete?) 挂到假人独立引擎。
 
-export { navigateToTask, type NavigateToTaskOptions } from "./NavigateToTask";
+export {
+  navigateToTask,
+  type NavigateOutcome,
+  type NavigateToTaskOptions,
+} from "./NavigateToTask";
 export { followTask, pauseFollow, resumeFollow } from "./FollowTask";

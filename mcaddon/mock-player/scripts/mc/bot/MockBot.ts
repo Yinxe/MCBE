@@ -10,6 +10,7 @@ import {
   Direction,
   ItemStack,
   Player,
+  system,
   Vector3,
   world,
 } from "@minecraft/server";
@@ -42,6 +43,7 @@ import { startUseItem, stopUseItem } from "../features/useItem";
 import { tpPlayerToBot, tpBotToPlayer } from "../features/teleport";
 import { sendData } from "../commands/data";
 import { switchSpawnMode, type SpawnMode } from "../features/spawnMode";
+import { navigateToTask, type NavigateToTaskOptions } from "./tasks";
 import { installDefaultCapabilities } from "./capabilities";
 
 /** 引擎执行上下文（mc 实现：tags 读 record、tick 读引擎计数） */
@@ -398,6 +400,72 @@ export class MockBot {
   /** 当前活跃任务 id */
   get activeTaskId(): string | undefined {
     return this.engine.activeTaskId;
+  }
+
+  // ── 异步（Promise 化，await 顺序写流程；永不 reject） ──
+
+  /** 延迟 ticks 后 resolve（Promise 版 runTimeout；如等待重连/交互动画） */
+  waitTicks(ticks: number): Promise<void> {
+    return new Promise((resolve) => {
+      system.runTimeout(() => resolve(), ticks);
+    });
+  }
+
+  /**
+   * 每 intervalTicks 检查一次条件，成立 → true；超过 timeoutTicks → false。
+   * ⚠️ 轮询等待只用于轻量条件（实体状态等）；高频事件场景仍优先事件驱动。
+   */
+  waitUntil(
+    condition: () => boolean,
+    opts: { intervalTicks?: number; timeoutTicks: number },
+  ): Promise<boolean> {
+    const intervalTicks = opts.intervalTicks ?? 10;
+    const maxChecks = Math.max(1, Math.floor(opts.timeoutTicks / intervalTicks));
+    let checks = 0;
+    return new Promise((resolve) => {
+      const check = (): void => {
+        if (condition()) {
+          resolve(true);
+          return;
+        }
+        checks++;
+        if (checks >= maxChecks) {
+          resolve(false);
+          return;
+        }
+        system.runTimeout(check, intervalTicks);
+      };
+      system.runTimeout(check, intervalTicks);
+    });
+  }
+
+  /**
+   * 导航到坐标附近并等待结果（NavigateToTask + Promise 包装）：
+   * 到达 → {ok:true}；超时/实体失效/任务占用 → {ok:false, reason}。
+   * 永不 reject，调用方 await 后检查 ok。
+   */
+  navigateNearAsync(
+    target: Vector3,
+    opts: Omit<NavigateToTaskOptions, "onFinish" | "onArrive"> = {},
+  ): Promise<{ ok: boolean; reason?: "timeout" | "entity-lost" | "busy" }> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (ok: boolean, reason?: "timeout" | "entity-lost" | "busy"): void => {
+        if (settled) return;
+        settled = true;
+        resolve({ ok, reason });
+      };
+      const task = navigateToTask(this, target, {
+        ...opts,
+        onFinish: (outcome) => {
+          if (outcome === "arrived") done(true);
+          else done(false, outcome);
+        },
+      });
+      if (!this.startTask(task)) {
+        done(false, "busy"); // 已有活跃任务（跟随/导航等），互斥
+      }
+    });
   }
 
   // ── 私有 ────────────────────────────────────────────
