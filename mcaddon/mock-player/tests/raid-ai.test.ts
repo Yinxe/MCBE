@@ -9,7 +9,8 @@ import assert from "node:assert/strict";
 
 import { Blackboard, Status, type AiContext } from "../scripts/core/ai";
 import {
-  createRaidTaskTree, VICTORY_WINDOW_TICKS,
+  createRaidTaskTree, VICTORY_WINDOW_TICKS, estimateRaidPhase, initialRaidPhaseState,
+  raidStarted, raidVictory, raidPhase,
   type RaidDrinkResult, type RaidIdleReason, type RaidKnowledge, type RaidPorts,
 } from "../scripts/core/tasks/RaidTask";
 
@@ -138,4 +139,97 @@ test("事件窗口过期：英雄效果残留但事件时刻过久 → 不重复
   assert.equal(ports.victoryCalls, 0); // 不重复处理
   assert.equal(ports.drinkCalls, 1); // 无兆头 → 走喝瓶（端口内会防御清理残留英雄）
   assert.equal(VICTORY_WINDOW_TICKS, 20); // 窗口 = 引擎周期 10 tick 的余量
+});
+
+// ─── 劫掠领域事件（内聚 RaidEvents） ─────────────────────
+
+test("RaidEvents：raidStarted/raidVictory/raidPhase 信号可触发并携带序列化负载", () => {
+  const started: string[] = [];
+  const victory: string[] = [];
+  const phases: string[] = [];
+  const off1 = raidStarted.subscribe((e) => started.push(`${e.botName}:${e.amplifier}`));
+  const off2 = raidVictory.subscribe((e) => victory.push(`${e.botName}:${e.amplifier}`));
+  const off3 = raidPhase.subscribe((e) => phases.push(`${e.botName}:${e.phase}:${e.detail}`));
+
+  raidStarted.trigger({ botName: "bot1", amplifier: 2 });
+  raidVictory.trigger({ botName: "bot1", amplifier: 1 });
+  raidPhase.trigger({ botName: "bot1", phase: "wave", detail: "波次 1 生成（检测到 4 名袭击者）" });
+
+  assert.deepEqual(started, ["bot1:2"]);
+  assert.deepEqual(victory, ["bot1:1"]);
+  assert.deepEqual(phases, ["bot1:wave:波次 1 生成（检测到 4 名袭击者）"]);
+
+  off1();
+  off2();
+  off3();
+});
+
+// ─── 袭击阶段估算（纯函数） ──────────────────────────────
+
+test("阶段估算：0→N 新一波生成（冷却后新生物 = 下一波已刷出）", () => {
+  // 袭击开始后进入冷却（第一波读条）
+  let state = initialRaidPhaseState();
+  state.phase = "cooling";
+  state.lastClearedTick = 1000;
+
+  // 第一波出现（0→4）
+  let r = estimateRaidPhase(state, 4, 1300);
+  assert.equal(r.state.phase, "wave");
+  assert.equal(r.state.wave, 1);
+  assert.match(r.change ?? "", /波次 1 生成（检测到 4 名袭击者）/);
+
+  // 波内数量变化（4→3）：保持 wave，无阶段变化
+  state = r.state;
+  r = estimateRaidPhase(state, 3, 1350);
+  assert.equal(r.state.phase, "wave");
+  assert.equal(r.change, undefined);
+});
+
+test("阶段估算：N→0 本波清完进入冷却（击杀时间不定，以生物为准）", () => {
+  let state = initialRaidPhaseState();
+  state.phase = "wave";
+  state.wave = 1;
+  state.lastRaiderCount = 3;
+
+  const r = estimateRaidPhase(state, 0, 2000);
+  assert.equal(r.state.phase, "cooling");
+  assert.match(r.change ?? "", /波次 1 清完，波间冷却 15 秒/);
+  assert.equal(r.state.lastClearedTick, 2000);
+});
+
+test("阶段估算：冷却后 0→N = 下一波生成（未胜利前出现新生物）", () => {
+  let state = initialRaidPhaseState();
+  state.phase = "cooling";
+  state.wave = 1;
+  state.lastClearedTick = 2000;
+  state.lastRaiderCount = 0;
+
+  const r = estimateRaidPhase(state, 5, 2400);
+  assert.equal(r.state.phase, "wave");
+  assert.equal(r.state.wave, 2);
+  assert.match(r.change ?? "", /波次 2 生成（检测到 5 名袭击者）/);
+});
+
+test("阶段估算：冷却超时无新波次与胜利 → 可能失败/停战（一次性提示）", () => {
+  let state = initialRaidPhaseState();
+  state.phase = "cooling";
+  state.wave = 3; // 最后一波清完
+  state.lastClearedTick = 1000;
+  state.lastRaiderCount = 0;
+
+  // 45 秒（900 tick）后仍无变化 → 提示
+  const r = estimateRaidPhase(state, 0, 1000 + 300 * 3 + 1);
+  assert.match(r.change ?? "", /可能袭击失败（村民死光\/床毁）或已停战/);
+  assert.equal(r.state.coolingHinted, true);
+
+  // 已提示过 → 不再重复
+  const r2 = estimateRaidPhase(r.state, 0, 5000);
+  assert.equal(r2.change, undefined);
+});
+
+test("阶段估算：victory 等事件驱动阶段不扫描估算", () => {
+  const state = { ...initialRaidPhaseState(), phase: "victory" as const };
+  const r = estimateRaidPhase(state, 5, 3000);
+  assert.equal(r.change, undefined); // 胜利后不再估算波次
+  assert.equal(r.state.phase, "victory");
 });

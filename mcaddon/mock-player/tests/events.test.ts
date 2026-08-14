@@ -48,22 +48,6 @@ test("EventSignal：同回调重复订阅去重（Set 语义）", () => {
   assert.equal(count, 1);
 });
 
-test("领域事件：raidStarted/raidVictory 信号可触发并携带序列化负载", () => {
-  const started: string[] = [];
-  const victory: string[] = [];
-  const off1 = BotEvents.raidStarted.subscribe((e) => started.push(`${e.botName}:${e.amplifier}`));
-  const off2 = BotEvents.raidVictory.subscribe((e) => victory.push(`${e.botName}:${e.amplifier}`));
-
-  BotEvents.raidStarted.trigger({ botName: "bot1", amplifier: 2 });
-  BotEvents.raidVictory.trigger({ botName: "bot1", amplifier: 1 });
-
-  assert.deepEqual(started, ["bot1:2"]);
-  assert.deepEqual(victory, ["bot1:1"]);
-
-  off1();
-  off2();
-});
-
 test("领域事件：vaultOpened 信号可触发并携带序列化负载（开箱成功通知/统计联动）", () => {
   const events: string[] = [];
   const off = BotEvents.vaultOpened.subscribe((e) => events.push(`${e.botName}:${e.keyType}:${e.remaining}`));

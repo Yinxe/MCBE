@@ -105,6 +105,12 @@ scripts/
 - 带袭击之兆/袭击中是正常状态，不报警；胜利处理幂等（事件时刻防重）+ 喝瓶前防御清理残留英雄
 - 无药水自动关模式（移除标签）
 
+**袭击阶段估算日志**（1.1.67，基于 wiki 波次机制）：
+- 领域事件**内聚在劫掠任务**（RaidEvents：raidStarted / raidVictory / raidPhase），规则内聚 core/tasks/RaidRules（含 RAIDER_TYPE_IDS / 波数 / 冷却 / 停战常量）
+- 阶段序列：预触发（袭击之兆）→ 开始（buff 结束）→ **第一波读条冷却** → 波次 N 生成 → 波间冷却 → … → 胜利 / 停战（40 分钟）
+- **以生物检测为主**（每波击杀时间不定）：周期扫描假人附近 112 格劫掠生物，0→N=新一波生成、N→0=清完冷却；冷却超时无新波次与胜利 → 提示可能失败/停战
+- ⚠️ **估算仅供日志，不干预核心流程**（预触发/开始/胜利以事件为准）
+
 ---
 
 ## 宝库模式（core/tasks/VaultTask + mc/tasks/McVaultPorts）
@@ -118,18 +124,20 @@ scripts/
 
 ---
 
-## 领域事件（DomainEvents，BotEvents 聚合）
+## 领域事件
 
+**BotEvents**（core/events/DomainEvents）：生命周期 / 认主 / 宝库 / 行为
 ```
 生命周期：botOnline / botOffline / botDeath / botRespawn
 认主：    tridentClaimed / tridentOwnerChanged
-劫掠：    raidStarted / raidVictory
 宝库：    vaultOpened
 行为：    botMainhandChanged / botBlockBroken / botBlockPlaced / botItemUsed / botEntityAttacked
 ```
 
-- 统一走 `BotEvents` 命名空间；生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（botActions）、认主（tridentTracker/tridentClaim）、劫掠（McRaidPorts effectAdd）、宝库（McVaultPorts 开箱）
-- 新领域事件一律经 BotEvents 聚合导出
+**RaidEvents**（core/tasks/RaidTask，劫掠任务内聚）：`raidStarted` / `raidVictory` / `raidPhase`（阶段估算日志）
+
+- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（botActions）、认主（tridentTracker/tridentClaim）、宝库（McVaultPorts 开箱）、劫掠（McRaidPorts effectAdd + 阶段扫描）
+- 新领域事件一律经对应命名空间聚合导出
 
 ---
 

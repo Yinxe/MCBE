@@ -18,6 +18,125 @@
 //     端口内移除劫掠标签（自动停用），树随后被引擎对账清理。
 
 import { Action, BehaviorTree, Condition, Selector, Sequence, Status, type AiContext } from "../ai";
+import { EventSignal } from "../events/EventSignal";
+import { RAID_WAVE_COOLDOWN_TICKS } from "./RaidRules";
+
+// ─── 劫掠领域事件（内聚在劫掠任务，用户规格） ────────────
+// 事件负载只用可序列化 string/number，保持 core 纯净。
+
+/** 劫掠开始事件：假人获得袭击之兆（不祥之兆在村庄/试炼之地内转化）——劫掠即将开始。
+ *  ⚠️ 不祥之兆本身不算劫掠开始（可能 100 分钟挂着或转化为试炼之兆），以转化为准 */
+export interface RaidStartedEvent {
+  /** 假人名 */
+  botName: string;
+  /** 袭击之兆等级 */
+  amplifier: number;
+}
+
+/** 劫掠胜利事件：假人获得村庄英雄（袭击结束） */
+export interface RaidVictoryEvent {
+  /** 假人名 */
+  botName: string;
+  /** 村庄英雄等级 */
+  amplifier: number;
+}
+
+/** 袭击阶段（估算日志用；核心流程以事件为准，阶段仅供参考） */
+export type RaidPhase =
+  | "idle" // 未开始
+  | "pre-trigger" // 预触发：获得袭击之兆，30 秒后袭击完全开始
+  | "started" // 开始：袭击之兆结束，袭击完全开始（瞬时，随后进入第一波冷却）
+  | "wave" // 波次中：检测到袭击者
+  | "cooling" // 读条冷却：本波清完 15 秒后下一波；**第一波前也有冷却**（用户实测）
+  | "victory" // 胜利：获得村庄英雄
+  | "truce"; // 停战：40 分钟未结束，平局
+
+/** 袭击阶段变化事件（估算日志/外部联动用；不参与核心流程决策） */
+export interface RaidPhaseEvent {
+  botName: string;
+  phase: RaidPhase;
+  /** 阶段变化描述（中文，日志/通知用） */
+  detail: string;
+}
+
+/** 劫掠开始信号 */
+export const raidStarted = new EventSignal<RaidStartedEvent>();
+
+/** 劫掠胜利信号 */
+export const raidVictory = new EventSignal<RaidVictoryEvent>();
+
+/** 袭击阶段变化信号（估算，仅供日志/联动，不影响核心流程） */
+export const raidPhase = new EventSignal<RaidPhaseEvent>();
+
+// ─── 袭击阶段估算（纯函数，可单测） ──────────────────────
+// ⚠️ 估算机制（基于 wiki 波次规则）只能判断劫掠生物是否存在/增减，
+//    实际劫掠进度以实际流程（预触发/开始/胜利事件）为准；
+//    估算不准确也**不干预主事件流程**——仅日志/事件输出。
+
+/** 阶段估算状态（每假人一份） */
+export interface RaidPhaseState {
+  phase: RaidPhase;
+  /** 当前波次（估算，从 1 递增） */
+  wave: number;
+  /** 上次扫描到的袭击者数量 */
+  lastRaiderCount: number;
+  /** 本波清完的 tick（冷却开始时刻；击杀时间不定，冷却判定以生物为准） */
+  lastClearedTick: number;
+  /** 冷却超时提示已发（防重复打印） */
+  coolingHinted: boolean;
+}
+
+/** 创建初始阶段状态 */
+export function initialRaidPhaseState(): RaidPhaseState {
+  return { phase: "idle", wave: 0, lastRaiderCount: 0, lastClearedTick: -Infinity, coolingHinted: false };
+}
+
+/**
+ * 阶段估算（纯函数）：输入扫描到的袭击者数量与当前状态，输出新状态与阶段变化描述。
+ * ⚠️ 每波击杀时间完全不确定——阶段判定**以生物增减为主**，不依赖时间推断波次：
+ *   - 0→N（无→有）：新一波生成（wave 递增，phase=wave）——含第一波（开始后
+ *     进入冷却，随后 0→N 触发"波次 1 生成"）
+ *   - N→0（有→无）：本波清完（phase=cooling，记录清完时刻）
+ *   - 0→0 冷却中：等待下一波/胜利判定；冷却超时（45 秒）仍无新波次与胜利 →
+ *     提示"可能袭击失败（村民死光/床毁）或已停战"（一次性，防刷屏）
+ *   - N→N（数量不变/波内变化）：保持 wave 阶段，无阶段变化
+ * @returns change = 阶段变化描述（无变化返回 undefined）
+ */
+export function estimateRaidPhase(
+  prev: RaidPhaseState,
+  raiderCount: number,
+  tick: number,
+): { state: RaidPhaseState; change: string | undefined } {
+  const state: RaidPhaseState = { ...prev, lastRaiderCount: raiderCount };
+
+  if (prev.phase !== "started" && prev.phase !== "wave" && prev.phase !== "cooling") {
+    return { state, change: undefined }; // 事件驱动阶段（idle/pre-trigger/victory/truce）不扫描估算
+  }
+
+  if (raiderCount > 0 && prev.lastRaiderCount === 0) {
+    // 无→有：新一波生成（冷却期后出现新生物且未胜利 = 下一波已刷出）
+    state.wave = prev.wave + 1;
+    state.phase = "wave";
+    state.coolingHinted = false;
+    return { state, change: `波次 ${state.wave} 生成（检测到 ${raiderCount} 名袭击者）` };
+  }
+  if (raiderCount === 0 && prev.lastRaiderCount > 0) {
+    // 有→无：本波清完，进入冷却（下一波 15 秒后；最后一波则等胜利判定）
+    state.phase = "cooling";
+    state.lastClearedTick = tick;
+    state.coolingHinted = false;
+    return { state, change: `波次 ${prev.wave} 清完，波间冷却 15 秒` };
+  }
+  if (raiderCount === 0 && !state.coolingHinted && tick - state.lastClearedTick > RAID_WAVE_COOLDOWN_TICKS * 3) {
+    // 冷却超时（45 秒）仍无新波次与胜利 → 可能失败（村民死光/床毁）或停战（一次性提示）
+    state.coolingHinted = true;
+    return { state, change: "冷却超时：无新波次与胜利判定——可能袭击失败（村民死光/床毁）或已停战" };
+  }
+  if (raiderCount > 0) {
+    state.phase = "wave"; // 波内数量变化，保持 wave
+  }
+  return { state, change: undefined };
+}
 
 // ─── 感知快照 ────────────────────────────────────────────
 

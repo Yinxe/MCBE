@@ -1,35 +1,13 @@
 // ─── 领域事件（core 层） ────────────────────────────────
-// 假人模块领域信号统一收口（劫掠/宝库/认主/生命周期/行为/装备槽）：
-//   喝下不祥之瓶 → 获得不祥之兆 → 触发 raidStarted（袭击开始）
-//   袭击获胜     → 获得村庄英雄 → 触发 raidVictory（袭击结束）→ 树处理胜利
+// 假人模块领域信号统一收口（宝库/认主/生命周期/行为/装备槽）：
 //   宝库开箱     → 钥匙消耗 → 触发 vaultOpened（开箱成功，供通知/统计联动）
+// ⚠️ 劫掠领域事件（raidStarted/raidVictory/raidPhase）已**内聚到劫掠任务**
+//    （core/tasks/RaidTask.ts 的 RaidEvents 命名空间）——本文件不再持有。
 // 订阅方通过信号解耦，不直接依赖任务内部实现。
 // 事件负载只用可序列化的 string/number，不携带 mc 对象——保证 core 纯净。
 
 import { EventSignal } from "./EventSignal";
 import type { EquipSlotName } from "../model/Types";
-
-/** 劫掠开始事件：假人喝下不祥之瓶获得不祥之兆（袭击将触发） */
-export interface RaidStartedEvent {
-  /** 假人名 */
-  botName: string;
-  /** 不祥之兆等级 */
-  amplifier: number;
-}
-
-/** 劫掠胜利事件：假人获得村庄英雄（袭击结束） */
-export interface RaidVictoryEvent {
-  /** 假人名 */
-  botName: string;
-  /** 村庄英雄等级 */
-  amplifier: number;
-}
-
-/** 劫掠开始信号 */
-export const raidStarted = new EventSignal<RaidStartedEvent>();
-
-/** 劫掠胜利信号 */
-export const raidVictory = new EventSignal<RaidVictoryEvent>();
 
 // ─── 宝库事件 ────────────────────────────────────────────
 
@@ -217,9 +195,6 @@ export const botEquipSlotChanged = new EventSignal<BotEquipSlotChangedEvent>();
 
 /** 全部领域事件信号聚合 */
 export const BotEvents = {
-  // 劫掠
-  raidStarted,
-  raidVictory,
   // 宝库
   vaultOpened,
   // 认主
