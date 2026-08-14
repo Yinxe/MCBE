@@ -15,14 +15,14 @@ import { color } from "@yinxe/toolkit";
 
 import type { RaidDrinkResult, RaidIdleReason, RaidKnowledge, RaidPorts } from "../../core/tasks/RaidTask";
 import {
-  BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAIDER_TYPE_IDS, RAID_LEAVE_RADIUS, RAID_TRUCE_TICKS,
+  BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_TRUCE_TICKS,
   isOminousBottle, classifyRaidEffect,
 } from "../../core/tasks/RaidRules";
 import {
-  raidStarted, raidVictory, raidPhase, estimateRaidPhase, initialRaidPhaseState,
+  raidStarted, raidVictory, raidPhase, initialRaidPhaseState,
   type RaidPhase, type RaidPhaseState,
 } from "../../core/tasks/RaidTask";
-import { BOT_TAG, TAG_RAID_MODE } from "../../core/tags/BotTags";
+import { TAG_RAID_MODE } from "../../core/tags/BotTags";
 import type { BotRecord } from "../../core/model/Types";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
@@ -42,10 +42,10 @@ const handledHeroTick = new Map<string, number>();
 const convertedToRaidTick = new Map<string, number>();
 /** 获得袭击之兆的 tick（袭击即将开始；30 秒后 buff 结束 = 袭击完全开始） */
 const raidOmenSince = new Map<string, number>();
-/** 袭击阶段估算状态（每假人一份；日志级，不干预核心流程） */
+/** 袭击阶段状态（每假人一份；阶段通知用，不干预核心流程） */
 const raidPhaseStates = new Map<string, RaidPhaseState>();
-/** 阶段扫描间隔（tick，1 秒） */
-const PHASE_SCAN_TICKS = 20;
+/** 阶段通知半径（格）：附近玩家（主人不受距离限制） */
+const NOTIFY_RADIUS = 64;
 /** 通知节流（tick，≈10 秒） */
 const notifyAt = new Map<string, number>();
 const NOTIFY_COOLDOWN_TICKS = 200;
@@ -63,15 +63,6 @@ export function initRaidPorts(): void {
   if (raidPortsReady) return;
   raidPortsReady = true;
   world.afterEvents.effectAdd.subscribe(handleEffectAdd);
-
-  // 袭击阶段估算扫描（日志级，不干预核心流程）：周期扫描劫掠生物
-  system.runInterval(() => {
-    try {
-      scanRaiderPhases();
-    } catch (err) {
-      console.warn(`[MockPlayer] 劫掠阶段扫描异常: ${err}`);
-    }
-  }, PHASE_SCAN_TICKS);
 }
 
 /**
@@ -125,6 +116,7 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
         `[MockPlayer] ${name} 袭击即将开始（袭击之兆 30 秒后完全开始）——触发点 (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`,
       );
       scheduleRaidStartCheck(name);
+      scheduleTruceCheck(name);
       return;
     }
 
@@ -306,73 +298,43 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
   }
 }
 
-// ─── 袭击阶段估算（日志级，不干预核心流程） ──────────────
-// 基于 wiki 波次机制：通过扫描假人附近（112 格）的劫掠生物数量变化，
-// 估算"波次生成 / 波间冷却"阶段并打印状态日志。
-// ⚠️ 只能判断劫掠生物是否存在/增减，实际进度以核心事件（预触发/开始/胜利）为准；
-//    估算不准确不影响主事件流程——纯日志 + raidPhase 事件输出。
+// ─── 袭击阶段（事件驱动，通知玩家） ─────────────────────
+// 阶段仅由核心事件驱动（预触发/开始/胜利/停战）——波次/冷却/生成估算已移除
+// （用户实测无用，2.0.0）。每次阶段变化：状态 + 日志 + raidPhase 事件 +
+// **通知玩家**（主人不受距离限制 + 附近 64 格玩家，Set 去重）。
 
-/** 设置/更新袭击阶段（状态 + 日志 + 领域事件；不参与核心流程决策） */
+/** 设置/更新袭击阶段（状态 + 日志 + 领域事件 + 通知玩家；不参与核心流程决策） */
 function setRaidPhase(botName: string, phase: RaidPhase, detail: string): void {
   const prev = raidPhaseStates.get(botName) ?? initialRaidPhaseState();
-  if (prev.phase === phase) return; // 同阶段不重复打印
+  if (prev.phase === phase) return; // 同阶段不重复
   raidPhaseStates.set(botName, { ...prev, phase });
   console.info(`[MockPlayer] 劫掠 ${botName} 阶段 → ${detail}`);
   raidPhase.trigger({ botName, phase, detail });
+  // 通知玩家：主人（无论距离）+ 附近玩家（NOTIFY_RADIUS 内，排除假人自己），去重
+  const bot = resolveBotPlayer(botName);
+  if (bot) notifyRaidPhase(bot, botName, detail);
 }
 
-/** 周期扫描劫掠生物，估算波次/冷却阶段（仅 started/cooling/wave 阶段扫描） */
-function scanRaiderPhases(): void {
-  let players;
+/** 阶段通知：主人 + 附近玩家（Set 去重——主人在附近时不重复发送） */
+function notifyRaidPhase(bot: SimulatedPlayer, botName: string, detail: string): void {
   try {
-    players = world.getPlayers({ tags: [BOT_TAG] });
+    const record = botRegistry.get(botName);
+    const targets = new Set<Player>();
+    if (record?.ownerName) {
+      const owner = world.getPlayers({ name: record.ownerName })[0];
+      if (owner) targets.add(owner);
+    }
+    for (const p of world.getPlayers()) {
+      if (p.name === botName) continue;
+      const dx = p.location.x - bot.location.x;
+      const dz = p.location.z - bot.location.z;
+      if (Math.hypot(dx, dz) <= NOTIFY_RADIUS) targets.add(p);
+    }
+    const msg = `${color.playerName}[劫掠] ${color.success}${botName} ${color.muted}${detail}`;
+    for (const t of targets) t.sendMessage(msg);
   } catch {
-    return;
+    /* 通知失败不影响主流程 */
   }
-  for (const player of players) {
-    try {
-      if (!player.hasTag(TAG_RAID_MODE.value)) continue;
-      const botName = player.name;
-      const state = raidPhaseStates.get(botName) ?? initialRaidPhaseState();
-      if (state.phase !== "started" && state.phase !== "cooling" && state.phase !== "wave") continue;
-
-      // 停战判定：袭击持续 40 分钟未结束 → 平局（估算；核心流程不受影响）
-      // （此处 phase 只可能是 started/cooling/wave，无需再查 truce）
-      const since = raidOmenSince.get(botName) ?? 0;
-      if (since > 0 && system.currentTick - since > RAID_TRUCE_TICKS) {
-        setRaidPhase(botName, "truce", "停战：袭击 40 分钟未结束，平局中止");
-        continue;
-      }
-
-      // 扫描假人附近（112 格，袭击者退出半径）的劫掠生物
-      const count = countRaidersNear(player);
-      const { state: next, change } = estimateRaidPhase(state, count, system.currentTick);
-      raidPhaseStates.set(botName, next);
-      if (change) {
-        setRaidPhase(botName, next.phase, change);
-      }
-    } catch (err) {
-      console.warn(`[MockPlayer] 劫掠阶段扫描异常 ${player.name}: ${err}`);
-    }
-  }
-}
-
-/** 统计假人附近（RAID_LEAVE_RADIUS 内）的劫掠生物数量（逐 typeId 查询合并） */
-function countRaidersNear(bot: Player): number {
-  let total = 0;
-  for (const typeId of RAIDER_TYPE_IDS) {
-    try {
-      const found = bot.dimension.getEntities({
-        type: typeId,
-        location: { x: bot.location.x, y: bot.location.y, z: bot.location.z },
-        maxDistance: RAID_LEAVE_RADIUS,
-      });
-      total += found.length;
-    } catch {
-      /* 单个类型查询失败忽略 */
-    }
-  }
-  return total;
 }
 
 // ─── 一次性检查（非轮询，只记录/提醒） ──────────────────
@@ -387,6 +349,30 @@ function countRaidersNear(bot: Player): number {
 const CONVERT_CHECK_TICKS = 600;
 /** 袭击之兆持续时间（tick）：基岩版 raid_omen 30 秒 = 600 tick；结束后袭击完全开始 */
 const RAID_OMEN_DURATION_TICKS = 600;
+
+/**
+ * 停战检查（一次性，非轮询）：袭击持续 40 分钟未结束 → 平局中止（通知 + 记录）。
+ * 排程于获得袭击之兆时（+ 48000 tick ≈ 40 分钟）。
+ * ⚠️ 新一轮袭击已开始（raidOmenSince 更新）→ 旧排程作废跳过，防误报。
+ */
+function scheduleTruceCheck(botName: string): void {
+  const scheduledAt = system.currentTick;
+
+  system.runTimeout(() => {
+    try {
+      const record = botRegistry.get(botName);
+      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+      // 新一轮袭击已开始 → 跳过（旧排程作废）
+      if ((raidOmenSince.get(botName) ?? 0) > scheduledAt) return;
+      // 当前已是胜利阶段（已结算）→ 跳过
+      const state = raidPhaseStates.get(botName) ?? initialRaidPhaseState();
+      if (state.phase === "victory") return;
+      setRaidPhase(botName, "truce", "停战：袭击 40 分钟未结束，平局中止");
+    } catch (err) {
+      console.warn(`[MockPlayer] 劫掠停战检查异常: ${err}`);
+    }
+  }, RAID_TRUCE_TICKS);
+}
 
 /**
  * 袭击完全开始检查（一次性，非轮询）：获得袭击之兆 30 秒后——
@@ -408,18 +394,7 @@ function scheduleRaidStartCheck(botName: string): void {
       // buff 已结束 → 袭击完全开始（记录；若期间已胜利则无影响）
       if (!hasEffect(bot, RAID_OMEN)) {
         console.info(`[MockPlayer] ${botName} 袭击之兆已结束，袭击完全开始`);
-        // 第一波也有读条冷却（用户实测）：进入冷却阶段，估算器随后收 0→N 触发"波次 1 生成"
-        setRaidPhase(botName, "cooling", "袭击完全开始，第一波读条冷却（15 秒）");
-        // 重置波次估算（新一轮袭击；冷却开始时刻 = 现在，供冷却超时提示计时）
-        const prev = raidPhaseStates.get(botName) ?? initialRaidPhaseState();
-        raidPhaseStates.set(botName, {
-          ...prev,
-          phase: "cooling",
-          wave: 0,
-          lastRaiderCount: 0,
-          lastClearedTick: system.currentTick,
-          coolingHinted: false,
-        });
+        setRaidPhase(botName, "started", "袭击完全开始！");
       }
       // buff 仍在（异常，游戏机制下 30 秒后必然开始）→ 仅记录，不打扰玩家
       else {
