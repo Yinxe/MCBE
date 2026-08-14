@@ -19,13 +19,15 @@ export function showAdminMenu(player: Player): void {
     return;
   }
   const cfg = configStore.get();
-  const owners = new Set(botRegistry.all().map((r) => r.ownerName).filter((n): n is string => !!n));
+  const all = botRegistry.all();
+  const owners = new Set(all.map((r) => r.ownerName).filter((n): n is string => !!n));
+  const ownerless = all.filter((r) => !r.ownerName).length;
 
   new ActionFormBuilder()
     .title(`${color.gold}⚙ 管理员菜单`)
     .body(
       `${color.muted}默认配额: ${color.info}${cfg.defaultQuota} ${color.muted}个/玩家\n` +
-      `${color.muted}假人总数: ${color.info}${botRegistry.size} ${color.muted}（主人 ${color.info}${owners.size} ${color.muted}名）\n` +
+      `${color.muted}假人总数: ${color.info}${botRegistry.size} ${color.muted}（主人 ${color.info}${owners.size} ${color.muted}名，无主 ${color.warn}${ownerless} ${color.muted}个）\n` +
       `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）`
     )
     // ── 假人全览（管理员视角：不受主人过滤，全部可见） ──

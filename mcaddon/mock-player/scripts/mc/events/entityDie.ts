@@ -24,7 +24,7 @@ import { formatDimensionId } from "../../core/format/Format";
 import { captureExperience } from "../adapters/McItemCodec";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";
-import { trackBotOffline } from "../workflows/tridentFlow";
+import { trackBotOffline } from "../features/tridentTracker";
 
 /** 自动重生延迟（tick）：复活后延迟 1 秒再传送回重生点 */
 const RESPAWN_DELAY_TICKS = 20;

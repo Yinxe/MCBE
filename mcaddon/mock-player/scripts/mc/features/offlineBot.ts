@@ -7,7 +7,7 @@ import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { BotEvents } from "../../core/events/DomainEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { trackBotOffline } from "../workflows/tridentFlow";
+import { trackBotOffline } from "./tridentTracker";
 
 /**
  * 主动下线假人

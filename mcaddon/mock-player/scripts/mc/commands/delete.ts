@@ -2,8 +2,8 @@ import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/serve
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../bootstrap/context";
-import { botManager } from "../bot/BotManager";
 import { guardBotCommand } from "./auth";
+import { deleteBot } from "../features/deleteBot";
 export function registerDeleteCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:delete", description: "删除指定假人",
@@ -16,12 +16,7 @@ export function registerDeleteCommand(registry: any): void {
     if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
-    try {
-      botManager.getOrCreate(record).delete(player);
-      botManager.remove(targetName);
-      player.sendMessage(`${color.success}已删除假人 ${color.playerName}${targetName}，物品和经验已回收`);
-    } catch (e: any) {
-      player.sendMessage(`${color.error}删除失败: ${e?.message ?? e}`);
-    }
+    deleteBot(record, player);
+    player.sendMessage(`${color.success}已删除假人 ${color.playerName}${targetName}，物品和经验已回收`);
   });
 }

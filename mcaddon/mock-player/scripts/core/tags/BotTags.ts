@@ -19,12 +19,13 @@ export const TAG_CONTROL: TagDef = { label: "体态控制", value: `${TAG_PREFIX
 export const TAG_AUTO_USE: TagDef = { label: "使用物品", value: `${TAG_PREFIX}autoUse` };
 export const TAG_VAULT_MODE: TagDef = { label: "宝库模式", value: `${TAG_PREFIX}vaultMode` };
 export const TAG_RAID_MODE: TagDef = { label: "劫掠模式", value: `${TAG_PREFIX}raidMode` };
+export const TAG_FISH_MODE: TagDef = { label: "自动钓鱼", value: `${TAG_PREFIX}fishMode` };
 
 /** 可共存的标签组 */
 export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
 
 /** 互斥的标签组（同一时间只能有一个生效） */
-export const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE, TAG_VAULT_MODE];
+export const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE, TAG_VAULT_MODE, TAG_FISH_MODE];
 
 /** 独立开关标签组（与互斥/共存标签均可并存，各自独立的持久开关，如劫掠模式） */
 export const STANDALONE_TAGS: TagDef[] = [TAG_RAID_MODE];

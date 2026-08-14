@@ -4,8 +4,8 @@ import { Player, CommandPermissionLevel, CustomCommandParamType } from "@minecra
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../bootstrap/context";
-import { botManager } from "../bot/BotManager";
 import { guardBotCommand } from "./auth";
+import { setSneaking } from "../features/sneak";
 
 export function registerSneakCommand(registry: any): void {
   defineCommand(registry, {
@@ -29,7 +29,7 @@ export function registerSneakCommand(registry: any): void {
       return;
     }
     const shouldSneak = params.sneak !== undefined ? (params.sneak as boolean) : true;
-    botManager.getOrCreate(record).setSneaking(shouldSneak);
+    setSneaking(record, shouldSneak);
     player.sendMessage(shouldSneak ? `${color.success}假人 ${color.playerName}${targetName}${color.success} 已潜行` : `${color.success}假人 ${color.playerName}${targetName}${color.success} 已站起`);
   });
 }

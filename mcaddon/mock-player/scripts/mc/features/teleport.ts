@@ -7,9 +7,9 @@ import { color } from "@yinxe/toolkit";
 import { BotRecord } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { BotUiEvent } from "../../core/events/UiEvents";
-import { botManager } from "../bot/BotManager";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../adapters/PoseGateway";
+import { onlineBot } from "./onlineBot";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
   if (!record.online || record.death) {
@@ -54,22 +54,21 @@ export function registerUiSubscriptions(): void {
 
     // ── 传送过去：离线先上线，等 1 tick 实体就绪后传送 ──
     if (e.action === "tpToBot") {
-      const record = botRegistry.get(e.botName);
-      if (!record) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已不存在`); return; }
-      const bot = botManager.getOrCreate(record);
+      const r = botRegistry.get(e.botName);
+      if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已不存在`); return; }
       system.run(() => {
-        if (!bot.isActive()) {
-          bot.online()
+        if (!r.online || r.death) {
+          onlineBot(r)
             .then(() => {
               player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已上线`);
               system.run(() => {
-                bot.tpPlayerToBot(player);
+                tpPlayerToBot(player, botRegistry.get(e.botName)!);
                 player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);
               });
             })
             .catch((err: any) => player.sendMessage(`${color.error}${err?.message ?? err}`));
         } else {
-          bot.tpPlayerToBot(player);
+          tpPlayerToBot(player, r);
           player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);
         }
       });
@@ -78,13 +77,12 @@ export function registerUiSubscriptions(): void {
 
     // ── 同步姿态：假人拉到玩家身边 + 复制姿态/朝向 ──
     if (e.action === "syncPose") {
-      const record = botRegistry.get(e.botName);
-      if (!record) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已不存在`); return; }
-      if (!record.online || record.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
-      const bot = botManager.getOrCreate(record);
+      const r = botRegistry.get(e.botName);
+      if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已不存在`); return; }
+      if (!r.online || r.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
       system.run(() => {
         try {
-          bot.tpBotToPlayer(player);
+          tpBotToPlayer(r, player);
           player.sendMessage(`${color.success}已同步 ${color.playerName}${e.botName}${color.success} 姿态与朝向`);
         } catch (err: any) { player.sendMessage(`${color.error}${err?.message ?? err}`); }
       });

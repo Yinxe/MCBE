@@ -3,7 +3,7 @@
 // UI 事件字段/动作），此处统一 import 并调用——保证模块可达（esbuild bundle
 // 只包含被引用模块）且订阅代码内聚在各功能文件内。
 // UI 层（ui/bot.ts、ui/tags.ts）只发布事件，不 import 任何业务动作函数；
-// 工作流内的订阅由各自 init 注册（workflowManager.initAll）。
+// AI 任务的 UI 反馈订阅（宝库/劫掠不在线提示）在 mc/ai/BotBrain.startBrainEngine。
 
 import { registerUiSubscriptions as registerSneakUi } from "../features/sneak";
 import { registerUiSubscriptions as registerSpawnModeUi } from "../features/spawnMode";
@@ -14,7 +14,6 @@ import { registerUiSubscriptions as registerSpawnPointUi } from "../features/spa
 import { registerUiSubscriptions as registerRenameUi } from "../features/rename";
 import { registerUiSubscriptions as registerKillUi } from "../features/killBot";
 import { registerUiSubscriptions as registerFollowUi } from "../features/follow";
-import { registerUiSubscriptions as registerRaidUi } from "../workflows/raidFlow";
 import { registerUiSubscriptions as registerSwapUi } from "../ui/swap";
 import { registerUiSubscriptions as registerMainhandUi } from "../ui/mainhand";
 import { registerUiSubscriptions as registerReclaimUi } from "../ui/reclaim";
@@ -35,7 +34,6 @@ export function registerUiDrivers(): void {
   registerRenameUi();
   registerKillUi();
   registerFollowUi();
-  registerRaidUi();
   registerSwapUi();
   registerMainhandUi();
   registerReclaimUi();

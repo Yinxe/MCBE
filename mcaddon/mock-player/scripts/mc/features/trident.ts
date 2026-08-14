@@ -9,7 +9,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { pauseFollow, resumeFollow, isFollowing } from "./follow";
-import { registerPendingTridentItem, discardPendingTridentItem } from "../workflows/tridentFlow";
+import { registerPendingTridentItem, discardPendingTridentItem } from "./tridentTracker";
 import { TRIDENT_ID, isTrident, scanTridentSlots } from "../../core/items/TridentRules";
 
 // ─── 投掷互斥（按假人：A 假人投掷不阻塞 B 假人） ─────────

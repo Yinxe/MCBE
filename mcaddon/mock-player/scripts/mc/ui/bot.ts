@@ -16,6 +16,7 @@ import { formatDimensionId } from "../../core/format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
 import { visibleRecords } from "../../core/service/BotVisibility";
+import { ownerLabel } from "./ownerLabel";
 
 // ─── 工具 ──────────────────────────────────────────────
 
@@ -120,7 +121,12 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
       : record.deathPoint
         ? formatDimensionId(record.deathPoint.dimension)
         : formatDimensionId(record.respawnPoint.dimension);
-    builder.button(`${getStatusIcon(record)} ${color.black}${record.name} ${color.black}${dim}`, () => showBotPanel(player, record.name, () => showBotList(player, onMainMenu)));
+    // 主人/无主标签：管理员看全览需归属信息；普通玩家看无主假人的 [无主] tag
+    const owner = ownerLabel(record, isAdmin(player));
+    builder.button(
+      `${getStatusIcon(record)} ${color.black}${record.name} ${color.black}${dim}${owner ? ` ${owner}` : ""}`,
+      () => showBotPanel(player, record.name, () => showBotList(player, onMainMenu)),
+    );
   }
 
   builder.button(style("← 返回", color.darkBlue), () => { if (onMainMenu) onMainMenu(); }).show(player);

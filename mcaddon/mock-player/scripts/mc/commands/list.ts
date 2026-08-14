@@ -16,6 +16,8 @@ import { formatPos } from "../format";
 import { formatDimensionId } from "../../core/format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { savePoseToRecord } from "../adapters/PoseGateway";
+import { isAdmin } from "./auth";
+import { ownerLabel } from "../ui/ownerLabel";
 
 /** 格式化点位状态（仅列表显示用） */
 function formatState(state: PositionState): string {
@@ -23,7 +25,7 @@ function formatState(state: PositionState): string {
 }
 
 /** 构建列表消息 */
-function buildListMessage(records: BotRecord[], filterOnline?: boolean, filterDeath?: boolean): string {
+function buildListMessage(records: BotRecord[], isAdminPlayer: boolean, filterOnline?: boolean, filterDeath?: boolean): string {
   let filtered = records;
   if (filterOnline !== undefined) filtered = filtered.filter((r) => r.online === filterOnline);
   if (filterDeath !== undefined) filtered = filtered.filter((r) => r.death === filterDeath);
@@ -45,7 +47,9 @@ function buildListMessage(records: BotRecord[], filterOnline?: boolean, filterDe
         return def ? `${color.accent}${def.label}${color.muted}` : t;
       });
     const tagHint = displayTags.length > 0 ? ` ${color.muted}[${displayTags.join(` ${color.muted}| `)}]` : "";
-    return `${icon} ${color.playerName}${r.name}${color.muted} — ${txt}${color.muted} | ${pos}${tagHint}`;
+    // 主人/无主标签（管理员全览需归属信息）
+    const owner = ownerLabel(r, isAdminPlayer);
+    return `${icon} ${color.playerName}${r.name}${owner ? ` ${owner}` : ""}${color.muted} — ${txt}${color.muted} | ${pos}${tagHint}`;
   });
 
   lines.unshift(`${color.success}假人列表 (${color.accent}${filtered.length}${color.success}/${records.length}${color.success}):`);
@@ -73,6 +77,6 @@ export function registerListCommand(registry: any): void {
         savePoseToRecord(record, bot.location, bot.dimension.id, bot.getRotation());
       }
     }
-    player.sendMessage(buildListMessage(botRegistry.all(), filterOnline, filterDeath));
+    player.sendMessage(buildListMessage(botRegistry.all(), isAdmin(player), filterOnline, filterDeath));
   });
 }

@@ -6,7 +6,7 @@
 //   Phase 2 有状态业务 —— （core 服务均为构造注入，无状态容器）
 //   Phase 3 注册副作用 —— startup 注册自定义命令（early-execution mode）
 //   Phase 4 延迟启动 —— worldLoad 后：GameTest 上下文 → 事件订阅 → 恢复持久化
-//             → 行为引擎 → 三叉戟追踪 → 劫掠事件系统
+//             → 行为引擎 → 三叉戟认主机制 → 工作流（劫掠/宝库）
 //
 // 依赖注入贯穿始终：core 服务以构造函数收依赖（测试用 InMemory 替身），
 // mc 层经 bootstrap/context 持有单例。
@@ -15,11 +15,15 @@ import { system, world } from "@minecraft/server";
 
 import { registerAllCommands } from "./mc/commands/index";
 import { registerAllEvents } from "./mc/events/index";
+import { startTagBehaviors } from "./mc/features/behavior";
+import { initTridentTracker } from "./mc/features/tridentTracker";
+import { initFishingHookTracker } from "./mc/features/fishingHookTracker";
+import { initLootTracker } from "./mc/features/fishingFlow";
+import { initRaidPorts } from "./mc/tasks/McRaidPorts";
+import { startBrainEngine } from "./mc/ai/BotBrain";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
 import { registerUiDrivers } from "./mc/bootstrap/uiDrivers";
-import { botManager } from "./mc/bot/BotManager";
 import { runMigrations } from "./mc/bootstrap/migration";
-import { workflowManager } from "./mc/bootstrap/workflows";
 import { botRegistry, configStore } from "./mc/bootstrap/context";
 
 // Phase 1/2: 基础设施与业务装配在 mc/bootstrap/context 模块 import 时完成
@@ -70,12 +74,27 @@ world.afterEvents.worldLoad.subscribe(() => {
   // （必须在 restoreAll 之后：记录已在内存；存储区域此时可注册）
   runMigrations();
 
-  // 启动 BotManager 驱动器（每假人独立引擎：标签行为能力 + 任务 + 100tick 周期持久化）
-  // 持续能力（自动挖掘/放置/攻击/跳跃/体态控制）由标签状态驱动启停（1.3.2 重构）
+  // 启动标签行为引擎（自动挖掘/放置/攻击/跳跃/体态控制）
+  // 同时启动 100tick 周期持久化（位置/经验/装备栏）
   console.info(`[MockPlayer] 启动引擎`);
-  botManager.start();
+  startTagBehaviors();
 
-  // 初始化三叉戟追踪（entitySpawn 标记假人抛出的三叉戟）——由 trident 工作流 init 负责
-  console.info(`[MockPlayer] 初始化工作流（劫掠/宝库/三叉戟认主）`);
-  workflowManager.initAll();
+  // 初始化三叉戟认主机制（entitySpawn/entityLoad 标记 + 上线夺回/下线回退）——
+  // 纯事件驱动的自定义世界机制，独立初始化
+  initTridentTracker();
+
+  // 初始化钓鱼钩生成追踪（entitySpawn 监测鱼钩 + 读取主人名字）——
+  // 自动钓鱼感知基础，独立初始化
+  initFishingHookTracker();
+
+  // 初始化战利品感知（背包物品变化事件订阅 → 钓鱼模式假人战利品收集）——
+  // 事件驱动感知，独立初始化
+  initLootTracker();
+
+  // 初始化劫掠机制（effectAdd 事件订阅 → 公共信号 + 一次性卡死提醒）——
+  // 事件驱动感知喂给 AI 行为树（core/tasks/RaidTask），独立初始化
+  initRaidPorts();
+
+  // 启动 AI 行为引擎（宝库/劫掠任务：每 10 tick 驱动各自行为树 + 标签对账）
+  startBrainEngine();
 });

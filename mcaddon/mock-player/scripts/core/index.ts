@@ -44,9 +44,11 @@ export * from "./storage/IntervalScheduler";
 // service
 export * from "./service/BotRegistry";
 export * from "./service/ReclaimPlanner";
-export * from "./service/RaidRules";
 export * from "./service/QuotaRules";
 export * from "./service/ModConfigRules";
 
-// bot（假人独立引擎：能力/任务调度 + 背包纯逻辑）
-export * from "./bot";
+// ai 行为树框架
+export * from "./ai";
+
+// tasks 任务型模块（构建于 core/ai 之上）
+export * from "./tasks";

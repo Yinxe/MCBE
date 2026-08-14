@@ -82,12 +82,18 @@ cd mcaddon/item-route && pnpm run test:core   # tsc -p tsconfig.test.json + node
 ### 版本迭代
 
 ```
-bump version (+0.01) → build → pack → commit → tag → push
+bump version → build → pack → commit → tag → push
 ```
 
+**版本号提升规则**（用户拍板 2.0.0 起）：
+- **架构完全升级** → `+1.0.0`（如 mock-player 行为树架构重构 → 2.0.0）
+- **新功能** → `+0.1`（如新增砍树任务 → 2.1.0）
+- **功能小改动/修复/试错调整** → `+0.01`（如宝库细节修复 → 2.0.1）
+- 按标准 semver 机制提升，不攒版本、不随意跳号
+
 - 版本在 `mcaddon/<name>/package.json` 中维护
-- commit message 格式：`<包名>@<新版本>: <中文描述>`（如 `mock-player@1.1.25: 回收详情表单 + 精确瞄准`）
-- tag 格式：`<包名>@<版本>`（如 `mock-player@1.1.25`）
+- commit message 格式：`<包名>@<新版本>: <中文描述>`（如 `mock-player@2.0.1: 宝库细节修复`）
+- tag 格式：`<包名>@<版本>`（如 `mock-player@2.0.0`）
 - 发布时同时 push commit + tag
 - 源码提交时**排除** `manifest.json` / `package.json`（release-only）；仅提交 `scripts/` 源码与 `tests/`
 
