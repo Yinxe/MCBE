@@ -17,6 +17,7 @@ import { registerAllCommands } from "./mc/commands/index";
 import { registerAllEvents } from "./mc/events/index";
 import { startTagBehaviors } from "./mc/features/behavior";
 import { initTridentTracker } from "./mc/features/tridentTracker";
+import { initFishingHookTracker } from "./mc/features/fishingHookTracker";
 import { initRaidPorts } from "./mc/tasks/McRaidPorts";
 import { startBrainEngine } from "./mc/ai/BotBrain";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
@@ -80,6 +81,10 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 初始化三叉戟认主机制（entitySpawn/entityLoad 标记 + 上线夺回/下线回退）——
   // 纯事件驱动的自定义世界机制，独立初始化
   initTridentTracker();
+
+  // 初始化钓鱼钩生成追踪（entitySpawn 监测鱼钩 + 读取主人名字）——
+  // 自动钓鱼感知基础，独立初始化
+  initFishingHookTracker();
 
   // 初始化劫掠机制（effectAdd 事件订阅 → 公共信号 + 一次性卡死提醒）——
   // 事件驱动感知喂给 AI 行为树（core/tasks/RaidTask），独立初始化
