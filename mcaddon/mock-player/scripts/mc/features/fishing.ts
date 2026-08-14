@@ -14,7 +14,7 @@ import { system, world, BlockVolume } from "@minecraft/server";
 import type { Dimension, Entity } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { AIR_BLOCK_ID, classifyFishingScan, collectFishingSpots, FISHING_HOOK_ID, isFishingRod, makeFisherTag, sortFishingSpots, WATER_BLOCK_IDS, type FindSpotsFailure, type FishingSpot } from "../../core/tasks/FishingRules";
+import { AIR_BLOCK_ID, ADJACENT_8, classifyFishingScan, collectFishingSpots, computeCastAim, FISHING_HOOK_ID, isFishingRod, isWaterBlock, judgeStandFishingSpot, makeFisherTag, sortFishingSpots, WATER_BLOCK_IDS, type FindSpotsFailure, type FishingSpot } from "../../core/tasks/FishingRules";
 import type { Vec3 } from "../../core/model/Types";
 import { BOT_TAG } from "../../core/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
@@ -39,7 +39,7 @@ export type ReelRodResult = "reeled" | "no-hook" | "no-rod" | "offline" | "error
  * ⚠️ 用户规格：nameTag 精确匹配优先（world.getPlayers({ name, tags })——
  *   实体名稳定，entityId 重连/重启后失效），registry entityId 回退双保险。
  */
-function resolveBotPlayer(botName: string): SimulatedPlayer | undefined {
+export function resolveBotPlayer(botName: string): SimulatedPlayer | undefined {
   try {
     const player = world.getPlayers({ name: botName, tags: [BOT_TAG] })[0];
     if (player) {
@@ -76,6 +76,12 @@ function findRodSlot(bot: SimulatedPlayer): number | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** 假人是否持有鱼竿（主手或热键栏；AI 感知/缺因判定用） */
+export function hasFishingRod(botName: string): boolean {
+  const bot = resolveBotPlayer(botName);
+  return bot !== undefined && findRodSlot(bot) !== undefined;
 }
 
 // ─── 鱼钩存在性查询 ─────────────────────────────────────
@@ -233,4 +239,74 @@ export async function reelFishingRod(botName: string): Promise<ReelRodResult> {
   if (slot === undefined) return "no-rod";
   const used = await useRod(bot, botName, slot);
   return used ? "reeled" : "error";
+}
+
+// ─── 钓鱼点状态检测（AI 行为用：点位判定/实体占用/可用性） ──
+
+/** 钓鱼点占用判定半径（格，用户规格：点位半径 1 内任何实体都算占用） */
+const SPOT_OCCUPY_RADIUS = 1;
+
+/**
+ * 轻量判定某坐标是否构成钓鱼点（AI 选点/就位用）：读支撑块 + 上方两格 +
+ * 同层 8 邻水面（~11 次 getBlock，替代 getBlocks 全扫描——高精度计算能避免
+ * 就避免）。构成钓鱼点时附带 waters/aim（瞄准点计算复用 computeCastAim）。
+ */
+export function spotAtStand(dimension: Dimension, stand: Vec3): FishingSpot | undefined {
+  try {
+    const supportLoc = { x: stand.x, y: stand.y - 1, z: stand.z };
+    const support = dimension.getBlock(supportLoc);
+    if (!support || support.isAir || support.isLiquid) return undefined; // 支撑必须实体实心
+    const above1 = dimension.getBlock({ x: stand.x, y: stand.y, z: stand.z });
+    const above2 = dimension.getBlock({ x: stand.x, y: stand.y + 1, z: stand.z });
+    // 同层 8 邻水面收集（支撑块与水相邻）
+    const waters: Vec3[] = [];
+    for (const { dx, dz } of ADJACENT_8) {
+      const w = dimension.getBlock({ x: supportLoc.x + dx, y: supportLoc.y, z: supportLoc.z + dz });
+      if (w && isWaterBlock(w.typeId)) {
+        waters.push({ x: supportLoc.x + dx, y: supportLoc.y, z: supportLoc.z + dz });
+      }
+    }
+    if (!judgeStandFishingSpot(stand, support.typeId, above1?.typeId ?? "", above2?.typeId ?? "", waters.length)) {
+      return undefined;
+    }
+    const aim =
+      computeCastAim(stand, waters, (loc) => {
+        const b = dimension.getBlock(loc);
+        return b !== undefined && isWaterBlock(b.typeId);
+      }) ?? { target: waters[0]!, level: 1 };
+    return { stand, support: supportLoc, waters, aim };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 钓鱼点是否被实体占用（用户规格：**任何实体**占用点位半径 1 都导致不可用——
+ * 实体占用的点鱼钩抛不出去（会勾中实体 → snagged 失败））。排除查询者自己
+ * （excludeEntityId）与 **fishing_hook 鱼钩**（钓具不阻挡抛竿——其他假人的
+ * 浮漂常在岸边 1 格内水面，若算占用会导致点位被误判不可用）。
+ * 实时检测天然实现"释放"：实体离开 → 自动释放。
+ */
+export function isSpotOccupiedByEntity(
+  dimension: Dimension,
+  stand: Vec3,
+  excludeEntityId?: string,
+  radius: number = SPOT_OCCUPY_RADIUS
+): boolean {
+  try {
+    return dimension
+      .getEntities({ location: stand, maxDistance: radius })
+      .some((e) => e.id !== excludeEntityId && e.typeId !== FISHING_HOOK_ID);
+  } catch {
+    return true; // 维度不可访问按占用处理（保守）
+  }
+}
+
+/**
+ * 钓鱼点当前是否可被假人使用（用户规格："用起来更直接"）：点位仍有效
+ * （spotAtStand 判定） **且** 未被任何实体占用。
+ */
+export function isSpotUsable(dimension: Dimension, stand: Vec3, excludeEntityId?: string): boolean {
+  if (isSpotOccupiedByEntity(dimension, stand, excludeEntityId)) return false;
+  return spotAtStand(dimension, stand) !== undefined;
 }

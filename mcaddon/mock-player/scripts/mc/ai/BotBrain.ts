@@ -15,12 +15,14 @@ import { color } from "@yinxe/toolkit";
 import { Blackboard, BehaviorTree, type AiContext } from "../../core/ai";
 import { createVaultTaskTree, type VaultPorts } from "../../core/tasks/VaultTask";
 import { createRaidTaskTree, type RaidPorts } from "../../core/tasks/RaidTask";
-import { BOT_TAG, TAG_RAID_MODE, TAG_VAULT_MODE } from "../../core/tags/BotTags";
+import { createFishingTaskTree, type FishingPorts } from "../../core/tasks/FishingTask";
+import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../../core/tags/BotTags";
 import { BotUiEvent } from "../../core/events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { reconnectingBots } from "../features/pendingRespawn";
 import { vaultPorts } from "../tasks/McVaultPorts";
 import { raidPorts } from "../tasks/McRaidPorts";
+import { fishingPorts } from "../tasks/McFishingPorts";
 
 // ─── 常量 ────────────────────────────────────────────────
 
@@ -83,6 +85,11 @@ export function tickRaidBrain(botName: string): void {
   tickTask(botName, "raid", () => createRaidTaskTree(raidPorts));
 }
 
+/** 钓鱼任务树推进 */
+export function tickFishingBrain(botName: string): void {
+  tickTask(botName, "fishing", () => createFishingTaskTree(fishingPorts));
+}
+
 /**
  * 任务对账：活跃（仍带对应标签）假人之外的树全部重置——
  * 停止已下发导航 + 清黑板。标签移除（UI 行为菜单 / /mp:tag 任意入口）
@@ -111,6 +118,11 @@ export function reconcileVaultBrains(activeBotNames: Iterable<string>): void {
 /** 劫掠任务对账（无重连概念，直接清理） */
 export function reconcileRaidBrains(activeBotNames: Iterable<string>): void {
   reconcileTask("raid", activeBotNames, false);
+}
+
+/** 钓鱼任务对账（跳过重连中——重连完成后继续原树） */
+export function reconcileFishingBrains(activeBotNames: Iterable<string>): void {
+  reconcileTask("fishing", activeBotNames, true);
 }
 
 /** 停止假人当前导航移动（守卫：记录/实体/标签） */
@@ -154,6 +166,11 @@ export function startBrainEngine(): void {
           `${color.playerName}[劫掠] ${color.warn}${e.botName}${color.muted} 不在线，上线后将自动喝第一瓶`,
         );
       }
+      if (e.tags.includes(TAG_FISH_MODE.value)) {
+        player.sendMessage(
+          `${color.playerName}[钓鱼] ${color.warn}${e.botName}${color.muted} 不在线，上线后将自动开始钓鱼`,
+        );
+      }
     }
   });
 
@@ -166,6 +183,7 @@ export function startBrainEngine(): void {
     }
     const vaultBots: string[] = [];
     const raidBots: string[] = [];
+    const fishingBots: string[] = [];
     for (const player of players) {
       try {
         if (player.hasTag(TAG_VAULT_MODE.value)) {
@@ -176,11 +194,16 @@ export function startBrainEngine(): void {
           raidBots.push(player.name);
           tickRaidBrain(player.name);
         }
+        if (player.hasTag(TAG_FISH_MODE.value)) {
+          fishingBots.push(player.name);
+          tickFishingBrain(player.name);
+        }
       } catch (e: any) {
         console.warn(`[MockPlayer] AI 引擎异常 ${player.name}: ${e?.message ?? e}`);
       }
     }
     reconcileVaultBrains(vaultBots);
     reconcileRaidBrains(raidBots);
+    reconcileFishingBrains(fishingBots);
   }, BRAIN_ENGINE_TICKS);
 }

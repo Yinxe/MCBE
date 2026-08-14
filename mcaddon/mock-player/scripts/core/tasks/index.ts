@@ -8,3 +8,4 @@ export * from "./VaultTask";
 export * from "./RaidTask";
 export * from "./RaidRules";
 export * from "./FishingRules";
+export * from "./FishingTask";

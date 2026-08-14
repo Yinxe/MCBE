@@ -13,6 +13,8 @@ import {
   classifyFishingScan,
   collectFishingSpots,
   computeCastAim,
+  computeTargetYaw,
+  diffLoot,
   initialBiteTracker,
   isBiteDrop,
   isFishingHook,
@@ -20,9 +22,12 @@ import {
   isSafeSupport,
   isSurfaceWater,
   isWaterBlock,
+  isYawAligned,
   judgeFishingSpot,
   judgeHookPlacement,
+  judgeStandFishingSpot,
   makeFisherTag,
+  makeLootFingerprint,
   parseFisherTag,
   sortFishingSpots,
   updateBiteTracker,
@@ -460,4 +465,61 @@ test("边界：tag 解析——名字含冒号完整保留（slice 语义）", (
   assert.equal(tag, "mp:fisher:名字:带冒号");
   assert.equal(parseFisherTag(tag), "名字:带冒号"); // 冒号后的内容不截断
   assert.equal(parseFisherTag("mp:fisher: 空格名 "), " 空格名 "); // 前后空格保留
+});
+
+// ─── AI 行为判定（judgeStandFishingSpot / yaw / 战利品 diff） ───
+
+test("完整钓鱼点判定：安全支撑 + 上方两格空气 + 至少一个相邻水面", () => {
+  const stand: Vec3 = { x: 5, y: 4, z: 5 };
+  assert.equal(judgeStandFishingSpot(stand, "minecraft:stone", AIR_BLOCK_ID, AIR_BLOCK_ID, 1), true);
+  assert.equal(judgeStandFishingSpot(stand, "minecraft:stone", AIR_BLOCK_ID, AIR_BLOCK_ID, 3), true);
+  // 缺相邻水面 → 不是钓鱼点（用户规格：点位必须与水相连）
+  assert.equal(judgeStandFishingSpot(stand, "minecraft:stone", AIR_BLOCK_ID, AIR_BLOCK_ID, 0), false);
+  // 危险支撑 / 站立格是水 / 头顶被堵 → 均不构成
+  assert.equal(judgeStandFishingSpot(stand, "minecraft:magma_block", AIR_BLOCK_ID, AIR_BLOCK_ID, 1), false);
+  assert.equal(judgeStandFishingSpot(stand, "minecraft:stone", "minecraft:water", AIR_BLOCK_ID, 1), false);
+  assert.equal(judgeStandFishingSpot(stand, "minecraft:stone", AIR_BLOCK_ID, "minecraft:stone", 1), false);
+});
+
+test("目标 yaw 计算：MC 标准（0=南+Z、东=-90、北=±180）", () => {
+  const from: Vec3 = { x: 0, y: 0, z: 0 };
+  // ⚠️ -0 断言陷阱：assert.equal 用 Object.is（-0 !== 0），加 +0 归一化
+  assert.equal(Math.round(computeTargetYaw(from, { x: 0, y: 0, z: 5 })) + 0, 0); // 朝南
+  assert.equal(Math.round(computeTargetYaw(from, { x: 5, y: 0, z: 0 })), -90); // 朝东
+  assert.equal(Math.round(computeTargetYaw(from, { x: -5, y: 0, z: 0 })), 90); // 朝西
+  assert.equal(Math.abs(Math.round(computeTargetYaw(from, { x: 0, y: 0, z: -5 }))), 180); // 朝北
+});
+
+test("朝向对齐判定：角度差归一化 ±180，容差内对齐", () => {
+  assert.equal(isYawAligned(0, 10, 15), true);
+  assert.equal(isYawAligned(0, 20, 15), false);
+  assert.equal(isYawAligned(-90, -80, 15), true);
+  // 跨 ±180 边界：179 与 -179 差 2 度 → 对齐
+  assert.equal(isYawAligned(179, -179, 15), true);
+  assert.equal(isYawAligned(170, -170, 15), false);
+  assert.equal(isYawAligned(0, 360, 15), true); // 360 归一化为 0
+});
+
+test("物品指纹：附魔差异可区分（带海之眷顾的鱼 vs 普通鱼）", () => {
+  assert.equal(makeLootFingerprint("minecraft:cod", []), "minecraft:cod");
+  assert.equal(makeLootFingerprint("minecraft:enchanted_book", [{ id: "luck_of_the_sea", level: 3 }]), "minecraft:enchanted_book#luck_of_the_sea:3");
+  assert.notEqual(
+    makeLootFingerprint("minecraft:enchanted_book", [{ id: "luck_of_the_sea", level: 3 }]),
+    makeLootFingerprint("minecraft:enchanted_book", [{ id: "luck_of_the_sea", level: 2 }])
+  );
+});
+
+test("战利品 diff：新增物品/附魔区分/多数量/无变化", () => {
+  // 空背包 → 钓到 2 条 cod
+  assert.deepEqual(diffLoot({}, { "minecraft:cod": 2 }), [{ typeId: "minecraft:cod", count: 2, enchantments: [] }]);
+  // 已有 1 条 cod，钓到 1 条 → 新增 1
+  assert.deepEqual(diffLoot({ "minecraft:cod": 1 }, { "minecraft:cod": 2 }), [{ typeId: "minecraft:cod", count: 1, enchantments: [] }]);
+  // 附魔书：before 无 → after 1 本海之眷顾Ⅲ
+  assert.deepEqual(diffLoot({}, { "minecraft:enchanted_book#luck_of_the_sea:3": 1 }), [
+    { typeId: "minecraft:enchanted_book", count: 1, enchantments: [{ id: "luck_of_the_sea", level: 3 }] },
+  ]);
+  // 无变化 → 空战利品
+  assert.deepEqual(diffLoot({ "minecraft:cod": 2 }, { "minecraft:cod": 2 }), []);
+  // 物品减少（消耗）不算新增
+  assert.deepEqual(diffLoot({ "minecraft:cod": 2 }, { "minecraft:cod": 1 }), []);
 });

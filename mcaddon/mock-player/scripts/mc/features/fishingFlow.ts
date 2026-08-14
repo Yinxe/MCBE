@@ -13,15 +13,21 @@
 //      连续 2 窗口 = 明显下沉（咬钩）→ 触发收杆信号（通知主人 + 自动收竿）
 //   5. 超时 → 收竿无获（timeout）；鱼钩中途消失 → hook-lost 失败
 //
-// 通知：主人收到 [模拟玩家][钓鱼] 提醒（上钩 / 超时 / 失败原因）
+// 通知（用户规格 2.1.14）：鱼上钩后只通知**附近 7 格玩家** [模拟玩家][钓鱼]
+// 提醒（上钩 / 战利品 / 超时 / 失败原因）；无鱼竿等缺因提示由 AI 端口负责
+// （McFishingPorts idle，主人通知 + 节流）
 
 import { system, world } from "@minecraft/server";
-import type { Entity } from "@minecraft/server";
+import type { Entity, ItemStack } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { initialBiteTracker, isWaterBlock, judgeHookPlacement, updateBiteTracker, type BiteTracker, type HookPlacement } from "../../core/tasks/FishingRules";
-import { botRegistry } from "../bootstrap/context";
-import { castFishingRod, findOwnHooks, reelFishingRod } from "./fishing";
+import { diffLoot, initialBiteTracker, isWaterBlock, judgeHookPlacement, makeLootFingerprint, updateBiteTracker, type BackpackInfo, type BiteTracker, type FishingFailureReason, type FishingOutcome, type HookPlacement, type LootItem } from "../../core/tasks/FishingRules";
+import { enchantDisplayName } from "../../core/format/EnchantZh";
+import { BOT_TAG, TAG_FISH_MODE } from "../../core/tags/BotTags";
+import { castFishingRod, findOwnHooks, reelFishingRod, resolveBotPlayer } from "./fishing";
+
+// ── 领域类型 re-export（类型已归位 core/tasks/FishingRules，此处保持导入方兼容） ──
+export type { FishingOutcome, FishingFailureReason, BackpackInfo, LootItem } from "../../core/tasks/FishingRules";
 
 // ─── 常量 ────────────────────────────────────────────────
 
@@ -35,26 +41,63 @@ const BITE_TIMEOUT_TICKS = 900;
 /** 挂实体检测半径（格，=0.25 极小值：鱼钩**直接勾住**实体才算挂住——物理贴合；
  *  getEntities 按实体中心点计算距离，半径放大即误判水中正常游动的鱼） */
 const PLACEMENT_ENTITY_RADIUS = 0.25;
+/** 背包快满阈值（剩余空格数 ≤ 该值 → 警告"背包快满"） */
+const NEAR_FULL_GAP = 2;
 
 // ─── 结果类型（区分度：成功 / 无获超时 / 失败+原因） ────
-
-/** 钓鱼失败原因（offline/no-rod 可重试；landed/snagged 需换点；hook-lost 异常） */
-export type FishingFailureReason =
-  | "offline" // 假人不可用
-  | "no-rod" // 无鱼竿（主手与热键栏都没有）
-  | "landed" // 鱼钩勾中固体方块（落陆地，未入水）
-  | "snagged" // 鱼钩勾中实体生物
-  | "hook-lost" // 监听中鱼钩消失（异常）
-  | "busy" // 已有进行中的钓鱼流程（防重入）
-  | "error"; // 执行失败（可重试）
-
-/** 一次钓鱼的结果：caught=上钩收竿 / timeout=45 秒无鱼超时收竿 / failed=失败+原因 */
-export type FishingOutcome = { kind: "caught" } | { kind: "timeout" } | { kind: "failed"; reason: FishingFailureReason };
+// ⚠️ FishingOutcome / FishingFailureReason / BackpackInfo 类型定义已归位
+//    core/tasks/FishingRules（AI 任务端口契约共用），此处仅 re-export。
 
 // ─── 防重入 ──────────────────────────────────────────────
 
 /** 进行中的钓鱼流程（按假人键控，防并发双收竿） */
 const runningFishing = new Set<string>();
+
+// ─── 战利品事件感知（用户规格） ─────────────────────────
+// ⚠️ 收竿后战利品入包有引擎延迟——收竿后立即快照 diff 会漏（"无战利品"根因）。
+//    改为**订阅假人背包物品变化事件**：只感知**钓鱼模式的假人**（TAG_FISH_MODE）
+//    + **非主手槽**变化（主手变化 = 抛竿/收竿操作，不是战利品）+ 钓鱼进行中。
+//    收竿后等待战利品入包（3 tick）再读取收集结果；事件未触发时回退快照 diff。
+
+/** 钓鱼中收集到的战利品（botName → 指纹 → 数量；每次钓鱼后清空） */
+const pendingLoot = new Map<string, Record<string, number>>();
+
+/** 初始化幂等守卫（main.ts worldLoad 调用一次；防重复订阅） */
+let lootTrackerReady = false;
+
+/**
+ * 订阅假人背包物品变化（战利品感知；main.ts worldLoad 后调用）。
+ * 过滤：假人（BOT_TAG）+ 钓鱼模式（TAG_FISH_MODE）+ 钓鱼进行中（runningFishing）
+ *   + 非主手槽（selectedSlotIndex——主手变化是抛竿/收竿操作）。
+ */
+export function initLootTracker(): void {
+  if (lootTrackerReady) return;
+  lootTrackerReady = true;
+  world.afterEvents.playerInventoryItemChange.subscribe((event) => {
+    try {
+      const bot = event.player;
+      if (!bot.hasTag(BOT_TAG) || !bot.hasTag(TAG_FISH_MODE.value)) return; // 只感知钓鱼模式假人
+      if (!runningFishing.has(bot.name)) return; // 钓鱼进行中
+      const selected = (bot as { selectedSlotIndex?: number }).selectedSlotIndex ?? 0;
+      if (event.slot === selected) return; // 排除主手（抛竿/收竿）
+      const item = event.itemStack;
+      if (!item) return; // 槽位被清空不算战利品
+      const fp = makeLootFingerprint(item.typeId, itemEnchantments(item));
+      const map = pendingLoot.get(bot.name) ?? {};
+      map[fp] = (map[fp] ?? 0) + item.amount;
+      pendingLoot.set(bot.name, map);
+    } catch {
+      /* 单事件异常隔离 */
+    }
+  });
+}
+
+/** 取出并清空钓鱼中收集的战利品（指纹 → 数量） */
+function takePendingLoot(botName: string): Record<string, number> {
+  const loot = pendingLoot.get(botName) ?? {};
+  pendingLoot.delete(botName);
+  return loot;
+}
 
 // ─── 工具 ────────────────────────────────────────────────
 
@@ -62,14 +105,26 @@ function waitTicks(ticks: number): Promise<void> {
   return new Promise((resolve) => system.runTimeout(resolve, ticks));
 }
 
-/** 通知假人主人（[模拟玩家][钓鱼] 前缀 + 详细；玩家不可达忽略） */
+/** 钓鱼消息通知半径（格，用户规格：鱼上钩后只通知附近 7 格玩家） */
+const NOTIFY_RADIUS = 7;
+
+/**
+ * 通知附近玩家钓鱼消息（[模拟玩家][钓鱼] 前缀 + 详细；用户规格：**只通知
+ * 附近 NOTIFY_RADIUS 格内的玩家**，主人不在附近不直发；排除假人自己）。
+ */
 function notifyOwner(botName: string, detail: string): void {
   try {
-    const record = botRegistry.get(botName);
-    if (!record?.ownerName) return;
-    world
-      .getPlayers({ name: record.ownerName })[0]
-      ?.sendMessage(`${color.accent}[模拟玩家][钓鱼] ${color.playerName}${botName} ${color.muted}${detail}`);
+    const bot = resolveBotPlayer(botName);
+    if (!bot) return;
+    const msg = `${color.accent}[模拟玩家][钓鱼] ${color.playerName}${botName} ${color.muted}${detail}`;
+    for (const p of world.getPlayers()) {
+      if (p.name === botName) continue; // 排除假人自己
+      const dx = p.location.x - bot.location.x;
+      const dz = p.location.z - bot.location.z;
+      if (Math.hypot(dx, dz) <= NOTIFY_RADIUS) {
+        p.sendMessage(msg);
+      }
+    }
   } catch {
     /* 通知失败不影响主流程 */
   }
@@ -93,6 +148,84 @@ export function failureLabel(reason: FishingFailureReason): string {
     default:
       return "执行失败";
   }
+}
+
+// ─── 背包快照 / 状态（成功钓鱼报告用） ───────────────────
+
+/** 背包物品附魔列表（读 enchantable 组件；无组件返回空） */
+function itemEnchantments(item: ItemStack): { id: string; level: number }[] {
+  try {
+    const ench = item.getComponent("minecraft:enchantable") as
+      | { getEnchantments: () => { type: { id: string }; level: number }[] }
+      | undefined;
+    return ench?.getEnchantments().map((e) => ({ id: e.type.id, level: e.level })) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** 背包指纹快照（指纹 → 数量；指纹含附魔，可区分同物品不同附魔） */
+function snapshotInventory(botName: string): Record<string, number> {
+  const snapshot: Record<string, number> = {};
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return snapshot;
+  try {
+    const container = (bot.getComponent("minecraft:inventory") as
+      | { container?: { size: number; getItem: (i: number) => ItemStack | undefined } }
+      | undefined)?.container;
+    if (!container) return snapshot;
+    for (let i = 0; i < container.size; i++) {
+      const item = container.getItem(i);
+      if (!item) continue;
+      const fp = makeLootFingerprint(item.typeId, itemEnchantments(item));
+      snapshot[fp] = (snapshot[fp] ?? 0) + item.amount;
+    }
+  } catch {
+    /* 背包不可读按空快照处理 */
+  }
+  return snapshot;
+}
+
+/** 背包状态（已用格数/总格数） */
+function backpackInfo(botName: string): BackpackInfo {
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return { usedSlots: 0, totalSlots: 0 };
+  try {
+    const container = (bot.getComponent("minecraft:inventory") as
+      | { container?: { size: number; getItem: (i: number) => ItemStack | undefined } }
+      | undefined)?.container;
+    if (!container) return { usedSlots: 0, totalSlots: 0 };
+    let used = 0;
+    for (let i = 0; i < container.size; i++) {
+      if (container.getItem(i)) used++;
+    }
+    return { usedSlots: used, totalSlots: container.size };
+  } catch {
+    return { usedSlots: 0, totalSlots: 0 };
+  }
+}
+
+/** 战利品 → 中文展示（物品 typeId + 附魔中文；附魔用 ENCH_ZH） */
+function lootLabel(loot: LootItem[]): string {
+  if (loot.length === 0) return "（无战利品）";
+  return loot
+    .map((l) => {
+      const ench = l.enchantments.length > 0 ? `（${l.enchantments.map((e) => enchantDisplayName(e.id)).join("、")}）` : "";
+      return `${l.typeId}×${l.count}${ench}`;
+    })
+    .join("、");
+}
+
+/** 背包状态 + 容量预警（快满/已满）→ 中文展示 */
+function backpackLabel(backpack: BackpackInfo): string {
+  const { usedSlots, totalSlots } = backpack;
+  let warning = "";
+  if (usedSlots >= totalSlots) {
+    warning = `${color.error}；⚠️ 背包已满（${usedSlots}/${totalSlots}），建议清理`;
+  } else if (usedSlots >= totalSlots - NEAR_FULL_GAP) {
+    warning = `${color.warn}；⚠️ 背包快满（${usedSlots}/${totalSlots}）`;
+  }
+  return `${color.muted}背包 ${usedSlots}/${totalSlots}${warning}`;
 }
 
 // ─── 流程阶段 ────────────────────────────────────────────
@@ -152,8 +285,21 @@ async function watchForBite(botName: string, hookId: string): Promise<FishingOut
       // ── 咬钩：触发收杆信号（通知主人 + 自动收竿） ──
       console.warn(`[MockPlayer] fishOnce ${botName} bite detected (drop ${(tracker.maxY - y).toFixed(2)} from max ${tracker.maxY.toFixed(2)})`);
       notifyOwner(botName, `${color.success}鱼上钩了，正在收竿！`);
+      const before = snapshotInventory(botName); // 收竿前背包快照（战利品 diff 基准）
       const reel = await reelFishingRod(botName);
-      if (reel === "reeled") return { kind: "caught" };
+      if (reel === "reeled") {
+        // ── 成功：等待战利品入包（事件驱动收集优先，diff 回退） + 背包状态报告 ──
+        await waitTicks(3); // ⚠️ 战利品入包有引擎延迟——立即快照会漏（"无战利品"根因）
+        const collected = takePendingLoot(botName);
+        const loot =
+          Object.keys(collected).length > 0
+            ? diffLoot({}, collected) // 事件收集（指纹 → LootItem）
+            : diffLoot(before, snapshotInventory(botName)); // 回退：延迟后快照 diff
+        const backpack = backpackInfo(botName);
+        console.warn(`[MockPlayer] fishOnce ${botName} caught: ${loot.map((l) => `${l.typeId}x${l.count}`).join(",") || "none"} backpack=${backpack.usedSlots}/${backpack.totalSlots}`);
+        notifyOwner(botName, `${color.success}钓到 ${lootLabel(loot)}；${backpackLabel(backpack)}`);
+        return { kind: "caught", loot, backpack };
+      }
       // 收竿异常：no-hook=钩已消失 / offline=假人下线 / no-rod=鱼竿没了 / error=执行失败
       const reason: FishingFailureReason =
         reel === "no-hook" ? "hook-lost" : reel === "offline" ? "offline" : reel === "no-rod" ? "no-rod" : "error";

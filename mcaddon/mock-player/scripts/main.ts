@@ -18,6 +18,7 @@ import { registerAllEvents } from "./mc/events/index";
 import { startTagBehaviors } from "./mc/features/behavior";
 import { initTridentTracker } from "./mc/features/tridentTracker";
 import { initFishingHookTracker } from "./mc/features/fishingHookTracker";
+import { initLootTracker } from "./mc/features/fishingFlow";
 import { initRaidPorts } from "./mc/tasks/McRaidPorts";
 import { startBrainEngine } from "./mc/ai/BotBrain";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
@@ -85,6 +86,10 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 初始化钓鱼钩生成追踪（entitySpawn 监测鱼钩 + 读取主人名字）——
   // 自动钓鱼感知基础，独立初始化
   initFishingHookTracker();
+
+  // 初始化战利品感知（背包物品变化事件订阅 → 钓鱼模式假人战利品收集）——
+  // 事件驱动感知，独立初始化
+  initLootTracker();
 
   // 初始化劫掠机制（effectAdd 事件订阅 → 公共信号 + 一次性卡死提醒）——
   // 事件驱动感知喂给 AI 行为树（core/tasks/RaidTask），独立初始化

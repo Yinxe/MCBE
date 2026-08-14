@@ -310,3 +310,128 @@ function distSq(a: Vec3, b: Vec3): number {
   const dz = a.z - b.z;
   return dx * dx + dy * dy + dz * dz;
 }
+
+// ─── 钓鱼点状态判定（AI 行为用：点位有效/占用/朝向） ────
+
+/**
+ * 完整钓鱼点判定（AI 决策复用，用户规格）：安全支撑方块（非岩浆/岩浆块等
+ * 危险方块） + **上方两格都是空气**（站立格 + 头顶格）+ **至少一个相邻水面**。
+ * ⚠️ 支撑块实体实心由调用方 isSolid 判定（本函数无 mc API）；相邻水面指
+ * 支撑块同层水平 8 邻内的水方块。
+ *
+ * @param stand              - 站立格坐标（假人脚所在格 = 支撑块上方 1 格）
+ * @param supportTypeId      - 支撑方块 typeId
+ * @param above1TypeId       - 站立格 typeId
+ * @param above2TypeId       - 头顶格 typeId
+ * @param adjacentWaterCount - 支撑块同层相邻水面数（≥1 才算钓鱼点）
+ */
+export function judgeStandFishingSpot(
+  stand: Vec3,
+  supportTypeId: string,
+  above1TypeId: string,
+  above2TypeId: string,
+  adjacentWaterCount: number
+): boolean {
+  return judgeFishingSpot(supportTypeId, above1TypeId, above2TypeId) && adjacentWaterCount > 0;
+}
+
+/** 朝向容差（度，用户规格：身体朝向与目标水域方向偏差超过该值需要转身） */
+export const YAW_TOLERANCE_DEG = 15;
+
+/**
+ * 计算 from 指向 to 的水平方向角（MC yaw 标准：0=南(+Z)、东=-90、北=±180）。
+ * 公式：yaw = -atan2(dx, dz) 转度（东向 dx>0 → -90 ✓；南向 dz>0 → 0 ✓）。
+ */
+export function computeTargetYaw(from: Vec3, to: Vec3): number {
+  const dx = to.x - from.x;
+  const dz = to.z - from.z;
+  return (-Math.atan2(dx, dz) * 180) / Math.PI;
+}
+
+/**
+ * 朝向是否对齐：当前 yaw 与目标 yaw 的角度差（归一化到 [-180, 180]）≤ 容差。
+ */
+export function isYawAligned(currentYaw: number, targetYaw: number, tolerance: number = YAW_TOLERANCE_DEG): boolean {
+  let diff = (targetYaw - currentYaw) % 360;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  return Math.abs(diff) <= tolerance;
+}
+
+// ─── 战利品 diff（成功钓鱼后背包前后对比，含附魔） ──────
+
+/** 战利品条目（钓到的东西，含附魔） */
+export interface LootItem {
+  /** 物品 typeId（如 minecraft:cod） */
+  typeId: string;
+  /** 数量 */
+  count: number;
+  /** 附魔列表（id: 附魔标识，level: 等级） */
+  enchantments: { id: string; level: number }[];
+}
+
+/**
+ * 物品指纹：typeId + 附魔编码（`typeId#enchId:lvl,...`）——同一物品不同附魔
+ * 可区分（如带海之眷顾的鱼竿 vs 普通鱼竿），背包前后 diff 据此识别战利品。
+ */
+export function makeLootFingerprint(typeId: string, enchantments: readonly { id: string; level: number }[]): string {
+  if (enchantments.length === 0) return typeId;
+  const enchPart = enchantments.map((e) => `${e.id}:${e.level}`).join(",");
+  return `${typeId}#${enchPart}`;
+}
+
+/**
+ * 背包前后指纹 diff（core 纯函数，可单测）：after 中数量多于 before 的
+ * 指纹 = 本次新增（战利品）。before/after 为「指纹 → 数量」映射（mc 层
+ * 扫描背包构造）。
+ *
+ * @param before - 收竿前背包指纹计数
+ * @param after  - 收竿后背包指纹计数
+ * @returns 新增物品列表（按指纹解析 typeId/附魔）
+ */
+export function diffLoot(before: Record<string, number>, after: Record<string, number>): LootItem[] {
+  const loot: LootItem[] = [];
+  for (const [fingerprint, afterCount] of Object.entries(after)) {
+    const beforeCount = before[fingerprint] ?? 0;
+    const gained = afterCount - beforeCount;
+    if (gained > 0) {
+      const [typeId = fingerprint, enchPart] = fingerprint.split("#");
+      const enchantments: { id: string; level: number }[] = [];
+      if (enchPart) {
+        for (const seg of enchPart.split(",")) {
+          const [id = "", levelStr = ""] = seg.split(":");
+          const level = parseInt(levelStr, 10);
+          if (id && !isNaN(level) && level > 0) enchantments.push({ id, level });
+        }
+      }
+      loot.push({ typeId, count: gained, enchantments });
+    }
+  }
+  return loot;
+}
+
+// ─── 钓鱼结果类型（领域类型：fishOnce 与 AI 任务共用） ───
+
+/** 钓鱼失败原因（offline/no-rod 可重试；landed/snagged 需换点；hook-lost 异常） */
+export type FishingFailureReason =
+  | "offline" // 假人不可用
+  | "no-rod" // 无鱼竿（主手与热键栏都没有）
+  | "landed" // 鱼钩勾中固体方块（落陆地，未入水）
+  | "snagged" // 鱼钩勾中实体生物
+  | "hook-lost" // 监听中鱼钩消失（异常）
+  | "busy" // 已有进行中的钓鱼流程（防重入）
+  | "error"; // 执行失败（可重试）
+
+/** 背包状态（成功钓鱼后报告用） */
+export interface BackpackInfo {
+  /** 已占用格数（非空格） */
+  usedSlots: number;
+  /** 背包总格数 */
+  totalSlots: number;
+}
+
+/** 一次钓鱼的结果：caught=上钩收竿（含战利品与背包状态） / timeout=45 秒无鱼超时收竿 / failed=失败+原因 */
+export type FishingOutcome =
+  | { kind: "caught"; loot: LootItem[]; backpack: BackpackInfo }
+  | { kind: "timeout" }
+  | { kind: "failed"; reason: FishingFailureReason };
