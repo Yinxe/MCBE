@@ -10,6 +10,7 @@ import { formatDimensionId } from "../../core/format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
 import { visibleRecords } from "../../core/service/BotVisibility";
+import { ownerLabel } from "./ownerLabel";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
 
@@ -49,10 +50,16 @@ export function showOnlineManagement(player: Player): void {
       .filter((t) => t !== BOT_TAG)
       .map((t) => { const d = getTagDef(t); return d ? d.label : t; })
       .join(" ");
-    builder.toggle(`s${i}`, `${icon} ${color.playerName}${record.name} ${color.accent}| ${posSummary}${tagSummary ? ` ${color.accent}[${tagSummary}]` : ""}`, {
-      defaultValue: record.online,
-      tooltip: record.online ? "关闭此开关将下线该假人" : "开启此开关将上线该假人",
-    });
+    // 主人/无主标签：管理员在线管理需归属信息；普通玩家看无主假人的 [无主] tag
+    const owner = ownerLabel(record, isAdmin(player));
+    builder.toggle(
+      `s${i}`,
+      `${icon} ${color.playerName}${record.name}${owner ? ` ${owner}` : ""} ${color.accent}| ${posSummary}${tagSummary ? ` ${color.accent}[${tagSummary}]` : ""}`,
+      {
+        defaultValue: record.online,
+        tooltip: record.online ? "关闭此开关将下线该假人" : "开启此开关将上线该假人",
+      },
+    );
   }
 
   builder.show(player).then((vals) => {
