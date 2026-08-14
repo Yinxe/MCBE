@@ -13,6 +13,7 @@ import {
   classifyFishingScan,
   collectFishingSpots,
   computeCastAim,
+  initialBiteTracker,
   isBiteDrop,
   isFishingHook,
   isFishingRod,
@@ -24,6 +25,7 @@ import {
   makeFisherTag,
   parseFisherTag,
   sortFishingSpots,
+  updateBiteTracker,
 } from "../scripts/core/tasks/FishingRules";
 import type { Vec3 } from "../scripts/core/model/Types";
 
@@ -68,13 +70,69 @@ test("水方块判定（普通水/流动水都能钓）", () => {
   assert.equal(isWaterBlock("minecraft:air"), false);
 });
 
-test("咬钩下沉信号判定（净下降超过阈值）", () => {
-  assert.equal(BITE_DROP_THRESHOLD, 0.3);
-  assert.equal(isBiteDrop(-0.5), true);
-  assert.equal(isBiteDrop(-0.3), false); // 恰在阈值不触发（严格小于）
-  assert.equal(isBiteDrop(-0.2), false);
-  assert.equal(isBiteDrop(0.1), false);
-  assert.equal(isBiteDrop(0.5), false); // 上浮不算
+test("咬钩下沉信号判定（相对最高点下降超过阈值 0.25）", () => {
+  assert.equal(BITE_DROP_THRESHOLD, 0.25);
+  assert.equal(isBiteDrop(0.5), true);
+  assert.equal(isBiteDrop(0.25), false); // 恰在阈值不触发（严格大于）
+  assert.equal(isBiteDrop(0.2), false);
+  assert.equal(isBiteDrop(-0.1), false); // 上浮不算
+});
+
+test("边界：咬钩阈值临界值（0.2501 触发，0.25 恰不触发）", () => {
+  assert.equal(isBiteDrop(0.2501), true);
+  assert.equal(isBiteDrop(0.2499), false);
+  assert.equal(isBiteDrop(1), true); // 深下沉
+});
+
+test("咬钩判定：下沉量超过 0.25 即上钩（单次判定，最高点参照）", () => {
+  let t = initialBiteTracker(10);
+  // 下沉 0.2（< 0.25）不触发；继续下沉到 0.3（> 0.25）→ 上钩
+  let r = updateBiteTracker(t, 9.8);
+  t = r.tracker;
+  assert.equal(r.bite, false);
+  r = updateBiteTracker(t, 9.7);
+  assert.equal(r.bite, true); // 相对最高点 10 下沉 0.3 > 0.25
+});
+
+test("咬钩判定：下沉不多（0.2 内）不上钩——最高点参照天然防误判", () => {
+  let t = initialBiteTracker(10);
+  // 微小下沉 0.2（< 0.25）→ 不触发
+  const r = updateBiteTracker(t, 9.8);
+  assert.equal(r.bite, false);
+});
+
+test("咬钩判定：正常浮动不误判（上浮刷新最高点参照）", () => {
+  let t = initialBiteTracker(10);
+  for (const y of [10.1, 9.9, 10.0, 9.95, 10.05]) {
+    const r = updateBiteTracker(t, y);
+    t = r.tracker;
+    assert.equal(r.bite, false); // 浮动幅度 ±0.1 < 阈值
+  }
+});
+
+test("咬钩判定：上浮后最高点跟随刷新，后续小降不误判", () => {
+  let t = initialBiteTracker(10);
+  // 上浮到 10.3 → 最高点刷新为 10.3
+  let r = updateBiteTracker(t, 10.3);
+  t = r.tracker;
+  assert.equal(r.bite, false);
+  assert.equal(t.maxY, 10.3);
+  // 相对新最高点小降 0.2 → 不触发（参照已跟随）
+  r = updateBiteTracker(t, 10.1);
+  assert.equal(r.bite, false);
+});
+
+test("咬钩判定：缓慢渐进下沉同样捕获（最高点不变，下沉量随深度增大）", () => {
+  let t = initialBiteTracker(10);
+  // 每窗口降 0.1：0.1 → 0.2（未触发）→ 0.3（>0.25 触发）
+  let r = updateBiteTracker(t, 9.9);
+  t = r.tracker;
+  assert.equal(r.bite, false);
+  r = updateBiteTracker(t, 9.8);
+  t = r.tracker;
+  assert.equal(r.bite, false);
+  r = updateBiteTracker(t, 9.7);
+  assert.equal(r.bite, true);
 });
 
 test("鱼钩落点判定：勾中任何实体都失败（实体优先），无实体才看是否入水", () => {
@@ -269,13 +327,6 @@ test("扫描失败原因分类：no-water / no-spot / 成功", () => {
 });
 
 // ─── 边界补充（阈值/空输入/防御分支/封顶语义/鲁棒性） ───
-
-test("边界：咬钩阈值临界值（-0.3001 触发，-0.3 恰不触发）", () => {
-  assert.equal(isBiteDrop(-0.3001), true);
-  assert.equal(isBiteDrop(-0.2999), false);
-  assert.equal(isBiteDrop(-0.3), false); // 严格小于
-  assert.equal(isBiteDrop(-1), true); // 深下沉
-});
 
 test("边界：安全支撑空串/未知方块视为安全（实心由调用方拦截）", () => {
   assert.equal(isSafeSupport(""), true); // 调用方 collect 已保证 supportType 非空

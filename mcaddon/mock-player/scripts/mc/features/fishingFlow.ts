@@ -19,7 +19,7 @@ import { system, world } from "@minecraft/server";
 import type { Entity } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { isBiteDrop, isWaterBlock, judgeHookPlacement, type HookPlacement } from "../../core/tasks/FishingRules";
+import { initialBiteTracker, isWaterBlock, judgeHookPlacement, updateBiteTracker, type BiteTracker, type HookPlacement } from "../../core/tasks/FishingRules";
 import { botRegistry } from "../bootstrap/context";
 import { castFishingRod, findOwnHooks, reelFishingRod } from "./fishing";
 
@@ -27,11 +27,9 @@ import { castFishingRod, findOwnHooks, reelFishingRod } from "./fishing";
 
 /** 浮漂稳定等待（tick，=1.25 秒：鱼钩抛竿即生成，下落至稳定目标位置的时间） */
 const STABILIZE_TICKS = 25;
-/** 下沉检测窗口（tick，=4 tick：咬钩下沉持续时间仅约 10 tick（收竿窗口），
- *  检测窗口必须足够密，保证在收竿窗口内捕获净下降并完成 2 窗口确认） */
-const BITE_CHECK_TICKS = 4;
-/** 连续净下降窗口数（防抖动误判） */
-const BITE_CONFIRM_WINDOWS = 2;
+/** 下沉检测窗口（tick，=2 tick：咬钩下沉持续时间仅约 10 tick（收竿窗口），
+ *  检测必须足够密——2 tick 采样让最高点参照的下沉量尽快达到 0.25 阈值） */
+const BITE_CHECK_TICKS = 2;
 /** 上钩监听上限（tick，=45 秒，用户规格） */
 const BITE_TIMEOUT_TICKS = 900;
 /** 挂实体检测半径（格，=0.25 极小值：鱼钩**直接勾住**实体才算挂住——物理贴合；
@@ -78,7 +76,7 @@ function notifyOwner(botName: string, detail: string): void {
 }
 
 /** 失败原因 → 中文描述（通知用） */
-function failureLabel(reason: FishingFailureReason): string {
+export function failureLabel(reason: FishingFailureReason): string {
   switch (reason) {
     case "offline":
       return "假人不在线";
@@ -127,14 +125,15 @@ async function checkPlacement(botName: string, hookId: string): Promise<HookPlac
 }
 
 /**
- * 监听上钩（最长 45 秒）：窗口累计净下降超阈值连续 2 窗口 = 咬钩 → 收竿。
+ * 监听上钩（最长 45 秒）：**相对稳定基准的累计下降**超阈值连续 2 窗口 =
+ * 咬钩 → 收竿（慢速渐进下沉也能捕获——相邻窗口对比会漏检）。判定逻辑
+ * 在 core（updateBiteTracker，可单测），本处只做感知与副作用。
  * 鱼钩中途消失 → hook-lost；超时 → 收竿（无获）返回 timeout。
  */
 async function watchForBite(botName: string, hookId: string): Promise<FishingOutcome> {
   // 稳定后基准高度（用户规格：记录鱼钩坐标）
   let baseY: number | undefined;
-  let winStartY: number | undefined;
-  let downStreak = 0;
+  let tracker: BiteTracker | undefined;
 
   for (let waited = 0; waited < BITE_TIMEOUT_TICKS; waited += BITE_CHECK_TICKS) {
     await waitTicks(BITE_CHECK_TICKS);
@@ -145,26 +144,21 @@ async function watchForBite(botName: string, hookId: string): Promise<FishingOut
       baseY = y;
       console.warn(`[MockPlayer] fishOnce ${botName} hook stabilized at y=${y}`);
     }
-    if (winStartY === undefined) winStartY = y;
+    tracker = tracker ?? initialBiteTracker(y);
 
-    // 窗口净下降 = 当前 - 窗口开头（负值=下沉）
-    if (isBiteDrop(y - winStartY)) {
-      downStreak++;
-      if (downStreak >= BITE_CONFIRM_WINDOWS) {
-        // ── 咬钩：触发收杆信号（通知主人 + 自动收竿） ──
-        console.warn(`[MockPlayer] fishOnce ${botName} bite detected (drop ${(y - winStartY).toFixed(2)} from base ${baseY.toFixed(2)})`);
-        notifyOwner(botName, `${color.success}鱼上钩了，正在收竿！`);
-        const reel = await reelFishingRod(botName);
-        if (reel === "reeled") return { kind: "caught" };
-        // 收竿异常：no-hook=钩已消失 / offline=假人下线 / no-rod=鱼竿没了 / error=执行失败
-        const reason: FishingFailureReason =
-          reel === "no-hook" ? "hook-lost" : reel === "offline" ? "offline" : reel === "no-rod" ? "no-rod" : "error";
-        return { kind: "failed", reason };
-      }
-    } else {
-      downStreak = 0;
+    const { tracker: next, bite } = updateBiteTracker(tracker, y);
+    tracker = next;
+    if (bite) {
+      // ── 咬钩：触发收杆信号（通知主人 + 自动收竿） ──
+      console.warn(`[MockPlayer] fishOnce ${botName} bite detected (drop ${(tracker.maxY - y).toFixed(2)} from max ${tracker.maxY.toFixed(2)})`);
+      notifyOwner(botName, `${color.success}鱼上钩了，正在收竿！`);
+      const reel = await reelFishingRod(botName);
+      if (reel === "reeled") return { kind: "caught" };
+      // 收竿异常：no-hook=钩已消失 / offline=假人下线 / no-rod=鱼竿没了 / error=执行失败
+      const reason: FishingFailureReason =
+        reel === "no-hook" ? "hook-lost" : reel === "offline" ? "offline" : reel === "no-rod" ? "no-rod" : "error";
+      return { kind: "failed", reason };
     }
-    winStartY = y;
   }
 
   // ── 超时（45 秒无鱼）：收竿无获 ──

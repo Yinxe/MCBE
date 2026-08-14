@@ -25,6 +25,7 @@ import { registerRecoverCommand } from "./recover";
 import { registerAdminCommand } from "./admin";
 import { registerStorageCommand } from "./storage";
 import { registerTestCommand } from "./test";
+import { registerFishingCommands } from "./fishing";
 
 export function registerAllCommands(event: StartupEvent): void {
   const registry = event.customCommandRegistry;
@@ -53,4 +54,5 @@ export function registerAllCommands(event: StartupEvent): void {
   registerAdminCommand(registry);
   registerStorageCommand(registry);
   registerTestCommand(registry);
+  registerFishingCommands(registry);
 }

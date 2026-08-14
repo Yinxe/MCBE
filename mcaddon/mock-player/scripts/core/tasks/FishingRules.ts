@@ -57,12 +57,41 @@ export function isWaterBlock(typeId: string): boolean {
   return (WATER_BLOCK_IDS as readonly string[]).includes(typeId);
 }
 
-/** 咬钩净下降阈值（格）：稳定后窗口内鱼钩 Y 净下降超过该值 = 明显下沉（咬钩信号） */
-export const BITE_DROP_THRESHOLD = 0.3;
+/** 咬钩下沉阈值（格，用户规格 0.25）：相对**稳定后最高点**的下沉量超过该值 = 上钩 */
+export const BITE_DROP_THRESHOLD = 0.25;
 
-/** 是否咬钩下沉信号（净下降 = 窗口末尾 - 窗口开头，负值表示下沉） */
-export function isBiteDrop(netDrop: number): boolean {
-  return netDrop < -BITE_DROP_THRESHOLD;
+/** 是否咬钩下沉信号（下沉量 = 最高点 - 当前，正值表示下沉） */
+export function isBiteDrop(drop: number): boolean {
+  return drop > BITE_DROP_THRESHOLD;
+}
+
+/** 咬钩判定状态（core 纯逻辑，可单测） */
+export interface BiteTracker {
+  /** 稳定后观测到的最高点（滚动最大值，下沉参照——用户规格：
+   *  "将鱼钩稳定后的最高点坐标记录下来，之后的每一次下沉都以最高点作为参照"） */
+  maxY: number;
+}
+
+/** 创建初始咬钩判定状态 */
+export function initialBiteTracker(y: number): BiteTracker {
+  return { maxY: y };
+}
+
+/**
+ * 更新咬钩判定（用户规格）：每次下沉都以**稳定后最高点**为参照计算下沉量，
+ * **超过 0.25 格即判断上钩**。
+ * 最高点参照天然防误判：正常浮动（±0.1 内）时下沉量 < 阈值不触发；上浮时
+ * 最高点跟随刷新（参照重置）；真下沉（哪怕缓慢渐进）时最高点不变、下沉量
+ * 随深度持续增大——比"单窗口对比/滚动累计"更简洁且不漏检。
+ *
+ * @param prev - 上一窗口的判定状态（initialBiteTracker 创建）
+ * @param y    - 当前鱼钩高度
+ * @returns 更新后的状态 + 是否判定咬钩（bite=true 时调用方收竿）
+ */
+export function updateBiteTracker(prev: BiteTracker, y: number): { tracker: BiteTracker; bite: boolean } {
+  const maxY = Math.max(prev.maxY, y); // 滚动最高点（上浮则刷新参照）
+  const drop = maxY - y; // 相对最高点的下沉量
+  return { tracker: { maxY }, bite: drop > BITE_DROP_THRESHOLD };
 }
 
 /** 鱼钩落点状态（稳定后判定）：water=正常入水 / landed=勾中固体方块（落陆地）/ snagged=勾中实体生物 */
