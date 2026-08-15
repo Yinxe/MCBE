@@ -84,16 +84,17 @@ export class BotCore {
 
   /**
    * 解析 SimulatedPlayer 实体（每次实时查询，防过期实体引用）。
+   * 复用 PlayerGateway.resolveBotPlayer 唯一实现（名字+标签查询 → entityId
+   * 回退 + 死亡检查）；惰性 require 保持测试构建零 mc 顶层依赖。
    * 不可用/未加载/实体失效 → undefined（不抛错）。
    */
   get entity(): SimulatedPlayer | undefined {
-    const { entityId } = this.record;
-    if (!entityId) return undefined;
     try {
-      const e = world().getEntity(entityId);
-      if (!e?.isValid) return undefined;
-      return e.hasTag(BOT_TAG) ? (e as SimulatedPlayer) : undefined;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { resolveBotPlayer } = require("../mc/adapters/PlayerGateway") as typeof import("../mc/adapters/PlayerGateway");
+      return resolveBotPlayer(this.name);
     } catch {
+      // 测试环境无 @minecraft 运行时 → 视为无实体（不抛错）
       return undefined;
     }
   }
