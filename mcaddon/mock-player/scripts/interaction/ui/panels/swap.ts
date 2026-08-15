@@ -108,7 +108,8 @@ function doSwap(player: Player, botName: string): void {
 
           // ── 主手（背包未涵盖时才单独互换） ──
           if (hasMainhand && !hasInv) {
-            swapMainhandWithBot(player, bot);
+            // 闭包异步（永不 reject）：面板内 fire-and-forget，结果不阻塞后续槽位处理
+            void swapMainhandWithBot(player, bot);
             done.push("主手");
           }
 

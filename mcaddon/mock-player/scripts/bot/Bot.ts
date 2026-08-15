@@ -145,24 +145,24 @@ export class Bot extends BotCore {
     tpBotToPlayer(this.record, player);
   }
 
-  // ─── 原子能力：装备交换（委托 basic/equip） ──────────
+  // ─── 原子能力：装备交换（委托 basic/equip，闭包异步） ──
 
-  /** 与玩家交换主手 */
-  swapMainhand(player: Player): boolean {
+  /** 与玩家交换主手（异步：执行结果 resolve） */
+  async swapMainhand(player: Player): Promise<boolean> {
     const bot = this.entity;
     if (!bot) return false;
     return swapMainhandWithBot(player, bot as Player);
   }
 
-  /** 与玩家交换副手 */
-  swapOffhand(player: Player): boolean {
+  /** 与玩家交换副手（异步：执行结果 resolve） */
+  async swapOffhand(player: Player): Promise<boolean> {
     const bot = this.entity;
     if (!bot) return false;
     return swapOffhandWithBot(player, bot as Player);
   }
 
-  /** 与玩家交换全部装备 */
-  swapEquipment(player: Player): boolean {
+  /** 与玩家交换全部装备（异步：执行结果 resolve） */
+  async swapEquipment(player: Player): Promise<boolean> {
     const bot = this.entity;
     if (!bot) return false;
     return swapEquipmentWithBot(player, bot as Player);
