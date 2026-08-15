@@ -2,8 +2,8 @@
 // 纯逻辑：从持久化原始值解析并合并 ModConfig（损坏/缺失/部分字段回退默认）。
 // McConfigStore.refresh 调用本函数，保证配置解析可脱离 mcapi 单测。
 
-import { createDefaultConfig } from "../model/Types";
-import type { ModConfig } from "../model/Types";
+import { createDefaultConfig } from "../rules/Types";
+import type { ModConfig } from "../rules/Types";
 
 /**
  * 解析 DP 中存储的原始配置字符串并合并默认值。

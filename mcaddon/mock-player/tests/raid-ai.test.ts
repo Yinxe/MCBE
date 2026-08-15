@@ -13,7 +13,7 @@ import {
   createRaidTaskTree, VICTORY_WINDOW_TICKS, initialRaidPhaseState,
   raidStarted, raidVictory, raidPhase,
   type RaidDrinkResult, type RaidIdleReason, type RaidKnowledge, type RaidPorts,
-} from "../scripts/tasks/RaidTask";
+} from "../scripts/ai/RaidTask";
 
 /** 可控测试端口：感知快照可切换 + 记录调用 */
 class FakeRaidPorts implements RaidPorts {

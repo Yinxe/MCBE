@@ -2,8 +2,8 @@
 // 纯逻辑：回收选项判定、物品预览组装与格式化、离线回收预览计算。
 // 实体容器读取与物品实际转移在 mc 层（features/reclaim.ts）。
 
-import type { BotRecord, ItemPreview, ReclaimPreview, SerializedItemStack } from "../model/Types";
-import { formatSerializedEnchantments } from "../format/EnchantZh";
+import type { BotRecord, ItemPreview, ReclaimPreview, SerializedItemStack } from "../rules/Types";
+import { formatSerializedEnchantments } from "../rules/format/EnchantZh";
 
 export interface ReclaimOptions {
   /** 回收经验等级 */

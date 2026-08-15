@@ -16,9 +16,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { InMemoryBotStore } from "../scripts/storage/BotStore";
+import { InMemoryBotStore } from "../scripts/service/BotStore";
 import { BotRegistry } from "../scripts/service/BotRegistry";
-import type { SerializedItemStack } from "../scripts/model/Types";
+import type { SerializedItemStack } from "../scripts/rules/Types";
 import { makeItem, makeRecord } from "./helpers/factories";
 
 const DIAMOND = "minecraft:diamond";

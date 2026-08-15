@@ -3,7 +3,7 @@
 // 管理员看到全部。列表/在线管理等 UI 统一走此过滤。
 // 零 @minecraft 依赖，可 node 单测。
 
-import type { BotRecord } from "../model/Types";
+import type { BotRecord } from "../rules/Types";
 
 /**
  * 玩家可见的假人记录：

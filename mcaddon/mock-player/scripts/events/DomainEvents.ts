@@ -7,7 +7,7 @@
 // 事件负载只用可序列化的 string/number，不携带 mc 对象——保证 core 纯净。
 
 import { EventSignal } from "./EventSignal";
-import type { EquipSlotName } from "../model/Types";
+import type { EquipSlotName } from "../rules/Types";
 
 // ─── 宝库事件 ────────────────────────────────────────────
 

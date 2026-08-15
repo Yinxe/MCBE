@@ -13,18 +13,18 @@
 
 import { system, world } from "@minecraft/server";
 
-import { registerAllCommands } from "./mc/commands/index";
-import { registerAllEvents } from "./mc/events/index";
-import { startTagBehaviors } from "./mc/features/state/behavior";
-import { initTridentTracker } from "./mc/features/trident/tridentTracker";
-import { initFishingHookTracker } from "./mc/features/task/fishingHookTracker";
-import { initLootTracker } from "./mc/features/task/fishingFlow";
-import { initRaidPorts } from "./mc/features/task/RaidPorts";
-import { startBrainEngine } from "./mc/ai/BotBrain";
-import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
-import { registerUiDrivers } from "./mc/bootstrap/uiDrivers";
-import { runMigrations } from "./mc/bootstrap/migration";
-import { botRegistry, configStore } from "./mc/bootstrap/context";
+import { registerAllCommands } from "./commands";
+import { registerAllEvents } from "./events";
+import { startTagBehaviors } from "./features/state/behavior";
+import { initTridentTracker } from "./features/trident/tridentTracker";
+import { initFishingHookTracker } from "./features/task/fishingHookTracker";
+import { initLootTracker } from "./features/task/fishingFlow";
+import { initRaidPorts } from "./features/task/RaidPorts";
+import { startBrainEngine } from "./ai/BotBrain";
+import { initGameTestContext, registerTestDimension } from "./bootstrap/gametestContext";
+import { registerUiDrivers } from "./bootstrap/uiDrivers";
+import { runMigrations } from "./bootstrap/migration";
+import { botRegistry, configStore } from "./bootstrap/context";
 
 // Phase 1/2: 基础设施与业务装配在 mc/bootstrap/context 模块 import 时完成
 // （botStore = DynamicProperty 后端，botRegistry = 内存注册表 + 写穿持久化）

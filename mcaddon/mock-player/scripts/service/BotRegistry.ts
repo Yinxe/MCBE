@@ -2,8 +2,8 @@
 // 内存注册表 + 生命周期状态 + 恢复标记，持久化经 BotStore 端口注入。
 // mc 层通过 bootstrap/context 持有单例，测试用 InMemoryBotStore 直接构造。
 
-import type { BotRecord } from "../model/Types";
-import type { BotStore } from "../storage/BotStore";
+import type { BotRecord } from "../rules/Types";
+import type { BotStore } from "../service/BotStore";
 
 export class BotRegistry {
   private readonly records = new Map<string, BotRecord>();

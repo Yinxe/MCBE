@@ -1,7 +1,7 @@
 // ─── 测试共享工具 ──────────────────────────────────────
 // 构造标准 BotRecord / Vec3 / SerializedItemStack 的工厂函数
 
-import type { BotRecord, PositionState, SerializedItemStack } from "../../scripts/model/Types";
+import type { BotRecord, PositionState, SerializedItemStack } from "../../scripts/rules/Types";
 
 export function makeState(overrides: Partial<PositionState> = {}): PositionState {
   return {

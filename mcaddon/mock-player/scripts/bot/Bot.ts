@@ -15,21 +15,21 @@ export class Bot extends BotCore {
   /** 开始跟随目标玩家（OOP 门面，委托 state/follow） */
   follow(targetPlayerId: string): boolean {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { startFollow } = require("../mc/features/state/follow") as typeof import("../mc/features/state/follow");
+    const { startFollow } = require("../features/state/follow") as typeof import("../features/state/follow");
     return startFollow(this.name, targetPlayerId);
   }
 
   /** 停止跟随 */
   unfollow(): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { stopFollow } = require("../mc/features/state/follow") as typeof import("../mc/features/state/follow");
+    const { stopFollow } = require("../features/state/follow") as typeof import("../features/state/follow");
     stopFollow(this.name);
   }
 
   /** 是否正在跟随 */
   get isFollowing(): boolean {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { isFollowing } = require("../mc/features/state/follow") as typeof import("../mc/features/state/follow");
+    const { isFollowing } = require("../features/state/follow") as typeof import("../features/state/follow");
     return isFollowing(this.name);
   }
 
@@ -38,44 +38,44 @@ export class Bot extends BotCore {
   /** 是否有鱼竿 */
   get hasFishingRod(): boolean {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { hasFishingRod } = require("../mc/features/task/fishing") as typeof import("../mc/features/task/fishing");
+    const { hasFishingRod } = require("../features/task/fishing") as typeof import("../features/task/fishing");
     return hasFishingRod(this.name);
   }
 
   /** 是否已抛竿（有鱼钩） */
   get isFishing(): boolean {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { hasFishingHook } = require("../mc/features/task/fishing") as typeof import("../mc/features/task/fishing");
+    const { hasFishingHook } = require("../features/task/fishing") as typeof import("../features/task/fishing");
     return hasFishingHook(this.name);
   }
 
   /** 抛竿 */
-  castRod(): Promise<import("../mc/features/task/fishing").CastRodResult> {
+  castRod(): Promise<import("../features/task/fishing").CastRodResult> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { castFishingRod } = require("../mc/features/task/fishing") as typeof import("../mc/features/task/fishing");
+    const { castFishingRod } = require("../features/task/fishing") as typeof import("../features/task/fishing");
     return castFishingRod(this.name);
   }
 
   /** 收竿 */
-  reelRod(): Promise<import("../mc/features/task/fishing").ReelRodResult> {
+  reelRod(): Promise<import("../features/task/fishing").ReelRodResult> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { reelFishingRod } = require("../mc/features/task/fishing") as typeof import("../mc/features/task/fishing");
+    const { reelFishingRod } = require("../features/task/fishing") as typeof import("../features/task/fishing");
     return reelFishingRod(this.name);
   }
 
   // ─── 原子能力：主手 ──────────────────────────────────
 
   /** 主手选择列表（undefined=不可用；空数组=背包无物品） */
-  getMainhandOptions(): import("../mc/features/basic/mainhand").MainhandOption[] | undefined {
+  getMainhandOptions(): import("../features/basic/mainhand").MainhandOption[] | undefined {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getMainhandOptions } = require("../mc/features/basic/mainhand") as typeof import("../mc/features/basic/mainhand");
+    const { getMainhandOptions } = require("../features/basic/mainhand") as typeof import("../features/basic/mainhand");
     return getMainhandOptions(this.name);
   }
 
   /** 设置主手槽（-1=清空；>=0=背包槽位） */
   setMainhand(slotValue: number): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { setMainhandSlot } = require("../mc/features/basic/mainhand") as typeof import("../mc/features/basic/mainhand");
+    const { setMainhandSlot } = require("../features/basic/mainhand") as typeof import("../features/basic/mainhand");
     setMainhandSlot(this.name, slotValue);
   }
 
@@ -84,7 +84,7 @@ export class Bot extends BotCore {
   /** 切换控制权（委托 basic/control） */
   toggleControl(controller: Player): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { toggleControl } = require("../mc/features/basic/control") as typeof import("../mc/features/basic/control");
+    const { toggleControl } = require("../features/basic/control") as typeof import("../features/basic/control");
     toggleControl(this.record, controller);
   }
 
@@ -93,7 +93,7 @@ export class Bot extends BotCore {
     const bot = this.entity;
     if (!bot) return;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { checkMainHandDurability } = require("../mc/features/basic/toolHealth") as typeof import("../mc/features/basic/toolHealth");
+    const { checkMainHandDurability } = require("../features/basic/toolHealth") as typeof import("../features/basic/toolHealth");
     checkMainHandDurability(bot as Player, changedSlot);
   }
 
@@ -122,56 +122,56 @@ export class Bot extends BotCore {
   /** 上线（委托 manage/onlineBot） */
   async bringOnline(): Promise<SimulatedPlayer> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { onlineBot } = require("../mc/features/manage/onlineBot") as typeof import("../mc/features/manage/onlineBot");
+    const { onlineBot } = require("../features/manage/onlineBot") as typeof import("../features/manage/onlineBot");
     return onlineBot(this.record);
   }
 
   /** 下线（委托 manage/offlineBot） */
   takeOffline(): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { offlineBot } = require("../mc/features/manage/offlineBot") as typeof import("../mc/features/manage/offlineBot");
+    const { offlineBot } = require("../features/manage/offlineBot") as typeof import("../features/manage/offlineBot");
     offlineBot(this.record);
   }
 
   /** 击杀（委托 manage/killBot） */
   kill(): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { killBot } = require("../mc/features/manage/killBot") as typeof import("../mc/features/manage/killBot");
+    const { killBot } = require("../features/manage/killBot") as typeof import("../features/manage/killBot");
     killBot(this.record);
   }
 
   /** 删除（委托 manage/deleteBot） */
   delete(reclaimTo?: Player): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { deleteBot } = require("../mc/features/manage/deleteBot") as typeof import("../mc/features/manage/deleteBot");
+    const { deleteBot } = require("../features/manage/deleteBot") as typeof import("../features/manage/deleteBot");
     deleteBot(this.record, reclaimTo);
   }
 
   /** 安全重连（委托 manage/pendingRespawn） */
-  safeReconnect(options?: import("../mc/features/manage/pendingRespawn").SafeReconnectOptions): void {
+  safeReconnect(options?: import("../features/manage/pendingRespawn").SafeReconnectOptions): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { safeReconnect } = require("../mc/features/manage/pendingRespawn") as typeof import("../mc/features/manage/pendingRespawn");
+    const { safeReconnect } = require("../features/manage/pendingRespawn") as typeof import("../features/manage/pendingRespawn");
     safeReconnect(this.record, options);
   }
 
   /** 切换生成模式（委托 manage/spawnMode） */
-  switchSpawnMode(newMode: import("../mc/features/manage/spawnMode").SpawnMode): void {
+  switchSpawnMode(newMode: import("../features/manage/spawnMode").SpawnMode): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { switchSpawnMode } = require("../mc/features/manage/spawnMode") as typeof import("../mc/features/manage/spawnMode");
+    const { switchSpawnMode } = require("../features/manage/spawnMode") as typeof import("../features/manage/spawnMode");
     switchSpawnMode(this.record, newMode);
   }
 
   /** 传送玩家到自己（委托 basic/teleport） */
   tpPlayerHere(player: Player): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { tpPlayerToBot } = require("../mc/features/basic/teleport") as typeof import("../mc/features/basic/teleport");
+    const { tpPlayerToBot } = require("../features/basic/teleport") as typeof import("../features/basic/teleport");
     tpPlayerToBot(player, this.record);
   }
 
   /** 传送自己到玩家（委托 basic/teleport） */
   tpToPlayer(player: Player): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { tpBotToPlayer } = require("../mc/features/basic/teleport") as typeof import("../mc/features/basic/teleport");
+    const { tpBotToPlayer } = require("../features/basic/teleport") as typeof import("../features/basic/teleport");
     tpBotToPlayer(this.record, player);
   }
 
@@ -182,7 +182,7 @@ export class Bot extends BotCore {
     const bot = this.entity;
     if (!bot) return false;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { swapMainhandWithBot } = require("../mc/features/basic/equip") as typeof import("../mc/features/basic/equip");
+    const { swapMainhandWithBot } = require("../features/basic/equip") as typeof import("../features/basic/equip");
     return swapMainhandWithBot(player, bot as Player);
   }
 
@@ -191,7 +191,7 @@ export class Bot extends BotCore {
     const bot = this.entity;
     if (!bot) return false;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { swapOffhandWithBot } = require("../mc/features/basic/equip") as typeof import("../mc/features/basic/equip");
+    const { swapOffhandWithBot } = require("../features/basic/equip") as typeof import("../features/basic/equip");
     return swapOffhandWithBot(player, bot as Player);
   }
 
@@ -200,44 +200,44 @@ export class Bot extends BotCore {
     const bot = this.entity;
     if (!bot) return false;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { swapEquipmentWithBot } = require("../mc/features/basic/equip") as typeof import("../mc/features/basic/equip");
+    const { swapEquipmentWithBot } = require("../features/basic/equip") as typeof import("../features/basic/equip");
     return swapEquipmentWithBot(player, bot as Player);
   }
 
   /** 回收（委托 manage/reclaim） */
-  reclaim(player: Player, options?: import("../service/ReclaimPlanner").ReclaimOptions): import("../mc/features/manage/reclaim").ReclaimResult {
+  reclaim(player: Player, options?: import("../service/ReclaimPlanner").ReclaimOptions): import("../features/manage/reclaim").ReclaimResult {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { reclaimBot } = require("../mc/features/manage/reclaim") as typeof import("../mc/features/manage/reclaim");
+    const { reclaimBot } = require("../features/manage/reclaim") as typeof import("../features/manage/reclaim");
     return reclaimBot(player, this.record, options);
   }
 
   /** 回收预览 */
-  getReclaimPreview(): ReturnType<typeof import("../mc/features/manage/reclaim").getReclaimPreview> {
+  getReclaimPreview(): ReturnType<typeof import("../features/manage/reclaim").getReclaimPreview> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getReclaimPreview } = require("../mc/features/manage/reclaim") as typeof import("../mc/features/manage/reclaim");
+    const { getReclaimPreview } = require("../features/manage/reclaim") as typeof import("../features/manage/reclaim");
     return getReclaimPreview(this.record);
   }
 
   // ─── 原子能力：三叉戟（委托 trident） ────────────────
 
   /** 扫描三叉戟（委托 trident/trident） */
-  scanTridents(): import("../mc/features/trident/trident").TridentSlot[] | undefined {
+  scanTridents(): import("../features/trident/trident").TridentSlot[] | undefined {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { scanTridents } = require("../mc/features/trident/trident") as typeof import("../mc/features/trident/trident");
+    const { scanTridents } = require("../features/trident/trident") as typeof import("../features/trident/trident");
     return scanTridents(this.name);
   }
 
   /** 主手是否三叉戟 */
   get isMainhandTrident(): boolean {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { isMainhandTrident } = require("../mc/features/trident/trident") as typeof import("../mc/features/trident/trident");
+    const { isMainhandTrident } = require("../features/trident/trident") as typeof import("../features/trident/trident");
     return isMainhandTrident(this.name);
   }
 
   /** 投掷三叉戟（委托 trident/trident） */
   throwTridents(playerId: string, slots: number[], onComplete?: () => void): void {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { throwTridents } = require("../mc/features/trident/trident") as typeof import("../mc/features/trident/trident");
+    const { throwTridents } = require("../features/trident/trident") as typeof import("../features/trident/trident");
     throwTridents(this.name, playerId, slots, onComplete);
   }
 }
@@ -268,4 +268,4 @@ export function requireBot(name: string, registry: BotRegistry): Bot {
 
 // ─── 导出类型 ──────────────────────────────────────────
 
-export type { BotRecord } from "../model/Types";
+export type { BotRecord } from "../rules/Types";

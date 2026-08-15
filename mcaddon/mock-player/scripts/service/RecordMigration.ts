@@ -5,7 +5,7 @@
 // 归一化幂等：缺失字段补默认值，已有字段不动；每次启动对全部记录执行安全。
 // 零 @minecraft 依赖，可 node 单测。
 
-import type { BotRecord, PositionState } from "../model/Types";
+import type { BotRecord, PositionState } from "../rules/Types";
 
 /** 记录缺失 respawnPoint 时的默认值（调用方可用世界出生点覆盖） */
 export const DEFAULT_RESPAWN: PositionState = {

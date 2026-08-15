@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { getEquipmentSlot, isWearableItem } from "../scripts/items/ItemRules";
+import { getEquipmentSlot, isWearableItem } from "../scripts/rules/items/ItemRules";
 
 test("getEquipmentSlot：护甲后缀判定", () => {
   assert.equal(getEquipmentSlot("minecraft:diamond_helmet"), "head");

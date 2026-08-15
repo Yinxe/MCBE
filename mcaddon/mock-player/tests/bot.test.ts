@@ -7,10 +7,10 @@ import assert from "node:assert/strict";
 
 import { BotCore, resolveBot, requireBot } from "../scripts/bot/BotCore";
 import { BotRegistry } from "../scripts/service/BotRegistry";
-import { InMemoryBotStore } from "../scripts/storage/BotStore";
+import { InMemoryBotStore } from "../scripts/service/BotStore";
 import { makeRecord } from "./helpers/factories";
 
-function makeBot(name = "bot1", overrides: Partial<import("../scripts/model/Types").BotRecord> = {}) {
+function makeBot(name = "bot1", overrides: Partial<import("../scripts/rules/Types").BotRecord> = {}) {
   const store = new InMemoryBotStore();
   const registry = new BotRegistry(store);
   const record = makeRecord(name, overrides);

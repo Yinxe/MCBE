@@ -11,8 +11,8 @@ import { Blackboard, Status, type AiContext } from "../scripts/ai";
 import {
   createVaultTaskTree, OMINOUS_TRIAL_KEY, TRIAL_KEY,
   type VaultIdleReason, type VaultInteractResult, type VaultKnowledge, type VaultPorts,
-} from "../scripts/tasks/VaultTask";
-import type { Vec3 } from "../scripts/model/Types";
+} from "../scripts/ai/VaultTask";
+import type { Vec3 } from "../scripts/rules/Types";
 
 const NORMAL_VAULT: Vec3 = { x: 10, y: 64, z: 20 };
 const OMINOUS_VAULT: Vec3 = { x: -10, y: 64, z: 20 };

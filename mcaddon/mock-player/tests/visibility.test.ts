@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { visibleRecords } from "../scripts/service/BotVisibility";
-import type { BotRecord } from "../scripts/model/Types";
+import type { BotRecord } from "../scripts/rules/Types";
 import { makeRecord } from "./helpers/factories";
 
 function rec(name: string, owner?: string): BotRecord {

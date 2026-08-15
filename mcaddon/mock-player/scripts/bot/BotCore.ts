@@ -12,8 +12,8 @@
 import type { Container, Dimension, Entity, ItemStack, Player, Vector3, World } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import type { BotRecord } from "../model/Types";
-import { BOT_TAG } from "../tags/BotTags";
+import type { BotRecord } from "../rules/Types";
+import { BOT_TAG } from "../rules/BotTags";
 import type { BotRegistry } from "../service/BotRegistry";
 
 // ─── 常量 ──────────────────────────────────────────────
@@ -91,7 +91,7 @@ export class BotCore {
   get entity(): SimulatedPlayer | undefined {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { resolveBotPlayer } = require("../mc/adapters/PlayerGateway") as typeof import("../mc/adapters/PlayerGateway");
+      const { resolveBotPlayer } = require("./PlayerGateway") as typeof import("./PlayerGateway");
       return resolveBotPlayer(this.name);
     } catch {
       // 测试环境无 @minecraft 运行时 → 视为无实体（不抛错）
@@ -277,7 +277,7 @@ export class BotCore {
     if (!bot) return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { syncEntityTags } = require("../mc/adapters/EntityTags") as typeof import("../mc/adapters/EntityTags");
+      const { syncEntityTags } = require("../features/basic/EntityTags") as typeof import("../features/basic/EntityTags");
       syncEntityTags(bot, this.record.tags);
     } catch { /* ignore */ }
   }

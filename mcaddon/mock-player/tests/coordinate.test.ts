@@ -3,8 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseCoordinateInput } from "../scripts/coords/Coordinate";
-import { rotationToDirection } from "../scripts/coords/Direction";
+import { parseCoordinateInput } from "../scripts/rules/coords/Coordinate";
+import { rotationToDirection } from "../scripts/rules/coords/Direction";
 
 test("parseCoordinateInput：空格分隔的绝对坐标", () => {
   const r = parseCoordinateInput("100 20 30");

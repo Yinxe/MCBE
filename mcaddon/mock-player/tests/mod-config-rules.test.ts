@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { mergeStoredConfig } from "../scripts/service/ModConfigRules";
-import { DEFAULT_QUOTA } from "../scripts/model/Types";
+import { DEFAULT_QUOTA } from "../scripts/rules/Types";
 
 test("从未保存（undefined）返回默认配置", () => {
   const cfg = mergeStoredConfig(undefined);

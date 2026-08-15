@@ -8,7 +8,7 @@
 //   （dimension.getEntities({ tags: [makeFisherTag(name)] })）。
 // 独立于投掷物认主前缀（mp:owner:）——钓鱼钩无"双任认主"语义，收回即消失。
 
-import type { Vec3 } from "../model/Types";
+import type { Vec3 } from "../rules/Types";
 
 /** 鱼钩主人 tag 前缀 */
 export const FISHER_TAG_PREFIX = "mp:fisher:";

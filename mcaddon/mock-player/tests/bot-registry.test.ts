@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { BotRegistry } from "../scripts/service/BotRegistry";
-import { InMemoryBotStore } from "../scripts/storage/BotStore";
+import { InMemoryBotStore } from "../scripts/service/BotStore";
 import { makeRecord, makeItem } from "./helpers/factories";
 
 function makeRegistry() {
