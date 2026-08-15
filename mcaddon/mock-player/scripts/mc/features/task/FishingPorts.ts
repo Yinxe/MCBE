@@ -18,13 +18,13 @@ import { system, world } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { FishingKnowledge, FishingPorts } from "../../tasks/FishingTask";
-import type { FishingSpot } from "../../rules/FishingRules";
-import { computeTargetYaw, isYawAligned, YAW_TOLERANCE_DEG } from "../../rules/FishingRules";
-import type { Vec3 } from "../../model/Types";
-import { botRegistry } from "../bootstrap/context";
-import { lookAt } from "../adapters/PoseGateway";
-import { resolveBotPlayer } from "../adapters/PlayerGateway";
+import type { FishingKnowledge, FishingPorts } from "../../../tasks/FishingTask";
+import type { FishingSpot } from "../../../rules/FishingRules";
+import { computeTargetYaw, isYawAligned, YAW_TOLERANCE_DEG } from "../../../rules/FishingRules";
+import type { Vec3 } from "../../../model/Types";
+import { botRegistry } from "../../bootstrap/context";
+import { lookAt } from "../../adapters/PoseGateway";
+import { resolveBotPlayer } from "../../adapters/PlayerGateway";
 import {
   findFishingSpots,
   getFishingStatus,
@@ -32,9 +32,9 @@ import {
   isSpotUsable,
   reelFishingRod,
   spotAtStand,
-} from "../features/task/fishing";
-import { fishOnce } from "../features/task/fishingFlow";
-import { distance3d, horizontalDistance, waitTicks } from "../utils";
+} from "./fishing";
+import { fishOnce } from "./fishingFlow";
+import { distance3d, horizontalDistance, waitTicks } from "../../utils";
 
 // ─── 常量 ────────────────────────────────────────────────
 

@@ -13,20 +13,20 @@ import { system, world, type Container, type Effect, type EffectAddAfterEvent, t
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { RaidDrinkResult, RaidIdleReason, RaidKnowledge, RaidPorts } from "../../tasks/RaidTask";
+import type { RaidDrinkResult, RaidIdleReason, RaidKnowledge, RaidPorts } from "../../../tasks/RaidTask";
 import {
   BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_TRUCE_TICKS,
   isOminousBottle, classifyRaidEffect,
-} from "../../rules/RaidRules";
+} from "../../../rules/RaidRules";
 import {
   raidStarted, raidVictory, raidPhase, initialRaidPhaseState,
   type RaidPhase, type RaidPhaseState,
-} from "../../tasks/RaidTask";
-import { TAG_RAID_MODE } from "../../tags/BotTags";
-import type { BotRecord } from "../../model/Types";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { resolveBotPlayer } from "../adapters/PlayerGateway";
-import { syncEntityTags } from "../adapters/EntityTags";
+} from "../../../tasks/RaidTask";
+import { TAG_RAID_MODE } from "../../../tags/BotTags";
+import type { BotRecord } from "../../../model/Types";
+import { botRegistry, saveCoordinator } from "../../bootstrap/context";
+import { resolveBotPlayer } from "../../adapters/PlayerGateway";
+import { syncEntityTags } from "../../adapters/EntityTags";
 
 // ─── 全局状态 ──────────────────────────────────────────
 

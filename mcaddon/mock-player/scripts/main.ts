@@ -19,7 +19,7 @@ import { startTagBehaviors } from "./mc/features/state/behavior";
 import { initTridentTracker } from "./mc/features/trident/tridentTracker";
 import { initFishingHookTracker } from "./mc/features/task/fishingHookTracker";
 import { initLootTracker } from "./mc/features/task/fishingFlow";
-import { initRaidPorts } from "./mc/tasks/McRaidPorts";
+import { initRaidPorts } from "./mc/features/task/RaidPorts";
 import { startBrainEngine } from "./mc/ai/BotBrain";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";
 import { registerUiDrivers } from "./mc/bootstrap/uiDrivers";

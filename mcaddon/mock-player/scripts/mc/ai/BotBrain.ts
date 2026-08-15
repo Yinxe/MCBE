@@ -20,9 +20,9 @@ import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../../tag
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { reconnectingBots } from "../features/manage/pendingRespawn";
-import { vaultPorts } from "../tasks/McVaultPorts";
-import { raidPorts } from "../tasks/McRaidPorts";
-import { fishingPorts } from "../tasks/McFishingPorts";
+import { vaultPorts } from "../features/task/VaultPorts";
+import { raidPorts } from "../features/task/RaidPorts";
+import { fishingPorts } from "../features/task/FishingPorts";
 
 // ─── 常量 ────────────────────────────────────────────────
 
