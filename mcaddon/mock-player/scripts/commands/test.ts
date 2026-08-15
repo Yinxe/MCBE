@@ -8,7 +8,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 
-import { TEST_DIMENSION } from "../bootstrap/gametestContext";
+import { TEST_DIMENSION } from "../features/manage/gametestContext";
 import { isAdmin } from "./auth";
 
 export function registerTestCommand(registry: any): void {

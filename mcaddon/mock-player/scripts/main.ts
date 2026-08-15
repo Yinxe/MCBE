@@ -21,7 +21,7 @@ import { initFishingHookTracker } from "./features/task/fishingHookTracker";
 import { initLootTracker } from "./features/task/fishingFlow";
 import { initRaidPorts } from "./features/task/RaidPorts";
 import { startBrainEngine } from "./ai/BotBrain";
-import { initGameTestContext, registerTestDimension } from "./bootstrap/gametestContext";
+import { initGameTestContext, registerTestDimension } from "./features/manage/gametestContext";
 import { registerUiDrivers } from "./bootstrap/uiDrivers";
 import { runMigrations } from "./bootstrap/migration";
 import { botRegistry, configStore } from "./bootstrap/context";

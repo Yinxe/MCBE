@@ -20,7 +20,7 @@ import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { finalizeBotSpawn } from "./spawn";
 import { safeReconnect } from "./pendingRespawn";
-import { globalTest } from "../../bootstrap/gametestContext";
+import { globalTest } from "./gametestContext";
 import { color } from "@yinxe/toolkit";
 
 export type SpawnMode = "normal" | "chunkload";

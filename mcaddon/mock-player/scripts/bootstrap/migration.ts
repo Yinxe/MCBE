@@ -19,7 +19,7 @@ import { world } from "@minecraft/server";
 
 import { botRegistry, botStore, saveCoordinator } from "./context";
 import { normalizeRecord, DEFAULT_RESPAWN } from "../service/RecordMigration";
-import { deserializeLegacyItem } from "./LegacyCodec";
+import { deserializeLegacyItem } from "../service/port/LegacyCodec";
 import { DP_PREFIX, INVENTORY_SIZE } from "../rules/Types";
 import type { SerializedItemStack } from "../rules/Types";
 

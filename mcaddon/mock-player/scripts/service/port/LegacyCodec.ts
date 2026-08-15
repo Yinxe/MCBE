@@ -11,7 +11,7 @@ import {
   EnchantmentType,
   Potions,
 } from "@minecraft/server";
-import type { SerializedItemStack } from "../rules/Types";
+import type { SerializedItemStack } from "../../rules/Types";
 
 /**
  * 反序列化 SerializedItemStack → ItemStack（旧版格式）。

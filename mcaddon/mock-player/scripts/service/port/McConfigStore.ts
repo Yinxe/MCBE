@@ -4,9 +4,9 @@
 // ⚠️ 早执行安全：构造时只建默认值不读 DP；持久化值须 Phase 4 `refresh()` 读取合并。
 
 import { world } from "@minecraft/server";
-import { createDefaultConfig } from "../rules/Types";
-import type { ModConfig } from "../rules/Types";
-import { mergeStoredConfig } from "../service/ModConfigRules";
+import { createDefaultConfig } from "../../rules/Types";
+import type { ModConfig } from "../../rules/Types";
+import { mergeStoredConfig } from "../ModConfigRules";
 
 const CONFIG_KEY = "mockplayer:config";
 

@@ -5,8 +5,8 @@
 // core 层测试不经过此处：测试自行构造 `new BotRegistry(new InMemoryBotStore())`。
 
 import { BotRegistry } from "../service/BotRegistry";
-import { McBotStore } from "./McBotStore";
-import { McConfigStore } from "./McConfigStore";
+import { McBotStore } from "../service/port/McBotStore";
+import { McConfigStore } from "../service/port/McConfigStore";
 import { SaveCoordinator } from "./save";
 import { InventoryStorage } from "../features/inventoryStorage";
 
