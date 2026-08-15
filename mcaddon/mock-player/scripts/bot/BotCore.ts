@@ -22,12 +22,21 @@ import type { BotRegistry } from "../service/BotRegistry";
 const DEFAULT_NAVIGATION_SPEED = 1;
 
 /**
- * 惰性获取 world 单例（@minecraft/server 仅在方法调用时加载——测试环境
- * 无此模块，顶层 import 会导致测试加载失败；运行时首次调用才 require）。
+ * ⚠️ 惰性加载说明：本文件被 node 测试编译（tsconfig.test.json include），
+ * 测试环境无 @minecraft/server 运行时模块——顶部 import 会导致测试加载失败。
+ * 因此世界依赖统一走下方 lazy 加载器，仅在方法实际调用时 require。
+ * （Bot.ts 不进测试编译，可安全顶部 import，见 Bot.ts。）
  */
-function world(): World {
+
+/** 统一惰性加载器：@minecraft/server 运行时模块（首次调用才 require） */
+function mc(): typeof import("@minecraft/server") {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("@minecraft/server").world as World;
+  return require("@minecraft/server") as typeof import("@minecraft/server");
+}
+
+/** world 单例（经统一惰性加载器） */
+function world(): World {
+  return mc().world;
 }
 
 // ─── Bot 类 ────────────────────────────────────────────
@@ -90,9 +99,7 @@ export class BotCore {
    */
   get entity(): SimulatedPlayer | undefined {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { resolveBotPlayer } = require("./PlayerGateway") as typeof import("./PlayerGateway");
-      return resolveBotPlayer(this.name);
+      return lazy.resolveBotPlayer(this.name);
     } catch {
       // 测试环境无 @minecraft 运行时 → 视为无实体（不抛错）
       return undefined;
@@ -276,9 +283,7 @@ export class BotCore {
     const bot = this.entity;
     if (!bot) return;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { syncEntityTags } = require("../features/basic/EntityTags") as typeof import("../features/basic/EntityTags");
-      syncEntityTags(bot, this.record.tags);
+      lazy.syncEntityTags(bot, this.record.tags);
     } catch { /* ignore */ }
   }
 
@@ -327,3 +332,23 @@ export function resolveBot(name: string, registry: BotRegistry): BotCore | undef
 export function requireBot(name: string, registry: BotRegistry): BotCore {
   return new BotCore(name, registry);
 }
+
+// ─── 统一惰性加载器（mc 适配模块，测试环境不可加载——仅在方法调用时 require） ──
+
+/**
+ * BotCore 依赖的 mc 适配模块统一惰性加载：
+ *   - PlayerGateway.resolveBotPlayer（实体解析）
+ *   - features/basic/EntityTags.syncEntityTags（标签同步）
+ * 顶部 import 会使 node 测试加载 BotCore 时 require @minecraft 失败，
+ * 因此集中在此按需加载（测试不调用世界方法 → 不触发 require）。
+ */
+const lazy = {
+  get resolveBotPlayer(): typeof import("./PlayerGateway").resolveBotPlayer {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./PlayerGateway").resolveBotPlayer;
+  },
+  get syncEntityTags(): typeof import("../features/basic/EntityTags").syncEntityTags {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("../features/basic/EntityTags").syncEntityTags;
+  },
+};
