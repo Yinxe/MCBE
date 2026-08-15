@@ -9,7 +9,6 @@
 //   各自树实例与黑板，互不干扰。
 
 import { system, world, type Player } from "@minecraft/server";
-import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
 import { Blackboard, BehaviorTree, type AiContext } from "../../ai";
@@ -19,6 +18,7 @@ import { createFishingTaskTree, type FishingPorts } from "../../tasks/FishingTas
 import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../../tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
+import { resolveBot } from "../../bot/BotCore";
 import { reconnectingBots } from "../features/manage/pendingRespawn";
 import { vaultPorts } from "../features/task/VaultPorts";
 import { raidPorts } from "../features/task/RaidPorts";
@@ -42,10 +42,10 @@ const brains = new Map<string, Map<string, BrainEntry>>();
 
 let brainEngineStarted = false;
 
-/** 假人可用（在线/非死亡）——任务树推进的共同守卫 */
+/** 假人可用（在线/非死亡）——任务树推进的共同守卫（Bot 对象判定） */
 function isBotAvailable(botName: string): boolean {
-  const record = botRegistry.get(botName);
-  return !!record && record.online && !record.death;
+  const bot = resolveBot(botName, botRegistry);
+  return !!bot && bot.isAvailable;
 }
 
 /** 推进一个任务树（惰性创建；不可用跳过；防重入） */
@@ -125,17 +125,9 @@ export function reconcileFishingBrains(activeBotNames: Iterable<string>): void {
   reconcileTask("fishing", activeBotNames, true);
 }
 
-/** 停止假人当前导航移动（守卫：记录/实体/标签） */
+/** 停止假人当前导航移动（Bot 对象封装，守卫自含） */
 function stopBotNavigation(botName: string): void {
-  try {
-    const record = botRegistry.get(botName);
-    const entity = record?.entityId ? world.getEntity(record.entityId) : undefined;
-    if (entity && entity.hasTag(BOT_TAG)) {
-      (entity as SimulatedPlayer).stopMoving();
-    }
-  } catch {
-    /* 忽略 */
-  }
+  resolveBot(botName, botRegistry)?.stopMoving();
 }
 
 // ─── 引擎启动（main.ts worldLoad 后调用一次） ─────────────
