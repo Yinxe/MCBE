@@ -11,7 +11,7 @@ import { getTagDef } from "../../../rules/tags/BotTags";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { formatPos } from "../../ui/format";
 import { formatDimensionId } from "../../../rules/format/Format";
-import { serializeItemStack } from "../../../features/basic/McItemCodec";
+import { serializeItemStack } from "../../../features/basic/items";
 import { getTotalXpForLevels } from "../../../rules/xp/XpMath";
 import { botRegistry, botStore } from "../../../bootstrap/context";
 import { isChunkLoaded } from "../../../bot/PlayerGateway";

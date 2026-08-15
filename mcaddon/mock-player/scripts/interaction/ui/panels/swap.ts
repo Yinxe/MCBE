@@ -8,7 +8,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotEvents } from "../../../events/DomainEvents";
 import { BotUiEvent } from "../../../events/UiEvents";
-import { collectContainerItems } from "../../../features/basic/McItemCodec";
+import { collectContainerItems } from "../../../features/basic/items";
 import { saveCoordinator } from "../../../bootstrap/context";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { ensureUiBotAvailable, resolveUiBotRecord } from "../helpers";

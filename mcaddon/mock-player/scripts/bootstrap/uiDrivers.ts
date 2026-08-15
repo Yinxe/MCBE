@@ -7,7 +7,7 @@
 
 import { registerUiSubscriptions as registerSneakUi } from "../features/basic/sneak";
 import { registerUiSubscriptions as registerSpawnModeUi } from "../features/manage/spawnMode";
-import { registerUiSubscriptions as registerUseItemUi } from "../features/basic/useItem";
+import { registerUiSubscriptions as registerUseItemUi } from "../features/basic/items";
 import { registerUiSubscriptions as registerOnlineUi } from "../features/manage/onlineBot";
 import { registerUiSubscriptions as registerTeleportUi } from "../features/basic/teleport";
 import { registerUiSubscriptions as registerSpawnPointUi } from "../features/manage/spawnPoint";

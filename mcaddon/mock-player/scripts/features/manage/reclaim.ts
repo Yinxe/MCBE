@@ -6,8 +6,8 @@ import { Player, EquipmentSlot, ItemStack, world } from "@minecraft/server";
 
 import { BotRecord, ItemPreview } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
-import { SWAP_SLOTS } from "../basic/EquipmentSlots";
-import { captureExperience, itemStackToPreview, serializeItemStack } from "../basic/McItemCodec";
+import { SWAP_SLOTS } from "../basic/items/EquipmentSlots";
+import { captureExperience, itemStackToPreview, serializeItemStack } from "../basic/items/McItemCodec";
 import {
   FULL_OPTIONS,
   hasAnyArmor,

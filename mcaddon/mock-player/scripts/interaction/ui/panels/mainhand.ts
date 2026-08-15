@@ -8,7 +8,7 @@ import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../../events/UiEvents";
-import { getMainhandOptions, setMainhandSlot } from "../../../features/basic/mainhand";
+import { getMainhandOptions, setMainhandSlot } from "../../../features/basic/items";
 import { ensureUiBotAvailable, resolveUiBotRecord } from "../helpers";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知选择主手动作） ──────

@@ -13,7 +13,7 @@ import { color } from "@yinxe/toolkit";
 import { findFishingSpots } from "../../../features/task/fishing";
 import type { FindSpotsFailure } from "../../../rules/FishingRules";
 import { fishOnce, failureLabel } from "../../../features/task/fishingFlow";
-import { withContainer, type ContainerOpResult } from "../../../features/basic/containerInteraction";
+import { withContainer, type ContainerOpResult } from "../../../features/basic/items";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { botRegistry } from "../../../bootstrap/context";
 import { isAdmin } from "../auth";

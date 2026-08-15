@@ -2,9 +2,9 @@
 
 import { Player, EquipmentSlot, system } from "@minecraft/server";
 
-import type { EquipChangeVia } from "../../events/DomainEvents";
-import { BotEvents } from "../../events/DomainEvents";
-import type { EquipSlotName } from "../../rules/Types";
+import type { EquipChangeVia } from "../../../events/DomainEvents";
+import { BotEvents } from "../../../events/DomainEvents";
+import type { EquipSlotName } from "../../../rules/Types";
 import { SWAP_SLOTS, EQUIP_SLOT_MAP } from "./EquipmentSlots";
 
 // ─── 内部工具 ──────────────────────────────────────────

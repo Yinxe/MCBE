@@ -18,12 +18,12 @@ import { system, world } from "@minecraft/server";
 import type { BlockInventoryComponent, Container, ItemStack } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import type { Vec3 } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/tags/BotTags";
-import { botRegistry } from "../../bootstrap/context";
-import { lookAt } from "./PoseGateway";
-import { resolveBotPlayer } from "../../bot/PlayerGateway";
-import { waitTicks } from "../utils";
+import type { Vec3 } from "../../../rules/Types";
+import { BOT_TAG } from "../../../rules/tags/BotTags";
+import { botRegistry } from "../../../bootstrap/context";
+import { lookAt } from "../PoseGateway";
+import { resolveBotPlayer } from "../../../bot/PlayerGateway";
+import { waitTicks } from "../../utils";
 
 // ─── 常量 ────────────────────────────────────────────────
 

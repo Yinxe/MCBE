@@ -20,7 +20,7 @@
 import type { ItemStack, Player } from "@minecraft/server";
 
 import type { BotRecord } from "../rules/Types";
-import { captureExperience, captureEffects } from "../features/basic/McItemCodec";
+import { captureExperience, captureEffects } from "../features/basic/items/McItemCodec";
 import type { BotRegistry } from "../service/BotRegistry";
 import type { BotStore } from "../service/port/BotStore";
 import type { InventoryStorage } from "../features/inventoryStorage";

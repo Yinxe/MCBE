@@ -8,11 +8,11 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotCore } from "./BotCore";
 import { toggleControl } from "../features/basic/control";
-import { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "../features/basic/equip";
-import { getMainhandOptions, setMainhandSlot } from "../features/basic/mainhand";
-import { useItemOnce } from "../features/basic/useItem";
+import { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "../features/basic/items";
+import { getMainhandOptions, setMainhandSlot } from "../features/basic/items";
+import { useItemOnce } from "../features/basic/items";
 import { tpPlayerToBot, tpBotToPlayer } from "../features/basic/teleport";
-import { checkMainHandDurability } from "../features/basic/toolHealth";
+import { checkMainHandDurability } from "../features/basic/items";
 import { deleteBot } from "../features/manage/deleteBot";
 import { killBot } from "../features/manage/killBot";
 import { offlineBot } from "../features/manage/offlineBot";
@@ -68,7 +68,7 @@ export class Bot extends BotCore {
   // ─── 原子能力：主手 ──────────────────────────────────
 
   /** 主手选择列表（undefined=不可用；空数组=背包无物品） */
-  getMainhandOptions(): import("../features/basic/mainhand").MainhandOption[] | undefined {
+  getMainhandOptions(): import("../features/basic/items").MainhandOption[] | undefined {
     return getMainhandOptions(this.name);
   }
 

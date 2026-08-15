@@ -21,7 +21,7 @@ import { BotEvents } from "./DomainEvents";
 import { syncEntityTags } from "../features/basic/EntityTags";
 import { formatPos } from "../interaction/ui/format";
 import { formatDimensionId } from "../rules/format/Format";
-import { captureExperience } from "../features/basic/McItemCodec";
+import { captureExperience } from "../features/basic/items";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../features/basic/PoseGateway";
 import { trackBotOffline } from "../features/trident/tridentTracker";

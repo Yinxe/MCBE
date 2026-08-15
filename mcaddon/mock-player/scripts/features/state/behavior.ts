@@ -12,7 +12,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { botRegistry, inventoryStorage, saveCoordinator } from "../../bootstrap/context";
 import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_CONTROL } from "../../rules/tags/BotTags";
 import { EQUIP_SLOT_NAMES } from "../../rules/Types";
-import { captureExperience } from "../basic/McItemCodec";
+import { captureExperience } from "../basic/items/McItemCodec";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../basic/PoseGateway";
 
 // ─── 启动引擎 ──────────────────────────────────────────
