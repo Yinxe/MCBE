@@ -11,8 +11,8 @@
 import { system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/server";
 
 import { TAG_BOT } from "../rules/tags/BotTags";
-import { showBotPanel } from "../ui/bot";
-import { showTagManagement } from "../ui/tags";
+import { showBotPanel } from "../interaction/ui/bot";
+import { showTagManagement } from "../interaction/ui/panels/tags";
 
 export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBeforeEvent): void {
   const { player, target, itemStack } = event;

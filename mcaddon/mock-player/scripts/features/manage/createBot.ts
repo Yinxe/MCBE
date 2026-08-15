@@ -6,7 +6,7 @@ import { BotRecord, isValidBotName, normalizeBotName, MAX_BOT_NAME_LENGTH } from
 import { botRegistry, configStore } from "../../bootstrap/context";
 import { isNameOccupiedInWorld } from "../../bot/PlayerGateway";
 import { canCreateBot, remainingQuota } from "../../service/QuotaRules";
-import { isAdmin } from "../../commands/auth";
+import { isAdmin } from "../../interaction/commands/auth";
 import { spawnBot } from "./spawnMode";
 
 export interface CreateBotOptions {

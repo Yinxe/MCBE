@@ -11,7 +11,7 @@
 import { system, world, type Player } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { Blackboard, BehaviorTree, type AiContext } from ".";
+import { Blackboard, BehaviorTree, type AiContext } from "./index";
 import { createVaultTaskTree, type VaultPorts } from "./VaultTask";
 import { createRaidTaskTree, type RaidPorts } from "./RaidTask";
 import { createFishingTaskTree, type FishingPorts } from "./FishingTask";

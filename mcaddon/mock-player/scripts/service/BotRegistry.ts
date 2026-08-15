@@ -3,7 +3,7 @@
 // mc 层通过 bootstrap/context 持有单例，测试用 InMemoryBotStore 直接构造。
 
 import type { BotRecord } from "../rules/Types";
-import type { BotStore } from "../service/port/BotStore";
+import type { BotStore } from "./port/BotStore";
 
 export class BotRegistry {
   private readonly records = new Map<string, BotRecord>();

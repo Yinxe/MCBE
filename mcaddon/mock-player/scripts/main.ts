@@ -13,8 +13,8 @@
 
 import { system, world } from "@minecraft/server";
 
-import { registerAllCommands } from "./commands";
-import { registerAllEvents } from "./events";
+import { registerAllCommands } from "./interaction/commands";
+import { registerAllEvents } from "./events/index";
 import { startTagBehaviors } from "./features/state/behavior";
 import { initTridentTracker } from "./features/trident/tridentTracker";
 import { initFishingHookTracker } from "./features/task/fishingHookTracker";

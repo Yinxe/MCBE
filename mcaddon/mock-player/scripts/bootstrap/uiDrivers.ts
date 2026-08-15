@@ -14,14 +14,14 @@ import { registerUiSubscriptions as registerSpawnPointUi } from "../features/man
 import { registerUiSubscriptions as registerRenameUi } from "../features/manage/rename";
 import { registerUiSubscriptions as registerKillUi } from "../features/manage/killBot";
 import { registerUiSubscriptions as registerFollowUi } from "../features/state/follow";
-import { registerUiSubscriptions as registerSwapUi } from "../ui/swap";
-import { registerUiSubscriptions as registerMainhandUi } from "../ui/mainhand";
-import { registerUiSubscriptions as registerReclaimUi } from "../ui/reclaim";
-import { registerUiSubscriptions as registerTagUi } from "../ui/tags";
-import { registerUiSubscriptions as registerTridentUi } from "../ui/trident";
-import { registerUiSubscriptions as registerTridentClaimUi } from "../ui/tridentClaim";
-import { registerUiSubscriptions as registerMoveUi } from "../ui/move";
-import { registerUiSubscriptions as registerDataUi } from "../commands/data";
+import { registerUiSubscriptions as registerSwapUi } from "../interaction/ui/panels/swap";
+import { registerUiSubscriptions as registerMainhandUi } from "../interaction/ui/panels/mainhand";
+import { registerUiSubscriptions as registerReclaimUi } from "../interaction/ui/panels/reclaim";
+import { registerUiSubscriptions as registerTagUi } from "../interaction/ui/panels/tags";
+import { registerUiSubscriptions as registerTridentUi } from "../interaction/ui/panels/trident";
+import { registerUiSubscriptions as registerTridentClaimUi } from "../interaction/ui/panels/tridentClaim";
+import { registerUiSubscriptions as registerMoveUi } from "../interaction/ui/panels/move";
+import { registerUiSubscriptions as registerDataUi } from "../interaction/commands/inspect/data";
 
 /** 注册全部 UI 领域事件订阅（worldLoad 后调用一次） */
 export function registerUiDrivers(): void {

@@ -19,7 +19,7 @@ import { PositionState, EQUIP_SLOT_NAMES } from "../rules/Types";
 import { BOT_TAG, TAG_RESPAWN } from "../rules/tags/BotTags";
 import { BotEvents } from "./DomainEvents";
 import { syncEntityTags } from "../features/basic/EntityTags";
-import { formatPos } from "../ui/format";
+import { formatPos } from "../interaction/ui/format";
 import { formatDimensionId } from "../rules/format/Format";
 import { captureExperience } from "../features/basic/McItemCodec";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";

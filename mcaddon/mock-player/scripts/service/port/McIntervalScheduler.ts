@@ -2,7 +2,7 @@
 // 实现 core/storage 的 IntervalScheduler 端口（system.runInterval 后端）。
 
 import { system } from "@minecraft/server";
-import type { IntervalHandle, IntervalScheduler } from "../port/IntervalScheduler";
+import type { IntervalHandle, IntervalScheduler } from "./IntervalScheduler";
 
 export class McIntervalScheduler implements IntervalScheduler {
   createInterval(fn: () => void, tickInterval: number): IntervalHandle {

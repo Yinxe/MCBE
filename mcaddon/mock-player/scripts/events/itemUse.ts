@@ -2,7 +2,7 @@
 
 import { world, ItemUseAfterEvent } from "@minecraft/server";
 
-import { showMainMenu } from "../ui/menu";
+import { showMainMenu } from "../interaction/ui/menu";
 
 /** 触发主菜单的快捷物品 ID */
 const MENU_TRIGGER_ITEM = "minecraft:stick";
