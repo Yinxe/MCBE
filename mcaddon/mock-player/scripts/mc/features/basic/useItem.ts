@@ -17,10 +17,10 @@ import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { BotRecord } from "../../model/Types";
-import { BOT_TAG } from "../../tags/BotTags";
-import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
+import type { BotRecord } from "../../../model/Types";
+import { BOT_TAG } from "../../../tags/BotTags";
+import { BotUiEvent } from "../../../events/UiEvents";
+import { botRegistry } from "../../bootstrap/context";
 
 /** 使用后自动停下前的蓄力/延迟（tick）：饮用/进食需 ~32tick 才完成，取 40tick(≈2s) 一并覆盖 */
 const USE_AUTO_STOP_DELAY = 40;

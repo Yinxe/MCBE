@@ -8,11 +8,11 @@
 import { system } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import type { BotRecord } from "../../model/Types";
+import type { BotRecord } from "../../../model/Types";
 import { offlineBot } from "./offlineBot";
 import { onlineBot } from "./onlineBot";
-import { waitForNameAvailable } from "../adapters/PlayerGateway";
-import { saveCoordinator } from "../bootstrap/context";
+import { waitForNameAvailable } from "../../adapters/PlayerGateway";
+import { saveCoordinator } from "../../bootstrap/context";
 
 export const reconnectingBots = new Set<string>();
 

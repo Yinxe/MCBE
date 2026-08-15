@@ -3,10 +3,10 @@
 import { Player, system, world } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { BOT_TAG } from "../../tags/BotTags";
-import { BotUiEvent } from "../../events/UiEvents";
-import { getPlayerLookTarget } from "../adapters/PoseGateway";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
+import { BOT_TAG } from "../../../tags/BotTags";
+import { BotUiEvent } from "../../../events/UiEvents";
+import { getPlayerLookTarget } from "../../adapters/PoseGateway";
+import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知设置重生动作） ──────
 

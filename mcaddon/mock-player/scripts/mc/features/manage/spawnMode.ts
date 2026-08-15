@@ -14,13 +14,13 @@
 import { GameMode, Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametest";
 
-import type { BotRecord } from "../../model/Types";
-import { BOT_TAG } from "../../tags/BotTags";
-import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
+import type { BotRecord } from "../../../model/Types";
+import { BOT_TAG } from "../../../tags/BotTags";
+import { BotUiEvent } from "../../../events/UiEvents";
+import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { finalizeBotSpawn } from "./spawn";
 import { safeReconnect } from "./pendingRespawn";
-import { globalTest } from "../bootstrap/gametestContext";
+import { globalTest } from "../../bootstrap/gametestContext";
 import { color } from "@yinxe/toolkit";
 
 export type SpawnMode = "normal" | "chunkload";

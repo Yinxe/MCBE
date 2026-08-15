@@ -2,10 +2,10 @@
 
 import { world } from "@minecraft/server";
 
-import { BotRecord } from "../../model/Types";
-import { TAG_CONTROL, BOT_TAG } from "../../tags/BotTags";
-import { syncEntityTags } from "../adapters/EntityTags";
-import { saveCoordinator } from "../bootstrap/context";
+import { BotRecord } from "../../../model/Types";
+import { TAG_CONTROL, BOT_TAG } from "../../../tags/BotTags";
+import { syncEntityTags } from "../../adapters/EntityTags";
+import { saveCoordinator } from "../../bootstrap/context";
 
 /**
  * 更新假人标签（运行时）。

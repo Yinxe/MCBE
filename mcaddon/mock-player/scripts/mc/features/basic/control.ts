@@ -3,12 +3,12 @@
 import { Player, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord } from "../../model/Types";
-import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG } from "../../tags/BotTags";
-import { syncEntityTags } from "../adapters/EntityTags";
-import { botRegistry } from "../bootstrap/context";
-import { setPose, getPlayerLookTarget, savePoseToRecord } from "../adapters/PoseGateway";
-import { setTags } from "./setTags";
+import { BotRecord } from "../../../model/Types";
+import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG } from "../../../tags/BotTags";
+import { syncEntityTags } from "../../adapters/EntityTags";
+import { botRegistry } from "../../bootstrap/context";
+import { setPose, getPlayerLookTarget, savePoseToRecord } from "../../adapters/PoseGateway";
+import { setTags } from "../state/setTags";
 
 export function toggleControl(record: BotRecord, player: Player): void {
   const hasControl = record.tags.includes(TAG_CONTROL.value);

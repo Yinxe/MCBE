@@ -4,10 +4,10 @@ import { system, world, type Player } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import { BotRecord } from "../../model/Types";
-import { BOT_TAG } from "../../tags/BotTags";
-import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
+import { BotRecord } from "../../../model/Types";
+import { BOT_TAG } from "../../../tags/BotTags";
+import { BotUiEvent } from "../../../events/UiEvents";
+import { botRegistry } from "../../bootstrap/context";
 
 export function killBot(record: BotRecord): void {
   const entity = record.entityId ? world.getEntity(record.entityId) : undefined;

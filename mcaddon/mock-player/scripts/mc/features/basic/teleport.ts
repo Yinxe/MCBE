@@ -4,12 +4,12 @@ import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import { BotRecord } from "../../model/Types";
-import { BOT_TAG } from "../../tags/BotTags";
-import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { setPose, getPlayerLookTarget, savePoseToRecord } from "../adapters/PoseGateway";
-import { onlineBot } from "./onlineBot";
+import { BotRecord } from "../../../model/Types";
+import { BOT_TAG } from "../../../tags/BotTags";
+import { BotUiEvent } from "../../../events/UiEvents";
+import { botRegistry, saveCoordinator } from "../../bootstrap/context";
+import { setPose, getPlayerLookTarget, savePoseToRecord } from "../../adapters/PoseGateway";
+import { onlineBot } from "../manage/onlineBot";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
   if (!record.online || record.death) {

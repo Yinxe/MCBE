@@ -5,9 +5,9 @@
 import { system } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 
-import { resolveBotPlayer } from "../adapters/PlayerGateway";
-import { formatEnchantments, formatDurability } from "../format";
-import { canClearMainhand, slotLabel } from "../../items/MainhandPolicy";
+import { resolveBotPlayer } from "../../adapters/PlayerGateway";
+import { formatEnchantments, formatDurability } from "../../format";
+import { canClearMainhand, slotLabel } from "../../../items/MainhandPolicy";
 
 // ─── 公开类型 ──────────────────────────────────────────
 

@@ -4,12 +4,12 @@ import { system, world, type Player } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import { BotRecord } from "../../model/Types";
-import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
+import { BotRecord } from "../../../model/Types";
+import { BotUiEvent } from "../../../events/UiEvents";
+import { botRegistry } from "../../bootstrap/context";
 import { spawnBot } from "./spawnMode";
 import { offlineBot } from "./offlineBot";
-import { trackBotOnline } from "./tridentTracker";
+import { trackBotOnline } from "../trident/tridentTracker";
 
 /**
  * 恢复离线假人上线（异步：生成前会等待名称唯一，见 spawnMode）

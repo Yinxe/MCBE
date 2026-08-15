@@ -4,10 +4,10 @@
 
 import { Player, EquipmentSlot, ItemStack, world } from "@minecraft/server";
 
-import { BotRecord, ItemPreview } from "../../model/Types";
-import { BOT_TAG } from "../../tags/BotTags";
-import { SWAP_SLOTS } from "../adapters/EquipmentSlots";
-import { captureExperience, itemStackToPreview, serializeItemStack } from "../adapters/McItemCodec";
+import { BotRecord, ItemPreview } from "../../../model/Types";
+import { BOT_TAG } from "../../../tags/BotTags";
+import { SWAP_SLOTS } from "../../adapters/EquipmentSlots";
+import { captureExperience, itemStackToPreview, serializeItemStack } from "../../adapters/McItemCodec";
 import {
   FULL_OPTIONS,
   hasAnyArmor,
@@ -15,8 +15,8 @@ import {
   buildOfflineReclaimPreview,
   buildInventorySummary,
   type ReclaimOptions,
-} from "../../service/ReclaimPlanner";
-import { botRegistry, botStore, saveCoordinator } from "../bootstrap/context";
+} from "../../../service/ReclaimPlanner";
+import { botRegistry, botStore, saveCoordinator } from "../../bootstrap/context";
 import { color } from "@yinxe/toolkit";
 
 export interface ReclaimResult {

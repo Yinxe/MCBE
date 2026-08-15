@@ -18,10 +18,10 @@
 
 import { world, system, EntityProjectileComponent } from "@minecraft/server";
 import type { Dimension, Entity, ItemStack } from "@minecraft/server";
-import { botRegistry } from "../bootstrap/context";
-import { BotEvents } from "../../events/DomainEvents";
-import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner, TRACKED_PROJECTILE_IDS } from "../../items/TridentClaimRules";
-import { queueClaimReport } from "./claimReporter";
+import { botRegistry } from "../../bootstrap/context";
+import { BotEvents } from "../../../events/DomainEvents";
+import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner, TRACKED_PROJECTILE_IDS } from "../../../items/TridentClaimRules";
+import { queueClaimReport } from "../manage/claimReporter";
 
 // ─── pending 附魔信息队列 ──────────────────────────────
 // 投掷流程（features/trident.ts doThrowLoop）在 useItemInSlot 前注册物品信息，

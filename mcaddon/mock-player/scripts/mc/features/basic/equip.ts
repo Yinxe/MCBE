@@ -2,11 +2,11 @@
 
 import { Player, EquipmentSlot } from "@minecraft/server";
 
-import type { EquipChangeVia } from "../../events/DomainEvents";
-import { BotEvents } from "../../events/DomainEvents";
-import type { EquipSlotName } from "../../model/Types";
-import { SWAP_SLOTS, EQUIP_SLOT_MAP } from "../adapters/EquipmentSlots";
-import { getEquipmentSlot } from "../../items/ItemRules";
+import type { EquipChangeVia } from "../../../events/DomainEvents";
+import { BotEvents } from "../../../events/DomainEvents";
+import type { EquipSlotName } from "../../../model/Types";
+import { SWAP_SLOTS, EQUIP_SLOT_MAP } from "../../adapters/EquipmentSlots";
+import { getEquipmentSlot } from "../../../items/ItemRules";
 
 // ─── 内部工具 ──────────────────────────────────────────
 

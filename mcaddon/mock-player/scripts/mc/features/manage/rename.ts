@@ -12,10 +12,10 @@ import { Player, system, world } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { isValidBotName, normalizeBotName } from "../../model/Types";
-import { BotUiEvent } from "../../events/UiEvents";
-import { isNameOccupiedInWorld } from "../adapters/PlayerGateway";
-import { botRegistry } from "../bootstrap/context";
+import { isValidBotName, normalizeBotName } from "../../../model/Types";
+import { BotUiEvent } from "../../../events/UiEvents";
+import { isNameOccupiedInWorld } from "../../adapters/PlayerGateway";
+import { botRegistry } from "../../bootstrap/context";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知改名动作） ──────────
 

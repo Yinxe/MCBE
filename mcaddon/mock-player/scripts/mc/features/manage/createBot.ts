@@ -2,11 +2,11 @@
 
 import { Vector3, Dimension, world } from "@minecraft/server";
 
-import { BotRecord, isValidBotName, normalizeBotName, MAX_BOT_NAME_LENGTH } from "../../model/Types";
-import { botRegistry, configStore } from "../bootstrap/context";
-import { isNameOccupiedInWorld } from "../adapters/PlayerGateway";
-import { canCreateBot, remainingQuota } from "../../service/QuotaRules";
-import { isAdmin } from "../commands/auth";
+import { BotRecord, isValidBotName, normalizeBotName, MAX_BOT_NAME_LENGTH } from "../../../model/Types";
+import { botRegistry, configStore } from "../../bootstrap/context";
+import { isNameOccupiedInWorld } from "../../adapters/PlayerGateway";
+import { canCreateBot, remainingQuota } from "../../../service/QuotaRules";
+import { isAdmin } from "../../commands/auth";
 import { spawnBot } from "./spawnMode";
 
 export interface CreateBotOptions {

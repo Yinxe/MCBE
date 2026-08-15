@@ -3,14 +3,14 @@
 import { Player, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord } from "../../model/Types";
-import { BOT_TAG } from "../../tags/BotTags";
-import { BotEvents } from "../../events/DomainEvents";
-import { botRegistry, inventoryStorage } from "../bootstrap/context";
+import { BotRecord } from "../../../model/Types";
+import { BOT_TAG } from "../../../tags/BotTags";
+import { BotEvents } from "../../../events/DomainEvents";
+import { botRegistry, inventoryStorage } from "../../bootstrap/context";
 import { reclaimBot } from "./reclaim";
-import { cleanupRaidMode } from "../tasks/McRaidPorts";
+import { cleanupRaidMode } from "../../tasks/McRaidPorts";
 import { color } from "@yinxe/toolkit";
-import { trackBotOffline } from "./tridentTracker";
+import { trackBotOffline } from "../trident/tridentTracker";
 
 /**
  * 删除假人（可选回收物品和经验到指定玩家）

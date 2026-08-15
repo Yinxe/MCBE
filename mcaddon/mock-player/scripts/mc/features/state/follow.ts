@@ -4,9 +4,9 @@
 import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
-import { resolveBotPlayer } from "../adapters/PlayerGateway";
+import { BotUiEvent } from "../../../events/UiEvents";
+import { botRegistry } from "../../bootstrap/context";
+import { resolveBotPlayer } from "../../adapters/PlayerGateway";
 import { color } from "@yinxe/toolkit";
 
 // ─── 跟随状态 ──────────────────────────────────────────

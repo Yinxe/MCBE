@@ -3,11 +3,11 @@
 import { world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord } from "../../model/Types";
-import { BOT_TAG } from "../../tags/BotTags";
-import { BotEvents } from "../../events/DomainEvents";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { trackBotOffline } from "./tridentTracker";
+import { BotRecord } from "../../../model/Types";
+import { BOT_TAG } from "../../../tags/BotTags";
+import { BotEvents } from "../../../events/DomainEvents";
+import { botRegistry, saveCoordinator } from "../../bootstrap/context";
+import { trackBotOffline } from "../trident/tridentTracker";
 
 /**
  * 主动下线假人
