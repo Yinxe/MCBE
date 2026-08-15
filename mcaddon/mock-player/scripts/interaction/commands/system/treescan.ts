@@ -5,7 +5,7 @@
 // 对照），并对木屋/柱子/装饰树等确认拒绝。扫描范围为矩形立方体，
 // 边界树评估区域完整（cellKind 直查真实世界，不截断）。
 
-import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import { system, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
@@ -34,7 +34,10 @@ export function registerTreescanCommand(registry: any): void {
       }
       const radius = Math.min(Math.max((params.radius as number | undefined) ?? DEFAULT_RADIUS, 1), MAX_RADIUS);
       const pos = player.location;
-      const detail = scanTreesNear(pos, player.dimension, radius);
+      // 异步两阶段扫描（粗扫分块 + 细扫并行，摊到多 tick）——先反馈再等待
+      player.sendMessage(`${color.muted}[树资源] 开始扫描 ${color.info}${radius}${color.muted} 格范围…`);
+      system.run(async () => {
+      const detail = await scanTreesNear(pos, player.dimension, radius);
 
       // ── 详细诊断全部走内容日志（console.warn，[MockPlayer][树资源] 前缀）──
       // 聊天只留一行汇总——大量行刷聊天不可复制，内容日志可整段复制回排障。
@@ -57,6 +60,7 @@ export function registerTreescanCommand(registry: any): void {
         `${color.accent}[树资源] ${color.success}接受 ${detail.trees.length} ${color.muted}/ ${color.warn}拒绝 ${detail.rejected.length}` +
           `${color.muted}——详细诊断已写入内容日志（前缀 [MockPlayer][树资源]）`
       );
+      });
     }
   );
 }

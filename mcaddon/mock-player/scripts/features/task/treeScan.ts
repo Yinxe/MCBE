@@ -278,13 +278,14 @@ function describeCandidate(
  * @param options 扫描选项（includeDiagnostics 缺省 true——命令路径）
  * @returns 树资源列表 + 拒绝诊断 + 逐候选详细描述行
  */
-export function scanTreesNear(
+export async function scanTreesNear(
   center: Vec3,
   dimension: Dimension,
   radius: number,
   options: { includeDiagnostics?: boolean } = {},
-): TreeScanDetail {
-  const result = scanStructures(center, dimension, radius, treeSpec(center), options.includeDiagnostics !== false);
+): Promise<TreeScanDetail> {
+  // 全异步两阶段扫描（粗扫分块 + 细扫并行），永不 reject
+  const result = await scanStructures(center, dimension, radius, treeSpec(center), options.includeDiagnostics !== false);
 
   const trees: TreeResource[] = [];
   const rejected: TreeReject[] = [];
