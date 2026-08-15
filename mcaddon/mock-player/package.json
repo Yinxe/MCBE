@@ -7,6 +7,7 @@
     "@minecraft/core-build-tasks": "5.5.0",
     "@types/node": "^26.1.1",
     "@yinxe/nbt-data-storage": "workspace:*",
+    "@yinxe/tool-strategy": "workspace:*",
     "@yinxe/toolkit": "workspace:*",
     "@yinxe/toolkit-build": "workspace:*",
     "eslint-plugin-minecraft-linting": "2.0.2",
@@ -16,7 +17,7 @@
     "typescript": "5.0.2"
   },
   "scripts": {
-    "test:core": "tsc -p tsconfig.test.json && node --test \".test-build/tests/**/*.test.js\"",
+    "test:core": "tsc -p tsconfig.test.json && node --require ts-node/register --test \".test-build/tests/**/*.test.js\"",
     "lint": "just-scripts lint",
     "build": "just-scripts build",
     "clean": "just-scripts clean",

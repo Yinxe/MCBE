@@ -50,6 +50,7 @@
     "pack:stackable": "pnpm --filter stackable run pack",
     "test:auto-refill": "pnpm --filter auto-refill run test:core",
     "test:mock-player": "pnpm --filter mock-player run test:core",
-    "test:nbt-data-storage": "pnpm --filter nbt-data-storage run test"
+    "test:nbt-data-storage": "pnpm --filter nbt-data-storage run test",
+    "test:tool-strategy": "pnpm --filter @yinxe/tool-strategy run test"
   }
 }
