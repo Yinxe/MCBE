@@ -105,8 +105,8 @@ export class Bot extends BotCore {
 
   // ─── 原子能力：生命周期（委托 manage） ───────────────
 
-  /** 上线（委托 manage/onlineBot） */
-  async bringOnline(): Promise<SimulatedPlayer> {
+  /** 上线（委托 manage/onlineBot；失败 resolve undefined，永不 reject） */
+  async bringOnline(): Promise<SimulatedPlayer | undefined> {
     return onlineBot(this.record);
   }
 

@@ -42,18 +42,24 @@ export function showAdminMenu(player: Player): void {
 
 /** 修改默认配额 */
 async function editDefaultQuota(player: Player): Promise<void> {
-  const cfg = configStore.get();
-  const vals = await ModalFormBuilder.showQuick(player, `${color.bold}默认配额`, (f) => {
-    f.textField("quota", "每玩家默认可创建的假人数（0 = 禁止）", { defaultValue: `${cfg.defaultQuota}`, tooltip: "管理员（OP 或名单）不受配额限制" });
-  });
-  if (!vals) return;
-  const quota = parseInt(vals.quota as string, 10);
-  if (isNaN(quota) || quota < 0) {
-    player.sendMessage(`${color.error}无效的配额数字`);
-    return;
+  try {
+    const cfg = configStore.get();
+    const vals = await ModalFormBuilder.showQuick(player, `${color.bold}默认配额`, (f) => {
+      f.textField("quota", "每玩家默认可创建的假人数（0 = 禁止）", { defaultValue: `${cfg.defaultQuota}`, tooltip: "管理员（OP 或名单）不受配额限制" });
+    });
+    if (!vals) return;
+    const quota = parseInt(vals.quota as string, 10);
+    if (isNaN(quota) || quota < 0) {
+      player.sendMessage(`${color.error}无效的配额数字`);
+      return;
+    }
+    configStore.setDefaultQuota(quota);
+    player.sendMessage(`${color.success}默认配额已更新为 ${color.info}${quota}${color.success} 个/玩家`);
+  } catch (e: any) {
+    // ⚠️ 永不 reject：表单异常 resolve 兜底（异步环境抛异常可能致游戏崩溃）
+    console.warn(`[MockPlayer] editDefaultQuota 异常: ${e?.message ?? e}`);
+    player.sendMessage(`${color.error}修改默认配额失败: ${e?.message ?? e}`);
   }
-  configStore.setDefaultQuota(quota);
-  player.sendMessage(`${color.success}默认配额已更新为 ${color.info}${quota}${color.success} 个/玩家`);
 }
 
 /** 逐玩家配额列表：有覆盖的玩家 + 全部主人 */
@@ -85,27 +91,33 @@ function showPlayerQuotaList(player: Player): void {
 
 /** 修改单个玩家配额（留空 = 恢复默认） */
 async function editPlayerQuota(player: Player, targetName: string): Promise<void> {
-  const cfg = configStore.get();
-  const owned = botRegistry.all().filter((r) => r.ownerName === targetName).length;
-  const current = cfg.quotas[targetName] !== undefined ? `${cfg.quotas[targetName]}` : "";
+  try {
+    const cfg = configStore.get();
+    const owned = botRegistry.all().filter((r) => r.ownerName === targetName).length;
+    const current = cfg.quotas[targetName] !== undefined ? `${cfg.quotas[targetName]}` : "";
 
-  const vals = await ModalFormBuilder.showQuick(player, `${color.bold}配额：${targetName}`, (f) => {
-    f.textField("quota", `配额（留空恢复默认 ${cfg.defaultQuota}；0 = 禁止）`, { defaultValue: current, tooltip: `当前占用 ${owned} 个假人` });
-  });
-  if (!vals) return;
-  const raw = (vals.quota as string).trim();
-  if (raw === "") {
-    configStore.setPlayerQuota(targetName, undefined);
-    player.sendMessage(`${color.success}${targetName} 已恢复默认配额 ${color.info}${cfg.defaultQuota}`);
-    return;
+    const vals = await ModalFormBuilder.showQuick(player, `${color.bold}配额：${targetName}`, (f) => {
+      f.textField("quota", `配额（留空恢复默认 ${cfg.defaultQuota}；0 = 禁止）`, { defaultValue: current, tooltip: `当前占用 ${owned} 个假人` });
+    });
+    if (!vals) return;
+    const raw = (vals.quota as string).trim();
+    if (raw === "") {
+      configStore.setPlayerQuota(targetName, undefined);
+      player.sendMessage(`${color.success}${targetName} 已恢复默认配额 ${color.info}${cfg.defaultQuota}`);
+      return;
+    }
+    const quota = parseInt(raw, 10);
+    if (isNaN(quota) || quota < 0) {
+      player.sendMessage(`${color.error}无效的配额数字`);
+      return;
+    }
+    configStore.setPlayerQuota(targetName, quota);
+    player.sendMessage(`${color.success}${targetName} 的配额已设为 ${color.info}${quota}${color.success} 个`);
+  } catch (e: any) {
+    // ⚠️ 永不 reject：表单异常 resolve 兜底
+    console.warn(`[MockPlayer] editPlayerQuota 异常: ${e?.message ?? e}`);
+    player.sendMessage(`${color.error}修改配额失败: ${e?.message ?? e}`);
   }
-  const quota = parseInt(raw, 10);
-  if (isNaN(quota) || quota < 0) {
-    player.sendMessage(`${color.error}无效的配额数字`);
-    return;
-  }
-  configStore.setPlayerQuota(targetName, quota);
-  player.sendMessage(`${color.success}${targetName} 的配额已设为 ${color.info}${quota}${color.success} 个`);
 }
 
 /** 管理员名单管理 */

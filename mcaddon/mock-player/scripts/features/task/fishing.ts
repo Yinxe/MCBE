@@ -192,13 +192,19 @@ function useRod(bot: SimulatedPlayer, botName: string, slot: number): Promise<bo
  * ⚠️ 有鱼钩时拒绝（MCBE 右键会变成收竿，误操作）。
  */
 export async function castFishingRod(botName: string): Promise<CastRodResult> {
-  const bot = resolveBotPlayer(botName);
-  if (!bot) return "offline";
-  if (hasFishingHook(botName)) return "already-cast";
-  const slot = findRodSlot(bot);
-  if (slot === undefined) return "no-rod";
-  const used = await useRod(bot, botName, slot);
-  return used ? "cast" : "error";
+  try {
+    const bot = resolveBotPlayer(botName);
+    if (!bot) return "offline";
+    if (hasFishingHook(botName)) return "already-cast";
+    const slot = findRodSlot(bot);
+    if (slot === undefined) return "no-rod";
+    const used = await useRod(bot, botName, slot);
+    return used ? "cast" : "error";
+  } catch (e: any) {
+    // ⚠️ 永不 reject：任何意外异常 resolve 错误结果（异步环境抛异常可能致游戏崩溃）
+    console.warn(`[MockPlayer] castFishingRod 异常 ${botName}: ${e?.message ?? e}`);
+    return "error";
+  }
 }
 
 /**
@@ -206,13 +212,19 @@ export async function castFishingRod(botName: string): Promise<CastRodResult> {
  * ⚠️ 无鱼钩时拒绝（MCBE 右键会变成抛竿，误操作）。
  */
 export async function reelFishingRod(botName: string): Promise<ReelRodResult> {
-  const bot = resolveBotPlayer(botName);
-  if (!bot) return "offline";
-  if (!hasFishingHook(botName)) return "no-hook";
-  const slot = findRodSlot(bot);
-  if (slot === undefined) return "no-rod";
-  const used = await useRod(bot, botName, slot);
-  return used ? "reeled" : "error";
+  try {
+    const bot = resolveBotPlayer(botName);
+    if (!bot) return "offline";
+    if (!hasFishingHook(botName)) return "no-hook";
+    const slot = findRodSlot(bot);
+    if (slot === undefined) return "no-rod";
+    const used = await useRod(bot, botName, slot);
+    return used ? "reeled" : "error";
+  } catch (e: any) {
+    // ⚠️ 永不 reject：任何意外异常 resolve 错误结果
+    console.warn(`[MockPlayer] reelFishingRod 异常 ${botName}: ${e?.message ?? e}`);
+    return "error";
+  }
 }
 
 // ─── 钓鱼点状态检测（AI 行为用：点位判定/实体占用/可用性） ──

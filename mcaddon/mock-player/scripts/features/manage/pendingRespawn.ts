@@ -62,8 +62,10 @@ export function safeReconnect(record: BotRecord, options?: SafeReconnectOptions)
 
   waitForNameAvailable(record.name)
     .then(() => doConnect(record, options?.onOnline))
+    // ⚠️ 防御性 catch：waitForNameAvailable 承诺永不 reject（超时也 resolve），
+    // 保留此分支防止未来回归引入 reject 导致重连状态卡死
     .catch(() => {
-      console.warn(`[MockPlayer] safeReconnect 等待名称释放超时 ${record.name}，强制执行上线`);
+      console.warn(`[MockPlayer] safeReconnect 等待名称释放异常 ${record.name}，强制执行上线`);
       doConnect(record, options?.onOnline);
     })
     .finally(() => reconnectingBots.delete(record.name));
@@ -73,11 +75,10 @@ async function doConnect(
   record: BotRecord,
   onOnline?: (bot: SimulatedPlayer, record: BotRecord) => void,
 ): Promise<void> {
-  let bot: SimulatedPlayer;
-  try {
-    bot = await onlineBot(record);
-  } catch (e: any) {
-    console.error(`[MockPlayer] safeReconnect 上线失败 ${record.name}: ${e?.message ?? e}`);
+  // onlineBot 承诺永不 reject（失败 resolve undefined），此处判断结果即可
+  const bot = await onlineBot(record);
+  if (!bot) {
+    console.error(`[MockPlayer] safeReconnect 上线失败 ${record.name}`);
     record.online = false;
     record.entityId = undefined;
     saveCoordinator.saveRecord(record);

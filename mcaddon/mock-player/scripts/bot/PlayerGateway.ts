@@ -75,10 +75,11 @@ const NAME_POLL_MAX = 60 / 2; // 60 tick 超时 ≈ 3 秒
 /**
  * 轮询等待假人名称在世界上完全释放（无同名实体）。
  * disconnect 后旧实体需异步清理，提前 spawn 会导致 "(2)" 重名后缀。
- * resolve 表示名称已可用；reject 表示超时（但仍可强制上线）。
+ * ⚠️ 永不 reject：超时也 resolve（调用方可强制上线，由生成后校验兜底）。
+ * 异步环境纪律：最外层 Promise 一律 resolve，错误不抛异常（防游戏崩溃）。
  */
 export function waitForNameAvailable(name: string): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     let polls = 0;
 
     function check(): void {
@@ -105,8 +106,8 @@ export function waitForNameAvailable(name: string): Promise<void> {
 
       polls++;
       if (polls >= NAME_POLL_MAX) {
-        console.warn(`[MockPlayer] waitForNameAvailable 超时 ${name}`);
-        reject(new Error(`waitForNameAvailable 超时 ${name}`));
+        console.warn(`[MockPlayer] waitForNameAvailable 超时 ${name}（超时仍 resolve，强制上线由生成后校验兜底）`);
+        resolve();
         return;
       }
       system.runTimeout(check, NAME_POLL_INTERVAL);

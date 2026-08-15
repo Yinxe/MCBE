@@ -59,14 +59,15 @@ export function registerUiSubscriptions(): void {
       system.run(() => {
         if (!r.online || r.death) {
           onlineBot(r)
-            .then(() => {
+            .then((bot) => {
+              // onlineBot 永不 reject（失败 resolve undefined）
+              if (!bot) { player.sendMessage(`${color.error}${e.botName} 上线失败，无法传送`); return; }
               player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已上线`);
               system.run(() => {
                 tpPlayerToBot(player, botRegistry.get(e.botName)!);
                 player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);
               });
-            })
-            .catch((err: any) => player.sendMessage(`${color.error}${err?.message ?? err}`));
+            });
         } else {
           tpPlayerToBot(player, r);
           player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);

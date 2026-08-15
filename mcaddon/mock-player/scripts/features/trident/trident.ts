@@ -91,34 +91,42 @@ export function throwTridents(
   slots: number[],
   onComplete?: () => void,
 ): Promise<void> {
-  if (throwingBots.has(botName)) {
-    console.warn(`[MockPlayer] 投掷已在进行中 ${botName}`);
-    onComplete?.();
-    return Promise.resolve();
-  }
-
-  const record = botRegistry.get(botName);
-  if (!record || !record.online || record.death) {
-    onComplete?.();
-    return Promise.resolve();
-  }
-
-  throwingBots.add(botName);
-
-  const wasFollowing = isFollowing(botName);
-  if (wasFollowing) pauseFollow();
-
-  // 闭包异步：done（doThrowLoop 的 finishThrow 统一出口）时 resolve + 兼容回调
-  return new Promise<void>((resolve) => {
-    const done = () => {
-      throwingBots.delete(botName);
-      if (wasFollowing) resumeFollow();
+  try {
+    if (throwingBots.has(botName)) {
+      console.warn(`[MockPlayer] 投掷已在进行中 ${botName}`);
       onComplete?.();
-      resolve();
-    };
+      return Promise.resolve();
+    }
 
-    system.run(() => doThrowLoop(botName, playerId, slots, done));
-  });
+    const record = botRegistry.get(botName);
+    if (!record || !record.online || record.death) {
+      onComplete?.();
+      return Promise.resolve();
+    }
+
+    throwingBots.add(botName);
+
+    const wasFollowing = isFollowing(botName);
+    if (wasFollowing) pauseFollow();
+
+    // 闭包异步：done（doThrowLoop 的 finishThrow 统一出口）时 resolve + 兼容回调
+    return new Promise<void>((resolve) => {
+      const done = () => {
+        throwingBots.delete(botName);
+        if (wasFollowing) resumeFollow();
+        onComplete?.();
+        resolve();
+      };
+
+      system.run(() => doThrowLoop(botName, playerId, slots, done));
+    });
+  } catch (e: any) {
+    // ⚠️ 永不 reject：构造期任何异常（registry/跟随状态读取等）→ 清理标记后 resolve
+    console.warn(`[MockPlayer] 投掷启动异常 ${botName}: ${e?.message ?? e}`);
+    try { throwingBots.delete(botName); } catch { /* ignore */ }
+    onComplete?.();
+    return Promise.resolve();
+  }
 }
 
 // ─── 投掷循环 ──────────────────────────────────────────

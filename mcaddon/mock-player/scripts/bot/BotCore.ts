@@ -149,49 +149,55 @@ export class BotCore {
    * @returns true=已到达；false=未开始/路径不可达/实体失效/超时
    */
   async navigateTo(target: Vector3, speed = DEFAULT_NAVIGATION_SPEED): Promise<boolean> {
-    const bot = this.entity;
-    if (!bot) return false;
-
-    let ok = false;
     try {
-      bot.stopMoving();
-      const result = bot.navigateToLocation(target, speed);
-      ok = result.isFullPath;
-    } catch {
+      const bot = this.entity;
+      if (!bot) return false;
+
+      let ok = false;
+      try {
+        bot.stopMoving();
+        const result = bot.navigateToLocation(target, speed);
+        ok = result.isFullPath;
+      } catch {
+        return false;
+      }
+      // 路径不可达：navigateToLocation 已开始移动但无法完整到达 → 直接失败
+      // （调用方可提示"无法完全到达"，与旧同步语义一致）
+      if (!ok) return false;
+
+      const sys = mc().system;
+      return new Promise<boolean>((resolve) => {
+        let settled = false;
+        let elapsed = 0;
+        let interval: number | undefined;
+        const finish = (reached: boolean) => {
+          if (settled) return;
+          settled = true;
+          if (interval !== undefined) sys.clearRun(interval);
+          resolve(reached);
+        };
+        interval = sys.runInterval(() => {
+          elapsed += NAV_CHECK_INTERVAL;
+          try {
+            // ⚠️ 实体有效性防护：死亡/下线瞬间实体失效 → 判定失败收尾
+            if (!bot.isValid) { finish(false); return; }
+            const d = Math.hypot(
+              bot.location.x - target.x,
+              bot.location.y - target.y,
+              bot.location.z - target.z,
+            );
+            if (d <= NAV_ARRIVE_DISTANCE) { finish(true); return; }
+            if (elapsed >= NAV_TIMEOUT_TICKS) { finish(false); return; }
+          } catch {
+            finish(false);
+          }
+        }, NAV_CHECK_INTERVAL);
+      });
+    } catch (e: any) {
+      // ⚠️ 永不 reject：任何意外异常 resolve false（异步环境抛异常可能致游戏崩溃）
+      console.warn(`[MockPlayer] navigateTo 异常 ${this.name}: ${e?.message ?? e}`);
       return false;
     }
-    // 路径不可达：navigateToLocation 已开始移动但无法完整到达 → 直接失败
-    // （调用方可提示"无法完全到达"，与旧同步语义一致）
-    if (!ok) return false;
-
-    const sys = mc().system;
-    return new Promise<boolean>((resolve) => {
-      let settled = false;
-      let elapsed = 0;
-      let interval: number | undefined;
-      const finish = (reached: boolean) => {
-        if (settled) return;
-        settled = true;
-        if (interval !== undefined) sys.clearRun(interval);
-        resolve(reached);
-      };
-      interval = sys.runInterval(() => {
-        elapsed += NAV_CHECK_INTERVAL;
-        try {
-          // ⚠️ 实体有效性防护：死亡/下线瞬间实体失效 → 判定失败收尾
-          if (!bot.isValid) { finish(false); return; }
-          const d = Math.hypot(
-            bot.location.x - target.x,
-            bot.location.y - target.y,
-            bot.location.z - target.z,
-          );
-          if (d <= NAV_ARRIVE_DISTANCE) { finish(true); return; }
-          if (elapsed >= NAV_TIMEOUT_TICKS) { finish(false); return; }
-        } catch {
-          finish(false);
-        }
-      }, NAV_CHECK_INTERVAL);
-    });
   }
 
   /** 停止移动 */
