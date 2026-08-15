@@ -166,3 +166,159 @@ test("耐久保护：旧带精准 → 替换优先带精准的同款", () => {
   const repl = urgentReplacement(current, bag, URGENT_THRESHOLD);
   assert.equal(repl?.slot, 1); // 精准同款优先（即便 slot 2 更耐久）
 });
+
+// ─── 耐久保护：复杂场景（阈值边界/多候选排序/类型与品阶交叉） ──
+
+test("紧急判定：占比阈值精确边界——恰好 5% 不紧急、4.99% 紧急（耐久 ≥ 绝对下限）", () => {
+  const at5 = tool({ slot: 0, durability: 20, maxDurability: 400, durabilityRatio: 0.05 }); // 恰好 5%，且 20 ≥ 16
+  const below5 = tool({ slot: 0, durability: 19.6, maxDurability: 400, durabilityRatio: 0.049 }); // 4.9% < 5%
+  assert.equal(isUrgent(at5, URGENT_THRESHOLD, ABS_DURABILITY_FLOOR), false); // 0.05 不 < 0.05
+  assert.equal(isUrgent(below5, URGENT_THRESHOLD, ABS_DURABILITY_FLOOR), true);
+});
+
+test("紧急判定：绝对下限精确边界——恰好 16 不紧急、15 紧急（高耐久工具占比兜底）", () => {
+  // 下界合金镐剩余 16：占比 0.08 不触发，但绝对下限 16 恰好不触发
+  const at16 = tool({ slot: 0, tier: 6, durability: 16, maxDurability: 2031, durabilityRatio: 0.008 });
+  const at15 = tool({ slot: 0, tier: 6, durability: 15, maxDurability: 2031, durabilityRatio: 0.007 });
+  assert.equal(isUrgent(at16, URGENT_THRESHOLD, ABS_DURABILITY_FLOOR), true); // 占比 0.8% < 5% → 紧急
+  // 用高占比但低绝对耐久验证绝对下限分支：占比 20% > 5%，但剩余 15 < 16 → 紧急
+  const highRatioLowAbs = tool({ slot: 0, tier: 5, durability: 15, maxDurability: 75, durabilityRatio: 0.2 });
+  assert.equal(isUrgent(highRatioLowAbs, URGENT_THRESHOLD, ABS_DURABILITY_FLOOR), true);
+  const highRatioOk = tool({ slot: 0, tier: 5, durability: 16, maxDurability: 80, durabilityRatio: 0.2 });
+  assert.equal(isUrgent(highRatioOk, URGENT_THRESHOLD, ABS_DURABILITY_FLOOR), false); // 占比 20% 且 16 ≥ 16 → 不紧急
+});
+
+test("耐久保护：多候选复杂排序——同款优先 > 精准一致 > 品阶 > 耐久", () => {
+  const current = tool({ slot: 0, isCurrent: true, typeId: "minecraft:iron_axe", tier: 3, durability: 10, durabilityRatio: 0.04 });
+  const bag = [
+    tool({ slot: 1, typeId: "minecraft:diamond_axe", tier: 5, durability: 100, durabilityRatio: 0.4 }), // 更高品阶
+    tool({ slot: 2, typeId: "minecraft:iron_axe", tier: 3, durability: 200, durabilityRatio: 0.8 }), // 同款更耐久
+    tool({ slot: 3, typeId: "minecraft:iron_axe", tier: 3, durability: 150, durabilityRatio: 0.6 }), // 同款次耐久
+  ];
+  const repl = urgentReplacement(current, bag, URGENT_THRESHOLD);
+  // 同款优先于高品阶（防换到不顺手工具）→ slot 2
+  assert.equal(repl?.slot, 2);
+});
+
+test("耐久保护：同款内按耐久排序——同 typeId 两把取更耐久者", () => {
+  const current = tool({ slot: 0, isCurrent: true, typeId: "minecraft:iron_axe", tier: 3, durability: 10, durabilityRatio: 0.04 });
+  const bag = [
+    tool({ slot: 1, typeId: "minecraft:iron_axe", tier: 3, durability: 180, durabilityRatio: 0.72 }),
+    tool({ slot: 2, typeId: "minecraft:iron_axe", tier: 3, durability: 220, durabilityRatio: 0.88 }),
+  ];
+  assert.equal(urgentReplacement(current, bag, URGENT_THRESHOLD)?.slot, 2);
+});
+
+test("耐久保护：品阶相同时类型不同——都不如'更耐久同款'但更高品阶仍可入选（无同款时）", () => {
+  const current = tool({ slot: 0, isCurrent: true, typeId: "minecraft:stone_axe", tier: 2, durability: 5, durabilityRatio: 0.08 });
+  const bag = [
+    tool({ slot: 1, typeId: "minecraft:iron_axe", tier: 3, durability: 100, durabilityRatio: 0.4 }), // 无 stone_axe 同款
+    tool({ slot: 2, typeId: "minecraft:diamond_axe", tier: 5, durability: 60, durabilityRatio: 0.04 }), // 占比不达标 → 不入
+  ];
+  const repl = urgentReplacement(current, bag, URGENT_THRESHOLD);
+  // slot1 铁斧（占比 0.4 达标、更耐久、更高品阶）；slot2 钻石占比 0.04 < 0.05 → 剔除
+  assert.equal(repl?.slot, 1);
+});
+
+test("耐久保护：候选占比恰好等于阈值可入选（>= 语义）", () => {
+  const current = tool({ slot: 0, isCurrent: true, typeId: "minecraft:iron_axe", tier: 3, durability: 10, durabilityRatio: 0.04 });
+  const bag = [
+    tool({ slot: 1, typeId: "minecraft:iron_axe", tier: 3, durability: 12.5, maxDurability: 250, durabilityRatio: 0.05 }),
+  ];
+  // 0.05 >= 0.05 → 可入选（但必须严格更耐久：12.5 > 10 ✓）
+  assert.equal(urgentReplacement(current, bag, URGENT_THRESHOLD)?.slot, 1);
+});
+
+test("耐久保护：同品阶同类型且都达标——取更耐久（极端贴近）", () => {
+  const current = tool({ slot: 0, isCurrent: true, typeId: "minecraft:iron_axe", tier: 3, durability: 10, durabilityRatio: 0.04 });
+  const bag = [
+    tool({ slot: 1, typeId: "minecraft:iron_axe", tier: 3, durability: 13, maxDurability: 250, durabilityRatio: 0.052 }),
+    tool({ slot: 2, typeId: "minecraft:iron_axe", tier: 3, durability: 14, maxDurability: 250, durabilityRatio: 0.056 }),
+  ];
+  assert.equal(urgentReplacement(current, bag, URGENT_THRESHOLD)?.slot, 2);
+});
+
+test("耐久保护：同耐久同品阶同类型 → 返回池内先者（稳定）", () => {
+  const current = tool({ slot: 0, isCurrent: true, typeId: "minecraft:iron_axe", tier: 3, durability: 10, durabilityRatio: 0.04 });
+  const bag = [
+    tool({ slot: 1, typeId: "minecraft:iron_axe", tier: 3, durability: 100, durabilityRatio: 0.4 }),
+    tool({ slot: 2, typeId: "minecraft:iron_axe", tier: 3, durability: 100, durabilityRatio: 0.4 }),
+  ];
+  assert.equal(urgentReplacement(current, bag, URGENT_THRESHOLD)?.slot, 1);
+});
+
+// ─── 模式树组合（logs/leaves/mixed 交叉场景） ──────────
+
+test("模式树：mixed 挖原木切斧、挖树叶切精准锄——同一背包来回切换", () => {
+  const hoe = tool({ slot: 1, role: "hoe", enchants: { silk: 1 } });
+  const axe = tool({ slot: 2, enchants: { efficiency: 5 } });
+  // 挖原木 → 效率斧
+  assert.equal(swapSlot(decideTool([hoe, axe], "minecraft:oak_log", undefined, true, "mixed")), 2);
+  // 挖树叶 → 精准锄
+  assert.equal(swapSlot(decideTool([hoe, axe], "minecraft:oak_leaves", undefined, true, "mixed")), 1);
+});
+
+test("模式树：mixed 主手斧挖树叶 + 背包精准锄 + 剪刀 → 精准锄优先（树叶档第一优先）", () => {
+  const hand = tool({ slot: 0, isCurrent: true, enchants: { efficiency: 5 } });
+  const shears = tool({ slot: 1, role: "shears", tier: 0 });
+  const hoe = tool({ slot: 2, role: "hoe", enchants: { silk: 1 } });
+  assert.equal(swapSlot(decideTool([shears, hoe], "minecraft:oak_leaves", hand)), 2);
+});
+
+test("模式树：logs 模式挖树叶保持斧（清障不换精准），挖原木换效率斧", () => {
+  const hand = tool({ slot: 0, isCurrent: true, enchants: { efficiency: 5 } });
+  const hoe = tool({ slot: 1, role: "hoe", enchants: { silk: 1 } });
+  // 挖原木 → 主手已是效率斧 → 保持
+  assert.equal(decideTool([hoe], "minecraft:oak_log", hand, true, "logs").action, "keep");
+  // 挖树叶 → logs 树无树叶节点 → 保持（不切精准）
+  assert.equal(decideTool([hoe], "minecraft:oak_leaves", hand, true, "logs").action, "keep");
+});
+
+test("模式树：leaves 模式挖原木保持、挖树叶换精准", () => {
+  const hand = tool({ slot: 0, isCurrent: true, enchants: { efficiency: 5 } });
+  const hoe = tool({ slot: 1, role: "hoe", enchants: { silk: 1 } });
+  // 挖原木 → leaves 树无原木节点 → 保持
+  assert.equal(decideTool([hoe], "minecraft:oak_log", hand, true, "leaves").action, "keep");
+  // 挖树叶 → 换精准锄
+  assert.equal(swapSlot(decideTool([hoe], "minecraft:oak_leaves", hand, true, "leaves")), 1);
+});
+
+test("模式树：mixed 挖其他方块（石头/泥土）→ 树无节点 → 保持", () => {
+  const hoe = tool({ slot: 1, role: "hoe", enchants: { silk: 1 } });
+  const axe = tool({ slot: 2, enchants: { efficiency: 5 } });
+  assert.equal(decideTool([hoe, axe], "minecraft:stone", undefined, true, "mixed").action, "keep");
+  assert.equal(decideTool([hoe, axe], "minecraft:dirt", undefined, true, "mixed").action, "keep");
+});
+
+test("模式树：mixed 主手非工具（undefined current）→ 挖原木从背包换效率斧", () => {
+  const hoe = tool({ slot: 1, role: "hoe", enchants: { silk: 1 } });
+  const axe = tool({ slot: 2, enchants: { efficiency: 5 } });
+  assert.equal(swapSlot(decideTool([hoe, axe], "minecraft:oak_log", undefined, true, "mixed")), 2);
+});
+
+test("模式树：mixed 挖树叶无精准锄无剪刀 → 任意精准工具兜底", () => {
+  const silkAxe = tool({ slot: 1, enchants: { silk: 1 } }); // 精准斧
+  const e5Axe = tool({ slot: 2, enchants: { efficiency: 5 } });
+  // 无精准锄/剪刀 → 档3 任意精准 → 精准斧
+  assert.equal(swapSlot(decideTool([e5Axe, silkAxe], "minecraft:oak_leaves", undefined, true, "mixed")), 1);
+});
+
+test("模式树：mixed 挖树叶只有普通斧 → 档4 任意工具兜底", () => {
+  const plainAxe = tool({ slot: 1, enchants: { efficiency: 5 } });
+  assert.equal(swapSlot(decideTool([plainAxe], "minecraft:oak_leaves", undefined, true, "mixed")), 1);
+});
+
+// ─── 决策树组合：预定义策略引用（对齐引擎注册表） ──────
+
+test("决策：主手空手（undefined）挖原木 + 背包无斧只有镐 → 保持（无候选）", () => {
+  const pick = tool({ slot: 1, role: "pickaxe" });
+  assert.equal(decideTool([pick], "minecraft:oak_log", undefined, true, "mixed").action, "keep");
+});
+
+test("决策：主手效率3斧 + 背包效率5斧 → 工作马换效率5（reselect 默认 true）", () => {
+  const hand = tool({ slot: 0, isCurrent: true, enchants: { efficiency: 3 } });
+  const better = tool({ slot: 2, enchants: { efficiency: 5 } });
+  assert.equal(swapSlot(decideTool([better], "minecraft:oak_log", hand)), 2);
+  // reselect=false → 主手命中策略即保持
+  assert.equal(decideTool([better], "minecraft:oak_log", hand, false).action, "keep");
+});
