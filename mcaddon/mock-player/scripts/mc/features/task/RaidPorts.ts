@@ -1,4 +1,4 @@
-// ─── 劫掠任务端口实现（mc/tasks） ────────────────────────
+// ─── 劫掠任务端口实现（mc/features/task） ─────────────────
 // RaidPorts 的 mc 适配（core/tasks/RaidTask 声明决策契约）。
 // **事件驱动黑板 + 树决策**：
 //   - effectAdd 订阅更新"最近英雄事件时刻"（lastHeroTick）+ 触发公共信号

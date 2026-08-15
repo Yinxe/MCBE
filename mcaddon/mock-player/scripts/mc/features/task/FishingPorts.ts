@@ -1,6 +1,6 @@
-// ─── 钓鱼任务端口实现（mc/tasks） ────────────────────────
+// ─── 钓鱼任务端口实现（mc/features/task） ─────────────────
 // 任务型模块的执行层：FishingPorts 的 mc 适配（core/tasks/FishingTask 声明
-// 决策契约）。分层约定：mc/ai = AI 引擎（BotBrain 驱动树）；mc/tasks = 具体
+// 决策契约）。分层约定：mc/ai = AI 引擎（BotBrain 驱动树）；features/task = 具体
 // 任务执行。
 //
 // 能力复用（不重复实现）：
