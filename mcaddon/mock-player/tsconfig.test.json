@@ -12,6 +12,7 @@
     "rootDir": "."
   },
   "include": [
+    "scripts/bot/**/*.ts",
     "scripts/rules/**/*.ts",
     "scripts/ai/**/*.ts",
     "scripts/tasks/**/*.ts",
