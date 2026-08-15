@@ -13,7 +13,7 @@ import {
 import { defineCommand, color } from "@yinxe/toolkit";
 
 import { botRegistry, inventoryStorage } from "../bootstrap/context";
-import { guardBotCommand } from "./auth";
+import { resolveBotForCommand } from "./auth";
 import { getTotalXpForLevels } from "../../xp/XpMath";
 
 export function registerRecoverCommand(registry: any): void {
@@ -30,32 +30,26 @@ export function registerRecoverCommand(registry: any): void {
       return;
     }
 
-    const denied = guardBotCommand(player, nameInput);
-    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
-
-    const record = botRegistry.get(nameInput);
-    if (!record) {
-      player.sendMessage(`${color.error}未找到模拟玩家 ${color.playerName}${nameInput}`);
-      return;
-    }
-
-    if (!record.online || !record.entityId) {
+    const bot = resolveBotForCommand(player, nameInput);
+    if (!bot) return;
+    if (!bot.isAvailable || !bot.record.entityId) {
       player.sendMessage(`${color.error}假人 ${color.playerName}${nameInput} ${color.error}不在线，请先上线`);
       return;
     }
 
-    const entity = world.getEntity(record.entityId);
+    const entity = world.getEntity(bot.record.entityId);
     if (!entity?.isValid) {
       player.sendMessage(`${color.error}假人 ${color.playerName}${nameInput} ${color.error}实体无效`);
       return;
     }
 
-    const bot = entity as Player;
+    const entityPlayer = entity as Player;
+    const record = bot.record;
     let restored = false;
 
     // ── 恢复背包/装备（复用 InventoryStorage.restoreInto：真实物品直写，占位跳过） ──
     try {
-      restored = inventoryStorage.restoreInto(bot, record);
+      restored = inventoryStorage.restoreInto(entityPlayer, record);
     } catch (e: any) {
       player.sendMessage(`${color.error}恢复数据失败: ${e?.message ?? e}`);
     }
@@ -69,8 +63,8 @@ export function registerRecoverCommand(registry: any): void {
     const exp = record.experience;
     if (exp.totalXp > 0) {
       try {
-        const current = getTotalXpForLevels(bot.level) + bot.xpEarnedAtCurrentLevel;
-        bot.addExperience(exp.totalXp - current);
+        const current = getTotalXpForLevels(entityPlayer.level) + entityPlayer.xpEarnedAtCurrentLevel;
+        entityPlayer.addExperience(exp.totalXp - current);
         player.sendMessage(`${color.success}经验恢复成功 (Lv.${exp.level} 总经验 ${exp.totalXp})`);
         restored = true;
       } catch {

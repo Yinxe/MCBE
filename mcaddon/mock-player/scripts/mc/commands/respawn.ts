@@ -2,8 +2,8 @@ import { world, CommandPermissionLevel, CustomCommandParamType } from "@minecraf
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { TAG_RESPAWN, TAG_BOT } from "../../tags/BotTags";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { guardBotCommand } from "./auth";
+import { saveCoordinator } from "../bootstrap/context";
+import { resolveBotForCommand } from "./auth";
 import { setTags } from "../features/state/setTags";
 import { getPlayerLookTarget } from "../adapters/PoseGateway";
 export function registerRespawnCommand(registry: any): void {
@@ -14,19 +14,17 @@ export function registerRespawnCommand(registry: any): void {
   }, ({ player, params }) => {
     const targetName = params.name as string;
     if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
-    const denied = guardBotCommand(player, targetName);
-    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
-    const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
-    const has = record.tags.includes(TAG_RESPAWN.value);
+    const bot = resolveBotForCommand(player, targetName);
+    if (!bot) return;
+    const has = bot.hasTag(TAG_RESPAWN.value);
     const newTags = has
-      ? record.tags.filter(t => t !== TAG_RESPAWN.value)
-      : [...record.tags, TAG_RESPAWN.value];
-    const rejected = setTags(record, newTags);
+      ? bot.tags.filter(t => t !== TAG_RESPAWN.value)
+      : [...bot.tags, TAG_RESPAWN.value];
+    const rejected = setTags(bot.record, newTags);
     if (rejected) { player.sendMessage(`${color.error}${rejected}`); return; }
     player.sendMessage(has
-      ? `${color.playerName}假人 ${color.playerName}${record.name}${color.playerName} 已关闭自动重生`
-      : `${color.success}假人 ${color.playerName}${record.name}${color.success} 已开启自动重生`);
+      ? `${color.playerName}假人 ${color.playerName}${bot.name}${color.playerName} 已关闭自动重生`
+      : `${color.success}假人 ${color.playerName}${bot.name}${color.success} 已开启自动重生`);
   });
 }
 
@@ -41,23 +39,21 @@ export function registerSetRespawnCommand(registry: any): void {
   }, ({ player, params }) => {
     const targetName = params.name as string;
     if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
-    const denied = guardBotCommand(player, targetName);
-    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
-    const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
+    const bot = resolveBotForCommand(player, targetName);
+    if (!bot) return;
     const lookTarget = getPlayerLookTarget(player);
-    record.respawnPoint = { location: player.location, dimension: player.dimension.id, rotation: player.getRotation(), lookTarget };
+    bot.record.respawnPoint = { location: player.location, dimension: player.dimension.id, rotation: player.getRotation(), lookTarget };
     try {
-      if (record.online && record.entityId) {
-        const e = world.getEntity(record.entityId);
+      if (bot.record.online && bot.record.entityId) {
+        const e = world.getEntity(bot.record.entityId);
         if (e?.hasTag(TAG_BOT.value)) {
-          (e as any).setSpawnPoint({ dimension: world.getDimension(record.respawnPoint.dimension), x: record.respawnPoint.location.x, y: record.respawnPoint.location.y, z: record.respawnPoint.location.z });
+          (e as any).setSpawnPoint({ dimension: world.getDimension(bot.record.respawnPoint.dimension), x: bot.record.respawnPoint.location.x, y: bot.record.respawnPoint.location.y, z: bot.record.respawnPoint.location.z });
         }
       }
     } catch (e: any) {
-      console.warn(`[MockPlayer] setSpawnPoint 失败 ${record.name}: ${e?.message ?? e}`);
+      console.warn(`[MockPlayer] setSpawnPoint 失败 ${bot.name}: ${e?.message ?? e}`);
     }
-    saveCoordinator.saveRecord(record);
+    saveCoordinator.saveRecord(bot.record);
     player.sendMessage(`${color.success}已更新 ${color.playerName}${targetName}${color.success} 的重生点`);
   });
 }
