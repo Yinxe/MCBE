@@ -14,9 +14,9 @@ import { color } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
 import { scanOwnTridents, claimTridents, type ClaimableTrident, type ClaimGroup } from "../features/trident/tridentClaim";
 import { projectileTypeLabel } from "../../items/TridentClaimRules";
+import { ensureUiBotAvailable, resolveUiBotRecord } from "./helpers";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知认主动作） ──────────
 
@@ -75,15 +75,9 @@ function groupLabel(g: ClaimGroup): string {
  * 按聚集分组展示（组按数量降序），批量 toggle 勾选 → 认主（假人成为第二任，覆盖旧第二任）。
  */
 export function showTridentClaimUI(player: Player, botName: string): void {
-  const record = botRegistry.get(botName);
-  if (!record) {
-    player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
-    return;
-  }
-  if (!record.online || record.death) {
-    player.sendMessage(`${color.error}假人不在线或已死亡`);
-    return;
-  }
+  const record = resolveUiBotRecord(player, botName);
+  if (!record) return;
+  if (!ensureUiBotAvailable(player, record)) return;
   if (!record.ownerName) {
     player.sendMessage(`${color.error}无主假人无法认主（没有主人体系）`);
     return;

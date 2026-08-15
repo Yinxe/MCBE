@@ -9,9 +9,9 @@ import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
 import { scanTridents, isMainhandTrident, throwTridents, type TridentSlot } from "../features/trident/trident";
 import { formatEnchantments, formatDurability } from "../format";
+import { ensureUiBotAvailable, resolveUiBotRecord } from "./helpers";
 
 const SLOT_HOTBAR = 9;
 
@@ -54,9 +54,9 @@ function makeTridentLabel(item: ItemStack, slotIndex: number, isMainhand: boolea
  * 若主手已是三叉戟且背包无其他三叉戟 → 直接投掷。
  */
 export function showTridentSelector(player: Player, botName: string): void {
-  const record = botRegistry.get(botName);
-  if (!record) { player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 已不存在`); return; }
-  if (!record.online || record.death) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
+  const record = resolveUiBotRecord(player, botName);
+  if (!record) return;
+  if (!ensureUiBotAvailable(player, record)) return;
 
   const tridents = scanTridents(botName);
   if (!tridents) { player.sendMessage(`${color.error}无法获取假人实体`); return; }

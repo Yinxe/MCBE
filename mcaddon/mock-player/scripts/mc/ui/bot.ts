@@ -15,6 +15,7 @@ import { formatPos } from "../format";
 import { formatDimensionId } from "../../format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
+import { resolveUiBotRecord } from "./helpers";
 import { visibleRecords } from "../../service/BotVisibility";
 import { ownerLabel } from "./ownerLabel";
 
@@ -39,8 +40,8 @@ function getPosSummary(record: BotRecord): string {
 // ─── 统一假人操作面板（v3，showBotPanel 主菜单） ──────
 
 export function showBotPanel(player: Player, botName: string, onBack?: () => void): void {
-  const record = botRegistry.get(botName);
-  if (!record) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`); return; }
+  const record = resolveUiBotRecord(player, botName);
+  if (!record) return;
 
   // ── 管理权限：只有主人或管理员可以操作假人 ──
   if (!canManageBot(player, record)) {

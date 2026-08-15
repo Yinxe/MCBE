@@ -13,8 +13,8 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { TAG_BOT, TAG_AUTO_USE, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, EXCLUSIVE_TAGS, getTagDef, computeTagsFromBehaviorForm } from "../../tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim } from "../commands/auth";
+import { resolveUiBotRecord } from "./helpers";
 import { setTags } from "../features/state/setTags";
 import { isFollowing } from "../features/state/follow";
 
@@ -33,11 +33,8 @@ export function registerUiSubscriptions(): void {
 // ─── 行为标签管理（含 上线/潜行 快捷开关） ───────────
 
 export function showTagManagement(player: Player, botName: string): void {
-  const record = botRegistry.get(botName);
-  if (!record) {
-      player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
-    return;
-  }
+  const record = resolveUiBotRecord(player, botName);
+  if (!record) return;
   // ⚠️ 权限守卫：本面板可改他人假人的标签/生成模式/潜行/跟随，
   // 入口可达自潜行长按假人（playerInteractWithEntity），必须校验管理权
   // 无主假人（旧版升级数据）：首次打开 tag 菜单 → 自动认领成为主人（静默标记）
@@ -114,11 +111,8 @@ export function showTagManagement(player: Player, botName: string): void {
 
   builder.show(player).then((vals) => {
     if (!vals) return;
-    const currentRecord = botRegistry.get(botName);
-    if (!currentRecord) {
-    player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
-      return;
-    }
+    const currentRecord = resolveUiBotRecord(player, botName);
+    if (!currentRecord) return;
 
     // ── 表单 → 标签计算（core 纯函数） ──
     const exclusiveSel = vals.exclusive as number;

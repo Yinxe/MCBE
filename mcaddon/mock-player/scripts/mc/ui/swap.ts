@@ -6,11 +6,12 @@ import { Player, EquipmentSlot, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BOT_TAG } from "../../tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { BotUiEvent } from "../../events/UiEvents";
 import { collectContainerItems } from "../adapters/McItemCodec";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
+import { saveCoordinator } from "../bootstrap/context";
+import { resolveBotPlayer } from "../adapters/PlayerGateway";
+import { ensureUiBotAvailable, resolveUiBotRecord } from "./helpers";
 import { swapMainhandWithBot } from "../features/index";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知互换动作） ──────────
@@ -47,18 +48,6 @@ function triggerEquipChangeUI(bot: Player, slot: EquipmentSlot): void {
   }
 }
 
-/** 获取假人 + 玩家双实体并安全执行装备操作 */
-function resolveBotEntity(botName: string): Player | undefined {
-  const record = botRegistry.get(botName);
-  if (!record || !record.entityId) return undefined;
-  const entity = world.getEntity(record.entityId);
-  if (!entity?.isValid) return undefined;
-  try {
-    return entity.hasTag(BOT_TAG) ? (entity as Player) : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 // ─── 互换面板 ──────────────────────────────────────────
 
@@ -68,9 +57,10 @@ function resolveBotEntity(botName: string): Player | undefined {
  * 所有操作在同一 system.run 内执行，避免竞态
  */
 function doSwap(player: Player, botName: string): void {
-  const r = botRegistry.get(botName);
-  if (!r || !r.online || r.death) { player.sendMessage(`${color.error}模拟玩家不在线或已死亡`); return; }
-  const bot = resolveBotEntity(botName);
+  const r = resolveUiBotRecord(player, botName);
+  if (!r) return;
+  if (!ensureUiBotAvailable(player, r)) return;
+  const bot = resolveBotPlayer(botName);
   if (!bot) { player.sendMessage(`${color.error}无法获取假人实体`); return; }
 
   new ModalFormBuilder()

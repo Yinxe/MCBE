@@ -5,8 +5,8 @@ import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
 import { moveBot } from "../features/basic/move";
+import { ensureUiBotAvailable, resolveUiBotRecord } from "./helpers";
 import { deleteBot } from "../features/manage/deleteBot";
 import { parseCoordinateInput } from "../../coords/Coordinate";
 
@@ -45,15 +45,9 @@ export function showMoveForm(player: Player, botName: string): void {
       }
     }
 
-    const record = botRegistry.get(botName);
-    if (!record) {
-      player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 已被删除`);
-      return;
-    }
-    if (!record.online || record.death) {
-      player.sendMessage(`${color.error}模拟玩家不在线或已死亡`);
-      return;
-    }
+    const record = resolveUiBotRecord(player, botName);
+    if (!record) return;
+    if (!ensureUiBotAvailable(player, record)) return;
 
     system.run(() => {
       try {
@@ -80,11 +74,8 @@ export function confirmDelete(player: Player, botName: string): void {
     `${color.bold}确认删除`,
     `${style("确定要删除模拟玩家", color.warn)} ${color.playerName}${botName}${color.warn} 吗？\n\n${color.gold}背包、装备和经验将被回收。\n${color.error}此操作不可撤销！`,
     () => {
-      const record = botRegistry.get(botName);
-      if (!record) {
-        player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${botName}${color.error} 不存在`);
-        return;
-      }
+      const record = resolveUiBotRecord(player, botName);
+      if (!record) return;
       system.run(() => {
         try {
           deleteBot(record, player);

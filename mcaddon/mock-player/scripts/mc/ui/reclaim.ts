@@ -9,8 +9,8 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 import type { BotRecord, ItemPreview } from "../../model/Types";
 import type { ReclaimOptions } from "../../service/ReclaimPlanner";
 import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../bootstrap/context";
 import { getReclaimPreview, reclaimBot, type ReclaimResult } from "../features/manage/reclaim";
+import { resolveUiBotRecord } from "./helpers";
 import { formatItemPreview } from "../../service/ReclaimPlanner";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知回收动作） ──────────
@@ -21,8 +21,8 @@ export function registerUiSubscriptions(): void {
     if (e.action !== "reclaim") return;
     const player = world.getEntity(e.playerId) as Player | undefined;
     if (!player) return;
-    const record = botRegistry.get(e.botName);
-    if (!record) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已被删除`); return; }
+    const record = resolveUiBotRecord(player, e.botName);
+    if (!record) return;
     showReclaimForm(player, record);
   });
 }

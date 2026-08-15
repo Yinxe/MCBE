@@ -9,7 +9,6 @@ import { BotRecord } from "../../model/Types";
 import { BOT_TAG } from "../../tags/BotTags";
 import { formatPos } from "../format";
 import { formatDimensionId } from "../../format/Format";
-import { botRegistry } from "../bootstrap/context";
 import { showBotPanel, showBotList } from "./bot";
 import { showCreateForm } from "./create";
 import { showOnlineManagement } from "./online";
