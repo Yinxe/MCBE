@@ -72,12 +72,17 @@ export function isMainhandTrident(botName: string): boolean {
 
 // ─── 投掷入口 ──────────────────────────────────────────
 
-/** 投掷结果（多状态，带失败原因） */
-export type ThrowResult =
-  | "ok"              // 投掷一轮完整执行
-  | "already-throwing" // 投掷已在进行中（防重入）
-  | "not-online"      // 假人不在线/已死亡/记录不存在
-  | "error";          // 意外异常
+/** 投掷结果枚举（多出口：成功 / 各类失败原因） */
+export enum ThrowResult {
+  /** 投掷一轮完整执行 */
+  Ok = "ok",
+  /** 投掷已在进行中（防重入） */
+  AlreadyThrowing = "already-throwing",
+  /** 假人不在线/已死亡/记录不存在 */
+  NotOnline = "not-online",
+  /** 意外异常 */
+  Error = "error",
+}
 
 /**
  * 让假人投掷指定槽位的三叉戟。
@@ -102,13 +107,13 @@ export function throwTridents(
     if (throwingBots.has(botName)) {
       console.warn(`[MockPlayer] 投掷已在进行中 ${botName}`);
       onComplete?.();
-      return Promise.resolve("already-throwing");
+      return Promise.resolve(ThrowResult.AlreadyThrowing);
     }
 
     const record = botRegistry.get(botName);
     if (!record || !record.online || record.death) {
       onComplete?.();
-      return Promise.resolve("not-online");
+      return Promise.resolve(ThrowResult.NotOnline);
     }
 
     throwingBots.add(botName);
@@ -122,7 +127,7 @@ export function throwTridents(
         throwingBots.delete(botName);
         if (wasFollowing) resumeFollow();
         onComplete?.();
-        resolve("ok");
+        resolve(ThrowResult.Ok);
       };
 
       system.run(() => doThrowLoop(botName, playerId, slots, done));
@@ -132,7 +137,7 @@ export function throwTridents(
     console.warn(`[MockPlayer] 投掷启动异常 ${botName}: ${e?.message ?? e}`);
     try { throwingBots.delete(botName); } catch { /* ignore */ }
     onComplete?.();
-    return Promise.resolve("error");
+    return Promise.resolve(ThrowResult.Error);
   }
 }
 

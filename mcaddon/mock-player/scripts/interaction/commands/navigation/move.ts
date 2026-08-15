@@ -1,23 +1,24 @@
 import { Vector3, system, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
+import { NavigateResult } from "../../../features/basic/move";
 import { resolveBotForCommand } from "../auth";
 
 /** 导航结果 → 玩家消息（多状态，各自说明失败原因） */
-function navigateMessage(targetName: string, loc: Vector3, result: string): string {
+function navigateMessage(targetName: string, loc: Vector3, result: NavigateResult): string {
   const pos = `${color.playerName}${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}`;
   switch (result) {
-    case "arrived":
+    case NavigateResult.Arrived:
       return `${color.success}假人 ${color.playerName}${targetName}${color.success} 已到达 ${pos}`;
-    case "no-path":
+    case NavigateResult.NoPath:
       return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 无法到达 ${pos}：无路径可达（障碍/距离过远）`;
-    case "still-timeout":
+    case NavigateResult.StillTimeout:
       return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 移动超时：2 秒内位置未变化（可能卡住）`;
-    case "timeout":
+    case NavigateResult.Timeout:
       return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 30 秒未到达 ${pos}（仍在移动或路径过长）`;
-    case "unavailable":
+    case NavigateResult.Unavailable:
       return `${color.error}假人 ${color.playerName}${targetName}${color.error} 不可用（不在线或已死亡）`;
-    case "entity-invalid":
+    case NavigateResult.EntityInvalid:
       return `${color.error}假人 ${color.playerName}${targetName}${color.error} 移动中实体失效（死亡/下线）`;
     default:
       return `${color.error}移动假人 ${color.playerName}${targetName}${color.error} 失败（异常）`;

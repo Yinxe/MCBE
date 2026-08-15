@@ -9,7 +9,7 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotCore } from "./BotCore";
 import { navigateBot } from "../features/basic/move";
 import { toggleControl } from "../features/basic/control";
-import { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "../features/basic/items";
+import { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot, SwapResult } from "../features/basic/items";
 import { getMainhandOptions, setMainhandSlot } from "../features/basic/items";
 import { useItemOnce } from "../features/basic/items";
 import { tpPlayerToBot, tpBotToPlayer } from "../features/basic/teleport";
@@ -161,21 +161,21 @@ export class Bot extends BotCore {
   /** 与玩家交换主手（异步多状态：SwapResult） */
   async swapMainhand(player: Player): Promise<import("../features/basic/items/equip").SwapResult> {
     const bot = this.entity;
-    if (!bot) return "no-entity";
+    if (!bot) return SwapResult.NoEntity;
     return swapMainhandWithBot(player, bot as Player);
   }
 
   /** 与玩家交换副手（异步多状态：SwapResult） */
   async swapOffhand(player: Player): Promise<import("../features/basic/items/equip").SwapResult> {
     const bot = this.entity;
-    if (!bot) return "no-entity";
+    if (!bot) return SwapResult.NoEntity;
     return swapOffhandWithBot(player, bot as Player);
   }
 
   /** 与玩家交换全部装备（异步多状态：SwapResult） */
   async swapEquipment(player: Player): Promise<import("../features/basic/items/equip").SwapResult> {
     const bot = this.entity;
-    if (!bot) return "no-entity";
+    if (!bot) return SwapResult.NoEntity;
     return swapEquipmentWithBot(player, bot as Player);
   }
 

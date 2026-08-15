@@ -19,15 +19,23 @@ const NAV_STILL_LIMIT = 4;
 /** 总时长超时（tick）：30 秒仍在移动但未到达 → 超时失败 */
 const NAV_TOTAL_TIMEOUT_TICKS = 600;
 
-/** 导航结果（多状态，带失败原因） */
-export type NavigateResult =
-  | "arrived"        // 已到达目标（静止且距目标 ≤ 到达距离）
-  | "no-path"        // 无路径可达（navigateToLocation 返回 isFullPath=false）
-  | "still-timeout"  // 移动超时：2 秒内位置未变化且未到达（卡住）
-  | "timeout"        // 总时长超时：30 秒仍在移动但未到达
-  | "unavailable"    // 假人不可用（不在线/死亡/无实体）
-  | "entity-invalid" // 监测中实体失效（死亡/下线）
-  | "error";         // 意外异常
+/** 导航结果枚举（多出口：成功 / 各类失败原因） */
+export enum NavigateResult {
+  /** 已到达目标（静止且距目标 ≤ 到达距离） */
+  Arrived = "arrived",
+  /** 无路径可达（navigateToLocation 返回 isFullPath=false） */
+  NoPath = "no-path",
+  /** 移动超时：2 秒内位置未变化且未到达（卡住） */
+  StillTimeout = "still-timeout",
+  /** 总时长超时：30 秒仍在移动但未到达 */
+  Timeout = "timeout",
+  /** 假人不可用（不在线/死亡/无实体） */
+  Unavailable = "unavailable",
+  /** 监测中实体失效（死亡/下线） */
+  EntityInvalid = "entity-invalid",
+  /** 意外异常 */
+  Error = "error",
+}
 
 /**
  * 寻路到目标位置并等待完成（闭包异步，多状态返回）。
@@ -36,7 +44,7 @@ export type NavigateResult =
  *   - 连续 4 次（40tick≈2 秒）位置未变化 → 假人已停下：
  *     距目标 ≤ 到达距离 = 已到达；否则 = 移动超时（卡住）
  *   - 总时长 30 秒仍在移动但未到达 → 超时失败
- * @returns 多状态结果（见 NavigateResult），永不 reject
+ * @returns 多状态结果（见 NavigateResult 枚举），永不 reject
  */
 export async function navigateBot(
   botName: string,
@@ -44,16 +52,16 @@ export async function navigateBot(
   speed = NAVIGATE_SPEED,
 ): Promise<NavigateResult> {
   const bot = resolveBotPlayer(botName);
-  if (!bot) return "unavailable";
+  if (!bot) return NavigateResult.Unavailable;
 
   try {
     bot.stopMoving();
     const result = bot.navigateToLocation(target, speed);
     // 无路径可达：直接失败（未开始移动）
-    if (!result.isFullPath) return "no-path";
+    if (!result.isFullPath) return NavigateResult.NoPath;
   } catch (e: any) {
     console.warn(`[MockPlayer] navigateBot 发起失败 ${botName}: ${e?.message ?? e}`);
-    return "error";
+    return NavigateResult.Error;
   }
 
   // ── 位置监测循环（每 10 tick） ──
@@ -65,7 +73,7 @@ export async function navigateBot(
     elapsed += NAV_CHECK_INTERVAL;
     try {
       // ⚠️ 实体有效性防护：死亡/下线瞬间实体失效
-      if (!bot.isValid) return "entity-invalid";
+      if (!bot.isValid) return NavigateResult.EntityInvalid;
 
       const loc = bot.location;
       const d = distance3d(loc, target);
@@ -77,15 +85,15 @@ export async function navigateBot(
         stillCount++;
         if (stillCount >= NAV_STILL_LIMIT) {
           // 2 秒内位置未变化 → 假人已停下：近=到达终点，远=移动超时
-          return d <= NAV_ARRIVE_DISTANCE ? "arrived" : "still-timeout";
+          return d <= NAV_ARRIVE_DISTANCE ? NavigateResult.Arrived : NavigateResult.StillTimeout;
         }
       }
       lastLoc = loc;
 
-      if (elapsed >= NAV_TOTAL_TIMEOUT_TICKS) return "timeout";
+      if (elapsed >= NAV_TOTAL_TIMEOUT_TICKS) return NavigateResult.Timeout;
     } catch (e: any) {
       console.warn(`[MockPlayer] navigateBot 监测异常 ${botName}: ${e?.message ?? e}`);
-      return "error";
+      return NavigateResult.Error;
     }
   }
 }
