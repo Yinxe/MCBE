@@ -25,6 +25,7 @@ import { registerRecoverCommand } from "./lifecycle/recover";
 import { registerAdminCommand } from "./system/admin";
 import { registerStorageCommand } from "./inspect/storage";
 import { registerTestCommand } from "./system/test";
+import { registerTreescanCommand } from "./system/treescan";
 import { registerFishingCommands } from "./activity/fishing";
 
 export function registerAllCommands(event: StartupEvent): void {
@@ -54,5 +55,6 @@ export function registerAllCommands(event: StartupEvent): void {
   registerAdminCommand(registry);
   registerStorageCommand(registry);
   registerTestCommand(registry);
+  registerTreescanCommand(registry);
   registerFishingCommands(registry);
 }
