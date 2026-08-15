@@ -18,6 +18,7 @@ import { AIR_BLOCK_ID, ADJACENT_8, classifyFishingScan, collectFishingSpots, com
 import type { Vec3 } from "../../../model/Types";
 import { BOT_TAG } from "../../../tags/BotTags";
 import { botRegistry } from "../../bootstrap/context";
+import { resolveBotPlayer } from "../../adapters/PlayerGateway";
 
 // ─── 常量 ────────────────────────────────────────────────
 
@@ -32,33 +33,6 @@ export type CastRodResult = "cast" | "already-cast" | "no-rod" | "offline" | "er
 /** 收竿结果：reeled=已收竿 / no-hook=无鱼钩（拒绝空收竿）/ no-rod=无鱼竿 / offline=假人不可用 / error=执行失败（可重试） */
 export type ReelRodResult = "reeled" | "no-hook" | "no-rod" | "offline" | "error";
 
-// ─── 假人解析 ────────────────────────────────────────────
-
-/**
- * 取在线（且未死亡）的假人实体。
- * ⚠️ 用户规格：nameTag 精确匹配优先（world.getPlayers({ name, tags })——
- *   实体名稳定，entityId 重连/重启后失效），registry entityId 回退双保险。
- */
-export function resolveBotPlayer(botName: string): SimulatedPlayer | undefined {
-  try {
-    const player = world.getPlayers({ name: botName, tags: [BOT_TAG] })[0];
-    if (player) {
-      // 死亡中的假人实体仍在世界但不可操控
-      if (botRegistry.get(botName)?.death) return undefined;
-      return player as SimulatedPlayer;
-    }
-  } catch {
-    /* 查询失败走 entityId 回退 */
-  }
-  const record = botRegistry.get(botName);
-  if (!record?.online || record.death || !record.entityId) return undefined;
-  try {
-    const e = world.getEntity(record.entityId);
-    return e?.hasTag(BOT_TAG) ? (e as SimulatedPlayer) : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 /** 找鱼竿槽位：主手优先，其次热键栏 0-8；无鱼竿返回 undefined */
 function findRodSlot(bot: SimulatedPlayer): number | undefined {

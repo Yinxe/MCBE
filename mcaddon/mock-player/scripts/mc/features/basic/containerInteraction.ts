@@ -22,6 +22,8 @@ import type { Vec3 } from "../../../model/Types";
 import { BOT_TAG } from "../../../tags/BotTags";
 import { botRegistry } from "../../bootstrap/context";
 import { lookAt } from "../../adapters/PoseGateway";
+import { resolveBotPlayer } from "../../adapters/PlayerGateway";
+import { waitTicks } from "../../../mc/utils";
 
 // ─── 常量 ────────────────────────────────────────────────
 
@@ -49,10 +51,6 @@ export interface ContainerAccess {
   transferItem(fromSlot: number, toContainer: Container): Promise<ItemStack | undefined>;
 }
 
-function waitTicks(ticks: number): Promise<void> {
-  return new Promise((resolve) => system.runTimeout(resolve, ticks));
-}
-
 /** 构造容器访问：**读操作不等待、写操作先操作后等待**（固定 2 tick 间隔防冲突；
  *  ⚠️ 先等待再写会在等待窗口被其他插入操作（漏斗等）抢先写入，setItem 反而
  *  覆盖——先写基于调用时刻状态立即生效；读无副作用不需要限速） */
@@ -75,29 +73,6 @@ function createThrottledAccess(container: Container): ContainerAccess {
       return moved;
     },
   };
-}
-
-// ─── 假人解析 ────────────────────────────────────────────
-
-/** 取在线（且未死亡）的假人实体（nameTag 精确匹配优先 + entityId 回退） */
-export function resolveBotPlayer(botName: string): SimulatedPlayer | undefined {
-  try {
-    const player = world.getPlayers({ name: botName, tags: [BOT_TAG] })[0];
-    if (player) {
-      if (botRegistry.get(botName)?.death) return undefined;
-      return player as SimulatedPlayer;
-    }
-  } catch {
-    /* 查询失败走 entityId 回退 */
-  }
-  const record = botRegistry.get(botName);
-  if (!record?.online || record.death || !record.entityId) return undefined;
-  try {
-    const e = world.getEntity(record.entityId);
-    return e?.hasTag(BOT_TAG) ? (e as SimulatedPlayer) : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 // ─── 公开入口 ────────────────────────────────────────────

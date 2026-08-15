@@ -24,7 +24,9 @@ import { color } from "@yinxe/toolkit";
 import { diffLoot, initialBiteTracker, isWaterBlock, judgeHookPlacement, makeLootFingerprint, updateBiteTracker, type BackpackInfo, type BiteTracker, type FishingFailureReason, type FishingOutcome, type HookPlacement, type LootItem } from "../../../rules/FishingRules";
 import { enchantDisplayName } from "../../../format/EnchantZh";
 import { BOT_TAG, TAG_FISH_MODE } from "../../../tags/BotTags";
-import { castFishingRod, findOwnHooks, reelFishingRod, resolveBotPlayer } from "./fishing";
+import { castFishingRod, findOwnHooks, reelFishingRod } from "./fishing";
+import { resolveBotPlayer } from "../../../mc/adapters/PlayerGateway";
+import { waitTicks } from "../../../mc/utils";
 
 // ── 领域类型 re-export（类型已归位 core/tasks/FishingRules，此处保持导入方兼容） ──
 export type { FishingOutcome, FishingFailureReason, BackpackInfo, LootItem } from "../../../rules/FishingRules";
@@ -100,10 +102,6 @@ function takePendingLoot(botName: string): Record<string, number> {
 }
 
 // ─── 工具 ────────────────────────────────────────────────
-
-function waitTicks(ticks: number): Promise<void> {
-  return new Promise((resolve) => system.runTimeout(resolve, ticks));
-}
 
 /** 钓鱼消息通知半径（格，用户规格：鱼上钩后只通知附近 7 格玩家） */
 const NOTIFY_RADIUS = 7;

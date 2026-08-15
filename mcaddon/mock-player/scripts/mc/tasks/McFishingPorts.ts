@@ -24,16 +24,17 @@ import { computeTargetYaw, isYawAligned, YAW_TOLERANCE_DEG } from "../../rules/F
 import type { Vec3 } from "../../model/Types";
 import { botRegistry } from "../bootstrap/context";
 import { lookAt } from "../adapters/PoseGateway";
+import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import {
   findFishingSpots,
   getFishingStatus,
   hasFishingRod,
   isSpotUsable,
   reelFishingRod,
-  resolveBotPlayer,
   spotAtStand,
 } from "../features/task/fishing";
 import { fishOnce } from "../features/task/fishingFlow";
+import { distance3d, horizontalDistance, waitTicks } from "../utils";
 
 // ─── 常量 ────────────────────────────────────────────────
 
@@ -79,19 +80,7 @@ function notifyOwner(botName: string, detail: string): void {
 
 // ─── 工具 ────────────────────────────────────────────────
 
-function waitTicks(ticks: number): Promise<void> {
-  return new Promise((resolve) => system.runTimeout(resolve, ticks));
-}
-
 /** 水平距离 */
-function horizontalDistance(a: Vec3, b: Vec3): number {
-  return Math.hypot(a.x - b.x, a.z - b.z);
-}
-
-/** 3D 距离 */
-function distance3d(a: Vec3, b: Vec3): number {
-  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-}
 
 // ─── 钓鱼点端口实现 ──────────────────────────────────────
 

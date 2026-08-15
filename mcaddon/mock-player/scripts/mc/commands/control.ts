@@ -4,9 +4,7 @@ import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/serve
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { TAG_CONTROL } from "../../tags/BotTags";
-import { botRegistry } from "../bootstrap/context";
-import { guardBotCommand } from "./auth";
-import { requireBot } from "../../bot/Bot";
+import { resolveBotForCommand } from "./auth";
 
 export function registerControlCommand(registry: any): void {
   defineCommand(registry, {
@@ -19,12 +17,9 @@ export function registerControlCommand(registry: any): void {
   }, ({ player, params }) => {
     const targetName = params.name as string;
     if (!targetName) { player.sendMessage(`${color.error}用法: /mp:control <假人> [true|false]`); return; }
-    const denied = guardBotCommand(player, targetName);
-    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
 
-    let bot;
-    try { bot = requireBot(targetName, botRegistry); }
-    catch { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
+    const bot = resolveBotForCommand(player, targetName);
+    if (!bot) return;
 
     const turnOn = (params.enable as boolean | undefined) ?? true;
     const isOn = bot.hasTag(TAG_CONTROL.value);

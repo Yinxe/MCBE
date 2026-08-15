@@ -8,6 +8,7 @@ import type { Player } from "@minecraft/server";
 import { canManage, color } from "@yinxe/toolkit";
 
 import type { BotRecord } from "../../model/Types";
+import { requireBot, type Bot } from "../../bot/Bot";
 import { botRegistry, configStore } from "../bootstrap/context";
 
 /** 是否管理员：OP 权限 或 配置名单内玩家 */
@@ -54,4 +55,33 @@ export function guardBotCommand(player: Player, botName: string): string | undef
     return undefined;
   }
   return `假人 ${botName} 只允许主人或管理员操作`;
+}
+/**
+ * 命令层统一解析假人 Bot 对象（含权限守卫 + 记录检查 + 错误消息）。
+ * 简化命令样板：找不到记录/无权限时自动向玩家发消息并返回 undefined。
+ * @param player 执行命令的玩家
+ * @param botName 假人名
+ * @param registry 注册表（默认全局单例）
+ * @returns Bot 对象；失败（无权限/无记录）→ undefined（已发消息）
+ */
+export function resolveBotForCommand(
+  player: Player,
+  botName: string,
+  registry: typeof botRegistry = botRegistry
+): Bot | undefined {
+  if (!botName) {
+    player.sendMessage(`${color.error}请指定假人名字`);
+    return undefined;
+  }
+  const denied = guardBotCommand(player, botName);
+  if (denied) {
+    player.sendMessage(`${color.error}${denied}`);
+    return undefined;
+  }
+  try {
+    return requireBot(botName, registry);
+  } catch {
+    player.sendMessage(`${color.error}未找到假人 ${color.playerName}${botName}${color.error} 的记录`);
+    return undefined;
+  }
 }

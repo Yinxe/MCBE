@@ -10,12 +10,23 @@ import { BOT_TAG } from "../../tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 
 /**
- * 根据假人名解析 SimulatedPlayer 实体。
- * 共享函数，避免各 feature 文件重复。
+ * 根据假人名解析 SimulatedPlayer 实体（唯一实现，各 feature/port 共用）。
+ * 两路解析：先按"名字+假人标签"查世界玩家（快路径），失败回退注册表
+ * entityId；死亡假人返回 undefined（实体不可操控）。查询全程 try-catch
+ * 防御（受限上下文/未加载返回 undefined）。
  */
 export function resolveBotPlayer(name: string): SimulatedPlayer | undefined {
+  try {
+    const player = world.getPlayers({ name, tags: [BOT_TAG] })[0];
+    if (player) {
+      if (botRegistry.get(name)?.death) return undefined;
+      return player as SimulatedPlayer;
+    }
+  } catch {
+    /* 查询失败走 entityId 回退 */
+  }
   const record = botRegistry.get(name);
-  if (!record || !record.entityId) return undefined;
+  if (!record?.online || record.death || !record.entityId) return undefined;
   try {
     const e = world.getEntity(record.entityId);
     if (!e?.isValid) return undefined;

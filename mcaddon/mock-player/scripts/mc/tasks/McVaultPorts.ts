@@ -30,6 +30,7 @@ import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../bootstrap/context";
 import { lookAt } from "../adapters/PoseGateway";
 import { safeReconnect, reconnectingBots } from "../features/manage/pendingRespawn";
+import { distance3d, horizontalDistance, waitTicks } from "../utils";
 
 // ─── 常量 ────────────────────────────────────────────────
 
@@ -285,26 +286,7 @@ function scanVaults(bot: SimulatedPlayer): NearbyVaults {
 
 // ─── 工具函数 ────────────────────────────────────────────
 
-function waitTicks(ticks: number): Promise<void> {
-  return new Promise((resolve) => {
-    system.runTimeout(resolve, ticks);
-  });
-}
-
 /** 水平距离（扫描排序用） */
-function horizontalDistance(a: Vec3, b: Vec3): number {
-  const dx = a.x - b.x;
-  const dz = a.z - b.z;
-  return Math.hypot(dx, dz);
-}
-
-/** 三维距离（到达判定用） */
-function distance3d(a: Vec3, b: Vec3): number {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  const dz = a.z - b.z;
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
 
 /** 目标坐标是否仍是宝库方块（被拆/被替换 → false） */
 function isVaultBlock(bot: SimulatedPlayer, pos: Vec3): boolean {

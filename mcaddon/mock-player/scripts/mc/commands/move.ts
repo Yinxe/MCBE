@@ -1,9 +1,7 @@
 import { Vector3, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
-import { botRegistry } from "../bootstrap/context";
-import { guardBotCommand } from "./auth";
-import { requireBot } from "../../bot/Bot";
+import { resolveBotForCommand } from "./auth";
 export function registerMoveCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:move", description: "让模拟玩家自动寻路到指定坐标",
@@ -13,11 +11,8 @@ export function registerMoveCommand(registry: any): void {
   }, ({ player, params }) => {
     const targetName = params.name as string;
     if (!targetName) { player.sendMessage(`${color.error}用法: /mp:move <假人> [x] [y] [z]`); return; }
-    const denied = guardBotCommand(player, targetName);
-    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
-    let bot;
-    try { bot = requireBot(targetName, botRegistry); }
-    catch { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
+    const bot = resolveBotForCommand(player, targetName);
+    if (!bot) return;
     const loc = (params.location as Vector3 | undefined) ?? player.location;
     try {
       const ok = bot.navigateTo(loc);
