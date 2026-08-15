@@ -90,6 +90,18 @@ function isFoodItem(sim: SimulatedPlayer, slot: number): boolean {
   }
 }
 
+/** 是否已满饱（饥饿/饱和度接近满值 20）：MCBE 机制——满饱食时无法进食 */
+function isFullyFed(sim: SimulatedPlayer): boolean {
+  try {
+    const hunger = (sim.getComponent("minecraft:player_hunger") as { value?: number } | undefined)?.value;
+    const saturation = (sim.getComponent("minecraft:player_saturation") as { value?: number } | undefined)?.value;
+    // 任一接近满值（容差 0.5）即视为无法进食
+    return (hunger !== undefined && hunger >= 19.5) || (saturation !== undefined && saturation >= 19.5);
+  } catch {
+    return false;
+  }
+}
+
 /** 使用物品结果枚举（多出口：成功 / 各类失败原因） */
 export enum UseItemResult {
   /** 完整执行（按下并自动停止） */
@@ -100,6 +112,8 @@ export enum UseItemResult {
   EntityInvalid = "entity-invalid",
   /** 主手物品不可用（空手或不能右键使用） */
   Unavailable = "unavailable",
+  /** 饱食度/饥饿度已满，无法进食（MCBE 机制：满饱食时不能吃东西） */
+  Full = "full",
   /** 意外异常 */
   Error = "error",
 }
@@ -125,9 +139,19 @@ export function useItemOnce(record: BotRecord, player?: Player): Promise<UseItem
         const slot = findUsableSlot(sim);
         const item = slotItemType(sim, slot);
         const food = isFoodItem(sim, slot);
+
+        // ⚠️ 满饱食预检：MCBE 机制——饥饿/饱和度已满时无法进食（useItemInSlot 会失败），
+        //    提前识别并给出明确提示，避免误报"物品不可用"
+        if (food && isFullyFed(sim)) {
+          player?.sendMessage(`${color.warn}${color.playerName}${record.name}${color.warn} 饱食度已满，无法进食`);
+          resolve(UseItemResult.Full);
+          return;
+        }
+
         const pressed = sim.useItemInSlot(slot);
         console.warn(`[MockPlayer] 使用物品：${record.name} slot=${slot} 手持=${item ?? "空"} 食物=${food} 开始使用=${pressed}`);
         if (!pressed) {
+          // 兜底：非食物失败或组件读取不到时的通用提示
           player?.sendMessage(`${color.warn}${color.playerName}${record.name}${color.warn} 主手物品当前不可用（空手或不能右键使用）`);
           resolve(UseItemResult.Unavailable);
           return;
