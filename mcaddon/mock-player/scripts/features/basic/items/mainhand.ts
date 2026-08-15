@@ -2,7 +2,6 @@
 // 扫描背包所有物品，将选中的物品置换到当前主手槽并选中
 // 决策（清空可行性/槽位命名）在 core/rules/items/MainhandPolicy，容器读写在这里
 
-import { system } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
@@ -82,38 +81,47 @@ function containerItemArray(container: any): unknown[] {
 // ─── 设置主手 ──────────────────────────────────────────
 
 /**
- * 将指定槽位的物品置换到 slot 0 并选中。
+ * 将指定槽位的物品置换到当前主手槽并选中。
+ * ⚠️ 调用方需在 system.run / 事件处理器内（容器操作上下文约束）。
  * @param value -1 表示清空主手，>=0 表示物品所在槽位
+ * @returns true=处理完成；false=未处理（-1 时背包无空位/主手为空，或操作失败/槽位无效）
  */
-export function setMainhandSlot(botName: string, slotValue: number): void {
-  system.run(() => {
-    try {
-      const bot = resolveBotPlayer(botName);
-      if (!bot) return;
+export function setMainhandSlot(botName: string, slotValue: number): boolean {
+  try {
+    const bot = resolveBotPlayer(botName);
+    if (!bot) return false;
 
-      const inv = bot.getComponent("minecraft:inventory") as any;
-      if (!inv?.container) return;
-      const container = inv.container;
+    const inv = bot.getComponent("minecraft:inventory") as any;
+    if (!inv?.container) return false;
+    const container = inv.container;
 
-      const handSlot = bot.selectedSlotIndex;
-      if (slotValue === -1) {
-        // 清空主手：swap 到首个空位
-        for (let i = 0; i < container.size; i++) {
-          if (i !== handSlot && !container.getItem(i)) {
-            container.swapItems(handSlot, i);
-            break;
-          }
+    const handSlot = bot.selectedSlotIndex;
+    if (slotValue === -1) {
+      // 清空主手：主手物品与背包第一个空位互换；无空位则不做处理（保留主手物品，绝不吞物品）
+      const handItem = container.getItem(handSlot);
+      if (!handItem) return false; // 主手本就为空
+      for (let i = 0; i < container.size; i++) {
+        if (i !== handSlot && !container.getItem(i)) {
+          container.setItem(i, handItem);
+          container.setItem(handSlot, undefined);
+          bot.selectedSlotIndex = handSlot;
+          return true;
         }
-      } else if (slotValue >= 0 && slotValue < container.size && slotValue !== handSlot) {
-        // 交换当前主手和目标槽
-        const currentMainhand = container.getItem(handSlot);
-        const targetItem = container.getItem(slotValue);
-        container.setItem(slotValue, currentMainhand ?? undefined);
-        container.setItem(handSlot, targetItem);
       }
+      // 背包无空位：不做处理（物品保留在主手）
+      return false;
+    } else if (slotValue >= 0 && slotValue < container.size && slotValue !== handSlot) {
+      // 交换当前主手和目标槽
+      const currentMainhand = container.getItem(handSlot);
+      const targetItem = container.getItem(slotValue);
+      container.setItem(slotValue, currentMainhand ?? undefined);
+      container.setItem(handSlot, targetItem);
       bot.selectedSlotIndex = handSlot;
-    } catch {
-      // 操作失败时忽略
+      return true;
     }
-  });
+    return false;
+  } catch {
+    // 操作失败时忽略（setItem 失败不影响原槽位，不吞物品）
+    return false;
+  }
 }
