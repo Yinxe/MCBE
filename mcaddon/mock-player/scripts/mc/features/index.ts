@@ -13,13 +13,7 @@ export { toggleControl } from "./basic/control";
 export { setSneaking } from "./basic/sneak";
 export { reclaimBot, type ReclaimResult } from "./manage/reclaim";
 export type { ReclaimOptions } from "../../service/ReclaimPlanner";
-export {
-  swapMainhandWithBot,
-  swapOffhandWithBot,
-  swapEquipmentWithBot,
-  unequipBotAll,
-  equipBotArmor,
-} from "./basic/equip";
+export { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "./basic/equip";
 export { InventoryStorage } from "./inventoryStorage";
 export { setTags } from "./state/setTags";
 export { checkMainHandDurability } from "./basic/toolHealth";
