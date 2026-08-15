@@ -8,20 +8,8 @@ import assert from "node:assert/strict";
 
 import { registerStrategy, select, STRATEGY_PRESETS } from "../src/index";
 import type { ToolCandidate, ToolSelectorConfig, ToolStrategy, ToolTree } from "../src/index";
+import { swapSlot, tool } from "./helpers";
 
-/** 构造工具候选（默认满耐久铁斧；enchants 类型为附魔等级表） */
-function tool(overrides: Partial<ToolCandidate> & { slot: number }): ToolCandidate {
-  return {
-    typeId: "minecraft:iron_axe",
-    role: "axe",
-    tier: 3,
-    durability: 250,
-    maxDurability: 250,
-    durabilityRatio: 1,
-    enchants: {},
-    ...overrides,
-  };
-}
 
 /** 单策略树（测试档位逻辑用） */
 function cfg(strategy: ToolStrategy, reselectIfCurrent = false): ToolSelectorConfig {
@@ -36,10 +24,6 @@ function treeCfg(tree: ToolTree, reselectIfCurrent = false): ToolSelectorConfig 
   return { tree, reselectIfCurrent };
 }
 
-function swapSlot(decision: ReturnType<typeof select>): number {
-  assert.equal(decision.action, "swap");
-  return decision.action === "swap" ? decision.tool.slot : -1;
-}
 
 // ─── 多档位深度回落（真实挖掘场景） ────────────────────
 

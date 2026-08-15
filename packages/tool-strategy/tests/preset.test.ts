@@ -4,22 +4,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { select } from "../src/index";
+import { swapSlot, tool } from "./helpers";
 import { registerStrategy, STRATEGY_PRESETS } from "../src/index";
 import type { ToolCandidate, ToolSelectorConfig, ToolStrategy, ToolTree } from "../src/index";
 
-/** 构造工具候选（默认满耐久铁斧） */
-function tool(overrides: Partial<ToolCandidate> & { slot: number }): ToolCandidate {
-  return {
-    typeId: "minecraft:iron_axe",
-    role: "axe",
-    tier: 3,
-    durability: 250,
-    maxDurability: 250,
-    durabilityRatio: 1,
-    enchants: {},
-    ...overrides,
-  };
-}
 
 /** 单策略树（引用预定义名） */
 function cfgOf(presetName: string, reselectIfCurrent = false): ToolSelectorConfig {
@@ -29,10 +17,6 @@ function cfgOf(presetName: string, reselectIfCurrent = false): ToolSelectorConfi
   };
 }
 
-function swapSlot(decision: ReturnType<typeof select>): number {
-  assert.equal(decision.action, "swap");
-  return decision.action === "swap" ? decision.tool.slot : -1;
-}
 
 test("注册表：内置预定义齐全（tier/durability/efficiency/silk/fortune/axe/pickaxe/hoe/shears）", () => {
   for (const name of ["tier", "durability", "efficiency", "silk", "fortune", "axe", "pickaxe", "hoe", "shears"]) {
