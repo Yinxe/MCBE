@@ -21,6 +21,13 @@ import type { BotRegistry } from "../service/BotRegistry";
 /** 默认导航速度 */
 const DEFAULT_NAVIGATION_SPEED = 1;
 
+/** 寻路到达判定距离（格）：距目标 ≤ 此值视为到达 */
+const NAV_ARRIVE_DISTANCE = 1.5;
+/** 寻路到达检查间隔（tick） */
+const NAV_CHECK_INTERVAL = 10;
+/** 寻路超时（tick）：超时未到达视为失败（30 秒） */
+const NAV_TIMEOUT_TICKS = 600;
+
 /**
  * ⚠️ 惰性加载说明：本文件被 node 测试编译（tsconfig.test.json include），
  * 测试环境无 @minecraft/server 运行时模块——顶部 import 会导致测试加载失败。
@@ -133,22 +140,58 @@ export class BotCore {
     return c.getItem(this.handSlot) ?? undefined;
   }
 
-  // ─── 原子能力：导航/移动 ─────────────────────────────
+  // ─── 原子能力：导航/移动（异步：等待完成） ─────────────
 
   /**
-   * 寻路到目标位置。
-   * @returns true=找到完整路径（含已在目标）；false=失败/不可用
+   * 寻路到目标位置并等待到达（闭包异步）。
+   * 内部用 system.runInterval 分帧检查到达（不阻塞主线程/事件循环）：
+   * 到达（距离 ≤ NAV_ARRIVE_DISTANCE）/ 实体失效 / 超时（NAV_TIMEOUT_TICKS）任一条件触发即 resolve。
+   * @returns true=已到达；false=未开始/路径不可达/实体失效/超时
    */
-  navigateTo(target: Vector3, speed = DEFAULT_NAVIGATION_SPEED): boolean {
+  async navigateTo(target: Vector3, speed = DEFAULT_NAVIGATION_SPEED): Promise<boolean> {
     const bot = this.entity;
     if (!bot) return false;
+
+    let ok = false;
     try {
       bot.stopMoving();
       const result = bot.navigateToLocation(target, speed);
-      return result.isFullPath;
+      ok = result.isFullPath;
     } catch {
       return false;
     }
+    // 路径不可达：navigateToLocation 已开始移动但无法完整到达 → 直接失败
+    // （调用方可提示"无法完全到达"，与旧同步语义一致）
+    if (!ok) return false;
+
+    const sys = mc().system;
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      let elapsed = 0;
+      let interval: number | undefined;
+      const finish = (reached: boolean) => {
+        if (settled) return;
+        settled = true;
+        if (interval !== undefined) sys.clearRun(interval);
+        resolve(reached);
+      };
+      interval = sys.runInterval(() => {
+        elapsed += NAV_CHECK_INTERVAL;
+        try {
+          // ⚠️ 实体有效性防护：死亡/下线瞬间实体失效 → 判定失败收尾
+          if (!bot.isValid) { finish(false); return; }
+          const d = Math.hypot(
+            bot.location.x - target.x,
+            bot.location.y - target.y,
+            bot.location.z - target.z,
+          );
+          if (d <= NAV_ARRIVE_DISTANCE) { finish(true); return; }
+          if (elapsed >= NAV_TIMEOUT_TICKS) { finish(false); return; }
+        } catch {
+          finish(false);
+        }
+      }, NAV_CHECK_INTERVAL);
+    });
   }
 
   /** 停止移动 */

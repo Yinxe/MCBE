@@ -82,34 +82,43 @@ export function isMainhandTrident(botName: string): boolean {
  * @param botName 假人名
  * @param playerId 操作玩家 ID
  * @param slots 要投掷的三叉戟所在容器槽位数组
+ * @param onComplete 兼容回调（Promise resolve 时同样调用，可省略）
+ * @returns Promise：投掷一轮完成（或防重入/不可投掷立即结束）时 resolve
  */
 export function throwTridents(
   botName: string,
   playerId: string,
   slots: number[],
   onComplete?: () => void,
-): void {
+): Promise<void> {
   if (throwingBots.has(botName)) {
     console.warn(`[MockPlayer] 投掷已在进行中 ${botName}`);
     onComplete?.();
-    return;
+    return Promise.resolve();
   }
 
   const record = botRegistry.get(botName);
-  if (!record || !record.online || record.death) { onComplete?.(); return; }
+  if (!record || !record.online || record.death) {
+    onComplete?.();
+    return Promise.resolve();
+  }
 
   throwingBots.add(botName);
 
   const wasFollowing = isFollowing(botName);
   if (wasFollowing) pauseFollow();
 
-  const done = () => {
-    throwingBots.delete(botName);
-    if (wasFollowing) resumeFollow();
-    onComplete?.();
-  };
+  // 闭包异步：done（doThrowLoop 的 finishThrow 统一出口）时 resolve + 兼容回调
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      throwingBots.delete(botName);
+      if (wasFollowing) resumeFollow();
+      onComplete?.();
+      resolve();
+    };
 
-  system.run(() => doThrowLoop(botName, playerId, slots, done));
+    system.run(() => doThrowLoop(botName, playerId, slots, done));
+  });
 }
 
 // ─── 投掷循环 ──────────────────────────────────────────

@@ -20,4 +20,4 @@ export { checkMainHandDurability } from "./basic/toolHealth";
 export { startFollow, stopFollow, isFollowing } from "./state/follow";
 export { scanTridents, isMainhandTrident, throwTridents } from "./trident/trident";
 export { getMainhandOptions, setMainhandSlot } from "./basic/mainhand";
-export { startUseItem, stopUseItem } from "./basic/useItem";
+export { startUseItem, stopUseItem, useItemOnce } from "./basic/useItem";

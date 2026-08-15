@@ -67,46 +67,61 @@ function slotItemType(sim: SimulatedPlayer, slot: number): string | undefined {
 }
 
 /**
- * 开始使用主手物品，并在 USE_AUTO_STOP_DELAY tick 后自动停止：
+ * 使用主手物品一次（闭包异步）：
+ * system.run 下一 tick 按下（useItemInSlot）→ USE_AUTO_STOP_DELAY tick 后自动松开（stopUsingItem）→ resolve。
  * - 饮用/进食：按住 ~2s 足够喝完/吃完，随后自动松开
  * - 弓/弩：满蓄力后自动松开发射
  * - 投掷类（药水/附魔瓶/三叉戟）：蓄力片刻后自动抛出
- * - 假人不在线：仅保存调用状态
+ * @returns true=完整执行（按下并自动停止）；false=不在线/实体失效/物品不可用/异常
  */
-export function startUseItem(player: Player, record: BotRecord): void {
+export function useItemOnce(record: BotRecord, player?: Player): Promise<boolean> {
   const sim = resolveBotPlayer(record);
   if (!sim) {
-    console.warn(`[MockPlayer] 使用物品：${record.name} 不在线，仅保存开关状态`);
-    return;
+    console.warn(`[MockPlayer] 使用物品：${record.name} 不在线`);
+    return Promise.resolve(false);
   }
-  system.run(() => {
-    try {
-      // ⚠️ 实体有效性防护：死亡/下线/重连瞬间实体失效，useItemInSlot 会抛 "entity being invalid"
-      if (!sim.isValid) return;
-      const slot = findUsableSlot(sim);
-      const item = slotItemType(sim, slot);
-      const pressed = sim.useItemInSlot(slot);
-      console.warn(`[MockPlayer] 使用物品：${record.name} slot=${slot} 手持=${item ?? "空"} 开始使用=${pressed}`);
-      if (!pressed) {
-        player.sendMessage(`${color.warn}${color.playerName}${record.name}${color.warn} 主手物品当前不可用（空手或不能右键使用）`);
-        return;
-      }
-      // 延迟自动松开：给蓄力（弓/弩）充能，用后即自动停止
-      system.runTimeout(() => {
-        // ⚠️ 实体有效性防护：假人死亡/下线瞬间实体失效，stopUsingItem 会抛 "entity being invalid"
-        if (!sim.isValid) return;
-        try {
-          const released = sim.stopUsingItem();
-          console.warn(`[MockPlayer] 使用物品：${record.name} 自动停止(延迟 ${USE_AUTO_STOP_DELAY}tick, 释放=${released?.typeId ?? "无"})`);
-        } catch (e: any) {
-          console.warn(`[MockPlayer] 使用物品自动停止异常 ${record.name}: ${e?.message ?? e}`);
+  return new Promise<boolean>((resolve) => {
+    system.run(() => {
+      try {
+        // ⚠️ 实体有效性防护：死亡/下线/重连瞬间实体失效，useItemInSlot 会抛 "entity being invalid"
+        if (!sim.isValid) { resolve(false); return; }
+        const slot = findUsableSlot(sim);
+        const item = slotItemType(sim, slot);
+        const pressed = sim.useItemInSlot(slot);
+        console.warn(`[MockPlayer] 使用物品：${record.name} slot=${slot} 手持=${item ?? "空"} 开始使用=${pressed}`);
+        if (!pressed) {
+          player?.sendMessage(`${color.warn}${color.playerName}${record.name}${color.warn} 主手物品当前不可用（空手或不能右键使用）`);
+          resolve(false);
+          return;
         }
-      }, USE_AUTO_STOP_DELAY);
-    } catch (e: any) {
-      console.warn(`[MockPlayer] 使用物品异常 ${record.name}: ${e?.message ?? e}`);
-      player.sendMessage(`${color.error}使用物品失败: ${e.message}`);
-    }
+        // 延迟自动松开：给蓄力（弓/弩）充能，用后即自动停止
+        system.runTimeout(() => {
+          // ⚠️ 实体有效性防护：假人死亡/下线瞬间实体失效，stopUsingItem 会抛 "entity being invalid"
+          if (!sim.isValid) { resolve(false); return; }
+          try {
+            const released = sim.stopUsingItem();
+            console.warn(`[MockPlayer] 使用物品：${record.name} 自动停止(延迟 ${USE_AUTO_STOP_DELAY}tick, 释放=${released?.typeId ?? "无"})`);
+            resolve(true);
+          } catch (e: any) {
+            console.warn(`[MockPlayer] 使用物品自动停止异常 ${record.name}: ${e?.message ?? e}`);
+            resolve(false);
+          }
+        }, USE_AUTO_STOP_DELAY);
+      } catch (e: any) {
+        console.warn(`[MockPlayer] 使用物品异常 ${record.name}: ${e?.message ?? e}`);
+        player?.sendMessage(`${color.error}使用物品失败: ${e.message}`);
+        resolve(false);
+      }
+    });
   });
+}
+
+/**
+ * 开始使用主手物品（一次性动作入口：UI 事件用，fire-and-forget）。
+ * 见 useItemOnce（闭包异步版，含完整执行结果）。
+ */
+export function startUseItem(player: Player, record: BotRecord): void {
+  void useItemOnce(record, player);
 }
 
 /**

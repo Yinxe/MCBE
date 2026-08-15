@@ -10,6 +10,7 @@ import { BotCore } from "./BotCore";
 import { toggleControl } from "../features/basic/control";
 import { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "../features/basic/equip";
 import { getMainhandOptions, setMainhandSlot } from "../features/basic/mainhand";
+import { useItemOnce } from "../features/basic/useItem";
 import { tpPlayerToBot, tpBotToPlayer } from "../features/basic/teleport";
 import { checkMainHandDurability } from "../features/basic/toolHealth";
 import { deleteBot } from "../features/manage/deleteBot";
@@ -90,17 +91,9 @@ export class Bot extends BotCore {
     checkMainHandDurability(bot as Player, changedSlot);
   }
 
-  /** 使用主手物品（消费主手 ItemStack；返回是否执行） */
-  useMainhand(): boolean {
-    const bot = this.entity;
-    const item = this.mainhandItem;
-    if (!bot || !item) return false;
-    try {
-      bot.useItem(item);
-      return true;
-    } catch {
-      return false;
-    }
+  /** 使用主手物品一次（闭包异步：system.run 按下 → runTimeout 自动停止 → resolve 完整执行结果） */
+  async useItem(): Promise<boolean> {
+    return useItemOnce(this.record);
   }
 
   /** 停止使用物品 */
@@ -197,9 +190,9 @@ export class Bot extends BotCore {
     return isMainhandTrident(this.name);
   }
 
-  /** 投掷三叉戟（委托 trident/trident） */
-  throwTridents(playerId: string, slots: number[], onComplete?: () => void): void {
-    throwTridents(this.name, playerId, slots, onComplete);
+  /** 投掷三叉戟一轮（闭包异步：doThrowLoop 完成时 resolve；兼容 onComplete 回调） */
+  async throwTridents(playerId: string, slots: number[], onComplete?: () => void): Promise<void> {
+    return throwTridents(this.name, playerId, slots, onComplete);
   }
 }
 
