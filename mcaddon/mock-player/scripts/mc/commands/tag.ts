@@ -4,7 +4,7 @@ import { color } from "@yinxe/toolkit";
 import { BOT_TAG, EXCLUSIVE_SET, getTagDef, resolveTag, getTagGroups } from "../../tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { setTags } from "../features/setTags";
+import { setTags } from "../features/state/setTags";
 
 /** 带色标签列表（core 只提供分组结构，渲染色码在 mc 层） */
 function buildTagListMessage(): string {

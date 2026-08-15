@@ -10,10 +10,10 @@ import type { Vector3 } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
-import { findFishingSpots } from "../features/fishing";
+import { findFishingSpots } from "../features/task/fishing";
 import type { FindSpotsFailure } from "../../rules/FishingRules";
-import { fishOnce, failureLabel } from "../features/fishingFlow";
-import { withContainer, resolveBotPlayer, type ContainerOpResult } from "../features/containerInteraction";
+import { fishOnce, failureLabel } from "../features/task/fishingFlow";
+import { withContainer, resolveBotPlayer, type ContainerOpResult } from "../features/basic/containerInteraction";
 import { botRegistry } from "../bootstrap/context";
 import { isAdmin } from "./auth";
 

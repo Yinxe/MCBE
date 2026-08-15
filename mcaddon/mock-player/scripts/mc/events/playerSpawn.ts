@@ -15,7 +15,7 @@ import { BOT_TAG } from "../../tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { trackBotOnline } from "../features/tridentTracker";
+import { trackBotOnline } from "../features/trident/tridentTracker";
 
 export function onPlayerSpawn(event: PlayerSpawnAfterEvent): void {
   // 首次生成不处理（由 playerJoin 负责恢复）

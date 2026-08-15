@@ -5,15 +5,15 @@
 // UI 层（ui/bot.ts、ui/tags.ts）只发布事件，不 import 任何业务动作函数；
 // AI 任务的 UI 反馈订阅（宝库/劫掠不在线提示）在 mc/ai/BotBrain.startBrainEngine。
 
-import { registerUiSubscriptions as registerSneakUi } from "../features/sneak";
-import { registerUiSubscriptions as registerSpawnModeUi } from "../features/spawnMode";
-import { registerUiSubscriptions as registerUseItemUi } from "../features/useItem";
-import { registerUiSubscriptions as registerOnlineUi } from "../features/onlineBot";
-import { registerUiSubscriptions as registerTeleportUi } from "../features/teleport";
-import { registerUiSubscriptions as registerSpawnPointUi } from "../features/spawnPoint";
-import { registerUiSubscriptions as registerRenameUi } from "../features/rename";
-import { registerUiSubscriptions as registerKillUi } from "../features/killBot";
-import { registerUiSubscriptions as registerFollowUi } from "../features/follow";
+import { registerUiSubscriptions as registerSneakUi } from "../features/basic/sneak";
+import { registerUiSubscriptions as registerSpawnModeUi } from "../features/manage/spawnMode";
+import { registerUiSubscriptions as registerUseItemUi } from "../features/basic/useItem";
+import { registerUiSubscriptions as registerOnlineUi } from "../features/manage/onlineBot";
+import { registerUiSubscriptions as registerTeleportUi } from "../features/basic/teleport";
+import { registerUiSubscriptions as registerSpawnPointUi } from "../features/manage/spawnPoint";
+import { registerUiSubscriptions as registerRenameUi } from "../features/manage/rename";
+import { registerUiSubscriptions as registerKillUi } from "../features/manage/killBot";
+import { registerUiSubscriptions as registerFollowUi } from "../features/state/follow";
 import { registerUiSubscriptions as registerSwapUi } from "../ui/swap";
 import { registerUiSubscriptions as registerMainhandUi } from "../ui/mainhand";
 import { registerUiSubscriptions as registerReclaimUi } from "../ui/reclaim";

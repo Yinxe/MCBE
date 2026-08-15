@@ -32,8 +32,8 @@ import {
   reelFishingRod,
   resolveBotPlayer,
   spotAtStand,
-} from "../features/fishing";
-import { fishOnce } from "../features/fishingFlow";
+} from "../features/task/fishing";
+import { fishOnce } from "../features/task/fishingFlow";
 
 // ─── 常量 ────────────────────────────────────────────────
 

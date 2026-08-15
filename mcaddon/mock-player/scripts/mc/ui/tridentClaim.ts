@@ -15,7 +15,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
-import { scanOwnTridents, claimTridents, type ClaimableTrident, type ClaimGroup } from "../features/tridentClaim";
+import { scanOwnTridents, claimTridents, type ClaimableTrident, type ClaimGroup } from "../features/trident/tridentClaim";
 import { projectileTypeLabel } from "../../items/TridentClaimRules";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知认主动作） ──────────

@@ -10,7 +10,7 @@ import type { BotRecord, ItemPreview } from "../../model/Types";
 import type { ReclaimOptions } from "../../service/ReclaimPlanner";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
-import { getReclaimPreview, reclaimBot, type ReclaimResult } from "../features/reclaim";
+import { getReclaimPreview, reclaimBot, type ReclaimResult } from "../features/manage/reclaim";
 import { formatItemPreview } from "../../service/ReclaimPlanner";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知回收动作） ──────────

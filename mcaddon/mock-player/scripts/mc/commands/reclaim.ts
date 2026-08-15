@@ -3,7 +3,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { reclaimBot } from "../features/reclaim";
+import { requireBot } from "../../bot/Bot";
 export function registerReclaimCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:reclaim", description: "回收假人全部背包装备和经验到玩家",
@@ -14,10 +14,11 @@ export function registerReclaimCommand(registry: any): void {
     if (!targetName) { player.sendMessage(`${color.error}用法: /mp:reclaim <假人名>`); return; }
     const denied = guardBotCommand(player, targetName);
     if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
-    const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
+    let bot;
+    try { bot = requireBot(targetName, botRegistry); }
+    catch { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     try {
-      const r = reclaimBot(player, record);
+      const r = bot.reclaim(player);
       const parts = [];
       if (r.items > 0) parts.push(`${color.success}${r.items}${color.muted} 件物品`);
       if (r.overflow > 0) parts.push(`${color.playerName}${r.overflow}${color.muted} 件溢出掉落`);

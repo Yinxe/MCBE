@@ -9,7 +9,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
-import { getMainhandOptions, setMainhandSlot } from "../features/mainhand";
+import { getMainhandOptions, setMainhandSlot } from "../features/basic/mainhand";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知选择主手动作） ──────
 

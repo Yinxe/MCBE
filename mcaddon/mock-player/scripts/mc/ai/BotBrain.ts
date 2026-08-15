@@ -19,7 +19,7 @@ import { createFishingTaskTree, type FishingPorts } from "../../tasks/FishingTas
 import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../../tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
-import { reconnectingBots } from "../features/pendingRespawn";
+import { reconnectingBots } from "../features/manage/pendingRespawn";
 import { vaultPorts } from "../tasks/McVaultPorts";
 import { raidPorts } from "../tasks/McRaidPorts";
 import { fishingPorts } from "../tasks/McFishingPorts";

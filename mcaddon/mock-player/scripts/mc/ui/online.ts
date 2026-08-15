@@ -11,8 +11,8 @@ import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
 import { visibleRecords } from "../../service/BotVisibility";
 import { ownerLabel } from "./ownerLabel";
-import { onlineBot } from "../features/onlineBot";
-import { offlineBot } from "../features/offlineBot";
+import { onlineBot } from "../features/manage/onlineBot";
+import { offlineBot } from "../features/manage/offlineBot";
 
 function getStatusIcon(death: boolean, online: boolean): string {
   if (death) return style("[死亡]", color.error);

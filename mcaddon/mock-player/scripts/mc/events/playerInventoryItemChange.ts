@@ -19,7 +19,7 @@ import { PlayerInventoryItemChangeAfterEvent } from "@minecraft/server";
 
 import { BOT_TAG } from "../../tags/BotTags";
 import { inventoryStorage } from "../bootstrap/context";
-import { checkMainHandDurability } from "../features/toolHealth";
+import { checkMainHandDurability } from "../features/basic/toolHealth";
 
 export function onPlayerInventoryItemChange(event: PlayerInventoryItemChangeAfterEvent): void {
   const { player, slot, itemStack, beforeItemStack } = event;

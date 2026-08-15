@@ -6,7 +6,7 @@ import { color } from "@yinxe/toolkit";
 import { TAG_CONTROL } from "../../tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { toggleControl } from "../features/control";
+import { requireBot } from "../../bot/Bot";
 
 export function registerControlCommand(registry: any): void {
   defineCommand(registry, {
@@ -22,13 +22,14 @@ export function registerControlCommand(registry: any): void {
     const denied = guardBotCommand(player, targetName);
     if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
 
-    const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
+    let bot;
+    try { bot = requireBot(targetName, botRegistry); }
+    catch { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
 
     const turnOn = (params.enable as boolean | undefined) ?? true;
-    const isOn = record.tags.includes(TAG_CONTROL.value);
-    if (turnOn && !isOn) { toggleControl(record, player); player.sendMessage(`${color.success}已开启假人 ${color.playerName}${targetName}${color.success} 的体态控制`); }
-    else if (!turnOn && isOn) { toggleControl(record, player); player.sendMessage(`${color.playerName}已关闭假人 ${color.playerName}${targetName}${color.playerName} 的体态控制，体态固定`); }
+    const isOn = bot.hasTag(TAG_CONTROL.value);
+    if (turnOn && !isOn) { bot.toggleControl(player); player.sendMessage(`${color.success}已开启假人 ${color.playerName}${targetName}${color.success} 的体态控制`); }
+    else if (!turnOn && isOn) { bot.toggleControl(player); player.sendMessage(`${color.playerName}已关闭假人 ${color.playerName}${targetName}${color.playerName} 的体态控制，体态固定`); }
     else { player.sendMessage(turnOn ? `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已处于控制模式` : `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 未处于控制模式`); }
   });
 }

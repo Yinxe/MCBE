@@ -8,7 +8,7 @@ import { PositionState } from "../../model/Types";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../../tags/BotTags";
 import { parseCoordinateInput } from "../../coords/Coordinate";
 import { getPlayerLookTarget } from "../adapters/PoseGateway";
-import { createBot } from "../features/createBot";
+import { createBot } from "../features/manage/createBot";
 
 export function showCreateForm(player: Player): void {
   const dimOptions = ["跟随玩家", "主世界 (overworld)", "下界 (nether)", "末地 (the_end)"];

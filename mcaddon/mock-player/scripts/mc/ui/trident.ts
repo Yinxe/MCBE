@@ -10,7 +10,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
-import { scanTridents, isMainhandTrident, throwTridents, type TridentSlot } from "../features/trident";
+import { scanTridents, isMainhandTrident, throwTridents, type TridentSlot } from "../features/trident/trident";
 import { formatEnchantments, formatDurability } from "../format";
 
 const SLOT_HOTBAR = 9;

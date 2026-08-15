@@ -18,7 +18,7 @@ import { BOT_TAG } from "../../tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry, inventoryStorage, saveCoordinator } from "../bootstrap/context";
 import { getTotalXpForLevels } from "../../xp/XpMath";
-import { trackBotOnline } from "../features/tridentTracker";
+import { trackBotOnline } from "../features/trident/tridentTracker";
 
 export function onPlayerJoin(event: PlayerJoinAfterEvent): void {
   const record = botRegistry.get(event.playerName);

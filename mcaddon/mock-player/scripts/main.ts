@@ -15,10 +15,10 @@ import { system, world } from "@minecraft/server";
 
 import { registerAllCommands } from "./mc/commands/index";
 import { registerAllEvents } from "./mc/events/index";
-import { startTagBehaviors } from "./mc/features/behavior";
-import { initTridentTracker } from "./mc/features/tridentTracker";
-import { initFishingHookTracker } from "./mc/features/fishingHookTracker";
-import { initLootTracker } from "./mc/features/fishingFlow";
+import { startTagBehaviors } from "./mc/features/state/behavior";
+import { initTridentTracker } from "./mc/features/trident/tridentTracker";
+import { initFishingHookTracker } from "./mc/features/task/fishingHookTracker";
+import { initLootTracker } from "./mc/features/task/fishingFlow";
 import { initRaidPorts } from "./mc/tasks/McRaidPorts";
 import { startBrainEngine } from "./mc/ai/BotBrain";
 import { initGameTestContext, registerTestDimension } from "./mc/bootstrap/gametestContext";

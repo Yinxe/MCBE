@@ -29,7 +29,7 @@ import { BOT_TAG } from "../../tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../bootstrap/context";
 import { lookAt } from "../adapters/PoseGateway";
-import { safeReconnect, reconnectingBots } from "../features/pendingRespawn";
+import { safeReconnect, reconnectingBots } from "../features/manage/pendingRespawn";
 
 // ─── 常量 ────────────────────────────────────────────────
 

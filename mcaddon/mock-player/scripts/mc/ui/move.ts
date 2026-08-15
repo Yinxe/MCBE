@@ -6,8 +6,8 @@ import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
-import { moveBot } from "../features/move";
-import { deleteBot } from "../features/deleteBot";
+import { moveBot } from "../features/basic/move";
+import { deleteBot } from "../features/manage/deleteBot";
 import { parseCoordinateInput } from "../../coords/Coordinate";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知删除动作） ──────────

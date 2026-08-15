@@ -14,8 +14,8 @@ import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 import { BOT_TAG } from "../../tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
-import { offlineBot } from "../features/offlineBot";
-import { reconnectingBots } from "../features/pendingRespawn";
+import { offlineBot } from "../features/manage/offlineBot";
+import { reconnectingBots } from "../features/manage/pendingRespawn";
 import { color } from "@yinxe/toolkit";
 
 /** 真实玩家下线 → 该主人名下全部在线假人安全下线 */

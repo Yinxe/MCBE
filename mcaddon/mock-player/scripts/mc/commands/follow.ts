@@ -3,7 +3,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { startFollow, stopFollow, isFollowing } from "../features/follow";
+import { requireBot } from "../../bot/Bot";
 
 export function registerFollowCommand(registry: any): void {
   defineCommand(registry, {
@@ -15,17 +15,18 @@ export function registerFollowCommand(registry: any): void {
     const botName = params.name as string;
     const denied = guardBotCommand(player, botName);
     if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
-    const record = botRegistry.get(botName);
-    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${botName}${color.error} 的记录`); return; }
+    let bot;
+    try { bot = requireBot(botName, botRegistry); }
+    catch { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${botName}${color.error} 的记录`); return; }
 
-    if (isFollowing(botName)) {
+    if (bot.isFollowing) {
       // 已跟随 → 停止跟随
-      stopFollow(botName);
+      bot.unfollow();
       player.sendMessage(`${color.success}已停止 ${color.playerName}${botName}${color.success} 的跟随`);
     } else {
       // 未跟随 → 开始跟随
-      if (!record.online || record.death) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
-      const ok = startFollow(botName, player.id);
+      if (!bot.isAvailable) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
+      const ok = bot.follow(player.id);
       if (ok) {
         player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 正在跟随你`);
       } else {

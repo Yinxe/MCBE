@@ -15,8 +15,8 @@ import { TAG_BOT, TAG_AUTO_USE, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, EXCLU
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim } from "../commands/auth";
-import { setTags } from "../features/setTags";
-import { isFollowing } from "../features/follow";
+import { setTags } from "../features/state/setTags";
+import { isFollowing } from "../features/state/follow";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
 

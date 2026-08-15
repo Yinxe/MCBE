@@ -3,7 +3,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { deleteBot } from "../features/deleteBot";
+import { requireBot } from "../../bot/Bot";
 export function registerDeleteCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:delete", description: "删除指定假人",
@@ -14,9 +14,10 @@ export function registerDeleteCommand(registry: any): void {
     if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
     const denied = guardBotCommand(player, targetName);
     if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
-    const record = botRegistry.get(targetName);
-    if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
-    deleteBot(record, player);
+    let bot;
+    try { bot = requireBot(targetName, botRegistry); }
+    catch { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
+    bot.delete(player);
     player.sendMessage(`${color.success}已删除假人 ${color.playerName}${targetName}，物品和经验已回收`);
   });
 }

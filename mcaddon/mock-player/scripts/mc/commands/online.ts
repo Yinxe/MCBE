@@ -3,7 +3,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry, botStore } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { onlineBot } from "../features/onlineBot";
+import { onlineBot } from "../features/manage/onlineBot";
 export function registerOnlineCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:online", description: "将一个已创建的假人上线并恢复所有状态",

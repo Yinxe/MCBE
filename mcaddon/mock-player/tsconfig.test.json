@@ -12,7 +12,7 @@
     "rootDir": "."
   },
   "include": [
-    "scripts/bot/**/*.ts",
+    "scripts/bot/BotCore.ts",
     "scripts/rules/**/*.ts",
     "scripts/ai/**/*.ts",
     "scripts/tasks/**/*.ts",

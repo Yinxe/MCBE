@@ -1,21 +1,21 @@
-// ─── bot/Bot — OOP 假人对象测试（注入 InMemory 注册表，纯逻辑验证） ──
-// Bot 类的世界实体方法（navigateTo/swapSlots 等）依赖 @minecraft 运行时，
+// ─── bot/BotCore — OOP 假人对象测试（注入 InMemory 注册表，纯逻辑验证） ──
+// BotCore 类的世界实体方法（navigateTo/swapSlots 等）依赖 @minecraft 运行时，
 // 游戏内冒烟验证；这里覆盖不触世界的纯逻辑：构造/记录访问/状态/标签/距离。
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { Bot, resolveBot, requireBot } from "../scripts/bot/Bot";
+import { BotCore, resolveBot, requireBot } from "../scripts/bot/BotCore";
 import { BotRegistry } from "../scripts/service/BotRegistry";
 import { InMemoryBotStore } from "../scripts/storage/BotStore";
 import { makeRecord } from "./helpers/factories";
 
-function makeBot(name = "bot1", overrides = {}) {
+function makeBot(name = "bot1", overrides: Partial<import("../scripts/model/Types").BotRecord> = {}) {
   const store = new InMemoryBotStore();
   const registry = new BotRegistry(store);
   const record = makeRecord(name, overrides);
   registry.set(record);
-  const bot = new Bot(name, registry);
+  const bot = new BotCore(name, registry);
   return { bot, registry, record };
 }
 
@@ -29,10 +29,10 @@ test("构造：记录存在 → 创建成功，name 正确", () => {
 test("构造：记录不存在 → 抛错", () => {
   const store = new InMemoryBotStore();
   const registry = new BotRegistry(store);
-  assert.throws(() => new Bot("ghost", registry), /记录不存在/);
+  assert.throws(() => new BotCore("ghost", registry), /记录不存在/);
 });
 
-test("resolveBot：记录存在 → Bot；不存在 → undefined", () => {
+test("resolveBot：记录存在 → BotCore；不存在 → undefined", () => {
   const store = new InMemoryBotStore();
   const registry = new BotRegistry(store);
   registry.set(makeRecord("a"));
@@ -40,7 +40,7 @@ test("resolveBot：记录存在 → Bot；不存在 → undefined", () => {
   assert.equal(resolveBot("ghost", registry), undefined);
 });
 
-test("requireBot：记录存在 → Bot；不存在 → 抛错", () => {
+test("requireBot：记录存在 → BotCore；不存在 → 抛错", () => {
   const store = new InMemoryBotStore();
   const registry = new BotRegistry(store);
   registry.set(makeRecord("a"));

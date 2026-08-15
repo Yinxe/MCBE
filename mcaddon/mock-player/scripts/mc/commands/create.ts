@@ -4,7 +4,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../../tags/BotTags";
 import { getPlayerLookTarget } from "../adapters/PoseGateway";
-import { createBot } from "../features/createBot";
+import { createBot } from "../features/manage/createBot";
 
 export function registerCreateCommand(registry: any): void {
   defineCommand(registry, {

@@ -1,304 +1,244 @@
-// ─── Bot 类（OOP 原子能力封装） ─────────────────────────
-// 假人对象的统一入口：持有 BotRecord + 惰性解析 SimulatedPlayer 实体，
-// 封装全部原子能力方法（导航/体态/装备/背包/使用/状态/查询/生命周期）。
-//
-// 设计原则：
-//   - 构造只接受 botName（或 record），实体/容器按需惰性解析（不缓存过期引用）
-//   - 所有世界操作 try-catch 防御：不可用/未加载返回 false/undefined，不抛错
-//   - 面向对象：能力即方法（bot.navigateTo / bot.swapMainhand / bot.isAvailable）
-//   - 领域事件解耦保留：装备/行为变化仍触发 BotEvents（订阅方不变）
-//   - 与旧函数式 features 并存过渡：迁移完成后旧函数退役
+// ─── Bot 类（OOP 原子能力封装，mc 适配扩展） ─────────────
+// 继承 BotCore（纯逻辑：构造/记录/状态/标签/距离/导航），本文件追加
+// mc 侧委托方法（跟随/钓鱼/主手/生命周期/装备/三叉戟）——均惰性 require
+// 归类后的 features 实现，避免顶层 mc 依赖（node 测试只编译 BotCore）。
 
-import type { Container, Dimension, Entity, ItemStack, Vector3, World } from "@minecraft/server";
+import type { Player, Vector3 } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import type { BotRecord } from "../model/Types";
-import { BOT_TAG } from "../tags/BotTags";
+import { BotCore } from "./BotCore";
 import type { BotRegistry } from "../service/BotRegistry";
 
-// ─── 常量 ──────────────────────────────────────────────
+export class Bot extends BotCore {
+  // ─── 原子能力：跟随 ──────────────────────────────────
 
-/** 默认导航速度 */
-const DEFAULT_NAVIGATION_SPEED = 1;
-
-/**
- * 惰性获取 world 单例（@minecraft/server 仅在方法调用时加载——测试环境
- * 无此模块，顶层 import 会导致测试加载失败；运行时首次调用才 require）。
- */
-function world(): World {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("@minecraft/server").world as World;
-}
-
-// ─── Bot 类 ────────────────────────────────────────────
-
-export class Bot {
-  /** 假人唯一名（= SimulatedPlayer name） */
-  readonly name: string;
-
-  /** 记录注册表（构造函数注入——测试可注入 InMemory 替身；mc 单例由调用方提供） */
-  private readonly registry: BotRegistry;
-
-  /**
-   * @param name 假人名（须已存在于注册表）
-   * @param registry 记录注册表（必须注入：mc 层传全局单例，测试传 InMemory 替身）
-   * @throws 记录不存在时抛出（调用方应先用 registry 校验）
-   */
-  constructor(name: string, registry: BotRegistry) {
-    if (!registry.get(name)) throw new Error(`Bot 记录不存在: ${name}`);
-    this.name = name;
-    this.registry = registry;
+  /** 开始跟随目标玩家（OOP 门面，委托 state/follow） */
+  follow(targetPlayerId: string): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { startFollow } = require("../mc/features/state/follow") as typeof import("../mc/features/state/follow");
+    return startFollow(this.name, targetPlayerId);
   }
 
-  // ─── 记录访问 ────────────────────────────────────────
-
-  /** 当前持久记录（每次实时读取，避免过期引用） */
-  get record(): BotRecord {
-    const r = this.registry.get(this.name);
-    if (!r) throw new Error(`Bot 记录不存在: ${this.name}`);
-    return r;
+  /** 停止跟随 */
+  unfollow(): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { stopFollow } = require("../mc/features/state/follow") as typeof import("../mc/features/state/follow");
+    stopFollow(this.name);
   }
 
-  /** 在线且未死亡 */
-  get isAvailable(): boolean {
-    const r = this.record;
-    return r.online && !r.death;
+  /** 是否正在跟随 */
+  get isFollowing(): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { isFollowing } = require("../mc/features/state/follow") as typeof import("../mc/features/state/follow");
+    return isFollowing(this.name);
   }
 
-  /** 是否死亡 */
-  get isDeath(): boolean {
-    return this.record.death;
+  // ─── 原子能力：钓鱼 ──────────────────────────────────
+
+  /** 是否有鱼竿 */
+  get hasFishingRod(): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { hasFishingRod } = require("../mc/features/task/fishing") as typeof import("../mc/features/task/fishing");
+    return hasFishingRod(this.name);
   }
 
-  /** 是否在线（含死亡在线） */
-  get isOnline(): boolean {
-    return this.record.online;
+  /** 是否已抛竿（有鱼钩） */
+  get isFishing(): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { hasFishingHook } = require("../mc/features/task/fishing") as typeof import("../mc/features/task/fishing");
+    return hasFishingHook(this.name);
   }
 
-  /** 持久标签列表 */
-  get tags(): string[] {
-    return this.record.tags;
+  /** 抛竿 */
+  castRod(): Promise<import("../mc/features/task/fishing").CastRodResult> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { castFishingRod } = require("../mc/features/task/fishing") as typeof import("../mc/features/task/fishing");
+    return castFishingRod(this.name);
   }
 
-  // ─── 实体解析（惰性） ────────────────────────────────
-
-  /**
-   * 解析 SimulatedPlayer 实体（每次实时查询，防过期实体引用）。
-   * 不可用/未加载/实体失效 → undefined（不抛错）。
-   */
-  get entity(): SimulatedPlayer | undefined {
-    const { entityId } = this.record;
-    if (!entityId) return undefined;
-    try {
-      const e = world().getEntity(entityId);
-      if (!e?.isValid) return undefined;
-      return e.hasTag(BOT_TAG) ? (e as SimulatedPlayer) : undefined;
-    } catch {
-      return undefined;
-    }
+  /** 收竿 */
+  reelRod(): Promise<import("../mc/features/task/fishing").ReelRodResult> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { reelFishingRod } = require("../mc/features/task/fishing") as typeof import("../mc/features/task/fishing");
+    return reelFishingRod(this.name);
   }
 
-  /** 实体所在维度（无实体 → undefined） */
-  get dimension(): import("@minecraft/server").Dimension | undefined {
-    return this.entity?.dimension;
+  // ─── 原子能力：主手 ──────────────────────────────────
+
+  /** 主手选择列表（undefined=不可用；空数组=背包无物品） */
+  getMainhandOptions(): import("../mc/features/basic/mainhand").MainhandOption[] | undefined {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getMainhandOptions } = require("../mc/features/basic/mainhand") as typeof import("../mc/features/basic/mainhand");
+    return getMainhandOptions(this.name);
   }
 
-  /** 当前位置（无实体 → undefined） */
-  get location(): Vector3 | undefined {
-    return this.entity?.location;
+  /** 设置主手槽（-1=清空；>=0=背包槽位） */
+  setMainhand(slotValue: number): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { setMainhandSlot } = require("../mc/features/basic/mainhand") as typeof import("../mc/features/basic/mainhand");
+    setMainhandSlot(this.name, slotValue);
   }
 
-  /** 背包容器（主背包 36 格；无实体 → undefined） */
-  get container(): Container | undefined {
-    return this.entity?.getComponent("minecraft:inventory")?.container;
+  // ─── 原子能力：控制/状态 ─────────────────────────────
+
+  /** 切换控制权（委托 basic/control） */
+  toggleControl(controller: Player): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { toggleControl } = require("../mc/features/basic/control") as typeof import("../mc/features/basic/control");
+    toggleControl(this.record, controller);
   }
 
-  /** 当前主手槽 */
-  get handSlot(): number {
-    return this.entity?.selectedSlotIndex ?? 0;
-  }
-
-  /** 主手物品 */
-  get mainhandItem(): import("@minecraft/server").ItemStack | undefined {
-    const c = this.container;
-    if (!c) return undefined;
-    return c.getItem(this.handSlot) ?? undefined;
-  }
-
-  // ─── 原子能力：导航/移动 ─────────────────────────────
-
-  /**
-   * 寻路到目标位置。
-   * @returns true=找到完整路径（含已在目标）；false=失败/不可用
-   */
-  navigateTo(target: Vector3, speed = DEFAULT_NAVIGATION_SPEED): boolean {
-    const bot = this.entity;
-    if (!bot) return false;
-    try {
-      bot.stopMoving();
-      const result = bot.navigateToLocation(target, speed);
-      return result.isFullPath;
-    } catch {
-      return false;
-    }
-  }
-
-  /** 停止移动 */
-  stopMoving(): void {
-    try {
-      this.entity?.stopMoving();
-    } catch { /* ignore */ }
-  }
-
-  /** 传送（跨维度时用世界侧 TP） */
-  teleportTo(location: Vector3, dimensionId?: string): boolean {
-    const bot = this.entity;
-    if (!bot) return false;
-    try {
-      if (dimensionId && dimensionId !== bot.dimension.id) {
-        const dim = world().getDimension(dimensionId);
-        dim.getEntities({ location, maxDistance: 1 });
-      }
-      bot.teleport(location);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  // ─── 原子能力：体态 ──────────────────────────────────
-
-  /** 潜行（true=潜行）——同步 record 与实体 */
-  setSneaking(sneaking: boolean): boolean {
-    const bot = this.entity;
-    if (!bot) return false;
-    try {
-      this.record.isSneaking = sneaking;
-      bot.isSneaking = sneaking;
-      this.syncTagsToEntity();
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /** 看向目标点 */
-  lookAt(target: Vector3): boolean {
-    const bot = this.entity;
-    if (!bot) return false;
-    try {
-      bot.lookAtLocation(target);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  // ─── 原子能力：背包/装备 ─────────────────────────────
-
-  /** 读取指定槽物品 */
-  getItem(slot: number): import("@minecraft/server").ItemStack | undefined {
-    const c = this.container;
-    if (!c) return undefined;
-    try {
-      return c.getItem(slot) ?? undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  /** 写入指定槽（undefined = 清空） */
-  setItem(slot: number, item?: import("@minecraft/server").ItemStack): boolean {
-    const c = this.container;
-    if (!c) return false;
-    try {
-      c.setItem(slot, item);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /** 交换两槽 */
-  swapSlots(a: number, b: number): boolean {
-    const c = this.container;
-    if (!c) return false;
-    try {
-      const itemA = c.getItem(a);
-      const itemB = c.getItem(b);
-      c.setItem(a, itemB);
-      c.setItem(b, itemA);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /** 主手槽设置 */
-  setMainhandSlot(slot: number): boolean {
-    const bot = this.entity;
-    if (!bot) return false;
-    try {
-      bot.selectedSlotIndex = slot;
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  // ─── 原子能力：标签 ──────────────────────────────────
-
-  /** 是否有标签 */
-  hasTag(tag: string): boolean {
-    return this.record.tags.includes(tag);
-  }
-
-  /** 添加标签（改 record + 同步实体，走 setTags 语义） */
-  addTag(tag: string): void {
-    const tags = this.record.tags;
-    if (tags.includes(tag)) return;
-    tags.push(tag);
-    this.syncTagsToEntity();
-  }
-
-  /** 移除标签 */
-  removeTag(tag: string): void {
-    const tags = this.record.tags;
-    const idx = tags.indexOf(tag);
-    if (idx < 0) return;
-    tags.splice(idx, 1);
-    this.syncTagsToEntity();
-  }
-
-  /** 实体标签与记录同步（mc 适配惰性加载——避免测试构建解析 mc 层） */
-  private syncTagsToEntity(): void {
+  /** 检查主手耐久（事件驱动补充；委托 basic/toolHealth） */
+  checkMainhandDurability(changedSlot: number): void {
     const bot = this.entity;
     if (!bot) return;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { checkMainHandDurability } = require("../mc/features/basic/toolHealth") as typeof import("../mc/features/basic/toolHealth");
+    checkMainHandDurability(bot as Player, changedSlot);
+  }
+
+  /** 使用主手物品（消费主手 ItemStack；返回是否执行） */
+  useMainhand(): boolean {
+    const bot = this.entity;
+    const item = this.mainhandItem;
+    if (!bot || !item) return false;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { syncEntityTags } = require("../mc/adapters/EntityTags") as typeof import("../mc/adapters/EntityTags");
-      syncEntityTags(bot, this.record.tags);
+      bot.useItem(item);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 停止使用物品 */
+  stopUsing(): void {
+    try {
+      this.entity?.stopUsingItem();
     } catch { /* ignore */ }
   }
 
-  // ─── 原子能力：状态查询 ──────────────────────────────
+  // ─── 原子能力：生命周期（委托 manage） ───────────────
 
-  /** 3D 距离（无实体 → Infinity） */
-  distanceTo(target: Vector3): number {
-    const loc = this.location;
-    if (!loc) return Number.POSITIVE_INFINITY;
-    return Math.hypot(loc.x - target.x, loc.y - target.y, loc.z - target.z);
+  /** 上线（委托 manage/onlineBot） */
+  async bringOnline(): Promise<SimulatedPlayer> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { onlineBot } = require("../mc/features/manage/onlineBot") as typeof import("../mc/features/manage/onlineBot");
+    return onlineBot(this.record);
   }
 
-  /** 是否可被操作（在线/未死亡/实体存在） */
-  isOperable(): boolean {
-    return this.isAvailable && !!this.entity;
+  /** 下线（委托 manage/offlineBot） */
+  takeOffline(): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { offlineBot } = require("../mc/features/manage/offlineBot") as typeof import("../mc/features/manage/offlineBot");
+    offlineBot(this.record);
   }
 
-  /** 实体是否仍有效（世界侧） */
-  get isEntityValid(): boolean {
-    const e = this.entity;
-    return !!e && e.isValid;
+  /** 击杀（委托 manage/killBot） */
+  kill(): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { killBot } = require("../mc/features/manage/killBot") as typeof import("../mc/features/manage/killBot");
+    killBot(this.record);
+  }
+
+  /** 删除（委托 manage/deleteBot） */
+  delete(reclaimTo?: Player): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { deleteBot } = require("../mc/features/manage/deleteBot") as typeof import("../mc/features/manage/deleteBot");
+    deleteBot(this.record, reclaimTo);
+  }
+
+  /** 安全重连（委托 manage/pendingRespawn） */
+  safeReconnect(options?: import("../mc/features/manage/pendingRespawn").SafeReconnectOptions): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { safeReconnect } = require("../mc/features/manage/pendingRespawn") as typeof import("../mc/features/manage/pendingRespawn");
+    safeReconnect(this.record, options);
+  }
+
+  /** 切换生成模式（委托 manage/spawnMode） */
+  switchSpawnMode(newMode: import("../mc/features/manage/spawnMode").SpawnMode): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { switchSpawnMode } = require("../mc/features/manage/spawnMode") as typeof import("../mc/features/manage/spawnMode");
+    switchSpawnMode(this.record, newMode);
+  }
+
+  /** 传送玩家到自己（委托 basic/teleport） */
+  tpPlayerHere(player: Player): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { tpPlayerToBot } = require("../mc/features/basic/teleport") as typeof import("../mc/features/basic/teleport");
+    tpPlayerToBot(player, this.record);
+  }
+
+  /** 传送自己到玩家（委托 basic/teleport） */
+  tpToPlayer(player: Player): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { tpBotToPlayer } = require("../mc/features/basic/teleport") as typeof import("../mc/features/basic/teleport");
+    tpBotToPlayer(this.record, player);
+  }
+
+  // ─── 原子能力：装备交换（委托 basic/equip） ──────────
+
+  /** 与玩家交换主手 */
+  swapMainhand(player: Player): boolean {
+    const bot = this.entity;
+    if (!bot) return false;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { swapMainhandWithBot } = require("../mc/features/basic/equip") as typeof import("../mc/features/basic/equip");
+    return swapMainhandWithBot(player, bot as Player);
+  }
+
+  /** 与玩家交换副手 */
+  swapOffhand(player: Player): boolean {
+    const bot = this.entity;
+    if (!bot) return false;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { swapOffhandWithBot } = require("../mc/features/basic/equip") as typeof import("../mc/features/basic/equip");
+    return swapOffhandWithBot(player, bot as Player);
+  }
+
+  /** 与玩家交换全部装备 */
+  swapEquipment(player: Player): boolean {
+    const bot = this.entity;
+    if (!bot) return false;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { swapEquipmentWithBot } = require("../mc/features/basic/equip") as typeof import("../mc/features/basic/equip");
+    return swapEquipmentWithBot(player, bot as Player);
+  }
+
+  /** 回收（委托 manage/reclaim） */
+  reclaim(player: Player, options?: import("../service/ReclaimPlanner").ReclaimOptions): import("../mc/features/manage/reclaim").ReclaimResult {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { reclaimBot } = require("../mc/features/manage/reclaim") as typeof import("../mc/features/manage/reclaim");
+    return reclaimBot(player, this.record, options);
+  }
+
+  /** 回收预览 */
+  getReclaimPreview(): ReturnType<typeof import("../mc/features/manage/reclaim").getReclaimPreview> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getReclaimPreview } = require("../mc/features/manage/reclaim") as typeof import("../mc/features/manage/reclaim");
+    return getReclaimPreview(this.record);
+  }
+
+  // ─── 原子能力：三叉戟（委托 trident） ────────────────
+
+  /** 扫描三叉戟（委托 trident/trident） */
+  scanTridents(): import("../mc/features/trident/trident").TridentSlot[] | undefined {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { scanTridents } = require("../mc/features/trident/trident") as typeof import("../mc/features/trident/trident");
+    return scanTridents(this.name);
+  }
+
+  /** 主手是否三叉戟 */
+  get isMainhandTrident(): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { isMainhandTrident } = require("../mc/features/trident/trident") as typeof import("../mc/features/trident/trident");
+    return isMainhandTrident(this.name);
+  }
+
+  /** 投掷三叉戟（委托 trident/trident） */
+  throwTridents(playerId: string, slots: number[], onComplete?: () => void): void {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { throwTridents } = require("../mc/features/trident/trident") as typeof import("../mc/features/trident/trident");
+    throwTridents(this.name, playerId, slots, onComplete);
   }
 }
 
@@ -328,4 +268,4 @@ export function requireBot(name: string, registry: BotRegistry): Bot {
 
 // ─── 导出类型 ──────────────────────────────────────────
 
-export type { BotRecord };
+export type { BotRecord } from "../model/Types";

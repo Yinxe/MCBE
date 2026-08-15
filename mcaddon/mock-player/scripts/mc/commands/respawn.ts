@@ -4,7 +4,7 @@ import { color } from "@yinxe/toolkit";
 import { TAG_RESPAWN, TAG_BOT } from "../../tags/BotTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { setTags } from "../features/setTags";
+import { setTags } from "../features/state/setTags";
 import { getPlayerLookTarget } from "../adapters/PoseGateway";
 export function registerRespawnCommand(registry: any): void {
   defineCommand(registry, {
