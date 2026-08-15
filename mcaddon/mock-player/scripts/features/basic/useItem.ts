@@ -18,7 +18,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
 import type { BotRecord } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/BotTags";
+import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../../bootstrap/context";
 

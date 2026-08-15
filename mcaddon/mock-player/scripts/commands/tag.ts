@@ -1,7 +1,7 @@
 import { CustomCommandStatus, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
-import { BOT_TAG, EXCLUSIVE_SET, getTagDef, resolveTag, getTagGroups } from "../rules/BotTags";
+import { BOT_TAG, EXCLUSIVE_SET, getTagDef, resolveTag, getTagGroups } from "../rules/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
 import { setTags } from "../features/state/setTags";

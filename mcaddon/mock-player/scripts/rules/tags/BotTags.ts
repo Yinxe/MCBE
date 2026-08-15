@@ -1,7 +1,7 @@
 // ─── 标签系统（core 层） ────────────────────────────────
 // 纯逻辑：标签定义、分组、四级解析。实体同步（syncEntityTags）在 mc 层。
 
-import { TagDef, TAG_PREFIX } from "../rules/Types";
+import { TagDef, TAG_PREFIX } from "../Types";
 
 // ─── 标签定义 ──────────────────────────────────────────
 

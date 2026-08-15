@@ -9,12 +9,12 @@
 //
 // 广播：假人名称发送消息通知全体玩家
 //
-// 决策（工具识别/耐久判定/槽位搜索）在 core/rules/items/ToolRules，容器读写在这里
+// 决策（工具识别/耐久判定/槽位搜索）在 core/rules/items/ToolDurability，容器读写在这里
 
 import { Player, Container, system, world } from "@minecraft/server";
 
-import { BOT_TAG } from "../../rules/BotTags";
-import { identifyTool, isToolHealthy, findReplacementIndex, findEmptySlotIndex, findAnySlot } from "../../rules/items/ToolRules";
+import { BOT_TAG } from "../../rules/tags/BotTags";
+import { identifyTool, isToolHealthy, findReplacementIndex, findEmptySlotIndex, findAnySlot } from "../../rules/items/ToolDurability";
 import { color } from "@yinxe/toolkit";
 
 // ─── 配置常量 ──────────────────────────────────────────

@@ -22,7 +22,7 @@ import {
   raidStarted, raidVictory, raidPhase, initialRaidPhaseState,
   type RaidPhase, type RaidPhaseState,
 } from "../../ai/RaidTask";
-import { TAG_RAID_MODE } from "../../rules/BotTags";
+import { TAG_RAID_MODE } from "../../rules/tags/BotTags";
 import type { BotRecord } from "../../rules/Types";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";

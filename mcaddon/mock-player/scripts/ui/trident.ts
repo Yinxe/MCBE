@@ -10,7 +10,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../events/UiEvents";
 import { scanTridents, isMainhandTrident, throwTridents, type TridentSlot } from "../features/trident/trident";
-import { formatEnchantments, formatDurability } from "../features/format";
+import { formatEnchantments, formatDurability } from "../ui/format";
 import { ensureUiBotAvailable, resolveUiBotRecord } from "./helpers";
 
 const SLOT_HOTBAR = 9;

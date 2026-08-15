@@ -15,7 +15,7 @@ import { GameMode, Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/BotTags";
+import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { finalizeBotSpawn } from "./spawn";

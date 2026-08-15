@@ -13,7 +13,7 @@ import type { Container, Dimension, Entity, ItemStack, Player, Vector3, World } 
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "../rules/Types";
-import { BOT_TAG } from "../rules/BotTags";
+import { BOT_TAG } from "../rules/tags/BotTags";
 import type { BotRegistry } from "../service/BotRegistry";
 
 // ─── 常量 ──────────────────────────────────────────────

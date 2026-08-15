@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { getTotalXpForLevels, buildExperienceRecord } from "../scripts/rules/XpMath";
+import { getTotalXpForLevels, buildExperienceRecord } from "../scripts/rules/xp/XpMath";
 
 test("getTotalXpForLevels：0 级为 0", () => {
   assert.equal(getTotalXpForLevels(0), 0);

@@ -9,9 +9,9 @@ import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder } from "@yinxe/toolkit";
 
 import { BotRecord } from "../rules/Types";
-import { BOT_TAG, getTagDef } from "../rules/BotTags";
+import { BOT_TAG, getTagDef } from "../rules/tags/BotTags";
 import { BotUiEvent, type BotPanelAction } from "../events/UiEvents";
-import { formatPos } from "../features/format";
+import { formatPos } from "../ui/format";
 import { formatDimensionId } from "../rules/format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";

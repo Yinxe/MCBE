@@ -5,7 +5,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
 import { BotRecord } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/BotTags";
+import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { syncEntityTags } from "./EntityTags";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";

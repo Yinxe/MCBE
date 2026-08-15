@@ -2,7 +2,7 @@ import { system, world, Vector3 } from "@minecraft/server";
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
-import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../rules/BotTags";
+import { TAG_BOT, TAG_RESPAWN, TAG_IDLE, DEFAULT_TAGS } from "../rules/tags/BotTags";
 import { getPlayerLookTarget } from "../features/basic/PoseGateway";
 import { createBot } from "../features/manage/createBot";
 

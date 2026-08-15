@@ -6,7 +6,7 @@ import { system, world } from "@minecraft/server";
 import type { Dimension, Player, Vector3 } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BOT_TAG } from "../rules/BotTags";
+import { BOT_TAG } from "../rules/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 
 /**

@@ -3,7 +3,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
-import { TAG_CONTROL } from "../rules/BotTags";
+import { TAG_CONTROL } from "../rules/tags/BotTags";
 import { resolveBotForCommand } from "./auth";
 
 export function registerControlCommand(registry: any): void {

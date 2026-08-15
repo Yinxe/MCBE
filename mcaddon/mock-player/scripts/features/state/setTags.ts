@@ -3,7 +3,7 @@
 import { world } from "@minecraft/server";
 
 import { BotRecord } from "../../rules/Types";
-import { TAG_CONTROL, BOT_TAG } from "../../rules/BotTags";
+import { TAG_CONTROL, BOT_TAG } from "../../rules/tags/BotTags";
 import { syncEntityTags } from "../basic/EntityTags";
 import { saveCoordinator } from "../../bootstrap/context";
 

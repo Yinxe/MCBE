@@ -16,10 +16,10 @@ import { world, system, EntityDieAfterEvent } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { PositionState, EQUIP_SLOT_NAMES } from "../rules/Types";
-import { BOT_TAG, TAG_RESPAWN } from "../rules/BotTags";
+import { BOT_TAG, TAG_RESPAWN } from "../rules/tags/BotTags";
 import { BotEvents } from "./DomainEvents";
 import { syncEntityTags } from "../features/basic/EntityTags";
-import { formatPos } from "../features/format";
+import { formatPos } from "../ui/format";
 import { formatDimensionId } from "../rules/format/Format";
 import { captureExperience } from "../features/basic/McItemCodec";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";

@@ -10,7 +10,7 @@
 
 import { world } from "@minecraft/server";
 
-import { BOT_TAG } from "../rules/BotTags";
+import { BOT_TAG } from "../rules/tags/BotTags";
 import { EQUIP_SLOT_NAMES } from "../rules/Types";
 import { BotEvents } from "./DomainEvents";
 

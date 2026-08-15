@@ -11,8 +11,8 @@ import {
   CustomCommandParamType,
 } from "@minecraft/server";
 import { BotRecord, PositionState } from "../rules/Types";
-import { BOT_TAG, TAG_IDLE, getTagDef } from "../rules/BotTags";
-import { formatPos } from "../features/format";
+import { BOT_TAG, TAG_IDLE, getTagDef } from "../rules/tags/BotTags";
+import { formatPos } from "../ui/format";
 import { formatDimensionId } from "../rules/format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { savePoseToRecord } from "../features/basic/PoseGateway";

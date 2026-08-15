@@ -21,7 +21,7 @@ import type { StoredRegion } from "@yinxe/nbt-data-storage";
 
 import type { BotRecord, StorageBinding } from "../rules/Types";
 import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../rules/Types";
-import type { BotStore } from "../service/BotStore";
+import type { BotStore } from "../service/port/BotStore";
 import {
   allBoundSlotIds,
   bindEquipSlot,
@@ -29,7 +29,7 @@ import {
   boundEquipSlotId,
   boundSlotId,
   createBinding,
-} from "../service/Binding";
+} from "../service/port/Binding";
 
 /**
  * 存储区域锚点：自定义测试维度 (16,0,16)——玩家不可达，与装置 (0,0) 区块列

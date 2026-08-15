@@ -4,7 +4,7 @@ import { Player, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../rules/Types";
-import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG } from "../../rules/BotTags";
+import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG } from "../../rules/tags/BotTags";
 import { syncEntityTags } from "./EntityTags";
 import { botRegistry } from "../../bootstrap/context";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "./PoseGateway";

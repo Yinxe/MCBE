@@ -12,7 +12,7 @@ import {
   urgentReplacement,
   URGENT_THRESHOLD,
   WOODCUT_TREE,
-} from "../scripts/rules/ToolPolicy";
+} from "../scripts/rules/items/ToolSelection";
 
 /** 构造工具候选（默认满耐久铁斧） */
 function tool(overrides: Partial<ToolCandidate> & { slot: number }): ToolCandidate {

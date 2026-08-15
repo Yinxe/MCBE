@@ -5,7 +5,7 @@ import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { PositionState } from "../rules/Types";
-import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../rules/BotTags";
+import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../rules/tags/BotTags";
 import { parseCoordinateInput } from "../rules/coords/Coordinate";
 import { getPlayerLookTarget } from "../features/basic/PoseGateway";
 import { createBot } from "../features/manage/createBot";

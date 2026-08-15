@@ -11,7 +11,7 @@
 import { world, PlayerSpawnAfterEvent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { BOT_TAG } from "../rules/BotTags";
+import { BOT_TAG } from "../rules/tags/BotTags";
 import { BotEvents } from "./DomainEvents";
 import { syncEntityTags } from "../features/basic/EntityTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";

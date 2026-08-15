@@ -4,7 +4,7 @@ import { Player, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotRecord } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/BotTags";
+import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry, inventoryStorage } from "../../bootstrap/context";
 import { reclaimBot } from "./reclaim";

@@ -15,7 +15,7 @@ import { Blackboard, BehaviorTree, type AiContext } from ".";
 import { createVaultTaskTree, type VaultPorts } from "./VaultTask";
 import { createRaidTaskTree, type RaidPorts } from "./RaidTask";
 import { createFishingTaskTree, type FishingPorts } from "./FishingTask";
-import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../rules/BotTags";
+import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../rules/tags/BotTags";
 import { BotUiEvent } from "../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { resolveBot } from "../bot/BotCore";

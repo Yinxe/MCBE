@@ -16,7 +16,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { InMemoryBotStore } from "../scripts/service/BotStore";
+import { InMemoryBotStore } from "../scripts/service/port/BotStore";
 import { BotRegistry } from "../scripts/service/BotRegistry";
 import type { SerializedItemStack } from "../scripts/rules/Types";
 import { makeItem, makeRecord } from "./helpers/factories";

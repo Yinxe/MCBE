@@ -6,11 +6,11 @@
 //
 // 物品存储不再使用 DynamicProperty JSON 视图，改为 nbt-data-storage 木桶阵列：
 //   每假人一段固定槽位（bindingId × 41），背包格 i ↔ slot bindingId×41+i，
-//   装备槽 j ↔ slot bindingId×41+36+j（见 core/service/Binding.ts）。
+//   装备槽 j ↔ slot bindingId×41+36+j（见 core/service/port/Binding.ts）。
 // 记录（BotRecord）仍走单条 DP：mockplayer:players:<name>。
 
-import type { BotRecord, SerializedItemStack } from "../rules/Types";
-import { INVENTORY_SIZE } from "../rules/Types";
+import type { BotRecord, SerializedItemStack } from "../../rules/Types";
+import { INVENTORY_SIZE } from "../../rules/Types";
 
 export interface BotStore<TItem = SerializedItemStack> {
   // ── 基础记录 ──

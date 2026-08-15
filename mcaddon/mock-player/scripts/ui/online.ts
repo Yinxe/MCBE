@@ -4,8 +4,8 @@ import { Player, system } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BOT_TAG, getTagDef } from "../rules/BotTags";
-import { formatPos } from "../features/format";
+import { BOT_TAG, getTagDef } from "../rules/tags/BotTags";
+import { formatPos } from "../ui/format";
 import { formatDimensionId } from "../rules/format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";

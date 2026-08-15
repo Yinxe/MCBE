@@ -1,7 +1,7 @@
 // ─── 经验值计算（core 层） ──────────────────────────────
 // 纯逻辑：MC 经验公式（Java & Bedrock 一致）。
 
-import type { ExperienceRecord } from "../rules/Types";
+import type { ExperienceRecord } from "../Types";
 
 /**
  * 计算从 0 级升到 targetLevel 累计所需的总经验值（不含当前等级进度）

@@ -3,7 +3,7 @@
 import { Player, system, world } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { BOT_TAG } from "../../rules/BotTags";
+import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { getPlayerLookTarget } from "../basic/PoseGateway";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";

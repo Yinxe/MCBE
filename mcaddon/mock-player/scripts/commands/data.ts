@@ -7,12 +7,12 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
 import { BotRecord } from "../rules/Types";
-import { getTagDef } from "../rules/BotTags";
+import { getTagDef } from "../rules/tags/BotTags";
 import { BotUiEvent } from "../events/UiEvents";
-import { formatPos } from "../features/format";
+import { formatPos } from "../ui/format";
 import { formatDimensionId } from "../rules/format/Format";
 import { serializeItemStack } from "../features/basic/McItemCodec";
-import { getTotalXpForLevels } from "../rules/XpMath";
+import { getTotalXpForLevels } from "../rules/xp/XpMath";
 import { botRegistry, botStore } from "../bootstrap/context";
 import { isChunkLoaded } from "../bot/PlayerGateway";
 

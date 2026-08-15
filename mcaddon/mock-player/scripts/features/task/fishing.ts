@@ -16,7 +16,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { AIR_BLOCK_ID, ADJACENT_8, classifyFishingScan, collectFishingSpots, computeCastAim, FISHING_HOOK_ID, isFishingRod, isWaterBlock, judgeStandFishingSpot, makeFisherTag, sortFishingSpots, WATER_BLOCK_IDS, type FindSpotsFailure, type FishingSpot } from "../../rules/FishingRules";
 import type { Vec3 } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/BotTags";
+import { BOT_TAG } from "../../rules/tags/BotTags";
 import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 

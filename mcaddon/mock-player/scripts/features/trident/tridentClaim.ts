@@ -8,7 +8,7 @@ import type { Entity } from "@minecraft/server";
 
 import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
-import { formatEnchantments, formatDurability } from "../format";
+import { formatEnchantments, formatDurability } from "../../ui/format";
 import { BotEvents } from "../../events/DomainEvents";
 import { queueClaimReport } from "../manage/claimReporter";
 import {

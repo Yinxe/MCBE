@@ -15,7 +15,7 @@ import {
   hasAnyBinding,
   unbindEquipSlot,
   unbindSlot,
-} from "../scripts/service/Binding";
+} from "../scripts/service/port/Binding";
 import type { StorageBinding } from "../scripts/rules/Types";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../scripts/rules/Types";
 

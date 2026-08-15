@@ -6,8 +6,8 @@ import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder } from "@yinxe/toolkit";
 
 import { BotRecord } from "../rules/Types";
-import { BOT_TAG } from "../rules/BotTags";
-import { formatPos } from "../features/format";
+import { BOT_TAG } from "../rules/tags/BotTags";
+import { formatPos } from "../ui/format";
 import { formatDimensionId } from "../rules/format/Format";
 import { showBotPanel, showBotList } from "./bot";
 import { showCreateForm } from "./create";

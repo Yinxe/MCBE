@@ -19,7 +19,7 @@ import type { BlockInventoryComponent, Container, ItemStack } from "@minecraft/s
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { Vec3 } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/BotTags";
+import { BOT_TAG } from "../../rules/tags/BotTags";
 import { botRegistry } from "../../bootstrap/context";
 import { lookAt } from "./PoseGateway";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";

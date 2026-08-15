@@ -17,7 +17,7 @@ import { BotEvents } from "../events/DomainEvents";
 import type { BotRecord, EquipSlotName } from "../rules/Types";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../rules/Types";
 import type { BotRegistry } from "../service/BotRegistry";
-import type { BotStore } from "../service/BotStore";
+import type { BotStore } from "../service/port/BotStore";
 import { EQUIP_SLOT_MAP } from "./basic/EquipmentSlots";
 
 /** 物品指纹：摘要（typeId|amount|damage|nameTag），用于"变化才写"判定 */

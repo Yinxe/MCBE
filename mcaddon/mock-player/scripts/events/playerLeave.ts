@@ -11,7 +11,7 @@
 
 import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 
-import { BOT_TAG } from "../rules/BotTags";
+import { BOT_TAG } from "../rules/tags/BotTags";
 import { BotEvents } from "./DomainEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { offlineBot } from "../features/manage/offlineBot";

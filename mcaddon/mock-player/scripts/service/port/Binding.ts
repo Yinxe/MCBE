@@ -5,8 +5,8 @@
 // JSON 紧凑。绑定表独立持久化（McBotStore 管理，与 BotRecord 解耦）。
 // 零 @minecraft 依赖，可 node 单测。
 
-import { INVENTORY_SIZE } from "../rules/Types";
-import type { StorageBinding } from "../rules/Types";
+import { INVENTORY_SIZE } from "../../rules/Types";
+import type { StorageBinding } from "../../rules/Types";
 
 /** 新建空绑定表（全部槽位未绑定） */
 export function createBinding(regionId: string): StorageBinding {

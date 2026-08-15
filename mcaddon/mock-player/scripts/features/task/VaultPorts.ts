@@ -25,7 +25,7 @@ import { color } from "@yinxe/toolkit";
 import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, VaultKnowledge, VaultPorts } from "../../ai/VaultTask";
 import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "../../ai/VaultTask";
 import type { Vec3 } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/BotTags";
+import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../../bootstrap/context";
 import { lookAt } from "../basic/PoseGateway";
