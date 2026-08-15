@@ -135,7 +135,12 @@ export function showTagManagement(player: Player, botName: string): void {
 
     system.run(() => {
       // ── ① 标签先落库（record.tags 最新 + 实体同步 + 持久化） ──
-      setTags(currentRecord, newTags, player);
+      // 校验失败（正常表单不会触发，防御脏数据）则不落库、不发布事件
+      const rejected = setTags(currentRecord, newTags, player);
+      if (rejected) {
+        player.sendMessage(`${color.error}${rejected}`);
+        return;
+      }
       // ── ② 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
       BotUiEvent.behaviorSubmitted.trigger({
         playerId: player.id,

@@ -3,6 +3,7 @@
 // mc 层的 ItemStack 版本格式化在 mc/format.ts）。
 
 import type { SerializedItemStack } from "../Types";
+import { levelToRoman } from "./Format";
 
 /**
  * 附魔 ID → 中文名映射（原版全附魔）。
@@ -72,11 +73,6 @@ export function enchantDisplayName(id: string): string {
 export function formatSerializedEnchantments(item: SerializedItemStack): string {
   if (!item.enchantments || item.enchantments.length === 0) return "";
   return item.enchantments
-    .map((e) => `${enchantDisplayName(e.id)}${levelToRomanLocal(e.level)}`)
+    .map((e) => `${enchantDisplayName(e.id)}${levelToRoman(e.level)}`)
     .join(" ");
-}
-
-function levelToRomanLocal(level: number): string {
-  if (level <= 10) return ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"][level] ?? `${level}`;
-  return `${level}`;
 }

@@ -15,7 +15,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 import { isValidBotName, normalizeBotName } from "../../rules/Types";
 import { BotUiEvent } from "../../events/UiEvents";
 import { isNameOccupiedInWorld } from "../../bot/PlayerGateway";
-import { botRegistry } from "../../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知改名动作） ──────────
 
@@ -71,7 +71,7 @@ function doRename(player: Player, botName: string): void {
 
         // ── 2. 改名（registry 内部完成内存 key 迁移 + 恢复标记随迁 + 持久化） ──
         // 背包/装备数据存 NBT 木桶阵列（绑定表随记录），无需迁移任何物品数据
-        botRegistry.rename(botName, newName);
+        saveCoordinator.renameRecord(botName, newName);
 
         player.sendMessage(`${color.success}已重命名为 ${color.playerName}${newName}`);
       } catch (e: any) { player.sendMessage(`${color.error}改名失败: ${e.message}`); }

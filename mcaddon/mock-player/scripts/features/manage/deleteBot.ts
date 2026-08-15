@@ -6,7 +6,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { BotRecord } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
-import { botRegistry, inventoryStorage } from "../../bootstrap/context";
+import { botRegistry, inventoryStorage, saveCoordinator } from "../../bootstrap/context";
 import { reclaimBot } from "./reclaim";
 import { cleanupRaidMode } from "../task/RaidPorts";
 import { color } from "@yinxe/toolkit";
@@ -38,7 +38,8 @@ export function deleteBot(record: BotRecord, reclaimTo?: Player): void {
   if (record.online) {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (entity && entity.hasTag(BOT_TAG)) {
-      trackBotOffline(record.entityId!);
+      // entity 已由 record.entityId 解析成功，entity.id 即同一实体（免断言）
+      trackBotOffline(entity.id);
       (entity as SimulatedPlayer).disconnect();
     }
     // 下线领域事件（订阅方：三叉戟回退第一任等）——删除路径 disconnect 不派发 playerLeave 前的事件链，
@@ -48,7 +49,7 @@ export function deleteBot(record: BotRecord, reclaimTo?: Player): void {
   // 删除：内存 + 持久化记录 + 背包/装备 + 恢复标记（registry.remove 一步完成）
   // 离线删除：disconnect() 不会触发 playerLeave，必须手动清除恢复标记
   // 否则同名新假人会被 isBotRestored 误判为已恢复，空背包覆盖持久化数据
-  botRegistry.remove(record.name);
+  saveCoordinator.removeRecord(record.name);
   // 清空库存存储的指纹快照（防内存残留）
   inventoryStorage.forget(record.name);
 

@@ -49,7 +49,7 @@ function normalizeAllRecords(): void {
   for (const record of botRegistry.all()) {
     try {
       if (normalizeRecord(record, spawn)) {
-        botRegistry.save(record);
+        saveCoordinator.saveRecord(record);
       }
     } catch (e: any) {
       console.warn(`[MockPlayer] 记录归一化失败 ${record.name}: ${e?.message ?? e}`);

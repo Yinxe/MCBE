@@ -108,3 +108,31 @@ export function computeTagsFromBehaviorForm(input: BehaviorFormInput): string[] 
   if (input.raidMode) tags.push(TAG_RAID_MODE.value);
   return tags;
 }
+
+// ─── 标签集校验（core 纯函数，可单测） ─────────────────
+
+/** 所有已定义标签的 value 集合（未知标签校验用） */
+const ALL_TAG_VALUES: Set<string> = new Set(ALL_TAGS.map((t) => t.value));
+
+/**
+ * 校验完整标签集是否合法（setTags 的唯一入口校验，先全通过再落库）：
+ * 1. 所有标签必须是已定义的（未知标签拒绝，防手滑拼错 / 防脏数据写入）；
+ * 2. 假人标识标签（BOT_TAG）不可缺失——移除后实体不再被识别为假人；
+ * 3. 互斥标签（EXCLUSIVE_TAGS）同一时间最多一个。
+ * @param tags 待校验的完整标签集
+ * @returns 拒绝原因（不合法时）；undefined = 合法
+ */
+export function validateTagSet(tags: string[]): string | undefined {
+  const unknown = tags.filter((t) => !ALL_TAG_VALUES.has(t));
+  if (unknown.length > 0) {
+    return `包含未知标签: ${unknown.join(", ")}`;
+  }
+  if (!tags.includes(BOT_TAG)) {
+    return "假人标识标签不可移除";
+  }
+  const exclusives = tags.filter((t) => EXCLUSIVE_SET.has(t));
+  if (exclusives.length > 1) {
+    return `互斥标签不能同时存在: ${exclusives.join(", ")}`;
+  }
+  return undefined;
+}

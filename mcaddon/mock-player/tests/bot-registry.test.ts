@@ -148,3 +148,11 @@ test("save(silent=true)：静默保存仍写持久化", () => {
   registry.save(makeRecord("bot1"), true);
   assert.equal(store.recordWrites, 1);
 });
+test("rename：清理旧 key 持久化记录——重启后不出现幽灵旧假人", () => {
+  const { store, registry } = makeRegistry();
+  registry.save(makeRecord("old"));
+  registry.rename("old", "new");
+  // 旧 key 的持久化记录必须被清理（否则 restoreAll 会载入幽灵假人）
+  assert.equal(store.loadRecord("old"), undefined);
+  assert.equal(store.loadRecord("new")?.name, "new");
+});

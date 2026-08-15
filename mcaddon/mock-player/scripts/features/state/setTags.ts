@@ -3,15 +3,23 @@
 import { world } from "@minecraft/server";
 
 import { BotRecord } from "../../rules/Types";
-import { TAG_CONTROL, BOT_TAG } from "../../rules/tags/BotTags";
+import { TAG_CONTROL, BOT_TAG, validateTagSet } from "../../rules/tags/BotTags";
 import { syncEntityTags } from "../basic/EntityTags";
 import { saveCoordinator } from "../../bootstrap/context";
 
 /**
  * 更新假人标签（运行时）。
+ * 校验规则见 rules/tags/BotTags.validateTagSet（未知标签 / 身份标识不可移除 / 互斥唯一）；
+ * 校验不通过则不改动 record，返回中文拒绝原因。
  * @returns 拒绝原因（未通过校验时）；undefined = 成功
  */
 export function setTags(record: BotRecord, newTags: string[], controllerPlayer?: any): string | undefined {
+  // ── 校验（先全部通过再改动 record，保证原子性） ──
+  const rejected = validateTagSet(newTags);
+  if (rejected) {
+    return rejected;
+  }
+
   const hadControl = record.tags.includes(TAG_CONTROL.value);
   const hasControlNow = newTags.includes(TAG_CONTROL.value);
 

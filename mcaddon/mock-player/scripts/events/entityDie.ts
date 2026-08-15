@@ -92,7 +92,8 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   //    "每秒一次"，消息/写风暴大幅缓解，且玩家能更快发现异常并处理
   if (record.tags.includes(TAG_RESPAWN.value)) {
     try {
-      trackBotOffline(record.entityId!);
+      // entity.id 即死亡实体（当前 record 对应实体），比 record.entityId 断言更可靠
+      trackBotOffline(entity.id);
       bot.respawn();
 
       // respawn() 必须在 entityDie 回调内调用（离开事件后实体 ID 失效），
@@ -128,7 +129,7 @@ export function onEntityDie(event: EntityDieAfterEvent): void {
   }
 
   // 4. 无自动重生 / 自动重生失败 / 熔断 → 死亡下线
-  trackBotOffline(record.entityId!);
+  trackBotOffline(entity.id);
   record.online = false;
   record.entityId = undefined;
   saveCoordinator.saveRecord(record);

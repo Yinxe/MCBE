@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   TAG_BOT, TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_CONTROL, TAG_VAULT_MODE, TAG_RAID_MODE, TAG_RESPAWN,
   COEXIST_TAGS, EXCLUSIVE_TAGS, STANDALONE_TAGS, ALL_TAGS, DEFAULT_TAGS,
-  EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG, getTagDef, resolveTag, getTagGroups, computeTagsFromBehaviorForm,
+  EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG, getTagDef, resolveTag, getTagGroups, computeTagsFromBehaviorForm, validateTagSet,
 } from "../scripts/rules/tags/BotTags";
 
 test("标签分组：可共存/互斥/独立开关互不重叠", () => {
@@ -91,4 +91,32 @@ test("computeTagsFromBehaviorForm：劫掠独立开关与互斥并存", () => {
 test("computeTagsFromBehaviorForm：全空表单仅 bot 标识", () => {
   const tags = computeTagsFromBehaviorForm({ coexist: [], exclusive: undefined, raidMode: false });
   assert.deepEqual(tags, [TAG_BOT.value]);
+});
+
+// ─── validateTagSet（标签集校验） ───────────────────────
+
+test("validateTagSet：合法标签集通过", () => {
+  assert.equal(validateTagSet([TAG_BOT.value, TAG_RESPAWN.value, TAG_IDLE.value]), undefined);
+  // 互斥 + 独立开关 + 共存并存
+  assert.equal(validateTagSet([TAG_BOT.value, TAG_AUTO_JUMP.value, TAG_AUTO_ATTACK.value, TAG_RAID_MODE.value]), undefined);
+});
+
+test("validateTagSet：未知标签拒绝", () => {
+  const rejected = validateTagSet([TAG_BOT.value, "mockplayer:tag:hack"]);
+  assert.ok(rejected && rejected.includes("未知标签"));
+});
+
+test("validateTagSet：假人标识缺失拒绝", () => {
+  const rejected = validateTagSet([TAG_IDLE.value, TAG_RESPAWN.value]);
+  assert.ok(rejected && rejected.includes("标识标签不可移除"));
+});
+
+test("validateTagSet：多个互斥标签拒绝", () => {
+  const rejected = validateTagSet([TAG_BOT.value, TAG_IDLE.value, TAG_AUTO_MINE.value]);
+  assert.ok(rejected && rejected.includes("互斥标签"));
+});
+
+test("validateTagSet：空标签集拒绝（缺身份标识）", () => {
+  const rejected = validateTagSet([]);
+  assert.ok(rejected && rejected.includes("标识标签不可移除"));
 });

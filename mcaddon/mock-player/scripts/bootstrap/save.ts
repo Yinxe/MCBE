@@ -1,6 +1,8 @@
 // ─── 保存协调器（mc 层统一写入口） ─────────────────────
 // 所有持久化**写**操作的唯一入口（读操作保持 botStore 直接调用）：
 //   - saveRecord      记录写穿（botRegistry.save 的包装）
+//   - removeRecord    删除假人（registry.remove 受控入口）
+//   - renameRecord    假人改名（registry.rename 受控入口）
 //   - saveSlot        背包单格（带"什么变了"变化日志）
 //   - saveInventory   背包全量
 //   - saveEquipment   装备全量
@@ -33,6 +35,22 @@ export class SaveCoordinator {
   /** 记录写穿（高频周期路径传 silent 防刷日志） */
   saveRecord(record: BotRecord, silent = false): void {
     this.registry.save(record, silent);
+  }
+
+  /**
+   * 删除假人（内存 + 持久化记录 + 背包/装备 + 恢复标记）。
+   * 复合操作的受控入口（删除/回收清空场景）——调用方不再直接触碰 registry.remove。
+   */
+  removeRecord(name: string): void {
+    this.registry.remove(name);
+  }
+
+  /**
+   * 假人改名（内存 key 迁移 + 持久化新 key + 旧 key 清理 + 绑定表迁移 + 恢复标记随迁）。
+   * 复合操作的受控入口——调用方不再直接触碰 registry.rename。
+   */
+  renameRecord(oldName: string, newName: string): void {
+    this.registry.rename(oldName, newName);
   }
 
   /**

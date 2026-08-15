@@ -82,7 +82,8 @@ export function registerTagCommand(registry: any): void {
     // ── remove ──
     if (action === "remove") {
       if (!record.tags.includes(tagDef.value)) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 没有标签 ${color.playerName}${tagDef.label}`); return; }
-      setTags(record, record.tags.filter(t => t !== tagDef.value));
+      const rejected = setTags(record, record.tags.filter(t => t !== tagDef.value));
+      if (rejected) { player.sendMessage(`${color.error}${rejected}`); return; }
       player.sendMessage(`${color.success}已为假人 ${color.playerName}${targetName}${color.success} 移除标签 ${color.playerName}${tagDef.label}`);
       return;
     }

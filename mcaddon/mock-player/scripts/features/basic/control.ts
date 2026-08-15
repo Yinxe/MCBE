@@ -2,6 +2,7 @@
 
 import { Player, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
+import { color } from "@yinxe/toolkit";
 
 import { BotRecord } from "../../rules/Types";
 import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG } from "../../rules/tags/BotTags";
@@ -22,14 +23,16 @@ export function toggleControl(record: BotRecord, player: Player): void {
     if (!hasExclusive) {
       newTags.push(TAG_IDLE.value);
     }
-    setTags(record, newTags);
+    const rejected = setTags(record, newTags);
+    if (rejected) { player.sendMessage(`${color.error}${rejected}`); return; }
   } else {
     // 开启控制：移除所有互斥标签，设置 control
     newTags = record.tags.filter((t) => !EXCLUSIVE_SET.has(t));
     if (!newTags.includes(TAG_CONTROL.value)) {
       newTags.push(TAG_CONTROL.value);
     }
-    setTags(record, newTags, player);
+    const rejected = setTags(record, newTags, player);
+    if (rejected) { player.sendMessage(`${color.error}${rejected}`); return; }
 
     // 立即同步一次体态
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;

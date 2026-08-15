@@ -9,7 +9,7 @@ import { canManage, color } from "@yinxe/toolkit";
 
 import type { BotRecord } from "../../rules/Types";
 import { requireBot, type Bot } from "../../bot/Bot";
-import { botRegistry, configStore } from "../../bootstrap/context";
+import { botRegistry, configStore, saveCoordinator } from "../../bootstrap/context";
 
 /** 是否管理员：OP 权限 或 配置名单内玩家 */
 export function isAdmin(player: Player): boolean {
@@ -35,7 +35,7 @@ export function canManageBot(player: Player, record: BotRecord): boolean {
 export function autoClaim(player: Player, record: BotRecord): boolean {
   if (record.ownerName) return false; // 已有主：不认领
   record.ownerName = player.name;
-  botRegistry.save(record);
+  saveCoordinator.saveRecord(record);
   console.info(`[MockPlayer] 自动认领 ${record.name} → ${player.name}`);
   return true;
 }

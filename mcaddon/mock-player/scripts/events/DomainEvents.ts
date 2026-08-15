@@ -21,7 +21,7 @@ export interface VaultOpenedEvent {
   remaining: number;
 }
 
-/** 宝库开箱成功信号 */
+/** 宝库开箱成功信号（⚠️ 预留：目前仅 VaultPorts 生产端触发，无订阅方，供通知/统计联动） */
 export const vaultOpened = new EventSignal<VaultOpenedEvent>();
 
 // ─── 三叉戟认主事件 ────────────────────────────────────
@@ -150,6 +150,10 @@ export interface BotEntityAttackedEvent {
   /** 造成的伤害 */
   damage: number;
 }
+
+// ─── 行为事件（预留） ──────────────────────────────────
+// ⚠️ 以下 5 个信号目前只有生产端触发、无订阅方（git 历史中从未接入消费者）——
+//    属于预留给未来联动/统计的功能性领域事件，非死代码，勿删。
 
 /** 主手切换信号 */
 export const botMainhandChanged = new EventSignal<BotMainhandChangedEvent>();

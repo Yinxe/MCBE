@@ -6,7 +6,7 @@ import { color } from "@yinxe/toolkit";
 
 import { BotRecord } from "../../rules/Types";
 import { BotUiEvent } from "../../events/UiEvents";
-import { botRegistry } from "../../bootstrap/context";
+import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { spawnBot } from "./spawnMode";
 import { offlineBot } from "./offlineBot";
 import { trackBotOnline } from "../trident/tridentTracker";
@@ -27,6 +27,9 @@ export async function onlineBot(record: BotRecord): Promise<SimulatedPlayer> {
   // spawn 成功后（名称唯一）再置在线状态
   record.online = true;
   record.death = false;
+  // ⚠️ 显式持久化在线状态：不依赖 spawn 后 playerJoin 事件落库的隐式时序
+  //（若 playerJoin 未如期触发，DB 里 online 保持旧值，重启后假人状态与实体不一致）
+  saveCoordinator.saveRecord(record);
 
   // 加入反查表（entityId → botName），供 entitySpawn 标记三叉戟用
   trackBotOnline(bot.id, record.name);

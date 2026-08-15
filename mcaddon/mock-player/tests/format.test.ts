@@ -44,9 +44,9 @@ test("formatSerializedEnchantments：中文 + 罗马等级", () => {
   assert.equal(text, "锋利V 击退II");
 });
 
-test("formatSerializedEnchantments：等级 >10 显示数字", () => {
+test("formatSerializedEnchantments：等级 >10 用 [n]（统一 levelToRoman 行为）", () => {
   const text = formatSerializedEnchantments(makeItem("minecraft:stick", 1, {
     enchantments: [{ id: "unbreaking", level: 11 }],
   }));
-  assert.equal(text, "耐久11");
+  assert.equal(text, "耐久[11]");
 });
