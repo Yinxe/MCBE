@@ -21,13 +21,13 @@ import { system, world } from "@minecraft/server";
 import type { Entity, ItemStack } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { diffLoot, initialBiteTracker, isWaterBlock, judgeHookPlacement, makeLootFingerprint, updateBiteTracker, type BackpackInfo, type BiteTracker, type FishingFailureReason, type FishingOutcome, type HookPlacement, type LootItem } from "../../core/tasks/FishingRules";
-import { enchantDisplayName } from "../../core/format/EnchantZh";
-import { BOT_TAG, TAG_FISH_MODE } from "../../core/tags/BotTags";
+import { diffLoot, initialBiteTracker, isWaterBlock, judgeHookPlacement, makeLootFingerprint, updateBiteTracker, type BackpackInfo, type BiteTracker, type FishingFailureReason, type FishingOutcome, type HookPlacement, type LootItem } from "../../rules/FishingRules";
+import { enchantDisplayName } from "../../format/EnchantZh";
+import { BOT_TAG, TAG_FISH_MODE } from "../../tags/BotTags";
 import { castFishingRod, findOwnHooks, reelFishingRod, resolveBotPlayer } from "./fishing";
 
 // ── 领域类型 re-export（类型已归位 core/tasks/FishingRules，此处保持导入方兼容） ──
-export type { FishingOutcome, FishingFailureReason, BackpackInfo, LootItem } from "../../core/tasks/FishingRules";
+export type { FishingOutcome, FishingFailureReason, BackpackInfo, LootItem } from "../../rules/FishingRules";
 
 // ─── 常量 ────────────────────────────────────────────────
 

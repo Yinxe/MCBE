@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { canClearMainhand, slotLabel } from "../scripts/core/items/MainhandPolicy";
+import { canClearMainhand, slotLabel } from "../scripts/items/MainhandPolicy";
 
 test("canClearMainhand：存在非主手空槽可清空", () => {
   const items = ["剑", null, "石头"];

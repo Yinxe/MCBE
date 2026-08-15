@@ -11,7 +11,7 @@ export { moveBot } from "./move";
 export { toggleControl } from "./control";
 export { setSneaking } from "./sneak";
 export { reclaimBot, type ReclaimResult } from "./reclaim";
-export type { ReclaimOptions } from "../../core/service/ReclaimPlanner";
+export type { ReclaimOptions } from "../../service/ReclaimPlanner";
 export {
   swapMainhandWithBot,
   swapOffhandWithBot,

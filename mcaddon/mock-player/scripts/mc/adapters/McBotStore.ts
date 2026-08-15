@@ -19,9 +19,9 @@ import { ItemStack, world } from "@minecraft/server";
 import { ItemStorage } from "@yinxe/nbt-data-storage";
 import type { StoredRegion } from "@yinxe/nbt-data-storage";
 
-import type { BotRecord, StorageBinding } from "../../core/model/Types";
-import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../../core/model/Types";
-import type { BotStore } from "../../core/storage/BotStore";
+import type { BotRecord, StorageBinding } from "../../model/Types";
+import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../../model/Types";
+import type { BotStore } from "../../storage/BotStore";
 import {
   allBoundSlotIds,
   bindEquipSlot,
@@ -29,7 +29,7 @@ import {
   boundEquipSlotId,
   boundSlotId,
   createBinding,
-} from "../../core/storage/Binding";
+} from "../../storage/Binding";
 
 /**
  * 存储区域锚点：自定义测试维度 (16,0,16)——玩家不可达，与装置 (0,0) 区块列

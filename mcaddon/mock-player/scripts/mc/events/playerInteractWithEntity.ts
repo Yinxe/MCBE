@@ -10,7 +10,7 @@
 
 import { system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/server";
 
-import { TAG_BOT } from "../../core/tags/BotTags";
+import { TAG_BOT } from "../../tags/BotTags";
 import { showBotPanel } from "../ui/bot";
 import { showTagManagement } from "../ui/tags";
 

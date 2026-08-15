@@ -4,8 +4,8 @@ import { system, world, type Player } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import { BotRecord } from "../../core/model/Types";
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { BotRecord } from "../../model/Types";
+import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { spawnBot } from "./spawnMode";
 import { offlineBot } from "./offlineBot";

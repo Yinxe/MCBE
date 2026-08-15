@@ -6,13 +6,13 @@ import { Player, world, EntityInventoryComponent, EntityEquippableComponent, Equ
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
-import { BotRecord } from "../../core/model/Types";
-import { getTagDef } from "../../core/tags/BotTags";
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { BotRecord } from "../../model/Types";
+import { getTagDef } from "../../tags/BotTags";
+import { BotUiEvent } from "../../events/UiEvents";
 import { formatPos } from "../format";
-import { formatDimensionId } from "../../core/format/Format";
+import { formatDimensionId } from "../../format/Format";
 import { serializeItemStack } from "../adapters/McItemCodec";
-import { getTotalXpForLevels } from "../../core/xp/XpMath";
+import { getTotalXpForLevels } from "../../xp/XpMath";
 import { botRegistry, botStore } from "../bootstrap/context";
 import { isChunkLoaded } from "../adapters/PlayerGateway";
 

@@ -3,8 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { formatDimensionId, levelToRoman } from "../scripts/core/format/Format";
-import { ENCH_ZH, enchantDisplayName, formatSerializedEnchantments } from "../scripts/core/format/EnchantZh";
+import { formatDimensionId, levelToRoman } from "../scripts/format/Format";
+import { ENCH_ZH, enchantDisplayName, formatSerializedEnchantments } from "../scripts/format/EnchantZh";
 import { makeItem } from "./helpers/factories";
 
 test("formatDimensionId：维度 ID → 中文", () => {

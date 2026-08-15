@@ -17,7 +17,7 @@
 
 import { PlayerInventoryItemChangeAfterEvent } from "@minecraft/server";
 
-import { BOT_TAG } from "../../core/tags/BotTags";
+import { BOT_TAG } from "../../tags/BotTags";
 import { inventoryStorage } from "../bootstrap/context";
 import { checkMainHandDurability } from "../features/toolHealth";
 

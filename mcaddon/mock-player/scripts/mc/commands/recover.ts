@@ -14,7 +14,7 @@ import { defineCommand, color } from "@yinxe/toolkit";
 
 import { botRegistry, inventoryStorage } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
-import { getTotalXpForLevels } from "../../core/xp/XpMath";
+import { getTotalXpForLevels } from "../../xp/XpMath";
 
 export function registerRecoverCommand(registry: any): void {
   defineCommand(registry, {

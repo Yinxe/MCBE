@@ -2,8 +2,8 @@
 
 import { world } from "@minecraft/server";
 
-import { BotRecord } from "../../core/model/Types";
-import { TAG_CONTROL, BOT_TAG } from "../../core/tags/BotTags";
+import { BotRecord } from "../../model/Types";
+import { TAG_CONTROL, BOT_TAG } from "../../tags/BotTags";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { saveCoordinator } from "../bootstrap/context";
 

@@ -10,9 +10,9 @@
 
 import { world } from "@minecraft/server";
 
-import { BOT_TAG } from "../../core/tags/BotTags";
-import { EQUIP_SLOT_NAMES } from "../../core/model/Types";
-import { BotEvents } from "../../core/events/DomainEvents";
+import { BOT_TAG } from "../../tags/BotTags";
+import { EQUIP_SLOT_NAMES } from "../../model/Types";
+import { BotEvents } from "../../events/DomainEvents";
 
 /** 订阅假人行为事件（在 worldLoad 后由 registerAllEvents 调用一次） */
 export function registerBotActionEvents(): void {

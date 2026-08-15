@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   OMINOUS_BOTTLE_ID, BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_TRUCE_TICKS,
   isOminousBottle, classifyRaidEffect,
-} from "../scripts/core/tasks/RaidRules";
+} from "../scripts/rules/RaidRules";
 
 test("常量：效果 ID 精确值", () => {
   assert.equal(OMINOUS_BOTTLE_ID, "minecraft:ominous_bottle");

@@ -5,7 +5,7 @@
 
 import { color } from "@yinxe/toolkit";
 
-import type { BotRecord } from "../../core/model/Types";
+import type { BotRecord } from "../../model/Types";
 
 /** 列表 owner 标签（带色）：管理员 → "主人:XXX" / "[无主]"；普通玩家 → 无主才标 "[无主]" */
 export function ownerLabel(record: BotRecord, isAdminPlayer: boolean): string {

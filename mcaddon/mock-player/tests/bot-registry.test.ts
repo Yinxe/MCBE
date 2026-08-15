@@ -3,8 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { BotRegistry } from "../scripts/core/service/BotRegistry";
-import { InMemoryBotStore } from "../scripts/core/storage/BotStore";
+import { BotRegistry } from "../scripts/service/BotRegistry";
+import { InMemoryBotStore } from "../scripts/storage/BotStore";
 import { makeRecord, makeItem } from "./helpers/factories";
 
 function makeRegistry() {

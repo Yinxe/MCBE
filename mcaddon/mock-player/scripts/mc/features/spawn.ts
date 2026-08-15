@@ -5,7 +5,7 @@
 import { Vector2, Vector3 } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import type { BotRecord } from "../../core/model/Types";
+import type { BotRecord } from "../../model/Types";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   FULL_OPTIONS, hasAnyArmor, isFullReclaim, serializedToPreview, formatItemPreview,
   buildInventorySummary, buildOfflineReclaimPreview,
-} from "../scripts/core/service/ReclaimPlanner";
+} from "../scripts/service/ReclaimPlanner";
 import { makeItem, makeRecord, emptyInventory } from "./helpers/factories";
 
 test("FULL_OPTIONS：全量回收判定", () => {

@@ -17,10 +17,10 @@
 
 import type { ItemStack, Player } from "@minecraft/server";
 
-import type { BotRecord } from "../../core/model/Types";
+import type { BotRecord } from "../../model/Types";
 import { captureExperience, captureEffects } from "../adapters/McItemCodec";
-import type { BotRegistry } from "../../core/service/BotRegistry";
-import type { BotStore } from "../../core/storage/BotStore";
+import type { BotRegistry } from "../../service/BotRegistry";
+import type { BotStore } from "../../storage/BotStore";
 import type { InventoryStorage } from "../features/inventoryStorage";
 
 export class SaveCoordinator {

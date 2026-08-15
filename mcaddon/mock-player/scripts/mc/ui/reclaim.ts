@@ -6,12 +6,12 @@ import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import type { BotRecord, ItemPreview } from "../../core/model/Types";
-import type { ReclaimOptions } from "../../core/service/ReclaimPlanner";
-import { BotUiEvent } from "../../core/events/UiEvents";
+import type { BotRecord, ItemPreview } from "../../model/Types";
+import type { ReclaimOptions } from "../../service/ReclaimPlanner";
+import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { getReclaimPreview, reclaimBot, type ReclaimResult } from "../features/reclaim";
-import { formatItemPreview } from "../../core/service/ReclaimPlanner";
+import { formatItemPreview } from "../../service/ReclaimPlanner";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知回收动作） ──────────
 

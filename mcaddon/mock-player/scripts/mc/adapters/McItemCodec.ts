@@ -16,8 +16,8 @@ import {
   ItemEnchantableComponent,
   EntityEquippableComponent,
 } from "@minecraft/server";
-import type { PositionState, ExperienceRecord, SerializedEffect, SerializedItemStack, ItemPreview } from "../../core/model/Types";
-import { buildExperienceRecord } from "../../core/xp/XpMath";
+import type { PositionState, ExperienceRecord, SerializedEffect, SerializedItemStack, ItemPreview } from "../../model/Types";
+import { buildExperienceRecord } from "../../xp/XpMath";
 import { EQUIP_SLOT_MAP } from "./EquipmentSlots";
 
 // ─── 状态捕获 ──────────────────────────────────────────

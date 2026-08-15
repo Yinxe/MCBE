@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   identifyTool, isToolHealthy, findReplacementIndex, findEmptySlotIndex, findAnySlot,
   HEALTH_PERCENT_THRESHOLD, HEALTH_ABSOLUTE_THRESHOLD,
-} from "../scripts/core/items/ToolRules";
+} from "../scripts/items/ToolRules";
 
 test("identifyTool：后缀模式识别", () => {
   assert.equal(identifyTool("minecraft:diamond_pickaxe")?.label, "镐");

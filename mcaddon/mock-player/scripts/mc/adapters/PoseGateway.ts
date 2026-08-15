@@ -5,8 +5,8 @@ import { Player } from "@minecraft/server";
 import type { Vector2, Vector3 } from "@minecraft/server";
 import { LookDuration, SimulatedPlayer } from "@minecraft/server-gametest";
 
-import type { BotRecord } from "../../core/model/Types";
-import { rotationToDirection } from "../../core/coords/Direction";
+import type { BotRecord } from "../../model/Types";
+import { rotationToDirection } from "../../coords/Direction";
 
 // ─── 底层体态操作 ──────────────────────────────────────
 

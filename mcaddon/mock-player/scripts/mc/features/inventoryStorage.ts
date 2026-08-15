@@ -13,11 +13,11 @@
 import { world } from "@minecraft/server";
 import type { Player, ItemStack } from "@minecraft/server";
 
-import { BotEvents } from "../../core/events/DomainEvents";
-import type { BotRecord, EquipSlotName } from "../../core/model/Types";
-import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../../core/model/Types";
-import type { BotRegistry } from "../../core/service/BotRegistry";
-import type { BotStore } from "../../core/storage/BotStore";
+import { BotEvents } from "../../events/DomainEvents";
+import type { BotRecord, EquipSlotName } from "../../model/Types";
+import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../../model/Types";
+import type { BotRegistry } from "../../service/BotRegistry";
+import type { BotStore } from "../../storage/BotStore";
 import { EQUIP_SLOT_MAP } from "../adapters/EquipmentSlots";
 
 /** 物品指纹：摘要（typeId|amount|damage|nameTag），用于"变化才写"判定 */

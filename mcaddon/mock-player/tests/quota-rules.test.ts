@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { canCreateBot, remainingQuota } from "../scripts/core/service/QuotaRules";
+import { canCreateBot, remainingQuota } from "../scripts/service/QuotaRules";
 
 test("普通玩家：数量未达配额可创建", () => {
   assert.equal(canCreateBot(3, 5, false), true);

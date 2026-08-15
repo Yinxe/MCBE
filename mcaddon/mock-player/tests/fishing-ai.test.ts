@@ -9,10 +9,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { Blackboard, Status, type AiContext } from "../scripts/core/ai";
-import { createFishingTaskTree, type FishingIdleReason, type FishingKnowledge, type FishingPorts } from "../scripts/core/tasks/FishingTask";
-import type { FishingOutcome, FishingSpot } from "../scripts/core/tasks/FishingRules";
-import type { Vec3 } from "../scripts/core/model/Types";
+import { Blackboard, Status, type AiContext } from "../scripts/ai";
+import { createFishingTaskTree, type FishingIdleReason, type FishingKnowledge, type FishingPorts } from "../scripts/tasks/FishingTask";
+import type { FishingOutcome, FishingSpot } from "../scripts/rules/FishingRules";
+import type { Vec3 } from "../scripts/model/Types";
 
 // ─── 测试数据 ────────────────────────────────────────────
 

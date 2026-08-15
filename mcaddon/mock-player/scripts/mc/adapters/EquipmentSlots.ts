@@ -2,7 +2,7 @@
 // core 层统一用字符串槽名（EquipSlotName），到 mc 边界转换为 EquipmentSlot 枚举。
 
 import { EquipmentSlot } from "@minecraft/server";
-import type { EquipSlotName } from "../../core/model/Types";
+import type { EquipSlotName } from "../../model/Types";
 
 /** 装备槽名称 → EquipmentSlot 枚举映射 */
 export const EQUIP_SLOT_MAP: Record<EquipSlotName, EquipmentSlot> = {

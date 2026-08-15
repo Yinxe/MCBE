@@ -10,10 +10,10 @@ import {
   CommandPermissionLevel,
   CustomCommandParamType,
 } from "@minecraft/server";
-import { BotRecord, PositionState } from "../../core/model/Types";
-import { BOT_TAG, TAG_IDLE, getTagDef } from "../../core/tags/BotTags";
+import { BotRecord, PositionState } from "../../model/Types";
+import { BOT_TAG, TAG_IDLE, getTagDef } from "../../tags/BotTags";
 import { formatPos } from "../format";
-import { formatDimensionId } from "../../core/format/Format";
+import { formatDimensionId } from "../../format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { savePoseToRecord } from "../adapters/PoseGateway";
 import { isAdmin } from "./auth";

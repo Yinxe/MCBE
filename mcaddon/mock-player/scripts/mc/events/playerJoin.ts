@@ -14,10 +14,10 @@
 import { world, system, PlayerJoinAfterEvent } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import { BOT_TAG } from "../../core/tags/BotTags";
-import { BotEvents } from "../../core/events/DomainEvents";
+import { BOT_TAG } from "../../tags/BotTags";
+import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry, inventoryStorage, saveCoordinator } from "../bootstrap/context";
-import { getTotalXpForLevels } from "../../core/xp/XpMath";
+import { getTotalXpForLevels } from "../../xp/XpMath";
 import { trackBotOnline } from "../features/tridentTracker";
 
 export function onPlayerJoin(event: PlayerJoinAfterEvent): void {

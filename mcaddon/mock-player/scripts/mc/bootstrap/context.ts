@@ -4,7 +4,7 @@
 // mc 层各模块直接 import 这里的单例（等价于旧 persistence.ts 的模块级 botRegistry）。
 // core 层测试不经过此处：测试自行构造 `new BotRegistry(new InMemoryBotStore())`。
 
-import { BotRegistry } from "../../core/service/BotRegistry";
+import { BotRegistry } from "../../service/BotRegistry";
 import { McBotStore } from "../adapters/McBotStore";
 import { McConfigStore } from "../adapters/McConfigStore";
 import { SaveCoordinator } from "./save";

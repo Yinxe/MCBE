@@ -2,7 +2,7 @@
 // 将标签列表同步到实体（Entity 绑定，core 层不涉及）。
 
 import type { Entity } from "@minecraft/server";
-import { TAG_PREFIX } from "../../core/model/Types";
+import { TAG_PREFIX } from "../../model/Types";
 
 /**
  * 将标签列表同步到实体：

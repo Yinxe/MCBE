@@ -4,12 +4,12 @@ import { Player, system } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BOT_TAG, getTagDef } from "../../core/tags/BotTags";
+import { BOT_TAG, getTagDef } from "../../tags/BotTags";
 import { formatPos } from "../format";
-import { formatDimensionId } from "../../core/format/Format";
+import { formatDimensionId } from "../../format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
-import { visibleRecords } from "../../core/service/BotVisibility";
+import { visibleRecords } from "../../service/BotVisibility";
 import { ownerLabel } from "./ownerLabel";
 import { onlineBot } from "../features/onlineBot";
 import { offlineBot } from "../features/offlineBot";
@@ -20,7 +20,7 @@ function getStatusIcon(death: boolean, online: boolean): string {
   return style("[离线]", color.warn);
 }
 
-function getPosSummary(record: import("../../core/model/Types").BotRecord): string {
+function getPosSummary(record: import("../../model/Types").BotRecord): string {
   if (record.lastPoint) {
     return `${formatPos(record.lastPoint.location)} ${color.gold}${formatDimensionId(record.lastPoint.dimension)}`;
   }

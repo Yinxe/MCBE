@@ -11,8 +11,8 @@ import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_AUTO_USE, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, EXCLUSIVE_TAGS, getTagDef, computeTagsFromBehaviorForm } from "../../core/tags/BotTags";
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { TAG_BOT, TAG_AUTO_USE, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, EXCLUSIVE_TAGS, getTagDef, computeTagsFromBehaviorForm } from "../../tags/BotTags";
+import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim } from "../commands/auth";
 import { setTags } from "../features/setTags";

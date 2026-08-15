@@ -1,7 +1,7 @@
 import { world, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
-import { TAG_RESPAWN, TAG_BOT } from "../../core/tags/BotTags";
+import { TAG_RESPAWN, TAG_BOT } from "../../tags/BotTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
 import { setTags } from "../features/setTags";

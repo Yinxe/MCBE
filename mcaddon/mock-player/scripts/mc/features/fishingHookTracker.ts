@@ -15,7 +15,7 @@
 import { world, Player } from "@minecraft/server";
 import type { Entity } from "@minecraft/server";
 
-import { isFishingHook, makeFisherTag } from "../../core/tasks/FishingRules";
+import { isFishingHook, makeFisherTag } from "../../rules/FishingRules";
 
 /** 初始化幂等守卫（main.ts worldLoad 调用一次；防重复订阅） */
 let fishingHookTrackerReady = false;

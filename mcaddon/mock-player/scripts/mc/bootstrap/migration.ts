@@ -18,10 +18,10 @@
 import { world } from "@minecraft/server";
 
 import { botRegistry, botStore, saveCoordinator } from "./context";
-import { normalizeRecord, DEFAULT_RESPAWN } from "../../core/service/RecordMigration";
+import { normalizeRecord, DEFAULT_RESPAWN } from "../../service/RecordMigration";
 import { deserializeLegacyItem } from "../adapters/LegacyCodec";
-import { DP_PREFIX, INVENTORY_SIZE } from "../../core/model/Types";
-import type { SerializedItemStack } from "../../core/model/Types";
+import { DP_PREFIX, INVENTORY_SIZE } from "../../model/Types";
+import type { SerializedItemStack } from "../../model/Types";
 
 /** 数据版本标记 key */
 const DATA_VERSION_KEY = "mockplayer:data-version";

@@ -4,8 +4,8 @@
 
 import { Player, EquipmentSlot, ItemStack, world } from "@minecraft/server";
 
-import { BotRecord, ItemPreview } from "../../core/model/Types";
-import { BOT_TAG } from "../../core/tags/BotTags";
+import { BotRecord, ItemPreview } from "../../model/Types";
+import { BOT_TAG } from "../../tags/BotTags";
 import { SWAP_SLOTS } from "../adapters/EquipmentSlots";
 import { captureExperience, itemStackToPreview, serializeItemStack } from "../adapters/McItemCodec";
 import {
@@ -15,7 +15,7 @@ import {
   buildOfflineReclaimPreview,
   buildInventorySummary,
   type ReclaimOptions,
-} from "../../core/service/ReclaimPlanner";
+} from "../../service/ReclaimPlanner";
 import { botRegistry, botStore, saveCoordinator } from "../bootstrap/context";
 import { color } from "@yinxe/toolkit";
 

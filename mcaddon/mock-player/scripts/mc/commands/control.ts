@@ -3,7 +3,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
-import { TAG_CONTROL } from "../../core/tags/BotTags";
+import { TAG_CONTROL } from "../../tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
 import { toggleControl } from "../features/control";

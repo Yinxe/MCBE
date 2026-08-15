@@ -22,11 +22,11 @@ import { system, world, Direction, BlockVolume, EquipmentSlot, type ItemStack, t
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, VaultKnowledge, VaultPorts } from "../../core/tasks/VaultTask";
-import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "../../core/tasks/VaultTask";
-import type { Vec3 } from "../../core/model/Types";
-import { BOT_TAG } from "../../core/tags/BotTags";
-import { BotEvents } from "../../core/events/DomainEvents";
+import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, VaultKnowledge, VaultPorts } from "../../tasks/VaultTask";
+import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "../../tasks/VaultTask";
+import type { Vec3 } from "../../model/Types";
+import { BOT_TAG } from "../../tags/BotTags";
+import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../bootstrap/context";
 import { lookAt } from "../adapters/PoseGateway";
 import { safeReconnect, reconnectingBots } from "../features/pendingRespawn";

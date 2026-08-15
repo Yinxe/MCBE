@@ -15,12 +15,12 @@ import { color } from "@yinxe/toolkit";
 import { world, system, EntityDieAfterEvent } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { PositionState, EQUIP_SLOT_NAMES } from "../../core/model/Types";
-import { BOT_TAG, TAG_RESPAWN } from "../../core/tags/BotTags";
-import { BotEvents } from "../../core/events/DomainEvents";
+import { PositionState, EQUIP_SLOT_NAMES } from "../../model/Types";
+import { BOT_TAG, TAG_RESPAWN } from "../../tags/BotTags";
+import { BotEvents } from "../../events/DomainEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { formatPos } from "../format";
-import { formatDimensionId } from "../../core/format/Format";
+import { formatDimensionId } from "../../format/Format";
 import { captureExperience } from "../adapters/McItemCodec";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { setPose } from "../adapters/PoseGateway";

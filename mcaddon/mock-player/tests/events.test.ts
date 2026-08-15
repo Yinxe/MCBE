@@ -3,9 +3,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { EventSignal } from "../scripts/core/events/EventSignal";
-import { BotEvents } from "../scripts/core/events/DomainEvents";
-import { BotUiEvent } from "../scripts/core/events/UiEvents";
+import { EventSignal } from "../scripts/events/EventSignal";
+import { BotEvents } from "../scripts/events/DomainEvents";
+import { BotUiEvent } from "../scripts/events/UiEvents";
 
 test("EventSignal：订阅/触发/退订", () => {
   const signal = new EventSignal<number>();

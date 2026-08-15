@@ -15,9 +15,9 @@ import {
   hasAnyBinding,
   unbindEquipSlot,
   unbindSlot,
-} from "../scripts/core/storage/Binding";
-import type { StorageBinding } from "../scripts/core/model/Types";
-import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../scripts/core/model/Types";
+} from "../scripts/storage/Binding";
+import type { StorageBinding } from "../scripts/model/Types";
+import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../scripts/model/Types";
 
 test("createBinding 初始全未绑定（空对象）", () => {
   const b = createBinding("2:0:-64");

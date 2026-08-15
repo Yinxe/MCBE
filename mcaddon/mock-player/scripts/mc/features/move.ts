@@ -3,8 +3,8 @@
 import { Vector3, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord } from "../../core/model/Types";
-import { BOT_TAG } from "../../core/tags/BotTags";
+import { BotRecord } from "../../model/Types";
+import { BOT_TAG } from "../../tags/BotTags";
 
 export function moveBot(record: BotRecord, target: Vector3): boolean {
   if (!record.online || record.death) {

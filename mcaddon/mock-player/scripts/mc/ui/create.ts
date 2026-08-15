@@ -4,9 +4,9 @@ import { Player, system, world, Vector3 } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { PositionState } from "../../core/model/Types";
-import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../../core/tags/BotTags";
-import { parseCoordinateInput } from "../../core/coords/Coordinate";
+import { PositionState } from "../../model/Types";
+import { TAG_BOT, TAG_RESPAWN, TAG_IDLE } from "../../tags/BotTags";
+import { parseCoordinateInput } from "../../coords/Coordinate";
 import { getPlayerLookTarget } from "../adapters/PoseGateway";
 import { createBot } from "../features/createBot";
 

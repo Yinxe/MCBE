@@ -12,8 +12,8 @@ import { Player, system, world } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { isValidBotName, normalizeBotName } from "../../core/model/Types";
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { isValidBotName, normalizeBotName } from "../../model/Types";
+import { BotUiEvent } from "../../events/UiEvents";
 import { isNameOccupiedInWorld } from "../adapters/PlayerGateway";
 import { botRegistry } from "../bootstrap/context";
 

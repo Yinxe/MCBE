@@ -7,7 +7,7 @@ import {
   TAG_BOT, TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_CONTROL, TAG_VAULT_MODE, TAG_RAID_MODE, TAG_RESPAWN,
   COEXIST_TAGS, EXCLUSIVE_TAGS, STANDALONE_TAGS, ALL_TAGS, DEFAULT_TAGS,
   EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG, getTagDef, resolveTag, getTagGroups, computeTagsFromBehaviorForm,
-} from "../scripts/core/tags/BotTags";
+} from "../scripts/tags/BotTags";
 
 test("标签分组：可共存/互斥/独立开关互不重叠", () => {
   const coexist = COEXIST_TAGS.map((t) => t.value);

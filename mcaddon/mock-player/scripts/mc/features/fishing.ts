@@ -14,9 +14,9 @@ import { system, world, BlockVolume } from "@minecraft/server";
 import type { Dimension, Entity } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { AIR_BLOCK_ID, ADJACENT_8, classifyFishingScan, collectFishingSpots, computeCastAim, FISHING_HOOK_ID, isFishingRod, isWaterBlock, judgeStandFishingSpot, makeFisherTag, sortFishingSpots, WATER_BLOCK_IDS, type FindSpotsFailure, type FishingSpot } from "../../core/tasks/FishingRules";
-import type { Vec3 } from "../../core/model/Types";
-import { BOT_TAG } from "../../core/tags/BotTags";
+import { AIR_BLOCK_ID, ADJACENT_8, classifyFishingScan, collectFishingSpots, computeCastAim, FISHING_HOOK_ID, isFishingRod, isWaterBlock, judgeStandFishingSpot, makeFisherTag, sortFishingSpots, WATER_BLOCK_IDS, type FindSpotsFailure, type FishingSpot } from "../../rules/FishingRules";
+import type { Vec3 } from "../../model/Types";
+import { BOT_TAG } from "../../tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
 
 // ─── 常量 ────────────────────────────────────────────────

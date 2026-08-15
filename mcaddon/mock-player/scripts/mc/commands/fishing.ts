@@ -11,7 +11,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
 import { findFishingSpots } from "../features/fishing";
-import type { FindSpotsFailure } from "../../core/tasks/FishingRules";
+import type { FindSpotsFailure } from "../../rules/FishingRules";
 import { fishOnce, failureLabel } from "../features/fishingFlow";
 import { withContainer, resolveBotPlayer, type ContainerOpResult } from "../features/containerInteraction";
 import { botRegistry } from "../bootstrap/context";

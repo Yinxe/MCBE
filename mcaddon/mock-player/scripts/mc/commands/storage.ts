@@ -12,8 +12,8 @@ import { Player, CustomCommandParamType, CommandPermissionLevel } from "@minecra
 import { defineCommand, color } from "@yinxe/toolkit";
 import { ItemStorage } from "@yinxe/nbt-data-storage";
 
-import { BotRecord } from "../../core/model/Types";
-import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../../core/model/Types";
+import { BotRecord } from "../../model/Types";
+import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../../model/Types";
 import { botRegistry, botStore } from "../bootstrap/context";
 import { guardBotCommand } from "./auth";
 

@@ -7,7 +7,7 @@ import { color, style } from "@yinxe/toolkit";
 
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { formatEnchantments, formatDurability } from "../format";
-import { canClearMainhand, slotLabel } from "../../core/items/MainhandPolicy";
+import { canClearMainhand, slotLabel } from "../../items/MainhandPolicy";
 
 // ─── 公开类型 ──────────────────────────────────────────
 

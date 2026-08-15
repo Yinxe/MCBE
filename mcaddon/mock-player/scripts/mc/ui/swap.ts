@@ -6,9 +6,9 @@ import { Player, EquipmentSlot, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BOT_TAG } from "../../core/tags/BotTags";
-import { BotEvents } from "../../core/events/DomainEvents";
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { BOT_TAG } from "../../tags/BotTags";
+import { BotEvents } from "../../events/DomainEvents";
+import { BotUiEvent } from "../../events/UiEvents";
 import { collectContainerItems } from "../adapters/McItemCodec";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { swapMainhandWithBot } from "../features/index";

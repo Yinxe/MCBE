@@ -3,8 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE, SWAP_SLOT_NAMES, TAG_PREFIX, createDefaultConfig, DEFAULT_QUOTA, isValidBotName, normalizeBotName, BOT_NAME_PREFIX, MAX_BOT_NAME_LENGTH } from "../scripts/core/model/Types";
-import type { ModConfig } from "../scripts/core/model/Types";
+import { DP_PREFIX, EQUIP_SLOT_NAMES, INVENTORY_SIZE, SWAP_SLOT_NAMES, TAG_PREFIX, createDefaultConfig, DEFAULT_QUOTA, isValidBotName, normalizeBotName, BOT_NAME_PREFIX, MAX_BOT_NAME_LENGTH } from "../scripts/model/Types";
+import type { ModConfig } from "../scripts/model/Types";
 
 test("isValidBotName：合法名字通过", () => {
   assert.ok(isValidBotName("bot1"));

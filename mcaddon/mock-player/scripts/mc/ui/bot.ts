@@ -8,14 +8,14 @@ import { Player } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder } from "@yinxe/toolkit";
 
-import { BotRecord } from "../../core/model/Types";
-import { BOT_TAG, getTagDef } from "../../core/tags/BotTags";
-import { BotUiEvent, type BotPanelAction } from "../../core/events/UiEvents";
+import { BotRecord } from "../../model/Types";
+import { BOT_TAG, getTagDef } from "../../tags/BotTags";
+import { BotUiEvent, type BotPanelAction } from "../../events/UiEvents";
 import { formatPos } from "../format";
-import { formatDimensionId } from "../../core/format/Format";
+import { formatDimensionId } from "../../format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
-import { visibleRecords } from "../../core/service/BotVisibility";
+import { visibleRecords } from "../../service/BotVisibility";
 import { ownerLabel } from "./ownerLabel";
 
 // ─── 工具 ──────────────────────────────────────────────

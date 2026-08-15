@@ -3,8 +3,8 @@
 import { Player, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord } from "../../core/model/Types";
-import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG } from "../../core/tags/BotTags";
+import { BotRecord } from "../../model/Types";
+import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG } from "../../tags/BotTags";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { botRegistry } from "../bootstrap/context";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../adapters/PoseGateway";

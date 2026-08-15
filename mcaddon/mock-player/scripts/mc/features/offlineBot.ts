@@ -3,9 +3,9 @@
 import { world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { BotRecord } from "../../core/model/Types";
-import { BOT_TAG } from "../../core/tags/BotTags";
-import { BotEvents } from "../../core/events/DomainEvents";
+import { BotRecord } from "../../model/Types";
+import { BOT_TAG } from "../../tags/BotTags";
+import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 import { trackBotOffline } from "./tridentTracker";
 

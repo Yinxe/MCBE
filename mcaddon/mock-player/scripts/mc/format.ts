@@ -6,9 +6,9 @@ import { ItemStack } from "@minecraft/server";
 import type { Vector3 } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
-import type { PositionState } from "../core/model/Types";
-import { formatDimensionId } from "../core/format/Format";
-import { ENCH_ZH } from "../core/format/EnchantZh";
+import type { PositionState } from "../model/Types";
+import { formatDimensionId } from "../format/Format";
+import { ENCH_ZH } from "../format/EnchantZh";
 
 export function formatPos(v: Vector3): string {
   return `${color.muted}[${color.info}${Math.floor(v.x)} ${color.info}${Math.floor(v.y)} ${color.info}${Math.floor(v.z)}${color.muted}]`;

@@ -18,10 +18,10 @@ import { system, world } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { FishingKnowledge, FishingPorts } from "../../core/tasks/FishingTask";
-import type { FishingSpot } from "../../core/tasks/FishingRules";
-import { computeTargetYaw, isYawAligned, YAW_TOLERANCE_DEG } from "../../core/tasks/FishingRules";
-import type { Vec3 } from "../../core/model/Types";
+import type { FishingKnowledge, FishingPorts } from "../../tasks/FishingTask";
+import type { FishingSpot } from "../../rules/FishingRules";
+import { computeTargetYaw, isYawAligned, YAW_TOLERANCE_DEG } from "../../rules/FishingRules";
+import type { Vec3 } from "../../model/Types";
 import { botRegistry } from "../bootstrap/context";
 import { lookAt } from "../adapters/PoseGateway";
 import {

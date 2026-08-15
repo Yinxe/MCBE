@@ -7,7 +7,7 @@
 import type { Player } from "@minecraft/server";
 import { canManage, color } from "@yinxe/toolkit";
 
-import type { BotRecord } from "../../core/model/Types";
+import type { BotRecord } from "../../model/Types";
 import { botRegistry, configStore } from "../bootstrap/context";
 
 /** 是否管理员：OP 权限 或 配置名单内玩家 */

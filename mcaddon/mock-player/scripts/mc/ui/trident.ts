@@ -8,7 +8,7 @@ import { Player, system, world, ItemStack } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { scanTridents, isMainhandTrident, throwTridents, type TridentSlot } from "../features/trident";
 import { formatEnchantments, formatDurability } from "../format";

@@ -8,7 +8,7 @@ import {
   isTrackedProjectile, makeOwnerTag, makeSecondOwnerTag,
   parseClaimTags, resolveClaimOwner, isOwnedByFamily,
   makeItemTag, parseItemTag, projectileTypeLabel,
-} from "../scripts/core/items/TridentClaimRules";
+} from "../scripts/items/TridentClaimRules";
 
 test("tag 常量：前缀格式", () => {
   assert.equal(OWNER_TAG_PREFIX, "mp:owner:");

@@ -12,8 +12,26 @@
     "rootDir": "."
   },
   "include": [
-    "scripts/core/**/*.ts",
+    "scripts/rules/**/*.ts",
+    "scripts/ai/**/*.ts",
+    "scripts/tasks/**/*.ts",
+    "scripts/items/**/*.ts",
+    "scripts/events/**/*.ts",
+    "scripts/model/**/*.ts",
+    "scripts/tags/**/*.ts",
+    "scripts/coords/**/*.ts",
+    "scripts/format/**/*.ts",
+    "scripts/xp/**/*.ts",
+    "scripts/storage/**/*.ts",
+    "scripts/service/**/*.ts",
     "tests/**/*.ts"
   ],
-  "exclude": ["node_modules", ".test-build", "lib", "dist", "scripts/mc/**/*.ts"]
+  "exclude": [
+    "node_modules",
+    ".test-build",
+    "lib",
+    "dist",
+    "scripts/mc/**/*.ts",
+    "scripts/core/**/*.ts"
+  ]
 }

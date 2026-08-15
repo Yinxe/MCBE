@@ -6,6 +6,6 @@
 
 export * from "./VaultTask";
 export * from "./RaidTask";
-export * from "./RaidRules";
-export * from "./FishingRules";
+export * from "../rules/RaidRules";
+export * from "../rules/FishingRules";
 export * from "./FishingTask";

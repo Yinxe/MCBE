@@ -9,16 +9,16 @@ import type { Entity } from "@minecraft/server";
 import { botRegistry } from "../bootstrap/context";
 import { resolveBotPlayer } from "../adapters/PlayerGateway";
 import { formatEnchantments, formatDurability } from "../format";
-import { BotEvents } from "../../core/events/DomainEvents";
+import { BotEvents } from "../../events/DomainEvents";
 import { queueClaimReport } from "./claimReporter";
 import {
   makeSecondOwnerTag, parseClaimTags, parseItemTag, isOwnedByFamily,
   OWNER2_TAG_PREFIX, TRACKED_PROJECTILE_IDS, isTrackedProjectile, projectileTypeLabel,
-} from "../../core/items/TridentClaimRules";
-import { computeClusterProbabilities, groupPointsByProximity } from "../../core/coords/Cluster";
-import { enchantDisplayName } from "../../core/format/EnchantZh";
-import { levelToRoman } from "../../core/format/Format";
-import type { Vec3 } from "../../core/model/Types";
+} from "../../items/TridentClaimRules";
+import { computeClusterProbabilities, groupPointsByProximity } from "../../coords/Cluster";
+import { enchantDisplayName } from "../../format/EnchantZh";
+import { levelToRoman } from "../../format/Format";
+import type { Vec3 } from "../../model/Types";
 
 /** 认主扫描半径（方块） */
 export const CLAIM_SCAN_RADIUS = 100;

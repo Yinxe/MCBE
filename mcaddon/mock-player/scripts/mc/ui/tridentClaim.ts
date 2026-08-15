@@ -13,10 +13,10 @@ import { Player, world } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { scanOwnTridents, claimTridents, type ClaimableTrident, type ClaimGroup } from "../features/tridentClaim";
-import { projectileTypeLabel } from "../../core/items/TridentClaimRules";
+import { projectileTypeLabel } from "../../items/TridentClaimRules";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知认主动作） ──────────
 

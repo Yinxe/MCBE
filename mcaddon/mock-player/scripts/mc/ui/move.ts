@@ -4,11 +4,11 @@ import { Player, system, world, Vector3 } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { moveBot } from "../features/move";
 import { deleteBot } from "../features/deleteBot";
-import { parseCoordinateInput } from "../../core/coords/Coordinate";
+import { parseCoordinateInput } from "../../coords/Coordinate";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知删除动作） ──────────
 

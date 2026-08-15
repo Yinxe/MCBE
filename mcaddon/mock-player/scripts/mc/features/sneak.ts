@@ -4,9 +4,9 @@ import { system, world, type Player } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import { BotRecord } from "../../core/model/Types";
-import { BOT_TAG } from "../../core/tags/BotTags";
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { BotRecord } from "../../model/Types";
+import { BOT_TAG } from "../../tags/BotTags";
+import { BotUiEvent } from "../../events/UiEvents";
 import { syncEntityTags } from "../adapters/EntityTags";
 import { botRegistry, saveCoordinator } from "../bootstrap/context";
 

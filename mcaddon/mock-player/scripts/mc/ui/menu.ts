@@ -5,10 +5,10 @@ import { Player } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder } from "@yinxe/toolkit";
 
-import { BotRecord } from "../../core/model/Types";
-import { BOT_TAG } from "../../core/tags/BotTags";
+import { BotRecord } from "../../model/Types";
+import { BOT_TAG } from "../../tags/BotTags";
 import { formatPos } from "../format";
-import { formatDimensionId } from "../../core/format/Format";
+import { formatDimensionId } from "../../format/Format";
 import { botRegistry } from "../bootstrap/context";
 import { showBotPanel, showBotList } from "./bot";
 import { showCreateForm } from "./create";

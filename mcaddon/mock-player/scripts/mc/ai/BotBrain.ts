@@ -12,12 +12,12 @@ import { system, world, type Player } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import { Blackboard, BehaviorTree, type AiContext } from "../../core/ai";
-import { createVaultTaskTree, type VaultPorts } from "../../core/tasks/VaultTask";
-import { createRaidTaskTree, type RaidPorts } from "../../core/tasks/RaidTask";
-import { createFishingTaskTree, type FishingPorts } from "../../core/tasks/FishingTask";
-import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../../core/tags/BotTags";
-import { BotUiEvent } from "../../core/events/UiEvents";
+import { Blackboard, BehaviorTree, type AiContext } from "../../ai";
+import { createVaultTaskTree, type VaultPorts } from "../../tasks/VaultTask";
+import { createRaidTaskTree, type RaidPorts } from "../../tasks/RaidTask";
+import { createFishingTaskTree, type FishingPorts } from "../../tasks/FishingTask";
+import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../../tags/BotTags";
+import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../bootstrap/context";
 import { reconnectingBots } from "../features/pendingRespawn";
 import { vaultPorts } from "../tasks/McVaultPorts";

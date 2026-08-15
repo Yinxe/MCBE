@@ -13,8 +13,8 @@
 
 import { Player, Container, system, world } from "@minecraft/server";
 
-import { BOT_TAG } from "../../core/tags/BotTags";
-import { identifyTool, isToolHealthy, findReplacementIndex, findEmptySlotIndex, findAnySlot } from "../../core/items/ToolRules";
+import { BOT_TAG } from "../../tags/BotTags";
+import { identifyTool, isToolHealthy, findReplacementIndex, findEmptySlotIndex, findAnySlot } from "../../items/ToolRules";
 import { color } from "@yinxe/toolkit";
 
 // ─── 配置常量 ──────────────────────────────────────────
