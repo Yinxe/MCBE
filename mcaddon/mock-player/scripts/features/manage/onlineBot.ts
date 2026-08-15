@@ -11,16 +11,26 @@ import { spawnBot } from "./spawnMode";
 import { offlineBot } from "./offlineBot";
 import { trackBotOnline } from "../trident/tridentTracker";
 
+/** 上线结果（多状态，带失败原因） */
+export interface OnlineResult {
+  /** 是否上线成功 */
+  ok: boolean;
+  /** 成功时上线的假人实体 */
+  bot?: SimulatedPlayer;
+  /** 失败原因（异常消息/阶段说明，供日志与玩家提示） */
+  reason?: string;
+}
+
 /**
  * 恢复离线假人上线（异步：生成前会等待名称唯一，见 spawnMode）
  * - 根据 spawnMode 选择普通/强加载模式
  * - 从记录中取最后位置/重生点
  * - 背包/装备/经验由后续的 playerJoin 事件恢复
  * - 反查表供 entitySpawn 标记三叉戟用；认主在 playerJoin 中统一处理
- * ⚠️ 永不 reject：任何异常 resolve undefined（异步环境抛异常可能致游戏崩溃）
- * @returns 上线的假人实体；失败 = undefined
+ * ⚠️ 永不 reject：失败 resolve { ok: false, reason }（异步环境抛异常可能致游戏崩溃）
+ * @returns 多状态结果（见 OnlineResult）
  */
-export async function onlineBot(record: BotRecord): Promise<SimulatedPlayer | undefined> {
+export async function onlineBot(record: BotRecord): Promise<OnlineResult> {
   try {
     const state = record.lastPoint ?? record.respawnPoint;
     const dim = world.getDimension(state.dimension);
@@ -41,10 +51,10 @@ export async function onlineBot(record: BotRecord): Promise<SimulatedPlayer | un
       `[MockPlayer] 上线假人 ${record.name} 模式=${record.spawnMode ?? "normal"}` +
       `（${state.dimension} ${Math.floor(state.location.x)} ${Math.floor(state.location.y)} ${Math.floor(state.location.z)}）`,
     );
-    return bot;
+    return { ok: true, bot };
   } catch (e: any) {
     console.error(`[MockPlayer] onlineBot 失败 ${record.name}: ${e?.message ?? e}`);
-    return undefined;
+    return { ok: false, reason: e?.message ?? "unknown" };
   }
 }
 
@@ -65,8 +75,8 @@ export function registerUiSubscriptions(): void {
           player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已下线`);
         } else {
           onlineBot(r)
-            .then((bot) => {
-              if (!bot) { player.sendMessage(`${color.error}${e.botName} 上线失败`); return; }
+            .then((result) => {
+              if (!result.ok) { player.sendMessage(`${color.error}${e.botName} 上线失败: ${result.reason ?? "unknown"}`); return; }
               player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已上线`);
             });
         }

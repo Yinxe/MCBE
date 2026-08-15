@@ -87,9 +87,9 @@ export function showOnlineManagement(player: Player): void {
       system.runTimeout(() => {
         try {
           if (newVal && !record.online) {
-            // onlineBot 永不 reject（失败 resolve undefined）
-            onlineBot(record).then((bot) => {
-              if (!bot) { player.sendMessage(`${color.error}${record.name} 上线失败`); return; }
+            // onlineBot 永不 reject（失败 resolve { ok: false, reason }）
+            onlineBot(record).then((result) => {
+              if (!result.ok) { player.sendMessage(`${color.error}${record.name} 上线失败: ${result.reason ?? "unknown"}`); return; }
             });
           } else if (!newVal && record.online) {
             offlineBot(record);

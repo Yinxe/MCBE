@@ -90,25 +90,32 @@ function isFoodItem(sim: SimulatedPlayer, slot: number): boolean {
   }
 }
 
+/** 使用物品结果（多状态，带失败原因） */
+export type UseItemResult =
+  | "ok"             // 完整执行（按下并自动停止）
+  | "offline"        // 假人不在线/已死亡
+  | "entity-invalid" // 使用中实体失效（死亡/下线瞬间）
+  | "unavailable"    // 主手物品不可用（空手或不能右键使用）
+  | "error";         // 意外异常
+
 /**
- * 使用主手物品一次（闭包异步）：
- * system.run 下一 tick 按下（useItemInSlot）→ USE_AUTO_STOP_DELAY tick 后自动松开（stopUsingItem）→ resolve。
- * - 饮用/进食：按住 ~2s 足够喝完/吃完，随后自动松开
- * - 弓/弩：满蓄力后自动松开发射
- * - 投掷类（药水/附魔瓶/三叉戟）：蓄力片刻后自动抛出
- * @returns true=完整执行（按下并自动停止）；false=不在线/实体失效/物品不可用/异常
+ * 使用主手物品一次（闭包异步，多状态返回）：
+ * system.run 下一 tick 按下（useItemInSlot）→ 延迟后自动松开（stopUsingItem）→ resolve。
+ * - 食物：延时 80tick 保证完整吃完再停（中途松开会取消进食）
+ * - 弓/弩：满蓄力后自动松开发射；投掷类（药水/附魔瓶/三叉戟）：蓄力片刻后自动抛出
+ * @returns 多状态结果（见 UseItemResult），永不 reject
  */
-export function useItemOnce(record: BotRecord, player?: Player): Promise<boolean> {
+export function useItemOnce(record: BotRecord, player?: Player): Promise<UseItemResult> {
   const sim = resolveBotPlayer(record);
   if (!sim) {
     console.warn(`[MockPlayer] 使用物品：${record.name} 不在线`);
-    return Promise.resolve(false);
+    return Promise.resolve("offline");
   }
-  return new Promise<boolean>((resolve) => {
+  return new Promise<UseItemResult>((resolve) => {
     system.run(() => {
       try {
         // ⚠️ 实体有效性防护：死亡/下线/重连瞬间实体失效，useItemInSlot 会抛 "entity being invalid"
-        if (!sim.isValid) { resolve(false); return; }
+        if (!sim.isValid) { resolve("entity-invalid"); return; }
         const slot = findUsableSlot(sim);
         const item = slotItemType(sim, slot);
         const food = isFoodItem(sim, slot);
@@ -116,7 +123,7 @@ export function useItemOnce(record: BotRecord, player?: Player): Promise<boolean
         console.warn(`[MockPlayer] 使用物品：${record.name} slot=${slot} 手持=${item ?? "空"} 食物=${food} 开始使用=${pressed}`);
         if (!pressed) {
           player?.sendMessage(`${color.warn}${color.playerName}${record.name}${color.warn} 主手物品当前不可用（空手或不能右键使用）`);
-          resolve(false);
+          resolve("unavailable");
           return;
         }
         // 延迟自动松开：给蓄力（弓/弩）充能，用后即自动停止。
@@ -124,20 +131,20 @@ export function useItemOnce(record: BotRecord, player?: Player): Promise<boolean
         const stopDelay = food ? USE_FOOD_STOP_DELAY : USE_AUTO_STOP_DELAY;
         system.runTimeout(() => {
           // ⚠️ 实体有效性防护：假人死亡/下线瞬间实体失效，stopUsingItem 会抛 "entity being invalid"
-          if (!sim.isValid) { resolve(false); return; }
+          if (!sim.isValid) { resolve("entity-invalid"); return; }
           try {
             const released = sim.stopUsingItem();
             console.warn(`[MockPlayer] 使用物品：${record.name} 自动停止(延迟 ${stopDelay}tick, 食物=${food}, 释放=${released?.typeId ?? "无"})`);
-            resolve(true);
+            resolve("ok");
           } catch (e: any) {
             console.warn(`[MockPlayer] 使用物品自动停止异常 ${record.name}: ${e?.message ?? e}`);
-            resolve(false);
+            resolve("error");
           }
         }, stopDelay);
       } catch (e: any) {
         console.warn(`[MockPlayer] 使用物品异常 ${record.name}: ${e?.message ?? e}`);
         player?.sendMessage(`${color.error}使用物品失败: ${e.message}`);
-        resolve(false);
+        resolve("error");
       }
     });
   });

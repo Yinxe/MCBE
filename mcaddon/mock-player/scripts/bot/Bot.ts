@@ -7,6 +7,7 @@ import type { Player, Vector3 } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotCore } from "./BotCore";
+import { navigateBot } from "../features/basic/move";
 import { toggleControl } from "../features/basic/control";
 import { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "../features/basic/items";
 import { getMainhandOptions, setMainhandSlot } from "../features/basic/items";
@@ -26,6 +27,16 @@ import { scanTridents, isMainhandTrident, throwTridents } from "../features/trid
 import type { BotRegistry } from "../service/BotRegistry";
 
 export class Bot extends BotCore {
+  // ─── 原子能力：导航（委托 basic/move，闭包异步多状态） ──
+
+  /**
+   * 寻路到目标位置并等待完成（while+await 每 10tick 监测位置，多状态返回）。
+   * @returns NavigateResult：arrived / no-path / still-timeout / timeout / unavailable / entity-invalid / error
+   */
+  navigateTo(target: Vector3, speed?: number): Promise<import("../features/basic/move").NavigateResult> {
+    return navigateBot(this.name, target, speed);
+  }
+
   // ─── 原子能力：跟随 ──────────────────────────────────
 
   /** 开始跟随目标玩家（OOP 门面，委托 state/follow） */
@@ -91,8 +102,8 @@ export class Bot extends BotCore {
     checkMainHandDurability(bot as Player, changedSlot);
   }
 
-  /** 使用主手物品一次（闭包异步：system.run 按下 → runTimeout 自动停止 → resolve 完整执行结果） */
-  async useItem(): Promise<boolean> {
+  /** 使用主手物品一次（闭包异步多状态：UseItemResult，永不 reject） */
+  async useItem(): Promise<import("../features/basic/items/useItem").UseItemResult> {
     return useItemOnce(this.record);
   }
 
@@ -105,8 +116,8 @@ export class Bot extends BotCore {
 
   // ─── 原子能力：生命周期（委托 manage） ───────────────
 
-  /** 上线（委托 manage/onlineBot；失败 resolve undefined，永不 reject） */
-  async bringOnline(): Promise<SimulatedPlayer | undefined> {
+  /** 上线（委托 manage/onlineBot；多状态结果，永不 reject） */
+  async bringOnline(): Promise<import("../features/manage/onlineBot").OnlineResult> {
     return onlineBot(this.record);
   }
 
@@ -147,24 +158,24 @@ export class Bot extends BotCore {
 
   // ─── 原子能力：装备交换（委托 basic/equip，闭包异步） ──
 
-  /** 与玩家交换主手（异步：执行结果 resolve） */
-  async swapMainhand(player: Player): Promise<boolean> {
+  /** 与玩家交换主手（异步多状态：SwapResult） */
+  async swapMainhand(player: Player): Promise<import("../features/basic/items/equip").SwapResult> {
     const bot = this.entity;
-    if (!bot) return false;
+    if (!bot) return "no-entity";
     return swapMainhandWithBot(player, bot as Player);
   }
 
-  /** 与玩家交换副手（异步：执行结果 resolve） */
-  async swapOffhand(player: Player): Promise<boolean> {
+  /** 与玩家交换副手（异步多状态：SwapResult） */
+  async swapOffhand(player: Player): Promise<import("../features/basic/items/equip").SwapResult> {
     const bot = this.entity;
-    if (!bot) return false;
+    if (!bot) return "no-entity";
     return swapOffhandWithBot(player, bot as Player);
   }
 
-  /** 与玩家交换全部装备（异步：执行结果 resolve） */
-  async swapEquipment(player: Player): Promise<boolean> {
+  /** 与玩家交换全部装备（异步多状态：SwapResult） */
+  async swapEquipment(player: Player): Promise<import("../features/basic/items/equip").SwapResult> {
     const bot = this.entity;
-    if (!bot) return false;
+    if (!bot) return "no-entity";
     return swapEquipmentWithBot(player, bot as Player);
   }
 
@@ -190,8 +201,8 @@ export class Bot extends BotCore {
     return isMainhandTrident(this.name);
   }
 
-  /** 投掷三叉戟一轮（闭包异步：doThrowLoop 完成时 resolve；兼容 onComplete 回调） */
-  async throwTridents(playerId: string, slots: number[], onComplete?: () => void): Promise<void> {
+  /** 投掷三叉戟一轮（闭包异步多状态：ThrowResult；兼容 onComplete 回调） */
+  async throwTridents(playerId: string, slots: number[], onComplete?: () => void): Promise<import("../features/trident/trident").ThrowResult> {
     return throwTridents(this.name, playerId, slots, onComplete);
   }
 }

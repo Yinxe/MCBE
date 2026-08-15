@@ -72,6 +72,13 @@ export function isMainhandTrident(botName: string): boolean {
 
 // ─── 投掷入口 ──────────────────────────────────────────
 
+/** 投掷结果（多状态，带失败原因） */
+export type ThrowResult =
+  | "ok"              // 投掷一轮完整执行
+  | "already-throwing" // 投掷已在进行中（防重入）
+  | "not-online"      // 假人不在线/已死亡/记录不存在
+  | "error";          // 意外异常
+
 /**
  * 让假人投掷指定槽位的三叉戟。
  *
@@ -83,25 +90,25 @@ export function isMainhandTrident(botName: string): boolean {
  * @param playerId 操作玩家 ID
  * @param slots 要投掷的三叉戟所在容器槽位数组
  * @param onComplete 兼容回调（Promise resolve 时同样调用，可省略）
- * @returns Promise：投掷一轮完成（或防重入/不可投掷立即结束）时 resolve
+ * @returns 多状态结果（见 ThrowResult），永不 reject
  */
 export function throwTridents(
   botName: string,
   playerId: string,
   slots: number[],
   onComplete?: () => void,
-): Promise<void> {
+): Promise<ThrowResult> {
   try {
     if (throwingBots.has(botName)) {
       console.warn(`[MockPlayer] 投掷已在进行中 ${botName}`);
       onComplete?.();
-      return Promise.resolve();
+      return Promise.resolve("already-throwing");
     }
 
     const record = botRegistry.get(botName);
     if (!record || !record.online || record.death) {
       onComplete?.();
-      return Promise.resolve();
+      return Promise.resolve("not-online");
     }
 
     throwingBots.add(botName);
@@ -110,12 +117,12 @@ export function throwTridents(
     if (wasFollowing) pauseFollow();
 
     // 闭包异步：done（doThrowLoop 的 finishThrow 统一出口）时 resolve + 兼容回调
-    return new Promise<void>((resolve) => {
+    return new Promise<ThrowResult>((resolve) => {
       const done = () => {
         throwingBots.delete(botName);
         if (wasFollowing) resumeFollow();
         onComplete?.();
-        resolve();
+        resolve("ok");
       };
 
       system.run(() => doThrowLoop(botName, playerId, slots, done));
@@ -125,7 +132,7 @@ export function throwTridents(
     console.warn(`[MockPlayer] 投掷启动异常 ${botName}: ${e?.message ?? e}`);
     try { throwingBots.delete(botName); } catch { /* ignore */ }
     onComplete?.();
-    return Promise.resolve();
+    return Promise.resolve("error");
   }
 }
 

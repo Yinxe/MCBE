@@ -2,6 +2,28 @@ import { Vector3, system, CommandPermissionLevel, CustomCommandParamType } from 
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { resolveBotForCommand } from "../auth";
+
+/** 导航结果 → 玩家消息（多状态，各自说明失败原因） */
+function navigateMessage(targetName: string, loc: Vector3, result: string): string {
+  const pos = `${color.playerName}${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}`;
+  switch (result) {
+    case "arrived":
+      return `${color.success}假人 ${color.playerName}${targetName}${color.success} 已到达 ${pos}`;
+    case "no-path":
+      return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 无法到达 ${pos}：无路径可达（障碍/距离过远）`;
+    case "still-timeout":
+      return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 移动超时：2 秒内位置未变化（可能卡住）`;
+    case "timeout":
+      return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 30 秒未到达 ${pos}（仍在移动或路径过长）`;
+    case "unavailable":
+      return `${color.error}假人 ${color.playerName}${targetName}${color.error} 不可用（不在线或已死亡）`;
+    case "entity-invalid":
+      return `${color.error}假人 ${color.playerName}${targetName}${color.error} 移动中实体失效（死亡/下线）`;
+    default:
+      return `${color.error}移动假人 ${color.playerName}${targetName}${color.error} 失败（异常）`;
+  }
+}
+
 export function registerMoveCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:move", description: "让模拟玩家自动寻路到指定坐标",
@@ -14,16 +36,10 @@ export function registerMoveCommand(registry: any): void {
     const bot = resolveBotForCommand(player, targetName);
     if (!bot) return;
     const loc = (params.location as Vector3 | undefined) ?? player.location;
-    // 异步等待到达（navigateTo 闭包内 runInterval 分帧检查，命令不阻塞主线程）
+    // 异步等待完成（navigateBot 内 while+await 每 10tick 监测位置，命令不阻塞主线程）
     system.run(async () => {
-      try {
-        const ok = await bot.navigateTo(loc);
-        player.sendMessage(ok
-          ? `${color.success}假人 ${color.playerName}${targetName}${color.success} 已到达 ${color.playerName}${Math.floor(loc.x)} ${Math.floor(loc.y)} ${Math.floor(loc.z)}`
-          : `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 未能到达目标（路径不可达/超时/实体失效）`);
-      } catch (e: any) {
-        player.sendMessage(`${color.error}移动假人失败: ${e?.message ?? e}`);
-      }
+      const result = await bot.navigateTo(loc);
+      player.sendMessage(navigateMessage(targetName, loc, result));
     });
   });
 }

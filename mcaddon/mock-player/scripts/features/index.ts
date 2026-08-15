@@ -3,21 +3,21 @@
 //       state（状态标签）/ trident（三叉戟）。决策调 rules/items 等纯规则，副作用留本地。
 
 export { createBot, type CreateBotOptions } from "./manage/createBot";
-export { onlineBot } from "./manage/onlineBot";
+export { onlineBot, type OnlineResult } from "./manage/onlineBot";
 export { offlineBot } from "./manage/offlineBot";
 export { deleteBot } from "./manage/deleteBot";
 export { killBot } from "./manage/killBot";
 export { tpPlayerToBot, tpBotToPlayer } from "./basic/teleport";
-export { moveBot } from "./basic/move";
+export { navigateBot, type NavigateResult } from "./basic/move";
 export { toggleControl } from "./basic/control";
 export { setSneaking } from "./basic/sneak";
 export { reclaimBot, type ReclaimResult } from "./manage/reclaim";
 export type { ReclaimOptions } from "../service/ReclaimPlanner";
-export { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "./basic/items";
+export { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot, type SwapResult } from "./basic/items";
 export { InventoryStorage } from "./inventoryStorage";
 export { setTags } from "./state/setTags";
 export { checkMainHandDurability } from "./basic/items";
 export { startFollow, stopFollow, isFollowing } from "./state/follow";
-export { scanTridents, isMainhandTrident, throwTridents } from "./trident/trident";
+export { scanTridents, isMainhandTrident, throwTridents, type ThrowResult } from "./trident/trident";
 export { getMainhandOptions, setMainhandSlot } from "./basic/items";
-export { startUseItem, stopUseItem, useItemOnce } from "./basic/items";
+export { startUseItem, stopUseItem, useItemOnce, type UseItemResult } from "./basic/items";

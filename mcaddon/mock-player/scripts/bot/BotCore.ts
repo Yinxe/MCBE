@@ -18,18 +18,6 @@ import type { BotRegistry } from "../service/BotRegistry";
 
 // ─── 常量 ──────────────────────────────────────────────
 
-/** 默认导航速度 */
-const DEFAULT_NAVIGATION_SPEED = 1;
-
-/** 寻路到达判定距离（格）：静止且距目标 ≤ 此值视为到达 */
-const NAV_ARRIVE_DISTANCE = 1.5;
-/** 寻路位置监测间隔（tick）：每次等待 10tick 读取一次位置 */
-const NAV_CHECK_INTERVAL = 10;
-/** 静止判定次数：连续 N 次监测位置未变化视为假人已停下（50tick ≈ 2.5s 静止） */
-const NAV_STILL_LIMIT = 5;
-/** 寻路超时（tick）：超时未到达视为失败（30 秒） */
-const NAV_TIMEOUT_TICKS = 600;
-
 /**
  * ⚠️ 惰性加载说明：本文件被 node 测试编译（tsconfig.test.json include），
  * 测试环境无 @minecraft/server 运行时模块——顶部 import 会导致测试加载失败。
@@ -142,85 +130,10 @@ export class BotCore {
     return c.getItem(this.handSlot) ?? undefined;
   }
 
-  // ─── 原子能力：导航/移动（异步：等待完成） ─────────────
-
-  /**
-   * 寻路到目标位置并等待完成（闭包异步）。
-   * 内部用 system.runInterval 每 10tick 监测一次假人位置（不阻塞主线程/事件循环）：
-   *   - 位置发生变化 → 假人仍在移动 → 继续监测（不提前判定）
-   *   - 位置连续 NAV_STILL_LIMIT 次未变化 → 假人已停下：
-   *     距目标 ≤ NAV_ARRIVE_DISTANCE = 已到达终点；否则 = 卡住失败
-   *   - 总时长超 NAV_TIMEOUT_TICKS → 超时失败
-   * @returns true=已到达；false=未开始/路径不可达/卡住/实体失效/超时
-   */
-  async navigateTo(target: Vector3, speed = DEFAULT_NAVIGATION_SPEED): Promise<boolean> {
-    try {
-      const bot = this.entity;
-      if (!bot) return false;
-
-      let ok = false;
-      try {
-        bot.stopMoving();
-        const result = bot.navigateToLocation(target, speed);
-        ok = result.isFullPath;
-      } catch {
-        return false;
-      }
-      // 路径不可达：navigateToLocation 已开始移动但无法完整到达 → 直接失败
-      // （调用方可提示"无法完全到达"，与旧同步语义一致）
-      if (!ok) return false;
-
-      const sys = mc().system;
-      return new Promise<boolean>((resolve) => {
-        let settled = false;
-        let elapsed = 0;
-        let stillCount = 0;
-        let lastLoc: Vector3 | undefined;
-        let interval: number | undefined;
-        const finish = (reached: boolean) => {
-          if (settled) return;
-          settled = true;
-          if (interval !== undefined) sys.clearRun(interval);
-          resolve(reached);
-        };
-        interval = sys.runInterval(() => {
-          elapsed += NAV_CHECK_INTERVAL;
-          try {
-            // ⚠️ 实体有效性防护：死亡/下线瞬间实体失效 → 判定失败收尾
-            if (!bot.isValid) { finish(false); return; }
-            const loc = bot.location;
-            const d = Math.hypot(
-              loc.x - target.x,
-              loc.y - target.y,
-              loc.z - target.z,
-            );
-
-            // ── 位置变化检测 ──
-            // 位置与上次监测不同 → 假人仍在移动 → 重置静止计数，继续等待
-            if (!lastLoc || loc.x !== lastLoc.x || loc.y !== lastLoc.y || loc.z !== lastLoc.z) {
-              stillCount = 0;
-            } else {
-              stillCount++;
-            }
-            lastLoc = loc;
-
-            // 连续多次位置未变化 → 假人已停下：近=到达终点，远=卡住失败
-            if (stillCount >= NAV_STILL_LIMIT) {
-              finish(d <= NAV_ARRIVE_DISTANCE);
-              return;
-            }
-            if (elapsed >= NAV_TIMEOUT_TICKS) { finish(false); return; }
-          } catch {
-            finish(false);
-          }
-        }, NAV_CHECK_INTERVAL);
-      });
-    } catch (e: any) {
-      // ⚠️ 永不 reject：任何意外异常 resolve false（异步环境抛异常可能致游戏崩溃）
-      console.warn(`[MockPlayer] navigateTo 异常 ${this.name}: ${e?.message ?? e}`);
-      return false;
-    }
-  }
+  // ─── 原子能力：导航（委托 features/basic/move，见 Bot.ts 门面） ──
+  // ⚠️ navigateTo 不在本层实现：导航为耗时异步能力（while+await 循环监测位置、
+  //    多状态返回），属于 mc 副作用功能，已下沉至 features/basic/move.navigateBot，
+  //    Bot 门面（Bot.ts）委托。本层保持纯逻辑/轻量原子能力。
 
   /** 停止移动 */
   stopMoving(): void {

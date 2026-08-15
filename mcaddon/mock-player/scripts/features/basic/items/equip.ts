@@ -35,62 +35,69 @@ function triggerEquipChange(bot: Player, slot: EquipmentSlot, via: EquipChangeVi
 }
 
 // ─── 交换（闭包异步：system.run 调度到安全上下文执行） ────
-// ⚠️ 统一纪律：永不 reject，任何异常 resolve false（异步环境抛异常可能致游戏崩溃）。
+// ⚠️ 统一纪律：永不 reject，任何异常 resolve 错误状态（异步环境抛异常可能致游戏崩溃）。
 //    装备槽写入调度到 system.run 下一 tick，避免受限上下文/批量写入竞态。
 
-/** 与假人互换主手物品（异步：执行结果 resolve） */
-export function swapMainhandWithBot(player: Player, bot: Player): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
+/** 装备交换结果（多状态，带失败原因） */
+export type SwapResult =
+  | "ok"            // 交换完成
+  | "no-entity"     // 假人实体不可用（门面层判定）
+  | "no-component"  // 双方缺少 equippable 组件
+  | "error";        // 意外异常
+
+/** 与假人互换主手物品（异步多状态） */
+export function swapMainhandWithBot(player: Player, bot: Player): Promise<SwapResult> {
+  return new Promise<SwapResult>((resolve) => {
     system.run(() => {
       try {
         const both = getBothEquip(player, bot);
-        if (!both) { resolve(false); return; }
+        if (!both) { resolve("no-component"); return; }
         swapSlot(both[0], both[1], EquipmentSlot.Mainhand);
         console.info(`[MockPlayer] 交换主手 ${bot.name} ←→ ${player.name}`);
-        resolve(true);
+        resolve("ok");
       } catch (e: any) {
         console.warn(`[MockPlayer] 交换主手异常 ${bot.name}: ${e?.message ?? e}`);
-        resolve(false);
+        resolve("error");
       }
     });
   });
 }
 
-/** 与假人互换副手物品（异步：执行结果 resolve） */
-export function swapOffhandWithBot(player: Player, bot: Player): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
+/** 与假人互换副手物品（异步多状态） */
+export function swapOffhandWithBot(player: Player, bot: Player): Promise<SwapResult> {
+  return new Promise<SwapResult>((resolve) => {
     system.run(() => {
       try {
         const both = getBothEquip(player, bot);
-        if (!both) { resolve(false); return; }
+        if (!both) { resolve("no-component"); return; }
         swapSlot(both[0], both[1], EquipmentSlot.Offhand);
         console.info(`[MockPlayer] 交换副手 ${bot.name} ←→ ${player.name}`);
         triggerEquipChange(bot, EquipmentSlot.Offhand, "swap");
-        resolve(true);
+        resolve("ok");
       } catch (e: any) {
         console.warn(`[MockPlayer] 交换副手异常 ${bot.name}: ${e?.message ?? e}`);
-        resolve(false);
+        resolve("error");
       }
     });
   });
 }
 
-/** 与假人互换全部装备（头盔/胸甲/护腿/靴子/副手，异步：执行结果 resolve） */
-export function swapEquipmentWithBot(player: Player, bot: Player): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
+/** 与假人互换全部装备（头盔/胸甲/护腿/靴子/副手，异步多状态） */
+export function swapEquipmentWithBot(player: Player, bot: Player): Promise<SwapResult> {
+  return new Promise<SwapResult>((resolve) => {
     system.run(() => {
       try {
         const both = getBothEquip(player, bot);
-        if (!both) { resolve(false); return; }
+        if (!both) { resolve("no-component"); return; }
         for (const slot of SWAP_SLOTS) {
           swapSlot(both[0], both[1], slot);
           triggerEquipChange(bot, slot, "swap");
         }
         console.info(`[MockPlayer] 交换装备 ${bot.name} ←→ ${player.name}`);
-        resolve(true);
+        resolve("ok");
       } catch (e: any) {
         console.warn(`[MockPlayer] 交换装备异常 ${bot.name}: ${e?.message ?? e}`);
-        resolve(false);
+        resolve("error");
       }
     });
   });

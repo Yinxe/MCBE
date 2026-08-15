@@ -1,22 +1,91 @@
 // ─── 移动（导航） ──────────────────────────────────────
+// 导航为耗时异步能力：while(true) + await waitTicks 循环监测位置（每 10 tick），
+// 位置变化=移动中继续等；连续 4 次（2 秒）位置未变 → 判定到达/移动超时。
+// 多状态返回（不裸 boolean）：调用方/玩家可获知具体失败原因。
 
-import { Vector3, world } from "@minecraft/server";
-import { SimulatedPlayer } from "@minecraft/server-gametest";
+import { Vector3 } from "@minecraft/server";
 
-import { BotRecord } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/tags/BotTags";
+import { resolveBotPlayer } from "../../bot/PlayerGateway";
+import { waitTicks, distance3d } from "../utils";
 
-export function moveBot(record: BotRecord, target: Vector3): boolean {
-  if (!record.online || record.death) {
-    throw new Error("模拟玩家不在线或已死亡");
+/** 导航速度 */
+const NAVIGATE_SPEED = 1;
+/** 到达判定距离（格）：静止且距目标 ≤ 此值视为到达 */
+const NAV_ARRIVE_DISTANCE = 1.5;
+/** 位置监测间隔（tick）：每 10 tick 读一次位置 */
+const NAV_CHECK_INTERVAL = 10;
+/** 静止超时次数：连续 4 次（4×10=40tick=2 秒）位置未变化 → 移动超时 */
+const NAV_STILL_LIMIT = 4;
+/** 总时长超时（tick）：30 秒仍在移动但未到达 → 超时失败 */
+const NAV_TOTAL_TIMEOUT_TICKS = 600;
+
+/** 导航结果（多状态，带失败原因） */
+export type NavigateResult =
+  | "arrived"        // 已到达目标（静止且距目标 ≤ 到达距离）
+  | "no-path"        // 无路径可达（navigateToLocation 返回 isFullPath=false）
+  | "still-timeout"  // 移动超时：2 秒内位置未变化且未到达（卡住）
+  | "timeout"        // 总时长超时：30 秒仍在移动但未到达
+  | "unavailable"    // 假人不可用（不在线/死亡/无实体）
+  | "entity-invalid" // 监测中实体失效（死亡/下线）
+  | "error";         // 意外异常
+
+/**
+ * 寻路到目标位置并等待完成（闭包异步，多状态返回）。
+ * while(true) + await waitTicks(10) 循环监测（不阻塞主线程）：
+ *   - 每 10 tick 读取一次位置；位置与上次不同 → 假人仍在移动 → 继续等待
+ *   - 连续 4 次（40tick≈2 秒）位置未变化 → 假人已停下：
+ *     距目标 ≤ 到达距离 = 已到达；否则 = 移动超时（卡住）
+ *   - 总时长 30 秒仍在移动但未到达 → 超时失败
+ * @returns 多状态结果（见 NavigateResult），永不 reject
+ */
+export async function navigateBot(
+  botName: string,
+  target: Vector3,
+  speed = NAVIGATE_SPEED,
+): Promise<NavigateResult> {
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return "unavailable";
+
+  try {
+    bot.stopMoving();
+    const result = bot.navigateToLocation(target, speed);
+    // 无路径可达：直接失败（未开始移动）
+    if (!result.isFullPath) return "no-path";
+  } catch (e: any) {
+    console.warn(`[MockPlayer] navigateBot 发起失败 ${botName}: ${e?.message ?? e}`);
+    return "error";
   }
-  const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-  if (!entity || !entity.hasTag(BOT_TAG)) {
-    throw new Error("无法在世界中找到该模拟玩家");
-  }
 
-  const bot = entity as SimulatedPlayer;
-  bot.stopMoving();
-  const result = bot.navigateToLocation(target, 1);
-  return result.isFullPath;
+  // ── 位置监测循环（每 10 tick） ──
+  let lastLoc = bot.location;
+  let stillCount = 0;
+  let elapsed = 0;
+  for (;;) {
+    await waitTicks(NAV_CHECK_INTERVAL);
+    elapsed += NAV_CHECK_INTERVAL;
+    try {
+      // ⚠️ 实体有效性防护：死亡/下线瞬间实体失效
+      if (!bot.isValid) return "entity-invalid";
+
+      const loc = bot.location;
+      const d = distance3d(loc, target);
+
+      if (loc.x !== lastLoc.x || loc.y !== lastLoc.y || loc.z !== lastLoc.z) {
+        // 位置变化 → 假人仍在移动 → 重置静止计数，继续等待
+        stillCount = 0;
+      } else {
+        stillCount++;
+        if (stillCount >= NAV_STILL_LIMIT) {
+          // 2 秒内位置未变化 → 假人已停下：近=到达终点，远=移动超时
+          return d <= NAV_ARRIVE_DISTANCE ? "arrived" : "still-timeout";
+        }
+      }
+      lastLoc = loc;
+
+      if (elapsed >= NAV_TOTAL_TIMEOUT_TICKS) return "timeout";
+    } catch (e: any) {
+      console.warn(`[MockPlayer] navigateBot 监测异常 ${botName}: ${e?.message ?? e}`);
+      return "error";
+    }
+  }
 }

@@ -18,10 +18,10 @@ export function registerOnlineCommand(registry: any): void {
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     if (record.online) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已经在线`); return; }
     system.run(async () => {
-      // onlineBot 永不 reject（失败 resolve undefined）
-      const bot = await onlineBot(record);
-      if (!bot) {
-        player.sendMessage(`${color.error}${record.name} 上线失败`);
+      // onlineBot 永不 reject（失败 resolve { ok: false, reason }）
+      const result = await onlineBot(record);
+      if (!result.ok) {
+        player.sendMessage(`${color.error}${record.name} 上线失败: ${result.reason ?? "unknown"}`);
         return;
       }
       player.sendMessage(`${color.success}假人 ${color.playerName}${record.name}${color.success} 已上线`);

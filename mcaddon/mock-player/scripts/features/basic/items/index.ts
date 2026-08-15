@@ -10,9 +10,9 @@
 // 非物品类原子能力（control/EntityTags/move/PoseGateway/sneak/teleport）留在 basic/ 根。
 
 export { getMainhandOptions, setMainhandSlot, type MainhandOption } from "./mainhand";
-export { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot } from "./equip";
+export { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot, type SwapResult } from "./equip";
 export { EQUIP_SLOT_MAP, SWAP_SLOTS } from "./EquipmentSlots";
-export { useItemOnce, startUseItem, stopUseItem, registerUiSubscriptions } from "./useItem";
+export { useItemOnce, startUseItem, stopUseItem, registerUiSubscriptions, type UseItemResult } from "./useItem";
 export { checkMainHandDurability } from "./toolHealth";
 export {
   capturePlayerState, capturePlayerStateFromRotation, captureExperience, captureEffects,

@@ -5,7 +5,7 @@ import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../../events/UiEvents";
-import { moveBot } from "../../../features/basic/move";
+import { navigateBot } from "../../../features/basic/move";
 import { ensureUiBotAvailable, resolveUiBotRecord } from "../helpers";
 import { deleteBot } from "../../../features/manage/deleteBot";
 import { parseCoordinateInput } from "../../../rules/coords/Coordinate";
@@ -49,18 +49,30 @@ export function showMoveForm(player: Player, botName: string): void {
     if (!record) return;
     if (!ensureUiBotAvailable(player, record)) return;
 
-    system.run(() => {
-      try {
-        const fullPath = moveBot(record, targetPos);
-        if (!fullPath) {
-          player.sendMessage(`${color.playerName}${botName}${color.warn} 无法完全到达目标位置（路径不完整）`);
-        } else {
-          player.sendMessage(
-            `${color.success}${botName}${color.success} 正在前往 ${color.warn}${Math.floor(targetPos.x)} ${Math.floor(targetPos.y)} ${Math.floor(targetPos.z)}`
-          );
-        }
-      } catch (e: any) {
-        player.sendMessage(`${color.error}移动失败: ${e.message}`);
+    system.run(async () => {
+      // navigateBot 闭包异步多状态（永不 reject）
+      const result = await navigateBot(botName, targetPos);
+      switch (result) {
+        case "arrived":
+          player.sendMessage(`${color.success}${botName}${color.success} 已到达 ${color.warn}${Math.floor(targetPos.x)} ${Math.floor(targetPos.y)} ${Math.floor(targetPos.z)}`);
+          break;
+        case "no-path":
+          player.sendMessage(`${color.warn}${botName}${color.warn} 无法到达目标位置（无路径可达）`);
+          break;
+        case "still-timeout":
+          player.sendMessage(`${color.warn}${botName}${color.warn} 移动超时：2 秒内位置未变化（可能卡住）`);
+          break;
+        case "timeout":
+          player.sendMessage(`${color.warn}${botName}${color.warn} 30 秒未到达目标（仍在移动或路径过长）`);
+          break;
+        case "unavailable":
+          player.sendMessage(`${color.error}${botName}${color.error} 不可用（不在线或已死亡）`);
+          break;
+        case "entity-invalid":
+          player.sendMessage(`${color.error}${botName}${color.error} 移动中实体失效（死亡/下线）`);
+          break;
+        default:
+          player.sendMessage(`${color.error}移动失败（异常）`);
       }
     });
   });

@@ -75,15 +75,16 @@ async function doConnect(
   record: BotRecord,
   onOnline?: (bot: SimulatedPlayer, record: BotRecord) => void,
 ): Promise<void> {
-  // onlineBot 承诺永不 reject（失败 resolve undefined），此处判断结果即可
-  const bot = await onlineBot(record);
-  if (!bot) {
-    console.error(`[MockPlayer] safeReconnect 上线失败 ${record.name}`);
+  // onlineBot 承诺永不 reject（失败 resolve { ok: false, reason }），此处判断结果即可
+  const result = await onlineBot(record);
+  if (!result.ok || !result.bot) {
+    console.error(`[MockPlayer] safeReconnect 上线失败 ${record.name}: ${result.reason ?? "unknown"}`);
     record.online = false;
     record.entityId = undefined;
     saveCoordinator.saveRecord(record);
     return;
   }
+  const bot = result.bot;
 
   try {
     onOnline?.(bot, record);
