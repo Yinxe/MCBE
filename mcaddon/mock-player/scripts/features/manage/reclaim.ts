@@ -144,131 +144,162 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
   if (record.online && !record.death) {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     if (!entity || !entity.hasTag(BOT_TAG)) throw new Error("无法在世界中找到该模拟玩家");
-    const bot = entity as Player;
-
-    // 背包 & 主手（背包 36 格，主手是 selectedSlotIndex 对应槽）
-    if (opts.inventory || opts.mainhand) {
-      const botContainer = inventoryContainerOf(bot);
-      if (botContainer) {
-        const handSlot = bot.selectedSlotIndex;
-        for (let i = 0; i < botContainer.size; i++) {
-          const isHand = i === handSlot;
-          if (isHand && !opts.mainhand) continue;
-          if (!isHand && !opts.inventory) continue;
-          const item = botContainer.getItem(i);
-          if (!item) continue;
-          botContainer.setItem(i, undefined);
-          transferItemToPlayer(item, pContainer, player, result);
-        }
-      }
-    }
-
-    // 装备（头/胸/腿/靴 + 副手）
-    if (opts.offhand || hasAnyArmor(opts)) {
-      const equip = bot.getComponent("minecraft:equippable");
-      if (equip) {
-        const slotCheck: Record<string, keyof ReclaimOptions> = {
-          [EquipmentSlot.Head]: "head",
-          [EquipmentSlot.Chest]: "chest",
-          [EquipmentSlot.Legs]: "legs",
-          [EquipmentSlot.Feet]: "feet",
-          [EquipmentSlot.Offhand]: "offhand",
-        };
-        for (const slot of SWAP_SLOTS) {
-          const optKey = slotCheck[slot as string]!;
-          if (!opts[optKey]) continue;
-          const item = equip.getEquipment(slot);
-          if (!item) continue;
-          equip.setEquipment(slot, undefined);
-          transferItemToPlayer(item, pContainer, player, result);
-        }
-      }
-    }
-
-    // 经验（从实体捕获实际经验，避免记录与实体不同步导致反复回收）
-    if (opts.xp) {
-      const botXp = captureExperience(bot);
-      if (botXp.totalXp > 0) {
-        result.xpLevel = botXp.level;
-        result.xp = botXp.totalXp;
-        try {
-          player.addExperience(botXp.totalXp);
-          // 必须清除假人实体上的经验，否则 saveBotFullState 会重新捕获并写回记录
-          // ⚠️ addExperience(-n) 对 SimulatedPlayer 完全不生效（经验从未被扣过）
-          //    resetLevel() 仅 2.6.0+；用 xp 指令清空最保险，全版本可用
-          try {
-            bot.runCommand("xp -2147483647L");
-          } catch {
-            const anyBot = bot as any;
-            if (typeof anyBot.resetLevel === "function") {
-              try { anyBot.resetLevel(); } catch {}
-            } else {
-              try { anyBot.addLevels(-bot.level); } catch {}
-              try { anyBot.addExperience(-bot.xpEarnedAtCurrentLevel); } catch {}
-            }
-          }
-        } catch {}
-      }
-      record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
-    }
-
-    // 保存剩余状态到持久化（此时假人实体上的经验已清零）
-    saveCoordinator.saveFullState(bot, record);
-
-    // ⚠️ 兜底：saveBotFullState 会重新 captureExperience 覆盖 record.experience。
-    //    若实体经验清除失败（低版本 API 限制），此处强制归零，杜绝重复回收
-    if (opts.xp) {
-      record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
-    }
-
+    reclaimFromEntity(entity as Player, player, pContainer, record, opts, result);
   // ── 离线/死亡：从持久化回收（真实 ItemStack，完整 NBT） ──
   } else {
-    // 背包（离线时主手位置不可知，假设在 slot 0）
-    if (opts.inventory || opts.mainhand) {
-      const savedInv = botStore.loadInventory(record.name);
-      if (savedInv) {
-        // 重建剩余背包（不回收的保留，回收的置空）
-        const remainingInv: (ItemStack | null)[] = [];
-        for (let i = 0; i < savedInv.length; i++) {
-          const isHand = i === 0; // 离线假人假设主手在 slot 0
-          if (isHand && !opts.mainhand) { remainingInv.push(savedInv[i]); continue; }
-          if (!isHand && !opts.inventory) { remainingInv.push(savedInv[i]); continue; }
-          if (!savedInv[i]) { remainingInv.push(null); continue; }
-          transferItemToPlayer(savedInv[i]!, pContainer, player, result);
-          remainingInv.push(null); // 已回收，清空
-        }
-        saveCoordinator.saveInventory(record.name, remainingInv);
-      }
-    }
-
-    // 装备（头/胸/腿/靴 + 副手）
-    if (opts.offhand || hasAnyArmor(opts)) {
-      const savedEquip = botStore.loadEquipment(record.name) ?? {};
-      for (const [slot, item] of Object.entries(savedEquip)) {
-        if (!item) continue;
-        const optKey = slot as "head" | "chest" | "legs" | "feet" | "offhand";
-        if (!opts[optKey]) continue;
-        transferItemToPlayer(item, pContainer, player, result);
-        delete savedEquip[slot];
-      }
-      saveCoordinator.saveEquipment(record.name, savedEquip);
-    }
-
-    // 经验
-    if (opts.xp && record.experience.totalXp > 0) {
-      result.xpLevel = record.experience.level;
-      result.xp = record.experience.totalXp;
-      try { player.addExperience(result.xp); } catch {}
-      record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
-    }
-
-    // 全量回收且无剩余 → 彻底清理持久化
-    if (isFullReclaim(opts)) {
-      saveCoordinator.removeInventory(record.name);
-    }
+    reclaimFromStorage(record, pContainer, player, opts, result);
   }
 
   saveCoordinator.saveRecord(record);
-
   return result;
+}
+
+// ─── 在线回收（从实体） ─────────────────────────────────────
+
+/** 在线假人回收：实体物品/装备/经验 → 玩家（完整 NBT 保留），并清实体 + 落库 */
+function reclaimFromEntity(
+  bot: Player,
+  player: Player,
+  pContainer: Container,
+  record: BotRecord,
+  opts: ReclaimOptions,
+  result: ReclaimResult,
+): void {
+  // 背包 & 主手（背包 36 格，主手是 selectedSlotIndex 对应槽）
+  if (opts.inventory || opts.mainhand) {
+    const botContainer = inventoryContainerOf(bot);
+    if (botContainer) {
+      const handSlot = bot.selectedSlotIndex;
+      for (let i = 0; i < botContainer.size; i++) {
+        const isHand = i === handSlot;
+        if (isHand && !opts.mainhand) continue;
+        if (!isHand && !opts.inventory) continue;
+        const item = botContainer.getItem(i);
+        if (!item) continue;
+        botContainer.setItem(i, undefined);
+        transferItemToPlayer(item, pContainer, player, result);
+      }
+    }
+  }
+
+  // 装备（头/胸/腿/靴 + 副手）
+  if (opts.offhand || hasAnyArmor(opts)) {
+    const equip = bot.getComponent("minecraft:equippable");
+    if (equip) {
+      const slotCheck: Record<string, keyof ReclaimOptions> = {
+        [EquipmentSlot.Head]: "head",
+        [EquipmentSlot.Chest]: "chest",
+        [EquipmentSlot.Legs]: "legs",
+        [EquipmentSlot.Feet]: "feet",
+        [EquipmentSlot.Offhand]: "offhand",
+      };
+      for (const slot of SWAP_SLOTS) {
+        const optKey = slotCheck[slot as string]!;
+        if (!opts[optKey]) continue;
+        const item = equip.getEquipment(slot);
+        if (!item) continue;
+        equip.setEquipment(slot, undefined);
+        transferItemToPlayer(item, pContainer, player, result);
+      }
+    }
+  }
+
+  // 经验（从实体捕获实际经验，避免记录与实体不同步导致反复回收）
+  if (opts.xp) {
+    const botXp = captureExperience(bot);
+    if (botXp.totalXp > 0) {
+      result.xpLevel = botXp.level;
+      result.xp = botXp.totalXp;
+      try {
+        player.addExperience(botXp.totalXp);
+        clearEntityXp(bot);
+      } catch {}
+    }
+    record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
+  }
+
+  // 保存剩余状态到持久化（此时假人实体上的经验已清零）
+  saveCoordinator.saveFullState(bot, record);
+
+  // ⚠️ 兜底：saveBotFullState 会重新 captureExperience 覆盖 record.experience。
+  //    若实体经验清除失败（低版本 API 限制），此处强制归零，杜绝重复回收
+  if (opts.xp) {
+    record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
+  }
+}
+
+/**
+ * 清除假人实体上的经验（防 saveBotFullState 重新捕获写回记录）。
+ * ⚠️ addExperience(-n) 对 SimulatedPlayer 完全不生效（经验从未被扣过）；
+ *    resetLevel() 仅 2.6.0+；用 xp 指令清空最保险，全版本可用
+ */
+function clearEntityXp(bot: Player): void {
+  try {
+    bot.runCommand("xp -2147483647L");
+  } catch {
+    const anyBot = bot as any;
+    if (typeof anyBot.resetLevel === "function") {
+      try { anyBot.resetLevel(); } catch {}
+    } else {
+      try { anyBot.addLevels(-bot.level); } catch {}
+      try { anyBot.addExperience(-bot.xpEarnedAtCurrentLevel); } catch {}
+    }
+  }
+}
+
+// ─── 离线回收（从持久化） ───────────────────────────────────
+
+/** 离线假人回收：持久化物品/装备/经验 → 玩家，并清理已回收的持久化数据 */
+function reclaimFromStorage(
+  record: BotRecord,
+  pContainer: Container,
+  player: Player,
+  opts: ReclaimOptions,
+  result: ReclaimResult,
+): void {
+  const botName = record.name;
+
+  // 背包（离线时主手位置不可知，假设在 slot 0）
+  if (opts.inventory || opts.mainhand) {
+    const savedInv = botStore.loadInventory(botName);
+    if (savedInv) {
+      // 重建剩余背包（不回收的保留，回收的置空）
+      const remainingInv: (ItemStack | null)[] = [];
+      for (let i = 0; i < savedInv.length; i++) {
+        const isHand = i === 0; // 离线假人假设主手在 slot 0
+        if (isHand && !opts.mainhand) { remainingInv.push(savedInv[i]); continue; }
+        if (!isHand && !opts.inventory) { remainingInv.push(savedInv[i]); continue; }
+        if (!savedInv[i]) { remainingInv.push(null); continue; }
+        transferItemToPlayer(savedInv[i]!, pContainer, player, result);
+        remainingInv.push(null); // 已回收，清空
+      }
+      saveCoordinator.saveInventory(botName, remainingInv);
+    }
+  }
+
+  // 装备（头/胸/腿/靴 + 副手）
+  if (opts.offhand || hasAnyArmor(opts)) {
+    const savedEquip = botStore.loadEquipment(botName) ?? {};
+    for (const [slot, item] of Object.entries(savedEquip)) {
+      if (!item) continue;
+      const optKey = slot as "head" | "chest" | "legs" | "feet" | "offhand";
+      if (!opts[optKey]) continue;
+      transferItemToPlayer(item, pContainer, player, result);
+      delete savedEquip[slot];
+    }
+    saveCoordinator.saveEquipment(botName, savedEquip);
+  }
+
+  // 经验
+  if (opts.xp && record.experience.totalXp > 0) {
+    result.xpLevel = record.experience.level;
+    result.xp = record.experience.totalXp;
+    try { player.addExperience(result.xp); } catch {}
+    record.experience = { level: 0, xpProgress: 0, totalXp: 0 };
+  }
+
+  // 全量回收且无剩余 → 彻底清理持久化
+  if (isFullReclaim(opts)) {
+    saveCoordinator.removeInventory(botName);
+  }
 }
