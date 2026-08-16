@@ -27,6 +27,7 @@ import { registerStorageCommand } from "./inspect/storage";
 import { registerTestCommand } from "./system/test";
 import { registerScanlogsCommand, registerScanleavesCommand, registerScantreeCommand } from "./system/blockscan";
 import { registerFishingCommands } from "./activity/fishing";
+import { registerBreakBlockCommand } from "./activity/blockbreak";
 
 export function registerAllCommands(event: StartupEvent): void {
   const registry = event.customCommandRegistry;
@@ -60,4 +61,5 @@ export function registerAllCommands(event: StartupEvent): void {
   registerScanleavesCommand(registry);
   registerScantreeCommand(registry);
   registerFishingCommands(registry);
+  registerBreakBlockCommand(registry);
 }
