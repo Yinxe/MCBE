@@ -8,12 +8,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { Blackboard, Status, type AiContext } from "../scripts/ai";
+import { Blackboard, Status, type AiContext } from "../scripts/legacy/ai";
 import {
   createRaidTaskTree, VICTORY_WINDOW_TICKS, initialRaidPhaseState,
   raidStarted, raidVictory, raidPhase,
   type RaidDrinkResult, type RaidIdleReason, type RaidKnowledge, type RaidPorts,
-} from "../scripts/ai/RaidTask";
+} from "../scripts/legacy/ai/RaidTask";
 
 /** 可控测试端口：感知快照可切换 + 记录调用 */
 class FakeRaidPorts implements RaidPorts {

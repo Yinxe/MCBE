@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import {
   Action, AlwaysFail, AlwaysSucceed, Blackboard, Cooldown, Condition, Inverter, RandomSelector,
   RepeatUntilSuccess, Selector, Sequence, Status, WaitForTicks, type AiContext, type Node,
-} from "../scripts/ai";
+} from "../scripts/legacy/ai";
 
 function makeCtx(tick: number, blackboard = new Blackboard()): AiContext {
   return { botName: "bot1", blackboard, tick };

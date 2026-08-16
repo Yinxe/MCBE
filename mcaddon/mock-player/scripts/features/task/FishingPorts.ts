@@ -18,7 +18,7 @@ import { system, world } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { FishingKnowledge, FishingPorts } from "../../ai/FishingTask";
+import type { FishingKnowledge, FishingPorts } from "../../legacy/ai/FishingTask";
 import type { FishingSpot } from "../../rules/FishingRules";
 import { computeTargetYaw, isYawAligned, YAW_TOLERANCE_DEG } from "../../rules/FishingRules";
 import type { Vec3 } from "../../rules/Types";

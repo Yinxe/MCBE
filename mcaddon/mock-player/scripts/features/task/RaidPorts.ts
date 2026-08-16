@@ -13,7 +13,7 @@ import { system, world, type Container, type Effect, type EffectAddAfterEvent, t
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { RaidDrinkResult, RaidIdleReason, RaidKnowledge, RaidPorts } from "../../ai/RaidTask";
+import type { RaidDrinkResult, RaidIdleReason, RaidKnowledge, RaidPorts } from "../../legacy/ai/RaidTask";
 import {
   BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_TRUCE_TICKS,
   isOminousBottle, classifyRaidEffect,
@@ -21,7 +21,7 @@ import {
 import {
   raidStarted, raidVictory, raidPhase, initialRaidPhaseState,
   type RaidPhase, type RaidPhaseState,
-} from "../../ai/RaidTask";
+} from "../../legacy/ai/RaidTask";
 import { TAG_RAID_MODE } from "../../rules/tags/BotTags";
 import type { BotRecord } from "../../rules/Types";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";

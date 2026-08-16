@@ -29,7 +29,7 @@
 //     "target-gone" → 清目标重扫（绝不重复对空气/错误方块交互）。
 
 import { Action, BehaviorTree, Cooldown, Condition, Selector, Sequence, Status, type AiContext } from "./index";
-import type { Vec3 } from "../rules/Types";
+import type { Vec3 } from "../../rules/Types";
 
 // ─── 感知快照（编排层唯一决策输入） ─────────────────────
 

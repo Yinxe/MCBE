@@ -22,8 +22,8 @@ import { system, world, Direction, BlockVolume, EquipmentSlot, type ItemStack, t
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, VaultKnowledge, VaultPorts } from "../../ai/VaultTask";
-import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "../../ai/VaultTask";
+import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, VaultKnowledge, VaultPorts } from "../../legacy/ai/VaultTask";
+import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "../../legacy/ai/VaultTask";
 import type { Vec3 } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";

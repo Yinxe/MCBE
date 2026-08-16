@@ -18,7 +18,7 @@
 //     端口内移除劫掠标签（自动停用），树随后被引擎对账清理。
 
 import { Action, BehaviorTree, Condition, Selector, Sequence, Status, type AiContext } from "./index";
-import { EventSignal } from "../events/EventSignal";
+import { EventSignal } from "../../events/EventSignal";
 
 // ─── 劫掠领域事件（内聚在劫掠任务，用户规格） ────────────
 // 事件负载只用可序列化 string/number，保持 core 纯净。

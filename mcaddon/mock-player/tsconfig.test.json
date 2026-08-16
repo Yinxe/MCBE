@@ -14,6 +14,7 @@
   "include": [
     "scripts/bot/BotCore.ts",
     "scripts/rules/**/*.ts",
+    "scripts/legacy/ai/*.ts",
     "scripts/ai/*.ts",
     "scripts/events/DomainEvents.ts",
     "scripts/events/EventSignal.ts",
@@ -26,7 +27,7 @@
     ".test-build",
     "lib",
     "dist",
-    "scripts/ai/BotBrain.ts",
+    "scripts/legacy/ai/BotBrain.ts",
     "scripts/bootstrap",
     "scripts/features",
     "scripts/interaction",

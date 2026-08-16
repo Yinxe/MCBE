@@ -20,8 +20,8 @@
 // 关键节点全日志（[MockPlayer] 前缀英文调试日志，游戏内排障报告用）。
 
 import { Action, BehaviorTree, Cooldown, Condition, Selector, Sequence, Status, type AiContext } from "./index";
-import type { FindSpotsFailure, FishingOutcome, FishingSpot } from "../rules/FishingRules";
-import type { Vec3 } from "../rules/Types";
+import type { FindSpotsFailure, FishingOutcome, FishingSpot } from "../../rules/FishingRules";
+import type { Vec3 } from "../../rules/Types";
 
 // ─── 感知快照 ────────────────────────────────────────────
 
