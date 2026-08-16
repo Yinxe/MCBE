@@ -6,7 +6,7 @@
 // 开销 = 2 次大范围 getBlocks + 全纯计算（零 getBlock 属性读取）。
 // ⚠️ 永不 reject：任何异常 resolve 空结果。
 
-import { BlockVolume } from "@minecraft/server";
+import { BlockPermutation, BlockVolume } from "@minecraft/server";
 import type { Dimension } from "@minecraft/server";
 
 import {
@@ -39,6 +39,21 @@ const INVALID_LEGACY_IDS = new Set([
 
 /** 有效自然原木 id（定位/补全用——剔除无效旧 id） */
 export const VALID_LOG_TYPE_IDS = (TREE_LOG_TYPE_IDS as readonly string[]).filter((id) => !INVALID_LEGACY_IDS.has(id));
+
+/**
+ * 水平原木置换（pillar_axis = x/z）——getBlocks 引擎级排除：
+ * 倒下的树/横梁在查询源头被剔除（无需几何后处理，结果更纯）。
+ * 构造失败（非原木 id 无 pillar_axis）的置换跳过。
+ */
+export const HORIZONTAL_LOG_PERMUTATIONS: BlockPermutation[] = VALID_LOG_TYPE_IDS.flatMap((id) =>
+  (["x", "z"] as const).flatMap((axis) => {
+    try {
+      return [BlockPermutation.resolve(id as never, { pillar_axis: axis } as never)];
+    } catch {
+      return [];
+    }
+  }),
+);
 
 /** 自然方块分批白名单（区域分类缓存用；每组 ≤30——getBlocks includeTypes
  *  数量过大可能被引擎拒绝（3.3.17 修复：原 50 一组 + 无效旧 id → 批量失败
@@ -92,13 +107,17 @@ export function collectCoordinateSet(
   name: string,
   fromY: number,
   toY: number,
+  excludePermutations?: BlockPermutation[],
 ): CoordinateSetResult {
   const t0 = Date.now();
   const volume = new BlockVolume(
     { x: center.x - radius, y: fromY, z: center.z - radius },
     { x: center.x + radius, y: toY, z: center.z + radius },
   );
-  const found = dimension.getBlocks(volume, { includeTypes: [...typeIds] });
+  const found = dimension.getBlocks(volume, {
+    includeTypes: [...typeIds],
+    ...(excludePermutations && excludePermutations.length > 0 ? { excludePermutations } : {}),
+  });
   const coords: Array<{ x: number; y: number; z: number }> = [];
   let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
@@ -161,7 +180,8 @@ export async function scanTreesFromSets(
   //    原木遍历落在 tick N、树叶遍历落在 tick N+1——主线程每 tick 只做
   //    一次大体积引擎遍历；两个协程生命周期重叠（Promise.all 语义并发）。
   const collectLogs = (async () => {
-    const r = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY);
+    // 引擎级排除水平原木（倒下的树/横梁——pillar_axis=x/z 在查询源头剔除）
+    const r = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY, HORIZONTAL_LOG_PERMUTATIONS);
     await waitTicks(1); // 原木遍历后让出
     return r;
   })();
