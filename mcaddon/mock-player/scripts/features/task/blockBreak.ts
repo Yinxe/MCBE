@@ -21,12 +21,30 @@ import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { lookAt } from "../basic/PoseGateway";
 import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
 import { botRegistry } from "../../bootstrap/context";
+import type { CancelToken } from "../../rules/utils/CancelToken";
 
 // ─── 结果类型 ──────────────────────────────────────────
 
-/** 破坏结果：broken=目标已被摧毁（成功信号）/ far=超距放弃 /
- *  aborted=实体丢失 / offline=假人不可用 / busy=同假人已有进行中的破坏（拒绝） */
-export type BreakResult = "broken" | "far" | "aborted" | "offline" | "busy";
+/** 破坏结果枚举（所有退出路径枚举化——switch 完备可查）：
+ *  - broken：目标已被摧毁（成功信号，唯一成功态）
+ *  - far：超距放弃（目标掉落/被推走/假人被传送）
+ *  - aborted：主动取消/实体丢失（token 取消 or shouldStop 或实体失效）
+ *  - offline：假人记录不可用（在线且未死亡才可挖）
+ *  - busy：并发防护拒绝（同假人已有进行中的破坏）
+ */
+export const BreakResult = {
+  Broken: "broken",
+  Far: "far",
+  Aborted: "aborted",
+  Offline: "offline",
+  Busy: "busy",
+} as const;
+
+/** 破坏结果值（联合类型，由枚举派生——单源） */
+export type BreakResultValue = (typeof BreakResult)[keyof typeof BreakResult];
+
+/** 兼容别名：旧代码 type BreakResult 仍可用 */
+export type BreakResult = BreakResultValue;
 
 // ─── 常量 ──────────────────────────────────────────────
 
@@ -72,12 +90,18 @@ export interface BreakOnceOptions {
   ensureTool?: (ctx: EnsureToolContext) => Promise<void> | void;
   /** 最大挖掘距离（格，3D 自检） */
   maxDistance?: number;
-  /** 状态检测间隔（tick） */
+  /** 状态检测间隔（tick，方块消失/距离/实体有效性检测；默认 5） */
   pollTicks?: number;
   /**
-   * 外部中止回调（每 pollTicks 检测一次；返回 true → 中止并返回 "aborted"）。
-   * 用于调用方掌控协程生命周期（如自动挖掘的 tag 移除/假人死亡检查）——
-   * 不传则保持"直到破坏"无超时语义（breakBlockAt 不传）。
+   * 取消令牌（推荐取消通道）：cancel() 后**每个 tick** 检测并立即返回
+   * "aborted"（不等 pollTicks）；等待中的协程经 signal 立即唤醒。
+   * 适用于"能力卸载即中止"的常驻破坏（定点挖掘等）。支持多协程共享。
+   */
+  token?: CancelToken;
+  /**
+   * 外部中止回调（向后兼容；每 pollTicks 检测一次；返回 true → 中止并返回
+   * "aborted"）。用途同 token，二选一即可——新代码优先用 token。
+   * 不传则保持"直到破坏"无超时语义。
    */
   shouldStop?: () => boolean;
 }
@@ -97,6 +121,21 @@ export interface BreakBlockOptions extends BreakOnceOptions {
 /** 延迟等待（异步协程节奏控制——闭包内部自调度，不走主循环） */
 export function waitTicks(ticks: number): Promise<void> {
   return new Promise((resolve) => system.runTimeout(resolve, ticks));
+}
+
+/**
+ * 可取消等待：期待到期或被 token 取消（signal resolve）中**先到者**唤醒；
+ * 无 token / 未取消 → 等价 waitTicks。用于破坏循环——cancel() 立即中断
+ * 当前等待，不必等定时器到期（主动取消的核心）。
+ */
+function waitTicksSignal(ticks: number, token?: CancelToken): Promise<void> {
+  if (!token) return waitTicks(ticks);
+  return Promise.race([waitTicks(ticks), token.signal]);
+}
+
+/** 取消是否已请求（token 与 shouldStop 任一为真即取消） */
+function isCancelled(token: CancelToken | undefined, shouldStop: (() => boolean) | undefined): boolean {
+  return (token?.cancelled ?? false) || (shouldStop?.() ?? false);
 }
 
 /** 假人记录是否可用（在线且未死亡）——区分 offline（记录不可用）与 aborted（实体丢失） */
@@ -188,10 +227,14 @@ export async function breakBlockOnce(
     ensureTool = () => undefined,
     maxDistance = DEFAULT_MAX_DISTANCE,
     pollTicks = DEFAULT_POLL_TICKS,
+    token,
     shouldStop,
   } = options;
   const dimension = bot.dimension;
   const targetLoc: Vector3 = { x: Math.floor(loc.x), y: Math.floor(loc.y), z: Math.floor(loc.z) };
+
+  // ⚠️ 前置：token 已取消 → 立即返回 aborted（不进入破坏）
+  if (isCancelled(token, shouldStop)) return "aborted";
 
   // 并发防护：同一假人已有进行中的破坏 → 拒绝处理，返回当前状态（busy）
   if (activeBreaks.has(bot.name)) return "busy";
@@ -218,8 +261,13 @@ export async function breakBlockOnce(
     // 持续挖掘循环（每 1 tick 起手；敲击失败静默下 tick 重试）
     let sinceCheck = 0;
     while (true) {
-      await waitTicks(1);
+      // 可取消等待：token cancel() 时 signal 立即唤醒（不等本 tick 定时器到期——
+      // 主动取消核心；无 token 时等价 waitTicks(1)）
+      await waitTicksSignal(1, token);
       sinceCheck++;
+
+      // ⚠️ token 取消即时检测（每 tick，非 pollTicks——主动取消要快）
+      if (token?.cancelled) return "aborted";
 
       // 每 tick 起手（不传 direction——引擎可选参数默认方向）
       try {
@@ -228,7 +276,8 @@ export async function breakBlockOnce(
         /* 敲击失败下 tick 重试 */
       }
 
-      // 实时检测（按 pollTicks 轮询——读块/距离有开销，不每 tick 做）
+      // 实时检测（按 pollTicks 轮询——读块/距离有开销，不每 tick 做；
+      // shouldStop 回调保持 pollTicks 粒度避免高频闭包调用）
       if (sinceCheck < pollTicks) continue;
       sinceCheck = 0;
 
@@ -271,12 +320,15 @@ export async function breakBlockAt(botName: string, target: Vector3, options: Br
     ensureTool = () => undefined,
     maxDistance = DEFAULT_MAX_DISTANCE,
     pollTicks = DEFAULT_POLL_TICKS,
+    token,
     shouldStop,
     skipLook = false,
   } = options;
 
   let bot = resolveBotPlayer(botName);
   if (!bot) return "offline";
+  // ⚠️ 前置：token 已取消 → 立即返回 aborted（不发起扭头/破坏）
+  if (isCancelled(token, shouldStop)) return "aborted";
   const dimension = bot.dimension;
   const targetLoc: Vector3 = { x: Math.floor(target.x), y: Math.floor(target.y), z: Math.floor(target.z) };
 
@@ -293,14 +345,24 @@ export async function breakBlockAt(botName: string, target: Vector3, options: Br
   // skipLook（连续同向破坏）：视线已对准 → 跳过扭头（每块省 5 tick 停顿）
   if (!skipLook) {
     lookAt(bot, targetCenter);
-    await waitTicks(LOOK_SETTLE_TICKS);
+    // 扭头等待亦可被 token 取消（取消了就不必等扭头到位）
+    if (token) {
+      const settled = await Promise.race([
+        waitTicks(LOOK_SETTLE_TICKS),
+        token.signal.then(() => "cancelled" as const),
+      ]);
+      if (token.cancelled) return "aborted";
+      void settled;
+    } else {
+      await waitTicks(LOOK_SETTLE_TICKS);
+    }
   }
 
   try {
     let busyWaits = 0; // busy 自旋计数（并发锁被其它破坏长期占用时放弃——防无限等待）
     while (true) {
-      // 外部中止（调用方生命周期控制——不可破方块由调用方决定放弃）
-      if (shouldStop?.()) return "aborted";
+      // 主动取消（token：每轮即时检测——能力卸载立即中止）+ 外部中止回调
+      if (isCancelled(token, shouldStop)) return "aborted";
 
       // 假人死亡（实体可能仍在世界（尸体）→ 显式查记录标记）
       if (botRegistry.get(botName)?.death) return "offline";
@@ -320,14 +382,14 @@ export async function breakBlockAt(botName: string, target: Vector3, options: Br
       const inSight =
         viewBlock(bot, maxDistance) ?? { typeId: targetBlock!.typeId, location: targetLoc, center: targetCenter };
 
-      // 原子破坏射线方块（工具策略透传；内部实时检测/并发防护/成功信号/中止）
-      const result = await breakBlockOnce(bot, inSight.location, { ensureTool, maxDistance, pollTicks, shouldStop });
+      // 原子破坏射线方块（工具策略/取消令牌透传；内部实时检测/并发防护/成功信号/中止）
+      const result = await breakBlockOnce(bot, inSight.location, { ensureTool, maxDistance, pollTicks, token, shouldStop });
       if (result === "broken") continue; // 该块已摧毁 → 下一轮（目标可能还没消失）
       if (result === "busy") {
         // 并发保护（另一破坏进行中，如手动 /mp:breakblock）→ 等待后重试；
         // 上限内放弃（自旋上限 ≈ 10 轮 × pollTicks ≈ 2 秒——不无限等）
         if (++busyWaits > BUSY_WAIT_LIMIT) return "aborted";
-        await waitTicks(pollTicks); 
+        await waitTicksSignal(pollTicks, token); // busy 等待亦支持取消唤醒
         continue;
       }
       return result; // far / aborted / offline 直接结束

@@ -1,127 +1,110 @@
-// ─── 自动挖掘能力（新框架 scripts/ai：Behavior 状态机） ──
-// woodcut 成熟实现移植：持续破坏方块（看哪挖哪）。
-// 状态机（step 同步短步）：
-//   idle → break（视线探测 → 启动 breakBlockAt 协程持续破坏）→
-//   轮询完成 → paused（块间微停，掉落物下落）→ 同一 step 立即探测下一块
-//   → 循环。
-// breakBlockAt 功能完备（blockBreak.ts）：每 tick 起手 breakBlock +
-// 轮询检测（实体/距离/方块消失）+ 并发防护 + 成功信号 + 全退出清理。
-// reset（切换/关行为）→ shouldStop 中止协程（防残留）。
-// 常量统一收敛到 MineBehaviorConfig。
+// ─── 自动挖掘能力（新框架 scripts/ai：Behavior + 常驻破块协程） ──
+// 用户规格（2026-08-16）：自动挖掘应**一直持续摧毁破坏，直到能力被卸载
+// 才停**——不是"step 轮询每块"的断续模式，而是一条常驻破块协程连续工作。
 //
-// ⚠️ 停顿语义（2026-08-16 用户反馈"挖一段时间停一段时间"根因修复）：
-//   brainEngine 每 BRAIN_ENGINE_TICKS(10) tick 才 step 一次——若用"step 计数
-//   递减"做块间停顿（旧实现 pauseTicks=5），真实停顿 = 5×10 = 50 tick ≈ 2.5秒，
-//   每挖一块就停 2.5 秒，即用户感知的周期停顿。旧版（behavior.ts autoMineLoop）
-//   是 1 tick 协程自调度 + broken 后立即下一块，零停顿。
-//   修复：broken → **同一 step 内立即 viewBlock + startRun 下一块**（块间只留
-//   协程交接的瞬隙，对齐旧版"无脑向前挖"）；step 间隙（≤10 tick）由引擎驱动
-//   天然存在，不再人为放大。
+// 设计（对齐"异步函数主动取消"改造）：
+//   - canActivate 只认 workMode === "mine"（**不依赖视线有目标**——暂时无
+//     方块时协程内部自等，不因断流 reset 中断）
+//   - onActivate → 启动一条常驻协程：viewBlock 探测 → breakBlockOnce 原子
+//     破坏 → 目标消失立即探测下一块 → 直到 token.cancel()（能力卸载）
+//   - reset（卸载/切换）→ **token.cancel()**（silent abort 核心）：每 tick
+//     即时检测 + signal Promise.race 立即唤醒等待，无需等 pollTicks/定时器
+//   - 无目标（挖空/挖到不可破方块）→ 协程低息等待固定间隔后重探，协程
+//     不退出（保持"一直持续"语义）
 
 import type { Behavior, BehaviorContext } from "../../../ai";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import type { AiBehaviorContext } from "../brainEngine";
-import { breakBlockAt, viewBlock, type BreakResult } from "../../task/blockBreak";
+import { system } from "@minecraft/server";
+import { breakBlockOnce, viewBlock, type BreakResultValue } from "../../task/blockBreak";
+import { createCancelToken, type CancelToken } from "../../../rules/utils/CancelToken";
 
 /** 自动挖掘行为配置（统一管理） */
 export interface MineBehaviorConfig {
   /** 挖掘距离（格）：视线探测与破坏距离上限 */
   distance: number;
-  /**
-   * 块间停顿（tick，真实 tick 语义）：挖掘推进 + 掉落物下落。
-   * 默认 0 = 同一 step 立即挖下一块（对齐旧版无脑挖）。
-   * ⚠️ 不能设太大——引擎每 10 tick 才 step 一次，停顿会被 step 周期叠加。
-   */
-  pauseTicks: number;
+  /** 无线索重探间隔（tick）：视线无目标（挖空/障碍后）时协程低息等待后重探 */
+  idleRecheckTicks: number;
+  /** 单块破坏状态检测间隔（tick；透传 breakBlockOnce） */
+  pollTicks: number;
 }
 
 /** 默认配置（统一管理；makeMineBehavior 可传自定义配置覆盖） */
 export const DEFAULT_MINE_CONFIG: MineBehaviorConfig = {
   distance: 6,
-  pauseTicks: 0,
+  idleRecheckTicks: 10,
+  pollTicks: 5,
 };
+
+/** 延迟等待（tick），可被 token 取消立即唤醒 */
+function waitTicks(ticks: number, token: CancelToken): Promise<void> {
+  return Promise.race([
+    new Promise<void>((resolve) => system.runTimeout(resolve, ticks)),
+    token.signal,
+  ]);
+}
+
+/**
+ * 常驻破块循环：持续"探测 → 破坏 → 下一块"，直到 token 取消。
+ * 每一块用独立 breakBlockOnce（原子：内部每 tick 起手 + 轮询消失）；
+ * 无目标时低息等待 idleRecheckTicks 后重探（协程不退出）。
+ */
+async function runMineLoop(botName: string, bot: SimulatedPlayer, token: CancelToken, config: MineBehaviorConfig): Promise<void> {
+  while (!token.cancelled) {
+    // 探测视线方块（仅在可取消等待后探测——无线索时低息重探）
+    const target = viewBlock(bot, config.distance);
+    if (!target) {
+      // 无目标：低息等待后重探（协程保持存活，符合"一直持续"语义）
+      await waitTicks(config.idleRecheckTicks, token);
+      continue;
+    }
+    // 原子破坏该块（token 透传：卸载时立即中止；内部每 tick 检测 + 起手）
+    const result: BreakResultValue = await breakBlockOnce(bot, target.location, {
+      maxDistance: config.distance,
+      pollTicks: config.pollTicks,
+      token,
+    });
+    if (result === "aborted") return; // 被取消（能力卸载/实体失效）→ 协程退出
+    if (result !== "broken") {
+      // far/offline/busy → 低息重试（不退出协程）
+      await waitTicks(1, token);
+    }
+  }
+}
 
 /** 创建自动挖掘行为（record.workMode === "mine" 时由引擎注册） */
 export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFIG): Behavior {
-  let pauseUntil = 0; // 块间停顿截止“真实 tick”（ctx.tick 语义——非 step 计数）
-  let run: Promise<unknown> | undefined; // 持续破坏协程
-  let runResult: BreakResult | undefined; // 协程完成标志
-  let aborted = false; // 中止标志（reset → shouldStop 让协程退出）
-  let bot: SimulatedPlayer | undefined; // 最近实体
-
-  const startRun = (botName: string, target: { x: number; y: number; z: number }): void => {
-    aborted = false;
-    runResult = undefined;
-    run = breakBlockAt(botName, target, {
-      maxDistance: config.distance,
-      skipLook: true, // 连续同向挖掘：视线已对准，跳过扭头（每块省停顿）
-      shouldStop: () => aborted,
-    })
-      .then((r) => {
-        runResult = r;
-      })
-      .catch(() => {
-        runResult = "aborted";
-      });
-  };
-
-  const reset = (): void => {
-    aborted = true; // 中止进行中协程（shouldStop 轮询感知）
-    pauseUntil = 0;
-    run = undefined;
-    runResult = undefined;
-  };
-
-  /** 同一 step 内检查块间微停（真实 tick 语义）后启动破坏协程 */
-  const startNext = (ctx: BehaviorContext, target: { x: number; y: number; z: number }): void => {
-    const now = ctx.tick;
-    if (config.pauseTicks > 0 && now < pauseUntil) return; // 微停中 → 本 step 不动
-    startRun(ctx.botName, target);
-  };
+  let token: CancelToken | undefined; // 当前协程取消令牌（reset → cancel）
+  let runLoop: Promise<void> | undefined; // 常驻破块协程（未完成协程句柄）
 
   return {
     name: "mine",
     priority: 10,
     canActivate: (ctx) => {
-      // 记忆注入自校验（可用性已由引擎门卫统一处理）
-      if (ctx.memory.get<string>("workMode") !== "mine") return false;
-      const b = (ctx as AiBehaviorContext).bot;
-      if (!b) return false;
-      // 视线有可挖方块才激活（看哪挖哪）
-      return viewBlock(b, config.distance) !== undefined;
+      // 记忆注入自校验；**不依赖视线目标**（常用者应一直持续到卸载）
+      return ctx.memory.get<string>("workMode") === "mine";
     },
-    reset,
-    step: (ctx) => {
-      bot = (ctx as AiBehaviorContext).bot;
+    onActivate: (ctx) => {
+      // 启动常驻破块协程（幂等：已有运行中协程则复用）
+      if (runLoop) return;
+      const bot = (ctx as AiBehaviorContext).bot;
       if (!bot) return;
-      if (!run) {
-        // idle → 视线探测 → 启动持续破坏协程（有界：shouldStop/完成标志轮询）
-        const inSight = viewBlock(bot, config.distance);
-        if (!inSight) {
-          reset(); // 无目标 → 下轮重评（canActivate）
-          return;
-        }
-        startNext(ctx, inSight.location);
-        return;
-      }
-      if (runResult === undefined) return; // 破坏中：等待
-      const result = runResult;
-      run = undefined;
-      runResult = undefined;
-      if (result !== "broken") {
-        reset(); // far/aborted/offline/busy → 下轮重试
-        return;
-      }
-      // 目标已摧毁 → **同一 step 内立即探测下一块**（对齐旧版"无脑向前挖"；
-      // 块间只留协程交接瞬隙。pauseTicks>0 时开启真实 tick 微停窗口——
-      // 引擎每 10 tick 才 step，微停不会被放大成 50 tick 停顿）
-      if (config.pauseTicks > 0) pauseUntil = ctx.tick + config.pauseTicks;
-      const next = viewBlock(bot, config.distance);
-      if (!next) {
-        reset(); // 挖到边界/无目标 → 下轮重评
-        return;
-      }
-      startNext(ctx, next.location);
+      const t = createCancelToken();
+      token = t;
+      runLoop = runMineLoop(ctx.botName, bot, t, config)
+        .catch((e) => console.warn(`[MockPlayer] 定点挖掘协程异常 ${ctx.botName}: ${e}`))
+        .finally(() => {
+          if (token === t) token = undefined;
+          runLoop = undefined;
+        });
+    },
+    reset: () => {
+      // 能力卸载/切换 → 取消令牌（signal 唤醒 + 每 tick 检测）→ 协程立即终止
+      token?.cancel();
+    },
+    step: () => {
+      // 常驻协程自驱动，无需 step 推进；onActivate 已启动循环。
+      // （保留 step 空实现以满足 Behavior 契约）
     },
   };
 }
