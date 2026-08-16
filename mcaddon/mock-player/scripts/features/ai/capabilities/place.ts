@@ -6,7 +6,7 @@
 
 import type { Behavior, BehaviorContext } from "../../../ai";
 import type { AiBehaviorContext } from "../brainEngine";
-import { placeBlockOnce } from "../../task/blockPlace";
+import { placeBlockOnce } from "../../basic/items";
 
 /** 自动放置行为配置（统一管理） */
 export interface PlaceBehaviorConfig {
