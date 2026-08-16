@@ -44,7 +44,7 @@ export function deserializeLegacyItem(data: SerializedItemStack | null | undefin
 
     // 耐久 / 不可破坏
     if (data.damage !== undefined || data.unbreakable) {
-      const d = item.getComponent("minecraft:durability") as any;
+      const d = item.getComponent("minecraft:durability");
       if (d) {
         if (data.damage !== undefined) d.damage = data.damage;
         if (data.unbreakable) d.unbreakable = true;
@@ -65,8 +65,8 @@ export function deserializeLegacyItem(data: SerializedItemStack | null | undefin
 
     // 染色
     if (data.color && item.hasComponent("minecraft:dyeable")) {
-      const d = item.getComponent("minecraft:dyeable") as any;
-      d.color = { red: data.color.red, green: data.color.green, blue: data.color.blue };
+      const d = item.getComponent("minecraft:dyeable");
+      if (d) d.color = { red: data.color.red, green: data.color.green, blue: data.color.blue };
     }
 
     return item;

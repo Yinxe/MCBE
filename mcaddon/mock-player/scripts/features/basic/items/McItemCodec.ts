@@ -7,17 +7,10 @@
 // 序列化。本文件的 serialize* 仅保留给 UI/回收**预览**用途；
 // collectContainerItems / collectEquipment 供全量保存直取真实物品。
 
-import {
-  Player,
-  Vector3,
-  Vector2,
-  Container,
-  ItemStack,
-  ItemEnchantableComponent,
-  EntityEquippableComponent,
-} from "@minecraft/server";
+import { Player, Vector3, Vector2, Container, ItemStack, EntityEquippableComponent } from "@minecraft/server";
 import type { PositionState, ExperienceRecord, SerializedEffect, SerializedItemStack, ItemPreview } from "../../../rules/Types";
 import { buildExperienceRecord } from "../../../rules/xp/XpMath";
+import { enchantableOf, readDurability } from "./ItemComponentRead";
 import { EQUIP_SLOT_MAP } from "./EquipmentSlots";
 
 // ─── 状态捕获 ──────────────────────────────────────────
@@ -117,36 +110,39 @@ export function serializeItemStack(item: ItemStack): SerializedItemStack {
   try { const d = item.getCanDestroy(); if (d.length > 0) data.canDestroy = d; } catch {}
   try { const p = item.getCanPlaceOn(); if (p.length > 0) data.canPlaceOn = p; } catch {}
 
-  // 耐久
+  // 耐久（getComponent 泛型映射为 ItemDurabilityComponent，无需 any）
   const durability = item.getComponent("minecraft:durability");
   if (durability) {
-    const d = durability as any;
-    if (d.damage > 0) data.damage = d.damage;
-    if (d.unbreakable) data.unbreakable = true;
+    try {
+      if (durability.damage > 0) data.damage = durability.damage;
+      if (durability.unbreakable) data.unbreakable = true;
+    } catch { /* 受限模式读取失败时忽略 */ }
   }
 
   // 附魔
-  if (item.hasComponent("minecraft:enchantable")) {
-    const ench = item.getComponent("minecraft:enchantable") as ItemEnchantableComponent;
-    const list = ench.getEnchantments();
-    if (list.length > 0) {
-      data.enchantments = list.map((e) => ({ id: e.type.id, level: e.level }));
-    }
+  const ench = enchantableOf(item);
+  if (ench) {
+    try {
+      const list = ench.getEnchantments();
+      if (list.length > 0) {
+        data.enchantments = list.map((e) => ({ id: e.type.id, level: e.level }));
+      }
+    } catch { /* ignore */ }
   }
 
   // 药水
-  if (item.hasComponent("minecraft:potion")) {
-    const p = item.getComponent("minecraft:potion") as any;
-    data.potionEffectType = p.potionEffectType?.id;
-    data.potionDeliveryType = p.potionDeliveryType?.id;
+  const potion = item.getComponent("minecraft:potion");
+  if (potion) {
+    try {
+      data.potionEffectType = potion.potionEffectType?.id;
+      data.potionDeliveryType = potion.potionDeliveryType?.id;
+    } catch { /* ignore */ }
   }
 
   // 染色
-  if (item.hasComponent("minecraft:dyeable")) {
-    const d = item.getComponent("minecraft:dyeable") as any;
-    if (d.color) {
-      data.color = { red: d.color.red, green: d.color.green, blue: d.color.blue };
-    }
+  const dyeable = item.getComponent("minecraft:dyeable");
+  if (dyeable?.color) {
+    data.color = { red: dyeable.color.red, green: dyeable.color.green, blue: dyeable.color.blue };
   }
 
   return data;
@@ -159,27 +155,21 @@ export function serializeItemStack(item: ItemStack): SerializedItemStack {
  */
 export function itemStackToPreview(item: ItemStack): ItemPreview {
   const ench: { id: string; level: number }[] = [];
-  if (item.hasComponent("minecraft:enchantable")) {
+  const enc = enchantableOf(item);
+  if (enc) {
     try {
-      const ec = item.getComponent("minecraft:enchantable") as any;
-      for (const e of ec.getEnchantments()) {
+      for (const e of enc.getEnchantments()) {
         ench.push({ id: e.type.id, level: e.level });
       }
     } catch { /* ignore */ }
   }
-  let damage: number | undefined;
-  let maxDurability: number | undefined;
-  const dur = item.getComponent("minecraft:durability") as any;
-  if (dur) {
-    damage = dur.damage ?? 0;
-    maxDurability = dur.maxDurability ?? 0;
-  }
+  const dur = readDurability(item) ?? { damage: 0, maxDurability: 0, unbreakable: false };
   return {
     typeId: item.typeId,
     amount: item.amount,
     nameTag: item.nameTag || undefined,
-    damage,
-    maxDurability,
+    damage: dur.damage,
+    maxDurability: dur.maxDurability || undefined,
     enchantments: ench,
   };
 }

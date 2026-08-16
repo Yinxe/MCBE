@@ -25,6 +25,7 @@ import { diffLoot, initialBiteTracker, isWaterBlock, judgeHookPlacement, makeLoo
 import { enchantDisplayName } from "../../rules/format/EnchantZh";
 import { BOT_TAG, TAG_FISH_MODE } from "../../rules/tags/BotTags";
 import { castFishingRod, findOwnHooks, reelFishingRod } from "./fishing";
+import { enchantableOf } from "../basic/items/ItemComponentRead";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { waitTicks } from "../utils";
 
@@ -152,11 +153,10 @@ export function failureLabel(reason: FishingFailureReason): string {
 
 /** 背包物品附魔列表（读 enchantable 组件；无组件返回空） */
 function itemEnchantments(item: ItemStack): { id: string; level: number }[] {
+  const ench = enchantableOf(item);
+  if (!ench) return [];
   try {
-    const ench = item.getComponent("minecraft:enchantable") as
-      | { getEnchantments: () => { type: { id: string }; level: number }[] }
-      | undefined;
-    return ench?.getEnchantments().map((e) => ({ id: e.type.id, level: e.level })) ?? [];
+    return ench.getEnchantments().map((e) => ({ id: e.type.id, level: e.level }));
   } catch {
     return [];
   }

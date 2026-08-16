@@ -9,6 +9,7 @@ import { color } from "@yinxe/toolkit";
 import type { PositionState } from "../../rules/Types";
 import { formatDimensionId } from "../../rules/format/Format";
 import { ENCH_ZH } from "../../rules/format/EnchantZh";
+import { enchantableOf, readDurability } from "../../features/basic/items/ItemComponentRead";
 
 export function formatPos(v: Vector3): string {
   return `${color.muted}[${color.info}${Math.floor(v.x)} ${color.info}${Math.floor(v.y)} ${color.info}${Math.floor(v.z)}${color.muted}]`;
@@ -23,8 +24,7 @@ export function formatState(state: PositionState): string {
  * @returns 如 "§9锋利III §9击退II" 或 ""（无附魔）
  */
 export function formatEnchantments(item: ItemStack): string {
-  if (!item.hasComponent("minecraft:enchantable")) return "";
-  const ench = item.getComponent("minecraft:enchantable") as any;
+  const ench = enchantableOf(item);
   if (!ench) return "";
   const parts: string[] = [];
   for (const e of ench.getEnchantments()) {
@@ -36,11 +36,10 @@ export function formatEnchantments(item: ItemStack): string {
 
 /** 格式化物品的耐久值为带颜色的字符串。返回 "" 表示无耐久组件 */
 export function formatDurability(item: ItemStack): string {
-  const dur = item.getComponent("minecraft:durability") as any;
+  const dur = readDurability(item);
   if (!dur) return "";
-  const maxD = dur.maxDurability ?? 1;
-  const dmg = dur.damage ?? 0;
-  const cur = maxD - dmg;
+  const maxD = dur.maxDurability || 1;
+  const cur = maxD - dur.damage;
   const pct = Math.floor((cur / maxD) * 100);
   const code = pct > 50 ? "" : pct > 20 ? color.darkGray : color.darkRed;
   return `${code}(${cur}/${maxD})`;

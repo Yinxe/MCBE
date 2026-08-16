@@ -13,6 +13,7 @@
 import { world } from "@minecraft/server";
 import type { Player, ItemStack } from "@minecraft/server";
 
+import { readDurability } from "./basic/items/ItemComponentRead";
 import { BotEvents } from "../events/DomainEvents";
 import type { BotRecord, EquipSlotName } from "../rules/Types";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../rules/Types";
@@ -23,8 +24,8 @@ import { EQUIP_SLOT_MAP } from "./basic/items/EquipmentSlots";
 /** 物品指纹：摘要（typeId|amount|damage|nameTag），用于"变化才写"判定 */
 function itemFingerprint(item: ItemStack | null | undefined): string {
   if (!item) return "";
-  const dur = item.getComponent("minecraft:durability") as { damage?: number } | undefined;
-  return `${item.typeId}|${item.amount}|${dur?.damage ?? 0}|${item.nameTag ?? ""}`;
+  const damage = readDurability(item)?.damage ?? 0;
+  return `${item.typeId}|${item.amount}|${damage}|${item.nameTag ?? ""}`;
 }
 
 export class InventoryStorage {

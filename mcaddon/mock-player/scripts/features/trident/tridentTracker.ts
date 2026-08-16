@@ -22,6 +22,7 @@ import { botRegistry } from "../../bootstrap/context";
 import { BotEvents } from "../../events/DomainEvents";
 import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner, TRACKED_PROJECTILE_IDS } from "../../rules/items/TridentClaimRules";
 import { queueClaimReport } from "../manage/claimReporter";
+import { enchantableOf, readDurability } from "../basic/items/ItemComponentRead";
 
 // ─── pending 附魔信息队列 ──────────────────────────────
 // 投掷流程（features/trident.ts doThrowLoop）在 useItemInSlot 前注册物品信息，
@@ -70,16 +71,14 @@ function consumePendingItem(ownerName: string): { tag: string } | undefined {
 function encodeItemTag(item: ItemStack): string | undefined {
   try {
     const enchantments: { id: string; level: number }[] = [];
-    if (item.hasComponent("minecraft:enchantable")) {
-      const ench = item.getComponent("minecraft:enchantable") as { getEnchantments: () => { type: { id: string }; level: number }[] } | undefined;
-      for (const e of ench?.getEnchantments() ?? []) {
-        enchantments.push({ id: e.type.id, level: e.level });
-      }
+    const ench = enchantableOf(item);
+    for (const e of ench?.getEnchantments() ?? []) {
+      enchantments.push({ id: e.type.id, level: e.level });
     }
     let durability: { current: number; max: number } | undefined;
-    const dur = item.getComponent("minecraft:durability") as { damage?: number; maxDurability?: number } | undefined;
+    const dur = readDurability(item);
     if (dur && dur.maxDurability) {
-      durability = { current: Math.max(0, dur.maxDurability - (dur.damage ?? 0)), max: dur.maxDurability };
+      durability = { current: Math.max(0, dur.maxDurability - dur.damage), max: dur.maxDurability };
     }
     return makeItemTag(enchantments, durability);
   } catch {

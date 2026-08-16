@@ -11,11 +11,12 @@
 //
 // 决策（工具识别/耐久判定/槽位搜索）在 core/rules/items/ToolDurability，容器读写在这里
 
-import { Player, Container, system, world } from "@minecraft/server";
+import { Player, Container, ItemStack, system, world } from "@minecraft/server";
 
 import { BOT_TAG } from "../../../rules/tags/BotTags";
 import { identifyTool, isToolHealthy, findReplacementIndex, findEmptySlotIndex, findAnySlot } from "../../../rules/items/ToolDurability";
 import { color } from "@yinxe/toolkit";
+import { readDurability } from "./ItemComponentRead";
 
 // ─── 配置常量 ──────────────────────────────────────────
 
@@ -27,18 +28,11 @@ const cooldowns = new Map<string, number>();
 
 // ─── 耐久检查（ItemStack 适配） ────────────────────────
 
-const DURABILITY_ID = "minecraft:durability";
-
 /** 从 mc ItemStack 提取耐久组件数值后委托 core isToolHealthy 判定 */
-function isToolHealthyItem(item: any): boolean {
-  if (!item.hasComponent?.(DURABILITY_ID)) return true;
-  const durability = item.getComponent(DURABILITY_ID) as any;
+function isToolHealthyItem(item: ItemStack): boolean {
+  const durability = readDurability(item);
   if (!durability) return true;
-  return isToolHealthy(
-    durability.damage as number | undefined,
-    durability.maxDurability as number | undefined,
-    durability.unbreakable as boolean | undefined
-  );
+  return isToolHealthy(durability.damage, durability.maxDurability, durability.unbreakable);
 }
 
 // ─── 容器交换 ──────────────────────────────────────────
@@ -70,12 +64,10 @@ function markCooldown(botName: string): void {
 
 // ─── 工具名称辅助 ──────────────────────────────────────
 
-function getItemDisplayName(item: any): string {
+function getItemDisplayName(item: ItemStack): string {
   if (item.nameTag) return item.nameTag;
-  const id = item.typeId as string;
-  const parts = id.split(":");
-  if (parts.length >= 2) return parts.slice(1).join(":");
-  return id;
+  const parts = item.typeId.split(":");
+  return parts.length >= 2 ? parts.slice(1).join(":") : item.typeId;
 }
 
 // ─── 公开入口 ──────────────────────────────────────────
@@ -121,9 +113,9 @@ export function checkMainHandDurability(bot: Player, changedSlot: number): void 
     const currentName = getItemDisplayName(handItem);
 
     // 容器 → 数组视图（slots 与 container 一一对应，null = 空位）
-    const itemView: any[] = [];
+    const itemView: (ItemStack | null)[] = [];
     for (let i = 0; i < container.size; i++) {
-      itemView.push(container.getItem(i));
+      itemView.push(container.getItem(i) ?? null);
     }
 
     // 1) 尝试从背包中寻找同类健康工具替换
