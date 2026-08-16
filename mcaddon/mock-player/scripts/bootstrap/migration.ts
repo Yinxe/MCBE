@@ -21,6 +21,7 @@ import { botRegistry, botStore, saveCoordinator } from "./context";
 import { normalizeRecord, DEFAULT_RESPAWN } from "../service/RecordMigration";
 import { deserializeLegacyItem } from "../service/port/LegacyCodec";
 import { DP_PREFIX, INVENTORY_SIZE } from "../rules/Types";
+import { TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_WANDER_MODE, filterKnownTags } from "../rules/tags/BotTags";
 import type { SerializedItemStack } from "../rules/Types";
 
 /** 数据版本标记 key */
@@ -163,10 +164,47 @@ export function runMigrations(): void {
   try {
     normalizeAllRecords();
     migrateLegacyItems();
+    cleanupUnknownTags();
     world.setDynamicProperty(DATA_VERSION_KEY, CURRENT_DATA_VERSION);
     console.info(`[MockPlayer] 数据迁移完成（data-version=${CURRENT_DATA_VERSION}）`);
   } catch (e: any) {
     console.warn(`[MockPlayer] 数据迁移异常: ${e?.message ?? e}`);
+  }
+}
+
+/**
+ * 标签清理与行为迁移：
+ * 1. 旧行为标签（自动挖掘/自动放置/随机游走）→ 转换到 record.aiBehavior
+ *    字段（行为标签机制已删除），并从标签中移除；
+ * 2. 其余未知标签（已删除定义的旧能力标签）→ 直接清理。
+ * 否则 setTags 校验会拒绝（"包含未知标签"），任何标签操作都会失败。
+ */
+const BEHAVIOR_TAG_TO_AI: Record<string, string> = {
+  [TAG_AUTO_MINE.value]: "mine",
+  [TAG_AUTO_PLACE.value]: "place",
+  [TAG_WANDER_MODE.value]: "wander",
+};
+
+function cleanupUnknownTags(): void {
+  for (const record of botRegistry.all()) {
+    // 旧行为标签 → aiBehavior（未设置过 AI 行为时）
+    if (!record.aiBehavior || record.aiBehavior === "none") {
+      for (const tag of record.tags) {
+        const behavior = BEHAVIOR_TAG_TO_AI[tag];
+        if (behavior) {
+          record.aiBehavior = behavior;
+          console.warn(`[MockPlayer] 数据迁移：行为标签 → aiBehavior ${record.name}: ${tag} → ${behavior}`);
+          break;
+        }
+      }
+    }
+    // 移除旧行为标签 + 未知标签（已转换/已删除定义的）
+    const keep = record.tags.filter((t) => !BEHAVIOR_TAG_TO_AI[t] && filterKnownTags([t]).length > 0);
+    if (keep.length !== record.tags.length) {
+      console.warn(`[MockPlayer] 数据迁移：清理行为标签 ${record.name}: ${record.tags.filter((t) => BEHAVIOR_TAG_TO_AI[t] || !filterKnownTags([t]).includes(t)).join(", ")}`);
+      record.tags = keep;
+    }
+    saveCoordinator.saveRecord(record);
   }
 }
 

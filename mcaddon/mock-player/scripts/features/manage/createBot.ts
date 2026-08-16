@@ -73,6 +73,7 @@ export async function createBot(options: CreateBotOptions): Promise<BotRecord> {
     online: true,
     death: false,
     tags: [...initialTags],
+    aiBehavior: "none",
     isSneaking,
     spawnMode,
     lastPoint: { location, dimension: dimension.id, rotation: rot2, lookTarget },

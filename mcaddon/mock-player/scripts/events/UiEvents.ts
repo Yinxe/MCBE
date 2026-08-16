@@ -58,9 +58,7 @@ export interface BehaviorSubmittedEvent {
   useItem: boolean;
   /** 勾选的共存标签（不含 bot 标识标签） */
   coexist: string[];
-  /** 互斥下拉选中标签（劫掠/宝库/自动挖掘等；未选 = undefined） */
-  exclusive: string | undefined;
-  /** 劫掠模式独立开关（可与互斥行为并存） */
+  /** 劫掠模式独立开关（legacy 引擎用） */
   raidMode: boolean;
   /** 完整新标签集（含 bot 标识标签；发布前已写入 record.tags） */
   tags: string[];

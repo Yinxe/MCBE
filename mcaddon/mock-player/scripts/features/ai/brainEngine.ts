@@ -3,18 +3,23 @@
 // 共享记忆（AiMemory）+ 行为运行器（BehaviorRunner 单主目标优先级抢占），
 // 10 tick 驱动；能力 = Behavior 状态机（感知-决策-执行，step 同步短步）。
 //
-// 标签对账（按功能启停）：假人开启某生物 AI 能力标签（如 TAG_WANDER_MODE）
-// → 注册对应行为；移除标签 → 卸载行为（reset 清状态 + 中断协程）。
-// 与旧引擎（legacy/ai/BotBrain）并存：旧引擎管旧行为标签（宝库/劫掠/钓鱼），
-// 本引擎管新框架生物 AI 能力标签。
+// 行为选择（用户拍板：行为标签机制已删除——统一走 record.aiBehavior 字段）：
+//   "none"  不启用
+//   "wander" 随机游走（空闲走走停停，近点散步）
+//   "mine"   自动挖掘（视线方向 breakBlock）
+//   "place"  自动放置（面前放置主手方块）
+// 引擎每 10 tick 对账：record.aiBehavior → 注册/卸载对应行为（切换 → 旧行为
+// reset 清状态 + 中断协程）。与旧引擎（legacy/ai/BotBrain 宝库/劫掠/钓鱼 +
+// features/state/behavior.ts 标签行为）并存——旧标签机制保留 legacy 内部使用。
 
 import { system } from "@minecraft/server";
 
 import { AiMemory, BehaviorRunner, type Behavior, type BehaviorContext } from "../../ai";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../../bootstrap/context";
-import { TAG_WANDER_MODE } from "../../rules/tags/BotTags";
 import { makeWanderBehavior } from "./capabilities/wander";
+import { makeMineBehavior } from "./capabilities/mine";
+import { makePlaceBehavior } from "./capabilities/place";
 import type { BotRecord } from "../../rules/Types";
 
 /** 引擎驱动周期（tick） */
@@ -30,22 +35,22 @@ interface AiBrain {
 const brains = new Map<string, AiBrain>();
 let engineStarted = false;
 
-/** 行为构造器（标签 → 能力；能力随标签开关注册/卸载） */
-const BEHAVIOR_BY_TAG: Record<string, () => Behavior> = {
-  [TAG_WANDER_MODE.value]: makeWanderBehavior,
+/** 行为构造器（aiBehavior 值 → 能力） */
+const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
+  wander: makeWanderBehavior,
+  mine: makeMineBehavior,
+  place: makePlaceBehavior,
 };
 
-/** 假人已开启的生物 AI 能力标签（互斥组保证至多一个） */
-function enabledBehaviorTag(record: BotRecord): string | undefined {
-  for (const tag of record.tags) {
-    if (BEHAVIOR_BY_TAG[tag]) return tag;
-  }
-  return undefined;
+/** 假人当前生物 AI 行为（record.aiBehavior；未启用 → undefined） */
+function enabledBehaviorName(record: BotRecord): string | undefined {
+  const name = record.aiBehavior;
+  return name && BEHAVIOR_BY_NAME[name] ? name : undefined;
 }
 
 /**
- * 生物 AI 引擎：10 tick 对账（标签 → 行为挂载/卸载）+ 推进全部在线假人大脑
- * （幂等启动）。未开启任何生物 AI 能力标签 → 不创建大脑（零开销）。
+ * 生物 AI 引擎：10 tick 对账（aiBehavior → 行为挂载/卸载）+ 推进全部在线
+ * 假人大脑（幂等启动）。未启用生物 AI 行为 → 不创建大脑（零开销）。
  */
 export function startAiEngine(): void {
   if (engineStarted) return;
@@ -57,17 +62,16 @@ export function startAiEngine(): void {
     for (const record of botRegistry.all()) {
       if (!record.online) continue;
       try {
-        const tag = enabledBehaviorTag(record);
-        if (!tag) continue; // 未开启生物 AI 能力 → 不创建大脑
+        const behaviorName = enabledBehaviorName(record);
+        if (!behaviorName) continue; // 未启用 → 不创建大脑
         let brain = brains.get(record.name);
         if (!brain) {
           brain = { memory: new AiMemory(), runner: new BehaviorRunner() };
           brains.set(record.name, brain);
         }
-        // 对账：注册当前标签对应行为；卸载其它能力行为（同名注册幂等）
-        for (const [t, make] of Object.entries(BEHAVIOR_BY_TAG)) {
-          const name = make().name;
-          if (t === tag) {
+        // 对账：注册当前行为；卸载其它行为（切换 → 旧行为 reset 清状态）
+        for (const [name, make] of Object.entries(BEHAVIOR_BY_NAME)) {
+          if (name === behaviorName) {
             brain.runner.register(make());
           } else {
             brain.runner.unregister(name);
@@ -81,7 +85,7 @@ export function startAiEngine(): void {
     }
   }, BRAIN_ENGINE_TICKS);
 
-  console.info(`[MockPlayer] 生物 AI 引擎启动（${BRAIN_ENGINE_TICKS} tick；能力: ${Object.keys(BEHAVIOR_BY_TAG).join("/")}）`);
+  console.info(`[MockPlayer] 生物 AI 引擎启动（${BRAIN_ENGINE_TICKS} tick；行为: ${Object.keys(BEHAVIOR_BY_NAME).join("/")}）`);
 }
 
 /** 假人下线 → 卸载大脑（行为 reset 清状态 + 中断协程） */

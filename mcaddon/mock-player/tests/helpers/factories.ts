@@ -21,6 +21,7 @@ export function makeRecord(name = "bot1", overrides: Partial<BotRecord> = {}): B
     online: false,
     death: false,
     tags: ["mockplayer:tag:bot", "mockplayer:tag:respawn", "mockplayer:tag:idle"],
+    aiBehavior: "none",
     isSneaking: false,
     lastPoint: null,
     respawnPoint: makeState(),

@@ -11,6 +11,11 @@ export const TAG_RESPAWN: TagDef = { label: "自动重生", value: `${TAG_PREFIX
 export const TAG_AUTO_JUMP: TagDef = { label: "自动跳跃", value: `${TAG_PREFIX}autoJump` };
 
 // 互斥的标签（同一时间只能有一个生效）
+// ⚠️ 旧行为标签（用户拍板：行为标签机制已删除——行为统一走生物 AI 行为
+//   record.aiBehavior 字段，新框架 scripts/ai 驱动）。以下定义**保留仅供
+//   legacy 引擎内部使用**（features/state/behavior.ts 的 autoAttack/control/
+//   autoJump 等标签行为 + legacy/ai/BotBrain 的宝库/劫掠/钓鱼），
+//   不再参与 UI 行为选择、不再进互斥组。
 export const TAG_IDLE: TagDef = { label: "空闲", value: `${TAG_PREFIX}idle` };
 export const TAG_AUTO_MINE: TagDef = { label: "自动挖掘", value: `${TAG_PREFIX}autoMine` };
 export const TAG_AUTO_PLACE: TagDef = { label: "自动放置", value: `${TAG_PREFIX}autoPlace` };
@@ -18,26 +23,28 @@ export const TAG_AUTO_ATTACK: TagDef = { label: "自动攻击", value: `${TAG_PR
 export const TAG_CONTROL: TagDef = { label: "体态控制", value: `${TAG_PREFIX}control` };
 export const TAG_AUTO_USE: TagDef = { label: "使用物品", value: `${TAG_PREFIX}autoUse` };
 export const TAG_VAULT_MODE: TagDef = { label: "宝库模式", value: `${TAG_PREFIX}vaultMode` };
-export const TAG_RAID_MODE: TagDef = { label: "劫掠模式", value: `${TAG_PREFIX}raidMode` };
 export const TAG_FISH_MODE: TagDef = { label: "自动钓鱼", value: `${TAG_PREFIX}fishMode` };
-
-// 生物 AI 能力标签（互斥单选：随机游走——新框架 scripts/ai 驱动的生物行为）
 export const TAG_WANDER_MODE: TagDef = { label: "随机游走", value: `${TAG_PREFIX}wanderMode` };
+export const TAG_RAID_MODE: TagDef = { label: "劫掠模式", value: `${TAG_PREFIX}raidMode` };
 
 /** 可共存的标签组 */
 export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
 
-/** 互斥的标签组（同一时间只能有一个生效） */
-export const EXCLUSIVE_TAGS: TagDef[] = [
-  TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE,
-  TAG_VAULT_MODE, TAG_FISH_MODE, TAG_WANDER_MODE,
-];
+/** 互斥的标签组（行为标签机制已删除——现为空；保留集合供校验兼容） */
+export const EXCLUSIVE_TAGS: TagDef[] = [];
 
 /** 独立开关标签组（与互斥/共存标签均可并存，各自独立的持久开关，如劫掠模式） */
 export const STANDALONE_TAGS: TagDef[] = [TAG_RAID_MODE];
 
+/** 旧行为标签组（legacy 引擎内部使用——autoAttack/control/宝库/钓鱼等仍按标签
+ *  驱动；保留定义与解析能力，但不参与互斥、不进入 UI 行为选择） */
+export const LEGACY_TAGS: TagDef[] = [
+  TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE,
+  TAG_VAULT_MODE, TAG_FISH_MODE, TAG_WANDER_MODE,
+];
+
 /** 所有已定义的标签 */
-export const ALL_TAGS: TagDef[] = [...COEXIST_TAGS, ...STANDALONE_TAGS, ...EXCLUSIVE_TAGS];
+export const ALL_TAGS: TagDef[] = [...COEXIST_TAGS, ...STANDALONE_TAGS, ...EXCLUSIVE_TAGS, ...LEGACY_TAGS];
 
 /** 新的假人默认拥有的标签（value 列表） */
 export const DEFAULT_TAGS: string[] = [TAG_BOT.value, TAG_RESPAWN.value, TAG_IDLE.value];
@@ -94,31 +101,21 @@ export function getTagGroups(): TagGroups {
 
 // ─── 行为表单标签计算（core 纯函数，可单测） ────────────
 
-/** 行为菜单表单输入（勾选的共存标签 / 互斥下拉选中 / 劫掠独立开关） */
+/** 行为菜单表单输入（勾选的共存标签 / 劫掠独立开关）——
+ *  行为选择已统一走生物 AI 行为（record.aiBehavior 字段，不再用标签） */
 export interface BehaviorFormInput {
   /** 勾选的共存标签（不含 bot 标识标签） */
   coexist: string[];
-  /** 互斥下拉选中标签（未选 = undefined） */
-  exclusive: string | undefined;
-  /** 劫掠模式独立开关（与互斥行为可并存） */
+  /** 劫掠模式独立开关（legacy 引擎用） */
   raidMode: boolean;
-  /** 生物 AI 能力单选（"none" = 不启用；"wander" = 随机游走——与互斥行为二选一） */
-  aiBehavior: "none" | "wander";
 }
 
 /**
  * 由行为菜单表单输入计算完整新标签集（含 bot 标识标签）。
- * 结构与 UI 表单布局一一对应：bot 标识打底 + 共存勾选 + 互斥单选 + 劫掠独立开关
- * + 生物 AI 能力单选（选中能力时互斥行为忽略——同一互斥组二选一）。
+ * 行为标签机制已删除：只含 bot 标识 + 共存勾选 + 劫掠独立开关。
  */
 export function computeTagsFromBehaviorForm(input: BehaviorFormInput): string[] {
   const tags = [TAG_BOT.value, ...input.coexist];
-  // 生物 AI 能力优先：选中能力 → 不再加入互斥行为标签（同一互斥组）
-  if (input.aiBehavior === "wander") {
-    tags.push(TAG_WANDER_MODE.value);
-  } else if (input.exclusive) {
-    tags.push(input.exclusive);
-  }
   if (input.raidMode) tags.push(TAG_RAID_MODE.value);
   return tags;
 }
@@ -127,6 +124,17 @@ export function computeTagsFromBehaviorForm(input: BehaviorFormInput): string[] 
 
 /** 所有已定义标签的 value 集合（未知标签校验用） */
 const ALL_TAG_VALUES: Set<string> = new Set(ALL_TAGS.map((t) => t.value));
+
+/**
+ * 过滤未知标签（数据迁移用）：只保留已定义标签。
+ * 场景：已删除定义的历史标签持久化在假人数据里，
+ * 会导致 setTags 校验拒绝（"包含未知标签"）——启动迁移时清理。
+ * @param tags 待清理的标签集
+ * @returns 仅含已定义标签的集合（保持原顺序）
+ */
+export function filterKnownTags(tags: string[]): string[] {
+  return tags.filter((t) => ALL_TAG_VALUES.has(t));
+}
 
 /**
  * 校验完整标签集是否合法（setTags 的唯一入口校验，先全通过再落库）：

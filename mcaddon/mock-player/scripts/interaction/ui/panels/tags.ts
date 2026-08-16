@@ -11,7 +11,8 @@ import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_AUTO_USE, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, TAG_WANDER_MODE, EXCLUSIVE_TAGS, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
+import { TAG_BOT, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
+import { setAiBehavior } from "../../../features/state/behavior";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
@@ -49,16 +50,9 @@ export function showTagManagement(player: Player, botName: string): void {
 
   // 共存标签（除 bot 标识外）：自动重生置顶单独开关，其余（自动跳跃）进共存区
 
-  // 「使用物品」是独立的普通开关（一次性使用），不进互斥行为下拉
-  const behaviorExclusive = EXCLUSIVE_TAGS.filter((t) => t.value !== TAG_AUTO_USE.value);
-  const exclusiveOptions = [style("无", color.muted), ...behaviorExclusive.map((t) => style(t.label, color.black))];
-  let exclusiveIndex = 0;
-  for (let i = 0; i < behaviorExclusive.length; i++) {
-    if (record.tags.includes(behaviorExclusive[i].value)) {
-      exclusiveIndex = i + 1;
-      break;
-    }
-  }
+  // 生物 AI 行为下拉选项（与 record.aiBehavior 值一一对应）
+  const AI_BEHAVIOR_OPTIONS = ["none", "wander", "mine", "place"];
+  const AI_BEHAVIOR_INDEX: Record<string, number> = { none: 0, wander: 1, mine: 2, place: 3 };
 
   const currentTagsText = record.tags
     .map((t) => { const d = getTagDef(t); return d ? d.label : t; })
@@ -103,35 +97,40 @@ export function showTagManagement(player: Player, botName: string): void {
       defaultValue: record.tags.includes(TAG_RAID_MODE.value),
       tooltip: "持续喝不祥之瓶刷袭击：获得村庄英雄视为本次袭击胜利，自动喝下一瓶。与其它行为可共存",
     })
-    .label("sep2", style("━━ 互斥行为 ────", color.accent))
-    .dropdown("exclusive", style("行为（仅选一项）", color.warn), exclusiveOptions, {
-      defaultValueIndex: exclusiveIndex,
-      tooltip: "空闲/自动挖掘/放置/攻击/体态控制/宝库模式等，互斥只能选一项（使用物品是上方独立开关）",
-    })
-    // ── 生物 AI 能力（新框架 scripts/ai 驱动；与互斥行为二选一） ──
-    .dropdown("aiBehavior", style("生物AI能力（仅选一项）", color.accent), ["无", style("随机游走", color.playerName)], {
-      defaultValueIndex: record.tags.includes(TAG_WANDER_MODE.value) ? 1 : 0,
-      tooltip: "单选生物 AI 能力改变假人生物行为：随机游走 = 空闲时随机走走停停（近点散步）。与上方互斥行为二选一",
-    });
+    .label("sep2", style("━━ 生物AI行为 ────", color.accent))
+    // ── 生物 AI 行为（新框架 scripts/ai 驱动；单选，替代旧互斥行为标签机制） ──
+    .dropdown(
+      "aiBehavior",
+      style("生物AI行为（仅选一项）", color.accent),
+      [
+        style("无", color.muted),
+        style("随机游走", color.playerName),
+        style("自动挖掘", color.playerName),
+        style("自动放置", color.playerName),
+      ],
+      {
+        defaultValueIndex: AI_BEHAVIOR_INDEX[record.aiBehavior] ?? 0,
+        tooltip: "单选生物 AI 行为改变假人行为：随机游走（近点散步）/ 自动挖掘（视线方向挖方块）/ 自动放置（面前放置主手方块）",
+      },
+    );
 
   builder.show(player).then((vals) => {
     if (!vals) return;
     const currentRecord = resolveUiBotRecord(player, botName);
     if (!currentRecord) return;
 
-    // ── 表单 → 标签计算（core 纯函数；生物 AI 能力优先于互斥行为） ──
-    const exclusiveSel = vals.exclusive as number;
-    const pickedExclusive = exclusiveSel > 0 ? behaviorExclusive[exclusiveSel - 1].value : undefined;
-    const aiBehavior = (vals.aiBehavior as number) === 1 ? "wander" : "none";
+    // ── 表单 → 标签计算（core 纯函数：共存勾选 + 劫掠开关） ──
+    const aiBehaviorSel = vals.aiBehavior as number;
+    const pickedAiBehavior = AI_BEHAVIOR_OPTIONS[aiBehaviorSel] ?? "none";
     const coexist: string[] = [];
     if (vals.respawn as boolean) coexist.push(TAG_RESPAWN.value);
     if (vals.autoJump as boolean) coexist.push(TAG_AUTO_JUMP.value);
     const newTags = computeTagsFromBehaviorForm({
       coexist,
-      exclusive: pickedExclusive,
       raidMode: vals.raidMode as boolean,
-      aiBehavior,
     });
+    // 生物 AI 行为落库（record.aiBehavior 字段——引擎下个周期对账生效）
+    setAiBehavior(currentRecord, pickedAiBehavior as "none" | "wander" | "mine" | "place");
 
     // 一次性使用开关：勾选提交=使用一次（自动停下），取消提交=停止一次。
     // 开关本身不落库（用后即停，无持续状态），每次打开行为菜单都默认关。
@@ -157,7 +156,6 @@ export function showTagManagement(player: Player, botName: string): void {
         follow: wantFollow,
         useItem: useItemOn,
         coexist,
-        exclusive: pickedExclusive,
         raidMode: vals.raidMode as boolean,
         tags: newTags,
       });

@@ -211,6 +211,12 @@ export interface BotRecord {
   entityId?: string;
   /** 持久化的标签列表（上线时通过 syncEntityTags 恢复） */
   tags: string[];
+  /**
+   * 生物 AI 行为（新框架 scripts/ai 驱动；替代旧互斥行为标签机制）：
+   * "none" = 不启用 / "wander" = 随机游走 / "mine" = 自动挖掘 / "place" = 自动放置。
+   * 旧记录缺失 = "none"（升级兼容）。
+   */
+  aiBehavior: string;
   /** 体态控制器玩家 ID（仅当有 TAG_CONTROL 标签时有效） */
   controllerId?: string;
   /** 潜行状态 */
