@@ -3,21 +3,27 @@
 // 状态机（step 同步短步，无循环无 await——woodcut 纪律）：
 //   idle（间隔计数）→ pick（选近点 + 发起单次导航协程）→ walk（轮询完成）
 //   → rest（休息计数）→ idle 循环。
-// 走停节律：间隔/休息随机 [20,60] tick——偶尔走几步、停下歇会（不连续乱走）；
+// 走停节律（实测调优：避免"一愣一愣站半天"）：间隔/休息缩短到
+//   [8,20]/[8,16] tick——走完歇 0.4-0.8 秒再走，不长时间站立；
+//   导航失败（无路径/卡住）→ 快速重试（5-10 tick 后重新选点），
+//   不进入长休息。
 // 近点（半径 ≤8 格，不计算 16 格之外）；单次导航协程有界（navigateBot 自带
 // 超时/停滞判定），完成标志由 step 轮询。
-// 协程防残留：reset（切换/关标签/下线）→ cancelNavigation 中断导航。
+// 协程防残留：reset（切换/关标签/下线）→ stopMoving 中断导航。
 
 import type { Behavior, BehaviorContext } from "../../../ai";
 import { randomStrollOnce, NavigateResult } from "../../basic/move";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 
-/** 游走间隔（tick）：空闲后随机等待再走 */
-const WANDER_INTERVAL_MIN = 20;
-const WANDER_INTERVAL_MAX = 60;
-/** 休息（tick）：到达后停下歇一会 */
-const WANDER_REST_MIN = 20;
-const WANDER_REST_MAX = 60;
+/** 游走间隔（tick）：走完歇一会再走（短——0.4~1 秒，不站半天） */
+const WANDER_INTERVAL_MIN = 8;
+const WANDER_INTERVAL_MAX = 20;
+/** 休息（tick）：到达后短暂停顿（0.4~0.8 秒） */
+const WANDER_REST_MIN = 8;
+const WANDER_REST_MAX = 16;
+/** 导航失败后的快速重试等待（tick：0.25~0.5 秒——失败不长时间站立） */
+const WANDER_FAIL_RETRY_MIN = 5;
+const WANDER_FAIL_RETRY_MAX = 10;
 /** 单次游走半径（格）：近点（≤16 格直达内） */
 const WANDER_RADIUS = 8;
 /** 游走速度（慢速散步） */
@@ -96,9 +102,17 @@ export function makeWanderBehavior(): Behavior {
           break;
         case "walk":
           if (runResult === undefined) return; // 导航中：等待
-          phase = "rest";
-          wait = randomBetween(WANDER_REST_MIN, WANDER_REST_MAX);
           run = undefined;
+          if (runResult === NavigateResult.Arrived) {
+            // 到达：短暂休息（走停节律）
+            phase = "rest";
+            wait = randomBetween(WANDER_REST_MIN, WANDER_REST_MAX);
+          } else {
+            // 导航失败（无路径/卡住/超时）：快速重试——短等待后重新选点，
+            // 不进入长休息（避免"站半天"）
+            phase = "idle";
+            wait = randomBetween(WANDER_FAIL_RETRY_MIN, WANDER_FAIL_RETRY_MAX);
+          }
           break;
         case "rest":
           if (--wait > 0) return;
