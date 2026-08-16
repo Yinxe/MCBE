@@ -34,7 +34,7 @@ const WANDER_SPEED = 0.6;
 /** 转头随机朝向距离（格，看向点的距离） */
 const LOOK_AROUND_DISTANCE = 5;
 /** 转头节流（引擎周期）：每 2 周期转头一次（约 1 秒一次，不频繁） */
-const LOOK_AROUND_INTERVAL = 2;
+const LOOK_AROUND_INTERVAL = 4;
 
 /** 状态机阶段 */
 type Phase = "idle" | "pick" | "walk" | "rest";
@@ -56,17 +56,31 @@ function stopBotMoving(botName: string): void {
 }
 
 /**
- * 随机转身/扭头（官方随机视角转向意向）：
- * 静止时随机看向一个方向（随机偏航 → 看向该方向 5 格处）——
+ * 偶尔扭头（官方随机视角转向意向，自然化）：
+ * 大部分时候（70%）在当前朝向基础上**小幅扭动**（±25°——"扭一下头"），
+ * 小概率（30%）才大幅随机转头（东张西望感）。
  * 转身后实体朝向变化，下次游走的朝向偏置选点自然偏向该方向。
  */
 function lookAround(botName: string): void {
   const bot = resolveBotPlayer(botName);
   if (!bot) return;
-  const yaw = Math.random() * 360;
+  let yaw: number;
+  if (Math.random() < 0.7) {
+    // 小幅扭动：当前朝向 ±25°（偶尔扭一下头）
+    let base = 0;
+    try {
+      base = bot.getRotation().y;
+    } catch {
+      /* 读取失败按 0 */
+    }
+    yaw = base + (Math.random() * 2 - 1) * 25;
+  } else {
+    // 小概率大幅转头（自然东张西望）
+    yaw = Math.random() * 360;
+  }
   const rad = (yaw * Math.PI) / 180;
   try {
-    // MCBE 朝向向量 (-sin(yaw), 0, cos(yaw))——看向随机方向点
+    // MCBE 朝向向量 (-sin(yaw), 0, cos(yaw))——看向该方向点
     bot.lookAtLocation({
       x: bot.location.x + -Math.sin(rad) * LOOK_AROUND_DISTANCE,
       y: bot.location.y,
