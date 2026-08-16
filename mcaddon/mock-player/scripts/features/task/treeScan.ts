@@ -1,8 +1,8 @@
 // ─── 树资源坐标集扫描（mc 层） ─────────────────────────
 // 坐标集方案（用户规格）：一次性 getBlocks 采集原木/树叶两个坐标集 →
-// 纯算术评估（聚类/树冠计数全在集合内，零 BFS 零世界查询）。
+// 纯算术评估（聚类 → 全局树叶归属 BFS → L×C×H 评估，零世界查询）。
 //   大树：2×2 原木垂直向上（恒等段）特征明显 → 直接接受，无需树叶；
-//   小树：logs + leaves 坐标关系判定。
+//   小树：logs + 归属树叶判定（每片叶恰属一棵树）。
 // 开销 = 2 次大范围 getBlocks + 全纯计算（零 getBlock 属性读取）。
 // ⚠️ 永不 reject：任何异常 resolve 空结果。
 
@@ -10,8 +10,10 @@ import { BlockPermutation, BlockVolume } from "@minecraft/server";
 import type { Dimension } from "@minecraft/server";
 
 import {
+  assignLeafOwnership,
   blockCenter,
   coordKey,
+  EMPTY_OWNED_LEAFS,
   evaluateTreeFromSets,
   extractTrunkCandidatesSimple,
   keyToCoord,
@@ -162,6 +164,8 @@ export interface TreeSetScanResult {
   smallCandidates: number;
   /** 聚类耗时（ms） */
   clusterMs: number;
+  /** 树叶归属耗时（ms）——全局单遍多源 BFS（每片叶恰属一棵树） */
+  ownershipMs: number;
   /** 评估耗时（ms） */
   evalMs: number;
   /** 大树碎段合并耗时（ms） */
@@ -203,17 +207,22 @@ export async function scanTreesFromSets(
   // 树叶坐标集：数字编码 Set<number>（零字符串分配——大范围几十万次查询的性能关键）
   const leafSet = new Set<number>(leavesResult.coords.map((c) => coordKey(c.x, c.y, c.z)));
 
-  // ③ 纯算术评估：无属性聚类（几何成链，零 getBlock）→ 坐标集树判定
+  // ③ 纯算术评估：无属性聚类（几何成链，零 getBlock）→ 全局树叶归属（单遍
+  //    多源 BFS，每片叶恰属一棵树——资源点 leafs 与 L 因子同源）→ L×C×H 判定
   const tCluster = Date.now();
   const candidates = extractTrunkCandidatesSimple(logs);
   const clusterMs = Date.now() - tCluster;
   const bigCandidates = candidates.filter((c) => c.kind === "big").length;
   const smallCandidates = candidates.length - bigCandidates;
+  const tOwn = Date.now();
+  const ownership = assignLeafOwnership(candidates, leafSet);
+  const ownershipMs = Date.now() - tOwn;
   const tEval = Date.now();
   const trees: TreeResource[] = [];
   const rejected: TreeReject[] = [];
-  for (const c of candidates) {
-    const verdict = evaluateTreeFromSets(c, leafSet);
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i]!;
+    const verdict = evaluateTreeFromSets(c, ownership.get(i) ?? EMPTY_OWNED_LEAFS);
     if (verdict.accepted) {
       trees.push(toTreeResource(c, {
         accepted: true,
@@ -254,10 +263,10 @@ export async function scanTreesFromSets(
     return true;
   });
   const scanMs = logsResult.ms + leavesResult.ms; // 两个 getBlocks 实际执行时间
-  const analyzeMs = clusterMs + evalMs + mergeMs;
+  const analyzeMs = clusterMs + ownershipMs + evalMs + mergeMs;
   return {
     logs: logsResult, leaves: leavesResult, trees: mergedTrees, rejected: mergedRejected, candidates: candidates.length,
-    bigCandidates, smallCandidates, clusterMs, evalMs, mergeMs,
+    bigCandidates, smallCandidates, clusterMs, ownershipMs, evalMs, mergeMs,
     scanMs, analyzeMs, computeMs: scanMs + analyzeMs,
     ms: Date.now() - t0, // 总耗时（零调度等待；日志输出在调用方另行计时）
   };
@@ -352,7 +361,7 @@ export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: 
   );
   lines.push(
     `[树] 纯算法：扫描 ${r.scanMs}ms（原木 ${r.logs.ms} + 树叶 ${r.leaves.ms}）＋ 分析 ${r.analyzeMs}ms` +
-      `（聚类 ${r.clusterMs} + 评估 ${r.evalMs} + 合并 ${r.mergeMs}）＝ ${r.computeMs}ms` +
+      `（聚类 ${r.clusterMs} + 归属 ${r.ownershipMs} + 评估 ${r.evalMs} + 合并 ${r.mergeMs}）＝ ${r.computeMs}ms` +
       `（调度等待 ${Math.max(r.ms - r.computeMs, 0)}ms，日志输出另计）`,
   );
   lines.push(
@@ -361,7 +370,9 @@ export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: 
   );
   lines.push(
     `[树] 聚类：候选 ${r.candidates}（大树 ${r.bigCandidates} / 小树 ${r.smallCandidates}）耗时 ${r.clusterMs}ms｜` +
-      `评估：接受 ${r.trees.length} / 拒绝 ${r.rejected.length} 耗时 ${r.evalMs}ms｜合并 ${r.mergeMs}ms｜纯计算合计 ${r.clusterMs + r.evalMs + r.mergeMs}ms`,
+      `归属：全局单遍多源 BFS（每片叶恰属一棵树）耗时 ${r.ownershipMs}ms｜` +
+      `评估：接受 ${r.trees.length} / 拒绝 ${r.rejected.length} 耗时 ${r.evalMs}ms｜合并 ${r.mergeMs}ms｜` +
+      `纯计算合计 ${r.clusterMs + r.ownershipMs + r.evalMs + r.mergeMs}ms`,
   );
   lines.push(`[树] ── 接受（${r.trees.length}）${"─".repeat(Math.max(8, 40 - String(r.trees.length).length))}`);
   for (const t of r.trees) {

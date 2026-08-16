@@ -757,17 +757,20 @@ export function scanTreeResources(logs: TreeLog[], cellKind: CellKindFn, origin?
 /**
  * 坐标数字编码（Set<number> 快于 Set<string>——零字符串分配，
  * 大范围扫描几十万次坐标查询时性能差距达数量级）。
- * 编码：x,y,z 各偏移 4096 后按 2^12 进制合并（z 低 12 位、y 中 12 位、x 高位移）。
+ * 编码：x,y,z 各偏移 4096 后按 2^13 进制合并（z 低 13 位、y 中 13 位、
+ * x 高 26 位位移）。⚠️ 段宽：偏移后 ∈ [0,8191] < 2^13，绝不进位污染
+ * 相邻段——旧版 12 位段宽在 y≥0/z≥0 时溢出进位，keyToCoord 解码错位
+ * （所有 y≥0 坐标反算全错，资源点树叶坐标失真）。
  */
 export function coordKey(x: number, y: number, z: number): number {
-  return (x + 4096) * 16777216 + (y + 4096) * 4096 + (z + 4096);
+  return (x + 4096) * 67108864 + (y + 4096) * 8192 + (z + 4096);
 }
 
-/** 数字 key → 坐标（诊断用） */
+/** 数字 key → 坐标（诊断/归属用） */
 export function keyToCoord(key: number): { x: number; y: number; z: number } {
-  const z = (key % 4096) - 4096;
-  const y = (Math.floor(key / 4096) % 4096) - 4096;
-  const x = Math.floor(key / 16777216) - 4096;
+  const z = (key % 8192) - 4096;
+  const y = (Math.floor(key / 8192) % 8192) - 4096;
+  const x = Math.floor(key / 67108864) - 4096;
   return { x, y, z };
 }
 // 由 mc 层一次性 getBlocks 采集坐标集（每类方块一次，零 getBlock），
@@ -803,62 +806,109 @@ export interface TreeSetEvalOptions {
   trunkHeightNorm?: number;
   /** 概率阈值（缺省 0.8） */
   threshold?: number;
-  /** 区域水平扩展（缺省 2——与 REGION_PAD 一致） */
-  pad?: number;
-  /** 区域顶余量（缺省 8——与 CANOPY_MARGIN 一致） */
-  topMargin?: number;
-  /** 区域默认高度（缺省 10） */
-  defaultHeight?: number;
+}
+
+// ─── 树叶归属（全局单遍多源 BFS，线性） ────────────────
+
+/** 树叶归属最大距离（26 邻步数；真实树冠半径 ≤10，16 余量充足——
+ *  超出归属范围的孤立叶板（装饰/浮空）不属于任何树，不参与任何资源点） */
+export const MAX_LEAF_OWNERSHIP_DISTANCE = 16;
+
+/** 单棵树的归属树叶集（评估输入：L/C 因子与资源点 leafs 同源同口径） */
+export interface OwnedLeafSet {
+  /** 归属树叶坐标（数字编码 key） */
+  keys: number[];
+  /** 归属叶数 */
+  count: number;
+  /** 归属树叶最低/最高 y（树冠厚度 C 因子） */
+  minY: number;
+  maxY: number;
+}
+
+/** 空归属集（候选无归属树叶——光树干/浮空叶板） */
+export const EMPTY_OWNED_LEAFS: OwnedLeafSet = { keys: [], count: 0, minY: 0, maxY: 0 };
+
+/**
+ * 树叶归属（最优：全局单遍多源 BFS，与树数量/树叶总量严格线性）：
+ * 所有候选的原木作为多源种子，26 邻波浪式向外扩张（只进树叶），
+ * 每片树叶被**最先到达**的候选认领——一片树叶恰属一棵树，零重复。
+ * 邻树树冠交融时以 BFS 波前为界（近树干者得），确定性切割；
+ * 孤立叶板（无原木可达或超距离）不属任何树。
+ * 替代逐候选区域扫描：区域方案在密集森林下区域重叠、每候选重复统计
+ * 同一片叶（超线性）；本方案全数据单遍，且天然给出"这棵树的树叶归属"。
+ *
+ * @param candidates 树干候选（extractTrunkCandidates 输出）
+ * @param leafSet 树叶坐标集（数字编码 key）
+ * @returns 候选下标 → 归属树叶集（无归属叶的候选无条目）
+ */
+export function assignLeafOwnership(
+  candidates: readonly TrunkCandidate[],
+  leafSet: ReadonlySet<number>,
+): Map<number, OwnedLeafSet> {
+  const owner = new Map<number, number>(); // 树叶 key → 候选下标（先到先得）
+  const buckets = new Map<number, number[]>(); // 候选下标 → 归属树叶 keys
+  const layer: Array<[number, number]> = []; // 当前 BFS 层（key, 候选下标）
+  for (let i = 0; i < candidates.length; i++) {
+    for (const l of candidates[i]!.logs) layer.push([coordKey(l.x, l.y, l.z), i]);
+  }
+  let depth = 0;
+  while (layer.length > 0 && depth < MAX_LEAF_OWNERSHIP_DISTANCE) {
+    const next: Array<[number, number]> = [];
+    for (const [key, oi] of layer) {
+      const { x, y, z } = keyToCoord(key);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            if (dx === 0 && dy === 0 && dz === 0) continue;
+            const nk = coordKey(x + dx, y + dy, z + dz);
+            if (!leafSet.has(nk) || owner.has(nk)) continue;
+            owner.set(nk, oi);
+            let bucket = buckets.get(oi);
+            if (!bucket) {
+              bucket = [];
+              buckets.set(oi, bucket);
+            }
+            bucket.push(nk);
+            next.push([nk, oi]);
+          }
+        }
+      }
+    }
+    layer.length = 0;
+    layer.push(...next);
+    depth++;
+  }
+  const result = new Map<number, OwnedLeafSet>();
+  for (const [oi, keys] of buckets) {
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    for (const k of keys) {
+      const y = keyToCoord(k).y;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    result.set(oi, { keys, count: keys.length, minY, maxY });
+  }
+  return result;
 }
 
 /**
- * 坐标集纯算术树评估：候选树干 + 树叶坐标集 → 树冠/形状/高度因子。
- * 零世界查询、零 BFS——区域内树叶计数全部在 Set 内运算，评估与树数量线性。
- * （简化：无 A 连通因子——候选本身是聚类验证过的垂直原木链，真实世界"砍树就是树"）
+ * 坐标集纯算术树评估：候选树干 + 归属树叶集 → 树冠/形状/高度因子。
+ * 零世界查询、零区域扫描、零 BFS——评估只做计数与算术，与树数量严格线性。
+ * （归属树叶集由 assignLeafOwnership 全局单遍产出——L/C 与资源点 leafs 同源）
  * @param candidate 树干候选（extractTrunkCandidates 输出）
- * @param leafSet 树叶坐标集（数字编码 key）
+ * @param owned 该候选的归属树叶集（assignLeafOwnership 输出；无归属叶传 EMPTY_OWNED_LEAFS）
  * @param options 评估参数（缺省与 cellKind 版一致）
  */
 export function evaluateTreeFromSets(
   candidate: TrunkCandidate,
-  leafSet: ReadonlySet<number>,
+  owned: OwnedLeafSet,
   options: TreeSetEvalOptions = {},
 ): TreeSetVerdict {
   const leafTarget = candidate.kind === "small" ? (options.leafTargetSmall ?? LEAF_TARGET_SMALL) : (options.leafTargetBig ?? LEAF_TARGET_BIG);
-  const pad = options.pad ?? REGION_PAD;
-  const topMargin = options.topMargin ?? CANOPY_MARGIN;
-  const defaultHeight = options.defaultHeight ?? DEFAULT_REGION_HEIGHT;
   const thinCanopy = options.thinCanopyFactor ?? THIN_CANOPY_FACTOR;
   const heightNorm = options.trunkHeightNorm ?? TRUNK_HEIGHT_NORM;
   const threshold = options.threshold ?? TREE_PROBABILITY_THRESHOLD;
-
-  // 区域范围：原木 bbox ± pad，垂直 baseY-1 .. max(baseY+默认高-1, topY+余量)
-  const xs = candidate.logs.map((l) => l.x);
-  const zs = candidate.logs.map((l) => l.z);
-  const minX = Math.min(...xs) - pad;
-  const maxX = Math.max(...xs) + pad;
-  const minZ = Math.min(...zs) - pad;
-  const maxZ = Math.max(...zs) + pad;
-  const regionTop = Math.max(candidate.baseY + defaultHeight - 1, candidate.topY + topMargin);
-
-  // ── 区域内树叶坐标统计（纯集合 has 判定；大树直接接受也复用——资源点携带真实树叶数据） ──
-  let leafCount = 0;
-  let leafMinY = Number.POSITIVE_INFINITY;
-  let leafMaxY = Number.NEGATIVE_INFINITY;
-  const leafKeysInRegion: number[] = [];
-  for (let y = candidate.baseY + LEAF_MIN_LAYER_OFFSET; y <= regionTop; y++) {
-    for (let x = minX; x <= maxX; x++) {
-      for (let z = minZ; z <= maxZ; z++) {
-        const key = coordKey(x, y, z);
-        if (leafSet.has(key)) {
-          leafCount++;
-          if (y < leafMinY) leafMinY = y;
-          if (y > leafMaxY) leafMaxY = y;
-          leafKeysInRegion.push(key);
-        }
-      }
-    }
-  }
 
   // ── 大树直接接受：2×2 原木垂直向上（恒等段）特征已足够明显，无需树叶判定 ──
   // ⚠️ 高度门槛：高 < 4 层（H < 阈值）不直接接受——矮 2×2 柱（装饰/树桩）走树叶评估或拒绝
@@ -868,15 +918,16 @@ export function evaluateTreeFromSets(
       const factors: TreeSetFactors = { L: 1, C: 1, H };
       return {
         accepted: true, kind: "big", probability: H, factors,
-        leafs: leafKeysInRegion.map(keyToCoord),
+        leafs: owned.keys.map(keyToCoord),
       };
     }
     // 矮 2×2：落到正常评估（依赖树叶）
   }
 
   // ── 因子计算（纯算术；概率 = L×C×H） ──
+  const leafCount = owned.count;
   const L = leafCount === 0 ? 0 : Math.min(leafCount / leafTarget, 1);
-  const spanY = leafCount === 0 ? 0 : leafMaxY - leafMinY + 1;
+  const spanY = leafCount === 0 ? 0 : owned.maxY - owned.minY + 1;
   const C = leafCount === 0 ? 0 : spanY >= 2 ? 1 : thinCanopy;
   const H = Math.min((candidate.topY - candidate.baseY + 1) / heightNorm, 1);
 
@@ -885,7 +936,7 @@ export function evaluateTreeFromSets(
   const common = { kind: candidate.kind, probability, factors };
   if (L === 0) return { accepted: false, reason: "no-canopy", ...common };
   if (probability < threshold) return { accepted: false, reason: "low-prob", ...common };
-  return { accepted: true, ...common, leafs: leafKeysInRegion.map(keyToCoord) };
+  return { accepted: true, ...common, leafs: owned.keys.map(keyToCoord) };
 }
 
 // ─── 无属性聚类变体（坐标集方案：纯位置，零 getBlock） ──
