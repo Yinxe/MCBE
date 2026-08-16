@@ -120,6 +120,9 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
   let runResult: NavigateResult | undefined; // 协程完成标志
   let lookTick = 0; // 转头节流计数
   let failStreak = 0; // 连续失败计数（日志降频）
+  // ⚠️ reset 无参（Behavior.reset 签名）——用最近 step 的实体引用中断移动；
+  // 必须放闭包内（每假人一实例），放模块级会跨假人共享误停他 bot（审核 M1）
+  let lastBot: SimulatedPlayer | undefined;
 
   const startRun = (botName: string): void => {
     runResult = undefined;
@@ -198,10 +201,7 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
   };
 }
 
-/** 游走状态日志（状态切换时打印——节流不刷屏；观察调度是否在跑） */
+/** 游走状态日志（状态切换时打印——节流不刷屏；仓库约定统一 console.warn） */
 function logStroll(botName: string, msg: string): void {
-  console.info(`[MockPlayer] 生物AI ${botName} 随机游走: ${msg}`);
+  console.warn(`[MockPlayer] 生物AI ${botName} 随机游走: ${msg}`);
 }
-
-/** reset 需要实体（Behavior.reset 无参——记录最近推进的实体引用） */
-let lastBot: SimulatedPlayer | undefined;

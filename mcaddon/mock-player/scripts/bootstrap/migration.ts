@@ -27,7 +27,7 @@ import type { SerializedItemStack } from "../rules/Types";
 /** 数据版本标记 key */
 const DATA_VERSION_KEY = "mockplayer:data-version";
 /** 当前数据版本（模组版本；迁移按"旧 key 是否存在"检测，版本号仅做标记） */
-const CURRENT_DATA_VERSION = "1.1.52";
+const CURRENT_DATA_VERSION = "2.2.1"; // 与包版本同步（审核 L3：数据版本误导排障）
 
 /** 世界出生点（记录缺 respawnPoint 时的默认值；worldLoad 后可读） */
 function defaultRespawn(): typeof DEFAULT_RESPAWN {
@@ -188,6 +188,7 @@ const BEHAVIOR_TAG_TO_AI: Record<string, string> = {
 
 function cleanupUnknownTags(): void {
   for (const record of botRegistry.all()) {
+    let changed = false;
     // 旧行为标签 → aiBehavior（未设置过 AI 行为时）
     if (!record.aiBehavior || record.aiBehavior === "none") {
       for (const tag of record.tags) {
@@ -195,6 +196,7 @@ function cleanupUnknownTags(): void {
         if (behavior) {
           record.aiBehavior = behavior;
           console.warn(`[MockPlayer] 数据迁移：行为标签 → aiBehavior ${record.name}: ${tag} → ${behavior}`);
+          changed = true;
           break;
         }
       }
@@ -204,8 +206,9 @@ function cleanupUnknownTags(): void {
     if (keep.length !== record.tags.length) {
       console.warn(`[MockPlayer] 数据迁移：清理行为标签 ${record.name}: ${record.tags.filter((t) => BEHAVIOR_TAG_TO_AI[t] || !filterKnownTags([t]).includes(t)).join(", ")}`);
       record.tags = keep;
+      changed = true;
     }
-    saveCoordinator.saveRecord(record);
+    if (changed) saveCoordinator.saveRecord(record);
   }
 }
 

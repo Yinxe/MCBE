@@ -32,6 +32,8 @@ const BRAIN_ENGINE_TICKS = 10;
 interface AiBrain {
   memory: AiMemory;
   runner: BehaviorRunner;
+  /** 当前对账的行为名（变化才重新挂载——避免每周期重建行为实例） */
+  behaviorName?: string;
 }
 
 /** botName → 假人大脑 */
@@ -79,7 +81,13 @@ export function startAiEngine(): void {
     for (const record of botRegistry.onlineAlive()) {
       try {
         const behaviorName = enabledBehaviorName(record);
-        if (!behaviorName) continue; // 未启用 → 不创建大脑
+        if (!behaviorName) {
+          // 未启用/切到 none：卸载大脑（行为 reset → 中止进行中协程）。
+          // ⚠️ 不能直接 continue——后台 breakBlockAt/导航协程会继续跑，
+          // 直到目标挖掉/超时才停（审核 S1：关停必须中断）。
+          disposeBotBrain(record.name);
+          continue;
+        }
         let brain = brains.get(record.name);
         if (!brain) {
           brain = { memory: new AiMemory(), runner: new BehaviorRunner() };
@@ -88,13 +96,16 @@ export function startAiEngine(): void {
         // 记忆注入（用户拍板：主动 AI 行为直接注入记忆表达——行为从记忆
         // 读取当前 aiBehavior，实体 TAG 不再参与行为表达）
         brain.memory.set("aiBehavior", behaviorName);
-        // 对账：注册当前行为；卸载其它行为（切换 → 旧行为 reset 清状态）
-        for (const [name, make] of Object.entries(BEHAVIOR_BY_NAME)) {
-          if (name === behaviorName) {
-            brain.runner.register(make());
-          } else {
-            brain.runner.unregister(name);
+        // 对账（仅行为变化时执行）：注册新行为 + 卸载旧行为（旧行为 reset 清状态）
+        if (brain.behaviorName !== behaviorName) {
+          for (const [name, make] of Object.entries(BEHAVIOR_BY_NAME)) {
+            if (name === behaviorName) {
+              brain.runner.register(make());
+            } else {
+              brain.runner.unregister(name);
+            }
           }
+          brain.behaviorName = behaviorName;
         }
         const bot = resolveBotPlayer(record.name); // 每假人每周期一次（缓存 TTL 内零查询）
         if (!bot) continue; // 实体不可用（失效/瞬态）→ 本周期不推进（事件负责清理）

@@ -39,10 +39,20 @@ export function clearEntityCache(): void {
   entityCache.clear();
 }
 
+/** 安全读取当前 tick（early execution 时 system.currentTick 会抛——返回 0，
+ *  缓存按"差值 < TTL"视为未过期，early 期实体也不变化） */
+function safeCurrentTick(): number {
+  try {
+    return system.currentTick;
+  } catch {
+    return 0;
+  }
+}
+
 export function resolveBotPlayer(name: string): SimulatedPlayer | undefined {
   // 缓存命中（TTL 内）→ 直接返回（每假人每引擎周期最多一次真实世界查询）
   const cached = entityCache.get(name);
-  if (cached && system.currentTick - cached.tick < ENTITY_CACHE_TTL_TICKS) {
+  if (cached && safeCurrentTick() - cached.tick < ENTITY_CACHE_TTL_TICKS) {
     return cached.bot;
   }
   let bot: SimulatedPlayer | undefined;
@@ -69,7 +79,7 @@ export function resolveBotPlayer(name: string): SimulatedPlayer | undefined {
       }
     }
   }
-  entityCache.set(name, { bot, tick: system.currentTick });
+  entityCache.set(name, { bot, tick: safeCurrentTick() });
   return bot;
 }
 

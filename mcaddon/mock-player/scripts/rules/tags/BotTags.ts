@@ -113,10 +113,17 @@ export interface BehaviorFormInput {
 /**
  * 由行为菜单表单输入计算完整新标签集（含 bot 标识标签）。
  * 行为标签机制已删除：只含 bot 标识 + 共存勾选 + 劫掠独立开关。
+ * 无独立开关标签时兜底保留空闲标签（新假人默认带 idle；表单提交是全量
+ * 替换标签集，不兜底会静默剥离 idle——与 control.ts 的"互斥/独立标签
+ * 兜底补 idle"语义对齐，审核 M2）。
  */
 export function computeTagsFromBehaviorForm(input: BehaviorFormInput): string[] {
   const tags = [TAG_BOT.value, ...input.coexist];
-  if (input.raidMode) tags.push(TAG_RAID_MODE.value);
+  if (input.raidMode) {
+    tags.push(TAG_RAID_MODE.value);
+  } else {
+    tags.push(TAG_IDLE.value);
+  }
   return tags;
 }
 

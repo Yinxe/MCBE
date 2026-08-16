@@ -29,7 +29,6 @@ export const DEFAULT_MINE_CONFIG: MineBehaviorConfig = {
 
 /** 创建自动挖掘行为（record.aiBehavior === "mine" 时由引擎注册） */
 export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFIG): Behavior {
-  let phase: "idle" | "break" | "pause" = "idle";
   let waiting = 0; // 块间停顿计数
   let run: Promise<unknown> | undefined; // 持续破坏协程
   let runResult: BreakResult | undefined; // 协程完成标志
@@ -54,7 +53,6 @@ export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFI
 
   const reset = (): void => {
     aborted = true; // 中止进行中协程（shouldStop 轮询感知）
-    phase = "idle";
     waiting = 0;
     run = undefined;
     runResult = undefined;
@@ -88,7 +86,6 @@ export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFI
           return;
         }
         startRun(ctx.botName, inSight.location);
-        phase = "break";
         return;
       }
       if (runResult === undefined) return; // 破坏中：等待
@@ -101,7 +98,6 @@ export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFI
       }
       // 目标已摧毁 → 块间停顿后继续下一块
       waiting = config.pauseTicks;
-      phase = "pause";
     },
   };
 }

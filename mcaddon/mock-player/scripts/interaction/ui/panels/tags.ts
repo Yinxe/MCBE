@@ -12,7 +12,7 @@ import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { TAG_BOT, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
-import { setAiBehavior } from "../../../features/state/behavior";
+import { AI_BEHAVIORS, setAiBehavior, type AiBehavior } from "../../../features/state/behavior";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
@@ -50,9 +50,10 @@ export function showTagManagement(player: Player, botName: string): void {
 
   // 共存标签（除 bot 标识外）：自动重生置顶单独开关，其余（自动跳跃）进共存区
 
-  // 生物 AI 行为下拉选项（与 record.aiBehavior 值一一对应）
-  const AI_BEHAVIOR_OPTIONS = ["none", "wander", "mine", "place", "attack"];
-  const AI_BEHAVIOR_INDEX: Record<string, number> = { none: 0, wander: 1, mine: 2, place: 3, attack: 4 };
+  // 生物 AI 行为下拉值列表 + 索引映射（从 canonical 列表 AI_BEHAVIORS 派生——
+  // 与引擎 BEHAVIOR_BY_NAME 同源，避免三处手抄漏同步，审核 L4）
+  const AI_BEHAVIOR_OPTIONS: readonly AiBehavior[] = AI_BEHAVIORS;
+  const AI_BEHAVIOR_INDEX: Record<string, number> = Object.fromEntries(AI_BEHAVIORS.map((b, i) => [b, i]));
 
   const currentTagsText = record.tags
     .map((t) => { const d = getTagDef(t); return d ? d.label : t; })
@@ -130,8 +131,9 @@ export function showTagManagement(player: Player, botName: string): void {
       coexist,
       raidMode: vals.raidMode as boolean,
     });
-    // 生物 AI 行为落库（record.aiBehavior 字段——引擎下个周期对账生效）
-    setAiBehavior(currentRecord, pickedAiBehavior as "none" | "wander" | "mine" | "place");
+    // 生物 AI 行为落库延迟到 system.run 内、标签校验成功后（审核 M1：
+    // 避免 setTags 校验失败时行为字段已改写——部分应用残留）
+    // setAiBehavior(currentRecord, pickedAiBehavior);
 
     // 一次性使用开关：勾选提交=使用一次（自动停下），取消提交=停止一次。
     // 开关本身不落库（用后即停，无持续状态），每次打开行为菜单都默认关。
@@ -148,7 +150,10 @@ export function showTagManagement(player: Player, botName: string): void {
         player.sendMessage(`${color.error}${rejected}`);
         return;
       }
-      // ── ② 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
+      // ── ② 生物 AI 行为落库（record.aiBehavior 字段——引擎下个周期对账生效；
+      //     与标签同一 system.run 块、标签校验通过后才写——防部分应用） ──
+      setAiBehavior(currentRecord, pickedAiBehavior);
+      // ── ③ 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
       BotUiEvent.behaviorSubmitted.trigger({
         playerId: player.id,
         botName,

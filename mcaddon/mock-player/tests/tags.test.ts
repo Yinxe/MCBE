@@ -72,19 +72,19 @@ test("getTagGroups：三分组结构与定义一致", () => {
 
 // ─── computeTagsFromBehaviorForm（行为菜单表单 → 标签集） ──
 
-test("computeTagsFromBehaviorForm：bot 标识打底 + 共存勾选", () => {
+test("computeTagsFromBehaviorForm：bot 标识打底 + 共存勾选（无独立开关 → 兜底空闲）", () => {
   const tags = computeTagsFromBehaviorForm({ coexist: [TAG_RESPAWN.value, TAG_AUTO_JUMP.value], raidMode: false });
-  assert.deepEqual(tags, [TAG_BOT.value, TAG_RESPAWN.value, TAG_AUTO_JUMP.value]);
+  assert.deepEqual(tags, [TAG_BOT.value, TAG_RESPAWN.value, TAG_AUTO_JUMP.value, TAG_IDLE.value]);
 });
 
-test("computeTagsFromBehaviorForm：劫掠独立开关与互斥并存", () => {
+test("computeTagsFromBehaviorForm：劫掠独立开关与互斥并存（有独立开关 → 不兜底空闲）", () => {
   const tags = computeTagsFromBehaviorForm({ coexist: [TAG_RESPAWN.value], raidMode: true });
   assert.deepEqual(tags, [TAG_BOT.value, TAG_RESPAWN.value, TAG_RAID_MODE.value]);
 });
 
-test("computeTagsFromBehaviorForm：全空表单仅 bot 标识", () => {
+test("computeTagsFromBehaviorForm：全空表单仅 bot 标识 + 空闲兜底", () => {
   const tags = computeTagsFromBehaviorForm({ coexist: [], raidMode: false });
-  assert.deepEqual(tags, [TAG_BOT.value]);
+  assert.deepEqual(tags, [TAG_BOT.value, TAG_IDLE.value]);
 });
 
 // ─── validateTagSet（标签集校验） ───────────────────────

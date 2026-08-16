@@ -21,6 +21,7 @@ import type { BotRecord } from "../../../rules/Types";
 import { BOT_TAG } from "../../../rules/tags/BotTags";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { botRegistry } from "../../../bootstrap/context";
+import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 
 /**
  * 非食物使用自动停止延时（tick）：弓/弩满蓄力 20tick、投掷类蓄力片刻，40tick(≈2s) 足够覆盖。
@@ -36,17 +37,6 @@ const USE_AUTO_STOP_DELAY = 40;
  * 中途松开 = 取消进食（食物不消耗）。取 80tick(≈4s) 保证所有食物完整吃完再停。
  */
 const USE_FOOD_STOP_DELAY = 80;
-
-/** 取在线（且未死亡）的假人实体 */
-function resolveBotPlayer(record: BotRecord): SimulatedPlayer | undefined {
-  if (!record.online || record.death || !record.entityId) return undefined;
-  try {
-    const e = world.getEntity(record.entityId);
-    return e?.hasTag(BOT_TAG) ? (e as SimulatedPlayer) : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 /** 找一个当前可用的物品槽位：优先当前选中的手；其次快捷栏第一个非空 */
 function findUsableSlot(sim: SimulatedPlayer): number {
@@ -126,7 +116,7 @@ export enum UseItemResult {
  * @returns 多状态结果（见 UseItemResult 枚举），永不 reject
  */
 export function useItemOnce(record: BotRecord, player?: Player): Promise<UseItemResult> {
-  const sim = resolveBotPlayer(record);
+  const sim = resolveBotPlayer(record.name);
   if (!sim) {
     console.warn(`[MockPlayer] 使用物品：${record.name} 不在线`);
     return Promise.resolve(UseItemResult.Offline);
@@ -195,7 +185,7 @@ export function startUseItem(player: Player, record: BotRecord): void {
  * - 无进行中的使用：no-op，安全
  */
 export function stopUseItem(player: Player, record: BotRecord): void {
-  const sim = resolveBotPlayer(record);
+  const sim = resolveBotPlayer(record.name);
   if (!sim) {
     console.warn(`[MockPlayer] 停止使用：${record.name} 不在线，仅保存开关状态`);
     return;

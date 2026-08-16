@@ -18,7 +18,8 @@ export function toggleControl(record: BotRecord, player: Player): void {
   if (hasControl) {
     // 关闭控制：只移除 control，保留其他标签
     newTags = record.tags.filter((t) => t !== TAG_CONTROL.value);
-    // 确保至少有一个互斥/独立开关标签兜底（如劫掠模式开启中则不强制补 idle）
+    // 空闲兜底：无独立开关标签（互斥组已清空——行为统一走 aiBehavior 字段）
+    // 时补 idle（与 computeTagsFromBehaviorForm 兜底语义对齐）
     const hasExclusive = newTags.some((t) => EXCLUSIVE_SET.has(t) || STANDALONE_SET.has(t));
     if (!hasExclusive) {
       newTags.push(TAG_IDLE.value);

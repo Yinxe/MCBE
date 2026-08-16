@@ -35,6 +35,9 @@ const DEFAULT_MAX_DISTANCE = 6;
 const DEFAULT_POLL_TICKS = 5;
 /** 扭头等待（tick，=0.25 秒——用户规格：看向目标方块后等待扭头到位再进入循环） */
 const LOOK_SETTLE_TICKS = 5;
+/** busy 自旋上限（轮）：并发锁被其它破坏长期占用（如手动 /mp:breakblock）时放弃，
+ *  防无限等待——10 轮 × pollTicks(5) ≈ 50 tick ≈ 2.5 秒 */
+const BUSY_WAIT_LIMIT = 10;
 /** 空气方块 ID（目标破坏判定） */
 const AIR_BLOCK_ID = "minecraft:air";
 /** 液体方块 ID（目标位置被液体填充 = 目标方块已破坏，不再继续破） */
@@ -298,6 +301,7 @@ export async function breakBlockAt(botName: string, target: Vector3, options: Br
   }
 
   try {
+    let busyWaits = 0; // busy 自旋计数（并发锁被其它破坏长期占用时放弃——防无限等待）
     while (true) {
       // 外部中止（调用方生命周期控制——不可破方块由调用方决定放弃）
       if (shouldStop?.()) return "aborted";
@@ -324,7 +328,10 @@ export async function breakBlockAt(botName: string, target: Vector3, options: Br
       const result = await breakBlockOnce(bot, inSight.location, { ensureTool, maxDistance, pollTicks, shouldStop });
       if (result === "broken") continue; // 该块已摧毁 → 下一轮（目标可能还没消失）
       if (result === "busy") {
-        await waitTicks(pollTicks); // 并发保护（另一破坏进行中）→ 等待后重试
+        // 并发保护（另一破坏进行中，如手动 /mp:breakblock）→ 等待后重试；
+        // 上限内放弃（自旋上限 ≈ 10 轮 × pollTicks ≈ 2 秒——不无限等）
+        if (++busyWaits > BUSY_WAIT_LIMIT) return "aborted";
+        await waitTicks(pollTicks); 
         continue;
       }
       return result; // far / aborted / offline 直接结束
