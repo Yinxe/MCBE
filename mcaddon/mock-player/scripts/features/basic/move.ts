@@ -12,7 +12,10 @@ import { RetryError, retry } from "../../rules/utils/Retry";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { waitTicks, distance3d } from "../utils";
-import { pickRandomStrollPoint, type RandomStrollOptions } from "../../rules/coords/Stroll";
+import {
+  GRASS_BLOCK_BONUS, isStableBlockType, pickRandomStrollPoint, selectStrollTarget, strollWalkValue,
+  STROLL_CANDIDATE_SAMPLES, STROLL_DEFAULT_RADIUS, type RandomStrollOptions, type StrollCandidate,
+} from "../../rules/coords/Stroll";
 
 /** 导航速度 */
 const NAVIGATE_SPEED = 1;
@@ -329,15 +332,68 @@ export async function longNavigateBot(
   return result;
 }
 
-// ─── 单次随机游走（移动功能模块新增） ─────────────────
-// 随机挑一个近点 → 单次导航走过去 → 结束（一次性动作；持续游走由
-// 生物 AI 能力（features/ai/capabilities/wander）周期性调用本函数）。
+// ─── 单次随机游走（移动功能模块） ─────────────────────
+// 官方 wiki 陆地目标算法（寻路页随机游走节）：
+//   1. 随机挑选 10 个位置（水平半径 + 高度范围随机方向）
+//   2. 筛选：下方必须是**稳定方块**（遮挡形状完整——台阶/楼梯/玻璃等
+//      黑名单排除）；目标为固体 → 高度向上修正到非固体；修正后为水 → 无效
+//   3. 挑选**行走目标值最大**的位置作为终点（位置值 i/(60-3i)-0.5
+//      光照单调递增 + 草方块偏好 10）
+// 决策核心（selectStrollTarget/稳定方块/行走目标值）在 rules/coords/Stroll
+// 纯逻辑可单测；本函数做世界查询（getBlock）采样 10 个候选并导航。
+// 持续游走由生物 AI 能力（features/ai/capabilities/wander）周期性调用。
 
-/** 随机游走找地面向下扫描深度（格） */
-const STROLL_GROUND_SCAN_DEPTH = 8;
+/** 高度范围（格）：官方"高度范围随机"（相对当前高度上下） */
+const STROLL_HEIGHT_RANGE = 3;
+/** 最大修正高度（格）：固体向上修正上限，防死循环 */
+const STROLL_MAX_RAISE = 8;
 
 /**
- * 单次随机游走：近点（半径 ≤ STROLL_DEFAULT_RADIUS）→ 找地面高度 →
+ * 单次候选采样（官方陆地目标算法一步）：
+ * 随机方向 → 下方稳定方块判定 → 高度修正到非固体 → 非水 → 行走目标值。
+ * 无有效候选 → undefined（调用方凑满 10 个候选后选偏好最大者）。
+ */
+function sampleStrollCandidate(
+  bot: SimulatedPlayer,
+  radius: number,
+): StrollCandidate | undefined {
+  const loc = bot.location;
+  const baseY = Math.floor(loc.y);
+  // 随机方向：水平半径内 + 高度范围随机
+  const point = pickRandomStrollPoint(loc, radius);
+  const x = Math.floor(point.x);
+  const z = Math.floor(point.z);
+  let y = baseY + Math.floor(Math.random() * (STROLL_HEIGHT_RANGE * 2 + 1)) - STROLL_HEIGHT_RANGE;
+  try {
+    const dim = bot.dimension;
+    // 下方必须是稳定方块（非空气非液体 + 遮挡形状完整——黑名单）
+    const below = dim.getBlock({ x, y: y - 1, z });
+    if (!below || below.isAir || below.isLiquid || !isStableBlockType(below.typeId)) return undefined;
+    // 目标位置高度修正（官方陆地目标算法）：固体 → 向上直到非固体；液体提前无效
+    let head = dim.getBlock({ x, y, z });
+    while (head && !head.isAir && head.typeId !== "minecraft:cave_air") {
+      if (head.isLiquid) return undefined;
+      y++;
+      if (y - baseY > STROLL_MAX_RAISE) return undefined;
+      head = dim.getBlock({ x, y, z });
+    }
+    if (!head) return undefined;
+    // 行走目标值：官方位置值（内部光照单调递增）+ 草方块偏好（动物语义 +10）
+    let walkValue = -0.5;
+    try {
+      walkValue = strollWalkValue(head.getLightLevel());
+    } catch {
+      /* 光照读取失败：按全暗位置值 */
+    }
+    if (below.typeId === "minecraft:grass_block") walkValue += GRASS_BLOCK_BONUS;
+    return { point: { x: x + 0.5, y, z: z + 0.5 }, walkValue };
+  } catch {
+    return undefined; // 区块未加载/越界 → 无效候选
+  }
+}
+
+/**
+ * 单次随机游走：官方陆地目标算法选点（10 候选选行走目标值最大者）→
  * 单次导航（≤16 格直达）。
  * @param botName 假人名
  * @param options 半径/速度（速度可传慢速如 0.6——散步语义）
@@ -346,20 +402,13 @@ const STROLL_GROUND_SCAN_DEPTH = 8;
 export async function randomStrollOnce(botName: string, options: RandomStrollOptions = {}): Promise<NavigateResult> {
   const bot = resolveBotPlayer(botName);
   if (!bot) return NavigateResult.Unavailable;
-  const point = pickRandomStrollPoint(bot.location, options.radius);
-  // 找地面高度（向下扫描第一个非空气方块之上；失败用当前高度）
-  let y = Math.floor(point.y);
-  try {
-    for (let dy = 0; dy < STROLL_GROUND_SCAN_DEPTH; dy++) {
-      const block = bot.dimension.getBlock({ x: Math.floor(point.x), y: Math.floor(point.y) - dy, z: Math.floor(point.z) });
-      if (block && block.typeId !== "minecraft:air" && block.typeId !== "minecraft:cave_air") {
-        y = Math.floor(point.y) - dy + 1;
-        break;
-      }
-    }
-  } catch {
-    /* 方块读取失败：用当前高度 */
+  // 10 候选采样 → 选行走目标值最大者（官方陆地目标算法）
+  const radius = options.radius ?? STROLL_DEFAULT_RADIUS;
+  const samples: (StrollCandidate | undefined)[] = [];
+  for (let i = 0; i < STROLL_CANDIDATE_SAMPLES; i++) {
+    samples.push(sampleStrollCandidate(bot, radius));
   }
-  const target = { x: point.x, y, z: point.z };
+  const target = selectStrollTarget(samples);
+  if (!target) return NavigateResult.NoPath; // 周围无可站立近点
   return navigateBot(botName, target, options.speed ?? NAVIGATE_SPEED);
 }

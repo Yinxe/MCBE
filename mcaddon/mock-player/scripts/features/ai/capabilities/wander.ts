@@ -15,15 +15,18 @@ import type { Behavior, BehaviorContext } from "../../../ai";
 import { randomStrollOnce, NavigateResult } from "../../basic/move";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 
-/** 游走间隔（tick）：走完歇一会再走（短——0.4~1 秒，不站半天） */
-const WANDER_INTERVAL_MIN = 8;
-const WANDER_INTERVAL_MAX = 20;
-/** 休息（tick）：到达后短暂停顿（0.4~0.8 秒） */
-const WANDER_REST_MIN = 8;
-const WANDER_REST_MAX = 16;
-/** 导航失败后的快速重试等待（tick：0.25~0.5 秒——失败不长时间站立） */
-const WANDER_FAIL_RETRY_MIN = 5;
-const WANDER_FAIL_RETRY_MAX = 10;
+// ⚠️ 等待单位 = **引擎周期**（step 每 10 tick 一次，--wait 递减的是周期数）：
+//   官方 RandomStrollGoal 默认 interval=120 tick（6 秒）倒计时挑目标；
+//   本实现走完停 1~2 秒（2~4 周期）再等 1~3 秒（2~6 周期）——比官方略活泼。
+
+/** 游走间隔（引擎周期 = 10 tick）：走完歇一会再走（1~3 秒 → 2~6 周期） */
+const WANDER_INTERVAL_MIN = 2;
+const WANDER_INTERVAL_MAX = 6;
+/** 休息（引擎周期）：到达后短暂停顿（1~2 秒 → 2~4 周期） */
+const WANDER_REST_MIN = 2;
+const WANDER_REST_MAX = 4;
+/** 导航失败后的快速重试等待（引擎周期：0.5 秒 → 1 周期——失败不长时间站立） */
+const WANDER_FAIL_RETRY = 1;
 /** 单次游走半径（格）：近点（≤16 格直达内） */
 const WANDER_RADIUS = 8;
 /** 游走速度（慢速散步） */
@@ -97,6 +100,7 @@ export function makeWanderBehavior(): Behavior {
           break;
         case "pick":
           // 选近点 + 发起单次导航协程（有界；完成由 walk 轮询）
+          logStroll(ctx.botName, "出发（选点+移动）");
           startRun(ctx.botName);
           phase = "walk";
           break;
@@ -105,13 +109,15 @@ export function makeWanderBehavior(): Behavior {
           run = undefined;
           if (runResult === NavigateResult.Arrived) {
             // 到达：短暂休息（走停节律）
+            logStroll(ctx.botName, "到达，休息片刻");
             phase = "rest";
             wait = randomBetween(WANDER_REST_MIN, WANDER_REST_MAX);
           } else {
             // 导航失败（无路径/卡住/超时）：快速重试——短等待后重新选点，
             // 不进入长休息（避免"站半天"）
+            logStroll(ctx.botName, `导航失败(${runResult})，快速重试`);
             phase = "idle";
-            wait = randomBetween(WANDER_FAIL_RETRY_MIN, WANDER_FAIL_RETRY_MAX);
+            wait = WANDER_FAIL_RETRY;
           }
           break;
         case "rest":
@@ -122,6 +128,11 @@ export function makeWanderBehavior(): Behavior {
       }
     },
   };
+}
+
+/** 游走状态日志（状态切换时打印——节流不刷屏；观察调度是否在跑） */
+function logStroll(botName: string, msg: string): void {
+  console.info(`[MockPlayer] 生物AI ${botName} 随机游走: ${msg}`);
 }
 
 /** reset 需要 botName（Behavior.reset 无参——记录最近推进的假人） */
