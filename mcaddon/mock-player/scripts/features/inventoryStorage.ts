@@ -13,7 +13,7 @@
 import { world } from "@minecraft/server";
 import type { Player, ItemStack } from "@minecraft/server";
 
-import { readDurability } from "./basic/items/ItemComponentRead";
+import { readDurability, inventoryContainerOf } from "./basic/items/ItemComponentRead";
 import { BotEvents } from "../events/DomainEvents";
 import type { BotRecord, EquipSlotName } from "../rules/Types";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../rules/Types";
@@ -94,9 +94,9 @@ export class InventoryStorage {
     }
     if (!entity) return;
 
-    const equip = entity.getComponent("minecraft:equippable") as any;
+    const equip = entity.getComponent("minecraft:equippable");
     if (!equip) return;
-    const item = equip.getEquipment(EQUIP_SLOT_MAP[slotName]) as ItemStack | undefined;
+    const item = equip.getEquipment(EQUIP_SLOT_MAP[slotName]);
 
     this.saveEquipSlotIfChanged(botName, slotName, item ?? null);
   }
@@ -110,12 +110,12 @@ export class InventoryStorage {
    * 但**不再全量重写**（事件驱动已实时保存，无变化零写入）。
    */
   reconcile(player: Player, record: BotRecord): void {
-    const inv = player.getComponent("minecraft:inventory") as any;
-    if (inv?.container) {
+    const container = inventoryContainerOf(player);
+    if (container) {
       const changes: { slot: number; item: ItemStack | null }[] = [];
-      const size = Math.min(inv.container.size, INVENTORY_SIZE);
+      const size = Math.min(container.size, INVENTORY_SIZE);
       for (let i = 0; i < size; i++) {
-        const item = inv.container.getItem(i) ?? null;
+        const item = container.getItem(i) ?? null;
         const key = `${record.name}:inv:${i}`;
         const fp = itemFingerprint(item);
         if (this.snapshots.get(key) === fp) continue;
@@ -127,7 +127,7 @@ export class InventoryStorage {
       }
     }
 
-    const equip = player.getComponent("minecraft:equippable") as any;
+    const equip = player.getComponent("minecraft:equippable");
     if (equip) {
       const changes: { slot: string; item: ItemStack | null }[] = [];
       for (const slotName of EQUIP_SLOT_NAMES) {
@@ -157,10 +157,10 @@ export class InventoryStorage {
 
     const savedInv = this.store.loadInventory(record.name);
     if (savedInv) {
-      const inv = player.getComponent("minecraft:inventory") as any;
-      if (inv?.container) {
-        for (let i = 0; i < Math.min(inv.container.size, savedInv.length); i++) {
-          inv.container.setItem(i, savedInv[i] ?? undefined);
+      const container = inventoryContainerOf(player);
+      if (container) {
+        for (let i = 0; i < Math.min(container.size, savedInv.length); i++) {
+          container.setItem(i, savedInv[i] ?? undefined);
           this.snapshots.set(`${record.name}:inv:${i}`, itemFingerprint(savedInv[i] ?? null));
         }
         restored = true;
@@ -169,7 +169,7 @@ export class InventoryStorage {
 
     const savedEquip = this.store.loadEquipment(record.name);
     if (savedEquip) {
-      const equip = player.getComponent("minecraft:equippable") as any;
+      const equip = player.getComponent("minecraft:equippable");
       if (equip) {
         for (const [name, slot] of Object.entries(EQUIP_SLOT_MAP)) {
           const item = savedEquip[name];

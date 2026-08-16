@@ -3,7 +3,7 @@
 // UI 格式化在 ui/trident.ts 中
 // 决策（三叉戟识别/槽位扫描）在 core/rules/items/TridentRules，投掷时序在这里
 
-import { EntityEquippableComponent, EquipmentSlot, ItemStack, system } from "@minecraft/server";
+import { EntityEquippableComponent, EquipmentSlot, ItemStack, Container, system } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry } from "../../bootstrap/context";
@@ -11,6 +11,7 @@ import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { pauseFollow, resumeFollow, isFollowing } from "../state/follow";
 import { registerPendingTridentItem, discardPendingTridentItem } from "./tridentTracker";
 import { TRIDENT_ID, isTrident, scanTridentSlots } from "../../rules/items/TridentRules";
+import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
 
 // ─── 投掷互斥（按假人：A 假人投掷不阻塞 B 假人） ─────────
 const throwingBots = new Set<string>();
@@ -43,7 +44,7 @@ export function scanTridents(botName: string): TridentSlot[] | undefined {
   const items: (ItemStack | null)[] = [];
   if (container) {
     for (let i = 0; i < container.size; i++) {
-      items.push(container.getItem(i));
+      items.push(container.getItem(i) ?? null);
     }
   }
 
@@ -155,11 +156,13 @@ function doThrowLoop(
 
   const container = getContainer(b);
   if (!container) { onDone(); return; }
+  // ⚠️ 闭包内保持精确 Container 类型（控制流收窄不会贯通异步闭包 → 用非空别名）
+  const c: Container = container;
 
   const mainhandSlot = b.selectedSlotIndex;
 
   // 保存当前主手物品
-  const savedMainhand = container.getItem(mainhandSlot);
+  const savedMainhand = c.getItem(mainhandSlot);
 
   // ⚠️ 收尾统一出口：任何断链路径（实体失效/投掷失败/异常）都必须走到这里，
   // 否则 isThrowing 永久为 true（全服投掷被拒）+ resumeFollow 永不执行（跟随被永久暂停）
@@ -168,7 +171,7 @@ function doThrowLoop(
       // 若 savedMainhand 本身就是被投掷的三叉戟（如快速路径），不恢复
       const mainhandConsumed = savedMainhand?.typeId === TRIDENT_ID
         && slots.includes(mainhandSlot);
-      restoreMainhand(container, mainhandSlot, mainhandConsumed ? undefined : savedMainhand);
+      restoreMainhand(c, mainhandSlot, mainhandConsumed ? undefined : savedMainhand);
     } catch (e) {
       console.warn(`[MockPlayer] 投掷收尾恢复主手失败: ${e}`);
     }
@@ -185,7 +188,7 @@ function doThrowLoop(
     }
 
     const tridentSlot = slots[index++];
-    const tridentItem = container.getItem(tridentSlot);
+    const tridentItem = c.getItem(tridentSlot);
 
     if (!tridentItem || !isTrident(tridentItem.typeId)) {
       throwNext();
@@ -197,8 +200,8 @@ function doThrowLoop(
 
     // 换到主手
     if (tridentSlot !== mainhandSlot) {
-      container.setItem(mainhandSlot, tridentItem);
-      container.setItem(tridentSlot, undefined);
+      c.setItem(mainhandSlot, tridentItem);
+      c.setItem(tridentSlot, undefined);
     }
     b.selectedSlotIndex = mainhandSlot;
 
@@ -246,12 +249,11 @@ function doThrowLoop(
 
 // ─── 工具函数 ──────────────────────────────────────────
 
-function getContainer(bot: SimulatedPlayer): any {
-  const inv = bot.getComponent("minecraft:inventory") as any;
-  return inv?.container;
+function getContainer(bot: SimulatedPlayer): Container | undefined {
+  return inventoryContainerOf(bot);
 }
 
-function restoreMainhand(container: any, slot: number, saved: ItemStack | undefined): void {
+function restoreMainhand(container: Container, slot: number, saved: ItemStack | undefined): void {
   try {
     if (saved) {
       container.setItem(slot, saved);

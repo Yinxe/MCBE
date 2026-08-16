@@ -2,12 +2,13 @@
 // 预览计算/选项判定/离线预览在 core/service/ReclaimPlanner，
 // 实体容器读写与实际转移在这里（mc 层）
 
-import { Player, EquipmentSlot, ItemStack, world } from "@minecraft/server";
+import { Player, EquipmentSlot, ItemStack, Container, world } from "@minecraft/server";
 
 import { BotRecord, ItemPreview } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { SWAP_SLOTS } from "../basic/items/EquipmentSlots";
 import { captureExperience, itemStackToPreview, serializeItemStack } from "../basic/items/McItemCodec";
+import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
 import {
   FULL_OPTIONS,
   hasAnyArmor,
@@ -55,16 +56,16 @@ export function getReclaimPreview(record: BotRecord): {
         : null;
 
       // 主手
-      const inv = bot.getComponent("minecraft:inventory") as any;
+      const invContainer = inventoryContainerOf(bot);
       let mainhand: ItemPreview | null = null;
-      if (inv?.container) {
+      if (invContainer) {
         const handSlot = bot.selectedSlotIndex;
-        const item = inv.container.getItem(handSlot);
+        const item = invContainer.getItem(handSlot);
         if (item) mainhand = itemStackToPreview(item);
       }
 
       // 装备
-      const equip = bot.getComponent("minecraft:equippable") as any;
+      const equip = bot.getComponent("minecraft:equippable");
       const equipMap: Record<string, ItemPreview | null> = { head: null, chest: null, legs: null, feet: null, offhand: null };
       if (equip) {
         const slotMap: Record<string, EquipmentSlot> = {
@@ -80,11 +81,11 @@ export function getReclaimPreview(record: BotRecord): {
 
       // 背包略写
       const invCounts: Record<string, number> = {};
-      if (inv?.container) {
+      if (invContainer) {
         const handSlot = bot.selectedSlotIndex;
-        for (let i = 0; i < inv.container.size; i++) {
+        for (let i = 0; i < invContainer.size; i++) {
           if (i === handSlot) continue;
-          const item = inv.container.getItem(i);
+          const item = invContainer.getItem(i);
           if (!item) continue;
           const shortName = item.typeId.replace("minecraft:", "");
           invCounts[shortName] = (invCounts[shortName] || 0) + item.amount;
@@ -109,13 +110,13 @@ export function getReclaimPreview(record: BotRecord): {
  * @returns 是否成功转移了物品
  */
 function transferItemToPlayer(
-  item: any,
-  pInv: any,
+  item: ItemStack,
+  container: Container,
   player: Player,
   result: ReclaimResult,
 ): void {
   if (!item) return;
-  const remainder = pInv.container.addItem(item);
+  const remainder = container.addItem(item);
   if (remainder) {
     player.dimension.spawnItem(remainder, player.location);
     result.overflow++;
@@ -136,8 +137,8 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
   const opts = options ?? FULL_OPTIONS;
   const result: ReclaimResult = { items: 0, overflow: 0, xp: 0, xpLevel: 0 };
 
-  const pInv = player.getComponent("minecraft:inventory") as any;
-  if (!pInv?.container) throw new Error("无法获取玩家背包");
+  const pContainer = inventoryContainerOf(player);
+  if (!pContainer) throw new Error("无法获取玩家背包");
 
   // ── 在线 & 非死亡：从实体回收 ──
   if (record.online && !record.death) {
@@ -147,17 +148,17 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
 
     // 背包 & 主手（背包 36 格，主手是 selectedSlotIndex 对应槽）
     if (opts.inventory || opts.mainhand) {
-      const botInv = bot.getComponent("minecraft:inventory") as any;
-      if (botInv?.container) {
+      const botContainer = inventoryContainerOf(bot);
+      if (botContainer) {
         const handSlot = bot.selectedSlotIndex;
-        for (let i = 0; i < botInv.container.size; i++) {
+        for (let i = 0; i < botContainer.size; i++) {
           const isHand = i === handSlot;
           if (isHand && !opts.mainhand) continue;
           if (!isHand && !opts.inventory) continue;
-          const item = botInv.container.getItem(i);
+          const item = botContainer.getItem(i);
           if (!item) continue;
-          botInv.container.setItem(i, undefined);
-          transferItemToPlayer(item, pInv, player, result);
+          botContainer.setItem(i, undefined);
+          transferItemToPlayer(item, pContainer, player, result);
         }
       }
     }
@@ -179,7 +180,7 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
           const item = equip.getEquipment(slot);
           if (!item) continue;
           equip.setEquipment(slot, undefined);
-          transferItemToPlayer(item, pInv, player, result);
+          transferItemToPlayer(item, pContainer, player, result);
         }
       }
     }
@@ -233,7 +234,7 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
           if (isHand && !opts.mainhand) { remainingInv.push(savedInv[i]); continue; }
           if (!isHand && !opts.inventory) { remainingInv.push(savedInv[i]); continue; }
           if (!savedInv[i]) { remainingInv.push(null); continue; }
-          transferItemToPlayer(savedInv[i]!, pInv, player, result);
+          transferItemToPlayer(savedInv[i]!, pContainer, player, result);
           remainingInv.push(null); // 已回收，清空
         }
         saveCoordinator.saveInventory(record.name, remainingInv);
@@ -247,7 +248,7 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
         if (!item) continue;
         const optKey = slot as "head" | "chest" | "legs" | "feet" | "offhand";
         if (!opts[optKey]) continue;
-        transferItemToPlayer(item, pInv, player, result);
+        transferItemToPlayer(item, pContainer, player, result);
         delete savedEquip[slot];
       }
       saveCoordinator.saveEquipment(record.name, savedEquip);

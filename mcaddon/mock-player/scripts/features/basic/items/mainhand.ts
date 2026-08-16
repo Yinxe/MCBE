@@ -7,6 +7,7 @@ import { color, style } from "@yinxe/toolkit";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { formatEnchantments, formatDurability } from "../../../interaction/ui/format";
 import { canClearMainhand, slotLabel } from "../../../rules/items/MainhandPolicy";
+import { inventoryContainerOf } from "./ItemComponentRead";
 
 // ─── 公开类型 ──────────────────────────────────────────
 
@@ -28,10 +29,8 @@ export function getMainhandOptions(botName: string): MainhandOption[] | undefine
   const bot = resolveBotPlayer(botName);
   if (!bot) return undefined;
 
-  const inv = bot.getComponent("minecraft:inventory") as any;
-  if (!inv?.container) return [];
-
-  const container = inv.container;
+  const container = inventoryContainerOf(bot);
+  if (!container) return [];
   /** 假人当前选中的热栏槽（即主手槽） */
   const handSlot = bot.selectedSlotIndex;
 
@@ -91,9 +90,8 @@ export function setMainhandSlot(botName: string, slotValue: number): boolean {
     const bot = resolveBotPlayer(botName);
     if (!bot) return false;
 
-    const inv = bot.getComponent("minecraft:inventory") as any;
-    if (!inv?.container) return false;
-    const container = inv.container;
+    const container = inventoryContainerOf(bot);
+    if (!container) return false;
 
     const handSlot = bot.selectedSlotIndex;
     if (slotValue === -1) {

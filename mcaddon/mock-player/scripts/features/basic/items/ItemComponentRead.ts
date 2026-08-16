@@ -1,14 +1,16 @@
 // ─── 物品组件类型化读取（mc 层共享工具） ────────────────
 // @minecraft/server 的 getComponent<T>(id) 返回泛型映射的精确组件类型
-// （ItemComponentReturnType<T>），但由于 ItemComponentTypeMap 覆盖不全，
-// 部分组件（potion/dyeable）仍需显式承载原类型。本模块收敛这些读取，
+// （ItemComponentReturnType<T>/EntityComponentReturnType<T>），因此耐久/附魔/
+// 药水/染色/背包等常见组件的读取**无需 any**。本模块收敛这些读取，
 // 提供类型化、容错的统一入口，消除调用方重复的 `as any` 与 try-catch。
 
-import {
-  ItemStack,
-  ItemDurabilityComponent,
-  ItemEnchantableComponent,
-} from "@minecraft/server";
+import { ItemStack, Container, Entity } from "@minecraft/server";
+import type { ItemDurabilityComponent, ItemEnchantableComponent } from "@minecraft/server";
+
+/** 读取实体背包容器（无 inventory 组件返回 undefined）；收敛各处 getComponent as any */
+export function inventoryContainerOf(entity: Entity): Container | undefined {
+  return entity.getComponent("minecraft:inventory")?.container;
+}
 
 /** 耐久组件空值对齐：无组件返回 null（hasComponent 与 getComponent 分两步判断） */
 export function durabilityOf(item: ItemStack): ItemDurabilityComponent | null {

@@ -16,7 +16,7 @@ import { Player, Container, ItemStack, system, world } from "@minecraft/server";
 import { BOT_TAG } from "../../../rules/tags/BotTags";
 import { identifyTool, isToolHealthy, findReplacementIndex, findEmptySlotIndex, findAnySlot } from "../../../rules/items/ToolDurability";
 import { color } from "@yinxe/toolkit";
-import { readDurability } from "./ItemComponentRead";
+import { readDurability, inventoryContainerOf } from "./ItemComponentRead";
 
 // ─── 配置常量 ──────────────────────────────────────────
 
@@ -92,9 +92,8 @@ export function checkMainHandDurability(bot: Player, changedSlot: number): void 
     // 冷却检查，防止高频事件反复触发
     if (isOnCooldown(bot.name)) return;
 
-    const inv = bot.getComponent("minecraft:inventory") as any;
-    if (!inv?.container) return;
-    const container = inv.container as Container;
+    const container = inventoryContainerOf(bot);
+    if (!container) return;
 
     // 获取主手物品
     const handItem = container.getItem(handSlot);
