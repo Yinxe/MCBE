@@ -95,6 +95,13 @@ export async function navigateBot(
 
   try {
     bot.stopMoving();
+    // 开始移动前：让假人看向移动方向的目标坐标点（初始朝向；
+    // 寻路自动转向前的朝向同步；看向失败不影响移动）
+    try {
+      bot.lookAtLocation(target);
+    } catch {
+      /* lookAt 失败不影响移动 */
+    }
     const result = bot.navigateToLocation(target, speed);
     // 无路径可达：直接失败（未开始移动）
     if (!result.isFullPath) return NavigateResult.NoPath;
