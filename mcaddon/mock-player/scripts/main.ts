@@ -21,6 +21,7 @@ import { initFishingHookTracker } from "./features/task/fishingHookTracker";
 import { initLootTracker } from "./features/task/fishingFlow";
 import { initRaidPorts } from "./features/task/RaidPorts";
 import { startBrainEngine } from "./legacy/ai/BotBrain";
+import { startAiEngine } from "./features/ai/brainEngine";
 import { initGameTestContext, registerTestDimension } from "./features/manage/gametestContext";
 import { registerUiDrivers } from "./bootstrap/uiDrivers";
 import { runMigrations } from "./bootstrap/migration";
@@ -97,4 +98,8 @@ world.afterEvents.worldLoad.subscribe(() => {
 
   // 启动 AI 行为引擎（宝库/劫掠任务：每 10 tick 驱动各自行为树 + 标签对账）
   startBrainEngine();
+
+  // 启动生物 AI 引擎（新框架 scripts/ai：行为状态机 + 标签对账——
+  // 随机游走等生物 AI 能力按标签启停）
+  startAiEngine();
 });

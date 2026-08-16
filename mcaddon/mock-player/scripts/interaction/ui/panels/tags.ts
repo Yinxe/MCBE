@@ -11,7 +11,7 @@ import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_AUTO_USE, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, EXCLUSIVE_TAGS, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
+import { TAG_BOT, TAG_AUTO_USE, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, TAG_WANDER_MODE, EXCLUSIVE_TAGS, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
@@ -107,6 +107,11 @@ export function showTagManagement(player: Player, botName: string): void {
     .dropdown("exclusive", style("行为（仅选一项）", color.warn), exclusiveOptions, {
       defaultValueIndex: exclusiveIndex,
       tooltip: "空闲/自动挖掘/放置/攻击/体态控制/宝库模式等，互斥只能选一项（使用物品是上方独立开关）",
+    })
+    // ── 生物 AI 能力（新框架 scripts/ai 驱动；与互斥行为二选一） ──
+    .dropdown("aiBehavior", style("生物AI能力（仅选一项）", color.accent), ["无", style("随机游走", color.playerName)], {
+      defaultValueIndex: record.tags.includes(TAG_WANDER_MODE.value) ? 1 : 0,
+      tooltip: "单选生物 AI 能力改变假人生物行为：随机游走 = 空闲时随机走走停停（近点散步）。与上方互斥行为二选一",
     });
 
   builder.show(player).then((vals) => {
@@ -114,9 +119,10 @@ export function showTagManagement(player: Player, botName: string): void {
     const currentRecord = resolveUiBotRecord(player, botName);
     if (!currentRecord) return;
 
-    // ── 表单 → 标签计算（core 纯函数） ──
+    // ── 表单 → 标签计算（core 纯函数；生物 AI 能力优先于互斥行为） ──
     const exclusiveSel = vals.exclusive as number;
     const pickedExclusive = exclusiveSel > 0 ? behaviorExclusive[exclusiveSel - 1].value : undefined;
+    const aiBehavior = (vals.aiBehavior as number) === 1 ? "wander" : "none";
     const coexist: string[] = [];
     if (vals.respawn as boolean) coexist.push(TAG_RESPAWN.value);
     if (vals.autoJump as boolean) coexist.push(TAG_AUTO_JUMP.value);
@@ -124,6 +130,7 @@ export function showTagManagement(player: Player, botName: string): void {
       coexist,
       exclusive: pickedExclusive,
       raidMode: vals.raidMode as boolean,
+      aiBehavior,
     });
 
     // 一次性使用开关：勾选提交=使用一次（自动停下），取消提交=停止一次。

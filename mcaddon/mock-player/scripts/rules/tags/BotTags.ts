@@ -21,11 +21,17 @@ export const TAG_VAULT_MODE: TagDef = { label: "宝库模式", value: `${TAG_PRE
 export const TAG_RAID_MODE: TagDef = { label: "劫掠模式", value: `${TAG_PREFIX}raidMode` };
 export const TAG_FISH_MODE: TagDef = { label: "自动钓鱼", value: `${TAG_PREFIX}fishMode` };
 
+// 生物 AI 能力标签（互斥单选：随机游走——新框架 scripts/ai 驱动的生物行为）
+export const TAG_WANDER_MODE: TagDef = { label: "随机游走", value: `${TAG_PREFIX}wanderMode` };
+
 /** 可共存的标签组 */
 export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
 
 /** 互斥的标签组（同一时间只能有一个生效） */
-export const EXCLUSIVE_TAGS: TagDef[] = [TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE, TAG_VAULT_MODE, TAG_FISH_MODE];
+export const EXCLUSIVE_TAGS: TagDef[] = [
+  TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE,
+  TAG_VAULT_MODE, TAG_FISH_MODE, TAG_WANDER_MODE,
+];
 
 /** 独立开关标签组（与互斥/共存标签均可并存，各自独立的持久开关，如劫掠模式） */
 export const STANDALONE_TAGS: TagDef[] = [TAG_RAID_MODE];
@@ -96,15 +102,23 @@ export interface BehaviorFormInput {
   exclusive: string | undefined;
   /** 劫掠模式独立开关（与互斥行为可并存） */
   raidMode: boolean;
+  /** 生物 AI 能力单选（"none" = 不启用；"wander" = 随机游走——与互斥行为二选一） */
+  aiBehavior: "none" | "wander";
 }
 
 /**
  * 由行为菜单表单输入计算完整新标签集（含 bot 标识标签）。
- * 结构与 UI 表单布局一一对应：bot 标识打底 + 共存勾选 + 互斥单选 + 劫掠独立开关。
+ * 结构与 UI 表单布局一一对应：bot 标识打底 + 共存勾选 + 互斥单选 + 劫掠独立开关
+ * + 生物 AI 能力单选（选中能力时互斥行为忽略——同一互斥组二选一）。
  */
 export function computeTagsFromBehaviorForm(input: BehaviorFormInput): string[] {
   const tags = [TAG_BOT.value, ...input.coexist];
-  if (input.exclusive) tags.push(input.exclusive);
+  // 生物 AI 能力优先：选中能力 → 不再加入互斥行为标签（同一互斥组）
+  if (input.aiBehavior === "wander") {
+    tags.push(TAG_WANDER_MODE.value);
+  } else if (input.exclusive) {
+    tags.push(input.exclusive);
+  }
   if (input.raidMode) tags.push(TAG_RAID_MODE.value);
   return tags;
 }

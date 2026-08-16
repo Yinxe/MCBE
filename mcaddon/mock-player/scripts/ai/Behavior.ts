@@ -61,6 +61,13 @@ export class BehaviorRunner {
     }
   }
 
+  /** 卸载全部行为（大脑清理/假人下线；运行中 → reset 释放） */
+  unregisterAll(): void {
+    this.active?.reset();
+    this.active = undefined;
+    this.behaviors = [];
+  }
+
   /**
    * 每引擎周期调用一次（同步）：
    *   1. 当前行为延续条件失效（canActivate）→ reset 释放

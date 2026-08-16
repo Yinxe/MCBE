@@ -12,6 +12,7 @@ import { RetryError, retry } from "../../rules/utils/Retry";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { waitTicks, distance3d } from "../utils";
+import { pickRandomStrollPoint, type RandomStrollOptions } from "../../rules/coords/Stroll";
 
 /** 导航速度 */
 const NAVIGATE_SPEED = 1;
@@ -326,4 +327,39 @@ export async function longNavigateBot(
   const result = SEGMENT_OUTCOME_TO_RESULT[outcome as Exclude<SegmentOutcome, "ok">];
   callbacks?.onComplete?.(result);
   return result;
+}
+
+// ─── 单次随机游走（移动功能模块新增） ─────────────────
+// 随机挑一个近点 → 单次导航走过去 → 结束（一次性动作；持续游走由
+// 生物 AI 能力（features/ai/capabilities/wander）周期性调用本函数）。
+
+/** 随机游走找地面向下扫描深度（格） */
+const STROLL_GROUND_SCAN_DEPTH = 8;
+
+/**
+ * 单次随机游走：近点（半径 ≤ STROLL_DEFAULT_RADIUS）→ 找地面高度 →
+ * 单次导航（≤16 格直达）。
+ * @param botName 假人名
+ * @param options 半径/速度（速度可传慢速如 0.6——散步语义）
+ * @returns 导航结果（arrived/失败原因；永不 reject）
+ */
+export async function randomStrollOnce(botName: string, options: RandomStrollOptions = {}): Promise<NavigateResult> {
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return NavigateResult.Unavailable;
+  const point = pickRandomStrollPoint(bot.location, options.radius);
+  // 找地面高度（向下扫描第一个非空气方块之上；失败用当前高度）
+  let y = Math.floor(point.y);
+  try {
+    for (let dy = 0; dy < STROLL_GROUND_SCAN_DEPTH; dy++) {
+      const block = bot.dimension.getBlock({ x: Math.floor(point.x), y: Math.floor(point.y) - dy, z: Math.floor(point.z) });
+      if (block && block.typeId !== "minecraft:air" && block.typeId !== "minecraft:cave_air") {
+        y = Math.floor(point.y) - dy + 1;
+        break;
+      }
+    }
+  } catch {
+    /* 方块读取失败：用当前高度 */
+  }
+  const target = { x: point.x, y, z: point.z };
+  return navigateBot(botName, target, options.speed ?? NAVIGATE_SPEED);
 }
