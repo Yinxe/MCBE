@@ -1,13 +1,14 @@
-// ─── 通用结构搜索引擎（mc 层，粗扫 + 分批细扫） ────────
-// 基于 dimension.getBlocks 的高性能结构搜索编排——调度模型：
+// ─── 通用结构搜索引擎（mc 层，粗扫 + 细扫工作队列） ─────
+// 基于 dimension.getBlocks 的高性能结构搜索编排——调度模型（防 Watchdog）：
 //
 //   tick 1（调用 tick）：Phase 1 粗扫——**一次性 getBlocks 扫完全部范围**
-//     特征方块（includeTypes=种子 id，Y 薄层收窄）；随后批量列补全（可选）、
-//     候选生成（聚类/模板）——全部同步完成，粗扫只占一个 tick。
-//   tick 2..N：Phase 2 细扫——候选按批次（默认每批 10 个，可调大至 20）
-//     **system.run 排队到下一 tick**：每个 tick 只细扫一批（批内 Promise.all
-//     并发评估），下一批排到再下一 tick。100 个候选 = 10 tick 扫完，
-//     单 tick 不堆积并发特征扫描。
+//     特征方块（includeTypes=种子 id，Y 薄层收窄）。
+//   tick 2：批量列补全（可选，1-2 次批量 getBlocks）+ 候选生成（内存）。
+//   tick 3..N：Phase 2 细扫——**工作队列**：每候选 = 区域缓存构建器
+//     （按白名单分批 getBlocks，每候选 4 批）；每 tick 推进最多
+//     EVALUATE_BATCH_SIZE（10）个未完成候选的各一批，全部批次就绪的候选
+//     立即评估。单 tick 计算量 = 10 次区域批量查询（不堆积，防 Watchdog）；
+//     22 候选 ≈ 9 tick 扫完。
 //   末 tick：距离排序 + 诊断行汇总（内存操作）→ resolve。
 //
 // 结构无关：树/宝库/建筑…只需提供 spec（种子/聚类或模板/评估/诊断）。
@@ -247,61 +248,87 @@ function probeColumnsBatched(
 // ─── Phase 2 细扫（每 tick 一批并发） ──────────────────
 
 /**
- * 区域分类缓存构建（同步）：区域批量 getBlocks 分批白名单填充。
- * 批量失败回退逐格（正确性兜底）；未命中格 = foreignKind。
+ * 区域缓存分步构建器（细扫工作队列单元）：
+ * 区域批量 getBlocks 按白名单分批推进——**每 tick 一批**（advance 执行一批），
+ * 全部批次完成 → done() 产出分类查询（未命中格 = foreignKind）。
+ * 批量失败回退逐格（正确性兜底，done() 自动切换）。
  */
-function buildRegionCellKind(
-  dimension: Dimension,
-  bounds: RegionBounds,
-  naturalBatches: readonly (readonly string[])[],
-  classify: (typeId: string) => string,
-  foreignKind: string,
-): CellKindFn {
-  const cache = new Map<string, string>();
-  let bulkOk = true;
-  try {
-    const volume = new BlockVolume(
+class RegionCacheBuilder {
+  private cache = new Map<string, string>();
+  private batchIndex = 0;
+  private bulkOk = true;
+  private readonly volume: BlockVolume;
+
+  constructor(
+    private readonly dimension: Dimension,
+    bounds: RegionBounds,
+    private readonly naturalBatches: readonly (readonly string[])[],
+    private readonly classify: (typeId: string) => string,
+    private readonly foreignKind: string,
+  ) {
+    this.volume = new BlockVolume(
       { x: bounds.minX, y: Math.max(-64, bounds.groundY), z: bounds.minZ },
       { x: bounds.maxX, y: Math.min(320, bounds.regionTop), z: bounds.maxZ },
     );
-    for (const batch of naturalBatches) {
-      const found = dimension.getBlocks(volume, { includeTypes: [...batch] });
-      for (const loc of found.getBlockLocationIterator()) {
-        const block = dimension.getBlock(loc);
-        if (block) cache.set(`${loc.x},${loc.y},${loc.z}`, classify(block.typeId));
-      }
-    }
-  } catch (e: any) {
-    console.error(`[MockPlayer] 结构区域批量缓存失败，回退逐格: ${e?.message ?? e}`);
-    bulkOk = false;
   }
-  if (bulkOk) {
-    return (x, y, z) => cache.get(`${x},${y},${z}`) ?? foreignKind;
+
+  /** 是否还有剩余白名单批次 */
+  get hasMore(): boolean {
+    return this.batchIndex < this.naturalBatches.length;
   }
-  return (x, y, z) => {
+
+  /** 推进一批白名单 getBlocks（单 tick 内一次批量查询） */
+  advance(): void {
+    const batch = this.naturalBatches[this.batchIndex]!;
+    this.batchIndex++;
     try {
-      const block = dimension.getBlock({ x, y, z });
-      return classify(block?.typeId ?? "");
-    } catch {
-      return foreignKind;
+      const found = this.dimension.getBlocks(this.volume, { includeTypes: [...batch] });
+      for (const loc of found.getBlockLocationIterator()) {
+        const block = this.dimension.getBlock(loc);
+        if (block) this.cache.set(`${loc.x},${loc.y},${loc.z}`, this.classify(block.typeId));
+      }
+    } catch (e: any) {
+      console.error(`[MockPlayer] 结构区域批量缓存失败，回退逐格: ${e?.message ?? e}`);
+      this.bulkOk = false;
     }
-  };
+  }
+
+  /** 全部批次完成 → 产出分类查询（批量失败时回退逐格） */
+  done(): CellKindFn {
+    if (this.bulkOk) {
+      return (x, y, z) => this.cache.get(`${x},${y},${z}`) ?? this.foreignKind;
+    }
+    return (x, y, z) => {
+      try {
+        const block = this.dimension.getBlock({ x, y, z });
+        return this.classify(block?.typeId ?? "");
+      } catch {
+        return this.foreignKind;
+      }
+    };
+  }
 }
 
-/** 单候选细扫（同步）：区域缓存 → spec 评估 →（可选）诊断行（复用同一缓存） */
-function evaluateCandidateSync<T extends StructureVerdict>(
+/** 细扫工作项（候选 + 区域缓存构建器） */
+interface EvalWorkItem<T extends StructureVerdict> {
+  candidate: StructureCandidate;
+  bounds: RegionBounds;
+  builder: RegionCacheBuilder;
+  /** 是否已评估完成 */
+  done: boolean;
+  /** 评估结果槽（done 时写入） */
+  result?: { candidate: StructureCandidate; result: T; lines: string[] };
+}
+
+/** 单候选评估（缓存已就绪；同步） */
+function evaluateWithCache<T extends StructureVerdict>(
   candidate: StructureCandidate,
   spec: StructureSearchSpec<T>,
-  dimension: Dimension,
-  region: { pad: number; defaultHeight: number; topMargin: number },
+  cellKind: CellKindFn,
+  bounds: RegionBounds,
   includeDiagnostics: boolean,
 ): { candidate: StructureCandidate; result: T; lines: string[] } {
   try {
-    const bounds = regionBoundsOf(candidate, region.pad, region.defaultHeight, region.topMargin);
-    const foreignKind = spec.foreignKind ?? "foreign";
-    const naturalBatches = spec.naturalBatches ?? [];
-    const classify = spec.classifyBlock ?? ((typeId: string) => typeId);
-    const cellKind = buildRegionCellKind(dimension, bounds, naturalBatches, classify, foreignKind);
     const result = spec.evaluate(candidate, cellKind, bounds);
     // 诊断行复用评估缓存（零额外世界查询）
     const lines = includeDiagnostics && spec.describe ? spec.describe(candidate, result, cellKind, bounds) : [];
@@ -318,13 +345,14 @@ function evaluateCandidateSync<T extends StructureVerdict>(
 const DEFAULT_Y_BAND = 3;
 
 /**
- * 在指定坐标、指定范围内搜索目标结构（粗扫 + 分批细扫调度）。
+ * 在指定坐标、指定范围内搜索目标结构（粗扫 + 细扫工作队列调度）。
  *
- * 调度（用户规格）：
- *   tick 1：粗扫一次性扫完（特征方块定位 + 列补全 + 候选生成，同步）
- *   tick 2..N：细扫每 tick 一批（EVALUATE_BATCH_SIZE=10 个，可调 20）——
- *     批内 Promise.all 并发评估，下一批 system.run 排到下一 tick；
- *     100 个候选 = 10 tick 扫完，单 tick 不堆积并发特征扫描
+ * 调度（防 Watchdog）：
+ *   tick 1：粗扫一次性定位特征方块（同步）
+ *   tick 2：列补全（可选）+ 候选生成（同步）
+ *   tick 3..N：细扫工作队列——每候选区域缓存按白名单分批推进，
+ *     每 tick 最多推进 EVALUATE_BATCH_SIZE（10）个候选的各一批；
+ *     单 tick 计算量 = 10 次区域批量查询，不堆积
  *   末 tick：排序 + 诊断行汇总 → resolve
  * 永不 reject：任何异常 resolve 空结果。
  *
@@ -351,128 +379,143 @@ export function scanStructures<T extends StructureVerdict>(
     // ── Phase 1 粗扫（一次性同步，第 1 tick） ──
     const { seeds, filtered } = locateSeedsSync(dimension, center, radius, yBand, spec.seedTypes, spec.buildSeed);
 
-    // ── 批量列补全（同步，可选） ──
-    let probeAdded = 0;
-    if (spec.probe && seeds.length > 0) {
-      const colMap = new Map<string, { x: number; z: number; topY: number; minY: number }>();
-      for (const s of seeds) {
-        const key = `${s.x},${s.z}`;
-        const col = colMap.get(key);
-        if (!col) {
-          colMap.set(key, { x: s.x, z: s.z, topY: s.y, minY: s.y });
-        } else {
-          if (s.y > col.topY) col.topY = s.y;
-          if (s.y < col.minY) col.minY = s.y;
-        }
-      }
-      const columns = [...colMap.values()];
-      const isExtend = spec.probe.isExtend ?? (() => true);
-      const buildExtend = spec.probe.buildExtend ?? spec.buildSeed;
-      const up = probeColumnsBatched(dimension, columns, spec.probe.extendTypes, spec.probe.limit, 1, isExtend, buildExtend);
-      const down = probeColumnsBatched(dimension, columns, spec.probe.extendTypes, spec.probe.limit, -1, isExtend, buildExtend);
-      seeds.push(...up, ...down);
-      probeAdded = up.length + down.length;
-    }
-
-    // ── 候选生成（同步） ──
-    const candidates: StructureCandidate[] = [];
-    if (spec.pattern) {
-      // 模板匹配模式：每个种子为线索推导锚点，逐位校验（区域方块单查——模板块数少）
-      const blockKind = (x: number, y: number, z: number): string => {
-        try {
-          return spec.classifyBlock?.(dimension.getBlock({ x, y, z })?.typeId ?? "") ?? "foreign";
-        } catch {
-          return "foreign";
-        }
-      };
-      const anchorSeen = new Set<string>();
-      for (const seed of seeds) {
-        const hits = matchPatternAtSeed(spec.pattern, seed, blockKind);
-        for (const { anchor, match } of hits) {
-          const key = `${anchor.x},${anchor.y},${anchor.z}`;
-          if (anchorSeen.has(key)) continue;
-          anchorSeen.add(key);
-          const candSeeds: ScanSeed[] = match.hit.map((b) => ({
-            x: anchor.x + b.dx,
-            y: anchor.y + b.dy,
-            z: anchor.z + b.dz,
-            kind: b.kind,
-          }));
-          candidates.push({
-            seeds: candSeeds,
-            baseY: Math.min(...candSeeds.map((s) => s.y)),
-            topY: Math.max(...candSeeds.map((s) => s.y)),
-            footprint: [{ x: anchor.x, z: anchor.z }],
-          });
-        }
-      }
-    } else if (spec.cluster) {
-      candidates.push(...spec.cluster(seeds));
-    } else {
-      console.warn(`[MockPlayer][${spec.name}] spec 缺少候选生成（cluster 或 pattern）`);
-    }
-
-    // ── Phase 2 细扫（每 tick 一批并发）：system.run 排队调度 ──
+    // ── 调度链：补全/候选（第 2 tick）→ 细扫工作队列（第 3 tick 起） ──
     return new Promise<StructureSearchResult<T>>((resolvePromise) => {
-      // 无候选：直接收尾（不调度）
-      if (candidates.length === 0) {
-        resolvePromise(empty());
-        return;
-      }
-      const hits: Array<{ candidate: StructureCandidate; result: T; lines: string[] }> = [];
-      let index = 0;
-
-      const runBatch = (): void => {
-        const batch = candidates.slice(index, index + EVALUATE_BATCH_SIZE);
-        index += batch.length;
-        // 批内并发评估（Promise.all——本 tick 内完成该批全部候选细扫）
-        Promise.all(batch.map((c) => evaluateCandidateSync(c, spec, dimension, region, includeDiagnostics)))
-          .then((results) => {
-            hits.push(...results);
-            if (index < candidates.length) {
-              // 下一批 → 下一 tick（每 tick 只细扫一批，单 tick 不堆积）
-              system.run(runBatch);
-            } else {
-              // 末批完成：排序 + 诊断行汇总 → resolve
-              const accepted: StructureHit<T>[] = [];
-              const rejected: StructureHit<T>[] = [];
-              const lines: string[] = [];
-              for (const h of hits) {
-                if (h.result.accepted) {
-                  accepted.push({ candidate: h.candidate, result: h.result });
-                } else {
-                  rejected.push({ candidate: h.candidate, result: h.result });
-                }
-                lines.push(...h.lines);
+      system.run(() => {
+        try {
+          // ── 批量列补全（可选，同步——1-2 次批量 getBlocks） ──
+          let probeAdded = 0;
+          if (spec.probe && seeds.length > 0) {
+            const colMap = new Map<string, { x: number; z: number; topY: number; minY: number }>();
+            for (const s of seeds) {
+              const key = `${s.x},${s.z}`;
+              const col = colMap.get(key);
+              if (!col) {
+                colMap.set(key, { x: s.x, z: s.z, topY: s.y, minY: s.y });
+              } else {
+                if (s.y > col.topY) col.topY = s.y;
+                if (s.y < col.minY) col.minY = s.y;
               }
-              const dist = (c: StructureCandidate) =>
-                Math.hypot(
-                  Math.min(...c.seeds.map((s) => s.x)) - sortOrigin.x,
-                  Math.min(...c.seeds.map((s) => s.z)) - sortOrigin.z,
-                );
-              accepted.sort((a, b) => dist(a.candidate) - dist(b.candidate));
-              rejected.sort((a, b) => dist(a.candidate) - dist(b.candidate));
-              resolvePromise({
-                accepted,
-                rejected,
-                lines,
-                seedsFound: seeds.length,
-                probeAdded,
-                filtered,
-                center,
-                radius,
-              });
             }
-          })
-          .catch((e: any) => {
-            // ⚠️ 永不 reject：批处理异常（理论不可达——evaluateCandidateSync 内部已兜底）
-            console.warn(`[MockPlayer][${spec.name}] 细扫批次异常: ${e?.message ?? e}`);
-            resolvePromise(empty());
-          });
-      };
+            const columns = [...colMap.values()];
+            const isExtend = spec.probe.isExtend ?? (() => true);
+            const buildExtend = spec.probe.buildExtend ?? spec.buildSeed;
+            const up = probeColumnsBatched(dimension, columns, spec.probe.extendTypes, spec.probe.limit, 1, isExtend, buildExtend);
+            const down = probeColumnsBatched(dimension, columns, spec.probe.extendTypes, spec.probe.limit, -1, isExtend, buildExtend);
+            seeds.push(...up, ...down);
+            probeAdded = up.length + down.length;
+          }
 
-      // 细扫从下一 tick 开始（第 2 tick 起每 tick 一批）
-      system.run(runBatch);
+          // ── 候选生成（同步内存） ──
+          const candidates: StructureCandidate[] = [];
+          if (spec.pattern) {
+            const blockKind = (x: number, y: number, z: number): string => {
+              try {
+                return spec.classifyBlock?.(dimension.getBlock({ x, y, z })?.typeId ?? "") ?? "foreign";
+              } catch {
+                return "foreign";
+              }
+            };
+            const anchorSeen = new Set<string>();
+            for (const seed of seeds) {
+              const hits = matchPatternAtSeed(spec.pattern, seed, blockKind);
+              for (const { anchor, match } of hits) {
+                const key = `${anchor.x},${anchor.y},${anchor.z}`;
+                if (anchorSeen.has(key)) continue;
+                anchorSeen.add(key);
+                const candSeeds: ScanSeed[] = match.hit.map((b) => ({
+                  x: anchor.x + b.dx,
+                  y: anchor.y + b.dy,
+                  z: anchor.z + b.dz,
+                  kind: b.kind,
+                }));
+                candidates.push({
+                  seeds: candSeeds,
+                  baseY: Math.min(...candSeeds.map((s) => s.y)),
+                  topY: Math.max(...candSeeds.map((s) => s.y)),
+                  footprint: [{ x: anchor.x, z: anchor.z }],
+                });
+              }
+            }
+          } else if (spec.cluster) {
+            candidates.push(...spec.cluster(seeds));
+          } else {
+            console.warn(`[MockPlayer][${spec.name}] spec 缺少候选生成（cluster 或 pattern）`);
+          }
+
+          // 无候选：直接收尾
+          if (candidates.length === 0) {
+            resolvePromise(empty());
+            return;
+          }
+
+          // ── Phase 2 细扫（工作队列，第 3 tick 起每 tick 一批单元） ──
+          // 每候选 = 区域缓存构建器（按白名单分批 getBlocks）→ 全部批次完成后评估。
+          // 每 tick 推进最多 EVALUATE_BATCH_SIZE 个未完成候选的各一批——
+          // 单 tick 计算量 = 10 次区域批量查询，不堆积（防 Watchdog）。
+          const foreignKind = spec.foreignKind ?? "foreign";
+          const naturalBatches = spec.naturalBatches ?? [];
+          const classify = spec.classifyBlock ?? ((typeId: string) => typeId);
+          const work: EvalWorkItem<T>[] = candidates.map((c) => {
+            const bounds = regionBoundsOf(c, region.pad, region.defaultHeight, region.topMargin);
+            return {
+              candidate: c,
+              bounds,
+              builder: new RegionCacheBuilder(dimension, bounds, naturalBatches, classify, foreignKind),
+              done: false,
+            };
+          });
+          let finished = 0;
+
+          const tickQueue = (): void => {
+            let advanced = 0;
+            for (const item of work) {
+              if (advanced >= EVALUATE_BATCH_SIZE) break;
+              if (item.done) continue;
+              // 推进一批白名单 getBlocks
+              item.builder.advance();
+              if (!item.builder.hasMore) {
+                // 该候选缓存就绪 → 立即评估（同步内存）
+                item.done = true;
+                finished++;
+                item.result = evaluateWithCache(item.candidate, spec, item.builder.done(), item.bounds, includeDiagnostics);
+              }
+              advanced++;
+            }
+            if (finished < work.length) {
+              system.run(tickQueue); // 下一 tick 继续推进
+              return;
+            }
+            // 全部完成：排序 + 诊断行汇总 → resolve
+            const accepted: StructureHit<T>[] = [];
+            const rejected: StructureHit<T>[] = [];
+            const lines: string[] = [];
+            for (const item of work) {
+              const h = item.result!;
+              if (h.result.accepted) {
+                accepted.push({ candidate: h.candidate, result: h.result });
+              } else {
+                rejected.push({ candidate: h.candidate, result: h.result });
+              }
+              lines.push(...h.lines);
+            }
+            const dist = (c: StructureCandidate) =>
+              Math.hypot(
+                Math.min(...c.seeds.map((s) => s.x)) - sortOrigin.x,
+                Math.min(...c.seeds.map((s) => s.z)) - sortOrigin.z,
+              );
+            accepted.sort((a, b) => dist(a.candidate) - dist(b.candidate));
+            rejected.sort((a, b) => dist(a.candidate) - dist(b.candidate));
+            resolvePromise({ accepted, rejected, lines, seedsFound: seeds.length, probeAdded, filtered, center, radius });
+          };
+
+          system.run(tickQueue);
+        } catch (e: any) {
+          // ⚠️ 永不 reject：任何异常 resolve 空结果
+          console.warn(`[MockPlayer][${spec.name}] 扫描异常: ${e?.message ?? e}`);
+          resolvePromise(empty());
+        }
+      });
     });
   } catch (e: any) {
     // ⚠️ 永不 reject：任何异常 resolve 空结果
