@@ -19,12 +19,12 @@ import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 //   官方 RandomStrollGoal 默认 interval=120 tick（6 秒）倒计时挑目标；
 //   本实现走完停 1~2 秒（2~4 周期）再等 1~3 秒（2~6 周期）——比官方略活泼。
 
-/** 游走间隔（引擎周期 = 10 tick）：走完歇一会再走（1~3 秒 → 2~6 周期） */
-const WANDER_INTERVAL_MIN = 2;
-const WANDER_INTERVAL_MAX = 6;
-/** 休息（引擎周期）：到达后短暂停顿（1~2 秒 → 2~4 周期） */
+/** 游走间隔（引擎周期 = 10 tick）：走完歇一会再走（1.5~4 秒 → 3~8 周期） */
+const WANDER_INTERVAL_MIN = 3;
+const WANDER_INTERVAL_MAX = 8;
+/** 休息（引擎周期）：到达后短暂停顿（1~2.5 秒 → 2~5 周期） */
 const WANDER_REST_MIN = 2;
-const WANDER_REST_MAX = 4;
+const WANDER_REST_MAX = 5;
 /** 导航失败后的快速重试等待（引擎周期：0.5 秒 → 1 周期——失败不长时间站立） */
 const WANDER_FAIL_RETRY = 1;
 /** 单次游走半径（格）：近点（≤16 格直达内） */
@@ -33,6 +33,8 @@ const WANDER_RADIUS = 8;
 const WANDER_SPEED = 0.6;
 /** 转头随机朝向距离（格，看向点的距离） */
 const LOOK_AROUND_DISTANCE = 5;
+/** 转头节流（引擎周期）：每 2 周期转头一次（约 1 秒一次，不频繁） */
+const LOOK_AROUND_INTERVAL = 2;
 
 /** 状态机阶段 */
 type Phase = "idle" | "pick" | "walk" | "rest";
@@ -81,6 +83,8 @@ export function makeWanderBehavior(): Behavior {
   let wait = randomBetween(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX); // 当前阶段剩余 tick
   let run: Promise<unknown> | undefined; // 单次导航协程
   let runResult: NavigateResult | undefined; // 协程完成标志
+  let lookTick = 0; // 转头节流计数
+  let failStreak = 0; // 连续失败计数（日志降频）
 
   const startRun = (botName: string): void => {
     runResult = undefined;
@@ -120,8 +124,8 @@ export function makeWanderBehavior(): Behavior {
       lastBotName = ctx.botName;
       switch (phase) {
         case "idle":
-          // 间隔等待（走停节律：不连续乱走）；静止时经常性转身/扭头
-          lookAround(ctx.botName);
+          // 间隔等待（走停节律：不连续乱走）；静止时偶尔转身/扭头（节流）
+          if (++lookTick % LOOK_AROUND_INTERVAL === 0) lookAround(ctx.botName);
           if (--wait > 0) return;
           phase = "pick";
           break;
@@ -136,20 +140,22 @@ export function makeWanderBehavior(): Behavior {
           run = undefined;
           if (runResult === NavigateResult.Arrived) {
             // 到达：短暂休息（走停节律）
+            failStreak = 0;
             logStroll(ctx.botName, "到达，休息片刻");
             phase = "rest";
             wait = randomBetween(WANDER_REST_MIN, WANDER_REST_MAX);
           } else {
             // 导航失败（无路径/卡住/超时）：快速重试——短等待后重新选点，
-            // 不进入长休息（避免"站半天"）
-            logStroll(ctx.botName, `导航失败(${runResult})，快速重试`);
+            // 不进入长休息（避免"站半天"）；日志降频（连续失败只打首条）
+            failStreak++;
+            if (failStreak === 1) logStroll(ctx.botName, `导航失败(${runResult})，快速重试`);
             phase = "idle";
             wait = WANDER_FAIL_RETRY;
           }
           break;
         case "rest":
-          // 休息时经常性转身/扭头（官方随机视角意向：静止时频繁转头）
-          lookAround(ctx.botName);
+          // 休息时偶尔转身/扭头（官方随机视角意向；节流不频繁）
+          if (++lookTick % LOOK_AROUND_INTERVAL === 0) lookAround(ctx.botName);
           if (--wait > 0) return;
           phase = "idle";
           wait = randomBetween(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX);

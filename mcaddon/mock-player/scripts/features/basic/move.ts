@@ -343,14 +343,14 @@ export async function longNavigateBot(
 // 纯逻辑可单测；本函数做世界查询（getBlock）采样 10 个候选并导航。
 // 持续游走由生物 AI 能力（features/ai/capabilities/wander）周期性调用。
 
-/** 高度范围（格）：官方"高度范围随机"（相对当前高度上下） */
-const STROLL_HEIGHT_RANGE = 3;
 /** 最大修正高度（格）：固体向上修正上限，防死循环 */
 const STROLL_MAX_RAISE = 8;
 
 /**
- * 单次候选采样（官方陆地目标算法一步）：
- * 随机方向 → 下方稳定方块判定 → 高度修正到非固体 → 非水 → 行走目标值。
+ * 单次候选采样（官方陆地目标算法一步，地面性修复版）：
+ * 随机方向（朝向偏置）→ **从当前地面层起**找"可站立点"：
+ *   非固体 且 下方是稳定方块（遮挡形状完整）且 非水——
+ * 目标点保证站在真实地面上（消除悬空点导致的 no-path）。
  * 无有效候选 → undefined（调用方凑满 10 个候选后选偏好最大者）。
  */
 function sampleStrollCandidate(
@@ -364,30 +364,35 @@ function sampleStrollCandidate(
   const point = pickDirectionalStrollPoint(loc, yawDeg, radius);
   const x = Math.floor(point.x);
   const z = Math.floor(point.z);
-  let y = baseY + Math.floor(Math.random() * (STROLL_HEIGHT_RANGE * 2 + 1)) - STROLL_HEIGHT_RANGE;
+  let y = baseY; // 从当前地面层起（不随机高度偏移——偏移会产生悬空点）
   try {
     const dim = bot.dimension;
-    // 下方必须是稳定方块（非空气非液体 + 遮挡形状完整——黑名单）
-    const below = dim.getBlock({ x, y: y - 1, z });
-    if (!below || below.isAir || below.isLiquid || !isStableBlockType(below.typeId)) return undefined;
-    // 目标位置高度修正（官方陆地目标算法）：固体 → 向上直到非固体；液体提前无效
-    let head = dim.getBlock({ x, y, z });
-    while (head && !head.isAir && head.typeId !== "minecraft:cave_air") {
-      if (head.isLiquid) return undefined;
+    // 从当前层向上找"可站立点"：非固体 + 下方稳定方块（遮挡形状完整）
+    while (y - baseY <= STROLL_MAX_RAISE) {
+      const head = dim.getBlock({ x, y, z });
+      if (!head) return undefined;
+      if (!head.isAir && head.typeId !== "minecraft:cave_air") {
+        // 目标位置为固体：液体提前无效，否则向上修正（官方陆地目标算法）
+        if (head.isLiquid) return undefined;
+        y++;
+        continue;
+      }
+      // 非固体：确认下方是稳定方块（可站立）——否则悬空，继续向上
+      const below = dim.getBlock({ x, y: y - 1, z });
+      if (below && !below.isAir && !below.isLiquid && isStableBlockType(below.typeId)) {
+        // 行走目标值：官方位置值（内部光照单调递增）+ 草方块偏好（动物语义 +10）
+        let walkValue = -0.5;
+        try {
+          walkValue = strollWalkValue(head.getLightLevel());
+        } catch {
+          /* 光照读取失败：按全暗位置值 */
+        }
+        if (below.typeId === "minecraft:grass_block") walkValue += GRASS_BLOCK_BONUS;
+        return { point: { x: x + 0.5, y, z: z + 0.5 }, walkValue };
+      }
       y++;
-      if (y - baseY > STROLL_MAX_RAISE) return undefined;
-      head = dim.getBlock({ x, y, z });
     }
-    if (!head) return undefined;
-    // 行走目标值：官方位置值（内部光照单调递增）+ 草方块偏好（动物语义 +10）
-    let walkValue = -0.5;
-    try {
-      walkValue = strollWalkValue(head.getLightLevel());
-    } catch {
-      /* 光照读取失败：按全暗位置值 */
-    }
-    if (below.typeId === "minecraft:grass_block") walkValue += GRASS_BLOCK_BONUS;
-    return { point: { x: x + 0.5, y, z: z + 0.5 }, walkValue };
+    return undefined; // 超修正上限：无可站立点
   } catch {
     return undefined; // 区块未加载/越界 → 无效候选
   }
