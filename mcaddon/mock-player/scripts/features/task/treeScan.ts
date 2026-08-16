@@ -117,6 +117,13 @@ export interface TreeSetScanResult {
   rejected: TreeReject[];
   /** 树干候选数 */
   candidates: number;
+  /** 大树/小树候选数（聚类统计） */
+  bigCandidates: number;
+  smallCandidates: number;
+  /** 聚类耗时（ms） */
+  clusterMs: number;
+  /** 评估耗时（ms） */
+  evalMs: number;
   /** 总耗时（ms） */
   ms: number;
 }
@@ -174,7 +181,12 @@ export async function scanTreesFromSets(
   }
 
   // ③ 纯算术评估：无属性聚类（几何成链，零 getBlock）→ 坐标集树判定
+  const tCluster = Date.now();
   const candidates = extractTrunkCandidatesSimple(logs);
+  const clusterMs = Date.now() - tCluster;
+  const bigCandidates = candidates.filter((c) => c.kind === "big").length;
+  const smallCandidates = candidates.length - bigCandidates;
+  const tEval = Date.now();
   const trees: TreeResource[] = [];
   const rejected: TreeReject[] = [];
   for (const c of candidates) {
@@ -200,7 +212,56 @@ export async function scanTreesFromSets(
   trees.sort((a, b) => Math.hypot(a.base.x - center.x, a.base.z - center.z) - Math.hypot(b.base.x - center.x, b.base.z - center.z));
 
   logsResult.count = logs.length; // 校正为参与计算的垂直原木数
-  return { logs: logsResult, leaves: leavesResult, trees, rejected, candidates: candidates.length, ms: Date.now() - t0 };
+  const evalMs = Date.now() - tEval;
+  return {
+    logs: logsResult, leaves: leavesResult, trees, rejected, candidates: candidates.length,
+    bigCandidates, smallCandidates, clusterMs, evalMs, ms: Date.now() - t0,
+  };
+}
+
+// ─── 详细日志评估报告（一次性输出：概况/坐标集/聚类/接受/拒绝/耗时） ──
+
+/** 因子格式化（L/C/H/A，G/F 坐标集方案恒 1） */
+function fmtFactors(f: { L: number; C: number; H: number; A: number }): string {
+  return `L${f.L.toFixed(2)} C${f.C.toFixed(2)} H${f.H.toFixed(2)} A${f.A.toFixed(2)}`;
+}
+
+/**
+ * 构建详细日志评估报告行（扫描即报告——最终一次性输出，循环内零日志）。
+ * 包含：概况 / 坐标集统计 / 聚类统计 / 接受明细（每树因子）/ 拒绝明细 / 分阶段耗时。
+ */
+export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: number, toY: number): string[] {
+  const size = radius * 2 + 1;
+  const volume = size * size * (toY - fromY + 1);
+  const lines: string[] = [];
+  lines.push(`[树] ═══ 树资源扫描评估报告 ═══`);
+  lines.push(
+    `[树] 概况：半径${radius} 空间体${size}×${size}×${toY - fromY + 1}（${volume.toLocaleString()}格）` +
+      `Y[${fromY}..${toY}] 总耗时 ${r.ms}ms`,
+  );
+  lines.push(
+    `[树] 坐标集：原木 ${r.logs.count} 个（Y ${r.logs.minY}..${r.logs.maxY}，采集 ${r.logs.ms}ms）｜` +
+      `树叶 ${r.leaves.count} 个（Y ${r.leaves.minY}..${r.leaves.maxY}，采集 ${r.leaves.ms}ms）｜查询 getBlocks ×2`,
+  );
+  lines.push(
+    `[树] 聚类：候选 ${r.candidates}（大树 ${r.bigCandidates} / 小树 ${r.smallCandidates}）耗时 ${r.clusterMs}ms｜` +
+      `评估：接受 ${r.trees.length} / 拒绝 ${r.rejected.length} 耗时 ${r.evalMs}ms｜纯计算合计 ${r.clusterMs + r.evalMs}ms`,
+  );
+  lines.push(`[树] ── 接受（${r.trees.length}）${"─".repeat(Math.max(8, 40 - String(r.trees.length).length))}`);
+  for (const t of r.trees) {
+    lines.push(
+      `[树] ✓ ${t.kind === "big" ? "大树" : "小树"} P=${t.probability.toFixed(2)} 高${t.top.y - t.base.y + 1} ` +
+        `原木${t.logs.length} 叶${t.leafCount} @(${t.base.x},${t.base.y},${t.base.z}) ${t.kind === "big" ? "（2×2 直接判定）" : fmtFactors(t.factors)}`,
+    );
+  }
+  lines.push(`[树] ── 拒绝（${r.rejected.length}）${"─".repeat(Math.max(8, 40 - String(r.rejected.length).length))}`);
+  for (const rej of r.rejected) {
+    lines.push(
+      `[树] ✗ (${rej.base.x},${rej.base.y},${rej.base.z}) ${rej.kind === "big" ? "大树" : "小树"} ` +
+        `原因=${rej.reason} P=${rej.probability.toFixed(3)} ${fmtFactors(rej.factors)}`,
+    );
+  }
+  return lines;
 }
 
 /** 有效树叶 id（剔除无效旧 id） */

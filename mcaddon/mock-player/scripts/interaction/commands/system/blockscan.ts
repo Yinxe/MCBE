@@ -9,7 +9,7 @@ import { system, CommandPermissionLevel, CustomCommandParamType } from "@minecra
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
-import { collectCoordinateSet, scanTreesFromSets, VALID_LOG_TYPE_IDS, VALID_LEAF_TYPE_IDS } from "../../../features/task/treeScan";
+import { buildTreeSetReport, collectCoordinateSet, scanTreesFromSets, VALID_LOG_TYPE_IDS, VALID_LEAF_TYPE_IDS } from "../../../features/task/treeScan";
 import { isAdmin } from "../auth";
 
 /** 默认扫描半径（格，空间体半边长） */
@@ -89,21 +89,11 @@ export function registerScantreeCommand(registry: any): void {
     system.run(async () => {
       try {
         const r = await scanTreesFromSets(pos, player.dimension, radius);
-        console.warn(
-          `[MockPlayer][坐标集][树] 原木 ${r.logs.count} 个（Y ${r.logs.minY}..${r.logs.maxY}，${r.logs.ms}ms）` +
-            `树叶 ${r.leaves.count} 个（Y ${r.leaves.minY}..${r.leaves.maxY}，${r.leaves.ms}ms）候选 ${r.candidates} 总耗时 ${r.ms}ms`
-        );
-        console.warn(`[MockPlayer][坐标集][树] 接受 ${r.trees.length} / 拒绝 ${r.rejected.length}（纯算术：logs/leaves 关系）`);
-        for (const t of r.trees) {
-          console.warn(
-            `[MockPlayer][坐标集][树] ✓ ${t.kind === "big" ? "大树" : "小树"} P=${t.probability.toFixed(2)} ` +
-              `@(${t.base.x},${t.base.y},${t.base.z}) 叶${t.leafCount}`
-          );
-        }
-        for (const rej of r.rejected) {
-          console.warn(
-            `[MockPlayer][坐标集][树] ✗ 拒绝 (${rej.base.x},${rej.base.y},${rej.base.z}) 原因=${rej.reason} P=${rej.probability.toFixed(3)}`
-          );
+        const fromY = Math.max(-64, pos.y - 10);
+        const toY = Math.min(320, pos.y + 40);
+        // 详细日志评估报告一次性输出（概况/坐标集/聚类/接受/拒绝/分阶段耗时）
+        for (const line of buildTreeSetReport(r, radius, fromY, toY)) {
+          console.warn(`[MockPlayer][坐标集][树] ${line}`);
         }
         player.sendMessage(
           `${color.accent}[坐标集][树] ${color.success}接受 ${r.trees.length} ${color.muted}/ ${color.warn}拒绝 ${r.rejected.length}` +
