@@ -212,11 +212,14 @@ export interface BotRecord {
   /** 持久化的标签列表（上线时通过 syncEntityTags 恢复） */
   tags: string[];
   /**
-   * 生物 AI 行为（新框架 scripts/ai 驱动；替代旧互斥行为标签机制）：
-   * "none" = 不启用 / "wander" = 随机游走 / "mine" = 自动挖掘 /
-   * "place" = 自动放置 / "attack" = 自动攻击。旧记录缺失 = "none"（升级兼容）。
+   * 工作模式（用户拍板命名：互斥单选——一个假人一个工作模式）：
+   * "none" = 无 / "wander" = 闲逛模式 / "mine" = 定点挖掘模式 /
+   * "place" = 定点放置模式 / "attack" = 定点攻击模式 / "raid" = 劫掠模式。
+   * 替代旧互斥行为标签 + 劫掠独立开关（互斥由单字段天然保证）。
+   * ⚠️ 钓鱼/砍树后期单独定制（暂保持旧标签驱动）——woodcut 值域预留。
+   * 旧记录缺失 = "none"（升级兼容；aiBehavior 字段由迁移转换）。
    */
-  aiBehavior: string;
+  workMode: string;
   /** 体态控制器玩家 ID（仅当有 TAG_CONTROL 标签时有效） */
   controllerId?: string;
   /** 潜行状态 */

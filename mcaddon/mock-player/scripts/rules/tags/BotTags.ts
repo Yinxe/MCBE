@@ -12,7 +12,7 @@ export const TAG_AUTO_JUMP: TagDef = { label: "自动跳跃", value: `${TAG_PREF
 
 // 互斥的标签（同一时间只能有一个生效）
 // ⚠️ 旧行为标签（用户拍板：行为标签机制已删除——行为统一走生物 AI 行为
-//   record.aiBehavior 字段，新框架 scripts/ai 驱动）。以下定义**保留仅供
+//   record.workMode 字段（工作模式单选，用户拍板）。以下定义**保留仅供
 //   legacy 引擎内部使用**（features/state/behavior.ts 的 autoAttack/control/
 //   autoJump 等标签行为 + legacy/ai/BotBrain 的宝库/劫掠/钓鱼），
 //   不再参与 UI 行为选择、不再进互斥组。
@@ -25,7 +25,8 @@ export const TAG_AUTO_USE: TagDef = { label: "使用物品", value: `${TAG_PREFI
 export const TAG_VAULT_MODE: TagDef = { label: "宝库模式", value: `${TAG_PREFIX}vaultMode` };
 export const TAG_FISH_MODE: TagDef = { label: "自动钓鱼", value: `${TAG_PREFIX}fishMode` };
 export const TAG_WANDER_MODE: TagDef = { label: "随机游走", value: `${TAG_PREFIX}wanderMode` };
-export const TAG_RAID_MODE: TagDef = { label: "劫掠模式", value: `${TAG_PREFIX}raidMode` };
+// ⚠️ TAG_RAID_MODE 已删除：劫掠模式收编进工作模式单选（workMode="raid"），
+//   旧存档中的 raidMode 标签由迁移转换并清理。
 
 /** 可共存的标签组 */
 export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
@@ -33,8 +34,10 @@ export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
 /** 互斥的标签组（行为标签机制已删除——现为空；保留集合供校验兼容） */
 export const EXCLUSIVE_TAGS: TagDef[] = [];
 
-/** 独立开关标签组（与互斥/共存标签均可并存，各自独立的持久开关，如劫掠模式） */
-export const STANDALONE_TAGS: TagDef[] = [TAG_RAID_MODE];
+/** 独立开关标签组（与互斥/共存标签均可并存，各自独立的持久开关）——
+ *  ⚠️ 劫掠模式已收编进工作模式单选（workMode="raid"），现为空；
+ *    保留组定义供校验兼容。 */
+export const STANDALONE_TAGS: TagDef[] = [];
 
 /** 旧行为标签组（legacy 引擎内部使用——autoAttack/control/宝库/钓鱼等仍按标签
  *  驱动；保留定义与解析能力，但不参与互斥、不进入 UI 行为选择） */
@@ -101,30 +104,22 @@ export function getTagGroups(): TagGroups {
 
 // ─── 行为表单标签计算（core 纯函数，可单测） ────────────
 
-/** 行为菜单表单输入（勾选的共存标签 / 劫掠独立开关）——
- *  行为选择已统一走生物 AI 行为（record.aiBehavior 字段，不再用标签） */
+/** 行为菜单表单输入（勾选的共存标签）——
+ *  工作模式已统一走 record.workMode 字段（单选互斥），不再用标签 */
 export interface BehaviorFormInput {
   /** 勾选的共存标签（不含 bot 标识标签） */
   coexist: string[];
-  /** 劫掠模式独立开关（legacy 引擎用） */
-  raidMode: boolean;
 }
 
 /**
  * 由行为菜单表单输入计算完整新标签集（含 bot 标识标签）。
- * 行为标签机制已删除：只含 bot 标识 + 共存勾选 + 劫掠独立开关。
- * 无独立开关标签时兜底保留空闲标签（新假人默认带 idle；表单提交是全量
- * 替换标签集，不兜底会静默剥离 idle——与 control.ts 的"互斥/独立标签
- * 兜底补 idle"语义对齐，审核 M2）。
+ * 工作模式机制下标签只剩：bot 标识 + 共存勾选（劫掠/行为标签均已收编）。
+ * 兜底保留空闲标签（新假人默认带 idle；表单提交是全量替换标签集，
+ * 不兜底会静默剥离 idle——与 control.ts 的"互斥/独立标签兜底补 idle"
+ * 语义对齐，审核 M2）。
  */
 export function computeTagsFromBehaviorForm(input: BehaviorFormInput): string[] {
-  const tags = [TAG_BOT.value, ...input.coexist];
-  if (input.raidMode) {
-    tags.push(TAG_RAID_MODE.value);
-  } else {
-    tags.push(TAG_IDLE.value);
-  }
-  return tags;
+  return [TAG_BOT.value, ...input.coexist, TAG_IDLE.value];
 }
 
 // ─── 标签集校验（core 纯函数，可单测） ─────────────────

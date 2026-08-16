@@ -22,7 +22,8 @@ import { normalizeRecord, DEFAULT_RESPAWN } from "../service/RecordMigration";
 import { deserializeLegacyItem } from "../service/port/LegacyCodec";
 import { DP_PREFIX, INVENTORY_SIZE } from "../rules/Types";
 import { TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_WANDER_MODE, filterKnownTags } from "../rules/tags/BotTags";
-import type { SerializedItemStack } from "../rules/Types";
+import { TAG_PREFIX } from "../rules/Types";
+import type { BotRecord, SerializedItemStack } from "../rules/Types";
 
 /** 数据版本标记 key */
 const DATA_VERSION_KEY = "mockplayer:data-version";
@@ -173,38 +174,55 @@ export function runMigrations(): void {
 }
 
 /**
- * 标签清理与行为迁移：
- * 1. 旧行为标签（自动挖掘/自动放置/随机游走）→ 转换到 record.aiBehavior
- *    字段（行为标签机制已删除），并从标签中移除；
- * 2. 其余未知标签（已删除定义的旧能力标签）→ 直接清理。
+ * 标签清理与职业迁移（用户拍板：行为标签 → 职业 profession 单选互斥字段）：
+ * 1. 旧行为标签（自动挖掘/自动放置/随机游走/自动攻击）→ 转换到 record.profession；
+ * 2. 旧劫掠标签（TAG_RAID_MODE 独立开关）→ 转换到 workMode = "raid"（劫掠
+ *    从标签收进工作模式单选）；
+ * 3. 旧 aiBehavior 字段（上代行为字段）→ 转换到 workMode；
+ * 4. 其余未知标签（已删除定义的旧能力标签）→ 直接清理。
  * 否则 setTags 校验会拒绝（"包含未知标签"），任何标签操作都会失败。
  */
-const BEHAVIOR_TAG_TO_AI: Record<string, string> = {
+const BEHAVIOR_TAG_TO_WORK_MODE: Record<string, string> = {
   [TAG_AUTO_MINE.value]: "mine",
   [TAG_AUTO_PLACE.value]: "place",
   [TAG_WANDER_MODE.value]: "wander",
   [TAG_AUTO_ATTACK.value]: "attack",
+  // 劫掠标签已删定义（收编进工作模式）——迁移表用旧标签字面量
+  [`${TAG_PREFIX}raidMode`]: "raid",
 };
+
+/** 旧 aiBehavior 字段读取（类型已迁移为 workMode——旧存档兼容） */
+function legacyAiBehavior(record: BotRecord): string | undefined {
+  return (record as any).aiBehavior;
+}
 
 function cleanupUnknownTags(): void {
   for (const record of botRegistry.all()) {
     let changed = false;
-    // 旧行为标签 → aiBehavior（未设置过 AI 行为时）
-    if (!record.aiBehavior || record.aiBehavior === "none") {
+    // 工作模式未设置时按优先级转换：旧行为/劫掠/钓鱼标签 → 旧 aiBehavior 字段
+    if (!record.workMode || record.workMode === "none") {
+      let mode: string | undefined;
       for (const tag of record.tags) {
-        const behavior = BEHAVIOR_TAG_TO_AI[tag];
-        if (behavior) {
-          record.aiBehavior = behavior;
-          console.warn(`[MockPlayer] 数据迁移：行为标签 → aiBehavior ${record.name}: ${tag} → ${behavior}`);
-          changed = true;
-          break;
+        const m = BEHAVIOR_TAG_TO_WORK_MODE[tag];
+        if (m) {
+          mode = m;
+          // 劫掠/钓鱼标签 vs 行为标签并存：劫掠优先（旧版可共存，单选取劫掠）
+          if (m === "raid") break;
         }
       }
+      // 无标签 → 读旧 aiBehavior 字段（上代行为选择）
+      if (!mode) mode = legacyAiBehavior(record);
+      if (mode) {
+        record.workMode = mode;
+        delete (record as any).aiBehavior;
+        console.warn(`[MockPlayer] 数据迁移：工作模式 ${record.name}: ${mode}`);
+        changed = true;
+      }
     }
-    // 移除旧行为标签 + 未知标签（已转换/已删除定义的）
-    const keep = record.tags.filter((t) => !BEHAVIOR_TAG_TO_AI[t] && filterKnownTags([t]).length > 0);
+    // 移除旧行为/劫掠/钓鱼标签 + 未知标签（已转换/已删除定义的）
+    const keep = record.tags.filter((t) => !BEHAVIOR_TAG_TO_WORK_MODE[t] && filterKnownTags([t]).length > 0);
     if (keep.length !== record.tags.length) {
-      console.warn(`[MockPlayer] 数据迁移：清理行为标签 ${record.name}: ${record.tags.filter((t) => BEHAVIOR_TAG_TO_AI[t] || !filterKnownTags([t]).includes(t)).join(", ")}`);
+      console.warn(`[MockPlayer] 数据迁移：清理行为标签 ${record.name}: ${record.tags.filter((t) => BEHAVIOR_TAG_TO_WORK_MODE[t] || !filterKnownTags([t]).includes(t)).join(", ")}`);
       record.tags = keep;
       changed = true;
     }

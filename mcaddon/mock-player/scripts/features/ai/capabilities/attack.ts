@@ -17,14 +17,14 @@ export const DEFAULT_ATTACK_CONFIG: AttackBehaviorConfig = {
   interval: 1,
 };
 
-/** 创建自动攻击行为（record.aiBehavior === "attack" 时由引擎注册） */
+/** 创建自动攻击行为（record.workMode === "attack" 时由引擎注册） */
 export function makeAttackBehavior(config: AttackBehaviorConfig = DEFAULT_ATTACK_CONFIG): Behavior {
   let tick = 0;
 
   return {
     name: "attack",
     priority: 10,
-    canActivate: (ctx) => ctx.memory.get<string>("aiBehavior") === "attack", // 记忆注入自校验
+    canActivate: (ctx) => ctx.memory.get<string>("workMode") === "attack", // 记忆注入自校验
     reset: () => {
       tick = 0;
     },

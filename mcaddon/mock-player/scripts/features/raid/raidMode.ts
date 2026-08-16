@@ -13,8 +13,8 @@
 //   ⑥ 无药水 → 自动关模式（移除标签）；标签移除 → stopRaidMode
 //
 // 触发时机（事件钩子，替代旧引擎轮询对账）：
-//   - botTagsChanged（setTags 唯一渠道落库后）：挂 raid 标签 → 启动；移除 → 停止
-//   - botOnline（上线/复活/重启后）：带 raid 标签 → 启动循环
+//   - botWorkModeChanged（setWorkMode 落库后）：workMode=raid → 启动；≠raid → 停止
+//   - botOnline（上线/复活/重启后）：workMode=raid → 启动循环
 //   - botOffline：清周期等待（下线中断 → 上线重新喝，与旧 reconcile 删树语义一致）
 //
 // ⚠️ 语义约束全部保留（用户实测拍板）：纯事件驱动 + 一次性卡死提醒（零恢复
@@ -30,14 +30,12 @@ import {
   isOminousBottle, classifyRaidEffect, canDrinkRaid, diagnoseRaidIdle,
   type RaidEffectState,
 } from "../../rules/RaidRules";
-import { TAG_RAID_MODE } from "../../rules/tags/BotTags";
+import { setWorkMode } from "../state/behavior";
 import type { BotRecord } from "../../rules/Types";
-import { botRegistry, saveCoordinator } from "../../bootstrap/context";
+import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
-import { syncEntityTags } from "../basic/EntityTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { BotUiEvent } from "../../events/UiEvents";
-import { setTags } from "../state/setTags";
 import { EventSignal } from "../../events/EventSignal";
 
 // ─── 劫掠领域事件（内聚在劫掠模块） ──────────────────────
@@ -137,18 +135,18 @@ export function initRaidMode(): void {
   // 下线 → 清周期等待（下线中断本周期 → 上线重新喝第一瓶）
   BotEvents.botOffline.subscribe((e) => raidWaiting.delete(e.botName));
 
-  // 标签变更（setTags 唯一渠道落库后）：挂 raid → 启动；移除 → 停止
-  BotEvents.botTagsChanged.subscribe((e) => {
-    if (e.tags.includes(TAG_RAID_MODE.value)) {
+  // 工作模式变更（setWorkMode 落库后发布）：raid → 启动；其它 → 停止
+  BotEvents.botWorkModeChanged.subscribe((e) => {
+    if (e.workMode === "raid") {
       startRaidCycle(e.botName);
     } else {
       stopRaidMode(e.botName);
     }
   });
 
-  // 行为菜单提交：开启劫掠但不在线 → 提示（在线场景由 botTagsChanged 启动循环）
+  // 行为菜单提交：开启劫掠但不在线 → 提示（在线场景由 botWorkModeChanged 启动循环）
   BotUiEvent.behaviorSubmitted.subscribe((e) => {
-    if (!e.tags.includes(TAG_RAID_MODE.value)) return;
+    if (e.workMode !== "raid") return;
     const player = world.getEntity(e.playerId) as Player | undefined;
     if (!player) return;
     const record = botRegistry.get(e.botName);
@@ -193,7 +191,7 @@ function stopRaidMode(botName: string): void {
  */
 function startRaidCycle(botName: string): void {
   const record = botRegistry.get(botName);
-  if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+  if (!record || record.workMode !== "raid") return;
   if (drinking.has(botName)) return; // 饮用中不重复触发
   const bot = resolveBotPlayer(botName);
   if (!bot || !bot.isValid) return;
@@ -216,7 +214,7 @@ function scheduleNoBottleRetry(botName: string): void {
   system.runTimeout(() => {
     try {
       const record = botRegistry.get(botName);
-      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+      if (!record || record.workMode !== "raid") return;
       if (raidWaiting.has(botName) || drinking.has(botName)) return;
       startRaidCycle(botName); // 内部 canDrink 判定：有瓶 → 喝；无瓶 → 再通知+再排程
     } catch {
@@ -278,7 +276,7 @@ async function drinkBottle(botName: string): Promise<void> {
 function finishDrink(botName: string, result: "drunk" | "no-bottle" | "error"): void {
   if (result !== "drunk") return;
   const record = botRegistry.get(botName);
-  if (record?.tags.includes(TAG_RAID_MODE.value)) raidWaiting.add(botName);
+  if (record?.workMode === "raid") raidWaiting.add(botName);
 }
 
 // ─── 效果事件监听（核心循环驱动） ───────────────────────
@@ -296,7 +294,7 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
       console.info(`[MockPlayer] ${name} 效果事件 typeId=${typeId || "(空)"} Lv.${amp}`);
     }
 
-    if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+    if (!record || record.workMode !== "raid") return;
     if (!typeId) return;
 
     const kind = classifyRaidEffect(typeId);
@@ -345,7 +343,7 @@ function handleEffectAdd(e: EffectAddAfterEvent): void {
 /** 胜利处理（幂等：已处理过当前英雄事件 → 跳过；防 removeEffect 失败重复叠加） */
 function handleVictory(botName: string): void {
   const record = botRegistry.get(botName);
-  if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+  if (!record || record.workMode !== "raid") return;
 
   const last = lastHeroTick.get(botName) ?? 0;
   if ((handledHeroTick.get(botName) ?? 0) >= last) return;
@@ -481,7 +479,7 @@ function scheduleTruceCheck(botName: string): void {
   system.runTimeout(() => {
     try {
       const record = botRegistry.get(botName);
-      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+      if (!record || record.workMode !== "raid") return;
       // 新一轮袭击已开始 → 跳过（旧排程作废）
       if ((raidOmenSince.get(botName) ?? 0) > scheduledAt) return;
       // 当前已是胜利阶段（已结算）→ 跳过
@@ -507,7 +505,7 @@ function scheduleRaidStartCheck(botName: string): void {
   system.runTimeout(() => {
     try {
       const record = botRegistry.get(botName);
-      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+      if (!record || record.workMode !== "raid") return;
       const bot = resolveBotPlayer(botName);
       if (!bot || !bot.isValid) return;
 
@@ -540,7 +538,7 @@ function scheduleBadOmenEndCheck(botName: string): void {
   system.runTimeout(() => {
     try {
       const record = botRegistry.get(botName);
-      if (!record || !record.tags.includes(TAG_RAID_MODE.value)) return;
+      if (!record || record.workMode !== "raid") return;
       const bot = resolveBotPlayer(botName);
       if (!bot || !bot.isValid) return;
 
@@ -690,15 +688,10 @@ function tryGetEffect(bot: SimulatedPlayer | Player, effectId: string): Effect |
   }
 }
 
-/** 关闭劫掠模式（无瓶自动关：走 setTags 唯一渠道 → 标签落库 + 实体同步 +
- *  botTagsChanged → stopRaidMode 停止循环） */
+/** 关闭劫掠模式（无瓶自动关：setWorkMode("none") 唯一渠道 → 落库 +
+ *  botWorkModeChanged → stopRaidMode 停止循环） */
 function disableRaidMode(botName: string, record: BotRecord, message?: string): void {
-  const newTags = record.tags.filter((t) => t !== TAG_RAID_MODE.value);
-  const rejected = setTags(record, newTags);
-  if (rejected) {
-    console.warn(`[MockPlayer] 劫掠模式自动关闭失败 ${botName}: ${rejected}`);
-    return;
-  }
+  setWorkMode(record, "none");
   if (message) {
     world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.warn}${botName}: ${message}`);
   }

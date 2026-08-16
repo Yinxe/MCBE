@@ -27,7 +27,7 @@ export const DEFAULT_MINE_CONFIG: MineBehaviorConfig = {
   pauseTicks: 5,
 };
 
-/** 创建自动挖掘行为（record.aiBehavior === "mine" 时由引擎注册） */
+/** 创建自动挖掘行为（record.workMode === "mine" 时由引擎注册） */
 export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFIG): Behavior {
   let waiting = 0; // 块间停顿计数
   let run: Promise<unknown> | undefined; // 持续破坏协程
@@ -63,7 +63,7 @@ export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFI
     priority: 10,
     canActivate: (ctx) => {
       // 记忆注入自校验（可用性已由引擎门卫统一处理）
-      if (ctx.memory.get<string>("aiBehavior") !== "mine") return false;
+      if (ctx.memory.get<string>("workMode") !== "mine") return false;
       const b = (ctx as AiBehaviorContext).bot;
       if (!b) return false;
       // 视线有可挖方块才激活（看哪挖哪）

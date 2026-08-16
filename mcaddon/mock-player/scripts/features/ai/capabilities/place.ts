@@ -17,14 +17,14 @@ export const DEFAULT_PLACE_CONFIG: PlaceBehaviorConfig = {
   interval: 3,
 };
 
-/** 创建自动放置行为（record.aiBehavior === "place" 时由引擎注册） */
+/** 创建自动放置行为（record.workMode === "place" 时由引擎注册） */
 export function makePlaceBehavior(config: PlaceBehaviorConfig = DEFAULT_PLACE_CONFIG): Behavior {
   let tick = 0;
 
   return {
     name: "place",
     priority: 10,
-    canActivate: (ctx) => ctx.memory.get<string>("aiBehavior") === "place", // 记忆注入自校验
+    canActivate: (ctx) => ctx.memory.get<string>("workMode") === "place", // 记忆注入自校验
     reset: () => {
       tick = 0;
     },

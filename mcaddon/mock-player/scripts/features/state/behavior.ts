@@ -10,6 +10,7 @@ import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, inventoryStorage, saveCoordinator } from "../../bootstrap/context";
+import { BotEvents } from "../../events/DomainEvents";
 import { BOT_TAG, TAG_AUTO_JUMP, TAG_CONTROL } from "../../rules/tags/BotTags";
 import { EQUIP_SLOT_NAMES } from "../../rules/Types";
 import { captureExperience } from "../basic/items/McItemCodec";
@@ -83,16 +84,19 @@ export function startTagBehaviors(): void {
   }, 1);
 }
 
-// ─── 生物 AI 行为设置（替代旧行为标签机制） ────────────
-// 行为选择统一走 record.aiBehavior（"none"/"wander"/"mine"/"place"），
-// 由生物 AI 引擎（features/ai/brainEngine）每 10 tick 对账挂载。
+// ─── 工作模式设置（替代旧行为标签 + 劫掠独立开关机制） ──
+// 用户拍板：统一「工作模式」单选互斥字段（record.workMode），
+// 各驱动引擎按值认领：wander/mine/place/attack → 生物 AI 引擎；raid → 劫掠模块。
+// 互斥由单字段天然保证。⚠️ 钓鱼（垂钓）/砍树（伐木工）后期单独定制，
+// 暂不进单选（保持旧标签驱动）——"woodcut" 值域预留。
 
-/** 生物 AI 行为可选值（UI 下拉与引擎对账共用） */
-export const AI_BEHAVIORS = ["none", "wander", "mine", "place", "attack"] as const;
-export type AiBehavior = (typeof AI_BEHAVIORS)[number];
+/** 工作模式可选值（UI 下拉与各引擎对账共用；woodcut 预留待实现） */
+export const WORK_MODES = ["none", "wander", "mine", "place", "attack", "raid"] as const;
+export type WorkMode = (typeof WORK_MODES)[number];
 
-/** 设置假人生物 AI 行为（持久化；引擎下个周期对账生效） */
-export function setAiBehavior(record: import("../../rules/Types").BotRecord, behavior: AiBehavior): void {
-  record.aiBehavior = behavior;
+/** 设置假人工作模式（持久化 + 发布 botWorkModeChanged——驱动模块按值启动/停止） */
+export function setWorkMode(record: import("../../rules/Types").BotRecord, mode: WorkMode): void {
+  record.workMode = mode;
   saveCoordinator.saveRecord(record);
+  BotEvents.botWorkModeChanged.trigger({ botName: record.name, workMode: mode });
 }

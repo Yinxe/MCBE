@@ -122,6 +122,21 @@ export interface BotTagsChangedEvent {
 /** 假人标签变更信号 */
 export const botTagsChanged = new EventSignal<BotTagsChangedEvent>();
 
+// ─── 工作模式变更事件 ──────────────────────────────────
+// 工作模式（workMode，用户拍板命名）是互斥单选字段（none/wander/mine/place/
+// attack/raid/fishing）——setWorkMode 落库后发布，工作模式驱动模块（生物 AI
+// 引擎/劫掠模式/钓鱼）按需订阅启动/停止，替代旧 10 tick 标签轮询。
+
+/** 假人工作模式变更事件：setWorkMode 成功后 */
+export interface BotWorkModeChangedEvent {
+  botName: string;
+  /** 新工作模式值 */
+  workMode: string;
+}
+
+/** 假人工作模式变更信号 */
+export const botWorkModeChanged = new EventSignal<BotWorkModeChangedEvent>();
+
 // ─── 假人行为事件 ──────────────────────────────────────
 // 假人成功执行动作时触发（主手切换/破坏方块/放置方块/使用物品/攻击实体），
 // 供订阅方统计/通知/联动（负载只用可序列化 string/number）。
@@ -228,6 +243,8 @@ export const BotEvents = {
   botRespawn,
   // 标签变更
   botTagsChanged,
+  // 工作模式变更
+  botWorkModeChanged,
   // 行为
   botMainhandChanged,
   botBlockBroken,

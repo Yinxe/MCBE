@@ -65,10 +65,19 @@ scripts/
 - 功能模块各自 `registerUiSubscriptions()` 分散订阅，`bootstrap/uiDrivers.ts` 统一装配
 - AI 任务的 UI 反馈（不在线提示）在 `startBrainEngine` 注册
 
+### 工作模式（record.workMode，用户拍板）
+- **互斥单选**：一个假人一个工作模式——none / wander（闲逛模式）/ mine（定点挖掘模式）/
+  place（定点放置模式）/ attack（定点攻击模式）/ raid（劫掠模式）。互斥由单字段天然保证
+- 各引擎按值认领：wander/mine/place/attack → 生物 AI 引擎；raid → 劫掠模块
+- **修改唯一渠道 `setWorkMode`**：落库 + 发布 `botWorkModeChanged`（驱动模块按值启动/停止，
+  替代旧 10 tick 标签轮询）；UI 提交前先 setTags 校验通过再 setWorkMode（防部分应用）
+- ⚠️ 钓鱼/砍树后期单独定制（暂保持旧标签驱动，不进单选）；woodcut 值域预留
+
 ### 标签系统
-- 标签 = 假人行为的持久开关（互斥组 EXCLUSIVE / 独立开关 STANDALONE / 可共存 COEXIST）
-- **标签修改唯一渠道 `setTags`**（UI 命令全走它）：实体同步 syncEntityTags + 持久化统一
-- AI 引擎按标签分发任务树；**移除标签 = 行为立即停止**（BotBrain 对账清树，重开重新开始）
+- 标签 = 假人行为的持久开关（共存 COEXIST / legacy 组 LEGACY：宝库/钓鱼/control 等旧标签）
+- **标签修改唯一渠道 `setTags`**（UI 命令全走它）：实体同步 syncEntityTags + 持久化统一 +
+  发布 `botTagsChanged`；**移除标签 = 行为立即停止**（BotBrain 对账清树，重开重新开始）
+- ⚠️ 互斥组 EXCLUSIVE / 独立开关组 STANDALONE 均已清空（行为/劫掠收编进工作模式）
 
 ### 持久化
 - **所有持久化写经 `SaveCoordinator`**（唯一入口，禁直接写 store/registry）
@@ -110,8 +119,8 @@ scripts/
 - ⑥ 无药水 → 自动关模式（移除标签）；标签移除 → stopRaidMode
 
 触发时机（事件钩子，替代旧引擎轮询对账）：
-- `botTagsChanged`（setTags 唯一渠道落库后发布）：挂 raid 标签 → 启动；移除 → 停止
-- `botOnline`（上线/复活/重启后）：带 raid 标签 → 启动循环；`botOffline` → 清周期等待
+- `botWorkModeChanged`（setWorkMode 落库后发布）：workMode=raid → 启动；≠raid → 停止
+- `botOnline`（上线/复活/重启后）：workMode=raid → 启动循环；`botOffline` → 清周期等待
 - 开启时无瓶 → 通知（节流）+ 低频重试排程（补瓶后自动喝）
 
 核心规则（用户拍板，全部保留）：
@@ -119,7 +128,7 @@ scripts/
 - **基岩版机制**：不祥之兆 100 分钟（不在村庄/试炼之地挂着不转化）；在村庄/试炼之地内喝 → 转化袭击之兆（30 秒）→ 袭击；**已有凶兆不自动转化，需重开模式再喝**（用户实测）
 - **唯一玩家提醒**：喝瓶 30 秒未转化为袭击之兆 → 通知"假人不在村庄/试炼之地范围"（一次性，只发消息）
 - 带袭击之兆/袭击中是正常状态，不报警；胜利处理幂等（事件时刻防重）+ 喝瓶前防御清理残留英雄
-- 无药水自动关模式（走 setTags 唯一渠道移除标签）
+- 无药水自动关模式（setWorkMode("none") 唯一渠道）
 - 决策纯函数在 rules/RaidRules（`canDrinkRaid` / `diagnoseRaidIdle`，可单测）；领域事件
   （RaidEvents：raidStarted / raidVictory / raidPhase）内聚在 raidMode.ts
 
@@ -143,9 +152,10 @@ scripts/
 
 ## 领域事件
 
-**BotEvents**（core/events/DomainEvents）：生命周期 / 认主 / 宝库 / 行为 / 标签变更
+**BotEvents**（core/events/DomainEvents）：生命周期 / 认主 / 宝库 / 行为 / 标签变更 / 工作模式变更
 ```
 生命周期：botOnline / botOffline / botDeath / botRespawn
+工作模式：botWorkModeChanged（setWorkMode 落库后发布——工作模式驱动模块按值启动/停止）
 标签变更：botTagsChanged（setTags 落库后发布——标签驱动模块按需订阅）
 认主：    tridentClaimed / tridentOwnerChanged
 宝库：    vaultOpened

@@ -11,8 +11,8 @@ import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_AUTO_JUMP, TAG_RESPAWN, TAG_RAID_MODE, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
-import { AI_BEHAVIORS, setAiBehavior, type AiBehavior } from "../../../features/state/behavior";
+import { TAG_BOT, TAG_AUTO_JUMP, TAG_RESPAWN, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
+import { WORK_MODES, setWorkMode, type WorkMode } from "../../../features/state/behavior";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
@@ -50,10 +50,10 @@ export function showTagManagement(player: Player, botName: string): void {
 
   // 共存标签（除 bot 标识外）：自动重生置顶单独开关，其余（自动跳跃）进共存区
 
-  // 生物 AI 行为下拉值列表 + 索引映射（从 canonical 列表 AI_BEHAVIORS 派生——
-  // 与引擎 BEHAVIOR_BY_NAME 同源，避免三处手抄漏同步，审核 L4）
-  const AI_BEHAVIOR_OPTIONS: readonly AiBehavior[] = AI_BEHAVIORS;
-  const AI_BEHAVIOR_INDEX: Record<string, number> = Object.fromEntries(AI_BEHAVIORS.map((b, i) => [b, i]));
+  // 工作模式下拉值列表 + 索引映射（从 canonical 列表 WORK_MODES 派生——
+  // 与各引擎同源，避免三处手抄漏同步，审核 L4）
+  const WORK_MODE_OPTIONS: readonly WorkMode[] = WORK_MODES;
+  const WORK_MODE_INDEX: Record<string, number> = Object.fromEntries(WORK_MODES.map((b, i) => [b, i]));
 
   const currentTagsText = record.tags
     .map((t) => { const d = getTagDef(t); return d ? d.label : t; })
@@ -93,26 +93,22 @@ export function showTagManagement(player: Player, botName: string): void {
       defaultValue: isFollowing(botName),
       tooltip: "开启后假人会持续跟随你",
     })
-    // ── 劫掠模式（独立开关，与其它行为可共存） ──
-    .toggle("raidMode", style("劫掠模式", color.warn), {
-      defaultValue: record.tags.includes(TAG_RAID_MODE.value),
-      tooltip: "持续喝不祥之瓶刷袭击：获得村庄英雄视为本次袭击胜利，自动喝下一瓶。与其它行为可共存",
-    })
-    .label("sep2", style("━━ 生物AI行为 ────", color.accent))
-    // ── 生物 AI 行为（新框架 scripts/ai 驱动；单选，替代旧互斥行为标签机制） ──
+    .label("sep2", style("━━ 工作模式 ────", color.accent))
+    // ── 工作模式（用户拍板：单选互斥——一个假人一个工作模式） ──
     .dropdown(
-      "aiBehavior",
-      style("生物AI行为（仅选一项）", color.accent),
+      "workMode",
+      style("工作模式（仅选一项，互斥）", color.accent),
       [
         style("无", color.muted),
-        style("随机游走", color.playerName),
-        style("自动挖掘", color.playerName),
-        style("自动放置", color.playerName),
-        style("自动攻击", color.playerName),
+        style("闲逛模式", color.playerName),
+        style("定点挖掘模式", color.playerName),
+        style("定点放置模式", color.playerName),
+        style("定点攻击模式", color.playerName),
+        style("劫掠模式", color.warn),
       ],
       {
-        defaultValueIndex: AI_BEHAVIOR_INDEX[record.aiBehavior] ?? 0,
-        tooltip: "单选生物 AI 行为改变假人行为：随机游走（近点散步）/ 自动挖掘（视线挖方块）/ 自动放置（面前放方块）/ 自动攻击（攻击面前目标）",
+        defaultValueIndex: WORK_MODE_INDEX[record.workMode] ?? 0,
+        tooltip: "单选工作模式（互斥，仅一项）：闲逛模式（近点散步）/ 定点挖掘模式（视线挖方块）/ 定点放置模式（面前放方块）/ 定点攻击模式（攻击面前目标）/ 劫掠模式（喝不祥之瓶刷袭击）。钓鱼/砍树后期单独定制",
       },
     );
 
@@ -121,19 +117,16 @@ export function showTagManagement(player: Player, botName: string): void {
     const currentRecord = resolveUiBotRecord(player, botName);
     if (!currentRecord) return;
 
-    // ── 表单 → 标签计算（core 纯函数：共存勾选 + 劫掠开关） ──
-    const aiBehaviorSel = vals.aiBehavior as number;
-    const pickedAiBehavior = AI_BEHAVIOR_OPTIONS[aiBehaviorSel] ?? "none";
+    // ── 表单 → 标签计算（core 纯函数：共存勾选） ──
+    const workModeSel = vals.workMode as number;
+    const pickedWorkMode = WORK_MODE_OPTIONS[workModeSel] ?? "none";
     const coexist: string[] = [];
     if (vals.respawn as boolean) coexist.push(TAG_RESPAWN.value);
     if (vals.autoJump as boolean) coexist.push(TAG_AUTO_JUMP.value);
-    const newTags = computeTagsFromBehaviorForm({
-      coexist,
-      raidMode: vals.raidMode as boolean,
-    });
-    // 生物 AI 行为落库延迟到 system.run 内、标签校验成功后（审核 M1：
-    // 避免 setTags 校验失败时行为字段已改写——部分应用残留）
-    // setAiBehavior(currentRecord, pickedAiBehavior);
+    const newTags = computeTagsFromBehaviorForm({ coexist });
+    // 工作模式落库延迟到 system.run 内、标签校验成功后（审核 M1：
+    // 避免 setTags 校验失败时模式字段已改写——部分应用残留）
+    // setWorkMode(currentRecord, pickedWorkMode);
 
     // 一次性使用开关：勾选提交=使用一次（自动停下），取消提交=停止一次。
     // 开关本身不落库（用后即停，无持续状态），每次打开行为菜单都默认关。
@@ -150,9 +143,9 @@ export function showTagManagement(player: Player, botName: string): void {
         player.sendMessage(`${color.error}${rejected}`);
         return;
       }
-      // ── ② 生物 AI 行为落库（record.aiBehavior 字段——引擎下个周期对账生效；
+      // ── ② 工作模式落库（record.workMode 字段——驱动引擎按值启动；
       //     与标签同一 system.run 块、标签校验通过后才写——防部分应用） ──
-      setAiBehavior(currentRecord, pickedAiBehavior);
+      setWorkMode(currentRecord, pickedWorkMode);
       // ── ③ 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
       BotUiEvent.behaviorSubmitted.trigger({
         playerId: player.id,
@@ -162,7 +155,7 @@ export function showTagManagement(player: Player, botName: string): void {
         follow: wantFollow,
         useItem: useItemOn,
         coexist,
-        raidMode: vals.raidMode as boolean,
+        workMode: pickedWorkMode,
         tags: newTags,
       });
     });

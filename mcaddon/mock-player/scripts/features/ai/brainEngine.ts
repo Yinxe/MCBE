@@ -3,14 +3,16 @@
 // 共享记忆（AiMemory）+ 行为运行器（BehaviorRunner 单主目标优先级抢占），
 // 10 tick 驱动；能力 = Behavior 状态机（感知-决策-执行，step 同步短步）。
 //
-// 行为选择（用户拍板：行为标签机制已删除——统一走 record.aiBehavior 字段）：
+// 行为选择（用户拍板：工作模式单选——统一走 record.workMode 字段）：
 //   "none"  不启用
-//   "wander" 随机游走（空闲走走停停，近点散步）
-//   "mine"   自动挖掘（视线方向 breakBlock）
-//   "place"  自动放置（面前放置主手方块）
-// 引擎每 10 tick 对账：record.aiBehavior → 注册/卸载对应行为（切换 → 旧行为
-// reset 清状态 + 中断协程）。与旧引擎（legacy/ai/BotBrain 宝库/劫掠/钓鱼 +
-// features/state/behavior.ts 标签行为）并存——旧标签机制保留 legacy 内部使用。
+//   "wander" 闲逛模式（空闲走走停停，近点散步）
+//   "mine"   定点挖掘模式（视线方向 breakBlock）
+//   "place"  定点放置模式（面前放置主手方块）
+//   "attack" 定点攻击模式（攻击面前目标）
+// 引擎每 10 tick 对账：record.workMode → 注册/卸载对应行为（切换 → 旧行为
+// reset 清状态 + 中断协程）。raid/fishing 由各自模块认领（互斥单字段）。
+// 与旧引擎（legacy/ai/BotBrain 宝库 + features/state/behavior.ts 标签行为）
+// 并存——旧标签机制保留 legacy 内部使用。
 
 import { system } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
@@ -50,7 +52,7 @@ export interface AiBehaviorContext extends BehaviorContext {
   bot: SimulatedPlayer | undefined;
 }
 
-/** 行为构造器（aiBehavior 值 → 能力） */
+/** 行为构造器（workMode 值 → 能力） */
 const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
   wander: makeWanderBehavior,
   mine: makeMineBehavior,
@@ -58,14 +60,14 @@ const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
   attack: makeAttackBehavior,
 };
 
-/** 假人当前生物 AI 行为（record.aiBehavior；未启用 → undefined） */
+/** 假人当前生物 AI 行为（record.workMode；未启用 → undefined） */
 function enabledBehaviorName(record: BotRecord): string | undefined {
-  const name = record.aiBehavior;
+  const name = record.workMode;
   return name && BEHAVIOR_BY_NAME[name] ? name : undefined;
 }
 
 /**
- * 生物 AI 引擎：10 tick 对账（aiBehavior → 行为挂载/卸载）+ 推进全部在线
+ * 生物 AI 引擎：10 tick 对账（workMode → 行为挂载/卸载）+ 推进全部在线
  * 假人大脑（幂等启动）。未启用生物 AI 行为 → 不创建大脑（零开销）。
  */
 export function startAiEngine(): void {
@@ -94,8 +96,8 @@ export function startAiEngine(): void {
           brains.set(record.name, brain);
         }
         // 记忆注入（用户拍板：主动 AI 行为直接注入记忆表达——行为从记忆
-        // 读取当前 aiBehavior，实体 TAG 不再参与行为表达）
-        brain.memory.set("aiBehavior", behaviorName);
+        // 读取当前 workMode，实体 TAG 不再参与行为表达）
+        brain.memory.set("workMode", behaviorName);
         // 对账（仅行为变化时执行）：注册新行为 + 卸载旧行为（旧行为 reset 清状态）
         if (brain.behaviorName !== behaviorName) {
           for (const [name, make] of Object.entries(BEHAVIOR_BY_NAME)) {

@@ -58,8 +58,8 @@ export interface BehaviorSubmittedEvent {
   useItem: boolean;
   /** 勾选的共存标签（不含 bot 标识标签） */
   coexist: string[];
-  /** 劫掠模式独立开关（legacy 引擎用） */
-  raidMode: boolean;
+  /** 工作模式（单选互斥：none/wander/mine/place/attack/raid/fishing；发布前已落库） */
+  workMode: string;
   /** 完整新标签集（含 bot 标识标签；发布前已写入 record.tags） */
   tags: string[];
 }
