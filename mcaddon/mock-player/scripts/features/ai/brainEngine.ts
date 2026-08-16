@@ -57,10 +57,16 @@ export function startAiEngine(): void {
   if (engineStarted) return;
   engineStarted = true;
 
+  // 实体生命周期 → 缓存失效（实体引用在上线/下线/死亡/复活时都可能变化：
+  //   botOffline/botDeath → 旧实体不可复用；
+  //   botOnline/botRespawn → 可能为新实体（重连/复活流程），强制重解析）
   BotEvents.botOffline.subscribe((e) => {
-    invalidateBotCache(e.botName); // 实体引用失效（缓存立即清除）
+    invalidateBotCache(e.botName);
     disposeBotBrain(e.botName);
   });
+  BotEvents.botDeath.subscribe((e) => invalidateBotCache(e.botName));
+  BotEvents.botOnline.subscribe((e) => invalidateBotCache(e.botName));
+  BotEvents.botRespawn.subscribe((e) => invalidateBotCache(e.botName));
 
   system.runInterval(() => {
     for (const record of botRegistry.all()) {
