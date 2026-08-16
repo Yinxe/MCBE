@@ -143,9 +143,8 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
     name: "wander",
     priority: 10,
     canActivate: (ctx) => {
-      // 记忆注入：当前主动 AI 行为（引擎对账时写入）——行为自校验互斥
-      if (ctx.memory.get<string>("aiBehavior") !== "wander") return false;
-      return (ctx as AiBehaviorContext).bot !== undefined; // 引擎注入实体——零 resolve
+      // 记忆注入自校验（可用性已由引擎门卫统一处理——在线/未死亡/实体有效）
+      return ctx.memory.get<string>("aiBehavior") === "wander";
     },
     onActivate: (ctx) => stopBotMoving((ctx as AiBehaviorContext).bot),
     reset: () => {

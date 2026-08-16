@@ -76,7 +76,8 @@ export function startAiEngine(): void {
 
   system.runInterval(() => {
     for (const record of botRegistry.all()) {
-      if (!record.online) continue;
+      // ── 引擎级可用性门卫（统一处理，行为不再各自判断） ──
+      if (!record.online || record.death) continue; // 不在线/死亡 → 跳过
       try {
         const behaviorName = enabledBehaviorName(record);
         if (!behaviorName) continue; // 未启用 → 不创建大脑
@@ -96,11 +97,13 @@ export function startAiEngine(): void {
             brain.runner.unregister(name);
           }
         }
+        const bot = resolveBotPlayer(record.name); // 每假人每周期一次（缓存 TTL 内零查询）
+        if (!bot) continue; // 实体不可用（失效/瞬态）→ 本周期不推进（事件负责清理）
         const ctx: AiBehaviorContext = {
           botName: record.name,
           tick: system.currentTick,
           memory: brain.memory,
-          bot: resolveBotPlayer(record.name), // 每假人每周期一次（缓存 TTL 内零查询）
+          bot,
         };
         brain.runner.step(ctx);
       } catch (e: any) {
