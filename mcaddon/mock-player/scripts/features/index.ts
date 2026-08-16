@@ -8,7 +8,7 @@ export { offlineBot } from "./manage/offlineBot";
 export { deleteBot } from "./manage/deleteBot";
 export { killBot } from "./manage/killBot";
 export { tpPlayerToBot, tpBotToPlayer } from "./basic/teleport";
-export { navigateBot, NavigateResult, type NavigateCallbacks } from "./basic/move";
+export { longNavigateBot, navigateBot, NavigateResult, type NavigateCallbacks } from "./basic/move";
 export { toggleControl } from "./basic/control";
 export { setSneaking } from "./basic/sneak";
 export { reclaimBot, type ReclaimResult } from "./manage/reclaim";

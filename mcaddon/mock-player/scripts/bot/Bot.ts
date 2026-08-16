@@ -7,7 +7,7 @@ import type { Player, Vector3 } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotCore } from "./BotCore";
-import { navigateBot } from "../features/basic/move";
+import { longNavigateBot, navigateBot } from "../features/basic/move";
 import { toggleControl } from "../features/basic/control";
 import { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot, SwapResult } from "../features/basic/items";
 import { getMainhandOptions, setMainhandSlot } from "../features/basic/items";
@@ -41,6 +41,20 @@ export class Bot extends BotCore {
     callbacks?: import("../features/basic/move").NavigateCallbacks,
   ): Promise<import("../features/basic/move").NavigateResult> {
     return navigateBot(this.name, target, speed, callbacks);
+  }
+
+  /**
+   * 长途寻路（分段接力，可移动远超 16 格）：目标路径按 16 格切段逐段寻路，
+   * 段内障碍引擎绕行、段间无缝衔接；任一段失败立即返回该段失败原因。
+   * @param callbacks 移动过程回调（onStart 首段一次；onMoving/onStuck 逐段；onComplete 整体收口）
+   * @returns NavigateResult：arrived（全部段完成）/ 任一段失败原因
+   */
+  navigateLongTo(
+    target: Vector3,
+    speed?: number,
+    callbacks?: import("../features/basic/move").NavigateCallbacks,
+  ): Promise<import("../features/basic/move").NavigateResult> {
+    return longNavigateBot(this.name, target, speed, callbacks);
   }
 
   // ─── 原子能力：跟随 ──────────────────────────────────

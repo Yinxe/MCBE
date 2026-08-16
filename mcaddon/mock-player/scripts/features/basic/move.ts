@@ -6,6 +6,7 @@
 
 import { Vector3 } from "@minecraft/server";
 
+import { buildLongNavigateWaypoints } from "../../rules/coords/Waypoints";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { waitTicks, distance3d } from "../utils";
@@ -169,4 +170,49 @@ export async function navigateBot(
       return NavigateResult.Error;
     }
   }
+}
+
+/**
+ * 长途寻路（分段接力，可移动远超 16 格）。
+ * 官方 API（navigateToLocation）无距离上限参数、远距离导航易失败/卡死——
+ * 本函数把目标路径按 16 格水平等分切段（buildLongNavigateWaypoints），
+ * 逐段调用 navigateBot（每段独立寻路：段内障碍引擎绕行、段尾无缝衔接下一段；
+ * 每段 ≤16 格天然满足短程限制）。水平/垂直随进度线性插值。
+ *
+ * @param botName 假人名
+ * @param target 长途目标（可远超 16 格）
+ * @param speed 导航速度（缺省 1）
+ * @param callbacks 移动过程回调（onStart 首段触发一次；onMoving/onStuck 逐段透传；
+ *                  onComplete 全部段完成后统一触发）
+ * @returns NavigateResult：arrived（全部段完成）/ 任一段失败原因
+ *          （no-path / still-timeout / timeout / unavailable / entity-invalid / error）
+ * @throws 永不 reject（每段 navigateBot 多状态返回，异常归 error）
+ */
+export async function longNavigateBot(
+  botName: string,
+  target: Vector3,
+  speed = NAVIGATE_SPEED,
+  callbacks?: NavigateCallbacks,
+): Promise<NavigateResult> {
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return NavigateResult.Unavailable;
+
+  const waypoints = buildLongNavigateWaypoints(bot.location, target);
+  for (let i = 0; i < waypoints.length; i++) {
+    const waypoint = waypoints[i]!;
+    const result = await navigateBot(botName, waypoint, speed, {
+      // onStart 仅首段触发（避免重复"开始移动"通知）；onComplete 由本函数统一收口
+      onStart: i === 0 ? callbacks?.onStart : undefined,
+      onMoving: callbacks?.onMoving,
+      onStuck: callbacks?.onStuck,
+    });
+    if (result !== NavigateResult.Arrived) {
+      // 段失败立即中止（TooFar 不会发生——每段 ≤16 格）
+      console.warn(`[MockPlayer] 长途寻路 ${botName} 第 ${i + 1}/${waypoints.length} 段失败: ${result}`);
+      callbacks?.onComplete?.(result);
+      return result;
+    }
+  }
+  callbacks?.onComplete?.(NavigateResult.Arrived);
+  return NavigateResult.Arrived;
 }
