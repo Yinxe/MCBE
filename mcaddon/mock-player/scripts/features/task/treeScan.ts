@@ -21,7 +21,6 @@ import {
   type TreeVerdict,
 } from "../../rules/tree/TreeRules";
 import type { Vec3 } from "../../rules/Types";
-import { waitTicks } from "../utils";
 
 /** 无效旧 id（1.20.30 方块拆分后已不存在，vanilla-data 1.26.20 校验）——
  *  getBlocks includeTypes 传入无效 id 可能被引擎拒绝（导致整轮扫描失败被
@@ -162,7 +161,7 @@ export interface TreeSetScanResult {
   analyzeMs: number;
   /** 纯算法总耗时（ms）= 扫描 + 分析（不含调度等待、不含日志输出） */
   computeMs: number;
-  /** 总耗时（ms）：全流程含调度等待（waitTicks）——不含日志输出（日志在调用方，另行计时） */
+  /** 总耗时（ms）：全流程（采集+分析，零调度等待——不含日志输出，日志在调用方另行计时） */
   ms: number;
 }
 
@@ -184,23 +183,11 @@ export async function scanTreesFromSets(
   const fromY = Math.max(-64, center.y - SET_SCAN_BELOW);
   const toY = Math.min(320, center.y + SET_SCAN_ABOVE);
 
-  // ① 原木/树叶坐标集：Promise.all 并发采集（协程交错调度）——
-  //    getBlocks 是同步 API（单线程），协程间靠 waitTicks 让出点错开，
-  //    原木遍历落在 tick N、树叶遍历落在 tick N+1——主线程每 tick 只做
-  //    一次大体积引擎遍历；两个协程生命周期重叠（Promise.all 语义并发）。
-  const collectLogs = (async () => {
-    // 引擎级排除水平原木（倒下的树/横梁——pillar_axis=x/z 在查询源头剔除）
-    const r = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY, HORIZONTAL_LOG_PERMUTATIONS);
-    await waitTicks(1); // 原木遍历后让出
-    return r;
-  })();
-  const collectLeaves = (async () => {
-    await waitTicks(1); // 错开：树叶遍历从原木的下一个 tick 开始
-    const r = collectCoordinateSet(dimension, center, radius, VALID_LEAF_TYPE_IDS, "树叶", fromY, toY);
-    await waitTicks(1);
-    return r;
-  })();
-  const [logsResult, leavesResult] = await Promise.all([collectLogs, collectLeaves]);
+  // ① 原木/树叶坐标集：直接连续采集（零等待——waitTicks 每次让出 50ms，
+  //    等待开销 > 采集本身；纯算法性能优先，单 tick 完成两次引擎遍历）
+  //    原木：引擎级排除水平原木（pillar_axis=x/z 在查询源头剔除）
+  const logsResult = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY, HORIZONTAL_LOG_PERMUTATIONS);
+  const leavesResult = collectCoordinateSet(dimension, center, radius, VALID_LEAF_TYPE_IDS, "树叶", fromY, toY);
   const logs = logsResult.coords;
   // 树叶坐标集：数字编码 Set<number>（零字符串分配——大范围几十万次查询的性能关键）
   const leafSet = new Set<number>(leavesResult.coords.map((c) => coordKey(c.x, c.y, c.z)));
@@ -261,7 +248,7 @@ export async function scanTreesFromSets(
     logs: logsResult, leaves: leavesResult, trees: mergedTrees, rejected: mergedRejected, candidates: candidates.length,
     bigCandidates, smallCandidates, clusterMs, evalMs, mergeMs,
     scanMs, analyzeMs, computeMs: scanMs + analyzeMs,
-    ms: Date.now() - t0, // 总耗时（含 waitTicks 调度等待；日志输出在调用方另行计时）
+    ms: Date.now() - t0, // 总耗时（零调度等待；日志输出在调用方另行计时）
   };
 }
 
