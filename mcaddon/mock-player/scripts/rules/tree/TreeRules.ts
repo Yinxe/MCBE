@@ -235,10 +235,15 @@ export function extractTrunkCandidates(logs: TreeLog[]): TrunkCandidate[] {
   }
   const ys = [...byY.keys()].sort((a, b) => a - b);
 
-  // 2. 层内 8 邻水平分组
+  // 2. 层内 8 邻水平分组（索引化：Map<x,z> 邻接 O(1)，替代全层遍历 O(N²)——大范围扫描性能关键）
   const groupsByY = new Map<number, LayerGroup[]>();
   for (const y of ys) {
     const layerLogs = byY.get(y)!;
+    // 层内坐标索引（"x,z" → 原木列表；同格多原木不会发生，列表长度 1）
+    const cellIndex = new Map<string, TreeLog>();
+    for (const log of layerLogs) {
+      cellIndex.set(`${log.x},${log.z}`, log);
+    }
     const groups: LayerGroup[] = [];
     const visited = new Set<string>();
     for (const start of layerLogs) {
@@ -250,12 +255,17 @@ export function extractTrunkCandidates(logs: TreeLog[]): TrunkCandidate[] {
       while (queue.length > 0) {
         const cur = queue.shift()!;
         group.push(cur);
-        for (const other of layerLogs) {
-          const ok = `${other.x},${other.z}`;
-          if (visited.has(ok)) continue;
-          if (Math.abs(other.x - cur.x) <= 1 && Math.abs(other.z - cur.z) <= 1) {
-            visited.add(ok);
-            queue.push(other);
+        // 8 邻查索引（O(1) 而非遍历全层）
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            if (dx === 0 && dz === 0) continue;
+            const nk = `${cur.x + dx},${cur.z + dz}`;
+            if (visited.has(nk)) continue;
+            const nbr = cellIndex.get(nk);
+            if (nbr) {
+              visited.add(nk);
+              queue.push(nbr);
+            }
           }
         }
       }
@@ -695,6 +705,23 @@ export function scanTreeResources(logs: TreeLog[], cellKind: CellKindFn, origin?
 }
 
 // ─── 坐标集评估（纯算术：原木/树叶两个坐标集 → 树判定） ──
+
+/**
+ * 坐标数字编码（Set<number> 快于 Set<string>——零字符串分配，
+ * 大范围扫描几十万次坐标查询时性能差距达数量级）。
+ * 编码：x,y,z 各偏移 4096 后按 2^12 进制合并（z 低 12 位、y 中 12 位、x 高位移）。
+ */
+export function coordKey(x: number, y: number, z: number): number {
+  return (x + 4096) * 16777216 + (y + 4096) * 4096 + (z + 4096);
+}
+
+/** 数字 key → 坐标（诊断用） */
+export function keyToCoord(key: number): { x: number; y: number; z: number } {
+  const z = (key % 4096) - 4096;
+  const y = (Math.floor(key / 4096) % 4096) - 4096;
+  const x = Math.floor(key / 16777216) - 4096;
+  return { x, y, z };
+}
 // 由 mc 层一次性 getBlocks 采集坐标集（每类方块一次，零 getBlock），
 // 评估只做集合运算（has 判定/邻接 BFS）——不再按候选区域查询世界。
 // G（地面）/F（纯净度）因子依赖其他方块类型，坐标集方案缺省视为 1
@@ -747,7 +774,7 @@ export interface TreeSetEvalOptions {
  */
 export function evaluateTreeFromSets(
   candidate: TrunkCandidate,
-  leafSet: ReadonlySet<string>,
+  leafSet: ReadonlySet<number>,
   options: TreeSetEvalOptions = {},
 ): TreeSetVerdict {
   // ── 大树直接接受：2×2 原木垂直向上（恒等段）特征已足够明显，无需树叶判定 ──
@@ -782,11 +809,11 @@ export function evaluateTreeFromSets(
   let leafCount = 0;
   let leafMinY = Number.POSITIVE_INFINITY;
   let leafMaxY = Number.NEGATIVE_INFINITY;
-  const leafKeysInRegion: string[] = [];
+  const leafKeysInRegion: number[] = [];
   for (let y = candidate.baseY + LEAF_MIN_LAYER_OFFSET; y <= regionTop; y++) {
     for (let x = minX; x <= maxX; x++) {
       for (let z = minZ; z <= maxZ; z++) {
-        const key = `${x},${y},${z}`;
+        const key = coordKey(x, y, z);
         if (leafSet.has(key)) {
           leafCount++;
           if (y < leafMinY) leafMinY = y;
@@ -806,17 +833,17 @@ export function evaluateTreeFromSets(
   // A：树冠连通——从贴原木的树叶 BFS（26 邻，全部在 leafSet 内判定）
   let A = 0;
   if (leafCount > 0) {
-    const logKeys = new Set(candidate.logs.map((l) => `${l.x},${l.y},${l.z}`));
-    const visited = new Set<string>();
-    const queue: string[] = [];
-    const seedCheck = (key: string): void => {
-      // 该树叶 26 邻内是否有候选原木
-      const [x, y, z] = key.split(",").map(Number) as [number, number, number];
+    const logKeys = new Set(candidate.logs.map((l) => coordKey(l.x, l.y, l.z)));
+    const visited = new Set<number>();
+    const queue: number[] = [];
+    const seedCheck = (key: number): void => {
+      // 该树叶 26 邻内是否有候选原木（数字 key 零分配）
+      const { x, y, z } = keyToCoord(key);
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
           for (let dz = -1; dz <= 1; dz++) {
             if (dx === 0 && dy === 0 && dz === 0) continue;
-            if (logKeys.has(`${x + dx},${y + dy},${z + dz}`)) {
+            if (logKeys.has(coordKey(x + dx, y + dy, z + dz))) {
               visited.add(key);
               queue.push(key);
               return;
@@ -828,12 +855,12 @@ export function evaluateTreeFromSets(
     for (const key of leafKeysInRegion) seedCheck(key);
     while (queue.length > 0) {
       const cur = queue.shift()!;
-      const [x, y, z] = cur.split(",").map(Number) as [number, number, number];
+      const { x, y, z } = keyToCoord(cur);
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
           for (let dz = -1; dz <= 1; dz++) {
             if (dx === 0 && dy === 0 && dz === 0) continue;
-            const nk = `${x + dx},${y + dy},${z + dz}`;
+            const nk = coordKey(x + dx, y + dy, z + dz);
             if (leafSet.has(nk) && !visited.has(nk)) {
               visited.add(nk);
               queue.push(nk);

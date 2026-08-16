@@ -10,6 +10,7 @@ import { BlockPermutation, BlockVolume } from "@minecraft/server";
 import type { Dimension } from "@minecraft/server";
 
 import {
+  coordKey,
   evaluateTreeFromSets,
   extractTrunkCandidatesSimple,
   TREE_LEAF_TYPE_IDS,
@@ -153,6 +154,8 @@ export interface TreeSetScanResult {
   clusterMs: number;
   /** 评估耗时（ms） */
   evalMs: number;
+  /** 大树碎段合并耗时（ms） */
+  mergeMs: number;
   /** 总耗时（ms） */
   ms: number;
 }
@@ -193,7 +196,8 @@ export async function scanTreesFromSets(
   })();
   const [logsResult, leavesResult] = await Promise.all([collectLogs, collectLeaves]);
   const logs = logsResult.coords;
-  const leafSet = new Set<string>(leavesResult.coords.map((c) => `${c.x},${c.y},${c.z}`));
+  // 树叶坐标集：数字编码 Set<number>（零字符串分配——大范围几十万次查询的性能关键）
+  const leafSet = new Set<number>(leavesResult.coords.map((c) => coordKey(c.x, c.y, c.z)));
 
   // ③ 纯算术评估：无属性聚类（几何成链，零 getBlock）→ 坐标集树判定
   const tCluster = Date.now();
@@ -232,7 +236,9 @@ export async function scanTreesFromSets(
   // ── ④ 大树碎段合并：同一棵 2×2 大树在树身偏移/加宽层被段切分断段后，
   //    产生多个同水平位置、垂直相邻（gap ≤2 层）的大树候选——
   //    合并为一棵树（取整体高度、合并原木与叶数，避免一棵树报多棵）
+  const tMerge = Date.now();
   const mergedTrees = mergeBigTreeSegments(trees);
+  const mergeMs = Date.now() - tMerge;
   const mergedRejected = rejected.filter((r) => {
     // 被合并段对应的拒绝候选（同水平位置的大树残段）一并过滤
     for (const t of mergedTrees) {
@@ -245,7 +251,7 @@ export async function scanTreesFromSets(
   });
   return {
     logs: logsResult, leaves: leavesResult, trees: mergedTrees, rejected: mergedRejected, candidates: candidates.length,
-    bigCandidates, smallCandidates, clusterMs, evalMs, ms: Date.now() - t0,
+    bigCandidates, smallCandidates, clusterMs, evalMs, mergeMs, ms: Date.now() - t0,
   };
 }
 
@@ -329,7 +335,7 @@ export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: 
   );
   lines.push(
     `[树] 聚类：候选 ${r.candidates}（大树 ${r.bigCandidates} / 小树 ${r.smallCandidates}）耗时 ${r.clusterMs}ms｜` +
-      `评估：接受 ${r.trees.length} / 拒绝 ${r.rejected.length} 耗时 ${r.evalMs}ms｜纯计算合计 ${r.clusterMs + r.evalMs}ms`,
+      `评估：接受 ${r.trees.length} / 拒绝 ${r.rejected.length} 耗时 ${r.evalMs}ms｜合并 ${r.mergeMs}ms｜纯计算合计 ${r.clusterMs + r.evalMs + r.mergeMs}ms`,
   );
   lines.push(`[树] ── 接受（${r.trees.length}）${"─".repeat(Math.max(8, 40 - String(r.trees.length).length))}`);
   for (const t of r.trees) {

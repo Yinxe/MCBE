@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateTreeFromSets, extractTrunkCandidatesSimple, classifyTreeBlock, type TreeLog } from "../scripts/rules/tree/TreeRules";
+import { coordKey, evaluateTreeFromSets, extractTrunkCandidatesSimple, classifyTreeBlock, type TreeLog } from "../scripts/rules/tree/TreeRules";
 import { buildOak, buildDarkOak, buildLogWall, MockWorld } from "./helpers/treeFixtures";
 
 /** 从 MockWorld 提取原木坐标集（TreeLog 列表，woodId 按 typeId 简化） */
@@ -23,14 +23,14 @@ function logsFrom(world: MockWorld, ground: { x: number; y: number; z: number },
   return logs;
 }
 
-/** 从 MockWorld 提取树叶坐标集（"x,y,z" key） */
-function leavesFrom(world: MockWorld, ground: { x: number; y: number; z: number }, span: number): Set<string> {
-  const leaves = new Set<string>();
+/** 从 MockWorld 提取树叶坐标集（数字编码 key） */
+function leavesFrom(world: MockWorld, ground: { x: number; y: number; z: number }, span: number): Set<number> {
+  const leaves = new Set<number>();
   for (let y = ground.y - 2; y <= ground.y + span; y++) {
     for (let x = ground.x - span; x <= ground.x + span; x++) {
       for (let z = ground.z - span; z <= ground.z + span; z++) {
         if (classifyTreeBlock(world.typeAt(x, y, z)) === "leaf") {
-          leaves.add(`${x},${y},${z}`);
+          leaves.add(coordKey(x, y, z));
         }
       }
     }
@@ -57,7 +57,7 @@ test("坐标集评估：深色橡树（2×2 大树）直接接受——无需树
   const candidates = extractTrunkCandidatesSimple(logs);
   assert.ok(candidates.length >= 1);
   // 不传树叶集（空 Set）——2×2 特征明显，直接接受
-  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<string>());
+  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<number>());
   assert.equal(verdict.kind, "big");
   assert.equal(verdict.accepted, true, JSON.stringify(verdict.factors));
 });
@@ -140,7 +140,7 @@ test("坐标集评估：纯 2×2 原木柱（无树叶）按大树接受", () =>
   const candidates = extractTrunkCandidatesSimple(logs);
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0]!.kind, "big");
-  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<string>());
+  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<number>());
   assert.equal(verdict.accepted, true); // 2×2 特征直接判定
   assert.equal(verdict.probability, 1); // 高 4 层 → H=1
 });
@@ -168,6 +168,6 @@ test("坐标集评估：矮 2×2（2 层）不直接接受——无树叶拒绝"
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0]!.kind, "big");
   // 高 2 层 → H=0.5 < 0.8 → 不直接接受；无树叶 → 拒绝
-  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<string>());
+  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<number>());
   assert.equal(verdict.accepted, false);
 });
