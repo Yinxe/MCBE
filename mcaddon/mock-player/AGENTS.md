@@ -79,6 +79,16 @@ scripts/
   发布 `botTagsChanged`；**移除标签 = 行为立即停止**（BotBrain 对账清树，重开重新开始）
 - ⚠️ 互斥组 EXCLUSIVE / 独立开关组 STANDALONE 均已清空（行为/劫掠收编进工作模式）
 
+### 物品组件类型化读取（ItemComponentRead）
+- mc 层**共享工具** `features/basic/items/ItemComponentRead.ts`：收敛 durability /
+  enchantable / inventory 组件的类型化读取（`readDurability` / `enchantableOf` /
+  `inventoryContainerOf`）
+- `@minecraft/server` 的 `getComponent<T>(id)` 按组件 ID 泛型映射到精确类型
+  （ItemComponentReturnType<T>）——常见组件读取**无需 `as any`**，尽量复用本工具
+- ⚠️ 特殊绕行保留：`getComponent("minecraft:effects")` 类型 map 缺 key（用局部接口）；
+  SimulatedPlayer 特有方法（`setSpawnPoint` / `resetLevel` / `getBlockFromViewDirection`）
+  需 `as any`；旧存档迁移探针 `(record as any).aiBehavior` 属合理惰性类型
+
 ### 持久化
 - **所有持久化写经 `SaveCoordinator`**（唯一入口，禁直接写 store/registry）
 - 背包/装备事件驱动增量保存（playerInventoryItemChange + 槽位事件）；死亡 = 存储时机点"有什么存什么"
