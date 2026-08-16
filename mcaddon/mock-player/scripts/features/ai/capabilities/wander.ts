@@ -13,7 +13,7 @@
 
 import type { Behavior, BehaviorContext } from "../../../ai";
 import { randomStrollOnce, NavigateResult } from "../../basic/move";
-import { resolveBotCached } from "../botCache";
+import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 
 // ⚠️ 等待单位 = **引擎周期**（step 每 10 tick 一次，--wait 递减的是周期数）：
 //   官方 RandomStrollGoal 默认 interval=120 tick（6 秒）倒计时挑目标；
@@ -44,7 +44,7 @@ function randomBetween(min: number, max: number): number {
 
 /** 停止假人移动（reset/切换时中断进行中导航；导航协程有界，静止后自行收尾） */
 function stopBotMoving(botName: string): void {
-  const bot = resolveBotCached(botName);
+  const bot = resolveBotPlayer(botName);
   if (!bot) return;
   try {
     bot.stopMoving();
@@ -59,7 +59,7 @@ function stopBotMoving(botName: string): void {
  * 转身后实体朝向变化，下次游走的朝向偏置选点自然偏向该方向。
  */
 function lookAround(botName: string): void {
-  const bot = resolveBotCached(botName);
+  const bot = resolveBotPlayer(botName);
   if (!bot) return;
   const yaw = Math.random() * 360;
   const rad = (yaw * Math.PI) / 180;
@@ -106,7 +106,7 @@ export function makeWanderBehavior(): Behavior {
     canActivate: (ctx) => {
       // 记忆注入：当前主动 AI 行为（引擎对账时写入）——行为自校验互斥
       if (ctx.memory.get<string>("aiBehavior") !== "wander") return false;
-      const bot = resolveBotCached(ctx.botName);
+      const bot = resolveBotPlayer(ctx.botName);
       return bot !== undefined;
     },
     onActivate: (ctx) => stopBotMoving(ctx.botName),

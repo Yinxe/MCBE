@@ -16,7 +16,6 @@ import { system } from "@minecraft/server";
 
 import { AiMemory, BehaviorRunner, type Behavior, type BehaviorContext } from "../../ai";
 import { BotEvents } from "../../events/DomainEvents";
-import { invalidateBotCache } from "./botCache";
 import { botRegistry } from "../../bootstrap/context";
 import { makeWanderBehavior } from "./capabilities/wander";
 import { makeMineBehavior } from "./capabilities/mine";
@@ -57,16 +56,9 @@ export function startAiEngine(): void {
   if (engineStarted) return;
   engineStarted = true;
 
-  // 实体生命周期 → 缓存失效（实体引用在上线/下线/死亡/复活时都可能变化：
-  //   botOffline/botDeath → 旧实体不可复用；
-  //   botOnline/botRespawn → 可能为新实体（重连/复活流程），强制重解析）
-  BotEvents.botOffline.subscribe((e) => {
-    invalidateBotCache(e.botName);
-    disposeBotBrain(e.botName);
-  });
-  BotEvents.botDeath.subscribe((e) => invalidateBotCache(e.botName));
-  BotEvents.botOnline.subscribe((e) => invalidateBotCache(e.botName));
-  BotEvents.botRespawn.subscribe((e) => invalidateBotCache(e.botName));
+  // 实体缓存失效由 PlayerGateway（resolveBotPlayer 唯一入口）内部订阅
+  // 生命周期事件处理——引擎只管大脑清理
+  BotEvents.botOffline.subscribe((e) => disposeBotBrain(e.botName));
 
   system.runInterval(() => {
     for (const record of botRegistry.all()) {

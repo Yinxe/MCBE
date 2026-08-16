@@ -8,30 +8,69 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BOT_TAG } from "../rules/tags/BotTags";
 import { botRegistry } from "../bootstrap/context";
+import { BotEvents } from "../events/DomainEvents";
 
 /**
- * 根据假人名解析 SimulatedPlayer 实体（唯一实现，各 feature/port 共用）。
+ * 假人实体解析（**唯一入口，含缓存**）：
  * 两路解析：先按"名字+假人标签"查世界玩家（快路径），失败回退注册表
  * entityId；死亡假人返回 undefined（实体不可操控）。查询全程 try-catch
  * 防御（受限上下文/未加载返回 undefined）。
+ *
+ * ⚠️ 缓存（数据单源约定）：本函数是全部调用方（BotCore.entity / 行为
+ * 能力 / features 端口）唯一的实体访问入口——缓存内聚于此，**禁止在
+ * 别处再建实体缓存**（数据位置多了不一致难维护）。TTL = 10 tick（引擎
+ * 周期）内共享同一实体引用；生命周期事件（上线/下线/死亡/复活）立即失效。
  */
+const ENTITY_CACHE_TTL_TICKS = 10;
+const entityCache = new Map<string, { bot: SimulatedPlayer | undefined; tick: number }>();
+
+function invalidateEntityCache(name: string): void {
+  entityCache.delete(name);
+}
+
+// 生命周期事件 → 缓存立即失效（重连/复活 = 新实体，强制重解析）
+BotEvents.botOffline.subscribe((e) => invalidateEntityCache(e.botName));
+BotEvents.botDeath.subscribe((e) => invalidateEntityCache(e.botName));
+BotEvents.botOnline.subscribe((e) => invalidateEntityCache(e.botName));
+BotEvents.botRespawn.subscribe((e) => invalidateEntityCache(e.botName));
+
+/** 清空实体缓存（重置/测试用） */
+export function clearEntityCache(): void {
+  entityCache.clear();
+}
+
 export function resolveBotPlayer(name: string): SimulatedPlayer | undefined {
+  // 缓存命中（TTL 内）→ 直接返回（每假人每引擎周期最多一次真实世界查询）
+  const cached = entityCache.get(name);
+  if (cached && system.currentTick - cached.tick < ENTITY_CACHE_TTL_TICKS) {
+    return cached.bot;
+  }
+  let bot: SimulatedPlayer | undefined;
   try {
     const player = world.getPlayers({ name, tags: [BOT_TAG] })[0];
     if (player) {
-      if (botRegistry.get(name)?.death) return undefined;
-      return player as SimulatedPlayer;
+      if (botRegistry.get(name)?.death) {
+        bot = undefined;
+      } else {
+        bot = player as SimulatedPlayer;
+      }
     }
   } catch {
     /* 查询失败走 entityId 回退 */
   }
-  const record = botRegistry.get(name);
-  if (!record?.online || record.death || !record.entityId) return undefined;
-  try {
-    const e = world.getEntity(record.entityId);
-    if (!e?.isValid) return undefined;
-    return e.hasTag(BOT_TAG) ? (e as SimulatedPlayer) : undefined;
-  } catch { return undefined; }
+  if (!bot) {
+    const record = botRegistry.get(name);
+    if (record?.online && !record.death && record.entityId) {
+      try {
+        const e = world.getEntity(record.entityId);
+        if (e?.isValid && e.hasTag(BOT_TAG)) bot = e as SimulatedPlayer;
+      } catch {
+        /* 回退失败按无实体 */
+      }
+    }
+  }
+  entityCache.set(name, { bot, tick: system.currentTick });
+  return bot;
 }
 
 /**

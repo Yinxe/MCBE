@@ -88,33 +88,20 @@ export class BotCore {
 
   // ─── 实体解析（持有 + 生命周期守卫） ─────────────────
 
-  /** 实体缓存（有效生命周期内持有——在线且未死亡时必然有效） */
-  private entityRef: SimulatedPlayer | undefined;
-
   /**
-   * 假人实体（**有效生命周期内持有**）：
-   * 仅在 isAvailable（在线且未死亡）时返回；内部缓存 + isValid 双守卫——
-   *   命中缓存且有效 → 直接返回（零查询）；
-   *   缓存失效/缺失 → 经 botCache 解析（TTL 缓存 + botOffline 立即失效）。
-   * 死亡/下线 → isAvailable false → 返回 undefined（引用自然失效）；
-   * 重连（实体替换）→ 旧引用 isValid=false → 自动重解析。
+   * 假人实体（**唯一入口 resolveBotPlayer，缓存内聚在 PlayerGateway**）：
+   * 数据单源约定——实体解析/缓存只在 resolveBotPlayer 一处，本 getter
+   * 仅做 isAvailable（在线且未死亡）守卫 + 委托；不再持有实例级引用。
    * 惰性 require 保持测试构建零 mc 顶层依赖。
    */
   get entity(): SimulatedPlayer | undefined {
     if (!this.isAvailable) return undefined;
-    if (this.entityRef?.isValid) return this.entityRef;
     try {
-      this.entityRef = lazy.resolveBotCached(this.name);
+      return lazy.resolveBotPlayer(this.name);
     } catch {
       // 测试环境无 @minecraft 运行时 → 视为无实体（不抛错）
-      this.entityRef = undefined;
+      return undefined;
     }
-    return this.entityRef;
-  }
-
-  /** 手动清空实体引用（下线/删除等场景；getter 守卫已保证安全，此方法供显式清理） */
-  clearEntity(): void {
-    this.entityRef = undefined;
   }
 
   /** 实体所在维度（无实体 → undefined） */
@@ -341,10 +328,6 @@ export function requireBot(name: string, registry: BotRegistry): BotCore {
  * 因此集中在此按需加载（测试不调用世界方法 → 不触发 require）。
  */
 const lazy = {
-  get resolveBotCached(): typeof import("../features/ai/botCache").resolveBotCached {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("../features/ai/botCache").resolveBotCached;
-  },
   get resolveBotPlayer(): typeof import("./PlayerGateway").resolveBotPlayer {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./PlayerGateway").resolveBotPlayer;
