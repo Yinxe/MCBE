@@ -69,6 +69,9 @@ export function startAiEngine(): void {
           brain = { memory: new AiMemory(), runner: new BehaviorRunner() };
           brains.set(record.name, brain);
         }
+        // 记忆注入（用户拍板：主动 AI 行为直接注入记忆表达——行为从记忆
+        // 读取当前 aiBehavior，实体 TAG 不再参与行为表达）
+        brain.memory.set("aiBehavior", behaviorName);
         // 对账：注册当前行为；卸载其它行为（切换 → 旧行为 reset 清状态）
         for (const [name, make] of Object.entries(BEHAVIOR_BY_NAME)) {
           if (name === behaviorName) {

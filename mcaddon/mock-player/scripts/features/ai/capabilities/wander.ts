@@ -104,6 +104,8 @@ export function makeWanderBehavior(): Behavior {
     name: "wander",
     priority: 10,
     canActivate: (ctx) => {
+      // 记忆注入：当前主动 AI 行为（引擎对账时写入）——行为自校验互斥
+      if (ctx.memory.get<string>("aiBehavior") !== "wander") return false;
       const bot = resolveBotPlayer(ctx.botName);
       return bot !== undefined;
     },

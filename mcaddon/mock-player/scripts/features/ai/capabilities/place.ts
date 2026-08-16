@@ -16,7 +16,7 @@ export function makePlaceBehavior(): Behavior {
   return {
     name: "place",
     priority: 10,
-    canActivate: () => true, // 引擎按 aiBehavior 注册/卸载，激活即运行
+    canActivate: (ctx) => ctx.memory.get<string>("aiBehavior") === "place", // 记忆注入自校验
     reset: () => {
       tick = 0;
     },
