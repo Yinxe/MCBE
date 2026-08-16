@@ -156,7 +156,13 @@ export interface TreeSetScanResult {
   evalMs: number;
   /** 大树碎段合并耗时（ms） */
   mergeMs: number;
-  /** 总耗时（ms） */
+  /** 扫描阶段实际耗时（ms）：原木采集 + 树叶采集（getBlocks 执行时间，不含调度等待） */
+  scanMs: number;
+  /** 分析阶段耗时（ms）：聚类 + 评估 + 合并 */
+  analyzeMs: number;
+  /** 纯算法总耗时（ms）= 扫描 + 分析（不含调度等待、不含日志输出） */
+  computeMs: number;
+  /** 总耗时（ms）：全流程含调度等待（waitTicks）——不含日志输出（日志在调用方，另行计时） */
   ms: number;
 }
 
@@ -249,9 +255,13 @@ export async function scanTreesFromSets(
     }
     return true;
   });
+  const scanMs = logsResult.ms + leavesResult.ms; // 两个 getBlocks 实际执行时间
+  const analyzeMs = clusterMs + evalMs + mergeMs;
   return {
     logs: logsResult, leaves: leavesResult, trees: mergedTrees, rejected: mergedRejected, candidates: candidates.length,
-    bigCandidates, smallCandidates, clusterMs, evalMs, mergeMs, ms: Date.now() - t0,
+    bigCandidates, smallCandidates, clusterMs, evalMs, mergeMs,
+    scanMs, analyzeMs, computeMs: scanMs + analyzeMs,
+    ms: Date.now() - t0, // 总耗时（含 waitTicks 调度等待；日志输出在调用方另行计时）
   };
 }
 
@@ -328,6 +338,11 @@ export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: 
   lines.push(
     `[树] 概况：半径${radius} 空间体${size}×${size}×${toY - fromY + 1}（${volume.toLocaleString()}格）` +
       `Y[${fromY}..${toY}] 总耗时 ${r.ms}ms`,
+  );
+  lines.push(
+    `[树] 纯算法：扫描 ${r.scanMs}ms（原木 ${r.logs.ms} + 树叶 ${r.leaves.ms}）＋ 分析 ${r.analyzeMs}ms` +
+      `（聚类 ${r.clusterMs} + 评估 ${r.evalMs} + 合并 ${r.mergeMs}）＝ ${r.computeMs}ms` +
+      `（调度等待 ${Math.max(r.ms - r.computeMs, 0)}ms，日志输出另计）`,
   );
   lines.push(
     `[树] 坐标集：原木 ${r.logs.count} 个（Y ${r.logs.minY}..${r.logs.maxY}，采集 ${r.logs.ms}ms）｜` +

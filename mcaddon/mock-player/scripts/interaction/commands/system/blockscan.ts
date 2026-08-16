@@ -112,16 +112,20 @@ export function registerScantreeCommand(registry: any): void {
         const r = await scanTreesFromSets(pos, player.dimension, radius);
         // ⚠️ 日志纪律：仅 debug 时输出完整报告（console.warn 是同步 IO，
         //    一次调用输出整份（\n 拼接）——正常工作时零日志，呈现由调用方决定）
+        // ⚠️ 计时口径：日志输出耗时单独计时（不计入扫描/分析/总耗时——测纯算法性能）
+        let logMs = 0;
         if (debug) {
           const fromY = Math.max(-64, pos.y - SCAN_BELOW);
           const toY = Math.min(320, pos.y + SCAN_ABOVE);
           const reportText = buildTreeSetReport(r, radius, fromY, toY).join("\n");
+          const tLog = Date.now();
           console.warn(`[MockPlayer][坐标集][树] ${reportText}`);
+          logMs = Date.now() - tLog;
         }
         player.sendMessage(
           `${color.accent}[坐标集][树] ${color.success}接受 ${r.trees.length} ${color.muted}/ ${color.warn}拒绝 ${r.rejected.length}` +
-            `${color.muted}（原木 ${color.info}${r.logs.count}${color.muted} 叶 ${color.info}${r.leaves.count}${color.muted} 总 ${color.info}${r.ms}${color.muted}ms）` +
-            (debug ? `${color.muted}——已写入内容日志` : "")
+            `${color.muted}（扫描 ${color.info}${r.scanMs}${color.muted} + 分析 ${color.info}${r.analyzeMs}${color.muted} ＝ 纯算法 ${color.info}${r.computeMs}${color.muted}ms` +
+            `，总 ${color.info}${r.ms}${color.muted}ms${debug ? `，日志 ${color.info}${logMs}${color.muted}ms` : ""}）`
         );
       } catch (e: any) {
         player.sendMessage(`${color.error}[坐标集][树] 扫描失败: ${e?.message ?? e}`);
