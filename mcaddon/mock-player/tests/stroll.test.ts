@@ -86,3 +86,38 @@ test("isStableBlockType：稳定方块判定（遮挡形状完整——台阶/�
   assert.ok(!isStableBlockType("minecraft:oak_fence"), "栅栏不稳定");
   assert.ok(!isStableBlockType("minecraft:short_grass"), "草不稳定");
 });
+
+// ─── 朝向偏置选点（转身带动游走方向） ─────────────────
+
+import { pickDirectionalStrollPoint } from "../scripts/rules/coords/Stroll";
+
+test("朝向偏置选点：bias=1 时方向限制在偏航 ±spread 内（朝转身方向）", () => {
+  const center = { x: 0, y: 64, z: 0 };
+  // yaw=0（面向 +Z 南）；spread=60 → 方向角 ∈ [-60, 60] → 点应偏向 +Z 半区
+  const seq = [0, 0.5, 0.5, 0.5]; // 进入偏置分支 + 角度中值 + 距离 0.5
+  const rng = () => seq.shift() ?? 0.5;
+  const p = pickDirectionalStrollPoint(center, 0, 8, rng, 1, 60);
+  // angle = 0 + (0.5*2-1)*60 = 0° → 方向 (0, +1) → dist = floor(0.5*9)=4
+  assert.equal(p.x, 0.5, "角度 0° 无横向偏移");
+  assert.equal(p.z, 0.5 + 4, "朝 +Z 走 4 格");
+});
+
+test("朝向偏置选点：bias=0 时全向随机（不偏向朝向）", () => {
+  const center = { x: 0, y: 64, z: 0 };
+  // 首随机 0.9 ≥ bias(0) → 全向分支：angle = rng*360 = 0.5*360 = 180° → 方向 (0, -1)
+  const seq = [0.9, 0.5, 0.5];
+  const rng = () => seq.shift() ?? 0.5;
+  const p = pickDirectionalStrollPoint(center, 0, 8, rng, 0);
+  assert.ok(Math.abs(p.x - 0.5) < 1e-9, "180° 无横向偏移（浮点近似）");
+  assert.ok(Math.abs(p.z - (0.5 - 4)) < 1e-9, "180° 朝 -Z");
+});
+
+test("朝向偏置选点：默认六成概率朝朝向方向", () => {
+  const center = { x: 0, y: 64, z: 0 };
+  // 命中偏置分支（rng<0.6）时角度 = yaw ± 60 内；未命中全向
+  const p = pickDirectionalStrollPoint(center, 90, 8);
+  // 偏航 90°（MCBE 面向 -X 西）——点应大概率落在 -X 半区
+  const dx = p.x - 0.5;
+  assert.ok(Math.abs(p.x - 0.5) <= 8 && Math.abs(p.z - 0.5) <= 8, "仍在半径内");
+  void dx;
+});

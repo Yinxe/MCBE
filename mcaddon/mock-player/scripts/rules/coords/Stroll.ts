@@ -89,3 +89,34 @@ export function pickRandomStrollPoint(center: Vec3, radius: number = STROLL_DEFA
   const dz = Math.floor(rng() * (radius * 2 + 1)) - radius;
   return { x: Math.floor(center.x) + dx + 0.5, y: center.y, z: Math.floor(center.z) + dz + 0.5 };
 }
+
+/**
+ * 朝向偏置选点（官方行为：静止时的转身/扭头会带动下次游走方向——
+ * 生物大概率朝当前朝向方向走）：
+ * 以概率 bias 从当前偏航 ±spread 方向内采样（转身方向加权），
+ * 其余概率全向随机。
+ * @param center 假人当前位置
+ * @param yawDeg 当前偏航（度；MCBE：0 = 面向 +Z 南，顺时针增加）
+ * @param radius 水平半径（格）
+ * @param rng 随机源（测试注入）
+ * @param bias 朝向方向采样概率（缺省 0.6——六成概率朝转身方向）
+ * @param spreadDeg 朝向方向扩散角（缺省 ±60°）
+ */
+export function pickDirectionalStrollPoint(
+  center: Vec3,
+  yawDeg: number,
+  radius: number = STROLL_DEFAULT_RADIUS,
+  rng: () => number = Math.random,
+  bias = 0.6,
+  spreadDeg = 60,
+): Vec3 {
+  const angleDeg = rng() < bias ? yawDeg + (rng() * 2 - 1) * spreadDeg : rng() * 360;
+  const rad = (angleDeg * Math.PI) / 180;
+  const dist = Math.floor(rng() * (radius + 1)); // 0..radius 均匀
+  // MCBE 朝向向量：(-sin(yaw), 0, cos(yaw))——yaw=0 面向 +Z
+  return {
+    x: Math.floor(center.x) + 0.5 + -Math.sin(rad) * dist,
+    y: center.y,
+    z: Math.floor(center.z) + 0.5 + Math.cos(rad) * dist,
+  };
+}

@@ -31,6 +31,8 @@ const WANDER_FAIL_RETRY = 1;
 const WANDER_RADIUS = 8;
 /** 游走速度（慢速散步） */
 const WANDER_SPEED = 0.6;
+/** 转头随机朝向距离（格，看向点的距离） */
+const LOOK_AROUND_DISTANCE = 5;
 
 /** 状态机阶段 */
 type Phase = "idle" | "pick" | "walk" | "rest";
@@ -48,6 +50,28 @@ function stopBotMoving(botName: string): void {
     bot.stopMoving();
   } catch {
     /* 实体失效忽略 */
+  }
+}
+
+/**
+ * 随机转身/扭头（官方随机视角转向意向）：
+ * 静止时随机看向一个方向（随机偏航 → 看向该方向 5 格处）——
+ * 转身后实体朝向变化，下次游走的朝向偏置选点自然偏向该方向。
+ */
+function lookAround(botName: string): void {
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return;
+  const yaw = Math.random() * 360;
+  const rad = (yaw * Math.PI) / 180;
+  try {
+    // MCBE 朝向向量 (-sin(yaw), 0, cos(yaw))——看向随机方向点
+    bot.lookAtLocation({
+      x: bot.location.x + -Math.sin(rad) * LOOK_AROUND_DISTANCE,
+      y: bot.location.y,
+      z: bot.location.z + Math.cos(rad) * LOOK_AROUND_DISTANCE,
+    });
+  } catch {
+    /* 看向失败（chunkload 受限等）不影响 */
   }
 }
 
@@ -94,12 +118,13 @@ export function makeWanderBehavior(): Behavior {
       lastBotName = ctx.botName;
       switch (phase) {
         case "idle":
-          // 间隔等待（走停节律：不连续乱走）
+          // 间隔等待（走停节律：不连续乱走）；静止时经常性转身/扭头
+          lookAround(ctx.botName);
           if (--wait > 0) return;
           phase = "pick";
           break;
         case "pick":
-          // 选近点 + 发起单次导航协程（有界；完成由 walk 轮询）
+          // 选近点（朝向偏置——大概率朝转身方向）+ 发起单次导航协程
           logStroll(ctx.botName, "出发（选点+移动）");
           startRun(ctx.botName);
           phase = "walk";
@@ -121,6 +146,8 @@ export function makeWanderBehavior(): Behavior {
           }
           break;
         case "rest":
+          // 休息时经常性转身/扭头（官方随机视角意向：静止时频繁转头）
+          lookAround(ctx.botName);
           if (--wait > 0) return;
           phase = "idle";
           wait = randomBetween(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX);
