@@ -5,7 +5,7 @@
 // step 同步短步（无循环无 await）；无目标（视线无方块）→ 下周期重试。
 
 import type { Behavior, BehaviorContext } from "../../../ai";
-import { resolveBotPlayer } from "../../../bot/PlayerGateway";
+import { resolveBotCached } from "../botCache";
 
 /** 挖掘距离（格） */
 const MINE_DISTANCE = 6;
@@ -25,7 +25,7 @@ export function makeMineBehavior(): Behavior {
     },
     step: (ctx) => {
       if (++tick % MINE_INTERVAL !== 0) return;
-      const bot = resolveBotPlayer(ctx.botName);
+      const bot = resolveBotCached(ctx.botName);
       if (!bot) return;
       try {
         const hit = bot.getBlockFromViewDirection({ maxDistance: MINE_DISTANCE });

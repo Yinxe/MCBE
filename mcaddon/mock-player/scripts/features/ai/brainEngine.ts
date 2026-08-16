@@ -16,6 +16,7 @@ import { system } from "@minecraft/server";
 
 import { AiMemory, BehaviorRunner, type Behavior, type BehaviorContext } from "../../ai";
 import { BotEvents } from "../../events/DomainEvents";
+import { invalidateBotCache } from "./botCache";
 import { botRegistry } from "../../bootstrap/context";
 import { makeWanderBehavior } from "./capabilities/wander";
 import { makeMineBehavior } from "./capabilities/mine";
@@ -56,7 +57,10 @@ export function startAiEngine(): void {
   if (engineStarted) return;
   engineStarted = true;
 
-  BotEvents.botOffline.subscribe((e) => disposeBotBrain(e.botName));
+  BotEvents.botOffline.subscribe((e) => {
+    invalidateBotCache(e.botName); // 实体引用失效（缓存立即清除）
+    disposeBotBrain(e.botName);
+  });
 
   system.runInterval(() => {
     for (const record of botRegistry.all()) {
