@@ -133,7 +133,7 @@ export async function navigateBot(
   let lastLoc = bot.location;
   let stillCount = 0;
   let elapsed = 0;
-  for (;;) {
+  while (true) {
     await waitTicks(NAV_CHECK_INTERVAL);
     elapsed += NAV_CHECK_INTERVAL;
     try {
@@ -232,7 +232,7 @@ export async function longNavigateBot(
   let lastLoc = bot.location;
   let stillCount = 0;
   let elapsed = 0;
-  for (;;) {
+  while (true) {
     await waitTicks(NAV_CHECK_INTERVAL);
     elapsed += NAV_CHECK_INTERVAL;
     try {
