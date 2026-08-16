@@ -4,7 +4,7 @@
 // 常量统一收敛到 PlaceBehaviorConfig。
 
 import type { Behavior, BehaviorContext } from "../../../ai";
-import { resolveBotPlayer } from "../../../bot/PlayerGateway";
+import type { AiBehaviorContext } from "../brainEngine";
 
 /** 自动放置行为配置（统一管理） */
 export interface PlaceBehaviorConfig {
@@ -30,7 +30,7 @@ export function makePlaceBehavior(config: PlaceBehaviorConfig = DEFAULT_PLACE_CO
     },
     step: (ctx) => {
       if (++tick % config.interval !== 0) return;
-      const bot = resolveBotPlayer(ctx.botName);
+      const bot = (ctx as AiBehaviorContext).bot; // 引擎注入实体——零 resolve
       if (!bot) return;
       try {
         bot.stopBreakingBlock();

@@ -10,8 +10,9 @@
 //    不再散落裸常量——调参只改配置。
 
 import type { Behavior, BehaviorContext } from "../../../ai";
+import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { randomStrollOnce, NavigateResult } from "../../basic/move";
-import { resolveBotPlayer } from "../../../bot/PlayerGateway";
+import type { AiBehaviorContext } from "../brainEngine";
 
 // ⚠️ 等待单位 = **引擎周期**（step 每 10 tick 一次，--wait 递减的是周期数）：
 //   官方 RandomStrollGoal 默认 interval=120 tick（6 秒）倒计时挑目标；
@@ -67,8 +68,7 @@ function randomBetween(min: number, max: number): number {
 }
 
 /** 停止假人移动（reset/切换时中断进行中导航；导航协程有界，静止后自行收尾） */
-function stopBotMoving(botName: string): void {
-  const bot = resolveBotPlayer(botName);
+function stopBotMoving(bot: SimulatedPlayer | undefined): void {
   if (!bot) return;
   try {
     bot.stopMoving();
@@ -83,8 +83,7 @@ function stopBotMoving(botName: string): void {
  * 小概率（30%）才大幅随机转头（东张西望感）。
  * 转身后实体朝向变化，下次游走的朝向偏置选点自然偏向该方向。
  */
-function lookAround(botName: string, cfg: WanderBehaviorConfig): void {
-  const bot = resolveBotPlayer(botName);
+function lookAround(bot: SimulatedPlayer | undefined, cfg: WanderBehaviorConfig): void {
   if (!bot) return;
   let yaw: number;
   if (Math.random() < cfg.lookSmallChance) {
@@ -146,22 +145,21 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
     canActivate: (ctx) => {
       // 记忆注入：当前主动 AI 行为（引擎对账时写入）——行为自校验互斥
       if (ctx.memory.get<string>("aiBehavior") !== "wander") return false;
-      const bot = resolveBotPlayer(ctx.botName);
-      return bot !== undefined;
+      return (ctx as AiBehaviorContext).bot !== undefined; // 引擎注入实体——零 resolve
     },
-    onActivate: (ctx) => stopBotMoving(ctx.botName),
+    onActivate: (ctx) => stopBotMoving((ctx as AiBehaviorContext).bot),
     reset: () => {
-      // 中断进行中导航 + 清状态
-      const botName = lastBotName;
-      if (botName) stopBotMoving(botName);
+      // 中断进行中导航 + 清状态（reset 无 ctx——用最近推进的实体引用）
+      if (lastBot) stopBotMoving(lastBot);
+      lastBot = undefined;
       reset();
     },
     step: (ctx) => {
-      lastBotName = ctx.botName;
+      lastBot = (ctx as AiBehaviorContext).bot;
       switch (phase) {
         case "idle":
           // 间隔等待（走停节律：不连续乱走）；静止时偶尔转身/扭头（节流）
-          if (++lookTick % config.lookAroundInterval === 0) lookAround(ctx.botName, config);
+          if (++lookTick % config.lookAroundInterval === 0) lookAround(lastBot, config);
           if (--wait > 0) return;
           phase = "pick";
           break;
@@ -191,7 +189,7 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
           break;
         case "rest":
           // 休息时偶尔转身/扭头（官方随机视角意向；节流不频繁）
-          if (++lookTick % config.lookAroundInterval === 0) lookAround(ctx.botName, config);
+          if (++lookTick % config.lookAroundInterval === 0) lookAround(lastBot, config);
           if (--wait > 0) return;
           phase = "idle";
           wait = randomBetween(config.intervalMin, config.intervalMax);
@@ -206,5 +204,5 @@ function logStroll(botName: string, msg: string): void {
   console.info(`[MockPlayer] 生物AI ${botName} 随机游走: ${msg}`);
 }
 
-/** reset 需要 botName（Behavior.reset 无参——记录最近推进的假人） */
-let lastBotName = "";
+/** reset 需要实体（Behavior.reset 无参——记录最近推进的实体引用） */
+let lastBot: SimulatedPlayer | undefined;

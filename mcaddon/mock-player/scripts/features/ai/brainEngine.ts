@@ -13,8 +13,10 @@
 // features/state/behavior.ts 标签行为）并存——旧标签机制保留 legacy 内部使用。
 
 import { system } from "@minecraft/server";
+import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { AiMemory, BehaviorRunner, type Behavior, type BehaviorContext } from "../../ai";
+import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../../bootstrap/context";
 import { makeWanderBehavior } from "./capabilities/wander";
@@ -35,6 +37,16 @@ interface AiBrain {
 /** botName → 假人大脑 */
 const brains = new Map<string, AiBrain>();
 let engineStarted = false;
+
+/**
+ * 引擎注入上下文（mc 层扩展 BehaviorContext）：
+ * bot = 引擎每周期解析一次的假人实体（resolveBotPlayer 唯一入口，含缓存）——
+ * 行为从 ctx.bot 直接取用，**无需再 resolve**（数据单源不变：解析仍在
+ * resolveBotPlayer 一处，ctx 只是传递通道）。
+ */
+export interface AiBehaviorContext extends BehaviorContext {
+  bot: SimulatedPlayer | undefined;
+}
 
 /** 行为构造器（aiBehavior 值 → 能力） */
 const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
@@ -84,7 +96,12 @@ export function startAiEngine(): void {
             brain.runner.unregister(name);
           }
         }
-        const ctx: BehaviorContext = { botName: record.name, tick: system.currentTick, memory: brain.memory };
+        const ctx: AiBehaviorContext = {
+          botName: record.name,
+          tick: system.currentTick,
+          memory: brain.memory,
+          bot: resolveBotPlayer(record.name), // 每假人每周期一次（缓存 TTL 内零查询）
+        };
         brain.runner.step(ctx);
       } catch (e: any) {
         console.warn(`[MockPlayer] 生物 AI 引擎异常 ${record.name}: ${e?.message ?? e}`);
