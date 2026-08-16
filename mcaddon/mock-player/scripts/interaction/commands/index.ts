@@ -11,7 +11,7 @@ import { registerOfflineCommand } from "./lifecycle/offline";
 import { registerKillCommand } from "./lifecycle/kill";
 import { registerRespawnCommand, registerSetRespawnCommand } from "./lifecycle/respawn";
 import { registerTpCommand, registerTpHereCommand } from "./navigation/teleport";
-import { registerMoveCommand } from "./navigation/move";
+import { registerMoveCommand, registerLongMoveCommand } from "./navigation/move";
 import { registerControlCommand } from "./behavior/control";
 import { registerSneakCommand } from "./behavior/sneak";
 import { registerTagsCommand, registerTagCommand } from "./behavior/tag";
@@ -42,6 +42,7 @@ export function registerAllCommands(event: StartupEvent): void {
   registerTpCommand(registry);
   registerTpHereCommand(registry);
   registerMoveCommand(registry);
+  registerLongMoveCommand(registry);
   registerControlCommand(registry);
   registerSneakCommand(registry);
   registerTagsCommand(registry);

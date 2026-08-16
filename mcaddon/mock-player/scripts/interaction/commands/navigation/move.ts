@@ -46,3 +46,22 @@ export function registerMoveCommand(registry: any): void {
     });
   });
 }
+
+export function registerLongMoveCommand(registry: any): void {
+  defineCommand(registry, {
+    name: "mp:longmove", description: "让模拟玩家长途寻路到指定坐标（分段接力，可远超 16 格，段间零间停）",
+    cheatsRequired: false, permissionLevel: CommandPermissionLevel.Any,
+    mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
+    optionalParameters: [{ name: "location", type: CustomCommandParamType.Location }],
+  }, ({ player, params }) => {
+    const targetName = params.name as string;
+    if (!targetName) { player.sendMessage(`${color.error}用法: /mp:longmove <假人> [x] [y] [z]`); return; }
+    const bot = resolveBotForCommand(player, targetName);
+    if (!bot) return;
+    const loc = (params.location as Vector3 | undefined) ?? player.location;
+    system.run(async () => {
+      const result = await bot.navigateLongTo(loc);
+      player.sendMessage(navigateMessage(targetName, loc, result));
+    });
+  });
+}

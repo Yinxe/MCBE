@@ -24,6 +24,11 @@ const NAV_CHECK_INTERVAL = 10;
 const NAV_STILL_LIMIT = 1;
 /** 总时长超时（tick）：30 秒仍在移动但未到达 → 超时失败 */
 const NAV_TOTAL_TIMEOUT_TICKS = 600;
+/** 长途段尾提前切换距离（格）：距段尾 ≤ 此值且仍在移动 → 直接发起下一段导航
+ *  （无缝转向；须 > 单监测间隔位移 ≈ 2-3 格，防监测间隔内越过段尾） */
+const NAV_SEGMENT_SWITCH_DISTANCE = 4;
+/** 长途每段超时（tick）：单段 20 秒（总超时 = max(短程 30s, 段数×20s)） */
+const LONG_NAV_SEGMENT_TIMEOUT_TICKS = 400;
 /** 位置/朝向数据更新阈值（格）：移动距离超过此值才写 record + 持久化（控制写入频率） */
 const NAV_POSITION_UPDATE_DISTANCE = 2;
 
@@ -173,20 +178,21 @@ export async function navigateBot(
 }
 
 /**
- * 长途寻路（分段接力，可移动远超 16 格）。
+ * 长途寻路（分段接力，可移动远超 16 格；段间零间停）。
  * 官方 API（navigateToLocation）无距离上限参数、远距离导航易失败/卡死——
  * 本函数把目标路径按 16 格水平等分切段（buildLongNavigateWaypoints），
- * 逐段调用 navigateBot（每段独立寻路：段内障碍引擎绕行、段尾无缝衔接下一段；
- * 每段 ≤16 格天然满足短程限制）。水平/垂直随进度线性插值。
+ * 单一监测循环逐段推进：**段尾提前切换**——假人距段尾 ≤ 切换距离且仍在移动时，
+ * 直接发起下一段导航（引擎导航覆盖当前移动，无缝转向，不 stopMoving 不等待停下）。
+ * 最后一段按到达语义收口（静止 + 距目标 ≤ 到达距离）。
  *
  * @param botName 假人名
  * @param target 长途目标（可远超 16 格）
  * @param speed 导航速度（缺省 1）
- * @param callbacks 移动过程回调（onStart 首段触发一次；onMoving/onStuck 逐段透传；
- *                  onComplete 全部段完成后统一触发）
- * @returns NavigateResult：arrived（全部段完成）/ 任一段失败原因
+ * @param callbacks 移动过程回调（onStart 触发一次；onMoving/onStuck 全程透传；
+ *                  onComplete 整体收口）
+ * @returns NavigateResult：arrived（全部段完成）/ 失败原因
  *          （no-path / still-timeout / timeout / unavailable / entity-invalid / error）
- * @throws 永不 reject（每段 navigateBot 多状态返回，异常归 error）
+ * @throws 永不 reject（异常归 error）
  */
 export async function longNavigateBot(
   botName: string,
@@ -198,21 +204,93 @@ export async function longNavigateBot(
   if (!bot) return NavigateResult.Unavailable;
 
   const waypoints = buildLongNavigateWaypoints(bot.location, target);
-  for (let i = 0; i < waypoints.length; i++) {
-    const waypoint = waypoints[i]!;
-    const result = await navigateBot(botName, waypoint, speed, {
-      // onStart 仅首段触发（避免重复"开始移动"通知）；onComplete 由本函数统一收口
-      onStart: i === 0 ? callbacks?.onStart : undefined,
-      onMoving: callbacks?.onMoving,
-      onStuck: callbacks?.onStuck,
-    });
-    if (result !== NavigateResult.Arrived) {
-      // 段失败立即中止（TooFar 不会发生——每段 ≤16 格）
-      console.warn(`[MockPlayer] 长途寻路 ${botName} 第 ${i + 1}/${waypoints.length} 段失败: ${result}`);
-      callbacks?.onComplete?.(result);
-      return result;
+  // 单段（≤16 格）：与短程寻路等价（复用其到达/停滞语义）
+  if (waypoints.length === 1) return navigateBot(botName, target, speed, callbacks);
+
+  // 发起第一段（初始 stopMoving + 朝向；后续段切换不停止移动）
+  const navigateTo = (waypoint: Vector3): boolean => {
+    try {
+      const result = bot.navigateToLocation(waypoint, speed);
+      return result.isFullPath;
+    } catch (e: any) {
+      console.warn(`[MockPlayer] longNavigateBot 发起失败 ${botName}: ${e?.message ?? e}`);
+      return false;
+    }
+  };
+  try {
+    bot.stopMoving();
+    bot.lookAtLocation(waypoints[0]!);
+  } catch {
+    /* lookAt 失败不影响移动 */
+  }
+  if (!navigateTo(waypoints[0]!)) return NavigateResult.NoPath;
+  callbacks?.onStart?.();
+
+  // ── 单一监测循环（每 10 tick）：段尾提前切换，最后一段到达收口 ──
+  let seg = 0;
+  const totalTimeoutTicks = Math.max(NAV_TOTAL_TIMEOUT_TICKS, waypoints.length * LONG_NAV_SEGMENT_TIMEOUT_TICKS);
+  let lastLoc = bot.location;
+  let stillCount = 0;
+  let elapsed = 0;
+  for (;;) {
+    await waitTicks(NAV_CHECK_INTERVAL);
+    elapsed += NAV_CHECK_INTERVAL;
+    try {
+      // ⚠️ 实体有效性防护：死亡/下线瞬间实体失效
+      if (!bot.isValid) {
+        callbacks?.onComplete?.(NavigateResult.EntityInvalid);
+        return NavigateResult.EntityInvalid;
+      }
+
+      const loc = bot.location;
+      const moving = loc.x !== lastLoc.x || loc.y !== lastLoc.y || loc.z !== lastLoc.z;
+      if (moving) {
+        stillCount = 0;
+        updateBotPositionData(botName, loc, bot.dimension.id, bot.getRotation());
+        callbacks?.onMoving?.(loc);
+      } else {
+        stillCount++;
+        callbacks?.onStuck?.(loc, stillCount);
+      }
+      lastLoc = loc;
+
+      const dSeg = distance3d(loc, waypoints[seg]!);
+      const isLast = seg === waypoints.length - 1;
+      if (!isLast && dSeg <= NAV_SEGMENT_SWITCH_DISTANCE) {
+        // ⚠️ 段尾提前切换：还在移动中直接发起下一段（引擎覆盖当前移动无缝转向；
+        //    不 stopMoving 不等待停下——切换距离 > 单监测间隔位移，防越过段尾）
+        seg++;
+        if (!navigateTo(waypoints[seg]!)) {
+          callbacks?.onComplete?.(NavigateResult.NoPath);
+          return NavigateResult.NoPath;
+        }
+      } else if (stillCount >= NAV_STILL_LIMIT) {
+        // 假人已停下：最后一段=到达判定；非末段=停滞失败（或已在切换距离内尝试切换）
+        if (isLast) {
+          const result = dSeg <= NAV_ARRIVE_DISTANCE ? NavigateResult.Arrived : NavigateResult.StillTimeout;
+          callbacks?.onComplete?.(result);
+          return result;
+        }
+        if (dSeg <= NAV_SEGMENT_SWITCH_DISTANCE) {
+          seg++;
+          if (!navigateTo(waypoints[seg]!)) {
+            callbacks?.onComplete?.(NavigateResult.NoPath);
+            return NavigateResult.NoPath;
+          }
+        } else {
+          callbacks?.onComplete?.(NavigateResult.StillTimeout);
+          return NavigateResult.StillTimeout;
+        }
+      }
+
+      if (elapsed >= totalTimeoutTicks) {
+        callbacks?.onComplete?.(NavigateResult.Timeout);
+        return NavigateResult.Timeout;
+      }
+    } catch (e: any) {
+      console.warn(`[MockPlayer] longNavigateBot 监测异常 ${botName}: ${e?.message ?? e}`);
+      callbacks?.onComplete?.(NavigateResult.Error);
+      return NavigateResult.Error;
     }
   }
-  callbacks?.onComplete?.(NavigateResult.Arrived);
-  return NavigateResult.Arrived;
 }
