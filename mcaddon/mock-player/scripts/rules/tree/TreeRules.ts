@@ -693,3 +693,154 @@ export function scanTreeResources(logs: TreeLog[], cellKind: CellKindFn, origin?
   }
   return { trees, rejected };
 }
+
+// ─── 坐标集评估（纯算术：原木/树叶两个坐标集 → 树判定） ──
+// 由 mc 层一次性 getBlocks 采集坐标集（每类方块一次，零 getBlock），
+// 评估只做集合运算（has 判定/邻接 BFS）——不再按候选区域查询世界。
+// G（地面）/F（纯净度）因子依赖其他方块类型，坐标集方案缺省视为 1
+// （可经 options 注入——如另采地面坐标集时恢复 G）。
+
+/** 坐标集评估因子（简化版：不含 G/F） */
+export interface TreeSetFactors {
+  /** 树冠叶量（区域内树叶数 / 目标叶量） */
+  L: number;
+  /** 树冠形状（厚 ≥2 层 = 1；单层薄板 = 0.4） */
+  C: number;
+  /** 树干高度（≥4 格满值） */
+  H: number;
+  /** 树冠与树干连通（贴原木树叶 BFS 连通比例） */
+  A: number;
+}
+
+/** 坐标集评估结论 */
+export type TreeSetVerdict =
+  | { accepted: true; kind: TreeKind; probability: number; factors: TreeSetFactors; leafCount: number }
+  | { accepted: false; reason: "no-canopy" | "low-prob"; kind: TreeKind; probability: number; factors: TreeSetFactors; leafCount: number };
+
+/** 坐标集评估选项 */
+export interface TreeSetEvalOptions {
+  /** 小树/大树树冠叶量目标（缺省 10/20，与 cellKind 版一致） */
+  leafTargetSmall?: number;
+  leafTargetBig?: number;
+  /** 树冠形状薄板因子（缺省 0.4） */
+  thinCanopyFactor?: number;
+  /** 树干高度归一基数（缺省 4） */
+  trunkHeightNorm?: number;
+  /** 概率阈值（缺省 0.8） */
+  threshold?: number;
+  /** 区域水平扩展（缺省 2——与 REGION_PAD 一致） */
+  pad?: number;
+  /** 区域顶余量（缺省 8——与 CANOPY_MARGIN 一致） */
+  topMargin?: number;
+  /** 区域默认高度（缺省 10） */
+  defaultHeight?: number;
+}
+
+/**
+ * 坐标集纯算术树评估：候选树干 + 树叶坐标集 → 树冠/连通/形状/高度因子。
+ * 零世界查询——区域内树叶计数与连通 BFS 全部在 Set 内运算。
+ * @param candidate 树干候选（extractTrunkCandidates 输出）
+ * @param leafSet 树叶坐标集（"x,y,z" key）
+ * @param options 评估参数（缺省与 cellKind 版一致）
+ */
+export function evaluateTreeFromSets(
+  candidate: TrunkCandidate,
+  leafSet: ReadonlySet<string>,
+  options: TreeSetEvalOptions = {},
+): TreeSetVerdict {
+  const leafTarget = candidate.kind === "small" ? (options.leafTargetSmall ?? LEAF_TARGET_SMALL) : (options.leafTargetBig ?? LEAF_TARGET_BIG);
+  const pad = options.pad ?? REGION_PAD;
+  const topMargin = options.topMargin ?? CANOPY_MARGIN;
+  const defaultHeight = options.defaultHeight ?? DEFAULT_REGION_HEIGHT;
+  const thinCanopy = options.thinCanopyFactor ?? THIN_CANOPY_FACTOR;
+  const heightNorm = options.trunkHeightNorm ?? TRUNK_HEIGHT_NORM;
+  const threshold = options.threshold ?? TREE_PROBABILITY_THRESHOLD;
+
+  // 区域范围：原木 bbox ± pad，垂直 baseY-1 .. max(baseY+默认高-1, topY+余量)
+  const xs = candidate.logs.map((l) => l.x);
+  const zs = candidate.logs.map((l) => l.z);
+  const minX = Math.min(...xs) - pad;
+  const maxX = Math.max(...xs) + pad;
+  const minZ = Math.min(...zs) - pad;
+  const maxZ = Math.max(...zs) + pad;
+  const regionTop = Math.max(candidate.baseY + defaultHeight - 1, candidate.topY + topMargin);
+
+  // ── 区域内树叶坐标统计（纯集合 has 判定） ──
+  let leafCount = 0;
+  let leafMinY = Number.POSITIVE_INFINITY;
+  let leafMaxY = Number.NEGATIVE_INFINITY;
+  const leafKeysInRegion: string[] = [];
+  for (let y = candidate.baseY + LEAF_MIN_LAYER_OFFSET; y <= regionTop; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      for (let z = minZ; z <= maxZ; z++) {
+        const key = `${x},${y},${z}`;
+        if (leafSet.has(key)) {
+          leafCount++;
+          if (y < leafMinY) leafMinY = y;
+          if (y > leafMaxY) leafMaxY = y;
+          leafKeysInRegion.push(key);
+        }
+      }
+    }
+  }
+
+  // ── 因子计算（纯算术） ──
+  const L = leafCount === 0 ? 0 : Math.min(leafCount / leafTarget, 1);
+  const spanY = leafCount === 0 ? 0 : leafMaxY - leafMinY + 1;
+  const C = leafCount === 0 ? 0 : spanY >= 2 ? 1 : thinCanopy;
+  const H = Math.min((candidate.topY - candidate.baseY + 1) / heightNorm, 1);
+
+  // A：树冠连通——从贴原木的树叶 BFS（26 邻，全部在 leafSet 内判定）
+  let A = 0;
+  if (leafCount > 0) {
+    const logKeys = new Set(candidate.logs.map((l) => `${l.x},${l.y},${l.z}`));
+    const visited = new Set<string>();
+    const queue: string[] = [];
+    const seedCheck = (key: string): void => {
+      // 该树叶 26 邻内是否有候选原木
+      const [x, y, z] = key.split(",").map(Number) as [number, number, number];
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            if (dx === 0 && dy === 0 && dz === 0) continue;
+            if (logKeys.has(`${x + dx},${y + dy},${z + dz}`)) {
+              visited.add(key);
+              queue.push(key);
+              return;
+            }
+          }
+        }
+      }
+    };
+    for (const key of leafKeysInRegion) seedCheck(key);
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      const [x, y, z] = cur.split(",").map(Number) as [number, number, number];
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            if (dx === 0 && dy === 0 && dz === 0) continue;
+            const nk = `${x + dx},${y + dy},${z + dz}`;
+            if (leafSet.has(nk) && !visited.has(nk)) {
+              visited.add(nk);
+              queue.push(nk);
+            }
+          }
+        }
+      }
+    }
+    let connectedLeaves = 0;
+    for (const key of leafKeysInRegion) {
+      if (visited.has(key)) connectedLeaves++;
+    }
+    const connectedFraction = connectedLeaves / leafCount;
+    A = connectedFraction >= A_DOMINANT_THRESHOLD ? 1 : connectedFraction;
+  }
+
+  const probability = L * C * H * A;
+  const factors: TreeSetFactors = { L, C, H, A };
+  const common = { kind: candidate.kind, probability, factors, leafCount };
+  if (L === 0) return { accepted: false, reason: "no-canopy", ...common };
+  if (probability < threshold) return { accepted: false, reason: "low-prob", ...common };
+  return { accepted: true, ...common };
+}

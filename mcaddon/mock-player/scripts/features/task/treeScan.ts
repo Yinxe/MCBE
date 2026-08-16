@@ -23,6 +23,7 @@ import type { Block, Dimension } from "@minecraft/server";
 import {
   classifyTreeBlock,
   evaluateTree,
+  evaluateTreeFromSets,
   extractTrunkCandidates,
   treeRegionBounds,
   TREE_AUX_TYPE_IDS,
@@ -117,7 +118,7 @@ const INVALID_LEGACY_IDS = new Set([
 ]);
 
 /** 有效自然原木 id（定位/补全用——剔除无效旧 id） */
-const VALID_LOG_TYPE_IDS = (TREE_LOG_TYPE_IDS as readonly string[]).filter((id) => !INVALID_LEGACY_IDS.has(id));
+export const VALID_LOG_TYPE_IDS = (TREE_LOG_TYPE_IDS as readonly string[]).filter((id) => !INVALID_LEGACY_IDS.has(id));
 
 /** 自然方块分批白名单（区域分类缓存用；每组 ≤30——getBlocks includeTypes
  *  数量过大可能被引擎拒绝（3.3.17 修复：原 50 一组 + 无效旧 id → 批量失败
@@ -429,3 +430,153 @@ export async function scanTreesNearNaive(
     return empty();
   }
 }
+
+// ─── 坐标集扫描（测试命令用：一次性 getBlocks 采集坐标集，纯算术评估） ──
+
+/** 坐标集采集结果 */
+export interface CoordinateSetResult {
+  /** 集合名（如 原木/树叶） */
+  name: string;
+  /** 坐标数量 */
+  count: number;
+  /** 最低/最高 y（分布统计） */
+  minY: number;
+  maxY: number;
+  /** 采集耗时（ms） */
+  ms: number;
+}
+
+/**
+ * 一次性 getBlocks 采集指定方块类型的坐标集（纯位置，零 getBlock）。
+ * 大范围（半径 32 空间体）每次只扫一种方块——得到该类型全部坐标。
+ */
+export function collectCoordinateSet(
+  dimension: Dimension,
+  center: Vec3,
+  radius: number,
+  typeIds: readonly string[],
+  name: string,
+  fromY: number,
+  toY: number,
+): CoordinateSetResult {
+  const t0 = Date.now();
+  const volume = new BlockVolume(
+    { x: center.x - radius, y: fromY, z: center.z - radius },
+    { x: center.x + radius, y: toY, z: center.z + radius },
+  );
+  const found = dimension.getBlocks(volume, { includeTypes: [...typeIds] });
+  let count = 0;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const loc of found.getBlockLocationIterator()) {
+    count++;
+    if (loc.y < minY) minY = loc.y;
+    if (loc.y > maxY) maxY = loc.y;
+  }
+  return { name, count, minY: count > 0 ? minY : center.y, maxY: count > 0 ? maxY : center.y, ms: Date.now() - t0 };
+}
+
+/** 坐标集树扫描结果（测试命令用） */
+export interface TreeSetScanResult {
+  /** 原木/树叶坐标集采集结果 */
+  logs: CoordinateSetResult;
+  leaves: CoordinateSetResult;
+  /** 纯算术评估出的树（近→远） */
+  trees: TreeResource[];
+  /** 被拒候选 */
+  rejected: TreeReject[];
+  /** 树干候选数 */
+  candidates: number;
+  /** 总耗时（ms） */
+  ms: number;
+}
+
+/** 坐标集扫描高度范围（下探 10 上探 40，覆盖树底到树顶） */
+const SET_SCAN_BELOW = 10;
+const SET_SCAN_ABOVE = 40;
+
+/**
+ * 坐标集树扫描（测试命令用）：两次 getBlocks 采集原木/树叶坐标集 →
+ * 纯算术评估（evaluateTreeFromSets——聚类/树冠计数/连通 BFS 全在集合内，
+ * 评估阶段零世界查询）。
+ */
+export async function scanTreesFromSets(
+  center: Vec3,
+  dimension: Dimension,
+  radius: number,
+): Promise<TreeSetScanResult> {
+  const t0 = Date.now();
+  const fromY = Math.max(-64, center.y - SET_SCAN_BELOW);
+  const toY = Math.min(320, center.y + SET_SCAN_ABOVE);
+
+  // ① 原木坐标集：一次 getBlocks + 每原木读 wood_id/水平过滤（原木数量少，必要属性）
+  const logsResult = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY);
+  const logs: TreeLog[] = [];
+  let horizontalFiltered = 0;
+  try {
+    const volume = new BlockVolume(
+      { x: center.x - radius, y: fromY, z: center.z - radius },
+      { x: center.x + radius, y: toY, z: center.z + radius },
+    );
+    const found = dimension.getBlocks(volume, { includeTypes: [...VALID_LOG_TYPE_IDS] });
+    for (const loc of found.getBlockLocationIterator()) {
+      const block = dimension.getBlock(loc);
+      if (!block) continue;
+      if (isHorizontalLog(block)) {
+        horizontalFiltered++;
+        continue;
+      }
+      logs.push({ x: loc.x, y: loc.y, z: loc.z, woodId: woodIdOf(block) });
+    }
+  } catch (e: any) {
+    console.warn(`[MockPlayer] 坐标集原木收集失败: ${e?.message ?? e}`);
+  }
+
+  // ② 树叶坐标集：一次 getBlocks（纯位置，零 getBlock）
+  const leavesResult = collectCoordinateSet(dimension, center, radius, VALID_LEAF_TYPE_IDS, "树叶", fromY, toY);
+  const leafSet = new Set<string>();
+  try {
+    const volume = new BlockVolume(
+      { x: center.x - radius, y: fromY, z: center.z - radius },
+      { x: center.x + radius, y: toY, z: center.z + radius },
+    );
+    const found = dimension.getBlocks(volume, { includeTypes: [...VALID_LEAF_TYPE_IDS] });
+    for (const loc of found.getBlockLocationIterator()) {
+      leafSet.add(`${loc.x},${loc.y},${loc.z}`);
+    }
+  } catch (e: any) {
+    console.warn(`[MockPlayer] 坐标集树叶收集失败: ${e?.message ?? e}`);
+  }
+
+  // ③ 纯算术评估：树干提取（聚类）→ 坐标集树判定（零世界查询）
+  const candidates = extractTrunkCandidates(logs);
+  const trees: TreeResource[] = [];
+  const rejected: TreeReject[] = [];
+  for (const c of candidates) {
+    const verdict = evaluateTreeFromSets(c, leafSet);
+    if (verdict.accepted) {
+      trees.push(toTreeResource(c, {
+        accepted: true,
+        kind: verdict.kind,
+        probability: verdict.probability,
+        factors: { G: 1, L: verdict.factors.L, C: verdict.factors.C, F: 1, H: verdict.factors.H, A: verdict.factors.A },
+        leafCount: verdict.leafCount,
+      }));
+    } else {
+      rejected.push({
+        kind: verdict.kind,
+        base: { x: Math.min(...c.logs.map((l) => l.x)), y: c.baseY, z: Math.min(...c.logs.map((l) => l.z)) },
+        reason: verdict.reason === "no-canopy" ? "no-canopy" : "low-prob",
+        probability: verdict.probability,
+        factors: { G: 1, L: verdict.factors.L, C: verdict.factors.C, F: 1, H: verdict.factors.H, A: verdict.factors.A },
+      });
+    }
+  }
+  trees.sort((a, b) => Math.hypot(a.base.x - center.x, a.base.z - center.z) - Math.hypot(b.base.x - center.x, b.base.z - center.z));
+
+  logsResult.count = logs.length; // 校正为参与计算的垂直原木数
+  return { logs: logsResult, leaves: leavesResult, trees, rejected, candidates: candidates.length, ms: Date.now() - t0 };
+}
+
+/** 有效树叶 id（剔除无效旧 id） */
+export const VALID_LEAF_TYPE_IDS = (TREE_LEAF_TYPE_IDS as readonly string[]).filter((id) => !INVALID_LEGACY_IDS.has(id));
