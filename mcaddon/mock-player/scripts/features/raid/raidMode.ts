@@ -221,7 +221,7 @@ async function drinkBottle(botName: string): Promise<void> {
   //    effectAdd 检测链——喝瓶前兜底清理，失败不影响喝瓶）
   try {
     if (hasEffect(bot, VILLAGE_HERO)) {
-      bot.removeEffect(VILLAGE_HERO as any);
+      bot.removeEffect(VILLAGE_HERO);
       console.info(`[MockPlayer] 劫掠模式 ${botName} 清理残留村庄英雄`);
     }
   } catch {
@@ -365,7 +365,7 @@ function processVictory(record: BotRecord, bot: SimulatedPlayer | undefined): vo
   grantVillageHeroToOwner(bot, record);
 
   try {
-    bot.removeEffect(VILLAGE_HERO as any);
+    bot.removeEffect(VILLAGE_HERO);
   } catch (err) {
     console.warn(`[MockPlayer] ${botName} 移除村庄英雄失败: ${err}`);
   }
@@ -380,7 +380,7 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
   const ownerName = record.ownerName;
   if (!ownerName) return;
   try {
-    const hero = bot.getEffect(VILLAGE_HERO as any);
+    const hero = bot.getEffect(VILLAGE_HERO);
     if (!hero) return;
 
     const owner = world.getPlayers({ name: ownerName })[0];
@@ -393,7 +393,7 @@ function grantVillageHeroToOwner(bot: SimulatedPlayer, record: BotRecord): void 
     const duration = Math.min(hero.duration + (own?.duration ?? 0), 20_000_000);
     const amplifier = Math.max(hero.amplifier, own?.amplifier ?? 0);
 
-    owner.addEffect(VILLAGE_HERO as any, duration, { amplifier });
+    owner.addEffect(VILLAGE_HERO, duration, { amplifier });
     botBroadcast(
       `${color.success}${record.name} 的村庄英雄已叠加给 ${ownerName}` +
         `${color.muted}（Lv.${amplifier + 1}，合计约 ${Math.round(duration / 1200)} 分钟）`,
@@ -650,7 +650,7 @@ function hasEffect(bot: SimulatedPlayer | Player, effectId: string): boolean {
 /** 读取效果对象（无该效果/读取抛错返回 undefined） */
 function tryGetEffect(bot: SimulatedPlayer | Player, effectId: string): Effect | undefined {
   try {
-    return bot.getEffect(effectId as any);
+    return bot.getEffect(effectId);
   } catch {
     return undefined;
   }
