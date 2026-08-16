@@ -17,6 +17,7 @@
 // 本文件 = 树结构描述（spec）+ 对外兼容层；搜索编排见 structureScan.ts
 // （通用引擎：薄层批量定位 → 批量列补全 → 候选聚类 → 区域缓存评估）。
 
+import { BlockVolume } from "@minecraft/server";
 import type { Block, Dimension } from "@minecraft/server";
 
 import {
@@ -317,4 +318,114 @@ export async function scanTreesNear(
     center,
     radius,
   };
+}
+
+// ─── 朴素全扫（对比基准：一次性扫描全部区域块） ─────────
+
+/** 朴素版全高度范围（格，上下各 80 层——覆盖树高余量；全高 -64..320 太宽泛） */
+const NAIVE_HEIGHT_RANGE = 80;
+/** 朴素版全局缓存 y 分段（格，控制单次 getBlocks 体积） */
+const NAIVE_Y_SEGMENT = 32;
+
+/**
+ * 朴素全扫（对比基准）：**一次性扫描整个立方体区域块**——
+ *   ① 全局分类缓存：整个立方体（含全高度）按 y 段分批 getBlocks 白名单，
+ *      所有候选共享一个缓存（无薄层定位、无按候选区域构建）；
+ *   ② 原木收集：全区域一次 getBlocks（有效原木 id）+ 水平过滤；
+ *   ③ 树干提取 → 逐候选从全局缓存评估（零额外世界查询）。
+ * 与 scanTreesNear（两阶段算法）对比用：验证粗扫+细扫的查询量优势。
+ * ⚠️ 永不 reject：任何异常 resolve 空结果。
+ */
+export async function scanTreesNearNaive(
+  center: Vec3,
+  dimension: Dimension,
+  radius: number,
+  options: { includeDiagnostics?: boolean } = {},
+): Promise<TreeScanDetail> {
+  const empty = (): TreeScanDetail => ({ trees: [], rejected: [], candidates: [], lines: [], logsFound: 0, horizontalFiltered: 0, center, radius });
+  const minX = center.x - radius;
+  const maxX = center.x + radius;
+  const minZ = center.z - radius;
+  const maxZ = center.z + radius;
+  const fromY = Math.max(-64, center.y - NAIVE_HEIGHT_RANGE);
+  const toY = Math.min(320, center.y + NAIVE_HEIGHT_RANGE);
+  const includeDiagnostics = options.includeDiagnostics !== false;
+
+  try {
+    // ① 全局分类缓存（全区域全高度，所有候选共享）
+    const cache = new Map<string, import("../../rules/tree/TreeRules").TreeBlockKind>();
+    for (let ys = fromY; ys <= toY; ys += NAIVE_Y_SEGMENT) {
+      const yTo = Math.min(ys + NAIVE_Y_SEGMENT - 1, toY);
+      const volume = new BlockVolume(
+        { x: minX, y: ys, z: minZ },
+        { x: maxX, y: yTo, z: maxZ },
+      );
+      for (const batch of NATURAL_BATCHES) {
+        try {
+          const found = dimension.getBlocks(volume, { includeTypes: [...batch] });
+          for (const loc of found.getBlockLocationIterator()) {
+            const block = dimension.getBlock(loc);
+            if (block) cache.set(`${loc.x},${loc.y},${loc.z}`, classifyTreeBlock(block.typeId));
+          }
+        } catch {
+          /* 段失败跳过——该段格子缺失按 foreign 兜底 */
+        }
+      }
+    }
+    // classifyTreeBlock 运行时返回 TreeBlockKind（CellKindFn 类型放宽为 string）
+    const globalCellKind = ((x: number, y: number, z: number) => cache.get(`${x},${y},${z}`) ?? "foreign") as (
+      x: number, y: number, z: number
+    ) => import("../../rules/tree/TreeRules").TreeBlockKind;
+
+    // ② 原木收集（全区域一次批量）
+    const logs: TreeLog[] = [];
+    let horizontalFiltered = 0;
+    try {
+      const volume = new BlockVolume(
+        { x: minX, y: fromY, z: minZ },
+        { x: maxX, y: toY, z: maxZ },
+      );
+      const found = dimension.getBlocks(volume, { includeTypes: [...VALID_LOG_TYPE_IDS] });
+      for (const loc of found.getBlockLocationIterator()) {
+        const block = dimension.getBlock(loc);
+        if (!block) continue;
+        if (isHorizontalLog(block)) {
+          horizontalFiltered++;
+          continue;
+        }
+        logs.push({ x: loc.x, y: loc.y, z: loc.z, woodId: woodIdOf(block) });
+      }
+    } catch (e: any) {
+      console.warn(`[MockPlayer] 朴素扫描原木收集失败: ${e?.message ?? e}`);
+    }
+
+    // ③ 树干提取 + 逐候选评估（全局缓存读）
+    const candidates = extractTrunkCandidates(logs);
+    const trees: TreeResource[] = [];
+    const rejected: TreeReject[] = [];
+    const lines: string[] = [];
+    for (const c of candidates) {
+      const verdict = evaluateTree(c, globalCellKind);
+      if (verdict.accepted) {
+        trees.push(toTreeResource(c, verdict));
+      } else {
+        rejected.push({
+          kind: verdict.kind,
+          base: { x: Math.min(...c.logs.map((l) => l.x)), y: c.baseY, z: Math.min(...c.logs.map((l) => l.z)) },
+          reason: verdict.reason,
+          probability: verdict.probability,
+          factors: verdict.factors,
+        });
+      }
+      if (includeDiagnostics) {
+        lines.push(...describeCandidate(c, verdict, globalCellKind, treeRegionBounds(c), center));
+      }
+    }
+    trees.sort((a, b) => Math.hypot(a.base.x - center.x, a.base.z - center.z) - Math.hypot(b.base.x - center.x, b.base.z - center.z));
+
+    return { trees, rejected, candidates, lines, logsFound: logs.length, horizontalFiltered, center, radius };
+  } catch (e: any) {
+    console.warn(`[MockPlayer] 朴素扫描异常: ${e?.message ?? e}`);
+    return empty();
+  }
 }
