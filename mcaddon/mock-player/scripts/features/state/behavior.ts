@@ -10,7 +10,7 @@ import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, inventoryStorage, saveCoordinator } from "../../bootstrap/context";
-import { BOT_TAG, TAG_AUTO_ATTACK, TAG_AUTO_JUMP, TAG_CONTROL } from "../../rules/tags/BotTags";
+import { BOT_TAG, TAG_AUTO_JUMP, TAG_CONTROL } from "../../rules/tags/BotTags";
 import { EQUIP_SLOT_NAMES } from "../../rules/Types";
 import { captureExperience } from "../basic/items/McItemCodec";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../basic/PoseGateway";
@@ -31,11 +31,6 @@ export function startTagBehaviors(): void {
       if (!record) continue;
 
       const sim = bot as SimulatedPlayer;
-
-      // ── 自动攻击 ── 每 3 tick ──
-      if (bot.hasTag(TAG_AUTO_ATTACK.value) && tick % 3 === 0) {
-        try { sim.attack(); } catch (e: any) { console.warn(`[MockPlayer] 自动攻击异常 ${bot.name}: ${e?.message ?? e}`); }
-      }
 
       // ── 自动跳跃 ── 每 3 tick ──
       if (bot.hasTag(TAG_AUTO_JUMP.value) && tick % 3 === 0) {
@@ -93,7 +88,7 @@ export function startTagBehaviors(): void {
 // 由生物 AI 引擎（features/ai/brainEngine）每 10 tick 对账挂载。
 
 /** 生物 AI 行为可选值（UI 下拉与引擎对账共用） */
-export const AI_BEHAVIORS = ["none", "wander", "mine", "place"] as const;
+export const AI_BEHAVIORS = ["none", "wander", "mine", "place", "attack"] as const;
 export type AiBehavior = (typeof AI_BEHAVIORS)[number];
 
 /** 设置假人生物 AI 行为（持久化；引擎下个周期对账生效） */

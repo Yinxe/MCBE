@@ -3,13 +3,11 @@
 // 状态机（step 同步短步，无循环无 await——woodcut 纪律）：
 //   idle（间隔计数）→ pick（选近点 + 发起单次导航协程）→ walk（轮询完成）
 //   → rest（休息计数）→ idle 循环。
-// 走停节律（实测调优：避免"一愣一愣站半天"）：间隔/休息缩短到
-//   [8,20]/[8,16] tick——走完歇 0.4-0.8 秒再走，不长时间站立；
-//   导航失败（无路径/卡住）→ 快速重试（5-10 tick 后重新选点），
-//   不进入长休息。
 // 近点（半径 ≤8 格，不计算 16 格之外）；单次导航协程有界（navigateBot 自带
 // 超时/停滞判定），完成标志由 step 轮询。
 // 协程防残留：reset（切换/关标签/下线）→ stopMoving 中断导航。
+// ⚠️ 全部节奏/范围常量统一收敛到 WanderBehaviorConfig（配置接口 + 默认值），
+//    不再散落裸常量——调参只改配置。
 
 import type { Behavior, BehaviorContext } from "../../../ai";
 import { randomStrollOnce, NavigateResult } from "../../basic/move";
@@ -17,24 +15,48 @@ import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 
 // ⚠️ 等待单位 = **引擎周期**（step 每 10 tick 一次，--wait 递减的是周期数）：
 //   官方 RandomStrollGoal 默认 interval=120 tick（6 秒）倒计时挑目标；
-//   本实现走完停 1~2 秒（2~4 周期）再等 1~3 秒（2~6 周期）——比官方略活泼。
+//   本实现走完停 1~2.5 秒（2~5 周期）再等 1.5~4 秒（3~8 周期）——比官方略活泼。
 
-/** 游走间隔（引擎周期 = 10 tick）：走完歇一会再走（1.5~4 秒 → 3~8 周期） */
-const WANDER_INTERVAL_MIN = 3;
-const WANDER_INTERVAL_MAX = 8;
-/** 休息（引擎周期）：到达后短暂停顿（1~2.5 秒 → 2~5 周期） */
-const WANDER_REST_MIN = 2;
-const WANDER_REST_MAX = 5;
-/** 导航失败后的快速重试等待（引擎周期：0.5 秒 → 1 周期——失败不长时间站立） */
-const WANDER_FAIL_RETRY = 1;
-/** 单次游走半径（格）：近点（≤16 格直达内） */
-const WANDER_RADIUS = 8;
-/** 游走速度（慢速散步） */
-const WANDER_SPEED = 0.6;
-/** 转头随机朝向距离（格，看向点的距离） */
-const LOOK_AROUND_DISTANCE = 5;
-/** 转头节流（引擎周期）：每 2 周期转头一次（约 1 秒一次，不频繁） */
-const LOOK_AROUND_INTERVAL = 4;
+/** 随机游走行为配置（统一管理：节奏/范围/转头参数） */
+export interface WanderBehaviorConfig {
+  /** 游走间隔下限（引擎周期 = 10 tick）：走完歇一会再走 */
+  intervalMin: number;
+  /** 游走间隔上限（引擎周期） */
+  intervalMax: number;
+  /** 休息下限（引擎周期）：到达后短暂停顿 */
+  restMin: number;
+  /** 休息上限（引擎周期） */
+  restMax: number;
+  /** 导航失败后的快速重试等待（引擎周期：失败不长时间站立） */
+  failRetry: number;
+  /** 单次游走半径（格）：近点（≤16 格直达内） */
+  radius: number;
+  /** 游走速度（慢速散步） */
+  speed: number;
+  /** 转头节流（引擎周期）：静止时偶尔扭头 */
+  lookAroundInterval: number;
+  /** 转头随机朝向距离（格，看向点的距离） */
+  lookAroundDistance: number;
+  /** 小幅扭头概率（0~1；其余为大幅随机转头） */
+  lookSmallChance: number;
+  /** 小幅扭头角度（±度）：当前朝向附近微调 */
+  lookSmallSpread: number;
+}
+
+/** 默认配置（统一管理；makeWanderBehavior 可传自定义配置覆盖） */
+export const DEFAULT_WANDER_CONFIG: WanderBehaviorConfig = {
+  intervalMin: 3,
+  intervalMax: 8,
+  restMin: 2,
+  restMax: 5,
+  failRetry: 1,
+  radius: 8,
+  speed: 0.6,
+  lookAroundInterval: 4,
+  lookAroundDistance: 5,
+  lookSmallChance: 0.7,
+  lookSmallSpread: 25,
+};
 
 /** 状态机阶段 */
 type Phase = "idle" | "pick" | "walk" | "rest";
@@ -61,19 +83,19 @@ function stopBotMoving(botName: string): void {
  * 小概率（30%）才大幅随机转头（东张西望感）。
  * 转身后实体朝向变化，下次游走的朝向偏置选点自然偏向该方向。
  */
-function lookAround(botName: string): void {
+function lookAround(botName: string, cfg: WanderBehaviorConfig): void {
   const bot = resolveBotPlayer(botName);
   if (!bot) return;
   let yaw: number;
-  if (Math.random() < 0.7) {
-    // 小幅扭动：当前朝向 ±25°（偶尔扭一下头）
+  if (Math.random() < cfg.lookSmallChance) {
+    // 小幅扭动：当前朝向 ±spread（"扭一下头"）
     let base = 0;
     try {
       base = bot.getRotation().y;
     } catch {
       /* 读取失败按 0 */
     }
-    yaw = base + (Math.random() * 2 - 1) * 25;
+    yaw = base + (Math.random() * 2 - 1) * cfg.lookSmallSpread;
   } else {
     // 小概率大幅转头（自然东张西望）
     yaw = Math.random() * 360;
@@ -82,19 +104,19 @@ function lookAround(botName: string): void {
   try {
     // MCBE 朝向向量 (-sin(yaw), 0, cos(yaw))——看向该方向点
     bot.lookAtLocation({
-      x: bot.location.x + -Math.sin(rad) * LOOK_AROUND_DISTANCE,
+      x: bot.location.x + -Math.sin(rad) * cfg.lookAroundDistance,
       y: bot.location.y,
-      z: bot.location.z + Math.cos(rad) * LOOK_AROUND_DISTANCE,
+      z: bot.location.z + Math.cos(rad) * cfg.lookAroundDistance,
     });
   } catch {
     /* 看向失败（chunkload 受限等）不影响 */
   }
 }
 
-/** 创建随机游走行为（aiBehavior 标签 TAG_WANDER_MODE 开启时由引擎注册） */
-export function makeWanderBehavior(): Behavior {
+/** 创建随机游走行为（默认配置见 DEFAULT_WANDER_CONFIG；可传自定义配置覆盖） */
+export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER_CONFIG): Behavior {
   let phase: Phase = "idle";
-  let wait = randomBetween(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX); // 当前阶段剩余 tick
+  let wait = randomBetween(config.intervalMin, config.intervalMax); // 当前阶段剩余周期
   let run: Promise<unknown> | undefined; // 单次导航协程
   let runResult: NavigateResult | undefined; // 协程完成标志
   let lookTick = 0; // 转头节流计数
@@ -102,7 +124,7 @@ export function makeWanderBehavior(): Behavior {
 
   const startRun = (botName: string): void => {
     runResult = undefined;
-    run = randomStrollOnce(botName, { radius: WANDER_RADIUS, speed: WANDER_SPEED })
+    run = randomStrollOnce(botName, { radius: config.radius, speed: config.speed })
       .then((r) => {
         runResult = r;
       })
@@ -113,7 +135,7 @@ export function makeWanderBehavior(): Behavior {
 
   const reset = (): void => {
     phase = "idle";
-    wait = randomBetween(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX);
+    wait = randomBetween(config.intervalMin, config.intervalMax);
     run = undefined;
     runResult = undefined;
   };
@@ -139,7 +161,7 @@ export function makeWanderBehavior(): Behavior {
       switch (phase) {
         case "idle":
           // 间隔等待（走停节律：不连续乱走）；静止时偶尔转身/扭头（节流）
-          if (++lookTick % LOOK_AROUND_INTERVAL === 0) lookAround(ctx.botName);
+          if (++lookTick % config.lookAroundInterval === 0) lookAround(ctx.botName, config);
           if (--wait > 0) return;
           phase = "pick";
           break;
@@ -157,22 +179,22 @@ export function makeWanderBehavior(): Behavior {
             failStreak = 0;
             logStroll(ctx.botName, "到达，休息片刻");
             phase = "rest";
-            wait = randomBetween(WANDER_REST_MIN, WANDER_REST_MAX);
+            wait = randomBetween(config.restMin, config.restMax);
           } else {
             // 导航失败（无路径/卡住/超时）：快速重试——短等待后重新选点，
             // 不进入长休息（避免"站半天"）；日志降频（连续失败只打首条）
             failStreak++;
             if (failStreak === 1) logStroll(ctx.botName, `导航失败(${runResult})，快速重试`);
             phase = "idle";
-            wait = WANDER_FAIL_RETRY;
+            wait = config.failRetry;
           }
           break;
         case "rest":
           // 休息时偶尔转身/扭头（官方随机视角意向；节流不频繁）
-          if (++lookTick % LOOK_AROUND_INTERVAL === 0) lookAround(ctx.botName);
+          if (++lookTick % config.lookAroundInterval === 0) lookAround(ctx.botName, config);
           if (--wait > 0) return;
           phase = "idle";
-          wait = randomBetween(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX);
+          wait = randomBetween(config.intervalMin, config.intervalMax);
           break;
       }
     },

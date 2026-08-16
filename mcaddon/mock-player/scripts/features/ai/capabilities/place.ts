@@ -1,16 +1,24 @@
 // ─── 自动放置能力（新框架 scripts/ai：Behavior 状态机） ──
 // 用户拍板：自动放置做成生物 AI 行为（简单能力）。
-// 逻辑（对齐旧标签行为）：startBuild/stopBuild 放置主手方块到面前；
-// 每 3 个引擎周期（30 tick）放一次——不连续猛放。
+// 逻辑（对齐旧标签行为）：startBuild/stopBuild 放置主手方块到面前。
+// 常量统一收敛到 PlaceBehaviorConfig。
 
 import type { Behavior, BehaviorContext } from "../../../ai";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 
-/** 放置间隔（引擎周期 = 10 tick：每 3 周期放一次） */
-const PLACE_INTERVAL = 3;
+/** 自动放置行为配置（统一管理） */
+export interface PlaceBehaviorConfig {
+  /** 放置间隔（引擎周期 = 10 tick） */
+  interval: number;
+}
+
+/** 默认配置（统一管理；makePlaceBehavior 可传自定义配置覆盖） */
+export const DEFAULT_PLACE_CONFIG: PlaceBehaviorConfig = {
+  interval: 3,
+};
 
 /** 创建自动放置行为（record.aiBehavior === "place" 时由引擎注册） */
-export function makePlaceBehavior(): Behavior {
+export function makePlaceBehavior(config: PlaceBehaviorConfig = DEFAULT_PLACE_CONFIG): Behavior {
   let tick = 0;
 
   return {
@@ -21,7 +29,7 @@ export function makePlaceBehavior(): Behavior {
       tick = 0;
     },
     step: (ctx) => {
-      if (++tick % PLACE_INTERVAL !== 0) return;
+      if (++tick % config.interval !== 0) return;
       const bot = resolveBotPlayer(ctx.botName);
       if (!bot) return;
       try {

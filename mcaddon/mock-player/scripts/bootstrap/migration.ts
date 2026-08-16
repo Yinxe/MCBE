@@ -21,7 +21,7 @@ import { botRegistry, botStore, saveCoordinator } from "./context";
 import { normalizeRecord, DEFAULT_RESPAWN } from "../service/RecordMigration";
 import { deserializeLegacyItem } from "../service/port/LegacyCodec";
 import { DP_PREFIX, INVENTORY_SIZE } from "../rules/Types";
-import { TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_WANDER_MODE, filterKnownTags } from "../rules/tags/BotTags";
+import { TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_WANDER_MODE, filterKnownTags } from "../rules/tags/BotTags";
 import type { SerializedItemStack } from "../rules/Types";
 
 /** 数据版本标记 key */
@@ -183,6 +183,7 @@ const BEHAVIOR_TAG_TO_AI: Record<string, string> = {
   [TAG_AUTO_MINE.value]: "mine",
   [TAG_AUTO_PLACE.value]: "place",
   [TAG_WANDER_MODE.value]: "wander",
+  [TAG_AUTO_ATTACK.value]: "attack",
 };
 
 function cleanupUnknownTags(): void {

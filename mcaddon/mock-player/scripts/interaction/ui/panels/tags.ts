@@ -51,8 +51,8 @@ export function showTagManagement(player: Player, botName: string): void {
   // 共存标签（除 bot 标识外）：自动重生置顶单独开关，其余（自动跳跃）进共存区
 
   // 生物 AI 行为下拉选项（与 record.aiBehavior 值一一对应）
-  const AI_BEHAVIOR_OPTIONS = ["none", "wander", "mine", "place"];
-  const AI_BEHAVIOR_INDEX: Record<string, number> = { none: 0, wander: 1, mine: 2, place: 3 };
+  const AI_BEHAVIOR_OPTIONS = ["none", "wander", "mine", "place", "attack"];
+  const AI_BEHAVIOR_INDEX: Record<string, number> = { none: 0, wander: 1, mine: 2, place: 3, attack: 4 };
 
   const currentTagsText = record.tags
     .map((t) => { const d = getTagDef(t); return d ? d.label : t; })
@@ -107,10 +107,11 @@ export function showTagManagement(player: Player, botName: string): void {
         style("随机游走", color.playerName),
         style("自动挖掘", color.playerName),
         style("自动放置", color.playerName),
+        style("自动攻击", color.playerName),
       ],
       {
         defaultValueIndex: AI_BEHAVIOR_INDEX[record.aiBehavior] ?? 0,
-        tooltip: "单选生物 AI 行为改变假人行为：随机游走（近点散步）/ 自动挖掘（视线方向挖方块）/ 自动放置（面前放置主手方块）",
+        tooltip: "单选生物 AI 行为改变假人行为：随机游走（近点散步）/ 自动挖掘（视线挖方块）/ 自动放置（面前放方块）/ 自动攻击（攻击面前目标）",
       },
     );
 

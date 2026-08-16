@@ -20,6 +20,7 @@ import { botRegistry } from "../../bootstrap/context";
 import { makeWanderBehavior } from "./capabilities/wander";
 import { makeMineBehavior } from "./capabilities/mine";
 import { makePlaceBehavior } from "./capabilities/place";
+import { makeAttackBehavior } from "./capabilities/attack";
 import type { BotRecord } from "../../rules/Types";
 
 /** 引擎驱动周期（tick） */
@@ -40,6 +41,7 @@ const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
   wander: makeWanderBehavior,
   mine: makeMineBehavior,
   place: makePlaceBehavior,
+  attack: makeAttackBehavior,
 };
 
 /** 假人当前生物 AI 行为（record.aiBehavior；未启用 → undefined） */
