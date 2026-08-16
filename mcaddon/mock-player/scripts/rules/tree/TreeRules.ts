@@ -719,6 +719,8 @@ export type TreeSetVerdict =
 
 /** 坐标集评估选项 */
 export interface TreeSetEvalOptions {
+  /** 大树直接接受（2×2 恒等段特征明显，无需树叶判定；缺省 true） */
+  bigDirectAccept?: boolean;
   /** 小树/大树树冠叶量目标（缺省 10/20，与 cellKind 版一致） */
   leafTargetSmall?: number;
   leafTargetBig?: number;
@@ -748,6 +750,13 @@ export function evaluateTreeFromSets(
   leafSet: ReadonlySet<string>,
   options: TreeSetEvalOptions = {},
 ): TreeSetVerdict {
+  // ── 大树直接接受：2×2 原木垂直向上（恒等段）特征已足够明显，无需树叶判定 ──
+  if (candidate.kind === "big" && options.bigDirectAccept !== false) {
+    const H = Math.min((candidate.topY - candidate.baseY + 1) / (options.trunkHeightNorm ?? TRUNK_HEIGHT_NORM), 1);
+    const factors: TreeSetFactors = { L: 1, C: 1, H, A: 1 };
+    return { accepted: true, kind: "big", probability: H, factors, leafCount: 0 };
+  }
+
   const leafTarget = candidate.kind === "small" ? (options.leafTargetSmall ?? LEAF_TARGET_SMALL) : (options.leafTargetBig ?? LEAF_TARGET_BIG);
   const pad = options.pad ?? REGION_PAD;
   const topMargin = options.topMargin ?? CANOPY_MARGIN;
@@ -843,4 +852,17 @@ export function evaluateTreeFromSets(
   if (L === 0) return { accepted: false, reason: "no-canopy", ...common };
   if (probability < threshold) return { accepted: false, reason: "low-prob", ...common };
   return { accepted: true, ...common };
+}
+
+// ─── 无属性聚类变体（坐标集方案：纯位置，零 getBlock） ──
+// 实际世界"砍树就是树"——不需要 wood_id 属性分流（异种交织极少见）；
+// 水平原木（倒下的树/横梁）由几何天然排除：单层横排成不了垂直链。
+
+/**
+ * 无属性树干提取：输入纯坐标（无 woodId），全部原木按同型聚类。
+ * 水平原木（倒下树/横梁）天然被丢弃——单层横排无法垂直成链。
+ * @param logs 原木坐标（x/y/z 即可）
+ */
+export function extractTrunkCandidatesSimple(logs: Array<{ x: number; y: number; z: number }>): TrunkCandidate[] {
+  return extractTrunkCandidates(logs.map((l) => ({ x: l.x, y: l.y, z: l.z, woodId: "" })));
 }

@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateTreeFromSets, extractTrunkCandidates, classifyTreeBlock, type TreeLog } from "../scripts/rules/tree/TreeRules";
+import { evaluateTreeFromSets, extractTrunkCandidatesSimple, classifyTreeBlock, type TreeLog } from "../scripts/rules/tree/TreeRules";
 import { buildOak, buildDarkOak, buildLogWall, MockWorld } from "./helpers/treeFixtures";
 
 /** 从 MockWorld 提取原木坐标集（TreeLog 列表，woodId 按 typeId 简化） */
@@ -44,20 +44,20 @@ test("坐标集评估：标准橡树接受（logs+leaves 关系）", () => {
   const { world } = buildOak();
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 16);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 16);
-  const candidates = extractTrunkCandidates(logs);
+  const candidates = extractTrunkCandidatesSimple(logs);
   assert.equal(candidates.length, 1);
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.accepted, true, JSON.stringify(verdict.factors));
   assert.ok(verdict.probability >= 0.8);
 });
 
-test("坐标集评估：深色橡树（2×2 大树）接受", () => {
+test("坐标集评估：深色橡树（2×2 大树）直接接受——无需树叶判定", () => {
   const { world } = buildDarkOak();
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 20);
-  const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 20);
-  const candidates = extractTrunkCandidates(logs);
+  const candidates = extractTrunkCandidatesSimple(logs);
   assert.ok(candidates.length >= 1);
-  const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
+  // 不传树叶集（空 Set）——2×2 特征明显，直接接受
+  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<string>());
   assert.equal(verdict.kind, "big");
   assert.equal(verdict.accepted, true, JSON.stringify(verdict.factors));
 });
@@ -68,7 +68,7 @@ test("坐标集评估：无树叶 → no-canopy 拒绝", () => {
   for (let y = 0; y < 5; y++) world.set(0, y, 0, "minecraft:oak_log");
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 10);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 10);
-  const candidates = extractTrunkCandidates(logs);
+  const candidates = extractTrunkCandidatesSimple(logs);
   assert.equal(candidates.length, 1);
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.accepted, false);
@@ -91,7 +91,7 @@ test("坐标集评估：浮空树叶（不贴原木）→ A=0 拒绝", () => {
   }
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 20);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 20);
-  const candidates = extractTrunkCandidates(logs);
+  const candidates = extractTrunkCandidatesSimple(logs);
   assert.equal(candidates.length, 1);
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   // 区域内无树叶或树叶不连通 → 拒绝
@@ -110,7 +110,7 @@ test("坐标集评估：单层树叶薄板 → C=0.4 低概率", () => {
   }
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 12);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 12);
-  const candidates = extractTrunkCandidates(logs);
+  const candidates = extractTrunkCandidatesSimple(logs);
   assert.equal(candidates.length, 1);
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.factors.C, 0.4);
@@ -121,17 +121,35 @@ test("坐标集评估：厚树冠与树干连通 → C=1 且 A 因子满", () =>
   const { world } = buildOak();
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 16);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 16);
-  const candidates = extractTrunkCandidates(logs);
+  const candidates = extractTrunkCandidatesSimple(logs);
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.factors.C, 1);
   assert.ok(verdict.factors.A >= 0.5);
+});
+
+test("坐标集评估：纯 2×2 原木柱（无树叶）按大树接受", () => {
+  const world = new MockWorld();
+  // 2×2 柱 4 层（恒 2×2 段）
+  for (let y = 0; y < 4; y++) {
+    world.set(0, y, 0, "minecraft:dark_oak_log");
+    world.set(1, y, 0, "minecraft:dark_oak_log");
+    world.set(0, y, 1, "minecraft:dark_oak_log");
+    world.set(1, y, 1, "minecraft:dark_oak_log");
+  }
+  const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 8);
+  const candidates = extractTrunkCandidatesSimple(logs);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0]!.kind, "big");
+  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<string>());
+  assert.equal(verdict.accepted, true); // 2×2 特征直接判定
+  assert.equal(verdict.probability, 1); // 高 4 层 → H=1
 });
 
 test("坐标集评估：木墙（无树冠形态）拒绝", () => {
   const { world } = buildLogWall();
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 20);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 20);
-  const candidates = extractTrunkCandidates(logs);
+  const candidates = extractTrunkCandidatesSimple(logs);
   // 木墙厚段应被丢弃或拒绝（无树叶）
   const allRejected = candidates.every((c) => !evaluateTreeFromSets(c, leaves).accepted);
   assert.ok(allRejected || candidates.length === 0);

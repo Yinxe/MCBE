@@ -25,6 +25,7 @@ import {
   evaluateTree,
   evaluateTreeFromSets,
   extractTrunkCandidates,
+  extractTrunkCandidatesSimple,
   treeRegionBounds,
   TREE_AUX_TYPE_IDS,
   TREE_GROUND_TYPE_IDS,
@@ -509,10 +510,11 @@ export async function scanTreesFromSets(
   const fromY = Math.max(-64, center.y - SET_SCAN_BELOW);
   const toY = Math.min(320, center.y + SET_SCAN_ABOVE);
 
-  // ① 原木坐标集：一次 getBlocks + 每原木读 wood_id/水平过滤（原木数量少，必要属性）
+  // ① 原木坐标集：一次 getBlocks，**纯位置零 getBlock**——
+  //    实际世界"砍树就是树"：无需 wood_id 分流；水平原木（倒下树/横梁）
+  //    由几何聚类天然排除（单层横排成不了垂直链）
   const logsResult = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY);
-  const logs: TreeLog[] = [];
-  let horizontalFiltered = 0;
+  const logs: Array<{ x: number; y: number; z: number }> = [];
   try {
     const volume = new BlockVolume(
       { x: center.x - radius, y: fromY, z: center.z - radius },
@@ -520,13 +522,7 @@ export async function scanTreesFromSets(
     );
     const found = dimension.getBlocks(volume, { includeTypes: [...VALID_LOG_TYPE_IDS] });
     for (const loc of found.getBlockLocationIterator()) {
-      const block = dimension.getBlock(loc);
-      if (!block) continue;
-      if (isHorizontalLog(block)) {
-        horizontalFiltered++;
-        continue;
-      }
-      logs.push({ x: loc.x, y: loc.y, z: loc.z, woodId: woodIdOf(block) });
+      logs.push({ x: loc.x, y: loc.y, z: loc.z });
     }
   } catch (e: any) {
     console.warn(`[MockPlayer] 坐标集原木收集失败: ${e?.message ?? e}`);
@@ -548,8 +544,8 @@ export async function scanTreesFromSets(
     console.warn(`[MockPlayer] 坐标集树叶收集失败: ${e?.message ?? e}`);
   }
 
-  // ③ 纯算术评估：树干提取（聚类）→ 坐标集树判定（零世界查询）
-  const candidates = extractTrunkCandidates(logs);
+  // ③ 纯算术评估：无属性聚类（几何成链，零 getBlock）→ 坐标集树判定
+  const candidates = extractTrunkCandidatesSimple(logs);
   const trees: TreeResource[] = [];
   const rejected: TreeReject[] = [];
   for (const c of candidates) {
