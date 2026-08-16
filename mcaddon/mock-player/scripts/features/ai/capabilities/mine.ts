@@ -9,8 +9,8 @@ import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 
 /** 挖掘距离（格） */
 const MINE_DISTANCE = 6;
-/** 挖掘间隔（引擎周期 = 10 tick：每 2 周期挖一次） */
-const MINE_INTERVAL = 2;
+/** 挖掘间隔（引擎周期 = 10 tick：每周期挖一次——连续挖掘，无明显停顿） */
+const MINE_INTERVAL = 1;
 
 /** 创建自动挖掘行为（record.aiBehavior === "mine" 时由引擎注册） */
 export function makeMineBehavior(): Behavior {
