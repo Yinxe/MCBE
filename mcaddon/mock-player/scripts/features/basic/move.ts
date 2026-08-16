@@ -1,6 +1,6 @@
 // ─── 移动（导航） ──────────────────────────────────────
 // 导航为耗时异步能力：while(true) + await waitTicks 循环监测位置（每 10 tick），
-// 位置变化=移动中继续等；连续 4 次（2 秒）位置未变 → 判定到达/移动超时。
+// 位置变化=移动中继续等；连续 1 次（0.5 秒）位置未变（X/Y/Z 完全一致）→ 判定到达/移动超时。
 // 多状态返回（不裸 boolean）：调用方/玩家可获知具体失败原因。
 // 支持选择性回调（onStart/onMoving/onStuck/onComplete），移动中自动更新假人位置/朝向数据。
 
@@ -16,8 +16,8 @@ const NAVIGATE_SPEED = 1;
 const NAV_ARRIVE_DISTANCE = 1.5;
 /** 位置监测间隔（tick）：每 10 tick 读一次位置 */
 const NAV_CHECK_INTERVAL = 10;
-/** 静止超时次数：连续 4 次（4×10=40tick=2 秒）位置未变化 → 移动超时 */
-const NAV_STILL_LIMIT = 4;
+/** 静止判定次数：连续 1 次（10tick=0.5 秒）位置未变化（X/Y/Z 完全一致）→ 视为假人已停下 */
+const NAV_STILL_LIMIT = 1;
 /** 总时长超时（tick）：30 秒仍在移动但未到达 → 超时失败 */
 const NAV_TOTAL_TIMEOUT_TICKS = 600;
 /** 位置/朝向数据更新阈值（格）：移动距离超过此值才写 record + 持久化（控制写入频率） */
@@ -29,7 +29,7 @@ export enum NavigateResult {
   Arrived = "arrived",
   /** 无路径可达（navigateToLocation 返回 isFullPath=false） */
   NoPath = "no-path",
-  /** 移动超时：2 秒内位置未变化且未到达（卡住） */
+  /** 移动超时：0.5 秒内位置未变化且未到达（卡住） */
   StillTimeout = "still-timeout",
   /** 总时长超时：30 秒仍在移动但未到达 */
   Timeout = "timeout",
@@ -77,7 +77,7 @@ function updateBotPositionData(botName: string, loc: Vector3, dimensionId: strin
  * 寻路到目标位置并等待完成（闭包异步，多状态返回）。
  * while(true) + await waitTicks(10) 循环监测（不阻塞主线程）：
  *   - 每 10 tick 读取一次位置；位置与上次不同 → 假人仍在移动 → 继续等待
- *   - 连续 4 次（40tick≈2 秒）位置未变化 → 假人已停下：
+ *   - 连续 1 次（10tick≈0.5 秒）位置未变化 → 假人已停下：
  *     距目标 ≤ 到达距离 = 已到达；否则 = 移动超时（卡住）
  *   - 总时长 30 秒仍在移动但未到达 → 超时失败
  * 移动监听：位置变化时自动更新假人 lastPoint（位置/维度/朝向）+ 持久化（距离阈值控频）。
@@ -134,7 +134,7 @@ export async function navigateBot(
         // 停滞回调（位置未变化）
         callbacks?.onStuck?.(loc, stillCount);
         if (stillCount >= NAV_STILL_LIMIT) {
-          // 2 秒内位置未变化 → 假人已停下：近=到达终点，远=移动超时
+          // 0.5 秒内位置未变化（X/Y/Z 完全一致）→ 假人已停下：近=到达终点，远=移动超时
           const result = d <= NAV_ARRIVE_DISTANCE ? NavigateResult.Arrived : NavigateResult.StillTimeout;
           callbacks?.onComplete?.(result);
           return result;

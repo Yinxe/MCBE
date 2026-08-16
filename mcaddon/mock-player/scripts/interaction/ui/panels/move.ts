@@ -60,7 +60,7 @@ export function showMoveForm(player: Player, botName: string): void {
           player.sendMessage(`${color.warn}${botName}${color.warn} 无法到达目标位置（无路径可达）`);
           break;
         case NavigateResult.StillTimeout:
-          player.sendMessage(`${color.warn}${botName}${color.warn} 移动超时：2 秒内位置未变化（可能卡住）`);
+          player.sendMessage(`${color.warn}${botName}${color.warn} 移动超时：0.5 秒内位置未变化（可能卡住）`);
           break;
         case NavigateResult.Timeout:
           player.sendMessage(`${color.warn}${botName}${color.warn} 30 秒未到达目标（仍在移动或路径过长）`);

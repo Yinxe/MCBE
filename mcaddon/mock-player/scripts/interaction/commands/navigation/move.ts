@@ -13,7 +13,7 @@ function navigateMessage(targetName: string, loc: Vector3, result: NavigateResul
     case NavigateResult.NoPath:
       return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 无法到达 ${pos}：无路径可达（障碍/距离过远）`;
     case NavigateResult.StillTimeout:
-      return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 移动超时：2 秒内位置未变化（可能卡住）`;
+      return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 移动超时：0.5 秒内位置未变化（可能卡住）`;
     case NavigateResult.Timeout:
       return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 30 秒未到达 ${pos}（仍在移动或路径过长）`;
     case NavigateResult.Unavailable:
