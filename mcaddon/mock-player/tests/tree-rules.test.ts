@@ -237,6 +237,11 @@ test("小树：普通橡树 → 接受（P ≥ 0.8，因子全满）", () => {
   assert.deepEqual(t.base, { x: 0.5, y: 1.5, z: 0.5 });
   assert.equal(t.id, "tree@(0,1,0)");
   assert.ok(t.leafs.length > 0);
+  // 存储坐标制：logs/footprint/top 全部 blockCenter（整数+0.5，负数坐标取整差 .5）
+  assert.equal(t.top.y, 5.5); // 树干 5 格（y 1..5）→ 最高原木中心
+  assert.deepEqual(t.footprint, [{ x: 0.5, y: 1.5, z: 0.5 }]);
+  assert.ok(t.logs.every((l) => l.x - Math.floor(l.x) === 0.5 && l.y - Math.floor(l.y) === 0.5 && l.z - Math.floor(l.z) === 0.5), "logs 应全为中心坐标");
+  assert.ok(t.leafs.every((c) => c.x - Math.floor(c.x) === 0.5 && c.y - Math.floor(c.y) === 0.5 && c.z - Math.floor(c.z) === 0.5), "leafs 应全为中心坐标");
 });
 
 test("小树：云杉锥形树冠 → 接受", () => {
@@ -356,7 +361,7 @@ test("大树：深色橡树（2×2+宽冠，加宽层断链）→ 接受 kind=bi
 test("大树：大型云杉（2×2 高 20 + 锥冠）→ 接受（区域自动加高）", () => {
   const t = firstAccepted(scanOf(buildMegaSpruce));
   assert.ok(t && t.kind === "big" && t.probability >= 0.8, `P=${t?.probability}`);
-  assert.equal(t.top.y, 20);
+  assert.equal(t.top.y, 20.5); // 最高原木 y=20 → 中心坐标
 });
 
 test("大树：大型松树（顶部稀疏叶）→ 接受", () => {

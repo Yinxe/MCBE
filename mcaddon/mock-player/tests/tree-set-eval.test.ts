@@ -184,7 +184,7 @@ test("树资源点：小树中心=单根原木的方块中心（blockCenter）�
   const center = treeCenter(candidates[0]!);
   assert.deepEqual(center, { x: 0.5, y: 1.5, z: 0.5 });
   assert.equal(treeResourceId(center), "tree@(0,1,0)");
-  // 接受判定携带树叶坐标：每个坐标都在树叶集内
+  // 接受判定携带树叶坐标（verdict 层整数格坐标）：每个坐标都在树叶集内
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.accepted, true);
   assert.ok(verdict.leafs.length > 0);
@@ -203,7 +203,7 @@ test("树资源点：大树中心=2×2 底部左下角原木的方块中心，�
   const center = treeCenter(candidates[0]!);
   assert.deepEqual(center, { x: 0.5, y: 1.5, z: 0.5 });
   assert.equal(treeResourceId(center), "tree@(0,1,0)");
-  // 直接接受（不传树叶也能过），但传入树叶集时资源点携带真实树叶坐标
+  // 直接接受（不传树叶也能过），但传入树叶集时资源点携带真实树叶坐标（verdict 层整数格）
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.kind, "big");
   assert.equal(verdict.accepted, true);

@@ -145,6 +145,7 @@ export type TreeKind = "small" | "big";
 
 /**
  * 原木点（扫描结果；woodId 由 mc 层按方块 states 归一：oak/spruce/birch/jungle/acacia/dark_oak/mangrove/cherry/pale_oak）。
+ * ⚠️ 坐标制：内部扫描/聚类为整数格坐标；TreeResource.logs 存储为中心坐标制（+0.5）。
  * ⚠️ 输入约定：仅垂直原木——mc 层按 pillar_axis 过滤水平原木（倒下的树/
  * 横梁不参与计算，且躺靠活树时会污染树干聚类）。
  */
@@ -576,7 +577,7 @@ export function evaluateTree(candidate: TrunkCandidate, cellKind: CellKindFn): T
   return {
     accepted: true,
     ...common,
-    // 树冠全部树叶坐标（资源点完整数据——树冠计数窗口内）
+    // 树冠全部树叶坐标（整数格坐标；资源转换点统一转 blockCenter）
     leafs: [...leafKeys].map((k) => {
       const [x, y, z] = k.split(",").map(Number) as [number, number, number];
       return { x, y, z };
@@ -612,7 +613,11 @@ export function treeResourceId(center: Vec3): string {
 
 // ─── 扫描汇总 ──────────────────────────────────────────
 
-/** 树资源（扫描结果；后续砍伐/锁表/通知的输入） */
+/**
+ * 树资源（扫描结果；后续砍伐/锁表/通知的输入）。
+ * ⚠️ 存储坐标制：本资源点全部方块坐标（base/top/footprint/logs/leafs）
+ * 均为中心坐标制（整数格坐标 + 0.5）——数据源统一，消费方直接可用。
+ */
 export interface TreeResource {
   /** 资源唯一 ID（由树中心坐标构建：tree@(x,y,z)——每树唯一） */
   id: string;
@@ -624,13 +629,13 @@ export interface TreeResource {
   factors: TreeFactors;
   /** 树中心坐标（blockCenter：最低层锚点原木的方块中心；站立/砍树/锁表锚点） */
   base: Vec3;
-  /** 最高原木角点 */
+  /** 最高原木中心坐标（blockCenter） */
   top: Vec3;
-  /** 底层 footprint（支撑层检查/站立点派生用） */
+  /** 底部支撑格（blockCenter；支撑层检查/站立点派生用） */
   footprint: Vec3[];
-  /** 链内全部原木坐标（砍伐输入） */
+  /** 链内全部原木坐标（blockCenter；砍伐输入） */
   logs: TreeLog[];
-  /** 树冠全部树叶坐标（资源点完整数据；数量 = leafs.length） */
+  /** 树冠全部树叶坐标（blockCenter；数量 = leafs.length） */
   leafs: Vec3[];
 }
 
@@ -705,7 +710,12 @@ function evaluateCandidatesWith(
     const verdict = evaluateTree(candidate, buildCellKind(candidate, bounds));
     verdicts.push(verdict);
     const base: Vec3 = treeCenter(candidate);
-    const top: Vec3 = { x: Math.max(...candidate.logs.map((l) => l.x)), y: candidate.topY, z: Math.max(...candidate.logs.map((l) => l.z)) };
+    // 存储坐标制：输出全部转 blockCenter（内部候选为整数格）
+    const top: Vec3 = blockCenter(
+      Math.max(...candidate.logs.map((l) => l.x)),
+      candidate.topY,
+      Math.max(...candidate.logs.map((l) => l.z)),
+    );
     if (verdict.accepted) {
       trees.push({
         id: treeResourceId(base),
@@ -714,9 +724,9 @@ function evaluateCandidatesWith(
         factors: verdict.factors,
         base,
         top,
-        footprint: candidate.footprint,
-        logs: candidate.logs,
-        leafs: verdict.leafs,
+        footprint: candidate.footprint.map((c) => blockCenter(c.x, c.y, c.z)),
+        logs: candidate.logs.map((l) => ({ x: l.x + 0.5, y: l.y + 0.5, z: l.z + 0.5, woodId: l.woodId })),
+        leafs: verdict.leafs.map((c) => blockCenter(c.x, c.y, c.z)),
       });
     } else {
       rejected.push({ kind: verdict.kind, base, reason: verdict.reason, probability: verdict.probability, factors: verdict.factors });

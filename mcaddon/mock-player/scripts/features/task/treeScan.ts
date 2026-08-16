@@ -10,6 +10,7 @@ import { BlockPermutation, BlockVolume } from "@minecraft/server";
 import type { Dimension } from "@minecraft/server";
 
 import {
+  blockCenter,
   coordKey,
   evaluateTreeFromSets,
   extractTrunkCandidatesSimple,
@@ -65,16 +66,21 @@ export const HORIZONTAL_LOG_PERMUTATIONS: BlockPermutation[] = VALID_LOG_TYPE_ID
 
 function toTreeResource(candidate: TrunkCandidate, verdict: Extract<TreeVerdict, { accepted: true }>): TreeResource {
   const base = treeCenter(candidate);
+  // 存储坐标制：内部候选为整数格，输出全部转 blockCenter
   return {
     id: treeResourceId(base),
     kind: verdict.kind,
     probability: verdict.probability,
     factors: verdict.factors,
     base,
-    top: { x: Math.max(...candidate.logs.map((l) => l.x)), y: candidate.topY, z: Math.max(...candidate.logs.map((l) => l.z)) },
-    footprint: candidate.footprint,
-    logs: candidate.logs,
-    leafs: verdict.leafs,
+    top: blockCenter(
+      Math.max(...candidate.logs.map((l) => l.x)),
+      candidate.topY,
+      Math.max(...candidate.logs.map((l) => l.z)),
+    ),
+    footprint: candidate.footprint.map((c) => blockCenter(c.x, c.y, c.z)),
+    logs: candidate.logs.map((l) => ({ x: l.x + 0.5, y: l.y + 0.5, z: l.z + 0.5, woodId: l.woodId })),
+    leafs: verdict.leafs.map((c) => blockCenter(c.x, c.y, c.z)),
   };
 }
 
@@ -277,12 +283,12 @@ function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
     for (const b of big) {
       if (used.has(b)) continue;
       const hd = Math.max(Math.abs(a.base.x - b.base.x), Math.abs(a.base.z - b.base.z));
-      // 组内任一段与 b 垂直 gap ≤2 且水平相邻 → 同树（blockCenter 的 y 取整还原原木层）
+      // 组内任一段与 b 垂直 gap ≤2 且水平相邻 → 同树（blockCenter y 取整还原原木层）
       const groupMinY = Math.min(...group.map((g) => Math.floor(g.base.y)));
-      const groupMaxY = Math.max(...group.map((g) => g.top.y));
+      const groupMaxY = Math.max(...group.map((g) => Math.floor(g.top.y)));
       const bBaseY = Math.floor(b.base.y);
-      const vd = bBaseY <= groupMaxY + 2 && b.top.y >= groupMinY - 2 ? 0 : Math.min(
-        Math.abs(bBaseY - groupMaxY), Math.abs(b.top.y - groupMinY),
+      const vd = bBaseY <= groupMaxY + 2 && Math.floor(b.top.y) >= groupMinY - 2 ? 0 : Math.min(
+        Math.abs(bBaseY - groupMaxY), Math.abs(Math.floor(b.top.y) - groupMinY),
       );
       if (hd <= 1 && vd <= 2) {
         used.add(b);
@@ -297,13 +303,16 @@ function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
     // 树中心取最低段（同柱 2×2 x/z 一致，blockCenter y 取整还原原木层）
     const allLogs = group.flatMap((g) => g.logs);
     const baseY = Math.min(...group.map((g) => Math.floor(g.base.y)));
-    const topY = Math.max(...group.map((g) => g.top.y));
+    const topY = Math.max(...group.map((g) => Math.floor(g.top.y)));
     const height = topY - baseY + 1;
     const leafKeySet = new Set<number>();
     for (const g of group) {
-      for (const c of g.leafs) leafKeySet.add(coordKey(c.x, c.y, c.z));
+      for (const c of g.leafs) leafKeySet.add(coordKey(Math.floor(c.x), Math.floor(c.y), Math.floor(c.z)));
     }
-    const leafs = [...leafKeySet].map(keyToCoord);
+    const leafs = [...leafKeySet].map((k) => {
+      const c = keyToCoord(k);
+      return blockCenter(c.x, c.y, c.z);
+    });
     const baseSeg = group.reduce((m, g) => (Math.floor(g.base.y) < Math.floor(m.base.y) ? g : m));
     const base = baseSeg.base;
     merged.push({
@@ -312,7 +321,7 @@ function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
       probability: Math.min(Math.max(...group.map((g) => g.probability)), 1),
       factors: { G: 1, L: 1, C: 1, F: 1, H: Math.min(height / 4, 1), A: 1 },
       base,
-      top: { x: group[0]!.top.x, y: topY, z: group[0]!.top.z },
+      top: blockCenter(Math.floor(group[0]!.top.x), topY, Math.floor(group[0]!.top.z)),
       footprint: baseSeg.footprint,
       logs: allLogs,
       leafs,
@@ -357,7 +366,7 @@ export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: 
   lines.push(`[树] ── 接受（${r.trees.length}）${"─".repeat(Math.max(8, 40 - String(r.trees.length).length))}`);
   for (const t of r.trees) {
     lines.push(
-      `[树] ✓ ${t.kind === "big" ? "大树" : "小树"} P=${t.probability.toFixed(2)} 高${t.top.y - Math.floor(t.base.y) + 1} ` +
+      `[树] ✓ ${t.kind === "big" ? "大树" : "小树"} P=${t.probability.toFixed(2)} 高${Math.floor(t.top.y) - Math.floor(t.base.y) + 1} ` +
         `原木${t.logs.length} 叶${t.leafs.length} ${t.id} ${t.kind === "big" ? "（2×2 直接判定）" : fmtFactors(t.factors)}`,
     );
   }
