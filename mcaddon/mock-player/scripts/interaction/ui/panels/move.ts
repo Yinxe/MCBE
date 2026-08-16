@@ -56,6 +56,9 @@ export function showMoveForm(player: Player, botName: string): void {
         case NavigateResult.Arrived:
           player.sendMessage(`${color.success}${botName}${color.success} 已到达 ${color.warn}${Math.floor(targetPos.x)} ${Math.floor(targetPos.y)} ${Math.floor(targetPos.z)}`);
           break;
+        case NavigateResult.TooFar:
+          player.sendMessage(`${color.warn}${botName}${color.warn} 拒绝寻路：目标超出最远距离（>16 格）`);
+          break;
         case NavigateResult.NoPath:
           player.sendMessage(`${color.warn}${botName}${color.warn} 无法到达目标位置（无路径可达）`);
           break;

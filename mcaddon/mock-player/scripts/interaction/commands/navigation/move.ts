@@ -10,6 +10,8 @@ function navigateMessage(targetName: string, loc: Vector3, result: NavigateResul
   switch (result) {
     case NavigateResult.Arrived:
       return `${color.success}假人 ${color.playerName}${targetName}${color.success} 已到达 ${pos}`;
+    case NavigateResult.TooFar:
+      return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 拒绝寻路：目标 ${pos} 超出最远距离（>16 格）`;
     case NavigateResult.NoPath:
       return `${color.warn}假人 ${color.playerName}${targetName}${color.warn} 无法到达 ${pos}：无路径可达（障碍/距离过远）`;
     case NavigateResult.StillTimeout:

@@ -12,6 +12,9 @@ import { waitTicks, distance3d } from "../utils";
 
 /** 导航速度 */
 const NAVIGATE_SPEED = 1;
+/** 寻路最远距离（格，水平）：目标超出此距离直接拒绝（不发起寻路）——
+ *  远距离寻路路径长、易卡/超时且消耗大，先拒绝由调用方换近目标 */
+const NAV_MAX_DISTANCE = 16;
 /** 到达判定距离（格）：静止且距目标 ≤ 此值视为到达 */
 const NAV_ARRIVE_DISTANCE = 1.5;
 /** 位置监测间隔（tick）：每 10 tick 读一次位置 */
@@ -27,6 +30,8 @@ const NAV_POSITION_UPDATE_DISTANCE = 2;
 export enum NavigateResult {
   /** 已到达目标（静止且距目标 ≤ 到达距离） */
   Arrived = "arrived",
+  /** 目标超出寻路最远距离（> 16 格）——直接拒绝，不发起寻路 */
+  TooFar = "too-far",
   /** 无路径可达（navigateToLocation 返回 isFullPath=false） */
   NoPath = "no-path",
   /** 移动超时：0.5 秒内位置未变化且未到达（卡住） */
@@ -92,6 +97,11 @@ export async function navigateBot(
 ): Promise<NavigateResult> {
   const bot = resolveBotPlayer(botName);
   if (!bot) return NavigateResult.Unavailable;
+
+  // ⚠️ 寻路最远距离：目标超出 16 格（水平）直接拒绝——不发起寻路、不移动
+  if (Math.hypot(target.x - bot.location.x, target.z - bot.location.z) > NAV_MAX_DISTANCE) {
+    return NavigateResult.TooFar;
+  }
 
   try {
     bot.stopMoving();

@@ -33,7 +33,7 @@ export class Bot extends BotCore {
    * 寻路到目标位置并等待完成（while+await 每 10tick 监测位置，多状态返回）。
    * 移动中自动更新假人位置/朝向数据（lastPoint + 持久化）。
    * @param callbacks 移动过程回调（onStart/onMoving/onStuck/onComplete，全部可选）
-   * @returns NavigateResult：arrived / no-path / still-timeout / timeout / unavailable / entity-invalid / error
+   * @returns NavigateResult：arrived / too-far（>16 格拒绝）/ no-path / still-timeout / timeout / unavailable / entity-invalid / error
    */
   navigateTo(
     target: Vector3,
