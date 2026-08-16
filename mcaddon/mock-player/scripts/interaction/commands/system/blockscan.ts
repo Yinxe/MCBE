@@ -91,10 +91,10 @@ export function registerScantreeCommand(registry: any): void {
         const r = await scanTreesFromSets(pos, player.dimension, radius);
         const fromY = Math.max(-64, pos.y - 10);
         const toY = Math.min(320, pos.y + 40);
-        // 详细日志评估报告一次性输出（概况/坐标集/聚类/接受/拒绝/分阶段耗时）
-        for (const line of buildTreeSetReport(r, radius, fromY, toY)) {
-          console.warn(`[MockPlayer][坐标集][树] ${line}`);
-        }
+        // ⚠️ 日志 IO 性能：console.warn 是同步 IO（写日志系统/文件，每次调用 ~几十 ms）——
+        //    报告 100+ 行若逐行调用 = 数秒卡顿；合并为**一次调用**（\n 拼接）输出整份报告
+        const reportText = buildTreeSetReport(r, radius, fromY, toY).join("\n");
+        console.warn(`[MockPlayer][坐标集][树] ${reportText}`);
         player.sendMessage(
           `${color.accent}[坐标集][树] ${color.success}接受 ${r.trees.length} ${color.muted}/ ${color.warn}拒绝 ${r.rejected.length}` +
             `${color.muted}（原木 ${color.info}${r.logs.count}${color.muted} 叶 ${color.info}${r.leaves.count}${color.muted} 总 ${color.info}${r.ms}${color.muted}ms）` +
