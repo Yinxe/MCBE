@@ -156,3 +156,15 @@ test("rename：清理旧 key 持久化记录——重启后不出现幽灵旧假
   assert.equal(store.loadRecord("old"), undefined);
   assert.equal(store.loadRecord("new")?.name, "new");
 });
+
+test("onlineAlive：只返回在线且未死亡的记录（引擎级可用性筛选）", () => {
+  const { store, registry } = makeRegistry();
+  const online = makeRecord("online", { online: true, death: false });
+  const death = makeRecord("dead", { online: true, death: true });
+  const offline = makeRecord("off", { online: false, death: false });
+  registry.save(online);
+  registry.save(death);
+  registry.save(offline);
+  const alive = registry.onlineAlive();
+  assert.deepEqual(alive.map((r) => r.name), ["online"], "只筛出在线未死亡");
+});

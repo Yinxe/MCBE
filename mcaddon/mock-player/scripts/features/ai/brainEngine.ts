@@ -75,9 +75,8 @@ export function startAiEngine(): void {
   BotEvents.botOffline.subscribe((e) => disposeBotBrain(e.botName));
 
   system.runInterval(() => {
-    for (const record of botRegistry.all()) {
-      // ── 引擎级可用性门卫（统一处理，行为不再各自判断） ──
-      if (!record.online || record.death) continue; // 不在线/死亡 → 跳过
+    // 注册表直接筛出"在线且未死亡"记录——免遍历全部再逐条过滤
+    for (const record of botRegistry.onlineAlive()) {
       try {
         const behaviorName = enabledBehaviorName(record);
         if (!behaviorName) continue; // 未启用 → 不创建大脑

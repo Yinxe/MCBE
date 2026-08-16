@@ -29,6 +29,14 @@ export class BotRegistry {
     return [...this.records.values()];
   }
 
+  /**
+   * 在线且未死亡的记录（引擎级可用性筛选——调用方免逐条过滤；
+   * 实体有效性与行为推进由引擎另行处理）。
+   */
+  onlineAlive(): BotRecord[] {
+    return [...this.records.values()].filter((r) => r.online && !r.death);
+  }
+
   /** 仅更新内存（高频路径：行为引擎逐 tick 更新 lastPoint 等） */
   set(record: BotRecord): void {
     this.records.set(record.name, record);
