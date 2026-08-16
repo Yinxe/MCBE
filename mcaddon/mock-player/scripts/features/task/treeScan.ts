@@ -156,18 +156,24 @@ export async function scanTreesFromSets(
   const fromY = Math.max(-64, center.y - SET_SCAN_BELOW);
   const toY = Math.min(320, center.y + SET_SCAN_ABOVE);
 
-  // ① 原木坐标集：**一次 getBlocks 同时计数+收集**（纯位置零 getBlock）——
-  //    实际世界"砍树就是树"：无需 wood_id 分流；水平原木（倒下树/横梁）
-  //    由几何聚类天然排除（单层横排成不了垂直链）
-  const logsResult = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY);
+  // ① 原木/树叶坐标集：Promise.all 并发采集（协程交错调度）——
+  //    getBlocks 是同步 API（单线程），协程间靠 waitTicks 让出点错开，
+  //    原木遍历落在 tick N、树叶遍历落在 tick N+1——主线程每 tick 只做
+  //    一次大体积引擎遍历；两个协程生命周期重叠（Promise.all 语义并发）。
+  const collectLogs = (async () => {
+    const r = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY);
+    await waitTicks(1); // 原木遍历后让出
+    return r;
+  })();
+  const collectLeaves = (async () => {
+    await waitTicks(1); // 错开：树叶遍历从原木的下一个 tick 开始
+    const r = collectCoordinateSet(dimension, center, radius, VALID_LEAF_TYPE_IDS, "树叶", fromY, toY);
+    await waitTicks(1);
+    return r;
+  })();
+  const [logsResult, leavesResult] = await Promise.all([collectLogs, collectLeaves]);
   const logs = logsResult.coords;
-  // 采集间让出（大体积引擎遍历后让出主线程，防单 tick 堆积）
-  await waitTicks(1);
-
-  // ② 树叶坐标集：一次 getBlocks（纯位置，零 getBlock）
-  const leavesResult = collectCoordinateSet(dimension, center, radius, VALID_LEAF_TYPE_IDS, "树叶", fromY, toY);
   const leafSet = new Set<string>(leavesResult.coords.map((c) => `${c.x},${c.y},${c.z}`));
-  await waitTicks(1);
 
   // ③ 纯算术评估：无属性聚类（几何成链，零 getBlock）→ 坐标集树判定
   const tCluster = Date.now();
