@@ -7,21 +7,21 @@ import { RetryError, retryAsync, retrySync } from "../scripts/rules/utils/Retry"
 
 // ─── 同步重试 ──────────────────────────────────────────
 
-test("retrySync：前 2 次 false 第 3 次成功 → 返回成功值并回调重试次数", () => {
+test("retrySync：前 2 次 false 第 3 次成功 → 返回成功值并回调重试次数（显式 isSuccess）", () => {
   let calls = 0;
   const retries: number[] = [];
   const result = retrySync(() => {
     calls++;
     return calls >= 3;
-  }, { onRetry: (attempt) => retries.push(attempt) });
+  }, { isSuccess: (r) => r === true, onRetry: (attempt) => retries.push(attempt) });
   assert.equal(result, true);
   assert.equal(calls, 3);
   assert.deepEqual(retries, [2, 3]); // 第 2、3 次尝试前回调
 });
 
-test("retrySync：始终 false → 抛 RetryError（attempts=3，lastResult=false）", () => {
+test("retrySync：始终 false（显式 isSuccess）→ 抛 RetryError（attempts=3，lastResult=false）", () => {
   assert.throws(
-    () => retrySync(() => false, { attempts: 3 }),
+    () => retrySync(() => false, { attempts: 3, isSuccess: (r) => r === true }),
     (e: unknown) => {
       assert.ok(e instanceof RetryError);
       const err = e as RetryError;
@@ -57,39 +57,45 @@ test("retrySync：自定义 isSuccess 谓词（{ok:true} 判定）", () => {
   assert.equal(calls, 2);
 });
 
-test("retrySync：attempts=1 不重试，一次失败即抛", () => {
+test("retrySync：attempts=1 不重试，一次异常即抛", () => {
   let calls = 0;
   assert.throws(
     () => retrySync(() => {
       calls++;
-      return false;
+      throw new Error("boom");
     }, { attempts: 1 }),
     RetryError,
   );
   assert.equal(calls, 1);
 });
 
-test("retrySync：缺省判定——false 重试，0/'' 成功", () => {
-  assert.equal(retrySync(() => 0), 0);
-  assert.equal(retrySync(() => ""), "");
+test("retrySync：缺省判定——不抛异常即成功（false/0/''/null 都直接成功不重试）", () => {
   let calls = 0;
+  // false 返回值不再触发重试：一次调用即成功返回
   assert.equal(
     retrySync(() => {
       calls++;
-      return calls >= 2 ? 42 : false;
+      return false;
     }),
-    42,
+    false,
   );
+  assert.equal(calls, 1);
+  assert.equal(retrySync(() => 0), 0);
+  assert.equal(retrySync(() => ""), "");
+  assert.equal(retrySync(() => null), null);
 });
 
-test("retrySync：异常与返回值不符混合重试 → 最终成功", () => {
+test("retrySync：异常与返回值不符混合重试（显式 isSuccess）→ 最终成功", () => {
   let calls = 0;
-  const result = retrySync(() => {
-    calls++;
-    if (calls === 1) throw new Error("boom");
-    if (calls === 2) return false;
-    return "win";
-  });
+  const result = retrySync(
+    () => {
+      calls++;
+      if (calls === 1) throw new Error("boom");
+      if (calls === 2) return false;
+      return "win";
+    },
+    { isSuccess: (r) => r === "win" },
+  );
   assert.equal(result, "win");
   assert.equal(calls, 3);
 });
@@ -122,21 +128,25 @@ test("retryAsync：前 2 次 reject 第 3 次 resolve → 成功", async () => {
   assert.equal(calls, 3);
 });
 
-test("retryAsync：返回值不符合预期（false）重试", async () => {
+test("retryAsync：返回值不符合预期（显式 isSuccess）重试", async () => {
   let calls = 0;
-  const result = await retryAsync(async () => {
-    calls++;
-    return calls >= 2;
-  });
+  const result = await retryAsync(
+    async () => {
+      calls++;
+      return calls >= 2;
+    },
+    { isSuccess: (r) => r === true },
+  );
   assert.equal(result, true);
   assert.equal(calls, 2);
 });
 
-test("retryAsync：接受返回普通值的同步函数", async () => {
+test("retryAsync：接受返回普通值的同步函数（缺省判定：抛异常才重试）", async () => {
   let calls = 0;
   const result = await retryAsync(() => {
     calls++;
-    return calls >= 2 ? "ok" : false;
+    if (calls === 1) throw new Error("boom");
+    return "ok";
   });
   assert.equal(result, "ok");
   assert.equal(calls, 2);
@@ -154,9 +164,9 @@ test("retryAsync：delayMs 间隔生效（2 次失败 × 20ms ≥ 40ms）", asyn
   assert.ok(elapsed >= 38, `应等待 2 次间隔，实测 ${elapsed}ms`);
 });
 
-test("retryAsync：始终失败 → reject RetryError（含 lastError/lastResult）", async () => {
+test("retryAsync：始终失败（显式 isSuccess）→ reject RetryError（含 lastError/lastResult）", async () => {
   await assert.rejects(
-    retryAsync(async () => false, { attempts: 2 }),
+    retryAsync(async () => false, { attempts: 2, isSuccess: (r) => r === true }),
     (e: unknown) => {
       assert.ok(e instanceof RetryError);
       const err = e as RetryError;
