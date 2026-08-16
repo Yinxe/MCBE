@@ -1,8 +1,11 @@
 // ─── 领域事件（core 层） ────────────────────────────────
-// 假人模块领域信号统一收口（宝库/认主/生命周期/行为/装备槽）：
+// 假人模块领域信号统一收口（宝库/认主/生命周期/行为/装备槽/标签变更）：
 //   宝库开箱     → 钥匙消耗 → 触发 vaultOpened（开箱成功，供通知/统计联动）
-// ⚠️ 劫掠领域事件（raidStarted/raidVictory/raidPhase）已**内聚到劫掠任务**
-//    （core/tasks/RaidTask.ts 的 RaidEvents 命名空间）——本文件不再持有。
+//   标签变更     → setTags 落库成功后触发 botTagsChanged（标签驱动模块按需订阅，
+//                  如劫掠模式：挂上标签 → 启动循环，移除 → 停止——替代旧 10 tick
+//                  引擎轮询对账）
+// ⚠️ 劫掠领域事件（raidStarted/raidVictory/raidPhase）已**内聚到劫掠模块**
+//    （features/raid/raidMode.ts 的 RaidEvents 命名空间）——本文件不再持有。
 // 订阅方通过信号解耦，不直接依赖任务内部实现。
 // 事件负载只用可序列化的 string/number，不携带 mc 对象——保证 core 纯净。
 
@@ -104,6 +107,20 @@ export const botDeath = new EventSignal<BotDeathEvent>();
 
 /** 假人复活信号 */
 export const botRespawn = new EventSignal<BotRespawnEvent>();
+
+// ─── 标签变更事件 ──────────────────────────────────────
+// setTags 落库成功后触发（唯一渠道）：标签驱动模块（劫掠模式等）订阅后
+// 挂标签 → 启动、移除 → 停止，替代旧引擎的 10 tick 标签轮询对账。
+
+/** 假人标签变更事件：setTags 成功后（record.tags 已落库 + 实体已同步） */
+export interface BotTagsChangedEvent {
+  botName: string;
+  /** 落库后的完整标签集 */
+  tags: string[];
+}
+
+/** 假人标签变更信号 */
+export const botTagsChanged = new EventSignal<BotTagsChangedEvent>();
 
 // ─── 假人行为事件 ──────────────────────────────────────
 // 假人成功执行动作时触发（主手切换/破坏方块/放置方块/使用物品/攻击实体），
@@ -209,6 +226,8 @@ export const BotEvents = {
   botOffline,
   botDeath,
   botRespawn,
+  // 标签变更
+  botTagsChanged,
   // 行为
   botMainhandChanged,
   botBlockBroken,

@@ -42,3 +42,39 @@ export function classifyRaidEffect(typeId: string): RaidEffectType | undefined {
   if (typeId === VILLAGE_HERO) return "village-hero";
   return undefined;
 }
+
+// ─── 流程决策纯函数（事件驱动循环：开启/胜利后喝瓶 → 等袭击 → 胜利） ──
+
+/** 效果状态（决策输入，mc 层实时查询实体） */
+export interface RaidEffectState {
+  badOmen: boolean;
+  raidOmen: boolean;
+}
+
+/**
+ * 可喝瓶判定（用户规格：**只在启动时与胜利后喝**）：
+ * 无兆头（一场袭击已在酝酿/进行则不重复喝）+ 背包有药水 +
+ * 未在周期等待（本周期已喝过 → 等袭击/胜利，兆头消失也不重复喝）。
+ * @param effects 效果状态
+ * @param bottles 背包不祥之瓶数量
+ * @param waiting 周期等待标记（已喝过、等袭击/胜利）
+ */
+export function canDrinkRaid(effects: RaidEffectState, bottles: number, waiting: boolean): boolean {
+  return !effects.badOmen && !effects.raidOmen && bottles > 0 && !waiting;
+}
+
+/** 等待原因（无药水通知用；"waiting"= 袭击中/周期等待，静默等待） */
+export type RaidIdleReason = "no-bottle" | "waiting";
+
+/**
+ * 等待原因诊断：开不了瓶时区分"背包没有不祥之瓶"（通知）与
+ * "袭击进行中/胜利待处理/周期等待"（静默等待）。
+ * @param effects 效果状态
+ * @param bottles 背包不祥之瓶数量
+ * @param waiting 周期等待标记
+ */
+export function diagnoseRaidIdle(effects: RaidEffectState, bottles: number, waiting: boolean): RaidIdleReason {
+  if (waiting) return "waiting";
+  if (!effects.badOmen && !effects.raidOmen && bottles === 0) return "no-bottle";
+  return "waiting";
+}

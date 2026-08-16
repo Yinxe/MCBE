@@ -20,14 +20,14 @@ pnpm run test:core   # core 单测（tsc -p tsconfig.test.json → node --test�
 ```
 scripts/
 ├── main.ts          # 4-Phase DI 组合根（只装配）：startup 注册命令 → worldLoad 挂载
-│                    #   机制（initTridentTracker / initRaidPorts）+ AI 引擎（startBrainEngine）
+│                    #   机制（initTridentTracker / initRaidMode）+ AI 引擎（startBrainEngine）
 ├── core/            # 领域层：零 @minecraft 依赖，可 node 单测
 │   ├── ai/          # AI 编排框架（行为树：节点/组合/装饰/黑板/Status 枚举，零具体任务）
-│   ├── tasks/       # 任务型模块（VaultTask 宝库 / RaidTask 劫掠：感知快照+端口契约+树装配）
+│   ├── tasks/       # 任务型模块（VaultTask 宝库 / FishingTask 钓鱼：感知快照+端口契约+树装配）
 │   └── model/events/tags/coords/items/storage/service/xp/format
 ├── mc/              # 适配层：只做 mcapi 副作用
 │   ├── ai/          # BotBrain：AI 引擎（每假人每任务一棵树 + 10tick 驱动 + 标签对账）
-│   ├── tasks/       # 任务执行（McVaultPorts / McRaidPorts：感知/导航/交互/事件订阅）
+│   ├── tasks/       # 任务执行（VaultPorts / FishingPorts：感知/导航/交互/事件订阅）
 │   └── bootstrap/adapters/features/commands/events/ui
 └── tests/           # node:test（只测 core；mc 层靠游戏内冒烟）
 ```
@@ -44,7 +44,7 @@ scripts/
 - **Selector 无记忆抢占**（goal 反应式，仿 Bedrock priority）：每 tick 从根重评，条件变化立即切换；`failure`=降级下一个分支（决策信号非异常），`running`=动作进行中（防重复启动）
 - **三态 Status 字符串枚举**（Success/Failure/Running）——所有节点统一返回，不用裸字符串
 - **黑板**：每树独立实例（按假人隔离），任务共享状态；重连保留（引擎重连中不清树）
-- **感知驱动决策**：`sense()` 一次返回完整感知快照（core 纯类型），决策纯函数（selectVaultTarget / diagnoseVaultIdle / diagnoseRaidIdle）在 core 可单测，mc 只翻译副作用
+- **感知驱动决策**：`sense()` 一次返回完整感知快照（core 纯类型），决策纯函数（selectVaultTarget / diagnoseVaultIdle）在 core 可单测，mc 只翻译副作用
 - **事件 ↔ 树桥接**：事件订阅（effectAdd/UI）更新 mc 状态/黑板，树每 10tick 读取决策——事件管感知实时性，树管决策时机（分钟级等待零轮询）
 - **新任务接入**：① core/tasks/XxxTask.ts 端口+树装配 ② mc/tasks/McXxxPorts.ts 副作用 ③ BotBrain 注册（tickXxxBrain + reconcileXxxBrains + startBrainEngine 标签分发）④ Fake 端口单测
 
@@ -95,18 +95,35 @@ scripts/
 
 ---
 
-## 劫掠模式（core/tasks/RaidTask + mc/tasks/McRaidPorts）
+## 劫掠模式（features/raid/raidMode.ts，事件驱动轻量模块）
 
-核心规则（用户拍板）：
-- **纯事件驱动，零巡检/零恢复机制**：袭击等待靠事件唤醒，树条件全 false 时等待分支无副作用
-- **喝瓶周期：只在启动/胜利后喝**——黑板 `raidWaiting` 标记（drink 成功写、handleVictory 清）；兆头消失/袭击中都不重复喝（不浪费药水）
+用户拍板：劫掠只是"监听事件 → 喝药 → 监听事件 → 回药"的简单循环，**不配作为 task**
+（旧 legacy/ai/RaidTask 行为树 + RaidPorts 端口契约已废除）。重写为纯事件驱动——
+`effectAdd` 直接驱动状态流转：**无树、无端口、无 10 tick 感知轮询**。
+
+循环（全部事件/时机驱动，零轮询）：
+- ① 开启/上线/胜利后 → `startRaidCycle`：可喝（无兆头+有药水+未等待）→ 喝瓶协程
+- ② 喝瓶成功 → 置 `raidWaiting`（等袭击/胜利——兆头消失也不重复喝）+ bad_omen 出现
+- ③ bad_omen → 30 秒一次性转化检查（未转化 → 不在村庄提醒，只发消息）
+- ④ raid_omen（村庄内转化）→ raidStarted + 阶段预触发 + 30 秒袭击开始检查
+- ⑤ village_hero → raidVictory + 胜利处理（计胜/叠加主人/移除英雄）→ 清 raidWaiting → 回到 ①
+- ⑥ 无药水 → 自动关模式（移除标签）；标签移除 → stopRaidMode
+
+触发时机（事件钩子，替代旧引擎轮询对账）：
+- `botTagsChanged`（setTags 唯一渠道落库后发布）：挂 raid 标签 → 启动；移除 → 停止
+- `botOnline`（上线/复活/重启后）：带 raid 标签 → 启动循环；`botOffline` → 清周期等待
+- 开启时无瓶 → 通知（节流）+ 低频重试排程（补瓶后自动喝）
+
+核心规则（用户拍板，全部保留）：
+- **喝瓶周期：只在启动/胜利后喝**——`raidWaiting` 标记（drink 成功写、胜利处理/下线清）；兆头消失/袭击中都不重复喝（不浪费药水）
 - **基岩版机制**：不祥之兆 100 分钟（不在村庄/试炼之地挂着不转化）；在村庄/试炼之地内喝 → 转化袭击之兆（30 秒）→ 袭击；**已有凶兆不自动转化，需重开模式再喝**（用户实测）
 - **唯一玩家提醒**：喝瓶 30 秒未转化为袭击之兆 → 通知"假人不在村庄/试炼之地范围"（一次性，只发消息）
 - 带袭击之兆/袭击中是正常状态，不报警；胜利处理幂等（事件时刻防重）+ 喝瓶前防御清理残留英雄
-- 无药水自动关模式（移除标签）
+- 无药水自动关模式（走 setTags 唯一渠道移除标签）
+- 决策纯函数在 rules/RaidRules（`canDrinkRaid` / `diagnoseRaidIdle`，可单测）；领域事件
+  （RaidEvents：raidStarted / raidVictory / raidPhase）内聚在 raidMode.ts
 
 **袭击阶段通知**（2.0.0，事件驱动）：
-- 领域事件**内聚在劫掠任务**（RaidEvents：raidStarted / raidVictory / raidPhase），规则内聚 core/tasks/RaidRules（波次/冷却/生成估算已移除——用户实测无用）
 - 阶段序列（全部事件驱动，仅核心流程）：预触发（袭击之兆转化）→ 开始（buff 结束检查）→ 胜利（村庄英雄）→ 停战（40 分钟超时，一次性检查）
 - **阶段变化通知玩家**：主人（不受距离限制）+ 附近 64 格玩家，Set 去重（主人在附近不重复发送）
 - ⚠️ 阶段仅通知/日志，不干预核心流程（raidStarted 以袭击之兆转化为准，bad_omen 不算劫掠开始）
@@ -126,17 +143,18 @@ scripts/
 
 ## 领域事件
 
-**BotEvents**（core/events/DomainEvents）：生命周期 / 认主 / 宝库 / 行为
+**BotEvents**（core/events/DomainEvents）：生命周期 / 认主 / 宝库 / 行为 / 标签变更
 ```
 生命周期：botOnline / botOffline / botDeath / botRespawn
+标签变更：botTagsChanged（setTags 落库后发布——标签驱动模块按需订阅）
 认主：    tridentClaimed / tridentOwnerChanged
 宝库：    vaultOpened
 行为：    botMainhandChanged / botBlockBroken / botBlockPlaced / botItemUsed / botEntityAttacked
 ```
 
-**RaidEvents**（core/tasks/RaidTask，劫掠任务内聚）：`raidStarted` / `raidVictory` / `raidPhase`（阶段估算日志）
+**RaidEvents**（features/raid/raidMode.ts 内聚）：`raidStarted` / `raidVictory` / `raidPhase`（阶段通知日志）
 
-- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（botActions）、认主（tridentTracker/tridentClaim）、宝库（McVaultPorts 开箱）、劫掠（McRaidPorts effectAdd + 阶段扫描）
+- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（botActions）、认主（tridentTracker/tridentClaim）、宝库（VaultPorts 开箱）、劫掠（raidMode effectAdd + 阶段扫描）
 - 新领域事件一律经对应命名空间聚合导出
 
 ---

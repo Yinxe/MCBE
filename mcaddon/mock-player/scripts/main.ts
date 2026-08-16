@@ -19,7 +19,7 @@ import { startTagBehaviors } from "./features/state/behavior";
 import { initTridentTracker } from "./features/trident/tridentTracker";
 import { initFishingHookTracker } from "./features/task/fishingHookTracker";
 import { initLootTracker } from "./features/task/fishingFlow";
-import { initRaidPorts } from "./features/task/RaidPorts";
+import { initRaidMode } from "./features/raid/raidMode";
 import { startBrainEngine } from "./legacy/ai/BotBrain";
 import { startAiEngine } from "./features/ai/brainEngine";
 import { initGameTestContext, registerTestDimension } from "./features/manage/gametestContext";
@@ -92,11 +92,11 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 事件驱动感知，独立初始化
   initLootTracker();
 
-  // 初始化劫掠机制（effectAdd 事件订阅 → 公共信号 + 一次性卡死提醒）——
-  // 事件驱动感知喂给 AI 行为树（core/tasks/RaidTask），独立初始化
-  initRaidPorts();
+  // 初始化劫掠模式（effectAdd 事件订阅 + 生命周期/标签变更钩子驱动循环）——
+  // 事件驱动轻量模块（用户拍板：简单循环不配作为 task），独立初始化
+  initRaidMode();
 
-  // 启动 AI 行为引擎（宝库/劫掠任务：每 10 tick 驱动各自行为树 + 标签对账）
+  // 启动 AI 行为引擎（宝库/钓鱼任务：每 10 tick 驱动各自行为树 + 标签对账）
   startBrainEngine();
 
   // 启动生物 AI 引擎（新框架 scripts/ai：行为状态机 + 标签对账——

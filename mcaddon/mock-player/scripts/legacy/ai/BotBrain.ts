@@ -5,23 +5,23 @@
 //   - 防重入：协程 tick 未完成跳过本次
 //   - 对账清理：标签被移除（UI/命令任意入口）→ 停止导航 + 清黑板，
 //     重新开启时重新开始（"移除 tag 更新行为"）；**宝库任务跳过重连中的假人**
-// 任务：vault（宝库：互斥标签）/ raid（劫掠：独立开关，可与宝库共存）——
-//   各自树实例与黑板，互不干扰。
+// 任务：vault（宝库：互斥标签）/ fishing（钓鱼）——各自树实例与黑板，互不干扰。
+// ⚠️ 劫掠已剥离（用户拍板：简单循环不配作为 task）——由事件驱动模块
+//   features/raid/raidMode.ts 独立驱动（botTagsChanged/botOnline 事件钩子），
+//   不再经本引擎轮询对账。
 
 import { system, world, type Player } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
 import { Blackboard, BehaviorTree, type AiContext } from "./index";
 import { createVaultTaskTree, type VaultPorts } from "./VaultTask";
-import { createRaidTaskTree, type RaidPorts } from "./RaidTask";
 import { createFishingTaskTree, type FishingPorts } from "./FishingTask";
-import { BOT_TAG, TAG_FISH_MODE, TAG_RAID_MODE, TAG_VAULT_MODE } from "../../rules/tags/BotTags";
+import { BOT_TAG, TAG_FISH_MODE, TAG_VAULT_MODE } from "../../rules/tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../../bootstrap/context";
 import { resolveBot } from "../../bot/BotCore";
 import { reconnectingBots } from "../../features/manage/pendingRespawn";
 import { vaultPorts } from "../../features/task/VaultPorts";
-import { raidPorts } from "../../features/task/RaidPorts";
 import { fishingPorts } from "../../features/task/FishingPorts";
 
 // ─── 常量 ────────────────────────────────────────────────
@@ -80,11 +80,6 @@ export function tickVaultBrain(botName: string): void {
   tickTask(botName, "vault", () => createVaultTaskTree(vaultPorts));
 }
 
-/** 劫掠任务树推进 */
-export function tickRaidBrain(botName: string): void {
-  tickTask(botName, "raid", () => createRaidTaskTree(raidPorts));
-}
-
 /** 钓鱼任务树推进 */
 export function tickFishingBrain(botName: string): void {
   tickTask(botName, "fishing", () => createFishingTaskTree(fishingPorts));
@@ -113,11 +108,6 @@ function reconcileTask(taskId: string, activeBotNames: Iterable<string>, skipRec
 /** 宝库任务对账（跳过重连中） */
 export function reconcileVaultBrains(activeBotNames: Iterable<string>): void {
   reconcileTask("vault", activeBotNames, true);
-}
-
-/** 劫掠任务对账（无重连概念，直接清理） */
-export function reconcileRaidBrains(activeBotNames: Iterable<string>): void {
-  reconcileTask("raid", activeBotNames, false);
 }
 
 /** 钓鱼任务对账（跳过重连中——重连完成后继续原树） */
@@ -153,11 +143,6 @@ export function startBrainEngine(): void {
           `${color.playerName}[宝库] ${color.warn}${e.botName}${color.muted} 不在线，上线后将自动尝试开箱`,
         );
       }
-      if (e.tags.includes(TAG_RAID_MODE.value)) {
-        player.sendMessage(
-          `${color.playerName}[劫掠] ${color.warn}${e.botName}${color.muted} 不在线，上线后将自动喝第一瓶`,
-        );
-      }
       if (e.tags.includes(TAG_FISH_MODE.value)) {
         player.sendMessage(
           `${color.playerName}[钓鱼] ${color.warn}${e.botName}${color.muted} 不在线，上线后将自动开始钓鱼`,
@@ -174,17 +159,12 @@ export function startBrainEngine(): void {
       return;
     }
     const vaultBots: string[] = [];
-    const raidBots: string[] = [];
     const fishingBots: string[] = [];
     for (const player of players) {
       try {
         if (player.hasTag(TAG_VAULT_MODE.value)) {
           vaultBots.push(player.name);
           tickVaultBrain(player.name);
-        }
-        if (player.hasTag(TAG_RAID_MODE.value)) {
-          raidBots.push(player.name);
-          tickRaidBrain(player.name);
         }
         if (player.hasTag(TAG_FISH_MODE.value)) {
           fishingBots.push(player.name);
@@ -195,7 +175,6 @@ export function startBrainEngine(): void {
       }
     }
     reconcileVaultBrains(vaultBots);
-    reconcileRaidBrains(raidBots);
     reconcileFishingBrains(fishingBots);
   }, BRAIN_ENGINE_TICKS);
 }

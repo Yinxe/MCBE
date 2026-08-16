@@ -8,7 +8,7 @@ import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry, inventoryStorage, saveCoordinator } from "../../bootstrap/context";
 import { reclaimBot } from "./reclaim";
-import { cleanupRaidMode } from "../task/RaidPorts";
+import { cleanupRaidMode } from "../raid/raidMode";
 import { color } from "@yinxe/toolkit";
 import { trackBotOffline } from "../trident/tridentTracker";
 
