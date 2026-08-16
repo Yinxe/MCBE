@@ -12,7 +12,8 @@
 //   - 无目标（挖空/挖到不可破方块）→ 协程低息等待固定间隔后重探，协程
 //     不退出（保持"一直持续"语义）
 
-import type { Behavior, BehaviorContext } from "../../../ai";
+import type { Behavior } from "../../../ai";
+import type { AiBehaviorContext } from "../brainEngine";
 import { system } from "@minecraft/server";
 import { breakBlockOnce, viewBlock, type BreakResultValue } from "../../task/blockBreak";
 import { createCancelToken, type CancelToken } from "../../../rules/utils/CancelToken";
@@ -48,14 +49,21 @@ function waitTicks(ticks: number, token: CancelToken): Promise<void> {
  * 每一块用独立 breakBlockOnce（原子：内部每 tick 起手 + 轮询消失）；
  * 无目标时低息等待 idleRecheckTicks 后重探（协程不退出）。
  *
- * ⚠️ 实体刷新：常驻协程跨很多 tick/块，**每轮 resolveBotPlayer(botName) 取
- * 最新活跃实体**（死亡/重连/换维度会生成新实体，旧引用失效）——绝不在
- * 协程内沿用启动时捕获的旧实体引用（对齐 breakBlockAt 的每轮刷新）。
+ * ⚠️ 实体获取（ctx.bot 注入 + resolve 兜底，双通道）：
+ *   brainEngine 每周期（10 tick）注入最新 ctx.bot —— step 持续写入 sharedBot，
+ *   协程每轮优先取用它（本周期注入的活跃实体，尊重注入通道）；若缺失或
+ *   step 注入已失效（跨 await 边界，或 10 tick 间隔内实体变化未被覆盖），
+ *   再用 resolveBotPlayer(botName) 立即兜底取最新——双保险。
  */
-async function runMineLoop(botName: string, token: CancelToken, config: MineBehaviorConfig): Promise<void> {
+async function runMineLoop(
+  botName: string,
+  sharedBot: { current: ReturnType<typeof resolveBotPlayer> },
+  token: CancelToken,
+  config: MineBehaviorConfig,
+): Promise<void> {
   while (!token.cancelled) {
-    // 每轮刷新实体（唯一实体入口 + TTL 缓存）——旧引用失效即重新取
-    const bot = resolveBotPlayer(botName);
+    // 优先用 step 最近注入的 ctx.bot（权威）；缺失或失效 → resolve 兜底
+    const bot = sharedBot.current?.isValid ? sharedBot.current : resolveBotPlayer(botName);
     if (!bot) {
       // 实体暂不可用（离线/死亡/重连中）→ 低息重试（协程保持存活）
       await waitTicks(config.idleRecheckTicks, token);
@@ -86,6 +94,20 @@ async function runMineLoop(botName: string, token: CancelToken, config: MineBeha
 export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFIG): Behavior {
   let token: CancelToken | undefined; // 当前协程取消令牌（reset → cancel）
   let runLoop: Promise<void> | undefined; // 常驻破块协程（未完成协程句柄）
+  // 实体双通道：sharedBot 保存 step 最近注入的 ctx.bot（brainEngine 每周期刷新人）
+  const sharedBot: { current: ReturnType<typeof resolveBotPlayer> } = { current: undefined };
+
+  const startLoop = (botName: string): void => {
+    if (runLoop) return; // 幂等：已有运行中协程则复用
+    const t = createCancelToken();
+    token = t;
+    runLoop = runMineLoop(botName, sharedBot, t, config)
+      .catch((e) => console.warn(`[MockPlayer] 定点挖掘协程异常 ${botName}: ${e}`))
+      .finally(() => {
+        if (token === t) token = undefined;
+        runLoop = undefined;
+      });
+  };
 
   return {
     name: "mine",
@@ -94,26 +116,15 @@ export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFI
       // 记忆注入自校验；**不依赖视线目标**（常用者应一直持续到卸载）
       return ctx.memory.get<string>("workMode") === "mine";
     },
-    onActivate: (ctx) => {
-      // 启动常驻破块协程（幂等：已有运行中协程则复用）。
-      // 协程内部每轮 resolveBotPlayer 取实体——这里不需要预取实体引用。
-      if (runLoop) return;
-      const t = createCancelToken();
-      token = t;
-      runLoop = runMineLoop(ctx.botName, t, config)
-        .catch((e) => console.warn(`[MockPlayer] 定点挖掘协程异常 ${ctx.botName}: ${e}`))
-        .finally(() => {
-          if (token === t) token = undefined;
-          runLoop = undefined;
-        });
+    step: (ctx) => {
+      // ① 接收引擎注入的 ctx.bot（每周期最新实体）→ 协程双通道的权威源
+      sharedBot.current = (ctx as AiBehaviorContext).bot;
+      // ② 确保常驻破块协程已启动（幂等）
+      startLoop(ctx.botName);
     },
     reset: () => {
       // 能力卸载/切换 → 取消令牌（signal 唤醒 + 每 tick 检测）→ 协程立即终止
       token?.cancel();
-    },
-    step: () => {
-      // 常驻协程自驱动，无需 step 推进；onActivate 已启动循环。
-      // （保留 step 空实现以满足 Behavior 契约）
     },
   };
 }
