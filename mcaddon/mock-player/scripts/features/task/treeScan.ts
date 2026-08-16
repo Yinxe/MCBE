@@ -1,6 +1,6 @@
 // ─── 树资源坐标集扫描（mc 层） ─────────────────────────
 // 坐标集方案（用户规格）：一次性 getBlocks 采集原木/树叶两个坐标集 →
-// 纯算术评估（聚类/树冠计数/连通 BFS 全在集合内，评估零世界查询）。
+// 纯算术评估（聚类/树冠计数全在集合内，零 BFS 零世界查询）。
 //   大树：2×2 原木垂直向上（恒等段）特征明显 → 直接接受，无需树叶；
 //   小树：logs + leaves 坐标关系判定。
 // 开销 = 2 次大范围 getBlocks + 全纯计算（零 getBlock 属性读取）。
@@ -182,7 +182,7 @@ const SET_SCAN_ABOVE = 40;
 
 /**
  * 坐标集树扫描（测试命令用）：两次 getBlocks 采集原木/树叶坐标集 →
- * 纯算术评估（evaluateTreeFromSets——聚类/树冠计数/连通 BFS 全在集合内，
+ * 纯算术评估（evaluateTreeFromSets——聚类/树冠计数全在集合内，零 BFS，
  * 评估阶段零世界查询）。
  */
 export async function scanTreesFromSets(
@@ -219,7 +219,7 @@ export async function scanTreesFromSets(
         accepted: true,
         kind: verdict.kind,
         probability: verdict.probability,
-        factors: { G: 1, L: verdict.factors.L, C: verdict.factors.C, F: 1, H: verdict.factors.H, A: verdict.factors.A },
+        factors: { G: 1, L: verdict.factors.L, C: verdict.factors.C, F: 1, H: verdict.factors.H, A: 1 },
         leafs: verdict.leafs,
       }));
     } else {
@@ -228,7 +228,7 @@ export async function scanTreesFromSets(
         base: treeCenter(c),
         reason: verdict.reason === "no-canopy" ? "no-canopy" : "low-prob",
         probability: verdict.probability,
-        factors: { G: 1, L: verdict.factors.L, C: verdict.factors.C, F: 1, H: verdict.factors.H, A: verdict.factors.A },
+        factors: { G: 1, L: verdict.factors.L, C: verdict.factors.C, F: 1, H: verdict.factors.H, A: 1 },
       });
     }
   }

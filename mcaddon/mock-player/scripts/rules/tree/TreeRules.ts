@@ -775,7 +775,7 @@ export function keyToCoord(key: number): { x: number; y: number; z: number } {
 // G（地面）/F（纯净度）因子依赖其他方块类型，坐标集方案缺省视为 1
 // （可经 options 注入——如另采地面坐标集时恢复 G）。
 
-/** 坐标集评估因子（简化版：不含 G/F） */
+/** 坐标集评估因子（简化版：L/C/H——无 A 连通 BFS，评估与树数量线性） */
 export interface TreeSetFactors {
   /** 树冠叶量（区域内树叶数 / 目标叶量） */
   L: number;
@@ -783,8 +783,6 @@ export interface TreeSetFactors {
   C: number;
   /** 树干高度（≥4 格满值） */
   H: number;
-  /** 树冠与树干连通（贴原木树叶 BFS 连通比例） */
-  A: number;
 }
 
 /** 坐标集评估结论 */
@@ -814,8 +812,9 @@ export interface TreeSetEvalOptions {
 }
 
 /**
- * 坐标集纯算术树评估：候选树干 + 树叶坐标集 → 树冠/连通/形状/高度因子。
- * 零世界查询——区域内树叶计数与连通 BFS 全部在 Set 内运算。
+ * 坐标集纯算术树评估：候选树干 + 树叶坐标集 → 树冠/形状/高度因子。
+ * 零世界查询、零 BFS——区域内树叶计数全部在 Set 内运算，评估与树数量线性。
+ * （简化：无 A 连通因子——候选本身是聚类验证过的垂直原木链，真实世界"砍树就是树"）
  * @param candidate 树干候选（extractTrunkCandidates 输出）
  * @param leafSet 树叶坐标集（数字编码 key）
  * @param options 评估参数（缺省与 cellKind 版一致）
@@ -866,7 +865,7 @@ export function evaluateTreeFromSets(
   if (candidate.kind === "big" && options.bigDirectAccept !== false) {
     const H = Math.min((candidate.topY - candidate.baseY + 1) / heightNorm, 1);
     if (H >= threshold) {
-      const factors: TreeSetFactors = { L: 1, C: 1, H, A: 1 };
+      const factors: TreeSetFactors = { L: 1, C: 1, H };
       return {
         accepted: true, kind: "big", probability: H, factors,
         leafs: leafKeysInRegion.map(keyToCoord),
@@ -875,61 +874,14 @@ export function evaluateTreeFromSets(
     // 矮 2×2：落到正常评估（依赖树叶）
   }
 
-  // ── 因子计算（纯算术） ──
+  // ── 因子计算（纯算术；概率 = L×C×H） ──
   const L = leafCount === 0 ? 0 : Math.min(leafCount / leafTarget, 1);
   const spanY = leafCount === 0 ? 0 : leafMaxY - leafMinY + 1;
   const C = leafCount === 0 ? 0 : spanY >= 2 ? 1 : thinCanopy;
   const H = Math.min((candidate.topY - candidate.baseY + 1) / heightNorm, 1);
 
-  // A：树冠连通——从贴原木的树叶 BFS（26 邻，全部在 leafSet 内判定）
-  let A = 0;
-  if (leafCount > 0) {
-    const logKeys = new Set(candidate.logs.map((l) => coordKey(l.x, l.y, l.z)));
-    const visited = new Set<number>();
-    const queue: number[] = [];
-    const seedCheck = (key: number): void => {
-      // 该树叶 26 邻内是否有候选原木（数字 key 零分配）
-      const { x, y, z } = keyToCoord(key);
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dz = -1; dz <= 1; dz++) {
-            if (dx === 0 && dy === 0 && dz === 0) continue;
-            if (logKeys.has(coordKey(x + dx, y + dy, z + dz))) {
-              visited.add(key);
-              queue.push(key);
-              return;
-            }
-          }
-        }
-      }
-    };
-    for (const key of leafKeysInRegion) seedCheck(key);
-    while (queue.length > 0) {
-      const cur = queue.shift()!;
-      const { x, y, z } = keyToCoord(cur);
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dz = -1; dz <= 1; dz++) {
-            if (dx === 0 && dy === 0 && dz === 0) continue;
-            const nk = coordKey(x + dx, y + dy, z + dz);
-            if (leafSet.has(nk) && !visited.has(nk)) {
-              visited.add(nk);
-              queue.push(nk);
-            }
-          }
-        }
-      }
-    }
-    let connectedLeaves = 0;
-    for (const key of leafKeysInRegion) {
-      if (visited.has(key)) connectedLeaves++;
-    }
-    const connectedFraction = connectedLeaves / leafCount;
-    A = connectedFraction >= A_DOMINANT_THRESHOLD ? 1 : connectedFraction;
-  }
-
-  const probability = L * C * H * A;
-  const factors: TreeSetFactors = { L, C, H, A };
+  const probability = L * C * H;
+  const factors: TreeSetFactors = { L, C, H };
   const common = { kind: candidate.kind, probability, factors };
   if (L === 0) return { accepted: false, reason: "no-canopy", ...common };
   if (probability < threshold) return { accepted: false, reason: "low-prob", ...common };

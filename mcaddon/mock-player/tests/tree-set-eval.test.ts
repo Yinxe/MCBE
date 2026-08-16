@@ -77,10 +77,10 @@ test("坐标集评估：无树叶 → no-canopy 拒绝", () => {
 
 // ─── 关系语义 ──────────────────────────────────────────
 
-test("坐标集评估：浮空树叶（不贴原木）→ A=0 拒绝", () => {
+test("坐标集评估：远处浮空树叶（区域外）→ L=0 拒绝", () => {
   const world = new MockWorld();
   for (let y = 0; y < 5; y++) world.set(0, y, 0, "minecraft:oak_log");
-  // 树叶在远处（不贴树干）——应 A=0
+  // 树叶在远处（不在候选区域）——区域内无树叶 → L=0 拒绝
   for (let y = 8; y < 12; y++) {
     for (let dx = -2; dx <= 2; dx++) {
       for (let dz = -2; dz <= 2; dz++) {
@@ -94,7 +94,7 @@ test("坐标集评估：浮空树叶（不贴原木）→ A=0 拒绝", () => {
   const candidates = extractTrunkCandidatesSimple(logs);
   assert.equal(candidates.length, 1);
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
-  // 区域内无树叶或树叶不连通 → 拒绝
+  // 区域内无树叶 → 拒绝
   assert.equal(verdict.accepted, false);
 });
 
@@ -117,14 +117,15 @@ test("坐标集评估：单层树叶薄板 → C=0.4 低概率", () => {
   assert.equal(verdict.accepted, false); // 叶量不足 + 薄板 → low-prob
 });
 
-test("坐标集评估：厚树冠与树干连通 → C=1 且 A 因子满", () => {
+test("坐标集评估：厚树冠 → C=1 且接受（简化因子 L×C×H，无 A）", () => {
   const { world } = buildOak();
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 16);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 16);
   const candidates = extractTrunkCandidatesSimple(logs);
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.factors.C, 1);
-  assert.ok(verdict.factors.A >= 0.5);
+  assert.equal(verdict.accepted, true);
+  assert.equal(verdict.probability, 1); // L=C=H=1 → 1
 });
 
 test("坐标集评估：纯 2×2 原木柱（无树叶）按大树接受", () => {
