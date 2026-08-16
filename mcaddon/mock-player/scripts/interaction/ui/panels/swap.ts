@@ -2,13 +2,14 @@
 // 面板按钮只发布事件（ui/bot.ts）；本文件订阅 swap 动作 → 弹互换表单 →
 // 提交后直接执行容器/装备互换（并触发装备槽领域事件供持久化）。
 
-import { Player, EquipmentSlot, system, world } from "@minecraft/server";
+import { Player, EquipmentSlot, ItemStack, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotEvents } from "../../../events/DomainEvents";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { collectContainerItems } from "../../../features/basic/items";
+import { inventoryContainerOf } from "../../../features/basic/items/ItemComponentRead";
 import { saveCoordinator } from "../../../bootstrap/context";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { ensureUiBotAvailable, resolveUiBotRecord } from "../helpers";
@@ -88,21 +89,21 @@ function doSwap(player: Player, botName: string): void {
 
           // ── 背包（含主手）优先执行 ──
           if (hasInv) {
-            const pInv = player.getComponent("inventory") as any;
-            const bInv = bot.getComponent("inventory") as any;
-            if (!pInv?.container || !bInv?.container) throw new Error("无法获取背包容器");
-            const size = Math.min(pInv.container.size, bInv.container.size);
-            const pItems: any[] = [];
-            const bItems: any[] = [];
+            const pContainer = inventoryContainerOf(player);
+            const bContainer = inventoryContainerOf(bot);
+            if (!pContainer || !bContainer) throw new Error("无法获取背包容器");
+            const size = Math.min(pContainer.size, bContainer.size);
+            const pItems: (ItemStack | null)[] = [];
+            const bItems: (ItemStack | null)[] = [];
             for (let i = 0; i < size; i++) {
-              pItems.push(pInv.container.getItem(i));
-              bItems.push(bInv.container.getItem(i));
+              pItems.push(pContainer.getItem(i) ?? null);
+              bItems.push(bContainer.getItem(i) ?? null);
             }
             for (let i = 0; i < size; i++) {
-              bInv.container.setItem(i, pItems[i] ?? undefined);
-              pInv.container.setItem(i, bItems[i] ?? undefined);
+              bContainer.setItem(i, pItems[i] ?? undefined);
+              pContainer.setItem(i, bItems[i] ?? undefined);
             }
-            saveCoordinator.saveInventory(r.name, collectContainerItems(bInv.container));
+            saveCoordinator.saveInventory(r.name, collectContainerItems(bContainer));
             done.push("背包");
           }
 
@@ -115,8 +116,8 @@ function doSwap(player: Player, botName: string): void {
 
           // ── 副手 & 装备（头/胸/腿/靴） ──
           if (hasOffhand || hasArmor) {
-            const pEquip = player.getComponent("minecraft:equippable") as any;
-            const bEquip = bot.getComponent("minecraft:equippable") as any;
+            const pEquip = player.getComponent("minecraft:equippable");
+            const bEquip = bot.getComponent("minecraft:equippable");
             if (pEquip && bEquip) {
               for (const slot of [EquipmentSlot.Offhand, EquipmentSlot.Head, EquipmentSlot.Chest, EquipmentSlot.Legs, EquipmentSlot.Feet]) {
                 const isOffhand = slot === EquipmentSlot.Offhand;

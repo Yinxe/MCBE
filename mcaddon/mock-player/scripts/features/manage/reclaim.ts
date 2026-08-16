@@ -165,7 +165,7 @@ export function reclaimBot(player: Player, record: BotRecord, options?: ReclaimO
 
     // 装备（头/胸/腿/靴 + 副手）
     if (opts.offhand || hasAnyArmor(opts)) {
-      const equip = bot.getComponent("minecraft:equippable") as any;
+      const equip = bot.getComponent("minecraft:equippable");
       if (equip) {
         const slotCheck: Record<string, keyof ReclaimOptions> = {
           [EquipmentSlot.Head]: "head",

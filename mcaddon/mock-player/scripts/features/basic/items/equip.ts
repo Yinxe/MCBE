@@ -1,6 +1,6 @@
 // ─── 装备互换（主手/副手/全部装备） ───────────────────────
 
-import { Player, EquipmentSlot, system } from "@minecraft/server";
+import { Player, EquipmentSlot, system, EntityEquippableComponent } from "@minecraft/server";
 
 import type { EquipChangeVia } from "../../../events/DomainEvents";
 import { BotEvents } from "../../../events/DomainEvents";
@@ -9,16 +9,16 @@ import { SWAP_SLOTS, EQUIP_SLOT_MAP } from "./EquipmentSlots";
 
 // ─── 内部工具 ──────────────────────────────────────────
 
-function swapSlot(pEquip: any, bEquip: any, slot: EquipmentSlot): void {
+function swapSlot(pEquip: EntityEquippableComponent, bEquip: EntityEquippableComponent, slot: EquipmentSlot): void {
   const pItem = pEquip.getEquipment(slot);
   const bItem = bEquip.getEquipment(slot);
   pEquip.setEquipment(slot, bItem);
   bEquip.setEquipment(slot, pItem);
 }
 
-function getBothEquip(player: Player, bot: Player): [any, any] | undefined {
-  const p = player.getComponent("minecraft:equippable") as any;
-  const b = bot.getComponent("minecraft:equippable") as any;
+function getBothEquip(player: Player, bot: Player): [EntityEquippableComponent, EntityEquippableComponent] | undefined {
+  const p = player.getComponent("minecraft:equippable");
+  const b = bot.getComponent("minecraft:equippable");
   return p && b ? [p, b] : undefined;
 }
 
