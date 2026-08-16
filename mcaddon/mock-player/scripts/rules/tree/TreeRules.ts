@@ -236,19 +236,21 @@ export function extractTrunkCandidates(logs: TreeLog[]): TrunkCandidate[] {
   }
   const ys = [...byY.keys()].sort((a, b) => a - b);
 
-  // 2. 层内 8 邻水平分组（索引化：Map<x,z> 邻接 O(1)，替代全层遍历 O(N²)——大范围扫描性能关键）
+  // 2. 层内 8 邻水平分组（数字 key 索引：x*8192+z 零字符串分配，邻接 O(1)——
+  //    替代全层遍历 O(N²) 与字符串拼接，大范围扫描性能关键）
   const groupsByY = new Map<number, LayerGroup[]>();
   for (const y of ys) {
     const layerLogs = byY.get(y)!;
-    // 层内坐标索引（"x,z" → 原木列表；同格多原木不会发生，列表长度 1）
-    const cellIndex = new Map<string, TreeLog>();
+    // 层内坐标索引（数字 key → 原木；同格多原木不会发生。唯一性：|Δz|<8192
+    // 保证 x*8192+z 同层内零碰撞，负数坐标同样唯一）
+    const cellIndex = new Map<number, TreeLog>();
     for (const log of layerLogs) {
-      cellIndex.set(`${log.x},${log.z}`, log);
+      cellIndex.set(log.x * 8192 + log.z, log);
     }
     const groups: LayerGroup[] = [];
-    const visited = new Set<string>();
+    const visited = new Set<number>();
     for (const start of layerLogs) {
-      const key = `${start.x},${start.z}`;
+      const key = start.x * 8192 + start.z;
       if (visited.has(key)) continue;
       const group: TreeLog[] = [];
       const queue: TreeLog[] = [start];
@@ -260,7 +262,7 @@ export function extractTrunkCandidates(logs: TreeLog[]): TrunkCandidate[] {
         for (let dx = -1; dx <= 1; dx++) {
           for (let dz = -1; dz <= 1; dz++) {
             if (dx === 0 && dz === 0) continue;
-            const nk = `${cur.x + dx},${cur.z + dz}`;
+            const nk = (cur.x + dx) * 8192 + (cur.z + dz);
             if (visited.has(nk)) continue;
             const nbr = cellIndex.get(nk);
             if (nbr) {
@@ -275,21 +277,29 @@ export function extractTrunkCandidates(logs: TreeLog[]): TrunkCandidate[] {
     groupsByY.set(y, groups);
   }
 
-  // 3. 垂直成链（同型 + 连续层 + 层间邻接；每层一组最多延伸一条链，反之亦然）
+  // 3. 垂直成链（同型 + 连续层 + 层间邻接；每层一组最多延伸一条链，反之亦然）。
+  //    tailY 桶索引：每组只查"尾层 = y-1"的链（Set 桶，延伸时搬家 O(1)）——
+  //    替代遍历全部链 O(层×组×链)（800 链 × 每层 30 组 × 50 层 = 120 万次迭代）
   const chains: TrunkChain[] = [];
+  const byTailY = new Map<number, Set<TrunkChain>>();
+  const chainedGroups = new Set<LayerGroup>(); // 已接链的组（防一组建两条链）
+  const addToTailIndex = (chain: TrunkChain, y: number): void => {
+    let bucket = byTailY.get(y);
+    if (!bucket) {
+      bucket = new Set();
+      byTailY.set(y, bucket);
+    }
+    bucket.add(chain);
+  };
   for (const y of ys) {
     const groups = groupsByY.get(y)!;
-    const extended = new Set<TrunkChain>();
     for (const group of groups) {
       const woodId = group.cells[0]!.woodId;
       let best: TrunkChain | undefined;
       let bestScore = 0;
-      for (const chain of chains) {
-        if (extended.has(chain)) continue; // 一条链每层只接一组
+      for (const chain of byTailY.get(y - 1) ?? []) {
         if (chain.woodId !== woodId) continue;
-        const tail = chain.layers[chain.layers.length - 1]!;
-        if (tail.y !== y - 1) continue; // 只在连续层延伸（断层=断链）
-        const score = layerAdjacencyScore(tail, group);
+        const score = layerAdjacencyScore(chain.layers[chain.layers.length - 1]!, group);
         if (score > bestScore) {
           bestScore = score;
           best = chain;
@@ -297,12 +307,17 @@ export function extractTrunkCandidates(logs: TreeLog[]): TrunkCandidate[] {
       }
       if (best && bestScore > 0) {
         best.layers.push(group);
-        extended.add(best);
+        chainedGroups.add(group);
+        // tail 索引搬家：y-1 桶 → y 桶（同层后续组不再见它，无需 extended 去重）
+        byTailY.get(y - 1)?.delete(best);
+        addToTailIndex(best, y);
       }
     }
     for (const group of groups) {
-      const chained = chains.some((c) => c.layers[c.layers.length - 1] === group);
-      if (!chained) chains.push({ woodId: group.cells[0]!.woodId, layers: [group] });
+      if (chainedGroups.has(group)) continue;
+      const chain: TrunkChain = { woodId: group.cells[0]!.woodId, layers: [group] };
+      chains.push(chain);
+      addToTailIndex(chain, y);
     }
   }
 
@@ -814,6 +829,20 @@ export interface TreeSetEvalOptions {
  *  超出归属范围的孤立叶板（装饰/浮空）不属于任何树，不参与任何资源点） */
 export const MAX_LEAF_OWNERSHIP_DISTANCE = 16;
 
+/** 26 邻偏移表（模块级常量——BFS 热点循环零分配） */
+const NEIGHBOR_OFFSETS: ReadonlyArray<readonly [number, number, number]> = (() => {
+  const list: Array<[number, number, number]> = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        if (dx === 0 && dy === 0 && dz === 0) continue;
+        list.push([dx, dy, dz]);
+      }
+    }
+  }
+  return list;
+})();
+
 /** 单棵树的归属树叶集（评估输入：L/C 因子与资源点 leafs 同源同口径） */
 export interface OwnedLeafSet {
   /** 归属树叶坐标（数字编码 key） */
@@ -847,35 +876,45 @@ export function assignLeafOwnership(
 ): Map<number, OwnedLeafSet> {
   const owner = new Map<number, number>(); // 树叶 key → 候选下标（先到先得）
   const buckets = new Map<number, number[]>(); // 候选下标 → 归属树叶 keys
-  const layer: Array<[number, number]> = []; // 当前 BFS 层（key, 候选下标）
+  // 双缓冲平行数组（key/owner 分离——避免每叶一个元组对象分配；层交换零拷贝）
+  let curKeys: number[] = [];
+  let curOwn: number[] = [];
   for (let i = 0; i < candidates.length; i++) {
-    for (const l of candidates[i]!.logs) layer.push([coordKey(l.x, l.y, l.z), i]);
+    for (const l of candidates[i]!.logs) {
+      curKeys.push(coordKey(l.x, l.y, l.z));
+      curOwn.push(i);
+    }
   }
+  let nxtKeys: number[] = [];
+  let nxtOwn: number[] = [];
   let depth = 0;
-  while (layer.length > 0 && depth < MAX_LEAF_OWNERSHIP_DISTANCE) {
-    const next: Array<[number, number]> = [];
-    for (const [key, oi] of layer) {
+  while (curKeys.length > 0 && depth < MAX_LEAF_OWNERSHIP_DISTANCE) {
+    for (let qi = 0; qi < curKeys.length; qi++) {
+      const key = curKeys[qi]!;
+      const oi = curOwn[qi]!;
       const { x, y, z } = keyToCoord(key);
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dz = -1; dz <= 1; dz++) {
-            if (dx === 0 && dy === 0 && dz === 0) continue;
-            const nk = coordKey(x + dx, y + dy, z + dz);
-            if (!leafSet.has(nk) || owner.has(nk)) continue;
-            owner.set(nk, oi);
-            let bucket = buckets.get(oi);
-            if (!bucket) {
-              bucket = [];
-              buckets.set(oi, bucket);
-            }
-            bucket.push(nk);
-            next.push([nk, oi]);
-          }
+      for (const [dx, dy, dz] of NEIGHBOR_OFFSETS) {
+        const nk = coordKey(x + dx, y + dy, z + dz);
+        if (!leafSet.has(nk) || owner.has(nk)) continue;
+        owner.set(nk, oi);
+        let bucket = buckets.get(oi);
+        if (!bucket) {
+          bucket = [];
+          buckets.set(oi, bucket);
         }
+        bucket.push(nk);
+        nxtKeys.push(nk);
+        nxtOwn.push(oi);
       }
     }
-    layer.length = 0;
-    layer.push(...next);
+    const tk = curKeys;
+    curKeys = nxtKeys;
+    nxtKeys = tk;
+    nxtKeys.length = 0;
+    const to = curOwn;
+    curOwn = nxtOwn;
+    nxtOwn = to;
+    nxtOwn.length = 0;
     depth++;
   }
   const result = new Map<number, OwnedLeafSet>();
