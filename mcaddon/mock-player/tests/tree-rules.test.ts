@@ -233,11 +233,10 @@ test("小树：普通橡树 → 接受（P ≥ 0.8，因子全满）", () => {
   assert.ok(t.probability >= TREE_PROBABILITY_THRESHOLD, `P=${t.probability}`);
   assert.deepEqual(t.factors, { G: 1, L: 1, C: 1, F: 1, H: 1, A: 1 });
   assert.equal(t.base.y, 1.5);
-  // 树资源点完整数据：中心=最低层原木方块中心、唯一 ID、树叶坐标（与 leafCount 同口径）
+  // 树资源点完整数据：中心=最低层原木方块中心、唯一 ID、树叶坐标
   assert.deepEqual(t.base, { x: 0.5, y: 1.5, z: 0.5 });
   assert.equal(t.id, "tree@(0,1,0)");
-  assert.equal(t.leafCoords.length, t.leafCount);
-  assert.ok(t.leafCoords.length > 0);
+  assert.ok(t.leafs.length > 0);
 });
 
 test("小树：云杉锥形树冠 → 接受", () => {
@@ -351,8 +350,7 @@ test("大树：深色橡树（2×2+宽冠，加宽层断链）→ 接受 kind=bi
   // 树资源点：中心=2×2 底部左下角原木的方块中心，唯一 ID 由中心构建，树叶坐标齐全
   assert.deepEqual(t.base, { x: 0.5, y: 1.5, z: 0.5 });
   assert.equal(t.id, "tree@(0,1,0)");
-  assert.equal(t.leafCoords.length, t.leafCount);
-  assert.ok(t.leafCoords.length > 0);
+  assert.ok(t.leafs.length > 0);
 });
 
 test("大树：大型云杉（2×2 高 20 + 锥冠）→ 接受（区域自动加高）", () => {

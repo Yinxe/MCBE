@@ -184,12 +184,11 @@ test("树资源点：小树中心=单根原木的方块中心（blockCenter）�
   const center = treeCenter(candidates[0]!);
   assert.deepEqual(center, { x: 0.5, y: 1.5, z: 0.5 });
   assert.equal(treeResourceId(center), "tree@(0,1,0)");
-  // 接受判定携带树叶坐标：与 leafCount 同口径，且每个坐标都在树叶集内
+  // 接受判定携带树叶坐标：每个坐标都在树叶集内
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.accepted, true);
-  assert.equal(verdict.leafCoords.length, verdict.leafCount);
-  assert.ok(verdict.leafCoords.length > 0);
-  for (const c of verdict.leafCoords) {
+  assert.ok(verdict.leafs.length > 0);
+  for (const c of verdict.leafs) {
     assert.ok(leaves.has(coordKey(c.x, c.y, c.z)), `树叶坐标 ${JSON.stringify(c)} 应在树叶集内`);
   }
 });
@@ -208,9 +207,8 @@ test("树资源点：大树中心=2×2 底部左下角原木的方块中心，�
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
   assert.equal(verdict.kind, "big");
   assert.equal(verdict.accepted, true);
-  assert.ok(verdict.leafCoords.length > 0, "大树直接接受也应携带真实树叶坐标");
-  assert.equal(verdict.leafCoords.length, verdict.leafCount);
-  for (const c of verdict.leafCoords) {
+  assert.ok(verdict.leafs.length > 0, "大树直接接受也应携带真实树叶坐标");
+  for (const c of verdict.leafs) {
     assert.ok(leaves.has(coordKey(c.x, c.y, c.z)), `树叶坐标 ${JSON.stringify(c)} 应在树叶集内`);
   }
 });

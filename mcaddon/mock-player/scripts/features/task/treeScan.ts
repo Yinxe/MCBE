@@ -74,8 +74,7 @@ function toTreeResource(candidate: TrunkCandidate, verdict: Extract<TreeVerdict,
     top: { x: Math.max(...candidate.logs.map((l) => l.x)), y: candidate.topY, z: Math.max(...candidate.logs.map((l) => l.z)) },
     footprint: candidate.footprint,
     logs: candidate.logs,
-    leafCount: verdict.leafCount,
-    leafCoords: verdict.leafCoords,
+    leafs: verdict.leafs,
   };
 }
 
@@ -215,8 +214,7 @@ export async function scanTreesFromSets(
         kind: verdict.kind,
         probability: verdict.probability,
         factors: { G: 1, L: verdict.factors.L, C: verdict.factors.C, F: 1, H: verdict.factors.H, A: verdict.factors.A },
-        leafCount: verdict.leafCount,
-        leafCoords: verdict.leafCoords,
+        leafs: verdict.leafs,
       }));
     } else {
       rejected.push({
@@ -303,9 +301,9 @@ function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
     const height = topY - baseY + 1;
     const leafKeySet = new Set<number>();
     for (const g of group) {
-      for (const c of g.leafCoords) leafKeySet.add(coordKey(c.x, c.y, c.z));
+      for (const c of g.leafs) leafKeySet.add(coordKey(c.x, c.y, c.z));
     }
-    const leafCoords = [...leafKeySet].map(keyToCoord);
+    const leafs = [...leafKeySet].map(keyToCoord);
     const baseSeg = group.reduce((m, g) => (Math.floor(g.base.y) < Math.floor(m.base.y) ? g : m));
     const base = baseSeg.base;
     merged.push({
@@ -317,8 +315,7 @@ function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
       top: { x: group[0]!.top.x, y: topY, z: group[0]!.top.z },
       footprint: baseSeg.footprint,
       logs: allLogs,
-      leafCount: leafCoords.length,
-      leafCoords,
+      leafs,
     });
   }
   return [...small, ...merged];
@@ -361,7 +358,7 @@ export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: 
   for (const t of r.trees) {
     lines.push(
       `[树] ✓ ${t.kind === "big" ? "大树" : "小树"} P=${t.probability.toFixed(2)} 高${t.top.y - Math.floor(t.base.y) + 1} ` +
-        `原木${t.logs.length} 叶${t.leafCount} ${t.id} ${t.kind === "big" ? "（2×2 直接判定）" : fmtFactors(t.factors)}`,
+        `原木${t.logs.length} 叶${t.leafs.length} ${t.id} ${t.kind === "big" ? "（2×2 直接判定）" : fmtFactors(t.factors)}`,
     );
   }
   lines.push(`[树] ── 拒绝（${r.rejected.length}）${"─".repeat(Math.max(8, 40 - String(r.rejected.length).length))}`);

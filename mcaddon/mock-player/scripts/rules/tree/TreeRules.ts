@@ -411,8 +411,8 @@ export type TreeRejectReason = "no-ground" | "no-canopy" | "low-prob";
 
 /** 树形评估结论（两套算法的统一出口） */
 export type TreeVerdict =
-  | { accepted: true; kind: TreeKind; probability: number; factors: TreeFactors; leafCount: number; leafCoords: Vec3[] }
-  | { accepted: false; reason: TreeRejectReason; kind: TreeKind; probability: number; factors: TreeFactors; leafCount: number };
+  | { accepted: true; kind: TreeKind; probability: number; factors: TreeFactors; leafs: Vec3[] }
+  | { accepted: false; reason: TreeRejectReason; kind: TreeKind; probability: number; factors: TreeFactors };
 
 /** 树干候选的区域范围（模板评估空间；mc 层诊断描述复用） */
 export interface TreeRegionBounds {
@@ -568,7 +568,7 @@ export function evaluateTree(candidate: TrunkCandidate, cellKind: CellKindFn): T
 
   const probability = G * L * C * F * H * A;
   const factors: TreeFactors = { G, L, C, F, H, A };
-  const common = { kind: candidate.kind, probability, factors, leafCount };
+  const common = { kind: candidate.kind, probability, factors };
 
   if (G === 0) return { accepted: false, reason: "no-ground", ...common };
   if (L === 0) return { accepted: false, reason: "no-canopy", ...common };
@@ -576,8 +576,8 @@ export function evaluateTree(candidate: TrunkCandidate, cellKind: CellKindFn): T
   return {
     accepted: true,
     ...common,
-    // 树冠全部树叶坐标（资源点完整数据——树冠计数窗口内，与 leafCount 同口径）
-    leafCoords: [...leafKeys].map((k) => {
+    // 树冠全部树叶坐标（资源点完整数据——树冠计数窗口内）
+    leafs: [...leafKeys].map((k) => {
       const [x, y, z] = k.split(",").map(Number) as [number, number, number];
       return { x, y, z };
     }),
@@ -630,10 +630,8 @@ export interface TreeResource {
   footprint: Vec3[];
   /** 链内全部原木坐标（砍伐输入） */
   logs: TreeLog[];
-  /** 树冠叶数（计数窗口内） */
-  leafCount: number;
-  /** 树冠全部树叶坐标（资源点完整数据） */
-  leafCoords: Vec3[];
+  /** 树冠全部树叶坐标（资源点完整数据；数量 = leafs.length） */
+  leafs: Vec3[];
 }
 
 /** 被拒候选（idle 缺因诊断用；含因子分解——定位哪个因子拖低概率） */
@@ -718,8 +716,7 @@ function evaluateCandidatesWith(
         top,
         footprint: candidate.footprint,
         logs: candidate.logs,
-        leafCount: verdict.leafCount,
-        leafCoords: verdict.leafCoords,
+        leafs: verdict.leafs,
       });
     } else {
       rejected.push({ kind: verdict.kind, base, reason: verdict.reason, probability: verdict.probability, factors: verdict.factors });
@@ -782,8 +779,8 @@ export interface TreeSetFactors {
 
 /** 坐标集评估结论 */
 export type TreeSetVerdict =
-  | { accepted: true; kind: TreeKind; probability: number; factors: TreeSetFactors; leafCount: number; leafCoords: Vec3[] }
-  | { accepted: false; reason: "no-canopy" | "low-prob"; kind: TreeKind; probability: number; factors: TreeSetFactors; leafCount: number };
+  | { accepted: true; kind: TreeKind; probability: number; factors: TreeSetFactors; leafs: Vec3[] }
+  | { accepted: false; reason: "no-canopy" | "low-prob"; kind: TreeKind; probability: number; factors: TreeSetFactors };
 
 /** 坐标集评估选项 */
 export interface TreeSetEvalOptions {
@@ -862,7 +859,7 @@ export function evaluateTreeFromSets(
       const factors: TreeSetFactors = { L: 1, C: 1, H, A: 1 };
       return {
         accepted: true, kind: "big", probability: H, factors,
-        leafCount, leafCoords: leafKeysInRegion.map(keyToCoord),
+        leafs: leafKeysInRegion.map(keyToCoord),
       };
     }
     // 矮 2×2：落到正常评估（依赖树叶）
@@ -923,10 +920,10 @@ export function evaluateTreeFromSets(
 
   const probability = L * C * H * A;
   const factors: TreeSetFactors = { L, C, H, A };
-  const common = { kind: candidate.kind, probability, factors, leafCount };
+  const common = { kind: candidate.kind, probability, factors };
   if (L === 0) return { accepted: false, reason: "no-canopy", ...common };
   if (probability < threshold) return { accepted: false, reason: "low-prob", ...common };
-  return { accepted: true, ...common, leafCoords: leafKeysInRegion.map(keyToCoord) };
+  return { accepted: true, ...common, leafs: leafKeysInRegion.map(keyToCoord) };
 }
 
 // ─── 无属性聚类变体（坐标集方案：纯位置，零 getBlock） ──
