@@ -154,3 +154,20 @@ test("坐标集评估：木墙（无树冠形态）拒绝", () => {
   const allRejected = candidates.every((c) => !evaluateTreeFromSets(c, leaves).accepted);
   assert.ok(allRejected || candidates.length === 0);
 });
+
+test("坐标集评估：矮 2×2（2 层）不直接接受——无树叶拒绝", () => {
+  const world = new MockWorld();
+  for (let y = 0; y < 2; y++) {
+    world.set(0, y, 0, "minecraft:dark_oak_log");
+    world.set(1, y, 0, "minecraft:dark_oak_log");
+    world.set(0, y, 1, "minecraft:dark_oak_log");
+    world.set(1, y, 1, "minecraft:dark_oak_log");
+  }
+  const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 8);
+  const candidates = extractTrunkCandidatesSimple(logs);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0]!.kind, "big");
+  // 高 2 层 → H=0.5 < 0.8 → 不直接接受；无树叶 → 拒绝
+  const verdict = evaluateTreeFromSets(candidates[0]!, new Set<string>());
+  assert.equal(verdict.accepted, false);
+});

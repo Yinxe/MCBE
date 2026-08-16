@@ -751,10 +751,14 @@ export function evaluateTreeFromSets(
   options: TreeSetEvalOptions = {},
 ): TreeSetVerdict {
   // ── 大树直接接受：2×2 原木垂直向上（恒等段）特征已足够明显，无需树叶判定 ──
+  // ⚠️ 高度门槛：高 < 4 层（H < 阈值）不直接接受——矮 2×2 柱（装饰/树桩）走树叶评估或拒绝
   if (candidate.kind === "big" && options.bigDirectAccept !== false) {
     const H = Math.min((candidate.topY - candidate.baseY + 1) / (options.trunkHeightNorm ?? TRUNK_HEIGHT_NORM), 1);
-    const factors: TreeSetFactors = { L: 1, C: 1, H, A: 1 };
-    return { accepted: true, kind: "big", probability: H, factors, leafCount: 0 };
+    if (H >= (options.threshold ?? TREE_PROBABILITY_THRESHOLD)) {
+      const factors: TreeSetFactors = { L: 1, C: 1, H, A: 1 };
+      return { accepted: true, kind: "big", probability: H, factors, leafCount: 0 };
+    }
+    // 矮 2×2：落到正常评估（依赖树叶）
   }
 
   const leafTarget = candidate.kind === "small" ? (options.leafTargetSmall ?? LEAF_TARGET_SMALL) : (options.leafTargetBig ?? LEAF_TARGET_BIG);

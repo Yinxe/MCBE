@@ -20,6 +20,7 @@ import {
   type TreeVerdict,
 } from "../../rules/tree/TreeRules";
 import type { Vec3 } from "../../rules/Types";
+import { waitTicks } from "../utils";
 
 /** 无效旧 id（1.20.30 方块拆分后已不存在，vanilla-data 1.26.20 校验）——
  *  getBlocks includeTypes 传入无效 id 可能被引擎拒绝（导致整轮扫描失败被
@@ -63,7 +64,7 @@ function toTreeResource(candidate: TrunkCandidate, verdict: TreeVerdict): TreeRe
  */
 // ─── 坐标集扫描（测试命令用：一次性 getBlocks 采集坐标集，纯算术评估） ──
 
-/** 坐标集采集结果 */
+/** 坐标集采集结果（一次 getBlocks 完成计数+收集，杜绝重复查询） */
 export interface CoordinateSetResult {
   /** 集合名（如 原木/树叶） */
   name: string;
@@ -74,11 +75,14 @@ export interface CoordinateSetResult {
   maxY: number;
   /** 采集耗时（ms） */
   ms: number;
+  /** 坐标列表（x/y/z；树叶即树叶坐标集） */
+  coords: Array<{ x: number; y: number; z: number }>;
 }
 
 /**
- * 一次性 getBlocks 采集指定方块类型的坐标集（纯位置，零 getBlock）。
- * 大范围（半径 32 空间体）每次只扫一种方块——得到该类型全部坐标。
+ * 一次性 getBlocks 采集指定方块类型的坐标集（纯位置，零 getBlock）：
+ * 大范围（半径 32 空间体）每次只扫一种方块——单次查询同时完成
+ * 计数 + Y 分布统计 + 坐标收集（不再重复遍历同一体积）。
  */
 export function collectCoordinateSet(
   dimension: Dimension,
@@ -95,15 +99,21 @@ export function collectCoordinateSet(
     { x: center.x + radius, y: toY, z: center.z + radius },
   );
   const found = dimension.getBlocks(volume, { includeTypes: [...typeIds] });
-  let count = 0;
+  const coords: Array<{ x: number; y: number; z: number }> = [];
   let minY = Number.POSITIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   for (const loc of found.getBlockLocationIterator()) {
-    count++;
+    coords.push({ x: loc.x, y: loc.y, z: loc.z });
     if (loc.y < minY) minY = loc.y;
     if (loc.y > maxY) maxY = loc.y;
   }
-  return { name, count, minY: count > 0 ? minY : center.y, maxY: count > 0 ? maxY : center.y, ms: Date.now() - t0 };
+  return {
+    name, count: coords.length,
+    minY: coords.length > 0 ? minY : center.y,
+    maxY: coords.length > 0 ? maxY : center.y,
+    ms: Date.now() - t0,
+    coords,
+  };
 }
 
 /** 坐标集树扫描结果（测试命令用） */
@@ -146,39 +156,18 @@ export async function scanTreesFromSets(
   const fromY = Math.max(-64, center.y - SET_SCAN_BELOW);
   const toY = Math.min(320, center.y + SET_SCAN_ABOVE);
 
-  // ① 原木坐标集：一次 getBlocks，**纯位置零 getBlock**——
+  // ① 原木坐标集：**一次 getBlocks 同时计数+收集**（纯位置零 getBlock）——
   //    实际世界"砍树就是树"：无需 wood_id 分流；水平原木（倒下树/横梁）
   //    由几何聚类天然排除（单层横排成不了垂直链）
   const logsResult = collectCoordinateSet(dimension, center, radius, VALID_LOG_TYPE_IDS, "原木", fromY, toY);
-  const logs: Array<{ x: number; y: number; z: number }> = [];
-  try {
-    const volume = new BlockVolume(
-      { x: center.x - radius, y: fromY, z: center.z - radius },
-      { x: center.x + radius, y: toY, z: center.z + radius },
-    );
-    const found = dimension.getBlocks(volume, { includeTypes: [...VALID_LOG_TYPE_IDS] });
-    for (const loc of found.getBlockLocationIterator()) {
-      logs.push({ x: loc.x, y: loc.y, z: loc.z });
-    }
-  } catch (e: any) {
-    console.warn(`[MockPlayer] 坐标集原木收集失败: ${e?.message ?? e}`);
-  }
+  const logs = logsResult.coords;
+  // 采集间让出（大体积引擎遍历后让出主线程，防单 tick 堆积）
+  await waitTicks(1);
 
   // ② 树叶坐标集：一次 getBlocks（纯位置，零 getBlock）
   const leavesResult = collectCoordinateSet(dimension, center, radius, VALID_LEAF_TYPE_IDS, "树叶", fromY, toY);
-  const leafSet = new Set<string>();
-  try {
-    const volume = new BlockVolume(
-      { x: center.x - radius, y: fromY, z: center.z - radius },
-      { x: center.x + radius, y: toY, z: center.z + radius },
-    );
-    const found = dimension.getBlocks(volume, { includeTypes: [...VALID_LEAF_TYPE_IDS] });
-    for (const loc of found.getBlockLocationIterator()) {
-      leafSet.add(`${loc.x},${loc.y},${loc.z}`);
-    }
-  } catch (e: any) {
-    console.warn(`[MockPlayer] 坐标集树叶收集失败: ${e?.message ?? e}`);
-  }
+  const leafSet = new Set<string>(leavesResult.coords.map((c) => `${c.x},${c.y},${c.z}`));
+  await waitTicks(1);
 
   // ③ 纯算术评估：无属性聚类（几何成链，零 getBlock）→ 坐标集树判定
   const tCluster = Date.now();
@@ -213,10 +202,79 @@ export async function scanTreesFromSets(
 
   logsResult.count = logs.length; // 校正为参与计算的垂直原木数
   const evalMs = Date.now() - tEval;
+
+  // ── ④ 大树碎段合并：同一棵 2×2 大树在树身偏移/加宽层被段切分断段后，
+  //    产生多个同水平位置、垂直相邻（gap ≤2 层）的大树候选——
+  //    合并为一棵树（取整体高度、合并原木与叶数，避免一棵树报多棵）
+  const mergedTrees = mergeBigTreeSegments(trees);
+  const mergedRejected = rejected.filter((r) => {
+    // 被合并段对应的拒绝候选（同水平位置的大树残段）一并过滤
+    for (const t of mergedTrees) {
+      if (t.kind !== "big") continue;
+      const hd = Math.max(Math.abs(t.base.x - r.base.x), Math.abs(t.base.z - r.base.z));
+      const vd = Math.abs(r.base.y - t.base.y);
+      if (hd <= 1 && vd <= 30) return false; // 属于已合并大树的高度范围内
+    }
+    return true;
+  });
   return {
-    logs: logsResult, leaves: leavesResult, trees, rejected, candidates: candidates.length,
+    logs: logsResult, leaves: leavesResult, trees: mergedTrees, rejected: mergedRejected, candidates: candidates.length,
     bigCandidates, smallCandidates, clusterMs, evalMs, ms: Date.now() - t0,
   };
+}
+
+// ─── 大树碎段合并 ─────────────────────────────────────
+
+/**
+ * 合并大树碎段：同一水平位置（|dx|≤1 且 |dz|≤1）且垂直 gap ≤2 层的大树候选
+ * 视为同一棵树——段切分在树身偏移/加宽层断段导致一棵 2×2 大树报多棵。
+ * 合并取整体高度、原木并集、叶数取最大。
+ */
+function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
+  const big = trees.filter((t) => t.kind === "big");
+  if (big.length <= 1) return trees;
+  const small = trees.filter((t) => t.kind !== "big");
+  const merged: TreeResource[] = [];
+  const used = new Set<TreeResource>();
+  for (const a of big) {
+    if (used.has(a)) continue;
+    used.add(a);
+    const group = [a];
+    for (const b of big) {
+      if (used.has(b)) continue;
+      const hd = Math.max(Math.abs(a.base.x - b.base.x), Math.abs(a.base.z - b.base.z));
+      // 组内任一段与 b 垂直 gap ≤2 且水平相邻 → 同树
+      const groupMinY = Math.min(...group.map((g) => g.base.y));
+      const groupMaxY = Math.max(...group.map((g) => g.top.y));
+      const vd = b.base.y <= groupMaxY + 2 && b.top.y >= groupMinY - 2 ? 0 : Math.min(
+        Math.abs(b.base.y - groupMaxY), Math.abs(b.top.y - groupMinY),
+      );
+      if (hd <= 1 && vd <= 2) {
+        used.add(b);
+        group.push(b);
+      }
+    }
+    if (group.length === 1) {
+      merged.push(a);
+      continue;
+    }
+    // 合并：整体高度范围、原木并集、叶数取最大、概率取最高段
+    const allLogs = group.flatMap((g) => g.logs);
+    const baseY = Math.min(...group.map((g) => g.base.y));
+    const topY = Math.max(...group.map((g) => g.top.y));
+    const height = topY - baseY + 1;
+    merged.push({
+      kind: "big",
+      probability: Math.min(Math.max(...group.map((g) => g.probability)), 1),
+      factors: { G: 1, L: 1, C: 1, F: 1, H: Math.min(height / 4, 1), A: 1 },
+      base: { x: group[0]!.base.x, y: baseY, z: group[0]!.base.z },
+      top: { x: group[0]!.top.x, y: topY, z: group[0]!.top.z },
+      footprint: group[0]!.footprint,
+      logs: allLogs,
+      leafCount: Math.max(...group.map((g) => g.leafCount)),
+    });
+  }
+  return [...small, ...merged];
 }
 
 // ─── 详细日志评估报告（一次性输出：概况/坐标集/聚类/接受/拒绝/耗时） ──
