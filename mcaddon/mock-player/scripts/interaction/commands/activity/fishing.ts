@@ -14,6 +14,7 @@ import { findFishingSpots } from "../../../features/task/fishing";
 import type { FindSpotsFailure } from "../../../rules/FishingRules";
 import { fishOnce, failureLabel } from "../../../features/task/fishingFlow";
 import { withContainer, type ContainerOpResult } from "../../../features/basic/items";
+import { inventoryContainerOf } from "../../../features/basic/items/ItemComponentRead";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { botRegistry } from "../../../bootstrap/context";
 import { isAdmin } from "../auth";
@@ -155,9 +156,7 @@ export function registerFishingCommands(registry: any): void {
         const result = await withContainer(botName, pos, async (access) => {
           const bot = resolveBotPlayer(botName);
           if (!bot) return;
-          const botInv = (bot.getComponent("minecraft:inventory") as
-            | { container?: { size: number; getItem: (i: number) => unknown; setItem: (i: number, v: unknown) => void } }
-            | undefined)?.container;
+          const botInv = inventoryContainerOf(bot);
           if (!botInv) return;
           // 互换前 min(27, 两容器尺寸) 格：读不等待，写经 access 自动 2 tick
           const n = Math.min(SWAP_SLOTS, botInv.size, access.size);

@@ -17,12 +17,12 @@
 //    附魔信息只能在投掷流程获取：优先投掷流程注册的 pending 队列，其次投掷者主手。
 
 import { world, system, EntityProjectileComponent } from "@minecraft/server";
-import type { Dimension, Entity, ItemStack } from "@minecraft/server";
+import type { Dimension, Entity, ItemStack, Player } from "@minecraft/server";
 import { botRegistry } from "../../bootstrap/context";
 import { BotEvents } from "../../events/DomainEvents";
 import { isTrackedProjectile, makeItemTag, makeOwnerTag, makeSecondOwnerTag, parseClaimTags, resolveClaimOwner, TRACKED_PROJECTILE_IDS } from "../../rules/items/TridentClaimRules";
 import { queueClaimReport } from "../manage/claimReporter";
-import { enchantableOf, readDurability } from "../basic/items/ItemComponentRead";
+import { enchantableOf, readDurability, inventoryContainerOf } from "../basic/items/ItemComponentRead";
 
 // ─── pending 附魔信息队列 ──────────────────────────────
 // 投掷流程（features/trident.ts doThrowLoop）在 useItemInSlot 前注册物品信息，
@@ -89,9 +89,8 @@ function encodeItemTag(item: ItemStack): string | undefined {
 /** 兜底：从投掷者主手读取三叉戟物品（引擎可能尚未消耗主手物品） */
 function readMainhandItem(owner: Entity): { tag: string } | undefined {
   try {
-    const inv = owner.getComponent("minecraft:inventory") as { container?: { getItem: (slot: number) => ItemStack | undefined } } | undefined;
-    const handSlot = (owner as { selectedSlotIndex?: number }).selectedSlotIndex ?? 0;
-    const item = inv?.container?.getItem(handSlot);
+    const handSlot = (owner as Player).selectedSlotIndex ?? 0;
+    const item = inventoryContainerOf(owner)?.getItem(handSlot);
     if (!item || item.typeId !== "minecraft:trident") return undefined;
     const tag = encodeItemTag(item);
     return tag ? { tag } : undefined;

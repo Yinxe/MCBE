@@ -19,6 +19,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { lookAt } from "../basic/PoseGateway";
+import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
 import { botRegistry } from "../../bootstrap/context";
 
 // ─── 结果类型 ──────────────────────────────────────────
@@ -156,12 +157,7 @@ export function viewBlock(
 
 /** 取假人背包容器（读不到返回 undefined） */
 function botContainer(bot: SimulatedPlayer): Container | undefined {
-  try {
-    const inv = bot.getComponent("minecraft:inventory") as { container?: Container } | undefined;
-    return inv?.container;
-  } catch {
-    return undefined;
-  }
+  return inventoryContainerOf(bot);
 }
 
 // ─── 并发防护 ──────────────────────────────────────────

@@ -32,6 +32,7 @@ import {
   type RaidEffectState,
 } from "../../rules/RaidRules";
 import { setWorkMode } from "../state/behavior";
+import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
 import type { BotRecord } from "../../rules/Types";
 import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
@@ -610,12 +611,7 @@ function readRaidEffects(bot: SimulatedPlayer): RaidEffectState {
 }
 
 function safeGetContainer(bot: SimulatedPlayer): Container | undefined {
-  try {
-    const inv = bot.getComponent("minecraft:inventory") as { container?: Container } | undefined;
-    return inv?.container;
-  } catch {
-    return undefined;
-  }
+  return inventoryContainerOf(bot);
 }
 
 function findOminousBottleSlot(container: Container): number {
