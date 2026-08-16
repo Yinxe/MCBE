@@ -232,7 +232,12 @@ test("小树：普通橡树 → 接受（P ≥ 0.8，因子全满）", () => {
   assert.equal(t.kind, "small");
   assert.ok(t.probability >= TREE_PROBABILITY_THRESHOLD, `P=${t.probability}`);
   assert.deepEqual(t.factors, { G: 1, L: 1, C: 1, F: 1, H: 1, A: 1 });
-  assert.equal(t.base.y, 1);
+  assert.equal(t.base[0]!.y, 1);
+  // 树资源点完整数据：中心=最低层原木（1 点）、唯一 ID、树叶坐标（与 leafCount 同口径）
+  assert.deepEqual(t.base, [{ x: 0, y: 1, z: 0 }]);
+  assert.equal(t.id, "tree@(0,1,0)");
+  assert.equal(t.leafCoords.length, t.leafCount);
+  assert.ok(t.leafCoords.length > 0);
 });
 
 test("小树：云杉锥形树冠 → 接受", () => {
@@ -343,6 +348,16 @@ test("大树：深色橡树（2×2+宽冠，加宽层断链）→ 接受 kind=bi
   assert.equal(t.kind, "big");
   assert.ok(t.probability >= 0.8, `P=${t.probability}`);
   assert.equal(t.logs.length, 20);
+  // 树资源点：中心=2×2 最低层全 4 点，唯一 ID 由中心构建，树叶坐标齐全
+  assert.deepEqual(t.base, [
+    { x: 0, y: 1, z: 0 },
+    { x: 0, y: 1, z: 1 },
+    { x: 1, y: 1, z: 0 },
+    { x: 1, y: 1, z: 1 },
+  ]);
+  assert.equal(t.id, "tree@(0,1,0)");
+  assert.equal(t.leafCoords.length, t.leafCount);
+  assert.ok(t.leafCoords.length > 0);
 });
 
 test("大树：大型云杉（2×2 高 20 + 锥冠）→ 接受（区域自动加高）", () => {
@@ -395,8 +410,8 @@ test("扫描：多棵树由近到远排序（origin 生效）", () => {
   ];
   const r = scanTreeResources(logs, world.provider, { x: 0, y: 0, z: 0 });
   assert.equal(r.trees.length, 2);
-  assert.equal(r.trees[0]!.base.x, 3); // 近的先
-  assert.equal(r.trees[1]!.base.x, 10);
+  assert.equal(r.trees[0]!.base[0]!.x, 3); // 近的先
+  assert.equal(r.trees[1]!.base[0]!.x, 10);
 });
 
 test("扫描：拒绝诊断——真树+柱子混合场景", () => {

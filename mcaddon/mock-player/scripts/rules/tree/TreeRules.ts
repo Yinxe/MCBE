@@ -411,7 +411,7 @@ export type TreeRejectReason = "no-ground" | "no-canopy" | "low-prob";
 
 /** 树形评估结论（两套算法的统一出口） */
 export type TreeVerdict =
-  | { accepted: true; kind: TreeKind; probability: number; factors: TreeFactors; leafCount: number }
+  | { accepted: true; kind: TreeKind; probability: number; factors: TreeFactors; leafCount: number; leafCoords: Vec3[] }
   | { accepted: false; reason: TreeRejectReason; kind: TreeKind; probability: number; factors: TreeFactors; leafCount: number };
 
 /** 树干候选的区域范围（模板评估空间；mc 层诊断描述复用） */
@@ -573,35 +573,77 @@ export function evaluateTree(candidate: TrunkCandidate, cellKind: CellKindFn): T
   if (G === 0) return { accepted: false, reason: "no-ground", ...common };
   if (L === 0) return { accepted: false, reason: "no-canopy", ...common };
   if (probability < TREE_PROBABILITY_THRESHOLD) return { accepted: false, reason: "low-prob", ...common };
-  return { accepted: true, ...common };
+  return {
+    accepted: true,
+    ...common,
+    // 树冠全部树叶坐标（资源点完整数据——树冠计数窗口内，与 leafCount 同口径）
+    leafCoords: [...leafKeys].map((k) => {
+      const [x, y, z] = k.split(",").map(Number) as [number, number, number];
+      return { x, y, z };
+    }),
+  };
+}
+
+// ─── 树资源点坐标 ──────────────────────────────────────
+
+/**
+ * 树中心坐标（最低层原木坐标集）：树干最低层全部原木的坐标——
+ * 小树 1~2 点（单根/双生 2×1），大树 2×2 全 4 点。按 x 再 z 排序（确定性）。
+ * 砍树/站立/锁表的锚点集。
+ */
+export function treeCenterPoints(candidate: TrunkCandidate): Vec3[] {
+  return candidate.logs
+    .filter((l) => l.y === candidate.baseY)
+    .map((l) => ({ x: l.x, y: l.y, z: l.z }))
+    .sort((a, b) => a.x - b.x || a.z - b.z);
+}
+
+/** 中心点集的最小角锚点（大树 2×2 取左下角原木；ID/距离排序/合并判距用） */
+export function centerAnchor(points: Vec3[]): Vec3 {
+  return {
+    x: Math.min(...points.map((p) => p.x)),
+    y: points[0]!.y,
+    z: Math.min(...points.map((p) => p.z)),
+  };
+}
+
+/** 树资源唯一 ID（由树中心坐标集的最小角锚点构建——每树唯一） */
+export function treeResourceId(center: Vec3[]): string {
+  const a = centerAnchor(center);
+  return `tree@(${a.x},${a.y},${a.z})`;
 }
 
 // ─── 扫描汇总 ──────────────────────────────────────────
 
 /** 树资源（扫描结果；后续砍伐/锁表/通知的输入） */
 export interface TreeResource {
+  /** 资源唯一 ID（由树中心坐标构建：tree@(x,y,z)——每树唯一） */
+  id: string;
   /** 大树/小树 */
   kind: TreeKind;
   /** 树形概率（0-1；选树优先级，由近到远排序后取第一个） */
   probability: number;
   /** 因子分解（校准/调试） */
   factors: TreeFactors;
-  /** 最低原木角点（距离排序锚点） */
-  base: Vec3;
+  /** 树中心坐标（最低层原木坐标集：小树 1~2 点 / 大树 2×2 全 4 点；站立/砍树/锁表锚点） */
+  base: Vec3[];
   /** 最高原木角点 */
   top: Vec3;
   /** 底层 footprint（支撑层检查/站立点派生用） */
   footprint: Vec3[];
-  /** 链内全部原木（砍伐输入） */
+  /** 链内全部原木坐标（砍伐输入） */
   logs: TreeLog[];
   /** 树冠叶数（计数窗口内） */
   leafCount: number;
+  /** 树冠全部树叶坐标（资源点完整数据） */
+  leafCoords: Vec3[];
 }
 
 /** 被拒候选（idle 缺因诊断用；含因子分解——定位哪个因子拖低概率） */
 export interface TreeReject {
   kind: TreeKind;
-  base: Vec3;
+  /** 树中心坐标（最低层原木坐标集） */
+  base: Vec3[];
   reason: TreeRejectReason;
   probability: number;
   /** 因子分解（如 F=0.53 → 异物击杀） */
@@ -667,10 +709,11 @@ function evaluateCandidatesWith(
     const bounds = treeRegionBounds(candidate);
     const verdict = evaluateTree(candidate, buildCellKind(candidate, bounds));
     verdicts.push(verdict);
-    const base: Vec3 = { x: Math.min(...candidate.logs.map((l) => l.x)), y: candidate.baseY, z: Math.min(...candidate.logs.map((l) => l.z)) };
+    const base: Vec3[] = treeCenterPoints(candidate);
     const top: Vec3 = { x: Math.max(...candidate.logs.map((l) => l.x)), y: candidate.topY, z: Math.max(...candidate.logs.map((l) => l.z)) };
     if (verdict.accepted) {
       trees.push({
+        id: treeResourceId(base),
         kind: verdict.kind,
         probability: verdict.probability,
         factors: verdict.factors,
@@ -679,6 +722,7 @@ function evaluateCandidatesWith(
         footprint: candidate.footprint,
         logs: candidate.logs,
         leafCount: verdict.leafCount,
+        leafCoords: verdict.leafCoords,
       });
     } else {
       rejected.push({ kind: verdict.kind, base, reason: verdict.reason, probability: verdict.probability, factors: verdict.factors });
@@ -699,7 +743,7 @@ function evaluateCandidatesWith(
 export function scanTreeResources(logs: TreeLog[], cellKind: CellKindFn, origin?: Vec3): TreeScanResult {
   const { trees, rejected } = evaluateCandidates(extractTrunkCandidates(logs), cellKind);
   if (origin) {
-    trees.sort((a, b) => horizontalDistance(origin, a.base) - horizontalDistance(origin, b.base));
+    trees.sort((a, b) => horizontalDistance(origin, centerAnchor(a.base)) - horizontalDistance(origin, centerAnchor(b.base)));
   }
   return { trees, rejected };
 }
@@ -741,7 +785,7 @@ export interface TreeSetFactors {
 
 /** 坐标集评估结论 */
 export type TreeSetVerdict =
-  | { accepted: true; kind: TreeKind; probability: number; factors: TreeSetFactors; leafCount: number }
+  | { accepted: true; kind: TreeKind; probability: number; factors: TreeSetFactors; leafCount: number; leafCoords: Vec3[] }
   | { accepted: false; reason: "no-canopy" | "low-prob"; kind: TreeKind; probability: number; factors: TreeSetFactors; leafCount: number };
 
 /** 坐标集评估选项 */
@@ -769,7 +813,7 @@ export interface TreeSetEvalOptions {
  * 坐标集纯算术树评估：候选树干 + 树叶坐标集 → 树冠/连通/形状/高度因子。
  * 零世界查询——区域内树叶计数与连通 BFS 全部在 Set 内运算。
  * @param candidate 树干候选（extractTrunkCandidates 输出）
- * @param leafSet 树叶坐标集（"x,y,z" key）
+ * @param leafSet 树叶坐标集（数字编码 key）
  * @param options 评估参数（缺省与 cellKind 版一致）
  */
 export function evaluateTreeFromSets(
@@ -777,17 +821,6 @@ export function evaluateTreeFromSets(
   leafSet: ReadonlySet<number>,
   options: TreeSetEvalOptions = {},
 ): TreeSetVerdict {
-  // ── 大树直接接受：2×2 原木垂直向上（恒等段）特征已足够明显，无需树叶判定 ──
-  // ⚠️ 高度门槛：高 < 4 层（H < 阈值）不直接接受——矮 2×2 柱（装饰/树桩）走树叶评估或拒绝
-  if (candidate.kind === "big" && options.bigDirectAccept !== false) {
-    const H = Math.min((candidate.topY - candidate.baseY + 1) / (options.trunkHeightNorm ?? TRUNK_HEIGHT_NORM), 1);
-    if (H >= (options.threshold ?? TREE_PROBABILITY_THRESHOLD)) {
-      const factors: TreeSetFactors = { L: 1, C: 1, H, A: 1 };
-      return { accepted: true, kind: "big", probability: H, factors, leafCount: 0 };
-    }
-    // 矮 2×2：落到正常评估（依赖树叶）
-  }
-
   const leafTarget = candidate.kind === "small" ? (options.leafTargetSmall ?? LEAF_TARGET_SMALL) : (options.leafTargetBig ?? LEAF_TARGET_BIG);
   const pad = options.pad ?? REGION_PAD;
   const topMargin = options.topMargin ?? CANOPY_MARGIN;
@@ -805,7 +838,7 @@ export function evaluateTreeFromSets(
   const maxZ = Math.max(...zs) + pad;
   const regionTop = Math.max(candidate.baseY + defaultHeight - 1, candidate.topY + topMargin);
 
-  // ── 区域内树叶坐标统计（纯集合 has 判定） ──
+  // ── 区域内树叶坐标统计（纯集合 has 判定；大树直接接受也复用——资源点携带真实树叶数据） ──
   let leafCount = 0;
   let leafMinY = Number.POSITIVE_INFINITY;
   let leafMaxY = Number.NEGATIVE_INFINITY;
@@ -822,6 +855,20 @@ export function evaluateTreeFromSets(
         }
       }
     }
+  }
+
+  // ── 大树直接接受：2×2 原木垂直向上（恒等段）特征已足够明显，无需树叶判定 ──
+  // ⚠️ 高度门槛：高 < 4 层（H < 阈值）不直接接受——矮 2×2 柱（装饰/树桩）走树叶评估或拒绝
+  if (candidate.kind === "big" && options.bigDirectAccept !== false) {
+    const H = Math.min((candidate.topY - candidate.baseY + 1) / heightNorm, 1);
+    if (H >= threshold) {
+      const factors: TreeSetFactors = { L: 1, C: 1, H, A: 1 };
+      return {
+        accepted: true, kind: "big", probability: H, factors,
+        leafCount, leafCoords: leafKeysInRegion.map(keyToCoord),
+      };
+    }
+    // 矮 2×2：落到正常评估（依赖树叶）
   }
 
   // ── 因子计算（纯算术） ──
@@ -882,7 +929,7 @@ export function evaluateTreeFromSets(
   const common = { kind: candidate.kind, probability, factors, leafCount };
   if (L === 0) return { accepted: false, reason: "no-canopy", ...common };
   if (probability < threshold) return { accepted: false, reason: "low-prob", ...common };
-  return { accepted: true, ...common };
+  return { accepted: true, ...common, leafCoords: leafKeysInRegion.map(keyToCoord) };
 }
 
 // ─── 无属性聚类变体（坐标集方案：纯位置，零 getBlock） ──
