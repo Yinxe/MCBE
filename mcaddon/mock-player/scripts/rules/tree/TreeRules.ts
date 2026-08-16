@@ -586,31 +586,28 @@ export function evaluateTree(candidate: TrunkCandidate, cellKind: CellKindFn): T
 
 // ─── 树资源点坐标 ──────────────────────────────────────
 
+/** 方块中心坐标（blockCenter）：整数方块坐标 + 0.5 —— 世界内方块的实际中心点 */
+export function blockCenter(x: number, y: number, z: number): Vec3 {
+  return { x: x + 0.5, y: y + 0.5, z: z + 0.5 };
+}
+
 /**
- * 树中心坐标（最低层原木坐标集）：树干最低层全部原木的坐标——
- * 小树 1~2 点（单根/双生 2×1），大树 2×2 全 4 点。按 x 再 z 排序（确定性）。
- * 砍树/站立/锁表的锚点集。
+ * 树中心坐标（blockCenter）：最低层左下角锚点原木的方块中心——
+ * 小树即单根原木中心；大树取 2×2 底部 4 根中的左下角（min 角）那一根。
+ * 站立/砍树/锁表的锚点。
  */
-export function treeCenterPoints(candidate: TrunkCandidate): Vec3[] {
-  return candidate.logs
-    .filter((l) => l.y === candidate.baseY)
-    .map((l) => ({ x: l.x, y: l.y, z: l.z }))
-    .sort((a, b) => a.x - b.x || a.z - b.z);
+export function treeCenter(candidate: TrunkCandidate): Vec3 {
+  const bottom = candidate.logs.filter((l) => l.y === candidate.baseY);
+  return blockCenter(
+    Math.min(...bottom.map((l) => l.x)),
+    candidate.baseY,
+    Math.min(...bottom.map((l) => l.z)),
+  );
 }
 
-/** 中心点集的最小角锚点（大树 2×2 取左下角原木；ID/距离排序/合并判距用） */
-export function centerAnchor(points: Vec3[]): Vec3 {
-  return {
-    x: Math.min(...points.map((p) => p.x)),
-    y: points[0]!.y,
-    z: Math.min(...points.map((p) => p.z)),
-  };
-}
-
-/** 树资源唯一 ID（由树中心坐标集的最小角锚点构建——每树唯一） */
-export function treeResourceId(center: Vec3[]): string {
-  const a = centerAnchor(center);
-  return `tree@(${a.x},${a.y},${a.z})`;
+/** 树资源唯一 ID（由树中心坐标构建——取整数锚点 tree@(x,y,z)，每树唯一） */
+export function treeResourceId(center: Vec3): string {
+  return `tree@(${Math.floor(center.x)},${Math.floor(center.y)},${Math.floor(center.z)})`;
 }
 
 // ─── 扫描汇总 ──────────────────────────────────────────
@@ -625,8 +622,8 @@ export interface TreeResource {
   probability: number;
   /** 因子分解（校准/调试） */
   factors: TreeFactors;
-  /** 树中心坐标（最低层原木坐标集：小树 1~2 点 / 大树 2×2 全 4 点；站立/砍树/锁表锚点） */
-  base: Vec3[];
+  /** 树中心坐标（blockCenter：最低层锚点原木的方块中心；站立/砍树/锁表锚点） */
+  base: Vec3;
   /** 最高原木角点 */
   top: Vec3;
   /** 底层 footprint（支撑层检查/站立点派生用） */
@@ -642,8 +639,8 @@ export interface TreeResource {
 /** 被拒候选（idle 缺因诊断用；含因子分解——定位哪个因子拖低概率） */
 export interface TreeReject {
   kind: TreeKind;
-  /** 树中心坐标（最低层原木坐标集） */
-  base: Vec3[];
+  /** 树中心坐标（blockCenter） */
+  base: Vec3;
   reason: TreeRejectReason;
   probability: number;
   /** 因子分解（如 F=0.53 → 异物击杀） */
@@ -709,7 +706,7 @@ function evaluateCandidatesWith(
     const bounds = treeRegionBounds(candidate);
     const verdict = evaluateTree(candidate, buildCellKind(candidate, bounds));
     verdicts.push(verdict);
-    const base: Vec3[] = treeCenterPoints(candidate);
+    const base: Vec3 = treeCenter(candidate);
     const top: Vec3 = { x: Math.max(...candidate.logs.map((l) => l.x)), y: candidate.topY, z: Math.max(...candidate.logs.map((l) => l.z)) };
     if (verdict.accepted) {
       trees.push({
@@ -743,7 +740,7 @@ function evaluateCandidatesWith(
 export function scanTreeResources(logs: TreeLog[], cellKind: CellKindFn, origin?: Vec3): TreeScanResult {
   const { trees, rejected } = evaluateCandidates(extractTrunkCandidates(logs), cellKind);
   if (origin) {
-    trees.sort((a, b) => horizontalDistance(origin, centerAnchor(a.base)) - horizontalDistance(origin, centerAnchor(b.base)));
+    trees.sort((a, b) => horizontalDistance(origin, a.base) - horizontalDistance(origin, b.base));
   }
   return { trees, rejected };
 }

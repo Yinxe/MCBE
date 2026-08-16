@@ -10,14 +10,13 @@ import { BlockPermutation, BlockVolume } from "@minecraft/server";
 import type { Dimension } from "@minecraft/server";
 
 import {
-  centerAnchor,
   coordKey,
   evaluateTreeFromSets,
   extractTrunkCandidatesSimple,
   keyToCoord,
   TREE_LEAF_TYPE_IDS,
   TREE_LOG_TYPE_IDS,
-  treeCenterPoints,
+  treeCenter,
   treeResourceId,
   type TrunkCandidate,
   type TreeReject,
@@ -65,7 +64,7 @@ export const HORIZONTAL_LOG_PERMUTATIONS: BlockPermutation[] = VALID_LOG_TYPE_ID
  *  = foreign，与逐格 getBlock 语义一致） */
 
 function toTreeResource(candidate: TrunkCandidate, verdict: Extract<TreeVerdict, { accepted: true }>): TreeResource {
-  const base = treeCenterPoints(candidate);
+  const base = treeCenter(candidate);
   return {
     id: treeResourceId(base),
     kind: verdict.kind,
@@ -222,14 +221,14 @@ export async function scanTreesFromSets(
     } else {
       rejected.push({
         kind: verdict.kind,
-        base: treeCenterPoints(c),
+        base: treeCenter(c),
         reason: verdict.reason === "no-canopy" ? "no-canopy" : "low-prob",
         probability: verdict.probability,
         factors: { G: 1, L: verdict.factors.L, C: verdict.factors.C, F: 1, H: verdict.factors.H, A: verdict.factors.A },
       });
     }
   }
-  trees.sort((a, b) => Math.hypot(centerAnchor(a.base).x - center.x, centerAnchor(a.base).z - center.z) - Math.hypot(centerAnchor(b.base).x - center.x, centerAnchor(b.base).z - center.z));
+  trees.sort((a, b) => Math.hypot(a.base.x - center.x, a.base.z - center.z) - Math.hypot(b.base.x - center.x, b.base.z - center.z));
 
   logsResult.count = logs.length; // 校正为参与计算的垂直原木数
   const evalMs = Date.now() - tEval;
@@ -242,12 +241,10 @@ export async function scanTreesFromSets(
   const mergeMs = Date.now() - tMerge;
   const mergedRejected = rejected.filter((r) => {
     // 被合并段对应的拒绝候选（同水平位置的大树残段）一并过滤
-    const rAnchor = centerAnchor(r.base);
     for (const t of mergedTrees) {
       if (t.kind !== "big") continue;
-      const tAnchor = centerAnchor(t.base);
-      const hd = Math.max(Math.abs(tAnchor.x - rAnchor.x), Math.abs(tAnchor.z - rAnchor.z));
-      const vd = Math.abs(rAnchor.y - tAnchor.y);
+      const hd = Math.max(Math.abs(t.base.x - r.base.x), Math.abs(t.base.z - r.base.z));
+      const vd = Math.abs(Math.floor(r.base.y) - Math.floor(t.base.y));
       if (hd <= 1 && vd <= 30) return false; // 属于已合并大树的高度范围内
     }
     return true;
@@ -279,16 +276,15 @@ function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
     if (used.has(a)) continue;
     used.add(a);
     const group = [a];
-    const aAnchor = centerAnchor(a.base);
     for (const b of big) {
       if (used.has(b)) continue;
-      const bAnchor = centerAnchor(b.base);
-      const hd = Math.max(Math.abs(aAnchor.x - bAnchor.x), Math.abs(aAnchor.z - bAnchor.z));
-      // 组内任一段与 b 垂直 gap ≤2 且水平相邻 → 同树
-      const groupMinY = Math.min(...group.map((g) => centerAnchor(g.base).y));
+      const hd = Math.max(Math.abs(a.base.x - b.base.x), Math.abs(a.base.z - b.base.z));
+      // 组内任一段与 b 垂直 gap ≤2 且水平相邻 → 同树（blockCenter 的 y 取整还原原木层）
+      const groupMinY = Math.min(...group.map((g) => Math.floor(g.base.y)));
       const groupMaxY = Math.max(...group.map((g) => g.top.y));
-      const vd = bAnchor.y <= groupMaxY + 2 && b.top.y >= groupMinY - 2 ? 0 : Math.min(
-        Math.abs(bAnchor.y - groupMaxY), Math.abs(b.top.y - groupMinY),
+      const bBaseY = Math.floor(b.base.y);
+      const vd = bBaseY <= groupMaxY + 2 && b.top.y >= groupMinY - 2 ? 0 : Math.min(
+        Math.abs(bBaseY - groupMaxY), Math.abs(b.top.y - groupMinY),
       );
       if (hd <= 1 && vd <= 2) {
         used.add(b);
@@ -300,9 +296,9 @@ function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
       continue;
     }
     // 合并：整体高度范围、原木并集、树叶并集、概率取最高段；
-    // 树中心取最低段的底部原木坐标集（同柱 2×2 x/z 一致）
+    // 树中心取最低段（同柱 2×2 x/z 一致，blockCenter y 取整还原原木层）
     const allLogs = group.flatMap((g) => g.logs);
-    const baseY = Math.min(...group.map((g) => centerAnchor(g.base).y));
+    const baseY = Math.min(...group.map((g) => Math.floor(g.base.y)));
     const topY = Math.max(...group.map((g) => g.top.y));
     const height = topY - baseY + 1;
     const leafKeySet = new Set<number>();
@@ -310,7 +306,7 @@ function mergeBigTreeSegments(trees: TreeResource[]): TreeResource[] {
       for (const c of g.leafCoords) leafKeySet.add(coordKey(c.x, c.y, c.z));
     }
     const leafCoords = [...leafKeySet].map(keyToCoord);
-    const baseSeg = group.reduce((m, g) => (centerAnchor(g.base).y < centerAnchor(m.base).y ? g : m));
+    const baseSeg = group.reduce((m, g) => (Math.floor(g.base.y) < Math.floor(m.base.y) ? g : m));
     const base = baseSeg.base;
     merged.push({
       id: treeResourceId(base),
@@ -364,15 +360,14 @@ export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: 
   lines.push(`[树] ── 接受（${r.trees.length}）${"─".repeat(Math.max(8, 40 - String(r.trees.length).length))}`);
   for (const t of r.trees) {
     lines.push(
-      `[树] ✓ ${t.kind === "big" ? "大树" : "小树"} P=${t.probability.toFixed(2)} 高${t.top.y - centerAnchor(t.base).y + 1} ` +
+      `[树] ✓ ${t.kind === "big" ? "大树" : "小树"} P=${t.probability.toFixed(2)} 高${t.top.y - Math.floor(t.base.y) + 1} ` +
         `原木${t.logs.length} 叶${t.leafCount} ${t.id} ${t.kind === "big" ? "（2×2 直接判定）" : fmtFactors(t.factors)}`,
     );
   }
   lines.push(`[树] ── 拒绝（${r.rejected.length}）${"─".repeat(Math.max(8, 40 - String(r.rejected.length).length))}`);
   for (const rej of r.rejected) {
-    const a = centerAnchor(rej.base);
     lines.push(
-      `[树] ✗ (${a.x},${a.y},${a.z}) ${rej.kind === "big" ? "大树" : "小树"} ` +
+      `[树] ✗ (${Math.floor(rej.base.x)},${Math.floor(rej.base.y)},${Math.floor(rej.base.z)}) ${rej.kind === "big" ? "大树" : "小树"} ` +
         `原因=${rej.reason} P=${rej.probability.toFixed(3)} ${fmtFactors(rej.factors)}`,
     );
   }

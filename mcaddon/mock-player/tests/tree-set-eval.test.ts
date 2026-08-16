@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { coordKey, evaluateTreeFromSets, extractTrunkCandidatesSimple, classifyTreeBlock, treeResourceId, treeCenterPoints, type TreeLog } from "../scripts/rules/tree/TreeRules";
+import { coordKey, evaluateTreeFromSets, extractTrunkCandidatesSimple, classifyTreeBlock, treeResourceId, treeCenter, type TreeLog } from "../scripts/rules/tree/TreeRules";
 import { buildOak, buildDarkOak, buildLogWall, MockWorld } from "./helpers/treeFixtures";
 
 /** 从 MockWorld 提取原木坐标集（TreeLog 列表，woodId 按 typeId 简化） */
@@ -174,15 +174,15 @@ test("坐标集评估：矮 2×2（2 层）不直接接受——无树叶拒绝"
 
 // ─── 树资源点数据（锚点坐标/唯一 ID/树叶坐标） ──────────
 
-test("树资源点：小树中心=最低层原木（1 点），ID 由中心构建，树叶坐标齐全", () => {
+test("树资源点：小树中心=单根原木的方块中心（blockCenter），ID 由中心构建，树叶坐标齐全", () => {
   const { world } = buildOak();
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 16);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 16);
   const candidates = extractTrunkCandidatesSimple(logs);
   assert.equal(candidates.length, 1);
-  // 中心：单柱橡树最低层原木 (0,1,0)（1 点）
-  const center = treeCenterPoints(candidates[0]!);
-  assert.deepEqual(center, [{ x: 0, y: 1, z: 0 }]);
+  // 中心：单柱橡树最低层原木 (0,1,0) 的方块中心 = (0.5,1.5,0.5)
+  const center = treeCenter(candidates[0]!);
+  assert.deepEqual(center, { x: 0.5, y: 1.5, z: 0.5 });
   assert.equal(treeResourceId(center), "tree@(0,1,0)");
   // 接受判定携带树叶坐标：与 leafCount 同口径，且每个坐标都在树叶集内
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
@@ -194,20 +194,15 @@ test("树资源点：小树中心=最低层原木（1 点），ID 由中心构�
   }
 });
 
-test("树资源点：大树中心=2×2 最低层全 4 点，直接接受也携带真实树叶坐标", () => {
+test("树资源点：大树中心=2×2 底部左下角原木的方块中心，直接接受也携带真实树叶坐标", () => {
   const { world } = buildDarkOak();
   const logs = logsFrom(world, { x: 0, y: 0, z: 0 }, 20);
   const leaves = leavesFrom(world, { x: 0, y: 0, z: 0 }, 20);
   const candidates = extractTrunkCandidatesSimple(logs);
   assert.ok(candidates.length >= 1);
-  // 中心：2×2（x∈{0,1}, z∈{0,1}）最低层全 4 根原木（按 x 再 z 排序）
-  const center = treeCenterPoints(candidates[0]!);
-  assert.deepEqual(center, [
-    { x: 0, y: 1, z: 0 },
-    { x: 0, y: 1, z: 1 },
-    { x: 1, y: 1, z: 0 },
-    { x: 1, y: 1, z: 1 },
-  ]);
+  // 中心：2×2（x∈{0,1}, z∈{0,1}）底部左下角原木 (0,1,0) 的方块中心
+  const center = treeCenter(candidates[0]!);
+  assert.deepEqual(center, { x: 0.5, y: 1.5, z: 0.5 });
   assert.equal(treeResourceId(center), "tree@(0,1,0)");
   // 直接接受（不传树叶也能过），但传入树叶集时资源点携带真实树叶坐标
   const verdict = evaluateTreeFromSets(candidates[0]!, leaves);
