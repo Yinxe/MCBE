@@ -13,11 +13,10 @@
 //     不退出（保持"一直持续"语义）
 
 import type { Behavior, BehaviorContext } from "../../../ai";
-import type { SimulatedPlayer } from "@minecraft/server-gametest";
-import type { AiBehaviorContext } from "../brainEngine";
 import { system } from "@minecraft/server";
 import { breakBlockOnce, viewBlock, type BreakResultValue } from "../../task/blockBreak";
 import { createCancelToken, type CancelToken } from "../../../rules/utils/CancelToken";
+import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 
 /** 自动挖掘行为配置（统一管理） */
 export interface MineBehaviorConfig {
@@ -48,10 +47,21 @@ function waitTicks(ticks: number, token: CancelToken): Promise<void> {
  * 常驻破块循环：持续"探测 → 破坏 → 下一块"，直到 token 取消。
  * 每一块用独立 breakBlockOnce（原子：内部每 tick 起手 + 轮询消失）；
  * 无目标时低息等待 idleRecheckTicks 后重探（协程不退出）。
+ *
+ * ⚠️ 实体刷新：常驻协程跨很多 tick/块，**每轮 resolveBotPlayer(botName) 取
+ * 最新活跃实体**（死亡/重连/换维度会生成新实体，旧引用失效）——绝不在
+ * 协程内沿用启动时捕获的旧实体引用（对齐 breakBlockAt 的每轮刷新）。
  */
-async function runMineLoop(botName: string, bot: SimulatedPlayer, token: CancelToken, config: MineBehaviorConfig): Promise<void> {
+async function runMineLoop(botName: string, token: CancelToken, config: MineBehaviorConfig): Promise<void> {
   while (!token.cancelled) {
-    // 探测视线方块（仅在可取消等待后探测——无线索时低息重探）
+    // 每轮刷新实体（唯一实体入口 + TTL 缓存）——旧引用失效即重新取
+    const bot = resolveBotPlayer(botName);
+    if (!bot) {
+      // 实体暂不可用（离线/死亡/重连中）→ 低息重试（协程保持存活）
+      await waitTicks(config.idleRecheckTicks, token);
+      continue;
+    }
+    // 探测视线方块
     const target = viewBlock(bot, config.distance);
     if (!target) {
       // 无目标：低息等待后重探（协程保持存活，符合"一直持续"语义）
@@ -85,13 +95,12 @@ export function makeMineBehavior(config: MineBehaviorConfig = DEFAULT_MINE_CONFI
       return ctx.memory.get<string>("workMode") === "mine";
     },
     onActivate: (ctx) => {
-      // 启动常驻破块协程（幂等：已有运行中协程则复用）
+      // 启动常驻破块协程（幂等：已有运行中协程则复用）。
+      // 协程内部每轮 resolveBotPlayer 取实体——这里不需要预取实体引用。
       if (runLoop) return;
-      const bot = (ctx as AiBehaviorContext).bot;
-      if (!bot) return;
       const t = createCancelToken();
       token = t;
-      runLoop = runMineLoop(ctx.botName, bot, t, config)
+      runLoop = runMineLoop(ctx.botName, t, config)
         .catch((e) => console.warn(`[MockPlayer] 定点挖掘协程异常 ${ctx.botName}: ${e}`))
         .finally(() => {
           if (token === t) token = undefined;

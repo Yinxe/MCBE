@@ -13,15 +13,15 @@
 // 用户规格（2026-08-14/15，含修正）：工具替换以回调注入、看向目标方块中心
 // 等待扭头到位后循环内不再 lookAt、无超时（破到目标消失为止）。
 
-import { system } from "@minecraft/server";
 import type { Block, Container, Dimension, Vector3 } from "@minecraft/server";
+import { system } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
+import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
+import type { CancelToken } from "../../rules/utils/CancelToken";
 import { lookAt } from "../basic/PoseGateway";
 import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
-import { botRegistry } from "../../bootstrap/context";
-import type { CancelToken } from "../../rules/utils/CancelToken";
 
 // ─── 结果类型 ──────────────────────────────────────────
 
