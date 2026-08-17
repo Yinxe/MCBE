@@ -14,7 +14,8 @@ import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { waitTicks, distance3d } from "../utils";
 import {
   GRASS_BLOCK_BONUS, isStableBlockType, pickDirectionalStrollPoint, selectStrollTarget, strollWalkValue,
-  STROLL_CANDIDATE_SAMPLES, STROLL_DEFAULT_RADIUS, type RandomStrollOptions, type StrollCandidate,
+  STROLL_CANDIDATE_SAMPLES, STROLL_DEFAULT_RADIUS, STROLL_MIN_DISTANCE,
+  type RandomStrollOptions, type StrollCandidate,
 } from "../../rules/coords/Stroll";
 
 /** 导航速度 */
@@ -351,17 +352,19 @@ const STROLL_MAX_RAISE = 8;
  * 随机方向（朝向偏置）→ **从当前地面层起**找"可站立点"：
  *   非固体 且 下方是稳定方块（遮挡形状完整）且 非水——
  * 目标点保证站在真实地面上（消除悬空点导致的 no-path）。
+ * 选点距离 ∈ [minDist, radius]（minDist 排除过近点——原地踱步不自然）。
  * 无有效候选 → undefined（调用方凑满 10 个候选后选偏好最大者）。
  */
 function sampleStrollCandidate(
   bot: SimulatedPlayer,
   radius: number,
   yawDeg: number,
+  minDist: number,
 ): StrollCandidate | undefined {
   const loc = bot.location;
   const baseY = Math.floor(loc.y);
   // 随机方向：朝向偏置（六成概率朝当前转身方向——官方随机视角带动游走方向）
-  const point = pickDirectionalStrollPoint(loc, yawDeg, radius);
+  const point = pickDirectionalStrollPoint(loc, yawDeg, radius, undefined, undefined, undefined, minDist);
   const x = Math.floor(point.x);
   const z = Math.floor(point.z);
   let y = baseY; // 从当前地面层起（不随机高度偏移——偏移会产生悬空点）
@@ -410,10 +413,11 @@ export async function randomStrollOnce(botName: string, options: RandomStrollOpt
   if (!bot) return NavigateResult.Unavailable;
   // 10 候选采样 → 选行走目标值最大者（官方陆地目标算法）
   const radius = options.radius ?? STROLL_DEFAULT_RADIUS;
+  const minDist = options.minDist ?? STROLL_MIN_DISTANCE;
   const yawDeg = bot.getRotation().y; // 当前朝向（转身/扭头后即新朝向——带动游走方向）
   const samples: (StrollCandidate | undefined)[] = [];
   for (let i = 0; i < STROLL_CANDIDATE_SAMPLES; i++) {
-    samples.push(sampleStrollCandidate(bot, radius, yawDeg));
+    samples.push(sampleStrollCandidate(bot, radius, yawDeg, minDist));
   }
   const target = selectStrollTarget(samples);
   if (!target) return NavigateResult.NoPath; // 周围无可站立近点

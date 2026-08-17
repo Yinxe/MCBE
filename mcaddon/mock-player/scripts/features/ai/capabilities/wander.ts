@@ -8,9 +8,17 @@
 // 协程防残留：reset（切换/关标签/下线）→ stopMoving 中断导航。
 // ⚠️ 全部节奏/范围常量统一收敛到 WanderBehaviorConfig（配置接口 + 默认值），
 //    不再散落裸常量——调参只改配置。
+//
+// 自然化（用户反馈 2026-08-17）：
+//   - 转身**分步平滑**：瞬移式 lookAtLocation 拆成"每 lookTurnStepTicks tick
+//     转 ≤ lookTurnStepDeg°"的有界排程链——像真实生物缓缓转头（GameTest 无
+//     旋转速度 API，分步逼近；转不完整不影响下次转身）
+//   - 转头频率减半（lookAroundInterval 8 周期 = 4 秒一次，原 2 秒）
+//   - 选点最小距离 minDist=3 格：剔除"走一两步就到"的过近点（原地踱步感）
 
 import type { Behavior, BehaviorContext } from "../../../ai";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
+import { system } from "@minecraft/server";
 import { randomStrollOnce, NavigateResult } from "../../basic/move";
 import type { AiBehaviorContext } from "../brainEngine";
 
@@ -32,9 +40,11 @@ export interface WanderBehaviorConfig {
   failRetry: number;
   /** 单次游走半径（格）：近点（≤16 格直达内） */
   radius: number;
+  /** 单次游走最小选点距离（格）：剔除过近点（原地踱步不自然） */
+  minDist: number;
   /** 游走速度（慢速散步） */
   speed: number;
-  /** 转头节流（引擎周期）：静止时偶尔扭头 */
+  /** 转头节流（引擎周期 = 10 tick）：静止时偶尔扭头 */
   lookAroundInterval: number;
   /** 转头随机朝向距离（格，看向点的距离） */
   lookAroundDistance: number;
@@ -42,6 +52,11 @@ export interface WanderBehaviorConfig {
   lookSmallChance: number;
   /** 小幅扭头角度（±度）：当前朝向附近微调 */
   lookSmallSpread: number;
+  /** 分步转身每步最大转角（度）：平滑转头——把瞬移式 lookAtLocation
+   *  拆成多步小角度（每步 lookTurnStepTicks tick），像真实生物缓缓转头 */
+  lookTurnStepDeg: number;
+  /** 分步转身步间间隔（tick） */
+  lookTurnStepTicks: number;
 }
 
 /** 默认配置（统一管理；makeWanderBehavior 可传自定义配置覆盖） */
@@ -52,11 +67,14 @@ export const DEFAULT_WANDER_CONFIG: WanderBehaviorConfig = {
   restMax: 5,
   failRetry: 1,
   radius: 8,
+  minDist: 3,
   speed: 0.6,
-  lookAroundInterval: 4,
+  lookAroundInterval: 8,
   lookAroundDistance: 5,
   lookSmallChance: 0.7,
   lookSmallSpread: 25,
+  lookTurnStepDeg: 20,
+  lookTurnStepTicks: 3,
 };
 
 /** 状态机阶段 */
@@ -77,15 +95,81 @@ function stopBotMoving(bot: SimulatedPlayer | undefined): void {
   }
 }
 
+/** 角度规范化到 (-180, 180]（转身走最短弧） */
+function normalizeDeg(deg: number): number {
+  let d = deg % 360;
+  if (d > 180) d -= 360;
+  if (d <= -180) d += 360;
+  return d;
+}
+
+/**
+ * 分步平滑转身：把瞬移式 lookAtLocation 拆成"每 stepTicks tick 转 ≤ stepDeg°"
+ * 的**有界排程链**——GameTest 无旋转速度 API，分步逼近真实生物的缓缓转头。
+ * 首步立即执行（转身启动即时响应），步间间隔由排程链自驱动（不走主循环）；
+ * 实体失效/转身失败 → 链中止（剩余角度放弃，下次转头重新分步）。
+ * ⚠️ 同一时期只转一次（turning 标志防重叠——连续触发跳过）。
+ */
+function startTurnSmoothly(
+  bot: SimulatedPlayer,
+  targetYawDeg: number,
+  cfg: WanderBehaviorConfig,
+  turning: { active: boolean },
+): void {
+  if (turning.active) return;
+  turning.active = true;
+
+  let current = targetYawDeg; // 读不到当前朝向时的兜底（直接到位）
+  try {
+    current = bot.getRotation().y;
+  } catch {
+    /* 读取失败：按兜底——单步转完 */
+  }
+  let remaining = normalizeDeg(targetYawDeg - current);
+
+  const applyStep = (): void => {
+    if (!bot.isValid) return;
+    // 每步转角：剩余角度的符号 × min(剩余, 每步上限)（走最短弧）
+    const d = Math.sign(remaining) * Math.min(Math.abs(remaining), cfg.lookTurnStepDeg);
+    if (Math.abs(d) < 1) return;
+    const rad = ((current + d) * Math.PI) / 180;
+    try {
+      bot.lookAtLocation({
+        x: bot.location.x + -Math.sin(rad) * cfg.lookAroundDistance,
+        y: bot.location.y,
+        z: bot.location.z + Math.cos(rad) * cfg.lookAroundDistance,
+      });
+    } catch {
+      return; /* 看向失败（chunkload 受限等）→ 链中止 */
+    }
+    current += d;
+    remaining -= d;
+    // 余角仍有 → 排程下一步（有界：总步数 ≤ 360/stepDeg）
+    system.runTimeout(() => {
+      if (!bot.isValid) return;
+      if (Math.abs(remaining) < 1) {
+        turning.active = false;
+        return;
+      }
+      applyStep();
+      if (Math.abs(remaining) < 1) turning.active = false;
+    }, cfg.lookTurnStepTicks);
+  };
+
+  applyStep();
+  if (Math.abs(remaining) < 1) turning.active = false;
+}
+
 /**
  * 偶尔扭头（官方随机视角转向意向，自然化）：
  * 大部分时候（70%）在当前朝向基础上**小幅扭动**（±25°——"扭一下头"），
- * 小概率（30%）才大幅随机转头（东张西望感）。
- * 转身后实体朝向变化，下次游走的朝向偏置选点自然偏向该方向。
+ * 小概率（30%）才大幅随机转头（东张西望感）；转头经 startTurnSmoothly
+ * **分步平滑**（不再瞬移猛扭）。转身后实体朝向变化，下次游走的朝向偏置
+ * 选点自然偏向该方向。
  */
-function lookAround(bot: SimulatedPlayer | undefined, cfg: WanderBehaviorConfig): void {
+function lookAround(bot: SimulatedPlayer | undefined, cfg: WanderBehaviorConfig, turning: { active: boolean }): void {
   if (!bot) return;
-  let yaw: number;
+  let targetYaw: number;
   if (Math.random() < cfg.lookSmallChance) {
     // 小幅扭动：当前朝向 ±spread（"扭一下头"）
     let base = 0;
@@ -94,22 +178,12 @@ function lookAround(bot: SimulatedPlayer | undefined, cfg: WanderBehaviorConfig)
     } catch {
       /* 读取失败按 0 */
     }
-    yaw = base + (Math.random() * 2 - 1) * cfg.lookSmallSpread;
+    targetYaw = base + (Math.random() * 2 - 1) * cfg.lookSmallSpread;
   } else {
     // 小概率大幅转头（自然东张西望）
-    yaw = Math.random() * 360;
+    targetYaw = Math.random() * 360;
   }
-  const rad = (yaw * Math.PI) / 180;
-  try {
-    // MCBE 朝向向量 (-sin(yaw), 0, cos(yaw))——看向该方向点
-    bot.lookAtLocation({
-      x: bot.location.x + -Math.sin(rad) * cfg.lookAroundDistance,
-      y: bot.location.y,
-      z: bot.location.z + Math.cos(rad) * cfg.lookAroundDistance,
-    });
-  } catch {
-    /* 看向失败（chunkload 受限等）不影响 */
-  }
+  startTurnSmoothly(bot, targetYaw, cfg, turning);
 }
 
 /** 创建随机游走行为（默认配置见 DEFAULT_WANDER_CONFIG；可传自定义配置覆盖） */
@@ -120,13 +194,14 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
   let runResult: NavigateResult | undefined; // 协程完成标志
   let lookTick = 0; // 转头节流计数
   let failStreak = 0; // 连续失败计数（日志降频）
+  const turning = { active: false }; // 分步转身进行中标志（防重叠）
   // ⚠️ reset 无参（Behavior.reset 签名）——用最近 step 的实体引用中断移动；
   // 必须放闭包内（每假人一实例），放模块级会跨假人共享误停他 bot（审核 M1）
   let lastBot: SimulatedPlayer | undefined;
 
   const startRun = (botName: string): void => {
     runResult = undefined;
-    run = randomStrollOnce(botName, { radius: config.radius, speed: config.speed })
+    run = randomStrollOnce(botName, { radius: config.radius, minDist: config.minDist, speed: config.speed })
       .then((r) => {
         runResult = r;
       })
@@ -154,6 +229,7 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
       // 中断进行中导航 + 清状态（reset 无 ctx——用最近推进的实体引用）
       if (lastBot) stopBotMoving(lastBot);
       lastBot = undefined;
+      turning.active = false; // 中止分步转身链（剩余步由实体有效性判定自然终止）
       reset();
     },
     step: (ctx) => {
@@ -161,12 +237,12 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
       switch (phase) {
         case "idle":
           // 间隔等待（走停节律：不连续乱走）；静止时偶尔转身/扭头（节流）
-          if (++lookTick % config.lookAroundInterval === 0) lookAround(lastBot, config);
+          if (++lookTick % config.lookAroundInterval === 0) lookAround(lastBot, config, turning);
           if (--wait > 0) return;
           phase = "pick";
           break;
         case "pick":
-          // 选近点（朝向偏置——大概率朝转身方向）+ 发起单次导航协程
+          // 选近点（朝向偏置——大概率朝转身方向；≥minDist 格）+ 发起单次导航协程
           logStroll(ctx.botName, "出发（选点+移动）");
           startRun(ctx.botName);
           phase = "walk";
@@ -191,7 +267,7 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
           break;
         case "rest":
           // 休息时偶尔转身/扭头（官方随机视角意向；节流不频繁）
-          if (++lookTick % config.lookAroundInterval === 0) lookAround(lastBot, config);
+          if (++lookTick % config.lookAroundInterval === 0) lookAround(lastBot, config, turning);
           if (--wait > 0) return;
           phase = "idle";
           wait = randomBetween(config.intervalMin, config.intervalMax);

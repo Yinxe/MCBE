@@ -14,6 +14,9 @@ import type { Vec3 } from "../../rules/Types";
 export const STROLL_DEFAULT_RADIUS = 8;
 /** 候选采样次数（官方：随机挑选 10 个位置） */
 export const STROLL_CANDIDATE_SAMPLES = 10;
+/** 随机游走默认最小选点距离（格）：低于此距离的点看起来原地忽走忽停，
+ *  不自然（真实生物散步至少走出几步） */
+export const STROLL_MIN_DISTANCE = 3;
 
 /** 单次候选采样结果（点 + 行走目标值偏好） */
 export interface StrollCandidate {
@@ -74,6 +77,8 @@ export function selectStrollTarget(
 export interface RandomStrollOptions {
   /** 水平半径（格；缺省 STROLL_DEFAULT_RADIUS） */
   radius?: number;
+  /** 最小选点距离（格；缺省 STROLL_MIN_DISTANCE——太近的点会原地踱步） */
+  minDist?: number;
   /** 导航速度（缺省 1；散步可传慢速如 0.6） */
   speed?: number;
 }
@@ -94,13 +99,16 @@ export function pickRandomStrollPoint(center: Vec3, radius: number = STROLL_DEFA
  * 朝向偏置选点（官方行为：静止时的转身/扭头会带动下次游走方向——
  * 生物大概率朝当前朝向方向走）：
  * 以概率 bias 从当前偏航 ±spread 方向内采样（转身方向加权），
- * 其余概率全向随机。
+ * 其余概率全向随机。距离在 [minDist, max(minDist, radius)] 均匀——
+ * **minDist 排除过近点**（<minDist 的点走一两步就到，原地踱步不自然）。
  * @param center 假人当前位置
  * @param yawDeg 当前偏航（度；MCBE：0 = 面向 +Z 南，顺时针增加）
  * @param radius 水平半径（格）
  * @param rng 随机源（测试注入）
  * @param bias 朝向方向采样概率（缺省 0.6——六成概率朝转身方向）
  * @param spreadDeg 朝向方向扩散角（缺省 ±60°）
+ * @param minDist 最小选点距离（格；缺省 0——纯逻辑默认不限制，调用方
+ *        按产品语义传入 STROLL_MIN_DISTANCE 等）
  */
 export function pickDirectionalStrollPoint(
   center: Vec3,
@@ -109,10 +117,12 @@ export function pickDirectionalStrollPoint(
   rng: () => number = Math.random,
   bias = 0.6,
   spreadDeg = 60,
+  minDist = 0,
 ): Vec3 {
   const angleDeg = rng() < bias ? yawDeg + (rng() * 2 - 1) * spreadDeg : rng() * 360;
   const rad = (angleDeg * Math.PI) / 180;
-  const dist = Math.floor(rng() * (radius + 1)); // 0..radius 均匀
+  const hi = Math.max(minDist, radius); // radius < minDist（异常配置）→ 固定 minDist 距离
+  const dist = minDist + Math.floor(rng() * (hi - minDist + 1)); // minDist..hi 均匀
   // MCBE 朝向向量：(-sin(yaw), 0, cos(yaw))——yaw=0 面向 +Z
   return {
     x: Math.floor(center.x) + 0.5 + -Math.sin(rad) * dist,
