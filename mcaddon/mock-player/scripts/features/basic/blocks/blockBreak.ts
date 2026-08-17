@@ -31,6 +31,8 @@ import { inventoryContainerOf } from "../items/ItemComponentRead";
  *  - aborted：主动取消/实体丢失（token 取消 or shouldStop 或实体失效）
  *  - offline：假人记录不可用（在线且未死亡才可挖）
  *  - busy：并发防护拒绝（同假人已有进行中的破坏）
+ *  - blocked：视线复核开启时目标被遮挡（视线方块已不是目标——中途插入
+ *    阻挡块；调用方应重新探测视线，先挖阻挡块而非"隔山打牛"）
  */
 export const BreakResult = {
   Broken: "broken",
@@ -38,6 +40,7 @@ export const BreakResult = {
   Aborted: "aborted",
   Offline: "offline",
   Busy: "busy",
+  Blocked: "blocked",
 } as const;
 
 /** 破坏结果值（联合类型，由枚举派生——单源） */
@@ -104,6 +107,14 @@ export interface BreakOnceOptions {
    * 不传则保持"直到破坏"无超时语义。
    */
   shouldStop?: () => boolean;
+  /**
+   * 视线复核（默认 false）：持续破坏期间每 pollTicks 检测一次目标**仍是
+   * 当前视线方块**——视线方块已不是目标（中途被插入方块遮挡）→ 中止返回
+   * "blocked"。开启方（自动挖掘"视线挖方块"语义）收到 blocked 后重新探测，
+   * 先挖阻挡块，杜绝隔山打牛；命令定点破坏（breakBlockAt）不开启。
+   * 视线读取失败（viewBlock undefined）不误判，继续挖掘原目标。
+   */
+  requireLineOfSight?: boolean;
 }
 
 /** 持续破坏选项（breakBlockAt） */
@@ -229,6 +240,7 @@ export async function breakBlockOnce(
     pollTicks = DEFAULT_POLL_TICKS,
     token,
     shouldStop,
+    requireLineOfSight = false,
   } = options;
   const dimension = bot.dimension;
   const targetLoc: Vector3 = { x: Math.floor(loc.x), y: Math.floor(loc.y), z: Math.floor(loc.z) };
@@ -285,6 +297,20 @@ export async function breakBlockOnce(
       if (!bot.isValid) return "aborted"; // 实体失效（重连/移除）
       if (distance3d(bot.location, targetLoc) > maxDistance) return "far";
       if (blockGone(readBlock(dimension, targetLoc))) return "broken"; // 成功信号：已摧毁
+
+      // ⚠️ 视线复核（仅自动挖掘等"视线挖方块"调用方开启）：目标不再是当前
+      //   视线方块 = 中途被插入方块遮挡（如玩家放基岩挡路）→ 中止返回 blocked，
+      //   由调用方重新探测视线（先挖阻挡块）——杜绝锁定坐标持续敲的隔山打牛。
+      //   视线读取失败（undefined）不误判，继续原目标。
+      if (requireLineOfSight) {
+        const sight = viewBlock(bot, maxDistance);
+        if (
+          sight &&
+          (sight.location.x !== targetLoc.x || sight.location.y !== targetLoc.y || sight.location.z !== targetLoc.z)
+        ) {
+          return "blocked";
+        }
+      }
     }
   } finally {
     // 释放并发锁 + 清理挖掘状态（所有退出路径；传送后引擎可能不自动打断）

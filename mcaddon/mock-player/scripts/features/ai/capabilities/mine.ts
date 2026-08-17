@@ -76,15 +76,18 @@ async function runMineLoop(
       await waitTicks(config.idleRecheckTicks, token);
       continue;
     }
-    // 原子破坏该块（token 透传：卸载时立即中止；内部每 tick 检测 + 起手）
+    // 原子破坏该块（token 透传：卸载时立即中止；内部每 tick 检测 + 起手 +
+    // requireLineOfSight 视线复核：目标不再是视线方块（中途被插入阻挡块如
+    // 基岩）→ blocked 中止，下轮 viewBlock 把阻挡块当新目标——先挖挡路的）
     const result: BreakResultValue = await breakBlockOnce(bot, target.location, {
       maxDistance: config.distance,
       pollTicks: config.pollTicks,
       token,
+      requireLineOfSight: true,
     });
     if (result === "aborted") return; // 被取消（能力卸载/实体失效）→ 协程退出
     if (result !== "broken") {
-      // far/offline/busy → 低息重试（不退出协程）
+      // far/offline/busy/blocked → 低息重试（blocked：重新探测视线，挖阻挡块）
       await waitTicks(1, token);
     }
   }
