@@ -25,12 +25,12 @@ const NAVIGATE_SPEED = 1;
 const NAV_MAX_DISTANCE = 16;
 /** 到达判定距离（格，水平 xz）：静止且距目标水平距离 ≤ 此值视为到达 */
 const NAV_ARRIVE_XZ = 1.5;
-/** 到达判定 y 容差（格）：|dy| ≤ 此值视为到达——选点/地面修正使目标 y
+/** 到达判定 y 容差（格）：|dy| ≤ 4 视为到达——选点/地面修正使目标 y
  *  与假人当前层常有几格差，xz 已到位即算到达（不再因 y 差卡住/原地不动） */
-const NAV_ARRIVE_Y_TOLERANCE = 2;
+const NAV_ARRIVE_Y_TOLERANCE = 4;
 
 /** 到达判定（水平 xz ≤ NAV_ARRIVE_XZ 且 |dy| ≤ NAV_ARRIVE_Y_TOLERANCE）：
- *  导航目标是"站到该位置"——xz 已到位、y 相差不大（上下 2 格内可攀爬/
+ *  导航目标是"站到该位置"——xz 已到位、y 相差不大（上下 4 格内可攀爬/
  *  跳跃落差）即算到达。⚠️ 用户实测（2026-08-17）：选点/地面修正使目标 y
  *  与假人当前层常有差，3D 判定过严导致假人"走不到终点"（卡住/原地不动） */
 function arrivedAt(loc: Vector3, target: Vector3): boolean {
