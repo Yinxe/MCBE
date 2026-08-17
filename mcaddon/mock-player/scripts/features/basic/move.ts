@@ -23,8 +23,22 @@ const NAVIGATE_SPEED = 1;
 /** 寻路最远距离（格，水平）：目标超出此距离直接拒绝（不发起寻路）——
  *  远距离寻路路径长、易卡/超时且消耗大，先拒绝由调用方换近目标 */
 const NAV_MAX_DISTANCE = 16;
-/** 到达判定距离（格）：静止且距目标 ≤ 此值视为到达 */
-const NAV_ARRIVE_DISTANCE = 1.5;
+/** 到达判定距离（格，水平 xz）：静止且距目标水平距离 ≤ 此值视为到达 */
+const NAV_ARRIVE_XZ = 1.5;
+/** 到达判定 y 容差（格）：|dy| ≤ 此值视为到达——选点/地面修正使目标 y
+ *  与假人当前层常有几格差，xz 已到位即算到达（不再因 y 差卡住/原地不动） */
+const NAV_ARRIVE_Y_TOLERANCE = 2;
+
+/** 到达判定（水平 xz ≤ NAV_ARRIVE_XZ 且 |dy| ≤ NAV_ARRIVE_Y_TOLERANCE）：
+ *  导航目标是"站到该位置"——xz 已到位、y 相差不大（上下 2 格内可攀爬/
+ *  跳跃落差）即算到达。⚠️ 用户实测（2026-08-17）：选点/地面修正使目标 y
+ *  与假人当前层常有差，3D 判定过严导致假人"走不到终点"（卡住/原地不动） */
+function arrivedAt(loc: Vector3, target: Vector3): boolean {
+  return (
+    Math.hypot(loc.x - target.x, loc.z - target.z) <= NAV_ARRIVE_XZ &&
+    Math.abs(loc.y - target.y) <= NAV_ARRIVE_Y_TOLERANCE
+  );
+}
 /** 位置监测间隔（tick）：每 10 tick 读一次位置 */
 const NAV_CHECK_INTERVAL = 10;
 /** 静止判定次数：连续 1 次（10tick=0.5 秒）位置未变化（X/Y/Z 完全一致）→ 视为假人已停下 */
@@ -153,7 +167,6 @@ export async function navigateBot(
       }
 
       const loc = bot.location;
-      const d = distance3d(loc, target);
 
       if (loc.x !== lastLoc.x || loc.y !== lastLoc.y || loc.z !== lastLoc.z) {
         // 位置变化 → 假人仍在移动 → 重置静止计数，继续等待
@@ -166,8 +179,9 @@ export async function navigateBot(
         // 停滞回调（位置未变化）
         callbacks?.onStuck?.(loc, stillCount);
         if (stillCount >= NAV_STILL_LIMIT) {
-          // 0.5 秒内位置未变化（X/Y/Z 完全一致）→ 假人已停下：近=到达终点，远=移动超时
-          const result = d <= NAV_ARRIVE_DISTANCE ? NavigateResult.Arrived : NavigateResult.StillTimeout;
+          // 0.5 秒内位置未变化 → 假人已停下：到达判定（水平 + y 容差）=
+          //  已到达；否则 = 移动超时（卡住）
+          const result = arrivedAt(loc, target) ? NavigateResult.Arrived : NavigateResult.StillTimeout;
           callbacks?.onComplete?.(result);
           return result;
         }
@@ -234,13 +248,15 @@ async function runSegment(
       }
       lastLoc = loc;
 
-      const d = distance3d(loc, waypoint);
-      // 段尾提前切换：还在移动中即成功（外层直接发起下一段导航无缝转向）
-      if (!isLast && d <= NAV_SEGMENT_SWITCH_DISTANCE) return "ok";
+      // 段尾提前切换：距段尾水平距离 ≤ 切换距离（y 容差内）且还在移动中即
+      // 成功（外层直接发起下一段导航无缝转向）
+      const nearWaypoint = Math.hypot(loc.x - waypoint.x, loc.z - waypoint.z) <= NAV_SEGMENT_SWITCH_DISTANCE &&
+        Math.abs(loc.y - waypoint.y) <= NAV_ARRIVE_Y_TOLERANCE;
+      if (!isLast && nearWaypoint) return "ok";
       if (stillCount >= NAV_STILL_LIMIT) {
-        // 假人已停下：末段=到达判定；非末段=已在切换距离内仍算成功，否则停滞失败
-        if (isLast) return d <= NAV_ARRIVE_DISTANCE ? "ok" : "still-timeout";
-        if (d <= NAV_SEGMENT_SWITCH_DISTANCE) return "ok";
+        // 假人已停下：末段=到达判定（水平 + y 容差）；非末段=已在切换距离内仍算成功，否则停滞失败
+        if (isLast) return arrivedAt(loc, waypoint) ? "ok" : "still-timeout";
+        if (nearWaypoint) return "ok";
         return "still-timeout";
       }
       if (elapsed >= LONG_NAV_SEGMENT_TIMEOUT_TICKS) return "timeout";
@@ -448,20 +464,22 @@ export async function randomStrollRouteOnce(
 ): Promise<NavigateResult> {
   const bot = resolveBotPlayer(botName);
   if (!bot) return NavigateResult.Unavailable;
-  // 路线生成（纯逻辑：1~3 点，总范围 radius 圆内；方向顺延不折返）
+  // 路线生成（纯逻辑：0~3 点，总范围 radius 圆内；方向顺延不折返）
   const route = generateStrollRoute(bot.location, bot.getRotation().y, {
     radius: options.radius ?? STROLL_DEFAULT_ROUTE_RADIUS,
     minDist: options.minDist,
     pointMin: options.pointMin,
     pointMax: options.pointMax,
   });
+  // 生成 0 个路径点 = 本次保持不动（用户拍板：直接视为完成——wander 走休息）
+  if (route.length === 0) return NavigateResult.Arrived;
   // 逐点可站立修正（丢弃修正失败的点——保证导航终点真实可站立）
   const standable: Vector3[] = [];
   for (const p of route) {
     const fixed = resolveStandableStrollPoint(bot, p);
     if (fixed) standable.push(fixed.point);
   }
-  if (standable.length === 0) return NavigateResult.NoPath; // 整条路线无可站立点
+  if (standable.length === 0) return NavigateResult.NoPath; // 有生成但全修正失败 → 快速重试
   // 依次导航：任一点失败 → 本次路线中止（walk 快速重试）
   for (const point of standable) {
     const r = await longNavigateBot(botName, point, options.speed ?? NAVIGATE_SPEED);

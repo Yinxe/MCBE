@@ -140,18 +140,18 @@ export interface StrollRouteOptions {
   radius?: number;
   /** 最小选点距离（格；缺省 STROLL_MIN_DISTANCE=3） */
   minDist?: number;
-  /** 路径点数下限（缺省 1） */
+  /** 路径点数下限（缺省 0——用户拍板 0~3：生成 0 个点 = 本次保持不动） */
   pointMin?: number;
-  /** 路径点数上限（缺省 3——用户拍板：每次 1~3 个路径点） */
+  /** 路径点数上限（缺省 3——用户拍板：每次最多 3 个路径点） */
   pointMax?: number;
   /** 随机源（测试注入；缺省 Math.random） */
   rng?: () => number;
 }
 
 /**
- * 随机游走路线生成（路线模式：每次游走 1~3 个路径点，全部落在以起点为
- * 圆心、radius 为半径的圆内——总范围；y 保留起点高度，可站立修正由 mc
- * 层世界查询负责）。
+ * 随机游走路线生成（路线模式：每次游走 0~3 个路径点，全部落在以起点为
+ * 圆心、radius 为半径的圆内——总范围；**只看水平距离，不考虑 y**（y 保留
+ * 起点高度，可站立修正由 mc 层世界查询负责）；生成 0 个点 = 本次保持不动。
  * 方向语义（对齐朝向偏置选点）：
  *   - 第 1 点：六成概率朝转身方向（yawDeg ±60°），其余全向——转身带动游走
  *   - 后续点：以"前一点相对起点的方向"为基础 ±60° 顺延——路径向外延展、
@@ -167,7 +167,7 @@ export function generateStrollRoute(
 ): Vec3[] {
   const radius = options.radius ?? STROLL_DEFAULT_ROUTE_RADIUS;
   const minDist = options.minDist ?? STROLL_MIN_DISTANCE;
-  const pointMin = options.pointMin ?? 1;
+  const pointMin = options.pointMin ?? 0;
   const pointMax = options.pointMax ?? 3;
   const rng = options.rng ?? Math.random;
   const count = pointMin + Math.floor(rng() * (pointMax - pointMin + 1));

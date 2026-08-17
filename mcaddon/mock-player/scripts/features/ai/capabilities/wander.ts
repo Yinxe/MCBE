@@ -3,9 +3,11 @@
 // 状态机（step 同步短步，无循环无 await——woodcut 纪律）：
 //   idle（间隔计数）→ pick（选路线 + 发起单次导航协程）→ walk（轮询完成）
 //   → rest（休息计数）→ idle 循环。
-// **路线模式**（用户拍板 2026-08-17）：每次游走生成 1~3 个路径点
+// **路线模式**（用户拍板 2026-08-17）：每次游走生成 0~3 个路径点
 // （routePointsMin/Max），全部落在以起点为圆心、总范围 radius=16 格圆内
 // （方向顺延不折返——像真实生物的散步路线），依次走完算一次游走；
+// **生成 0 个点 = 本次保持不动**（直接进入休息）；选点只看水平距离、不
+// 考虑 y（到达判定同为水平 + y 容差——y 由选点/地面修正影响常有差）。
 // 单次路线导航协程有界（longNavigateBot 段切 + 超时/停滞判定），完成标志
 // 由 step 轮询。协程防残留：reset（切换/关标签/下线）→ stopMoving 中断导航。
 // ⚠️ 全部节奏/范围常量统一收敛到 WanderBehaviorConfig（配置接口 + 默认值），
@@ -44,7 +46,7 @@ export interface WanderBehaviorConfig {
   radius: number;
   /** 单次游走最小选点距离（格）：剔除过近点（原地踱步不自然） */
   minDist: number;
-  /** 路线路径点数下限（每次游走随机 1~max 个路径点，依次走完算一次散步） */
+  /** 路线路径点数下限（每次游走随机 min~max 个路径点；0 = 本次保持不动） */
   routePointsMin: number;
   /** 路线路径点数上限 */
   routePointsMax: number;
@@ -74,7 +76,7 @@ export const DEFAULT_WANDER_CONFIG: WanderBehaviorConfig = {
   failRetry: 1,
   radius: 16,
   minDist: 3,
-  routePointsMin: 1,
+  routePointsMin: 0,
   routePointsMax: 3,
   speed: 0.6,
   lookAroundInterval: 8,
@@ -201,7 +203,6 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
   let run: Promise<unknown> | undefined; // 单次导航协程
   let runResult: NavigateResult | undefined; // 协程完成标志
   let lookTick = 0; // 转头节流计数
-  let failStreak = 0; // 连续失败计数（日志降频）
   const turning = { active: false }; // 分步转身进行中标志（防重叠）
   // ⚠️ reset 无参（Behavior.reset 签名）——用最近 step 的实体引用中断移动；
   // 必须放闭包内（每假人一实例），放模块级会跨假人共享误停他 bot（审核 M1）
@@ -256,9 +257,8 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
           phase = "pick";
           break;
         case "pick":
-          // 生成路线（1~3 路径点，总范围 16 格圆内；朝向偏置/顺延不折返）+
-          // 发起单次路线导航协程
-          logStroll(ctx.botName, "出发（生成路线+移动）");
+          // 生成路线（0~3 路径点，总范围 16 格圆内；朝向偏置/顺延不折返；
+          // 0 个点 = 本次保持不动）+ 发起单次路线导航协程
           startRun(ctx.botName);
           phase = "walk";
           break;
@@ -266,16 +266,12 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
           if (runResult === undefined) return; // 导航中：等待
           run = undefined;
           if (runResult === NavigateResult.Arrived) {
-            // 到达：短暂休息（走停节律）
-            failStreak = 0;
-            logStroll(ctx.botName, "到达，休息片刻");
+            // 到达（含生成 0 点保持不动）：短暂休息（走停节律）
             phase = "rest";
             wait = randomBetween(config.restMin, config.restMax);
           } else {
             // 导航失败（无路径/卡住/超时）：快速重试——短等待后重新选点，
-            // 不进入长休息（避免"站半天"）；日志降频（连续失败只打首条）
-            failStreak++;
-            if (failStreak === 1) logStroll(ctx.botName, `导航失败(${runResult})，快速重试`);
+            // 不进入长休息（避免"站半天"）
             phase = "idle";
             wait = config.failRetry;
           }
@@ -290,9 +286,4 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
       }
     },
   };
-}
-
-/** 游走状态日志（状态切换时打印——节流不刷屏；仓库约定统一 console.warn） */
-function logStroll(botName: string, msg: string): void {
-  console.warn(`[MockPlayer] 生物AI ${botName} 随机游走: ${msg}`);
 }

@@ -126,9 +126,9 @@ test("朝向偏置选点：默认六成概率朝朝向方向", () => {
 
 import { generateStrollRoute } from "../scripts/rules/coords/Stroll";
 
-test("路线生成：点数由首随机决定（1~3），各点距起点 ∈ [minDist, radius]，y 保持起点", () => {
+test("路线生成：点数由首随机决定（0~3），各点距起点 ∈ [minDist, radius]，y 保持起点", () => {
   const center = { x: 0, y: 64, z: 0 };
-  // 首 rng=0.5 → count = 1 + floor(0.5*3) = 2；p1: bias 分支(0.5<0.6) angle=0°、
+  // 首 rng=0.5 → count = 0 + floor(0.5*4) = 2；p1: bias 分支(0.5<0.6) angle=0°、
   //   dist=3+floor(0.5*14)=10 → (0,10)；p2: 顺延分支(0.5<0.7) baseYaw=0°、
   //   dist=3+floor(0.0*14)=3 → (0,3)
   const seq = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0];
@@ -145,10 +145,19 @@ test("路线生成：点数由首随机决定（1~3），各点距起点 ∈ [mi
   assert.ok(Math.abs(p2.z - 3) < 1e-9, "p2 距起点 3 格（minDist）");
 });
 
+test("路线生成：首随机 0.0 → 0 个路径点（本次保持不动）", () => {
+  const center = { x: 0, y: 64, z: 0 };
+  const rng = () => 0.0;
+  const route = generateStrollRoute(center, 90, { rng });
+
+  assert.deepEqual(route, [], "0 个点 = 保持不动");
+});
+
 test("路线生成：首点朝转身方向偏置（yaw=90 → 面向 -X）", () => {
   const center = { x: 0, y: 64, z: 0 };
-  // 首 rng=0.0 → count=1；p1: bias(0.5<0.6) angle=90+(0.5*2-1)*60=90°、dist=10 → (-10,0)
-  const seq = [0.0, 0.5, 0.5, 0.5];
+  // 首 rng=0.25 → count = floor(0.25*4) = 1；p1: bias(0.5<0.6) angle=90+(0.5*2-1)*60=90°、
+  //   dist=3+floor(0.5*14)=10 → (-10,0)
+  const seq = [0.25, 0.5, 0.5, 0.5];
   const rng = () => seq.shift() ?? 0.5;
   const route = generateStrollRoute(center, 90, { rng });
 
@@ -157,11 +166,11 @@ test("路线生成：首点朝转身方向偏置（yaw=90 → 面向 -X）", () 
   assert.ok(Math.abs(route[0]!.x + 10) < 1e-9, "朝 -X 走 10 格");
 });
 
-test("路线生成：随机 200 次各点必在 [minDist, radius] 圆内、点数必 1~3（边界由数学保证）", () => {
+test("路线生成：随机 200 次各点必在 [minDist, radius] 圆内、点数必 0~3（边界由数学保证）", () => {
   const center = { x: 7, y: 64, z: -3 };
   for (let i = 0; i < 200; i++) {
     const route = generateStrollRoute(center, 0);
-    assert.ok(route.length >= 1 && route.length <= 3, "点数 ∈ [1,3]");
+    assert.ok(route.length >= 0 && route.length <= 3, "点数 ∈ [0,3]");
     for (const p of route) {
       const dist = Math.hypot(p.x - center.x, p.z - center.z);
       assert.ok(dist >= 3 - 1e-9 && dist <= 16 + 1e-9, `点距 ${dist} ∈ [3,16]`);
