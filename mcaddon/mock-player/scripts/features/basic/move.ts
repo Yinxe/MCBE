@@ -28,6 +28,9 @@ const NAV_ARRIVE_XZ = 1.5;
 /** 到达判定 y 容差（格）：|dy| ≤ 4 视为到达——选点/地面修正使目标 y
  *  与假人当前层常有几格差，xz 已到位即算到达（不再因 y 差卡住/原地不动） */
 const NAV_ARRIVE_Y_TOLERANCE = 4;
+/** 附近容忍半径（格，水平 xz）：nearby=true 时停滞判定改用此半径——
+ *  目标被方块阻挡无法精确停靠时，"附近就算成功" */
+const NEARBY_ARRIVE_XZ = 1;
 
 /** 到达判定（水平 xz ≤ NAV_ARRIVE_XZ 且 |dy| ≤ NAV_ARRIVE_Y_TOLERANCE）：
  *  导航目标是"站到该位置"——xz 已到位、y 相差不大（上下 4 格内可攀爬/
@@ -36,6 +39,16 @@ const NAV_ARRIVE_Y_TOLERANCE = 4;
 function arrivedAt(loc: Vector3, target: Vector3): boolean {
   return (
     Math.hypot(loc.x - target.x, loc.z - target.z) <= NAV_ARRIVE_XZ &&
+    Math.abs(loc.y - target.y) <= NAV_ARRIVE_Y_TOLERANCE
+  );
+}
+
+/** 附近容忍判定（nearby=true）：停滞时水平距离 ≤ NEARBY_ARRIVE_XZ（y 容差
+ *  内）即算到达——目的地坐标存在方块阻挡、路径失败无法精确停靠时，附近
+ *  就算移动成功（用户拍板的独立功能参数，默认关） */
+function nearbyArrived(loc: Vector3, target: Vector3): boolean {
+  return (
+    Math.hypot(loc.x - target.x, loc.z - target.z) <= NEARBY_ARRIVE_XZ &&
     Math.abs(loc.y - target.y) <= NAV_ARRIVE_Y_TOLERANCE
   );
 }
@@ -116,6 +129,8 @@ function updateBotPositionData(botName: string, loc: Vector3, dimensionId: strin
  *   - 总时长 30 秒仍在移动但未到达 → 超时失败
  * 移动监听：位置变化时自动更新假人 lastPoint（位置/维度/朝向）+ 持久化（距离阈值控频）。
  * @param callbacks 移动过程回调（onStart/onMoving/onStuck/onComplete，全部可选）
+ * @param nearby 附近容忍（独立功能参数，默认 false）：停滞时水平距离 ≤1 格
+ *      即算移动成功——目的地坐标存在方块阻挡、路径失败无法精确停靠时用
  * @returns 多状态结果（见 NavigateResult 枚举），永不 reject
  */
 export async function navigateBot(
@@ -123,6 +138,7 @@ export async function navigateBot(
   target: Vector3,
   speed = NAVIGATE_SPEED,
   callbacks?: NavigateCallbacks,
+  nearby = false,
 ): Promise<NavigateResult> {
   const bot = resolveBotPlayer(botName);
   if (!bot) return NavigateResult.Unavailable;
@@ -180,8 +196,11 @@ export async function navigateBot(
         callbacks?.onStuck?.(loc, stillCount);
         if (stillCount >= NAV_STILL_LIMIT) {
           // 0.5 秒内位置未变化 → 假人已停下：到达判定（水平 + y 容差）=
-          //  已到达；否则 = 移动超时（卡住）
-          const result = arrivedAt(loc, target) ? NavigateResult.Arrived : NavigateResult.StillTimeout;
+          //  已到达；nearby=true 用附近容忍半径（目标被阻挡时附近即成功）；
+          // 否则 = 移动超时（卡住）
+          const result = (nearby ? nearbyArrived(loc, target) : arrivedAt(loc, target))
+            ? NavigateResult.Arrived
+            : NavigateResult.StillTimeout;
           callbacks?.onComplete?.(result);
           return result;
         }
@@ -206,7 +225,7 @@ type SegmentOutcome = "ok" | "no-path" | "still-timeout" | "timeout" | "entity-i
 /**
  * 执行单段导航并监测至段完成（异步；每段独立计时）。
  * 非末段：距段尾 ≤ 切换距离即成功（假人仍在移动——外层无缝进入下一段）；
- * 末段：静止且距目标 ≤ 到达距离才算到达。
+ * 末段：静止且距目标 ≤ 到达距离才算到达（nearby=true 用附近容忍半径）。
  * 失败原因：无路径 / 停滞未达切换点 / 段超时 / 实体失效 / 监测异常。
  */
 async function runSegment(
@@ -216,6 +235,7 @@ async function runSegment(
   speed: number,
   isLast: boolean,
   callbacks?: NavigateCallbacks,
+  nearby = false,
 ): Promise<SegmentOutcome> {
   // 实体有效性（重试时立即返回，不发起导航）
   if (!bot.isValid) return "entity-invalid";
@@ -254,8 +274,9 @@ async function runSegment(
         Math.abs(loc.y - waypoint.y) <= NAV_ARRIVE_Y_TOLERANCE;
       if (!isLast && nearWaypoint) return "ok";
       if (stillCount >= NAV_STILL_LIMIT) {
-        // 假人已停下：末段=到达判定（水平 + y 容差）；非末段=已在切换距离内仍算成功，否则停滞失败
-        if (isLast) return arrivedAt(loc, waypoint) ? "ok" : "still-timeout";
+        // 假人已停下：末段=到达判定（水平 + y 容差；nearby=true 用附近容忍
+        // 半径）；非末段=已在切换距离内仍算成功，否则停滞失败
+        if (isLast) return (nearby ? nearbyArrived(loc, waypoint) : arrivedAt(loc, waypoint)) ? "ok" : "still-timeout";
         if (nearWaypoint) return "ok";
         return "still-timeout";
       }
@@ -289,6 +310,8 @@ const SEGMENT_OUTCOME_TO_RESULT: Record<Exclude<SegmentOutcome, "ok">, NavigateR
  * @param speed 导航速度（缺省 1）
  * @param callbacks 移动过程回调（onStart 触发一次；onMoving/onStuck 全程透传；
  *                  onComplete 整体收口）
+ * @param nearby 附近容忍（独立功能参数，默认 false）：段末停滞时水平距离
+ *      ≤1 格即算段成功——目的地坐标被方块阻挡无法精确停靠时用
  * @returns NavigateResult：arrived（全部段完成）/ 失败原因
  *          （no-path / still-timeout / timeout / unavailable / entity-invalid / error）
  * @throws 永不 reject（异常归 error）
@@ -298,13 +321,14 @@ export async function longNavigateBot(
   target: Vector3,
   speed = NAVIGATE_SPEED,
   callbacks?: NavigateCallbacks,
+  nearby = false,
 ): Promise<NavigateResult> {
   const bot = resolveBotPlayer(botName);
   if (!bot) return NavigateResult.Unavailable;
 
   const waypoints = buildLongNavigateWaypoints(bot.location, target);
   // 单段（≤16 格）：与短程寻路等价（复用其到达/停滞语义）
-  if (waypoints.length === 1) return navigateBot(botName, target, speed, callbacks);
+  if (waypoints.length === 1) return navigateBot(botName, target, speed, callbacks, nearby);
 
   // 初始朝向（段间切换/重试不 stopMoving——引擎覆盖当前移动保持无缝）
   try {
@@ -321,7 +345,7 @@ export async function longNavigateBot(
     try {
       // ⚠️ 容错：长距离移动小差错（无路径/停滞/超时）经 retry 重试，最多 3 次
       outcome = await retry(
-        () => runSegment(bot, botName, waypoints[seg]!, speed, isLast, callbacks),
+        () => runSegment(bot, botName, waypoints[seg]!, speed, isLast, callbacks, nearby),
         {
           attempts: LONG_NAV_SEGMENT_RETRY_ATTEMPTS,
           isSuccess: (r) => r === "ok",
