@@ -121,3 +121,51 @@ test("朝向偏置选点：默认六成概率朝朝向方向", () => {
   assert.ok(Math.abs(p.x - 0.5) <= 8 && Math.abs(p.z - 0.5) <= 8, "仍在半径内");
   void dx;
 });
+
+// ─── 路线模式（1~3 路径点，总范围 radius 圆内） ─────────
+
+import { generateStrollRoute } from "../scripts/rules/coords/Stroll";
+
+test("路线生成：点数由首随机决定（1~3），各点距起点 ∈ [minDist, radius]，y 保持起点", () => {
+  const center = { x: 0, y: 64, z: 0 };
+  // 首 rng=0.5 → count = 1 + floor(0.5*3) = 2；p1: bias 分支(0.5<0.6) angle=0°、
+  //   dist=3+floor(0.5*14)=10 → (0,10)；p2: 顺延分支(0.5<0.7) baseYaw=0°、
+  //   dist=3+floor(0.0*14)=3 → (0,3)
+  const seq = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0];
+  const rng = () => seq.shift() ?? 0.5;
+  const route = generateStrollRoute(center, 0, { rng });
+
+  assert.equal(route.length, 2, "首随机 0.5 → 2 个路径点");
+  const p1 = route[0]!;
+  assert.ok(Math.abs(p1.x) < 1e-9, "p1 角度 0° 无横向偏移");
+  assert.ok(Math.abs(p1.z - 10) < 1e-9, "p1 朝 +Z 10 格");
+  assert.equal(p1.y, 64, "y 保持起点高度");
+  const p2 = route[1]!;
+  assert.ok(Math.abs(p2.x) < 1e-9, "p2 顺延（与前点同向）无横向偏移");
+  assert.ok(Math.abs(p2.z - 3) < 1e-9, "p2 距起点 3 格（minDist）");
+});
+
+test("路线生成：首点朝转身方向偏置（yaw=90 → 面向 -X）", () => {
+  const center = { x: 0, y: 64, z: 0 };
+  // 首 rng=0.0 → count=1；p1: bias(0.5<0.6) angle=90+(0.5*2-1)*60=90°、dist=10 → (-10,0)
+  const seq = [0.0, 0.5, 0.5, 0.5];
+  const rng = () => seq.shift() ?? 0.5;
+  const route = generateStrollRoute(center, 90, { rng });
+
+  assert.equal(route.length, 1);
+  assert.ok(Math.abs(route[0]!.z) < 1e-9, "90° 方向无 Z 偏移");
+  assert.ok(Math.abs(route[0]!.x + 10) < 1e-9, "朝 -X 走 10 格");
+});
+
+test("路线生成：随机 200 次各点必在 [minDist, radius] 圆内、点数必 1~3（边界由数学保证）", () => {
+  const center = { x: 7, y: 64, z: -3 };
+  for (let i = 0; i < 200; i++) {
+    const route = generateStrollRoute(center, 0);
+    assert.ok(route.length >= 1 && route.length <= 3, "点数 ∈ [1,3]");
+    for (const p of route) {
+      const dist = Math.hypot(p.x - center.x, p.z - center.z);
+      assert.ok(dist >= 3 - 1e-9 && dist <= 16 + 1e-9, `点距 ${dist} ∈ [3,16]`);
+      assert.equal(p.y, 64, "y 保持起点高度");
+    }
+  }
+});

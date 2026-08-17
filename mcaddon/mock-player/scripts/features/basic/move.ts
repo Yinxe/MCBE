@@ -14,8 +14,8 @@ import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { waitTicks, distance3d } from "../utils";
 import {
   GRASS_BLOCK_BONUS, isStableBlockType, pickDirectionalStrollPoint, selectStrollTarget, strollWalkValue,
-  STROLL_CANDIDATE_SAMPLES, STROLL_DEFAULT_RADIUS, STROLL_MIN_DISTANCE,
-  type RandomStrollOptions, type StrollCandidate,
+  generateStrollRoute, STROLL_CANDIDATE_SAMPLES, STROLL_DEFAULT_RADIUS, STROLL_DEFAULT_ROUTE_RADIUS,
+  STROLL_MIN_DISTANCE, type RandomStrollOptions, type StrollCandidate, type StrollRouteOptions,
 } from "../../rules/coords/Stroll";
 
 /** 导航速度 */
@@ -348,26 +348,17 @@ export async function longNavigateBot(
 const STROLL_MAX_RAISE = 8;
 
 /**
- * 单次候选采样（官方陆地目标算法一步，地面性修复版）：
- * 随机方向（朝向偏置）→ **从当前地面层起**找"可站立点"：
- *   非固体 且 下方是稳定方块（遮挡形状完整）且 非水——
- * 目标点保证站在真实地面上（消除悬空点导致的 no-path）。
- * 选点距离 ∈ [minDist, radius]（minDist 排除过近点——原地踱步不自然）。
- * 无有效候选 → undefined（调用方凑满 10 个候选后选偏好最大者）。
+ * 可站立修正（mc 层世界查询；单点/路线游走共用）：
+ * 从**当前地面层起**找"可站立点"：非固体 且 下方是稳定方块（遮挡形状
+ * 完整）且 非水——目标点保证站在真实地面上（消除悬空点导致的 no-path）。
+ * 返回修正后目标点 + 行走目标值（官方偏好；路线模式只用点）。
+ * 无有效候选 → undefined。
  */
-function sampleStrollCandidate(
-  bot: SimulatedPlayer,
-  radius: number,
-  yawDeg: number,
-  minDist: number,
-): StrollCandidate | undefined {
-  const loc = bot.location;
-  const baseY = Math.floor(loc.y);
-  // 随机方向：朝向偏置（六成概率朝当前转身方向——官方随机视角带动游走方向）
-  const point = pickDirectionalStrollPoint(loc, yawDeg, radius, undefined, undefined, undefined, minDist);
-  const x = Math.floor(point.x);
-  const z = Math.floor(point.z);
-  let y = baseY; // 从当前地面层起（不随机高度偏移——偏移会产生悬空点）
+function resolveStandableStrollPoint(bot: SimulatedPlayer, candidate: Vector3): StrollCandidate | undefined {
+  const x = Math.floor(candidate.x);
+  const z = Math.floor(candidate.z);
+  const baseY = Math.floor(bot.location.y); // 从当前地面层起（不随机高度偏移——偏移会产生悬空点）
+  let y = baseY;
   try {
     const dim = bot.dimension;
     // 从当前层向上找"可站立点"：非固体 + 下方稳定方块（遮挡形状完整）
@@ -402,6 +393,23 @@ function sampleStrollCandidate(
 }
 
 /**
+ * 单次候选采样（官方陆地目标算法一步，地面性修复版）：
+ * 随机方向（朝向偏置）→ 可站立修正。选点距离 ∈ [minDist, radius]
+ * （minDist 排除过近点——原地踱步不自然）。无有效候选 → undefined
+ * （调用方凑满 10 个候选后选偏好最大者）。
+ */
+function sampleStrollCandidate(
+  bot: SimulatedPlayer,
+  radius: number,
+  yawDeg: number,
+  minDist: number,
+): StrollCandidate | undefined {
+  // 随机方向：朝向偏置（六成概率朝当前转身方向——官方随机视角带动游走方向）
+  const point = pickDirectionalStrollPoint(bot.location, yawDeg, radius, undefined, undefined, undefined, minDist);
+  return resolveStandableStrollPoint(bot, point);
+}
+
+/**
  * 单次随机游走：官方陆地目标算法选点（10 候选选行走目标值最大者）→
  * 单次导航（≤16 格直达）。
  * @param botName 假人名
@@ -422,4 +430,42 @@ export async function randomStrollOnce(botName: string, options: RandomStrollOpt
   const target = selectStrollTarget(samples);
   if (!target) return NavigateResult.NoPath; // 周围无可站立近点
   return navigateBot(botName, target, options.speed ?? NAVIGATE_SPEED);
+}
+
+/**
+ * 单次随机游走路线（路线模式：每次游走 1~3 个路径点，总范围 radius 圆内，
+ * 方向顺延不折返）：生成路线 → 逐点可站立修正（修正失败的点丢弃，全丢 =
+ * 无可站立点）→ 依次导航（longNavigateBot 段切处理可覆盖任意点间距）。
+ * 任一路径点失败 → 本次路线中止返回该失败原因（wander 按失败快速重试，
+ * 不进入长休息）。
+ * @param botName 假人名
+ * @param options 总范围半径/最小距离/点数上下限/速度（透传路线生成）
+ * @returns 导航结果（arrived/中途失败原因；永不 reject）
+ */
+export async function randomStrollRouteOnce(
+  botName: string,
+  options: RandomStrollOptions & StrollRouteOptions = {},
+): Promise<NavigateResult> {
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return NavigateResult.Unavailable;
+  // 路线生成（纯逻辑：1~3 点，总范围 radius 圆内；方向顺延不折返）
+  const route = generateStrollRoute(bot.location, bot.getRotation().y, {
+    radius: options.radius ?? STROLL_DEFAULT_ROUTE_RADIUS,
+    minDist: options.minDist,
+    pointMin: options.pointMin,
+    pointMax: options.pointMax,
+  });
+  // 逐点可站立修正（丢弃修正失败的点——保证导航终点真实可站立）
+  const standable: Vector3[] = [];
+  for (const p of route) {
+    const fixed = resolveStandableStrollPoint(bot, p);
+    if (fixed) standable.push(fixed.point);
+  }
+  if (standable.length === 0) return NavigateResult.NoPath; // 整条路线无可站立点
+  // 依次导航：任一点失败 → 本次路线中止（walk 快速重试）
+  for (const point of standable) {
+    const r = await longNavigateBot(botName, point, options.speed ?? NAVIGATE_SPEED);
+    if (r !== NavigateResult.Arrived) return r;
+  }
+  return NavigateResult.Arrived;
 }

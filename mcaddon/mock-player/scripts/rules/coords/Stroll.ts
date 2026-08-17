@@ -10,8 +10,11 @@
 
 import type { Vec3 } from "../../rules/Types";
 
-/** 随机游走默认水平半径（格）：近点游走（不计算 16 格之外） */
+/** 随机游走默认水平半径（格）：单点游走（不计算 16 格之外） */
 export const STROLL_DEFAULT_RADIUS = 8;
+/** 随机游走路线默认总范围（格）：路线模式所有路径点在此半径圆内
+ * （用户拍板：总范围 16——恰为直达导航上限，分段导航可覆盖） */
+export const STROLL_DEFAULT_ROUTE_RADIUS = 16;
 /** 候选采样次数（官方：随机挑选 10 个位置） */
 export const STROLL_CANDIDATE_SAMPLES = 10;
 /** 随机游走默认最小选点距离（格）：低于此距离的点看起来原地忽走忽停，
@@ -129,4 +132,66 @@ export function pickDirectionalStrollPoint(
     y: center.y,
     z: Math.floor(center.z) + 0.5 + Math.cos(rad) * dist,
   };
+}
+
+/** 随机游走路线选项（路线模式） */
+export interface StrollRouteOptions {
+  /** 总范围（格，以起点为圆心；缺省 STROLL_DEFAULT_ROUTE_RADIUS=16） */
+  radius?: number;
+  /** 最小选点距离（格；缺省 STROLL_MIN_DISTANCE=3） */
+  minDist?: number;
+  /** 路径点数下限（缺省 1） */
+  pointMin?: number;
+  /** 路径点数上限（缺省 3——用户拍板：每次 1~3 个路径点） */
+  pointMax?: number;
+  /** 随机源（测试注入；缺省 Math.random） */
+  rng?: () => number;
+}
+
+/**
+ * 随机游走路线生成（路线模式：每次游走 1~3 个路径点，全部落在以起点为
+ * 圆心、radius 为半径的圆内——总范围；y 保留起点高度，可站立修正由 mc
+ * 层世界查询负责）。
+ * 方向语义（对齐朝向偏置选点）：
+ *   - 第 1 点：六成概率朝转身方向（yawDeg ±60°），其余全向——转身带动游走
+ *   - 后续点：以"前一点相对起点的方向"为基础 ±60° 顺延——路径向外延展、
+ *     不折返（像真实生物的散步路线）；距离 [minDist, radius] 均匀。
+ * @param center 假人当前位置（路线圆心）
+ * @param yawDeg 当前偏航（度；MCBE：0 = 面向 +Z 南，顺时针增加）
+ * @param options 范围/点数/随机源
+ */
+export function generateStrollRoute(
+  center: Vec3,
+  yawDeg: number,
+  options: StrollRouteOptions = {},
+): Vec3[] {
+  const radius = options.radius ?? STROLL_DEFAULT_ROUTE_RADIUS;
+  const minDist = options.minDist ?? STROLL_MIN_DISTANCE;
+  const pointMin = options.pointMin ?? 1;
+  const pointMax = options.pointMax ?? 3;
+  const rng = options.rng ?? Math.random;
+  const count = pointMin + Math.floor(rng() * (pointMax - pointMin + 1));
+
+  const points: Vec3[] = [];
+  for (let i = 0; i < count; i++) {
+    let angleDeg: number;
+    if (i === 0) {
+      // 第 1 点：六成概率朝转身方向（同 pickDirectionalStrollPoint 语义）
+      angleDeg = rng() < 0.6 ? yawDeg + (rng() * 2 - 1) * 60 : rng() * 360;
+    } else {
+      // 后续点：以前一点相对起点的方向为基础顺延（MCBE yaw 反推：
+      //   yaw = atan2(-dx, dz)；±60° 扩散——路径自然延展不折返）
+      const prev = points[i - 1]!;
+      const baseYaw = (Math.atan2(-(prev.x - center.x), prev.z - center.z) * 180) / Math.PI;
+      angleDeg = rng() < 0.7 ? baseYaw + (rng() * 2 - 1) * 60 : rng() * 360;
+    }
+    const rad = (angleDeg * Math.PI) / 180;
+    const dist = minDist + Math.floor(rng() * (radius - minDist + 1)); // minDist..radius 均匀
+    points.push({
+      x: center.x + -Math.sin(rad) * dist,
+      y: center.y,
+      z: center.z + Math.cos(rad) * dist,
+    });
+  }
+  return points;
 }

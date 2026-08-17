@@ -1,11 +1,13 @@
 // ─── 随机游走能力（新框架 scripts/ai：Behavior 状态机） ──
 // 用户拍板：利用新 AI 框架实现随机游走能力——空闲时随机走走停停。
 // 状态机（step 同步短步，无循环无 await——woodcut 纪律）：
-//   idle（间隔计数）→ pick（选近点 + 发起单次导航协程）→ walk（轮询完成）
+//   idle（间隔计数）→ pick（选路线 + 发起单次导航协程）→ walk（轮询完成）
 //   → rest（休息计数）→ idle 循环。
-// 近点（半径 ≤8 格，不计算 16 格之外）；单次导航协程有界（navigateBot 自带
-// 超时/停滞判定），完成标志由 step 轮询。
-// 协程防残留：reset（切换/关标签/下线）→ stopMoving 中断导航。
+// **路线模式**（用户拍板 2026-08-17）：每次游走生成 1~3 个路径点
+// （routePointsMin/Max），全部落在以起点为圆心、总范围 radius=16 格圆内
+// （方向顺延不折返——像真实生物的散步路线），依次走完算一次游走；
+// 单次路线导航协程有界（longNavigateBot 段切 + 超时/停滞判定），完成标志
+// 由 step 轮询。协程防残留：reset（切换/关标签/下线）→ stopMoving 中断导航。
 // ⚠️ 全部节奏/范围常量统一收敛到 WanderBehaviorConfig（配置接口 + 默认值），
 //    不再散落裸常量——调参只改配置。
 //
@@ -19,7 +21,7 @@
 import type { Behavior, BehaviorContext } from "../../../ai";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { system } from "@minecraft/server";
-import { randomStrollOnce, NavigateResult } from "../../basic/move";
+import { randomStrollRouteOnce, NavigateResult } from "../../basic/move";
 import type { AiBehaviorContext } from "../brainEngine";
 
 // ⚠️ 等待单位 = **引擎周期**（step 每 10 tick 一次，--wait 递减的是周期数）：
@@ -38,10 +40,14 @@ export interface WanderBehaviorConfig {
   restMax: number;
   /** 导航失败后的快速重试等待（引擎周期：失败不长时间站立） */
   failRetry: number;
-  /** 单次游走半径（格）：近点（≤16 格直达内） */
+  /** 单次游走总范围（格）：路线模式所有路径点在此半径圆内（16 = 直达上限） */
   radius: number;
   /** 单次游走最小选点距离（格）：剔除过近点（原地踱步不自然） */
   minDist: number;
+  /** 路线路径点数下限（每次游走随机 1~max 个路径点，依次走完算一次散步） */
+  routePointsMin: number;
+  /** 路线路径点数上限 */
+  routePointsMax: number;
   /** 游走速度（慢速散步） */
   speed: number;
   /** 转头节流（引擎周期 = 10 tick）：静止时偶尔扭头 */
@@ -66,8 +72,10 @@ export const DEFAULT_WANDER_CONFIG: WanderBehaviorConfig = {
   restMin: 2,
   restMax: 5,
   failRetry: 1,
-  radius: 8,
+  radius: 16,
   minDist: 3,
+  routePointsMin: 1,
+  routePointsMax: 3,
   speed: 0.6,
   lookAroundInterval: 8,
   lookAroundDistance: 5,
@@ -201,7 +209,13 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
 
   const startRun = (botName: string): void => {
     runResult = undefined;
-    run = randomStrollOnce(botName, { radius: config.radius, minDist: config.minDist, speed: config.speed })
+    run = randomStrollRouteOnce(botName, {
+      radius: config.radius,
+      minDist: config.minDist,
+      pointMin: config.routePointsMin,
+      pointMax: config.routePointsMax,
+      speed: config.speed,
+    })
       .then((r) => {
         runResult = r;
       })
@@ -242,8 +256,9 @@ export function makeWanderBehavior(config: WanderBehaviorConfig = DEFAULT_WANDER
           phase = "pick";
           break;
         case "pick":
-          // 选近点（朝向偏置——大概率朝转身方向；≥minDist 格）+ 发起单次导航协程
-          logStroll(ctx.botName, "出发（选点+移动）");
+          // 生成路线（1~3 路径点，总范围 16 格圆内；朝向偏置/顺延不折返）+
+          // 发起单次路线导航协程
+          logStroll(ctx.botName, "出发（生成路线+移动）");
           startRun(ctx.botName);
           phase = "walk";
           break;
