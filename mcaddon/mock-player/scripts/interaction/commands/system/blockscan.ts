@@ -11,7 +11,7 @@ import { system, CommandPermissionLevel, CustomCommandParamType } from "@minecra
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
-import { buildTreeSetReport, collectCoordinateSet, scanTreesFromSets, VALID_LOG_TYPE_IDS, VALID_LEAF_TYPE_IDS } from "../../../features/task/treeScan";
+import { buildTreeSetReport, collectCoordinateSet, scanTreesFromSets, VALID_LOG_TYPE_IDS, VALID_LEAF_TYPE_IDS } from "../../../features/flow";
 import { isAdmin } from "../auth";
 
 /** 默认扫描半径（格，空间体半边长） */

@@ -1,6 +1,7 @@
-// ─── 宝库任务端口实现（mc/features/task） ─────────────────
-// 任务型模块的执行层：VaultPorts 的 mc 适配（core/tasks/VaultTask 声明决策契约）。
-// 分层约定：mc/ai = AI 引擎（BotBrain 驱动树）；features/task = 具体任务执行。
+// ─── 宝库任务端口实现（legacy/ai，旧树任务适配层） ────────
+// 任务型模块的执行层：VaultPorts 的 mc 适配（legacy/ai/VaultTask 声明决策契约）。
+// 分层约定：legacy/ai 自含旧引擎（BotBrain 驱动树）+ 任务适配（VaultPorts/FishingPorts）；
+// 与新版 features/flow（工作流）无关——随旧树架构退役。
 // 感知驱动（用户规格 1.1.57）：sense() 一次返回完整感知快照——背包钥匙分类
 //   （普通/不详各多少）+ 附近宝库分类（普通/不详，按距离排序），编排层据此
 //   精确决策（优先不详宝库）；开不了宝库时按 core 诊断原因翻译通知。
@@ -22,15 +23,15 @@ import { system, world, Direction, BlockVolume, EquipmentSlot, type ItemStack, t
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, VaultKnowledge, VaultPorts } from "../../legacy/ai/VaultTask";
-import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "../../legacy/ai/VaultTask";
+import type { KeyInventory, NearbyVaults, VaultIdleReason, VaultInteractResult, VaultKnowledge, VaultPorts } from "./VaultTask";
+import { OMINOUS_TRIAL_KEY, TRIAL_KEY } from "./VaultTask";
 import type { Vec3 } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../../bootstrap/context";
-import { lookAt } from "../basic/PoseGateway";
-import { safeReconnect, reconnectingBots } from "../manage/pendingRespawn";
-import { distance3d, horizontalDistance, waitTicks } from "../utils";
+import { lookAt } from "../../features/basic/PoseGateway";
+import { safeReconnect, reconnectingBots } from "../../features/manage/pendingRespawn";
+import { distance3d, horizontalDistance, waitTicks } from "../../features/utils";
 
 // ─── 常量 ────────────────────────────────────────────────
 

@@ -17,11 +17,11 @@ import type { Block, Container, Dimension, Vector3 } from "@minecraft/server";
 import { system } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { botRegistry } from "../../bootstrap/context";
-import { resolveBotPlayer } from "../../bot/PlayerGateway";
-import type { CancelToken } from "../../rules/utils/CancelToken";
-import { lookAt } from "../basic/PoseGateway";
-import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
+import { botRegistry } from "../../../bootstrap/context";
+import { resolveBotPlayer } from "../../../bot/PlayerGateway";
+import type { CancelToken } from "../../../rules/utils/CancelToken";
+import { lookAt } from "../PoseGateway";
+import { inventoryContainerOf } from "../items/ItemComponentRead";
 
 // ─── 结果类型 ──────────────────────────────────────────
 

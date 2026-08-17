@@ -10,9 +10,9 @@ import type { Vector3 } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
-import { findFishingSpots } from "../../../features/task/fishing";
+import { findFishingSpots } from "../../../features/basic/fishing";
 import type { FindSpotsFailure } from "../../../rules/FishingRules";
-import { fishOnce, failureLabel } from "../../../features/task/fishingFlow";
+import { fishOnce, failureLabel } from "../../../features/flow";
 import { withContainer, type ContainerOpResult } from "../../../features/basic/items";
 import { inventoryContainerOf } from "../../../features/basic/items/ItemComponentRead";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";

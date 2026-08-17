@@ -1,7 +1,7 @@
-// ─── 钓鱼任务端口实现（mc/features/task） ─────────────────
-// 任务型模块的执行层：FishingPorts 的 mc 适配（core/tasks/FishingTask 声明
-// 决策契约）。分层约定：mc/ai = AI 引擎（BotBrain 驱动树）；features/task = 具体
-// 任务执行。
+// ─── 钓鱼任务端口实现（legacy/ai，旧树任务适配层） ────────
+// 任务型模块的执行层：FishingPorts 的 mc 适配（legacy/ai/FishingTask 声明
+// 决策契约）。分层约定：legacy/ai 自含旧引擎（BotBrain 驱动树）+ 任务适配
+// （VaultPorts/FishingPorts）；与新版 features/flow（工作流）无关——随旧树架构退役。
 //
 // 能力复用（不重复实现）：
 //   - sense        → findFishingSpots（getBlocks 扫描，半径 30）
@@ -18,12 +18,12 @@ import { system, world } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color } from "@yinxe/toolkit";
 
-import type { FishingKnowledge, FishingPorts } from "../../legacy/ai/FishingTask";
+import type { FishingKnowledge, FishingPorts } from "./FishingTask";
 import type { FishingSpot } from "../../rules/FishingRules";
 import { computeTargetYaw, isYawAligned, YAW_TOLERANCE_DEG } from "../../rules/FishingRules";
 import type { Vec3 } from "../../rules/Types";
 import { botRegistry } from "../../bootstrap/context";
-import { lookAt } from "../basic/PoseGateway";
+import { lookAt } from "../../features/basic/PoseGateway";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import {
   findFishingSpots,
@@ -32,9 +32,9 @@ import {
   isSpotUsable,
   reelFishingRod,
   spotAtStand,
-} from "./fishing";
-import { fishOnce } from "./fishingFlow";
-import { distance3d, horizontalDistance, waitTicks } from "../utils";
+} from "../../features/basic/fishing";
+import { fishOnce } from "../../features/flow/fishingFlow";
+import { distance3d, horizontalDistance, waitTicks } from "../../features/utils";
 
 // ─── 常量 ────────────────────────────────────────────────
 

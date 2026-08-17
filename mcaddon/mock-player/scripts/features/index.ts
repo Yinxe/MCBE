@@ -1,5 +1,5 @@
 // ─── Features barrel — re-exports all public API ────────
-// 归类：manage（生命周期管理）/ basic（基础原子操作）/ task（行为任务）/
+// 归类：manage（生命周期管理）/ basic（基础原子操作）/ flow（工作流）/
 //       state（状态标签）/ trident（三叉戟）。决策调 rules/items 等纯规则，副作用留本地。
 
 export { createBot, type CreateBotOptions } from "./manage/createBot";

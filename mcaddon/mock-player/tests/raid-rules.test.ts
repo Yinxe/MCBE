@@ -1,4 +1,4 @@
-// ─── core/tasks — 劫掠规则（事件驱动模块 features/raid/raidMode 的决策纯函数） ──
+// ─── core/tasks — 劫掠规则（事件驱动模块 features/flow/raidMode 的决策纯函数） ──
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

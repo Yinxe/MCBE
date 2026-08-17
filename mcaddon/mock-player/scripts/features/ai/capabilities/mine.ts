@@ -15,7 +15,7 @@
 import type { Behavior } from "../../../ai";
 import type { AiBehaviorContext } from "../brainEngine";
 import { system } from "@minecraft/server";
-import { breakBlockOnce, viewBlock, type BreakResultValue } from "../../task/blockBreak";
+import { breakBlockOnce, viewBlock, type BreakResultValue } from "../../basic/blocks";
 import { createCancelToken, type CancelToken } from "../../../rules/utils/CancelToken";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 

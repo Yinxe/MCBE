@@ -1,4 +1,4 @@
-// ─── 劫掠领域事件（features/raid 内聚） ──────────────────
+// ─── 劫掠领域事件（features/flow 内聚） ──────────────────
 // 事件负载只用可序列化 string/number。raidPhase 仅供通知/联动，不参与流程。
 // 生产端：raidMode.ts（effectAdd 事件监听）；订阅方按需（通知/统计联动）。
 

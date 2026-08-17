@@ -22,7 +22,7 @@ import { safeReconnect } from "../features/manage/pendingRespawn";
 import { reclaimBot, getReclaimPreview } from "../features/manage/reclaim";
 import { switchSpawnMode } from "../features/manage/spawnMode";
 import { startFollow, stopFollow, isFollowing } from "../features/state/follow";
-import { hasFishingRod, hasFishingHook, castFishingRod, reelFishingRod } from "../features/task/fishing";
+import { hasFishingRod, hasFishingHook, castFishingRod, reelFishingRod } from "../features/basic/fishing";
 import { scanTridents, isMainhandTrident, throwTridents } from "../features/trident/trident";
 import type { BotRegistry } from "../service/BotRegistry";
 
@@ -87,12 +87,12 @@ export class Bot extends BotCore {
   }
 
   /** 抛竿 */
-  castRod(): Promise<import("../features/task/fishing").CastRodResult> {
+  castRod(): Promise<import("../features/basic/fishing").CastRodResult> {
     return castFishingRod(this.name);
   }
 
   /** 收竿 */
-  reelRod(): Promise<import("../features/task/fishing").ReelRodResult> {
+  reelRod(): Promise<import("../features/basic/fishing").ReelRodResult> {
     return reelFishingRod(this.name);
   }
 

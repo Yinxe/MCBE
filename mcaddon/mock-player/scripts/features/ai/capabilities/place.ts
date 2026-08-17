@@ -1,12 +1,13 @@
 // ─── 自动放置能力（新框架 scripts/ai：Behavior 状态机） ──
 // 用户拍板：自动放置做成生物 AI 行为（简单能力）。
-// 逻辑（对齐旧标签行为）：复用原子放置能力 placeBlockOnce
-// （stopBreakingBlock → startBuild → stopBuild 放置主手方块到面前）。
+// 逻辑（对齐旧标签行为）：**直接调用原子放置能力 placeBlockOnce**
+// （异步：内部 system.run 包装 stopBreakingBlock → startBuild → stopBuild
+// 放置主手方块到面前）——生物 AI 只消费原子函数，不重复实现放置序列。
 // 常量统一收敛到 PlaceBehaviorConfig。
 
 import type { Behavior, BehaviorContext } from "../../../ai";
 import type { AiBehaviorContext } from "../brainEngine";
-import { placeBlockOnce } from "../../basic/items";
+import { placeBlockOnce } from "../../basic/blocks";
 
 /** 自动放置行为配置（统一管理） */
 export interface PlaceBehaviorConfig {
@@ -34,7 +35,9 @@ export function makePlaceBehavior(config: PlaceBehaviorConfig = DEFAULT_PLACE_CO
       if (++tick % config.interval !== 0) return;
       const bot = (ctx as AiBehaviorContext).bot; // 引擎注入实体——零 resolve
       if (!bot) return;
-      placeBlockOnce(bot); // 原子放置一个方块到面前（内部容错）
+      // 直接用原子放置能力（fire-and-forget：step 契约同步短步不可 await；
+      // 动作已入队 system.run，内部容错 resolve(false)，无未处理拒绝）
+      void placeBlockOnce(bot);
     },
   };
 }

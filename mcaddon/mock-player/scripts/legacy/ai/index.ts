@@ -3,8 +3,8 @@
 // 分层：框架（节点/组合/装饰，不含具体任务）+ 任务（VaultTask/FishingTask：
 //   端口 + 树装配，构建于框架之上）+ 劫掠/钓鱼规则。
 // ⚠️ 劫掠已从任务架构剥离（用户拍板：简单循环不配作为 task）——重写为
-//   事件驱动轻量模块 features/raid/raidMode.ts，不再走行为树。
-// 具体任务的 mc 适配（VaultPorts 等）在 features/task/。
+//   事件驱动轻量模块 features/flow/raidMode.ts，不再走行为树。
+// 具体任务的 mc 适配（VaultPorts / FishingPorts）与 BotBrain 同在 legacy/ai/。
 
 export { Status } from "./Status"; // 字符串枚举（值 + 类型）
 export { Blackboard } from "./Blackboard";

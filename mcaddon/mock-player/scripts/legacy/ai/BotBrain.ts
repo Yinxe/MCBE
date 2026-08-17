@@ -7,7 +7,7 @@
 //     重新开启时重新开始（"移除 tag 更新行为"）；**宝库任务跳过重连中的假人**
 // 任务：vault（宝库：互斥标签）/ fishing（钓鱼）——各自树实例与黑板，互不干扰。
 // ⚠️ 劫掠已剥离（用户拍板：简单循环不配作为 task）——由事件驱动模块
-//   features/raid/raidMode.ts 独立驱动（botTagsChanged/botOnline 事件钩子），
+//   features/flow/raidMode.ts 独立驱动（botWorkModeChanged/botOnline 事件钩子），
 //   不再经本引擎轮询对账。
 
 import { system, world, type Player } from "@minecraft/server";
@@ -21,8 +21,8 @@ import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry } from "../../bootstrap/context";
 import { resolveBot } from "../../bot/BotCore";
 import { reconnectingBots } from "../../features/manage/pendingRespawn";
-import { vaultPorts } from "../../features/task/VaultPorts";
-import { fishingPorts } from "../../features/task/FishingPorts";
+import { vaultPorts } from "./VaultPorts";
+import { fishingPorts } from "./FishingPorts";
 
 // ─── 常量 ────────────────────────────────────────────────
 

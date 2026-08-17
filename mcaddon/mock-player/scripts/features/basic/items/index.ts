@@ -7,7 +7,7 @@
 //   - toolHealth          工具耐久（耐久变化 → 背包找同类健康工具替换）
 //   - McItemCodec         物品编解码（ItemStack ↔ SerializedItemStack / 容器收集 / 状态捕获）
 //   - containerInteraction 容器交互（withContainer：看向容器 → 回调自由取放）
-//   - blockPlace          放置方块（同步原子：stopBreakingBlock→startBuild→stopBuild 放面前）
+
 // 非物品类原子能力（control/EntityTags/move/PoseGateway/sneak/teleport）留在 basic/ 根。
 
 export { getMainhandOptions, setMainhandSlot, type MainhandOption } from "./mainhand";
@@ -20,4 +20,4 @@ export {
   collectContainerItems, collectEquipment, serializeItemStack, itemStackToPreview,
 } from "./McItemCodec";
 export { withContainer, type ContainerOpResult, type ContainerAccess } from "./containerInteraction";
-export { placeBlockOnce } from "./blockPlace";
+

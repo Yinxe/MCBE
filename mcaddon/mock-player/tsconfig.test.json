@@ -28,6 +28,8 @@
     "lib",
     "dist",
     "scripts/legacy/ai/BotBrain.ts",
+    "scripts/legacy/ai/VaultPorts.ts",
+    "scripts/legacy/ai/FishingPorts.ts",
     "scripts/bootstrap",
     "scripts/features",
     "scripts/interaction",

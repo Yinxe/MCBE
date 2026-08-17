@@ -2,14 +2,14 @@
 // /mp:breakblock <假人> [x y z]：持续破坏一个方块直到消失——
 //   无坐标 = 假人视线方向方块（viewBlock 探测）；
 //   有坐标 = 指定坐标方块（breakBlockAt 持续破坏）。
-// 工作流（features/task/blockBreak.ts）：每 tick 起手 breakBlock +
+// 工作流（features/basic/blocks/blockBreak.ts）：每 tick 起手 breakBlock +
 // 轮询检测（实体/距离/方块消失）+ 成功信号 broken + 全路径清理。
 
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 
-import { breakBlockAt, viewBlock, type BreakResult } from "../../../features/task/blockBreak";
+import { breakBlockAt, viewBlock, type BreakResult } from "../../../features/basic/blocks";
 import { resolveBotForCommand } from "../auth";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { isAdmin } from "../auth";

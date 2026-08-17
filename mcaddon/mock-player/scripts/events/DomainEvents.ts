@@ -5,7 +5,7 @@
 //                  如劫掠模式：挂上标签 → 启动循环，移除 → 停止——替代旧 10 tick
 //                  引擎轮询对账）
 // ⚠️ 劫掠领域事件（raidStarted/raidVictory/raidPhase）已**内聚到劫掠模块**
-//    （features/raid/raidMode.ts 的 RaidEvents 命名空间）——本文件不再持有。
+//    （features/flow/raidMode.ts + RaidEvents.ts）——本文件不再持有。
 // 订阅方通过信号解耦，不直接依赖任务内部实现。
 // 事件负载只用可序列化的 string/number，不携带 mc 对象——保证 core 纯净。
 

@@ -24,7 +24,7 @@ import { color } from "@yinxe/toolkit";
 import { diffLoot, initialBiteTracker, isWaterBlock, judgeHookPlacement, makeLootFingerprint, updateBiteTracker, type BackpackInfo, type BiteTracker, type FishingFailureReason, type FishingOutcome, type HookPlacement, type LootItem } from "../../rules/FishingRules";
 import { enchantDisplayName } from "../../rules/format/EnchantZh";
 import { BOT_TAG, TAG_FISH_MODE } from "../../rules/tags/BotTags";
-import { castFishingRod, findOwnHooks, reelFishingRod } from "./fishing";
+import { castFishingRod, findOwnHooks, reelFishingRod } from "../basic/fishing";
 import { enchantableOf } from "../basic/items/ItemComponentRead";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { waitTicks } from "../utils";

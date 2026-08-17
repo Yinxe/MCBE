@@ -15,38 +15,98 @@ pnpm run test:core   # core 单测（tsc -p tsconfig.test.json → node --test�
 
 ---
 
-## 架构（六边形分层，对齐 item-route）
+## 架构（顶层目录语义）
 
 ```
 scripts/
-├── main.ts          # 4-Phase DI 组合根（只装配）：startup 注册命令 → worldLoad 挂载
-│                    #   机制（initTridentTracker / initRaidMode）+ AI 引擎（startBrainEngine）
-├── core/            # 领域层：零 @minecraft 依赖，可 node 单测
-│   ├── ai/          # AI 编排框架（行为树：节点/组合/装饰/黑板/Status 枚举，零具体任务）
-│   ├── tasks/       # 任务型模块（VaultTask 宝库 / FishingTask 钓鱼：感知快照+端口契约+树装配）
-│   └── model/events/tags/coords/items/storage/service/xp/format
-├── mc/              # 适配层：只做 mcapi 副作用
-│   ├── ai/          # BotBrain：AI 引擎（每假人每任务一棵树 + 10tick 驱动 + 标签对账）
-│   ├── tasks/       # 任务执行（VaultPorts / FishingPorts：感知/导航/交互/事件订阅）
-│   └── bootstrap/adapters/features/commands/events/ui
-└── tests/           # node:test（只测 core；mc 层靠游戏内冒烟）
+├── main.ts                    # 4-Phase 启动装配（组合根，只装配不写业务）：startup 注册
+│                              #   命令/测试维度 → worldLoad 恢复持久化 → 数据迁移 →
+│                              #   标签行为引擎 → 三叉戟/钓鱼钩/战利品追踪 → 劫掠模式 →
+│                              #   旧 AI 引擎（legacy BotBrain）→ 生物 AI 引擎（新框架）
+├── ai/                        # 生物 AI 框架（驱动 features/ai 的能力状态机）
+│   └── Behavior.ts            # BehaviorRunner：能力 = 感知-决策-同步短步（step 无循环
+│                              #   无 await）；同目录 Memory / Goal / GoalSelector / Sensor /
+│                              #   Status / Tree / ResourceLock / Action。零 @minecraft 可单测
+├── bootstrap/                 # 启动初始化（装配 + 统一入口 + 迁移）
+│   ├── context.ts             # 运行时装配上下文：mc 层单例（botRegistry / botStore /
+│   │                          #   configStore / saveCoordinator / inventoryStorage）
+│   ├── save.ts                # SaveCoordinator：全部持久化**写**的唯一入口
+│   ├── migration.ts           # 数据迁移（旧版本升级通道，幂等）
+│   └── uiDrivers.ts           # UI 领域事件订阅装配（各模块 registerUiSubscriptions 聚合）
+├── bot/                       # 假人 OOP 封装（基于机器人的面向对象）
+│   ├── Bot.ts / BotCore.ts    # Bot 类：能力即方法（navigateTo/swapMainhand/...）；
+│   │                          #   BotCore = 纯逻辑基座（可单测），Bot = mc 委托扩展
+│   └── PlayerGateway.ts       # SimulatedPlayer 解析唯一入口（含缓存/名称占用/区块检测）
+├── events/                    # 事件订阅与事件声明
+│   ├── DomainEvents.ts        # BotEvents 领域事件（生命周期/认主/行为/标签/工作模式）
+│   ├── EventSignal.ts         # 事件信号实现（core 零依赖）
+│   ├── UiEvents.ts            # BotUiEvent（UI 只发布事件，零功能 import）
+│   └── *.ts                   # world 事件订阅薄壳（playerJoin/playerLeave/entityDie/...）
+├── features/                  # 核心功能封装（副作用层）
+│   ├── ai/                    # 生物 AI 行为：brainEngine（10 tick 对账 + 驱动）+ capabilities
+│   │                          #   （wander 闲逛 / mine 定点挖掘 / place 定点放置 / attack 攻击）
+│   ├── basic/                 # 基础**原子性**功能（单动作不可细分）：blocks（破坏/放置）/
+│   │                          #   items（背包/主手/使用/装备）/ fishing（发杆/收竿）/
+│   │                          #   control / move（导航）/ PoseGateway（体态）/ sneak /
+│   │                          #   teleport / EntityTags
+│   ├── manage/                # 假人生命周期管理（create/delete/kill/online/offline/spawn/
+│   │                          #   reclaim/rename/spawnPoint/spawnMode/gametestContext...）
+│   ├── raid/                  # 劫掠模式（事件驱动轻量模块：无树、无端口、零轮询）
+│   ├── flow/                  # **工作流（flow）**：一组原子功能（basic）组合的流程——
+│   │                          #   fishingFlow（钓鱼流程）、fishingHookTracker（感知基础）、
+│   │                          #   treeScan（woodcut 扫描壳）；barrel 统一出口
+│   ├── state/                 # ⚠️ 定位待确认：旧标签行为引擎（behavior，TAG 驱动
+│   │                          #   autoMine/autoPlace/...）+ 跟随（follow）+ 标签渠道（setTags）
+│   ├── trident/               # ⚠️ 三叉戟 mc 副作用（投掷/认主标记/上线夺回）
+│   └── inventoryStorage.ts    # ⚠️ 库存存储（事件驱动增量保存 + 对账兜底；位置待定）
+├── interaction/               # 交互层：命令 + UI
+│   ├── commands/              # /mp:* 命令注册（lifecycle / navigation / behavior /
+│   │                          #   activity / inspect / system）
+│   └── ui/                    # ActionForm 面板（bot / panels/*）+ 格式化 / 帮助
+├── legacy/                    # 旧时代遗留（保留运行，部分功能未重写）
+│   └── ai/                    # 行为树框架（VaultTask / FishingTask 端口契约 + 树装配）+
+│                              #   BotBrain 引擎（10 tick 驱动宝库/钓鱼树；劫掠已剥离）+
+│                              #   任务 mc 适配（VaultPorts / FishingPorts，随旧架构退役）
+├── rules/                     # 规则模块（纯逻辑，零 @minecraft 可单测）
+│   ├── coords/ items/ format/ tags/ tree/ utils/ xp/
+│   └── DefenseRules / FishingRules / RaidRules / Types
+└── service/                   # 服务模块（core 纯逻辑 + 端口）
+    ├── BotRegistry / BotVisibility / QuotaRules / ReclaimPlanner /
+    │   RecordMigration / ModConfigRules
+    └── port/                  # 端口定义（BotStore / IntervalScheduler / Binding）+
+                               #   mc 实现（McBotStore / McConfigStore / LegacyCodec）
 ```
 
-### 依赖纪律（core 层强约束）
-- **core 零 `@minecraft/*`、零 `@yinxe/toolkit` 导入**（grep + tsconfig.test.json 双重兜底）
-- core 类型本地化：`Vector3/Vector2` → `Vec3/Vec2`；`EquipmentSlot` 枚举 → 字符串槽名（mc 边界转换）
-- 领域事件负载只用可序列化 string/number；端口（BotStore/IntervalScheduler）定义 + InMemory 实现在 core，mc 实现同接口
+### 纯/副作用分层界限（tsconfig.test.json 权威）
+- **可 node 单测（零 `@minecraft/*`、零 `@yinxe/toolkit` 导入）**：`ai/`、`rules/`、`service/`
+  （含 port 接口）、`bot/BotCore.ts`、`legacy/ai/*`（除 BotBrain.ts）、
+  `events/DomainEvents + EventSignal + UiEvents`
+- **mc 副作用层**：`bootstrap/`、`features/`、`interaction/`、`bot/Bot.ts + PlayerGateway`、
+  `events/` 订阅薄壳、`main.ts`
+- 类型本地化：`Vector3/Vector2` → `Vec3/Vec2`；`EquipmentSlot` 枚举 → 字符串槽名（mc 边界转换）
+- 领域事件负载只用可序列化 string/number；端口（BotStore/IntervalScheduler）接口 + mc 实现同界
 
 ### 测试纪律
-- core 纯逻辑必须有单测（任务树注入 Fake 端口断言场景序列）；mc 层靠游戏内冒烟
+- 纯层逻辑必须有单测（tests/*.test.ts，Fake/InMemory 替身断言场景序列）；mc 层靠游戏内冒烟
 
-### AI 编排层（core/ai + core/tasks + mc/ai + mc/tasks）
-- **Selector 无记忆抢占**（goal 反应式，仿 Bedrock priority）：每 tick 从根重评，条件变化立即切换；`failure`=降级下一个分支（决策信号非异常），`running`=动作进行中（防重复启动）
-- **三态 Status 字符串枚举**（Success/Failure/Running）——所有节点统一返回，不用裸字符串
-- **黑板**：每树独立实例（按假人隔离），任务共享状态；重连保留（引擎重连中不清树）
-- **感知驱动决策**：`sense()` 一次返回完整感知快照（core 纯类型），决策纯函数（selectVaultTarget / diagnoseVaultIdle）在 core 可单测，mc 只翻译副作用
-- **事件 ↔ 树桥接**：事件订阅（effectAdd/UI）更新 mc 状态/黑板，树每 10tick 读取决策——事件管感知实时性，树管决策时机（分钟级等待零轮询）
-- **新任务接入**：① core/tasks/XxxTask.ts 端口+树装配 ② mc/tasks/McXxxPorts.ts 副作用 ③ BotBrain 注册（tickXxxBrain + reconcileXxxBrains + startBrainEngine 标签分发）④ Fake 端口单测
+### 两套 AI 引擎（并存）
+- **新框架（ai/ + features/ai，生物 AI）**：Behavior 状态机 + BehaviorRunner 优先级抢占；
+  brainEngine 每 10 tick 注入 ctx.bot 驱动；能力形态 = 常驻协程（mine：token 可取消）或
+  同步短步（wander / place / attack）；记忆经 AiMemory 注入，决策在行为内
+- **旧框架（legacy/ai/BotBrain，宝库/钓鱼任务）**：行为树（Sequence/Selector/黑板/Sense）
+  + 端口契约；VaultPorts / FishingPorts 任务适配同在 legacy/ai/；劫掠已剥离为
+  事件驱动模块 features/raid（无树、无端口、零轮询）
+
+### 目录语义与定位修正（用户拍板；✅=已办，其余待重构）
+| 目录 | 现状 | 定位判定 |
+|---|---|---|
+| `features/task/` | ✅ 已改名 **`features/flow/`** | 概念 = **flow（流程）**——一组原子功能组合而成的工作流；fishingFlow 为范例 |
+| 原子能力归位 | ✅ fishing.ts（发杆/收竿）已入 **basic** | 原子性功能应在 **basic**（如飞行 fly 原子能力 → basic；飞行 flow 才属 flow 模块） |
+| task 内工具集 | treeScan（树资源坐标集扫描） | 规则/算法部分已抽 **rules/tree**（规则化已达成）；mc 扫描壳属 woodcut flow 的一部分，留在 flow |
+| Ports 命名 | ✅ FishingPorts / VaultPorts 已移入 **legacy/ai/** | 旧时代遗留命名（legacy 树任务端口的 mc 适配），随旧架构退役清理 |
+| `features/trident/` | 投掷 / 认主标记 / 上线夺回（mc 副作用） | 规则在 rules/items（TridentRules / TridentClaimRules）；本体属规则 + 工作流一小部分 |
+| `features/inventoryStorage.ts` | 库存增量保存 + 对账兜底 + 恢复 | 位置不对，属数据/持久化层，待挪出 features |
+| `features/state/` | behavior（TAG 行为引擎）/ follow / setTags | 旧标签行为体系遗留，用途待确认（可能收编或淘汰） |
 
 ---
 
@@ -108,7 +168,7 @@ scripts/
 ## 投掷物双任认主（三叉戟/箭）——自定义机制，非 AI 非工作流
 
 - 纯事件驱动的世界机制（实体 tag + owner 归属），`main.ts` 直接 `initTridentTracker()` 独立初始化（幂等）
-- tag 编码：`mp:owner:`（第一任投掷者）/ `mp:owner2:`（第二任认主者）/ `mp:item:`（附魔耐久编码）；规则层 `core/items/TridentClaimRules` 零 mc 可单测
+- tag 编码：`mp:owner:`（第一任投掷者）/ `mp:owner2:`（第二任认主者）/ `mp:item:`（附魔耐久编码）；规则层 `rules/items/TridentClaimRules` 零 mc 可单测
 - 认主途径：spawn（投掷标记）/ load（加载回退）/ rebind（上线夺回）/ ui / offline-fallback（下线回退第一任）
 - 领域事件 `tridentClaimed` / `tridentOwnerChanged`（唯一真源 DomainEvents）
 
@@ -149,7 +209,7 @@ scripts/
 
 ---
 
-## 宝库模式（core/tasks/VaultTask + mc/tasks/McVaultPorts）
+## 宝库模式（legacy/ai/VaultTask 契约 + legacy/ai/VaultPorts）
 
 核心规则：
 - **感知驱动**：sense() 返回背包钥匙分类 + 附近宝库分类（普通/不详，按距离排序）
@@ -162,7 +222,7 @@ scripts/
 
 ## 领域事件
 
-**BotEvents**（core/events/DomainEvents）：生命周期 / 认主 / 宝库 / 行为 / 标签变更 / 工作模式变更
+**BotEvents**（events/DomainEvents）：生命周期 / 认主 / 宝库 / 行为 / 标签变更 / 工作模式变更
 ```
 生命周期：botOnline / botOffline / botDeath / botRespawn
 工作模式：botWorkModeChanged（setWorkMode 落库后发布——工作模式驱动模块按值启动/停止）
