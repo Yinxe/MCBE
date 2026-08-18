@@ -16,6 +16,7 @@ import { system, world } from "@minecraft/server";
 import { registerAllCommands } from "./interaction/commands";
 import { registerAllEvents } from "./events/index";
 import { startTagBehaviors } from "./features/state/behavior";
+import { initPositionTracker } from "./features/basic/PositionTracker";
 import { initTridentTracker } from "./features/trident/tridentTracker";
 import { initFishingHookTracker, initLootTracker } from "./features/flow";
 import { initRaidMode } from "./features/flow/raidMode";
@@ -90,6 +91,10 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 初始化战利品感知（背包物品变化事件订阅 → 钓鱼模式假人战利品收集）——
   // 事件驱动感知，独立初始化
   initLootTracker();
+
+  // 初始化位置追踪（订阅 botMoved 领域事件 → lastPoint 落库 + 持久化）——
+  // 导航模块只发布事件，位置数据更新解耦到本订阅方，独立初始化
+  initPositionTracker();
 
   // 初始化劫掠模式（effectAdd 事件订阅 + 生命周期/标签变更钩子驱动循环）——
   // 事件驱动轻量模块（用户拍板：简单循环不配作为 task），独立初始化

@@ -137,6 +137,26 @@ export interface BotWorkModeChangedEvent {
 /** 假人工作模式变更信号 */
 export const botWorkModeChanged = new EventSignal<BotWorkModeChangedEvent>();
 
+// ─── 假人移动事件 ──────────────────────────────────────
+// 导航/移动监测到位置变化时发布（高频：每 10 tick 轮询粒度）——订阅方自行
+// 控频（如 PositionTracker 按距离阈值节流落库）。**解耦约定**：导航模块只
+// 发布事件、不直接依赖持久化；位置数据落库（lastPoint + 持久化）由订阅方
+// 负责（features/basic/PositionTracker）。负载只用可序列化 string/number。
+
+/** 假人移动事件：监测到位置变化时触发 */
+export interface BotMovedEvent {
+  botName: string;
+  /** 当前位置（脚部坐标） */
+  position: { x: number; y: number; z: number };
+  /** 当前维度 ID */
+  dimension: string;
+  /** 当前朝向 */
+  rotation: { x: number; y: number };
+}
+
+/** 假人移动信号 */
+export const botMoved = new EventSignal<BotMovedEvent>();
+
 // ─── 假人行为事件 ──────────────────────────────────────
 // 假人成功执行动作时触发（主手切换/破坏方块/放置方块/使用物品/攻击实体），
 // 供订阅方统计/通知/联动（负载只用可序列化 string/number）。
@@ -245,6 +265,8 @@ export const BotEvents = {
   botTagsChanged,
   // 工作模式变更
   botWorkModeChanged,
+  // 移动（导航发布 → PositionTracker 订阅落库）
+  botMoved,
   // 行为
   botMainhandChanged,
   botBlockBroken,

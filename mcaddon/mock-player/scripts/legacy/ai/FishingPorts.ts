@@ -4,7 +4,7 @@
 // （VaultPorts/FishingPorts）；与新版 features/flow（工作流）无关——随旧树架构退役。
 //
 // 能力复用（不重复实现）：
-//   - sense        → findFishingSpots（getBlocks 扫描，半径 30）
+//   - sense        → findFishingSpots（getBlocks 扫描，半径 16）
 //   - 点位判定     → spotAtStand（~11 次 getBlock 轻量判定）
 //   - 占用检测     → isSpotOccupiedByEntity / isSpotUsable（任何实体，实时释放）
 //   - 钓鱼中查询   → getFishingStatus（鱼钩实体存在性，最准）
@@ -12,7 +12,7 @@
 //   - 寻路         → 宝库同款链（navigateToLocation 中心点 + isFullPath +
 //                    轮询到达/停滞/超时/协程自检）
 //   - 就位三检查   → 微调导航 + setBodyRotation（yaw）+ lookAt（瞄准点）
-//   - idle 通知    → [模拟玩家][钓鱼] 前缀 + 200 tick 节流（主人不受距离限制）
+//   - idle 通知    → [模拟玩家][钓鱼] 前缀 + 200 tick 节流（只通知附近玩家）
 
 import { system, world } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
@@ -38,8 +38,8 @@ import { distance3d, horizontalDistance, waitTicks } from "../../features/utils"
 
 // ─── 常量 ────────────────────────────────────────────────
 
-/** 感知扫描半径（格，正方体半边长） */
-const SENSE_RADIUS = 30;
+/** 感知扫描半径（格，正方体半边长；用户调参：16） */
+const SENSE_RADIUS = 16;
 /** 导航轮询间隔（tick） */
 const NAVIGATE_POLL_TICKS = 10;
 /** 导航停滞判定（tick）：距离连续无进展超过该时长 → 放弃（≈10 秒） */
@@ -56,23 +56,33 @@ const ALIGN_ARRIVE = 0.8;
 const ALIGN_TIMEOUT_TICKS = 100;
 /** 通知节流（tick，≈10 秒） */
 const NOTIFY_COOLDOWN_TICKS = 200;
+/** 钓鱼消息通知半径（格，用户规格：**只通知附近玩家**——不再"主人不受距离
+ *  限制"直发；与 fishingFlow 的附近通知口径一致，此处略宽便于 idle 缺因提示） */
+const NOTIFY_RADIUS = 16;
 
-// ─── 通知（主人 + 节流） ─────────────────────────────────
+// ─── 通知（附近玩家 + 节流） ─────────────────────────────
 
 const notifyAt = new Map<string, number>();
 
-/** 通知假人主人（[模拟玩家][钓鱼] 前缀 + 详细；节流防刷屏） */
+/** 通知附近玩家钓鱼消息（[模拟玩家][钓鱼] 前缀 + 详细；节流防刷屏；
+ *  ⚠️ 用户规格：**只通知 NOTIFY_RADIUS 格内的玩家**，排除假人自己） */
 function notifyOwner(botName: string, detail: string): void {
   try {
     const now = system.currentTick;
     const last = notifyAt.get(botName) ?? 0;
     if (now - last < NOTIFY_COOLDOWN_TICKS) return;
     notifyAt.set(botName, now);
-    const record = botRegistry.get(botName);
-    if (!record?.ownerName) return;
-    world
-      .getPlayers({ name: record.ownerName })[0]
-      ?.sendMessage(`${color.accent}[模拟玩家][钓鱼] ${color.playerName}${botName} ${color.muted}${detail}`);
+    const bot = resolveBotPlayer(botName);
+    if (!bot) return;
+    const msg = `${color.accent}[模拟玩家][钓鱼] ${color.playerName}${botName} ${color.muted}${detail}`;
+    for (const p of world.getPlayers()) {
+      if (p.name === botName) continue; // 排除假人自己
+      const dx = p.location.x - bot.location.x;
+      const dz = p.location.z - bot.location.z;
+      if (Math.hypot(dx, dz) <= NOTIFY_RADIUS) {
+        p.sendMessage(msg);
+      }
+    }
   } catch {
     /* 通知失败不影响主流程 */
   }

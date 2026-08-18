@@ -32,29 +32,39 @@ export class Bot extends BotCore {
   /**
    * 寻路到目标位置并等待完成（while+await 每 10tick 监测位置，多状态返回）。
    * 移动中自动更新假人位置/朝向数据（lastPoint + 持久化）。
-   * @param callbacks 移动过程回调（onStart/onMoving/onStuck/onComplete，全部可选）
+   * @param callbacks 移动过程回调（onStart/onNear/onMoving/onStuck/onComplete，全部可选）
+   * @param nearby 附近容忍（独立功能参数，默认 false）：停滞时水平距离 ≤2 格
+   *      即算移动成功——目的地坐标被方块阻挡无法精确停靠时用
    * @returns NavigateResult：arrived / too-far（>16 格拒绝）/ no-path / still-timeout / timeout / unavailable / entity-invalid / error
    */
   navigateTo(
     target: Vector3,
     speed?: number,
     callbacks?: import("../features/basic/move").NavigateCallbacks,
+    nearby = false,
   ): Promise<import("../features/basic/move").NavigateResult> {
-    return navigateBot(this.name, target, speed, callbacks);
+    return navigateBot(this.name, target, speed, callbacks, nearby);
   }
 
   /**
-   * 长途寻路（分段接力，可移动远超 16 格）：目标路径按 16 格切段逐段寻路，
+   * 长途寻路（分段接力，可移动远超 16 格）：目标路径按 12 格切段逐段寻路，
    * 段内障碍引擎绕行、段间无缝衔接；任一段失败立即返回该段失败原因。
-   * @param callbacks 移动过程回调（onStart 首段一次；onMoving/onStuck 逐段；onComplete 整体收口）
+   * 段点判定不做 y 验证、容忍度更高（水平到位即算成功——寻路终点 y 常与假人
+   * 当前层差数格）；每段失败自动重试（最多 3 次）。
+   * @param callbacks 移动过程回调（onStart 首段一次；onMoving/onStuck 逐段；
+   *      onNear 末段接近目标一次；onSegmentStart/onSegmentComplete/onRetry
+   *      每段阶段信号——**阶段完成回调**；onComplete 整体收口）
+   * @param nearby 附近容忍（独立功能参数，默认 false）：段切换/末段到达半径
+   *      放宽到 4 格（知道终点可能无法精确停靠，附近就行）
    * @returns NavigateResult：arrived（全部段完成）/ 任一段失败原因
    */
   navigateLongTo(
     target: Vector3,
     speed?: number,
     callbacks?: import("../features/basic/move").NavigateCallbacks,
+    nearby = false,
   ): Promise<import("../features/basic/move").NavigateResult> {
-    return longNavigateBot(this.name, target, speed, callbacks);
+    return longNavigateBot(this.name, target, speed, callbacks, nearby);
   }
 
   // ─── 原子能力：跟随 ──────────────────────────────────

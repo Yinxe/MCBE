@@ -158,6 +158,34 @@ test("领域事件：假人行为事件（主手切换/破坏/放置/使用/攻�
   off5();
 });
 
+test("领域事件：假人移动事件（botMoved）可触发并携带序列化负载", () => {
+  const events: string[] = [];
+  const off = BotEvents.botMoved.subscribe((e) =>
+    events.push(`${e.botName}@${e.position.x},${e.position.y},${e.position.z}:${e.dimension}:${e.rotation.x},${e.rotation.y}`)
+  );
+
+  BotEvents.botMoved.trigger({
+    botName: "bot1",
+    position: { x: 10.5, y: 64, z: -5 },
+    dimension: "minecraft:overworld",
+    rotation: { x: 0, y: 90 },
+  });
+
+  assert.deepEqual(events, ["bot1@10.5,64,-5:minecraft:overworld:0,90"]);
+  off();
+});
+
+test("领域事件：botMoved 订阅者异常隔离（单个崩溃不影响其他订阅者）", () => {
+  const received: string[] = [];
+  BotEvents.botMoved.subscribe(() => { throw new Error("boom"); });
+  const off = BotEvents.botMoved.subscribe((e) => received.push(e.botName));
+
+  BotEvents.botMoved.trigger({ botName: "bot1", position: { x: 1, y: 2, z: 3 }, dimension: "minecraft:overworld", rotation: { x: 0, y: 0 } });
+
+  assert.deepEqual(received, ["bot1"]);
+  off();
+});
+
 // ─── UiEvents（UI 领域事件：面板动作 + 行为菜单提交） ──
 
 test("BotUiEvent.panelAction：发布动作 → 订阅方按 action 过滤执行，退订生效", () => {

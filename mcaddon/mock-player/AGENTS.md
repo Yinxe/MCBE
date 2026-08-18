@@ -47,8 +47,9 @@ scripts/
 │   │                          #   （wander 闲逛 / mine 定点挖掘 / place 定点放置 / attack 攻击）
 │   ├── basic/                 # 基础**原子性**功能（单动作不可细分）：blocks（破坏/放置）/
 │   │                          #   items（背包/主手/使用/装备）/ fishing（发杆/收竿）/
-│   │                          #   control / move（导航）/ PoseGateway（体态）/ sneak /
-│   │                          #   teleport / EntityTags
+│   │                          #   control / move（导航，发布 botMoved 事件）/
+│   │                          #   PositionTracker（订阅 botMoved → lastPoint 落库）/
+│   │                          #   PoseGateway（体态）/ sneak / teleport / EntityTags
 │   ├── manage/                # 假人生命周期管理（create/delete/kill/online/offline/spawn/
 │   │                          #   reclaim/rename/spawnPoint/spawnMode/gametestContext...）
 │   ├── raid/                  # 劫掠模式（事件驱动轻量模块：无树、无端口、零轮询）
@@ -229,6 +230,7 @@ scripts/
 标签变更：botTagsChanged（setTags 落库后发布——标签驱动模块按需订阅）
 认主：    tridentClaimed / tridentOwnerChanged
 宝库：    vaultOpened
+移动：    botMoved（move 发布 → PositionTracker 订阅：lastPoint 落库 + 持久化，解耦）
 行为：    botMainhandChanged / botBlockBroken / botBlockPlaced / botItemUsed / botEntityAttacked
 ```
 

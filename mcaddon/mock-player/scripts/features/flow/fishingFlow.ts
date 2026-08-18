@@ -8,7 +8,7 @@
 //      位置（入水先下沉再上浮，稳定后记录坐标才可信——稳定期内下沉会被
 //      咬钩判定误判）
 //   3. 落点检查：鱼钩不在水中 = 本次钓鱼直接失败（勾中实体生物 → snagged /
-//      勾中固体方块 → landed），返回失败原因
+//      勾中固体方块 → landed），**提前收竿**后返回失败原因
 //   4. 监听上钩（最长 BITE_TIMEOUT_TICKS = 45 秒）：窗口累计净下降超阈值
 //      连续 2 窗口 = 明显下沉（咬钩）→ 触发收杆信号（通知主人 + 自动收竿）
 //   5. 超时 → 收竿无获（timeout）；鱼钩中途消失 → hook-lost 失败
@@ -320,8 +320,8 @@ async function watchForBite(botName: string, hookId: string): Promise<FishingOut
 
 /**
  * 完成一次完整钓鱼（闭包流程）：发杆 → 稳定等待 → 落点检查 → 监听上钩
- * （45 秒）→ 下沉触发收杆。异常（勾中实体/固体方块/鱼钩消失）直接判定
- * 失败并返回原因。
+ * （45 秒）→ 下沉触发收杆。异常（勾中实体/固体方块）**提前收竿**后判定
+ * 失败并返回原因；鱼钩消失 → hook-lost 失败。
  *
  * @param botName - 假人名
  * @returns 结果：caught=上钩收竿 / timeout=超时收竿 / failed=失败+原因
@@ -347,11 +347,26 @@ export async function fishOnce(botName: string): Promise<FishingOutcome> {
     if (placement !== "water") {
       const reason: FishingFailureReason = placement === undefined ? "hook-lost" : placement;
       console.warn(`[MockPlayer] fishOnce ${botName} placement=${placement ?? "missing"}`);
-      notifyOwner(botName, `${color.error}${failureLabel(reason)}`);
+      // ⚠️ 修复（用户调参）：抛钩无效（勾中非水方块 landed / 勾中实体生物
+      //   snagged）→ **提前收钩**再结束——否则鱼钩残留在陆地/实体上，
+      //   getFishingStatus 按鱼钩存在性持续误报 fishing，流程卡死重抛；
+      //   鱼钩已丢失（hook-lost）则无需收
+      if (placement !== undefined) {
+        const reel = await reelFishingRod(botName);
+        console.warn(`[MockPlayer] fishOnce ${botName} invalid placement (${placement}), early reel=${reel}`);
+      }
+      notifyOwner(
+        botName,
+        `${color.error}${failureLabel(reason)}${placement !== undefined ? "（已提前收竿）" : ""}`,
+      );
       return { kind: "failed", reason };
     }
 
     // ── 4. 记录坐标 + 监听上钩（45 秒） ──
+    // ⚠️ 清零战利品暂存：抛竿阶段（含鱼竿置入主手 slot 0 的槽位互换）产生的
+    // 槽位变化**不属于战利品**（loot tracker 会误收）——正式监听前清空，
+    // 仅保留收竿后入包的真实战利品（收竿发生在 watchForBite 内部，其后才收集）
+    pendingLoot.delete(botName);
     return await watchForBite(botName, hookId);
   } finally {
     runningFishing.delete(botName);

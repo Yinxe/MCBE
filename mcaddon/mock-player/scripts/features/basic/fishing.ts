@@ -11,14 +11,13 @@
 // fishingHookTracker + core/tasks/FishingRules）。
 
 import { system, world, BlockVolume } from "@minecraft/server";
-import type { Dimension, Entity } from "@minecraft/server";
+import type { Dimension, Entity, ItemStack } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
-import { AIR_BLOCK_ID, ADJACENT_8, classifyFishingScan, collectFishingSpots, computeCastAim, FISHING_HOOK_ID, isFishingRod, isWaterBlock, judgeStandFishingSpot, makeFisherTag, sortFishingSpots, WATER_BLOCK_IDS, type FindSpotsFailure, type FishingSpot } from "../../rules/FishingRules";
+import { AIR_BLOCK_ID, ADJACENT_8, classifyFishingScan, collectFishingSpots, computeCastAim, FISHING_HOOK_ID, FISHING_ROD_ID, isWaterBlock, judgeStandFishingSpot, makeFisherTag, sortFishingSpots, WATER_BLOCK_IDS, type FindSpotsFailure, type FishingSpot } from "../../rules/FishingRules";
 import type { Vec3 } from "../../rules/Types";
-import { BOT_TAG } from "../../rules/tags/BotTags";
-import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
+import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
 
 // ─── 常量 ────────────────────────────────────────────────
 
@@ -34,28 +33,68 @@ export type CastRodResult = "cast" | "already-cast" | "no-rod" | "offline" | "er
 export type ReelRodResult = "reeled" | "no-hook" | "no-rod" | "offline" | "error";
 
 
-/** 找鱼竿槽位：主手优先，其次热键栏 0-8；无鱼竿返回 undefined */
+// ─── 找鱼竿槽位 ─────────────────────────────────────────
+
+/** 假人主手槽（用户规格：主手固定使用 slot 0——抛竿/收竿必须经主手） */
+const MAINHAND_SLOT = 0;
+
+/** 单格是否鱼竿（ItemStack.matches = 版本安全**类型**匹配，忽略 NBT/耐久；
+ *  ⚠️ 2.8.0 Container/ItemStack 无 hasType——find/contains 需构造 ItemStack
+ *  且匹配语义含 NBT/耐久（带损伤的鱼竿会漏判），逐格 getItem + matches 最稳） */
+function isRodItem(item: ItemStack): boolean {
+  return item.matches(FISHING_ROD_ID);
+}
+
+/**
+ * 找鱼竿并确保在主手槽（slot 0，用户规格：**假人主手只使用 slot 0**）：
+ *   ① slot 0 已是鱼竿 → 直接用
+ *   ② 背包任意位置有鱼竿（热键栏 1-8 / 主背包 9-35，matches 类型判断）→
+ *      与 slot 0 **互换**（slot 0 原物品移到鱼竿原槽——绝不吞物品，对齐
+ *      setMainhandSlot 语义），鱼竿进主手 → 返回 slot 0
+ *   ③ 都没有 → undefined（no-rod）
+ * ⚠️ 修复（用户规格）：鱼竿在主背包时原实现报 no-rod——本实现全背包查找 +
+ *  自动置入主手（外部调用不需关心鱼竿原来在哪）。
+ */
 function findRodSlot(bot: SimulatedPlayer): number | undefined {
   try {
-    const container = (bot.getComponent("minecraft:inventory") as
-      | { container?: { getItem: (i: number) => { typeId?: string } | undefined } }
-      | undefined)?.container;
-    const selected = bot.selectedSlotIndex ?? 0;
-    const candidates = [selected, ...Array.from({ length: 9 }, (_, i) => i).filter((i) => i !== selected)];
-    for (const slot of candidates) {
-      const item = container?.getItem(slot);
-      if (item?.typeId && isFishingRod(item.typeId)) return slot;
+    const container = inventoryContainerOf(bot);
+    if (!container) return undefined;
+    // ① 主手已是鱼竿
+    const hand = container.getItem(MAINHAND_SLOT);
+    if (hand && isRodItem(hand)) return MAINHAND_SLOT;
+    // ② 全背包找鱼竿（含主背包）→ 与主手互换（不吞物品）
+    for (let i = 1; i < container.size; i++) {
+      const item = container.getItem(i);
+      if (item && isRodItem(item)) {
+        container.setItem(i, hand ?? undefined);
+        container.setItem(MAINHAND_SLOT, item);
+        console.warn(`[MockPlayer] fishing rod slot ${i} -> mainhand slot ${MAINHAND_SLOT}`);
+        return MAINHAND_SLOT;
+      }
     }
     return undefined;
-  } catch {
+  } catch (e) {
+    console.warn(`[MockPlayer] findRodSlot error: ${e}`);
     return undefined;
   }
 }
 
-/** 假人是否持有鱼竿（主手或热键栏；AI 感知/缺因判定用） */
+/** 假人是否持有鱼竿（**全背包**搜索——主背包也算持有；只读不搬移；
+ *  AI 感知/缺因判定用） */
 export function hasFishingRod(botName: string): boolean {
   const bot = resolveBotPlayer(botName);
-  return bot !== undefined && findRodSlot(bot) !== undefined;
+  if (!bot) return false;
+  try {
+    const container = inventoryContainerOf(bot);
+    if (!container) return false;
+    for (let i = 0; i < container.size; i++) {
+      const item = container.getItem(i);
+      if (item && isRodItem(item)) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 // ─── 鱼钩存在性查询 ─────────────────────────────────────

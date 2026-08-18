@@ -52,7 +52,7 @@ export function registerFishingCommands(registry: any): void {
   // ── /mp:fishspot 寻找钓鱼点 ──
   defineCommand(registry, {
     name: "mp:fishspot",
-    description: "寻找钓鱼点（默认以玩家为中心半径 40；可指定坐标与半径）",
+    description: "寻找钓鱼点（默认以玩家为中心半径 16；可指定坐标与半径）",
     cheatsRequired: false,
     permissionLevel: CommandPermissionLevel.Any,
     optionalParameters: [
@@ -65,7 +65,7 @@ export function registerFishingCommands(registry: any): void {
       return;
     }
     const center = (params.location as Vector3 | undefined) ?? player.location;
-    const radius = (params.radius as number | undefined) ?? 40;
+    const radius = (params.radius as number | undefined) ?? 16;
 
     const result = findFishingSpots(center, player.dimension, radius);
     if (result.reason) {
