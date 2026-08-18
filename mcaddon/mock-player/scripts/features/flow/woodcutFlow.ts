@@ -1,11 +1,14 @@
 // ─── 单棵树的砍伐流程（mc 层：woodcut flow） ────────────
-// chopOneTree：按 ChopPlan（core 纯逻辑）顺序砍伐一棵已认领的树——
-//   阶段编排（用户规格 2026-08-18）：
-//     1. 逐目标：靠近（超出挖掘范围 → 导航缩短距离）→ 按模式/目标自动换工具
-//       （圆木/原木模式树叶 → 斧头策略；收集模式树叶 → 树叶策略强制应用）
-//       → breakBlockOnce 破坏 → 未破坏（far/busy）重试
-//     2. 圆木卡叶清理已并入 plan（stuck-cleanup：破树叶让掉落物掉下来）
-//     3. 拾取：树范围（pickupRegion）内扫描掉落物实体 → 逐个靠近自动拾取
+// chopOneTree：按 ChopPlan（core 纯逻辑）砍伐一棵已认领的树——
+//   阶段编排（用户规格 2026-08-18 优化版）：
+//     ① 先导航到树附近（树中心坐标）
+//     ② 破除**树桩**，再**向上逐根**砍掉全部圆木资源——每根用 breakBlockAt
+//       （"直到破坏方块"模式：看向目标方块中心 + 持续挖掘到目标被破坏）；
+//       目标超出挖掘距离（far）→ **靠近目标方块缩短距离再挖**
+//     ③ 完整砍树模式（collect）：再挖掘掉**全部树叶**资源（已并入 plan；
+//       树叶用树叶策略：精准锄头>剪刀>任意精准工具，强制应用）
+//     ④ 圆木卡叶清理并入 plan（stuck-cleanup：破树叶让掉落物掉下来）
+//     ⑤ 拾取：独立拾取 flow（runPickupFlow）收集树范围全部掉落物
 //
 // ⚠️ 本流程为 mc 适配层：core 已由 ChopPlan / WoodcutRules 覆盖并可单测，
 //   这里的副作用（导航/破块/换工具/拾取）按 fishingFlow 风格**永不 reject**。
@@ -15,7 +18,7 @@
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
-import { breakBlockOnce } from "../basic/blocks";
+import { breakBlockAt } from "../basic/blocks";
 import { navigateBot, longNavigateBot, NavigateResult } from "../basic/move";
 import { setMainhandSlot } from "../basic/items/mainhand";
 import { inventoryContainerOf, enchantableOf } from "../basic/items/ItemComponentRead";
@@ -43,11 +46,9 @@ export type WoodcutOutcome =
 
 // ─── 常量 ──────────────────────────────────────────────
 
-/** 破坏距离（格，3D 自检；超距 → 靠近后再挖） */
+/** 破坏距离（格，3D 自检；translated to breakBlockAt maxDistance） */
 const BREAK_MAX_DISTANCE = 6;
-/** 靠近目标后破坏前的微调容差（格）：已够近即可开挖 */
-const BREAK_NEAR_DISTANCE = 5;
-/** 单目标破坏重试上限 */
+/** 单目标破坏重试上限（超距靠近 + 重试的次数） */
 const BREAK_RETRY_LIMIT = 3;
 
 // ─── 背包工具快照（强制策略：全背包扫描取最优） ──────────
@@ -85,63 +86,92 @@ function targetGone(bot: SimulatedPlayer, target: ChopTarget): boolean {
   }
 }
 
-/** 3D 距离（blockBreakOnce 同款） */
-function distance3d(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {
-  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-}
-
 // ─── 阶段实现 ──────────────────────────────────────────
 
-/** 破坏单个目标：靠近（若超距）→ 换工具 → 破坏；未破坏重试 */
-async function breakTarget(botName: string, bot: SimulatedPlayer, target: ChopTarget, mode: ChopMode): Promise<"broken" | "skip" | "failed"> {
-  // 已消失 → 跳过（成功信号）
-  if (targetGone(bot, target)) return "skip";
+/**
+ * 持续破坏单个目标直到被摧毁（用户规格：breakBlock 的"直到破坏方块"模式）：
+ *   breakBlockAt 会**看向目标方块中心**并持续挖掘直到目标消失；超出挖掘距离
+ *   （far）→ 靠近目标方块缩短距离后重试。工具每块按模式/目标自动切换。
+ *
+ * @returns "broken"=已摧毁 / "skip"=本就不存在 / "failed"=多次尝试仍失败（含不可达）
+ */
+async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMode): Promise<"broken" | "skip" | "failed"> {
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return "failed";
+  if (targetGone(bot, target)) return "skip"; // 已消失 → 成功信号
 
-  for (let attempt = 0; attempt < BREAK_RETRY_LIMIT; attempt++) {
-    const d = distance3d(bot.location, target.loc);
-    // 超出挖掘范围 → 靠近目标方块缩短距离再挖（用户规格）
-    if (d > BREAK_NEAR_DISTANCE) {
-      const nav = await longNavigateBot(botName, { x: target.loc.x + 0.5, y: target.loc.y, z: target.loc.z + 0.5 });
-      if (nav !== NavigateResult.Arrived) {
-        // 近程再试（目标就在附近但寻路失败 → navigateBot 直接靠近）
-        await navigateBot(botName, { x: target.loc.x + 0.5, y: target.loc.y, z: target.loc.z + 0.5 });
-      }
-      if (!bot.isValid) return "failed";
-      if (distance3d(bot.location, target.loc) > BREAK_NEAR_DISTANCE) continue; // 仍未靠近 → 重试
-    }
-
-    // 换工具（全背包强制策略；无匹配 → 不换）
+  // 工具策略（每块破坏前注入；全背包强制策略——core 决策）
+  const ensureTool = async (): Promise<void> => {
+    const cur = resolveBotPlayer(botName);
+    if (!cur) return;
     const kind: ChopTargetKind = target.kind;
-    const slot = pickBestTool(kind, mode, snapshotTools(bot));
+    const slot = pickBestTool(kind, mode, snapshotTools(cur));
     if (slot !== undefined) {
       setMainhandSlot(botName, slot);
       await waitTicks(1); // 工具入主手后等待 1 tick 生效
     }
+  };
 
-    const res = await breakBlockOnce(bot, target.loc, {
+  // 靠近目标基座（同 x/z、尽量贴近地面）——"超出挖掘距离则缩短距离再挖"
+  const approach = async (): Promise<void> => {
+    const cur = resolveBotPlayer(botName);
+    if (!cur) return;
+    // 导航到目标正下方（y 用假人当前层——地面可达时生成导航目标）
+    const navTarget = { x: target.loc.x + 0.5, y: Math.max(target.loc.y - 1, cur.location.y - 2), z: target.loc.z + 0.5 };
+    const nav = await longNavigateBot(botName, navTarget);
+    if (nav !== NavigateResult.Arrived) {
+      await navigateBot(botName, navTarget);
+    }
+  };
+
+  for (let attempt = 0; attempt < BREAK_RETRY_LIMIT; attempt++) {
+    // 已消失（上轮破坏成功/被其它进程清掉）→ 成功
+    const cur = resolveBotPlayer(botName);
+    if (!cur) return "failed";
+    if (targetGone(cur, target)) return "broken";
+
+    const res = await breakBlockAt(botName, target.loc, {
       maxDistance: BREAK_MAX_DISTANCE,
       pollTicks: 3,
-      requireLineOfSight: false,
+      ensureTool, // 每块破坏前自动换工具（斧头/树叶策略）
+      skipLook: false, // 看向目标方块中心再挖（breakBlockAt 内置扭头）
     });
-    if (res === "broken" || res === "aborted") {
-      // aborted：实体失效/并发取消 → 由调用方续跑或终止
-      return res === "broken" ? "broken" : "failed";
+    if (res === "broken") return "broken"; // 持续挖掘直到目标被破坏 ✓
+    if (res === "far") {
+      // 目标超出挖掘距离 → 靠近目标方块缩短距离再挖（用户规格）
+      await approach();
+      continue;
     }
-    // far/busy/offline/blocked → 等待 3 tick 后重试
-    await waitTicks(3);
+    if (res === "busy" || res === "offline") {
+      await waitTicks(3);
+      continue;
+    }
+    return "failed"; // aborted/error → 交给调用方（尽力砍）
   }
   return "failed";
+}
+
+/** 靠近某坐标（longNavigate → navigate 兜底，容错） */
+async function approachPoint(botName: string, loc: { x: number; y: number; z: number }): Promise<void> {
+  const nav = await longNavigateBot(botName, { x: loc.x, y: loc.y, z: loc.z });
+  if (nav !== NavigateResult.Arrived) {
+    await navigateBot(botName, { x: loc.x, y: loc.y, z: loc.z });
+  }
 }
 
 // ─── 公开入口 ────────────────────────────────────────────
 
 /**
  * 完成一棵树的砍伐流程（闭包异步，永不 reject）：
- *   按 ChopPlan 逐目标（换工具/破块/靠近）→ 拾取阶段调独立拾取 flow
- *   （runPickupFlow）收集树范围全部掉落物。
+ *   ① 先导航到树附近（树中心坐标 base）
+ *   ② 破除**树桩**（最低那段圆木），再**向上逐根**砍掉全部圆木资源——
+ *      每根用 breakBlockAt（看向目标 + 持续挖掘直到被破坏）；超出挖掘距离
+ *      时**靠近目标方块缩短距离再挖**（far → approach）
+ *   ③ 完整砍树模式（collect）：再挖掘掉**全部树叶**资源（已并入 plan）
+ *   ④ 拾取阶段调独立拾取 flow（runPickupFlow）收集树范围全部掉落物
  *
  * @param botName 假人名
- * @param plan    单树砍伐计划（core ChopPlan 输出）
+ * @param plan    单树砍伐计划（core ChopPlan 输出；logs 底→顶）
  * @param mode    砍树模式（原木模式/收集模式）
  * @returns done={broken,picked} / failed={reason}
  */
@@ -149,27 +179,29 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
   const bot = resolveBotPlayer(botName);
   if (!bot) return { kind: "failed", reason: "offline" };
 
+  // ── ① 先导航到树附近（树中心坐标） ──
+  await approachPoint(botName, plan.base);
+
+  // ── ②/③ 按 plan 顺序逐目标：树桩→向上圆木→（收集模式）全部树叶 ──
   let broken = 0;
   for (const target of plan.targets) {
-    if (!bot.isValid) return { kind: "failed", reason: "aborted" };
-    const r = await breakTarget(botName, bot, target, mode);
+    if (!resolveBotPlayer(botName)?.isValid) return { kind: "failed", reason: "aborted" };
+    const r = await breakUntilGone(botName, target, mode);
     if (r === "broken") broken++;
     else if (r === "failed") {
-      // 单目标多次失败：不中断整树（尽力砍；剩余由共享池后续认领者处理）
-      console.warn(`[MockPlayer] chopOneTree ${botName} 目标 ${target.loc.x},${target.loc.y},${target.loc.z} 多次失败，跳过`);
+      // 单目标多次尝试仍失败（含高处不可达）：不中断整树（尽力砍；
+      // 剩余由共享池后续认领者/玩家接手）
+      console.warn(`[MockPlayer] chopOneTree ${botName} 目标 ${target.loc.x},${target.loc.y},${target.loc.z} 无法破坏（可能超出竖向挖掘距离），跳过`);
     }
   }
 
-  // 圆木卡叶清理已并入 plan（stuck-cleanup 目标）；此处正式进入拾取阶段
-  // —— 复用独立的拾取 flow：收集树范围内全部掉落物；卡在树叶上/新增的
-  //    掉落物由拾取 flow 的 allowCleanup 破除阻挡让掉落物掉下再拾取
+  // ── ④ 拾取阶段：独立拾取 flow（卡在树叶上的掉落物由 allowCleanup 破除） ──
   let picked = 0;
-  if (bot.isValid) {
+  if (resolveBotPlayer(botName)?.isValid) {
     const task: PickupTask = {
       rangeMin: plan.pickupMin,
       rangeMax: plan.pickupMax,
-      origin: bot.location,
-      // 卡落判定：正下方是树范围内树叶 → 需先破除（掉落物掉到地面才可拾取）
+      origin: resolveBotPlayer(botName)!.location,
       isBlockingBelow: (loc) =>
         plan.targets.some((t) => t.kind === "leaf" && t.loc.x === loc.x && t.loc.y === loc.y && t.loc.z === loc.z),
     };

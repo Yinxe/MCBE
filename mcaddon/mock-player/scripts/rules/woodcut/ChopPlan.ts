@@ -4,12 +4,13 @@
 //
 // 阶段编排（用户规格 2026-08-18）：
 //   原木模式（logs）：
-//     1. 全部圆木（先砍顶部——树冠清空让后续更容易够到）
+//     1. 全部圆木（**底→顶**：先破除树桩，再向上逐根砍——超出挖掘距离由
+//        执行层靠近目标方块继续）
 //     2. 阻碍挖圆木的树叶/障碍（blocker——提前排在该圆木前）
 //     3. 圆木下方是树叶 → 掉落物会卡在树叶上 → 破除该树叶让掉落物掉下来
 //     4. 拾取树范围内全部掉落物（拾取阶段在流程首尾执行）
 //   收集模式（collect）：
-//     1. 全部圆木（先砍顶部）
+//     1. 全部圆木（底→顶）
 //     2. 整棵树全部树叶（完整破除树形）
 //     3. 圆木卡叶清理同原木模式
 //     4. 拾取树范围内全部掉落物
@@ -118,9 +119,10 @@ export function planChop(tree: TreeResource, mode: ChopMode, world: ChopWorld = 
     leafs.push({ loc: { x: fl(l.x), y: fl(l.y), z: fl(l.z) }, kind: "leaf", reason: mode === "collect" ? "collect-leaf" : "blocker-leaf" });
   }
 
-  // 圆木从顶到底（先清树冠，便于后续接近/清理）
-  logs.sort((a, b) => b.loc.y - a.loc.y);
-  leafs.sort((a, b) => b.loc.y - a.loc.y);
+  // 圆木从底到顶（用户规格 2026-08-18：**先破除树桩，再向上砍掉所有圆木**；
+  // 逐根上升，超出挖掘距离时执行层靠近目标方块继续）
+  logs.sort((a, b) => a.loc.y - b.loc.y);
+  leafs.sort((a, b) => a.loc.y - b.loc.y);
 
   const ordered: ChopTarget[] = [];
   const seen = new Set<string>();

@@ -53,9 +53,9 @@ test("planChop（原木模式）：含全部圆木 + 侧面挡叶 blocker + 顶�
     assert.equal(t!.kind, "log");
     assert.equal(t!.reason, "log");
   }
-  // 圆木从顶到底排序
+  // 圆木从底到顶排序（先破除树桩，再向上逐根砍——用户规格）
   const logYs = plan.targets.filter((t) => t.kind === "log").map((t) => t.loc.y);
-  assert.deepEqual(logYs, [66, 65, 64]);
+  assert.deepEqual(logYs, [64, 65, 66]);
   // 顶部树叶 (5,67,5) 在原木模式不强制（非侧面挡叶）→ 不作为 blocker
   assert.equal(targetAt(plan, 5, 67, 5), undefined);
   // 拾取范围覆盖 logs+leafs（含余量）
