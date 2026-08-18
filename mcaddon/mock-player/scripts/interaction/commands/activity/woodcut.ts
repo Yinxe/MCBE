@@ -13,7 +13,7 @@ import { color } from "@yinxe/toolkit";
 import { scanTreesFromSets } from "../../../features/flow";
 import { describeChopPlan } from "../../../features/flow/woodcutFlow";
 import { planChop } from "../../../rules/woodcut/ChopPlan";
-import { CHOP_MODE_LABEL, type ChopMode } from "../../../rules/woodcut/WoodcutRules";
+import { CHOP_MODE_LABEL, normalizeChopMode, type ChopMode } from "../../../rules/woodcut/WoodcutRules";
 import { isAdmin, resolveBotForCommand } from "../auth";
 import { saveCoordinator } from "../../../bootstrap/context";
 
@@ -22,16 +22,19 @@ const DEFAULT_RADIUS = 16;
 /** 半径上限 */
 const MAX_RADIUS = 32;
 
-/** 解析模式参数：logs=原木模式 / collect=收集模式（非法回退 logs） */
+/** 解析模式参数：logs=原木模式 / collect=收集模式（非法回退 logs，core 规格化） */
 function resolveMode(params: Record<string, unknown> | undefined): ChopMode {
-  const m = String(params?.mode ?? "logs").toLowerCase();
-  return m === "collect" ? "collect" : m === "logs" ? "logs" : "logs";
+  return normalizeChopMode(String(params?.mode ?? "logs").toLowerCase());
 }
 
-/** 解析模式参数：非法值返回 undefined（命令校验用，拒绝静默回退） */
+/**
+ * 解析模式参数：非法值返回 undefined（命令校验用，拒绝静默回退）。
+ * 校验复用 core 枚举入口——避免命令层手抄枚举漏同步。
+ */
 function parseMode(strict: string): ChopMode | undefined {
-  const m = String(strict).toLowerCase();
-  return m === "logs" ? "logs" : m === "collect" ? "collect" : undefined;
+  const normalized = normalizeChopMode(String(strict).toLowerCase());
+  // normalizeChopMode 会把非法值回退 logs——这里需要区分"用户显式传 logs"与"非法回退"
+  return String(strict).toLowerCase() === normalized ? normalized : undefined;
 }
 
 export function registerWoodcutCommands(registry: any): void {

@@ -19,7 +19,7 @@ import { setMainhandSlot } from "../basic/items/mainhand";
 import { inventoryContainerOf, enchantableOf } from "../basic/items/ItemComponentRead";
 import { waitTicks } from "../utils";
 import { planPickup, type PickupItem, type PickupTask } from "../../rules/pickup/PickupPlan";
-import { pickBestTool } from "../../rules/woodcut/WoodcutRules";
+import { pickBestTool, toolCategoryOf } from "../../rules/woodcut/WoodcutRules";
 
 // ─── 结果类型 ──────────────────────────────────────────
 
@@ -70,7 +70,7 @@ function snapshotTools(bot: SimulatedPlayer): Array<{ slot: number; typeId: stri
     const item = container.getItem(i);
     if (!item) continue;
     const typeId = item.typeId;
-    const category = typeId.endsWith("_axe") ? "axe" : typeId.endsWith("_hoe") ? "hoe" : typeId === "minecraft:shears" ? "shears" : "axe";
+    const category = toolCategoryOf(typeId); // 统一入口（core）
     const ench = enchantableOf(item);
     let enchantments: { id: string; level: number }[] = [];
     try {

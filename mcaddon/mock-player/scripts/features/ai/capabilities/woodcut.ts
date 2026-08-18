@@ -37,7 +37,7 @@ import {
   type PoolTree,
   type TreePickOptions,
 } from "../../../rules/woodcut/TreePool";
-import type { ChopMode } from "../../../rules/woodcut/WoodcutRules";
+import { normalizeChopMode, type ChopMode } from "../../../rules/woodcut/WoodcutRules";
 
 /** 自动砍树行为配置 */
 export interface WoodcutBehaviorConfig {
@@ -134,10 +134,9 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
     }
   };
 
-  /** 当前砍树模式（运行时：优先大脑记忆注入，缺省配置默认值 logs） */
+  /** 当前砍树模式（运行时：优先大脑记忆注入，规格化；缺省配置默认值） */
   const currentMode = (ai: AiBehaviorContext): ChopMode => {
-    const m = ai.memory.get<string>("woodcutMode");
-    return m === "collect" ? "collect" : m === "logs" ? "logs" : config.mode;
+    return normalizeChopMode(ai.memory.get<string>("woodcutMode"), config.mode);
   };
 
   /** 发起砍树协程（chopOneTree：逐目标破块 + 独立拾取 flow） */

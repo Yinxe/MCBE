@@ -28,6 +28,24 @@ export type ChopTargetKind = "log" | "leaf";
 /** 工具类别（策略决策输出；shears/hoe 只服务树叶，axe 服务圆木与障碍） */
 export type ToolCategory = "axe" | "hoe" | "shears";
 
+/** 砍树模式规范化（用户规格枚举：原木模式 logs / 收集模式 collect）：
+ *  非法/缺省值回退 fallback（缺省 logs）。命令解析/能力记忆统一走此入口，
+ *  枚举只此一处定义，避免各处手抄漏同步。 */
+export function normalizeChopMode(value: unknown, fallback: ChopMode = "logs"): ChopMode {
+  if (value === "logs") return "logs";
+  if (value === "collect") return "collect";
+  return fallback;
+}
+
+/** 物品 typeId → 工具类别（斧/锄/剪；非三类物品兜底归 axe——评分器按类别
+ *  与附魔甄别，非工具不会被选为最优）。mc 层工具快照统一走此入口去重。 */
+export function toolCategoryOf(typeId: string): ToolCategory {
+  if (typeId.endsWith("_axe")) return "axe";
+  if (typeId.endsWith("_hoe")) return "hoe";
+  if (typeId === "minecraft:shears") return "shears";
+  return "axe";
+}
+
 // ─── 品阶（材质等级） ─────────────────────────────────
 
 /** 工具材质 → 品阶分（品阶优先：梯度远大于附魔分）；

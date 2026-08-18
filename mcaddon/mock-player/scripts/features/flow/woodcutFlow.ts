@@ -22,6 +22,7 @@ import { inventoryContainerOf, enchantableOf } from "../basic/items/ItemComponen
 import { waitTicks } from "../utils";
 import {
   pickBestTool,
+  toolCategoryOf,
   type ChopMode,
   type ChopTargetKind,
   type ToolItem,
@@ -60,13 +61,7 @@ export function snapshotTools(bot: SimulatedPlayer): ToolItem[] {
     const item = container.getItem(i);
     if (!item) continue;
     const typeId = item.typeId;
-    const category: ToolItem["category"] = typeId.endsWith("_axe")
-      ? "axe"
-      : typeId.endsWith("_hoe")
-        ? "hoe"
-        : typeId === "minecraft:shears"
-          ? "shears"
-          : "axe"; // 兜底归 axe 类别（非工具不被选——评分器按类别与附魔甄别）
+    const category = toolCategoryOf(typeId); // 统一入口（core）
     const ench = enchantableOf(item);
     let enchantments: { id: string; level: number }[] = [];
     try {
