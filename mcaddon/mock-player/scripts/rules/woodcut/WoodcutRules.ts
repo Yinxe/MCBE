@@ -168,3 +168,13 @@ export function pickBestTool(kind: ChopTargetKind, mode: ChopMode, items: readon
   }
   return best?.slot;
 }
+
+/**
+ * 是否有**合适树叶工具**（用户规格：收集模式没有合适工具 → 自动 fallback 圆木模式）：
+ * 合适 = 剪刀 / 锄类 / 任意精准（silk_touch）工具。三者皆无 → false。
+ */
+export function hasSuitableLeafTool(items: readonly ToolItem[]): boolean {
+  return items.some(
+    (it) => it.category === "shears" || it.category === "hoe" || enchantLevel(it, "silk_touch") > 0,
+  );
+}

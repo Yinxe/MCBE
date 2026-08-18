@@ -21,6 +21,9 @@ export {
   VALID_LEAF_TYPE_IDS,
   type CoordinateSetResult,
   type TreeSetScanResult,
+  rescanTree7x7,
+  RESCAN_RADIUS,
+  type TreeRescanResult,
 } from "./treeScan";
 export {
   chopOneTree,

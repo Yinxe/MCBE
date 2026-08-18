@@ -20,10 +20,10 @@ import { color } from "@yinxe/toolkit";
 
 import type { Behavior } from "../../../ai";
 import type { AiBehaviorContext } from "../brainEngine";
-import { scanTreesFromSets } from "../../flow/treeScan";
+import { resolveBotPlayer } from "../../../bot/PlayerGateway";
+import { scanTreesFromSets, rescanTree7x7 } from "../../flow/treeScan";
 import { chopOneTree, type WoodcutOutcome } from "../../flow/woodcutFlow";
-import { planChop, type ChopWorld } from "../../../rules/woodcut/ChopPlan";
-import { TREE_LEAF_TYPE_IDS, TREE_LOG_TYPE_IDS } from "../../../rules/tree/TreeRules";
+import { planChop, refreshTreeResource } from "../../../rules/woodcut/ChopPlan";
 import {
   claimTree,
   countClaimable,
@@ -54,12 +54,6 @@ export interface WoodcutBehaviorConfig {
   notifyCooldownCycles: number;
   /** 砍树模式（原木模式 / 收集模式） */
   mode: ChopMode;
-  /**
-   * 是否破除阻碍挖掘圆木的**其他实心障碍**（泥土/石子等非树方块，紧贴圆木；
-   * 用户规格"其他障碍物阻碍挖掘圆木，则需要破除"）。缺省 true；若希望
-   * 只挖树内方块、绝不碰周围建筑方块，可置 false（此时仅破树内树叶）。
-   */
-  breakObstacles: boolean;
 }
 
 /** 默认配置 */
@@ -70,7 +64,6 @@ export const DEFAULT_WOODCUT_CONFIG: WoodcutBehaviorConfig = {
   recheckCycles: 5, // 50 tick = 2.5 秒
   notifyCooldownCycles: 10, // 100 tick = 5 秒
   mode: "logs",
-  breakObstacles: true,
 };
 
 /**
@@ -159,35 +152,41 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
     return normalizeChopMode(ai.memory.get<string>("woodcutMode"), config.mode);
   };
 
-  /** 障碍查看器（mc 层注入 planChop）：紧贴圆木的非树实心方块 = 障碍 */
-  const buildChopWorld = (ai: AiBehaviorContext, breakObstacles: boolean): ChopWorld => {
-    return {
-      isSolidForeign: (loc) => {
-        if (!breakObstacles) return false;
-        const bot = ai.bot;
-        if (!bot) return false;
-        try {
-          const block = bot.dimension.getBlock(loc);
-          if (!block) return false;
-          if (block.isAir || block.isLiquid) return false; // 空气/液体不阻
-          // 树自身方块（原木/树叶）是计划主目标，不算障碍
-          if ((TREE_LOG_TYPE_IDS as readonly string[]).includes(block.typeId)) return false;
-          if ((TREE_LEAF_TYPE_IDS as readonly string[]).includes(block.typeId)) return false;
-          return true; // 其他实心方块（泥土/石子等）= 阻碍挖圆木的障碍
-        } catch {
-          return false;
-        }
-      },
-    };
-  };
-
-  /** 发起砍树协程（chopOneTree：逐目标破块 + 独立拾取 flow） */
+  /**
+   * 发起砍树协程（chopOneTree：逐目标破块 + 独立拾取 flow）。
+   * 砍伐前先以**树中心 7×7×7**重扫一次，用真实圆木/树叶更新树资源清单
+   * （refreshTreeResource + 写回共享池），再生成计划——清单不失真。
+   */
   const startChop = (ai: AiBehaviorContext, tree: PoolTree): void => {
     chopResult = undefined;
-    const mode = currentMode(ai);
-    const world = buildChopWorld(ai, config.breakObstacles);
-    const plan = planChop(tree, mode, world);
-    chopRun = chopOneTree(ai.botName, plan, mode)
+    chopRun = (async () => {
+      const mode = currentMode(ai);
+      const bot = resolveBotPlayer(ai.botName);
+      if (!bot) return { kind: "failed", reason: "offline" } as WoodcutOutcome;
+      // ① 7×7×7 重扫（树中心底部坐标）→ 更新圆木/树叶资源
+      let effectiveTree: PoolTree = tree;
+      try {
+        const rescan = rescanTree7x7(bot.dimension, tree.base);
+        const refreshed = refreshTreeResource(tree, rescan.logs, rescan.leafs);
+        effectiveTree = { ...tree, ...refreshed };
+        // 写回共享池（后续认领者/他人看到的是更新后的清单）
+        const fresh = ai.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [];
+        ai.shared.set(
+          TREE_POOL_KEY,
+          fresh.map((t) => (t.id === effectiveTree.id ? effectiveTree : t)),
+          POOL_TTL_TICKS,
+          "renewing",
+          ai.tick,
+        );
+        console.warn(`[MockPlayer] woodcut ${ai.botName} 7×7×7 重扫 ${tree.id}：圆木 ${rescan.logs.length} / 树叶 ${rescan.leafs.length}`);
+      } catch (e: any) {
+        // 重扫失败 → 用认领时的清单兜底（不中断砍树）
+        console.warn(`[MockPlayer] woodcut ${ai.botName} 7×7×7 重扫失败，用认领清单: ${e?.message ?? e}`);
+      }
+      // ② 生成计划并执行砍伐
+      const plan = planChop(effectiveTree, mode);
+      return await chopOneTree(ai.botName, plan, mode);
+    })()
       .then((o) => {
         chopResult = o;
       })
@@ -313,7 +312,8 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
     const outcome = chopResult;
     chopRun = chopResult = undefined;
     if (outcome.kind === "done") {
-      notify(ai.botName, `砍伐完成（破 ${outcome.broken} 块，拾取 ${outcome.picked} 件）`);
+      const fallbackNote = outcome.fellBack ? "（收集模式无合适树叶工具，已回退为圆木模式）" : "";
+      notify(ai.botName, `砍伐完成（破 ${outcome.broken} 块，拾取 ${outcome.picked} 件）${fallbackNote}`);
     } else {
       notify(ai.botName, "本次砍树中断（可重试）");
     }

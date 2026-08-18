@@ -393,3 +393,41 @@ export function buildTreeSetReport(r: TreeSetScanResult, radius: number, fromY: 
 
 /** 有效树叶 id（剔除无效旧 id） */
 export const VALID_LEAF_TYPE_IDS = (TREE_LEAF_TYPE_IDS as readonly string[]).filter((id) => !INVALID_LEGACY_IDS.has(id));
+
+// ─── 砍伐前 7×7×7 重扫（用户规格：以树中心为 7×7×7 范围重扫，更新树资源清单） ──
+
+/** 树中心 7×7×7 重扫结果（logs/leafs 为存储坐标制 0.5） */
+export interface TreeRescanResult {
+  logs: { x: number; y: number; z: number; woodId: string }[];
+  leafs: Vec3[];
+}
+
+/** 树中心重扫半径（格）：7×7×7 = base ±3 */
+export const RESCAN_RADIUS = 3;
+
+/** 重扫木材 id（规划不依赖种类；后续可由方块 states 归一细化） */
+const RESCAN_WOOD_ID = "oak";
+
+/**
+ * 以树中心（底部坐标）为中心的 7×7×7 重扫：一次性采集圆木/树叶坐标集，
+ * 用于**砍伐前更新树资源清单**（用户规格）。开销 = 2 次小范围 getBlocks。
+ */
+export function rescanTree7x7(dimension: Dimension, base: Vec3): TreeRescanResult {
+  const bx = Math.floor(base.x);
+  const by = Math.floor(base.y);
+  const bz = Math.floor(base.z);
+  const fromY = Math.max(-64, by - RESCAN_RADIUS);
+  const toY = Math.min(320, by + RESCAN_RADIUS);
+  const center: Vec3 = { x: bx, y: by, z: bz };
+
+  const logRes = collectCoordinateSet(dimension, center, RESCAN_RADIUS, VALID_LOG_TYPE_IDS, "原木(7×7)", fromY, toY, HORIZONTAL_LOG_PERMUTATIONS);
+  const leafRes = collectCoordinateSet(dimension, center, RESCAN_RADIUS, VALID_LEAF_TYPE_IDS, "树叶(7×7)", fromY, toY);
+
+  const leafs: Vec3[] = leafRes.coords.map((c) => ({ x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5 }));
+  // 只保留 7×7 范围内的原木（collectCoordinateSet 已含 center±RESCAN_RADIUS 的 x/z，
+  // 但 y 由 fromY/toY 控制——这里再按 base±3 的 y 严格过滤，防高树越界窜入）
+  const logs: { x: number; y: number; z: number; woodId: string }[] = logRes.coords
+    .filter((c) => c.y >= by - RESCAN_RADIUS && c.y <= by + RESCAN_RADIUS)
+    .map((c) => ({ x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5, woodId: RESCAN_WOOD_ID }));
+  return { logs, leafs };
+}

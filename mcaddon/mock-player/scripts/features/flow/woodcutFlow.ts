@@ -24,13 +24,15 @@ import { setMainhandSlot } from "../basic/items/mainhand";
 import { inventoryContainerOf, enchantableOf } from "../basic/items/ItemComponentRead";
 import { waitTicks } from "../utils";
 import {
+  hasSuitableLeafTool,
   pickBestTool,
   toolCategoryOf,
   type ChopMode,
   type ChopTargetKind,
   type ToolItem,
 } from "../../rules/woodcut/WoodcutRules";
-import type { ChopPlan, ChopTarget } from "../../rules/woodcut/ChopPlan";
+import { TREE_LEAF_TYPE_IDS, TREE_LOG_TYPE_IDS } from "../../rules/tree/TreeRules";
+import type { ChopPlan, ChopStage, ChopTarget } from "../../rules/woodcut/ChopPlan";
 import type { PickupTask } from "../../rules/pickup/PickupPlan";
 import { runPickupFlow } from "./pickupFlow";
 
@@ -41,7 +43,7 @@ export type WoodcutFailureReason = "offline" | "aborted" | "error";
 
 /** 一次砍树流程结果 */
 export type WoodcutOutcome =
-  | { kind: "done"; broken: number; picked: number }
+  | { kind: "done"; broken: number; picked: number; fellBack?: boolean }
   | { kind: "failed"; reason: WoodcutFailureReason };
 
 // ─── 常量 ──────────────────────────────────────────────
@@ -116,6 +118,7 @@ async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMod
   const approach = async (): Promise<void> => {
     const cur = resolveBotPlayer(botName);
     if (!cur) return;
+    stopMining(botName); // ⚠️ 移动前必须立刻停止正在挖掘的动作
     // 导航到目标正下方（y 用假人当前层——地面可达时生成导航目标）
     const navTarget = { x: target.loc.x + 0.5, y: Math.max(target.loc.y - 1, cur.location.y - 2), z: target.loc.z + 0.5 };
     const nav = await longNavigateBot(botName, navTarget);
@@ -151,8 +154,18 @@ async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMod
   return "failed";
 }
 
-/** 靠近某坐标（longNavigate → navigate 兜底，容错） */
+/** 停止假人正在挖掘的动作（用户规格：任何移动操作进行时，都要立刻停止挖矿） */
+function stopMining(botName: string): void {
+  try {
+    resolveBotPlayer(botName)?.stopBreakingBlock();
+  } catch {
+    /* 实体失效忽略 */
+  }
+}
+
+/** 靠近某坐标（longNavigate → navigate 兜底，容错；移动前先停挖） */
 async function approachPoint(botName: string, loc: { x: number; y: number; z: number }): Promise<void> {
+  stopMining(botName); // ⚠️ 移动前必须立刻停止正在挖掘的动作
   const nav = await longNavigateBot(botName, { x: loc.x, y: loc.y, z: loc.z });
   if (nav !== NavigateResult.Arrived) {
     await navigateBot(botName, { x: loc.x, y: loc.y, z: loc.z });
@@ -163,15 +176,16 @@ async function approachPoint(botName: string, loc: { x: number; y: number; z: nu
 
 /**
  * 完成一棵树的砍伐流程（闭包异步，永不 reject）：
- *   ① 先导航到树附近（树中心坐标 base）
- *   ② 破除**树桩**（最低那段圆木），再**向上逐根**砍掉全部圆木资源——
- *      每根用 breakBlockAt（看向目标 + 持续挖掘直到被破坏）；超出挖掘距离
- *      时**靠近目标方块缩短距离再挖**（far → approach）
- *   ③ 完整砍树模式（collect）：再挖掘掉**全部树叶**资源（已并入 plan）
- *   ④ 拾取阶段调独立拾取 flow（runPickupFlow）收集树范围全部掉落物
+ *   ① 先导航到树附近（树中心坐标 base；移动前 stopBreakingBlock）
+ *   ② 树桩 → 移动进入树中心向上垂直砍主干 → 移到散落圆木正下方破除
+ *     （每根用 breakBlockAt：看向目标 + 持续挖掘直到被破坏；超出挖掘距离
+ *       → 靠近目标正下方缩短距离再挖）
+ *   ③ 收集模式：挖掉**所有挖掘范围内**的树叶（超距 → 正下方缩短距离）；
+ *     没有合适树叶工具 → **自动 fallback 圆木模式**（跳过树叶，直接拾取）
+ *   ④ 拾取：树中心 7×7 范围内**圆木 + 树叶两类**掉落物（独立拾取 flow）
  *
  * @param botName 假人名
- * @param plan    单树砍伐计划（core ChopPlan 输出；logs 底→顶）
+ * @param plan    单树砍伐计划（core ChopPlan 输出；分阶段）
  * @param mode    砍树模式（原木模式/收集模式）
  * @returns done={broken,picked} / failed={reason}
  */
@@ -179,29 +193,46 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
   const bot = resolveBotPlayer(botName);
   if (!bot) return { kind: "failed", reason: "offline" };
 
-  // ── ① 先导航到树附近（树中心坐标） ──
+  // ── ① 先导航到树附近（树中心坐标；移动前停挖） ──
   await approachPoint(botName, plan.base);
 
-  // ── ②/③ 按 plan 顺序逐目标：树桩→向上圆木→（收集模式）全部树叶 ──
+  // ── ②/③ 分阶段推进：树桩→主干→散落→[收集模式]全部树叶 ──
   let broken = 0;
-  for (const target of plan.targets) {
-    if (!resolveBotPlayer(botName)?.isValid) return { kind: "failed", reason: "aborted" };
-    const r = await breakUntilGone(botName, target, mode);
-    if (r === "broken") broken++;
-    else if (r === "failed") {
-      // 单目标多次尝试仍失败（含高处不可达）：不中断整树（尽力砍；
-      // 剩余由共享池后续认领者/玩家接手）
-      console.warn(`[MockPlayer] chopOneTree ${botName} 目标 ${target.loc.x},${target.loc.y},${target.loc.z} 无法破坏（可能超出竖向挖掘距离），跳过`);
+  let effectiveMode: ChopMode = mode;
+  let fellBack = false;
+  for (const stage of plan.stages) {
+    if (stage.kind === "leaf" && effectiveMode === "collect") {
+      // 收集模式挖树叶：无合适树叶工具 → 自动 fallback 圆木模式
+      const cur = resolveBotPlayer(botName);
+      const tools = cur ? snapshotTools(cur) : [];
+      if (!cur || !hasSuitableLeafTool(tools)) {
+        fellBack = true;
+        console.warn(`[MockPlayer] chopOneTree ${botName} 收集模式无合适树叶工具，自动 fallback 圆木模式`);
+        // 通知（如果有附近玩家）——flow 内不直接依赖 world 通知，交给能力层/日志
+        break; // 跳过树叶阶段，进入拾取
+      }
+    }
+    for (const target of stage.targets) {
+      if (!resolveBotPlayer(botName)?.isValid) return { kind: "failed", reason: "aborted" };
+      stopMining(botName); // ⚠️ 每个目标处理前（含 move 前）确保停挖
+      const r = await breakUntilGone(botName, target, effectiveMode);
+      if (r === "broken") broken++;
+      else if (r === "failed") {
+        console.warn(
+          `[MockPlayer] chopOneTree ${botName} 目标 ${target.loc.x},${target.loc.y},${target.loc.z} 无法破坏（可能超出竖向挖掘距离），跳过`,
+        );
+      }
     }
   }
 
-  // ── ④ 拾取阶段：独立拾取 flow（卡在树叶上的掉落物由 allowCleanup 破除） ──
+  // ── ④ 拾取：树中心 7×7 范围内圆木/树叶两类掉落物（独立拾取 flow，卡叶破除） ──
   let picked = 0;
   if (resolveBotPlayer(botName)?.isValid) {
     const task: PickupTask = {
       rangeMin: plan.pickupMin,
       rangeMax: plan.pickupMax,
       origin: resolveBotPlayer(botName)!.location,
+      includeTypes: [...(TREE_LOG_TYPE_IDS as readonly string[]), ...(TREE_LEAF_TYPE_IDS as readonly string[])],
       isBlockingBelow: (loc) =>
         plan.targets.some((t) => t.kind === "leaf" && t.loc.x === loc.x && t.loc.y === loc.y && t.loc.z === loc.z),
     };
@@ -219,9 +250,8 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
     picked = outcome.kind === "failed" ? 0 : outcome.picked;
     await waitTicks(3); // 收尾等待（末班掉落物自动吸入）
   }
-  return { kind: "done", broken, picked };
+  return { kind: "done", broken, picked, fellBack };
 }
-
 // ─── 测试诊断入口（游戏内命令） ─────────────────────────
 
 /** 一次性展示一棵树的砍伐计划（诊断；不实际破坏） */
