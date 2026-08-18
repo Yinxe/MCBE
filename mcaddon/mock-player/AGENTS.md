@@ -169,6 +169,11 @@ scripts/
   到 `BotRecord.woodcutMode`（缺省 logs），引擎注入大脑记忆驱动能力
 - **测试命令 `/mp:woodcut [radius] [mode]`**：扫描树资源并展示最近一棵树的砍伐计划
   （flow 诊断；mode=logs 原木模式 / collect 收集模式）
+- **树扫描时机与节流（⚠️ 树坐标集扫描很贵 ~50ms ≈ 1 游戏刻）**：`find` 阶段只有当
+  共享池里可认领树不足（< minPoolTrees）且**本会话还没扫过**时才**主动扫描一次**；
+  这次扫描若没带来**新树**（没扫到/都在池里）→ 进 `exhausted` 终态：报告
+  "自动砍树任务完成"并静止，**不再原地空扫描**；重新激活（切换 workMode /
+  下线重连 → reset）才允许再扫一次
 
 ### 标签系统
 - 标签 = 假人行为的持久开关（共存 COEXIST / legacy 组 LEGACY：宝库/钓鱼/control 等旧标签）

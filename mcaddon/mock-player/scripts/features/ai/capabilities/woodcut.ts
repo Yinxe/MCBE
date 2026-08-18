@@ -48,8 +48,6 @@ export interface WoodcutBehaviorConfig {
   maxDistance: number;
   /** 池内可认领树资源下限：不足则主动扫描发现新树并共享 */
   minPoolTrees: number;
-  /** 扫描冷却（引擎周期 = 10 tick） */
-  scanCooldownCycles: number;
   /** 无树等待周期 */
   recheckCycles: number;
   /** 通知节流（引擎周期 = 10 tick；附近 16 格玩家） */
@@ -69,15 +67,19 @@ export const DEFAULT_WOODCUT_CONFIG: WoodcutBehaviorConfig = {
   scanRadius: 16,
   maxDistance: TREE_POOL_MAX_DISTANCE,
   minPoolTrees: POOL_MIN_TREES,
-  scanCooldownCycles: 12, // 120 tick = 6 秒
   recheckCycles: 5, // 50 tick = 2.5 秒
   notifyCooldownCycles: 10, // 100 tick = 5 秒
   mode: "logs",
   breakObstacles: true,
 };
 
-/** 状态机阶段 */
-type Phase = "init" | "find" | "chop" | "finish" | "wait";
+/**
+ * 状态机阶段。
+ * exhausted = **扫描耗尽终态**：会话内已主动扫描一次且没扫到可砍的新树 →
+ * 报告"任务完成"并停下，**不再原地空扫描**（树扫描很贵 ~50ms≈1 游戏刻）。
+ * 重新激活（切换 workMode / 下线重连 → reset）会清标志，允许再次扫描。
+ */
+type Phase = "init" | "find" | "chop" | "finish" | "wait" | "exhausted";
 
 /**
  * 创建自动砍树行为（record.workMode === "woodcut" 时由引擎注册）。
@@ -87,7 +89,14 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
   let phase: Phase = "init";
   let wait = 2; // 初始停顿
   let notifyCooldown = 0;
-  let scanCooldown = 0;
+
+  /** 本会话树扫描节流（⚠️ 树扫描昂贵 ~50ms≈1 游戏刻）：
+   *  - scanPending   一次主动扫描在途（防并发/重复扫描）
+   *  - noTreeFound   已扫过一次且没扫到可砍的新树 → 耗尽，进入终端态不再扫
+   *  - exhaustedNotified 耗尽通知只发一次 */
+  let scanPending = false;
+  let noTreeFound = false;
+  let exhaustedNotified = false;
 
   /** 当前独占认领的树 */
   let currentId: string | undefined;
@@ -194,10 +203,13 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
       pool = releaseTree(pool, currentId);
       lastShared.set(TREE_POOL_KEY, pool, POOL_TTL_TICKS, "renewing");
     }
+    // ⚠️ 复位（切换 workMode/下线重连）→ 清扫描耗尽标记，重新激活允许再次扫描
+    scanPending = false;
+    noTreeFound = false;
+    exhaustedNotified = false;
     phase = "init";
     wait = 2;
     notifyCooldown = 0;
-    scanCooldown = 0;
     currentId = undefined;
     currentTree = undefined;
     chopRun = chopResult = undefined;
@@ -205,7 +217,17 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
     lastBot = undefined;
   };
 
-  /** find：取池 → 不足则扫描合并共享 → 选树认领 → 生成计划并发起砍树 */
+  /**
+   * find：取池 → 不足则**主动扫描一次**发现新树并合并共享 → 选树认领。
+   *
+   * ⚠️ 扫描时机/节流（用户规格 2026-08-18）：树坐标集扫描很贵（~50ms，几乎
+   * 占满 1 个游戏刻）。因此**一个会话内只主动扫描一次**：
+   *   - 只有当共享池里可认领树不足（< minPoolTrees）且本会话还没扫过时扫描；
+   *   - 这次扫描若没带来任何**新树**（没扫到树 / 扫到的都已在池里）→ 立即
+   *     标记 noTreeFound，进入 exhausted 终态：报告"任务完成"并停下，
+   *     **不再原地空扫描浪费计算资源**；
+   *   - 重新激活（切换 workMode / 下线重连 → reset）才允许再次扫描。
+   */
   const doFind = (ai: AiBehaviorContext): void => {
     const botName = ai.botName;
     const bot = ai.bot;
@@ -220,32 +242,61 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
       center: botLocation,
       maxDistance: config.maxDistance,
     };
-    // 可认领树资源不足 → 主动扫描发现新树并合并共享
-    if (countClaimable(pool, botName, pickOptions) < config.minPoolTrees && scanCooldown <= 0) {
-      scanCooldown = config.scanCooldownCycles;
-      // 异步扫描：启动后由引擎下一周期继续（扫描完成后合并写池，直接选树）
+
+    // ── ① 本会话已扫描耗尽：报告一次并完成（终端态，不再扫描） ──
+    if (noTreeFound) {
+      if (!exhaustedNotified) {
+        exhaustedNotified = true;
+        notify(botName, "附近 16 格内没有可砍的树，自动砍树任务完成");
+        console.warn(`[MockPlayer] woodcut ${botName} 扫描耗尽：任务完成，停止扫描（树扫描 ~50ms 昂贵，避免空扫耗刻）`);
+      }
+      phase = "exhausted";
+      return;
+    }
+
+    // ── ② 可认领树不足 + 本会话还没扫 → 主动扫描一次并合并新树共享 ──
+    const claimable = countClaimable(pool, botName, pickOptions);
+    if (claimable < config.minPoolTrees && !scanPending) {
+      scanPending = true; // 并发/重复扫描守卫（一次会话只扫一次）
       scanTreesFromSets(botLocation, bot.dimension, config.scanRadius)
         .then((result) => {
-          if (result.trees.length > 0) {
-            const fresh = ai.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [];
-            const merged = mergeScannedTrees(fresh, result.trees);
+          scanPending = false;
+          const fresh = ai.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [];
+          const before = new Set(fresh.map((t) => t.id));
+          const newTrees = result.trees.filter((t) => !before.has(t.id));
+          if (newTrees.length > 0) {
+            // 扫到新树 → 合并进共享池，下一周期就能认领
+            const merged = mergeScannedTrees(fresh, newTrees);
             ai.shared.set(TREE_POOL_KEY, merged, POOL_TTL_TICKS, "renewing", ai.tick);
+            console.warn(`[MockPlayer] woodcut ${botName} 扫描发现 ${newTrees.length} 棵新树并入共享池`);
+          } else {
+            // 没扫到可砍的新树（无树 / 都是他人已认领且在池内）→ 耗尽 → 报告完成
+            noTreeFound = true;
           }
         })
         .catch(() => {
-          /* 扫描失败下次重试 */
+          // 扫描异常：不立即判耗尽，下周期允许重试一次（异常 ≠ 无树）
+          scanPending = false;
         });
-    } else if (scanCooldown > 0) {
-      scanCooldown--;
     }
+
+    // ── ③ 用当前池认领（扫描在途时最多等 2 周期；等结果下一周期合并再认领） ──
     const pick = pickBestTree(pool, botName, botLocation, pickOptions);
     if (!pick) {
-      notify(botName, "附近没有可砍的树，稍后再找");
+      if (scanPending) {
+        phase = "wait";
+        wait = 2; // 扫描在途：短时间内不再扫，等合并结果
+        return;
+      }
+      // 池里确实没有可认领（且本会话扫描尚未触发/已触发但要等 cooldown 之外）
+      // ——不空转：短暂等待后回 find（首次仍会触发那一次扫描，扫完后自动终结）
       phase = "wait";
       wait = config.recheckCycles;
       return;
     }
-    // 独占认领（共享——其他假人不再抢它）
+    // 独占认领（共享——其他假人不再抢它）；认领成功即重置耗尽标记
+    noTreeFound = false;
+    exhaustedNotified = false;
     currentId = pick.id;
     currentTree = pick;
     pool = claimTree(pool, currentId, botName);
@@ -308,6 +359,9 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
           if (--wait > 0) return;
           phase = "find";
           break;
+        case "exhausted":
+          // ⚠️ 终端态：扫描耗尽已报告"任务完成"，保持静止零扫描（省计算刻）
+          return;
       }
     },
   };
