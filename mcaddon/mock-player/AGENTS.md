@@ -25,7 +25,9 @@ scripts/
 │                              #   旧 AI 引擎（legacy BotBrain）→ 生物 AI 引擎（新框架）
 ├── ai/                        # 生物 AI 框架（驱动 features/ai 的能力状态机）
 │   └── Behavior.ts            # BehaviorRunner：能力 = 感知-决策-同步短步（step 无循环
-│                              #   无 await）；同目录 Memory / Goal / GoalSelector / Sensor /
+│                              #   无 await）；同目录 Memory / SharedMemory（跨假人共享+
+│                              #   过期：独立每秒扫描 / fixed 定时 / renewing 延长默认）/
+│                              #   Goal / GoalSelector / Sensor /
 │                              #   Status / Tree / ResourceLock / Action。零 @minecraft 可单测
 ├── bootstrap/                 # 启动初始化（装配 + 统一入口 + 迁移）
 │   ├── context.ts             # 运行时装配上下文：mc 层单例（botRegistry / botStore /
@@ -44,7 +46,9 @@ scripts/
 │   └── *.ts                   # world 事件订阅薄壳（playerJoin/playerLeave/entityDie/...）
 ├── features/                  # 核心功能封装（副作用层）
 │   ├── ai/                    # 生物 AI 行为：brainEngine（10 tick 对账 + 驱动）+ capabilities
-│   │                          #   （wander 闲逛 / mine 定点挖掘 / place 定点放置 / attack 攻击）
+│   │                          #   （wander 闲逛 / mine 定点挖掘 / place 定点放置 /
+│   │                          #   attack 定点攻击 / fishing 自动钓鱼——共享钓鱼点池 +
+│   │                          #   占用/连续失败不可用标记，规则在 rules/FishingPool）
 │   ├── basic/                 # 基础**原子性**功能（单动作不可细分）：blocks（破坏/放置）/
 │   │                          #   items（背包/主手/使用/装备）/ fishing（发杆/收竿）/
 │   │                          #   control / move（导航，发布 botMoved 事件）/
@@ -92,8 +96,9 @@ scripts/
 
 ### 两套 AI 引擎（并存）
 - **新框架（ai/ + features/ai，生物 AI）**：Behavior 状态机 + BehaviorRunner 优先级抢占；
-  brainEngine 每 10 tick 注入 ctx.bot 驱动；能力形态 = 常驻协程（mine：token 可取消）或
-  同步短步（wander / place / attack）；记忆经 AiMemory 注入，决策在行为内
+  brainEngine 每 10 tick 注入 ctx.bot / ctx.shared 驱动；能力形态 = 常驻协程（mine：token 可取消）或
+  同步短步（wander / place / attack）；私有记忆经 AiMemory（brain.memory）注入，
+  **跨假人共享记忆经 SharedMemory 全局单例（ctx.shared）注入——所有假人都能读写**，决策在行为内
 - **旧框架（legacy/ai/BotBrain，宝库/钓鱼任务）**：行为树（Sequence/Selector/黑板/Sense）
   + 端口契约；VaultPorts / FishingPorts 任务适配同在 legacy/ai/；劫掠已剥离为
   事件驱动模块 features/raid（无树、无端口、零轮询）
@@ -128,11 +133,18 @@ scripts/
 
 ### 工作模式（record.workMode，用户拍板）
 - **互斥单选**：一个假人一个工作模式——none / wander（闲逛模式）/ mine（定点挖掘模式）/
-  place（定点放置模式）/ attack（定点攻击模式）/ raid（劫掠模式）。互斥由单字段天然保证
-- 各引擎按值认领：wander/mine/place/attack → 生物 AI 引擎；raid → 劫掠模块
+  place（定点放置模式）/ attack（定点攻击模式）/ raid（劫掠模式）/ fishing（自动钓鱼模式）。
+  互斥由单字段天然保证
+- 各引擎按值认领：wander/mine/place/attack/fishing → 生物 AI 引擎；raid → 劫掠模块
 - **修改唯一渠道 `setWorkMode`**：落库 + 发布 `botWorkModeChanged`（驱动模块按值启动/停止，
   替代旧 10 tick 标签轮询）；UI 提交前先 setTags 校验通过再 setWorkMode（防部分应用）
-- ⚠️ 钓鱼/砍树后期单独定制（暂保持旧标签驱动，不进单选）；woodcut 值域预留
+- ⚠️ 砍树后期单独定制（暂保持旧标签驱动，不进单选）；woodcut 值域预留。
+  ⚠️ 自动钓鱼：新版走 workMode="fishing"（生物 AI + 共享钓鱼点池）；旧 TAG_FISH_MODE
+  驱动路径（legacy 树）保留兼容——两套并存，按启用方式二选一
+- **共享钓鱼点池选点规则（新版 workMode="fishing"，rules/FishingPool）**：
+  假人只能从池里选**自身 16 格内**（SPOT_MAX_DISTANCE）且**点位半径 1 格内无
+  其他实体**（现场实时判定 isSpotUsable）的有效钓鱼点；池内**有效点**不足
+  下限（POOL_MIN_USABLE=3）→ 下次寻找的假人主动扫描发现新点并合并进池共享
 
 ### 标签系统
 - 标签 = 假人行为的持久开关（共存 COEXIST / legacy 组 LEGACY：宝库/钓鱼/control 等旧标签）

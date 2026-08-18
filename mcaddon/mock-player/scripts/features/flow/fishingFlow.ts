@@ -27,6 +27,7 @@ import { BOT_TAG, TAG_FISH_MODE } from "../../rules/tags/BotTags";
 import { castFishingRod, findOwnHooks, reelFishingRod } from "../basic/fishing";
 import { enchantableOf } from "../basic/items/ItemComponentRead";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
+import { botRegistry } from "../../bootstrap/context";
 import { waitTicks } from "../utils";
 
 // ── 领域类型 re-export（类型已归位 core/tasks/FishingRules，此处保持导入方兼容） ──
@@ -58,8 +59,9 @@ const runningFishing = new Set<string>();
 
 // ─── 战利品事件感知（用户规格） ─────────────────────────
 // ⚠️ 收竿后战利品入包有引擎延迟——收竿后立即快照 diff 会漏（"无战利品"根因）。
-//    改为**订阅假人背包物品变化事件**：只感知**钓鱼模式的假人**（TAG_FISH_MODE）
-//    + **非主手槽**变化（主手变化 = 抛竿/收竿操作，不是战利品）+ 钓鱼进行中。
+//    改为**订阅假人背包物品变化事件**：只感知**钓鱼的假人**（旧 TAG_FISH_MODE
+//    或新版 workMode="fishing"，二选一 → 生物 AI 新版兼容）+ **非主手槽**变化
+//    （主手变化 = 抛竿/收竿操作，不是战利品）+ 钓鱼进行中。
 //    收竿后等待战利品入包（3 tick）再读取收集结果；事件未触发时回退快照 diff。
 
 /** 钓鱼中收集到的战利品（botName → 指纹 → 数量；每次钓鱼后清空） */
@@ -70,8 +72,8 @@ let lootTrackerReady = false;
 
 /**
  * 订阅假人背包物品变化（战利品感知；main.ts worldLoad 后调用）。
- * 过滤：假人（BOT_TAG）+ 钓鱼模式（TAG_FISH_MODE）+ 钓鱼进行中（runningFishing）
- *   + 非主手槽（selectedSlotIndex——主手变化是抛竿/收竿操作）。
+ * 过滤：假人（BOT_TAG）+ 钓鱼（旧 TAG_FISH_MODE 或 workMode="fishing"）
+ *   + 钓鱼进行中（runningFishing）+ 非主手槽（selectedSlotIndex）。
  */
 export function initLootTracker(): void {
   if (lootTrackerReady) return;
@@ -79,7 +81,10 @@ export function initLootTracker(): void {
   world.afterEvents.playerInventoryItemChange.subscribe((event) => {
     try {
       const bot = event.player;
-      if (!bot.hasTag(BOT_TAG) || !bot.hasTag(TAG_FISH_MODE.value)) return; // 只感知钓鱼模式假人
+      if (!bot.hasTag(BOT_TAG)) return; // 只感知假人
+      // 钓鱼：旧标签路径或新版工作模式（工作模式值域互斥，二选一）
+      const workMode = botRegistry.get(bot.name)?.workMode;
+      if (!bot.hasTag(TAG_FISH_MODE.value) && workMode !== "fishing") return;
       if (!runningFishing.has(bot.name)) return; // 钓鱼进行中
       const selected = (bot as { selectedSlotIndex?: number }).selectedSlotIndex ?? 0;
       if (event.slot === selected) return; // 排除主手（抛竿/收竿）

@@ -12,6 +12,7 @@ export type { AiContext, Node } from "./Node";
 export { Action, type ActionFn } from "./Action";
 export { BehaviorTree } from "./Tree";
 export { AiMemory } from "./Memory";
+export { SharedMemory } from "./SharedMemory";
 export { SensorRunner, type AiSensor, type AiSensorContext } from "./Sensor";
 export type { AiBrainContext, AiGoal, AiGoalFlags } from "./Goal";
 export { GoalSelector } from "./GoalSelector";

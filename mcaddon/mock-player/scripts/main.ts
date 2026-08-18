@@ -22,6 +22,7 @@ import { initFishingHookTracker, initLootTracker } from "./features/flow";
 import { initRaidMode } from "./features/flow/raidMode";
 import { startBrainEngine } from "./legacy/ai/BotBrain";
 import { startAiEngine } from "./features/ai/brainEngine";
+import { startSharedMemorySweeper } from "./features/ai/brainEngine";
 import { initGameTestContext, registerTestDimension } from "./features/manage/gametestContext";
 import { registerUiDrivers } from "./bootstrap/uiDrivers";
 import { runMigrations } from "./bootstrap/migration";
@@ -106,4 +107,7 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 启动生物 AI 引擎（新框架 scripts/ai：行为状态机 + 标签对账——
   // 随机游走等生物 AI 能力按标签启停）
   startAiEngine();
+
+  // 启动共享记忆过期扫描（独立计时器，每秒一次——过期键直接删除）
+  startSharedMemorySweeper();
 });

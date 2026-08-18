@@ -12,12 +12,15 @@
 //   - reset() 清全部状态（abort/切换/行为关闭），无残留协程
 
 import type { AiMemory } from "./Memory";
+import type { SharedMemory } from "./SharedMemory";
 
-/** 行为推进上下文（大脑注入：botName + 共享记忆 + 引擎 tick） */
+/** 行为推进上下文（大脑注入：botName + 私有记忆 + 共享记忆 + 引擎 tick） */
 export interface BehaviorContext {
   botName: string;
   tick: number;
   memory: AiMemory;
+  /** 跨假人共享记忆（引擎全局单例注入；可选——测试/单跑可缺省，引擎必注入） */
+  shared?: SharedMemory;
 }
 
 /** 行为状态机（能力 = 感知驱动决策 + 步进执行；替换常驻 while 工作流） */
