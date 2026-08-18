@@ -10,6 +10,7 @@ import {
   mergeScannedTrees,
   passesTreeConstraints,
   pickBestTree,
+  POOL_MIN_TREES,
   releaseTree,
   removeTree,
   TREE_POOL_MAX_DISTANCE,
@@ -87,4 +88,31 @@ test("passesTreeConstraints：默认 16 格距离 + 现场有效性", () => {
   assert.equal(passesTreeConstraints(tree, { center: { x: 0, y: 64, z: 0 }, maxDistance: 20 }), true);
   assert.equal(passesTreeConstraints(tree, { center: { x: 0, y: 64, z: 0 }, maxDistance: 20, isValid: () => false }), false);
   assert.equal(passesTreeConstraints(tree, { center: { x: 0, y: 64, z: 0 }, maxDistance: 20, isValid: () => true }), true);
+});
+
+test("双假人防抢 + 处理完移除再认领 + 不足主动扫描（核心语义集成）", () => {
+  // 假人 A 在 (0,64,0)，假人 B 在 (10,64,0)；t1 两方 16 格内，t2 超 16
+  const centerA = { x: 0, y: 64, z: 0 };
+  const centerB = { x: 10, y: 64, z: 0 };
+  let pool: PoolTree[] = [
+    makeTree("t1", { x: 3, y: 64, z: 0 }),
+    makeTree("t2", { x: 40, y: 64, z: 0 }),
+  ];
+  // ① 两方各自都有 1 棵可认领（t1；t2 超 16 排除）
+  assert.equal(countClaimable(pool, "$A", { center: centerA, maxDistance: TREE_POOL_MAX_DISTANCE }), 1);
+  assert.equal(countClaimable(pool, "$B", { center: centerB, maxDistance: TREE_POOL_MAX_DISTANCE }), 1);
+
+  // ② A 认领 t1 → B 不可抢（可认领数归 0 < POOL_MIN_TREES → 下次 B 会主动扫描）
+  pool = claimTree(pool, "t1", "$A");
+  assert.equal(countClaimable(pool, "$B", { center: centerB, maxDistance: TREE_POOL_MAX_DISTANCE }), 0);
+  assert.ok(0 < POOL_MIN_TREES, "可认领不足 → 触发主动扫描分享的判据");
+  assert.equal(pickBestTree(pool, "$B", centerB, { center: centerB, maxDistance: TREE_POOL_MAX_DISTANCE }), undefined);
+  // A 本人仍可看到自己独占的树（认领中不重抢自己）
+  assert.equal(countClaimable(pool, "$A", { center: centerA, maxDistance: TREE_POOL_MAX_DISTANCE }), 1);
+
+  // ③ A 处理完移除 t1 → 世界树还在，后续扫描 mergeScannedTrees 补回 free → B 重新可认领
+  pool = removeTree(pool, "t1");
+  const merged = mergeScannedTrees(pool, [makeTree("t1", { x: 3, y: 64, z: 0 })]);
+  assert.equal(countClaimable(merged, "$B", { center: centerB, maxDistance: TREE_POOL_MAX_DISTANCE }), 1);
+  assert.equal(pickBestTree(merged, "$B", centerB, { center: centerB, maxDistance: TREE_POOL_MAX_DISTANCE })?.id, "t1");
 });
