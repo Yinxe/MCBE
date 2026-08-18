@@ -52,6 +52,8 @@ export interface WoodcutBehaviorConfig {
   scanCooldownCycles: number;
   /** 无树等待周期 */
   recheckCycles: number;
+  /** 通知节流（引擎周期 = 10 tick；附近 16 格玩家） */
+  notifyCooldownCycles: number;
   /** 砍树模式（原木模式 / 收集模式） */
   mode: ChopMode;
   /**
@@ -69,6 +71,7 @@ export const DEFAULT_WOODCUT_CONFIG: WoodcutBehaviorConfig = {
   minPoolTrees: POOL_MIN_TREES,
   scanCooldownCycles: 12, // 120 tick = 6 秒
   recheckCycles: 5, // 50 tick = 2.5 秒
+  notifyCooldownCycles: 10, // 100 tick = 5 秒
   mode: "logs",
   breakObstacles: true,
 };
@@ -99,7 +102,7 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
   /** 通知附近玩家（节流；[模拟玩家][砍树] 前缀，附近 16 格） */
   const notify = (botName: string, detail: string): void => {
     if (notifyCooldown > 0) return;
-    notifyCooldown = 10;
+    notifyCooldown = config.notifyCooldownCycles;
     try {
       const bot = lastBot;
       if (!bot) return;
