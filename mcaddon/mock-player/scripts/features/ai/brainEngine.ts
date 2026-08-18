@@ -13,9 +13,10 @@
 //   "place"  定点放置模式（面前放置主手方块）
 //   "attack" 定点攻击模式（攻击面前目标）
 //   "fishing" 自动钓鱼模式（共享钓鱼点池 + 占用/失败标记，见 capabilities/fishing）
+//   "woodcut" 自动砍树模式（共享树资源池 + 单树砍伐流程，见 capabilities/woodcut）
 // 引擎每 10 tick 对账：record.workMode → 注册/卸载对应行为（切换 → 旧行为
-// reset 清状态 + 中断协程）。raid 由各自模块认领（互斥单字段；fishing 已入
-// 单选；woodcut 预留）。
+// reset 清状态 + 中断协程）。raid 由各自模块认领（互斥单字段；fishing/woodcut
+// 已入单选）。
 // 与旧引擎（legacy/ai/BotBrain 宝库 + features/state/behavior.ts 标签行为）
 // 并存——旧标签机制保留 legacy 内部使用。
 
@@ -31,6 +32,7 @@ import { makeMineBehavior } from "./capabilities/mine";
 import { makePlaceBehavior } from "./capabilities/place";
 import { makeAttackBehavior } from "./capabilities/attack";
 import { makeFishingBehavior } from "./capabilities/fishing";
+import { makeWoodcutBehavior } from "./capabilities/woodcut";
 import type { BotRecord } from "../../rules/Types";
 
 /** 引擎驱动周期（tick） */
@@ -96,6 +98,7 @@ const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
   place: makePlaceBehavior,
   attack: makeAttackBehavior,
   fishing: makeFishingBehavior,
+  woodcut: makeWoodcutBehavior,
 };
 
 /** 假人当前生物 AI 行为（record.workMode；未启用 → undefined） */

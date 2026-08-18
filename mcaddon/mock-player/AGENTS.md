@@ -133,18 +133,32 @@ scripts/
 
 ### 工作模式（record.workMode，用户拍板）
 - **互斥单选**：一个假人一个工作模式——none / wander（闲逛模式）/ mine（定点挖掘模式）/
-  place（定点放置模式）/ attack（定点攻击模式）/ raid（劫掠模式）/ fishing（自动钓鱼模式）。
-  互斥由单字段天然保证
-- 各引擎按值认领：wander/mine/place/attack/fishing → 生物 AI 引擎；raid → 劫掠模块
+  place（定点放置模式）/ attack（定点攻击模式）/ raid（劫掠模式）/ fishing（自动钓鱼模式）/
+  woodcut（自动砍树模式）。互斥由单字段天然保证
+- 各引擎按值认领：wander/mine/place/attack/fishing/woodcut → 生物 AI 引擎；raid → 劫掠模块
 - **修改唯一渠道 `setWorkMode`**：落库 + 发布 `botWorkModeChanged`（驱动模块按值启动/停止，
   替代旧 10 tick 标签轮询）；UI 提交前先 setTags 校验通过再 setWorkMode（防部分应用）
-- ⚠️ 砍树后期单独定制（暂保持旧标签驱动，不进单选）；woodcut 值域预留。
-  ⚠️ 自动钓鱼：新版走 workMode="fishing"（生物 AI + 共享钓鱼点池）；旧 TAG_FISH_MODE
+- ⚠️ 自动钓鱼：新版走 workMode="fishing"（生物 AI + 共享钓鱼点池）；旧 TAG_FISH_MODE
   驱动路径（legacy 树）保留兼容——两套并存，按启用方式二选一
 - **共享钓鱼点池选点规则（新版 workMode="fishing"，rules/FishingPool）**：
   假人只能从池里选**自身 16 格内**（SPOT_MAX_DISTANCE）且**点位半径 1 格内无
   其他实体**（现场实时判定 isSpotUsable）的有效钓鱼点；池内**有效点**不足
   下限（POOL_MIN_USABLE=3）→ 下次寻找的假人主动扫描发现新点并合并进池共享
+
+### 自动砍树（新版 workMode="woodcut"）
+- **共享树资源池（rules/woodcut/TreePool）**：所有砍树假人共用 SharedMemory
+  `"woodcut:pool"` 池（renewing TTL，活跃即延长）——一个假人发现的树全体可见；
+  **只认领附近 16 格**（TREE_POOL_MAX_DISTANCE）、**多假人不抢夺**（claimTree 独占）、
+  **处理完移除**（removeTree）、可认领树资源不足（POOL_MIN_TREES=3）→ 主动扫描
+  发现新树并合并进池共享（mergeScannedTrees）
+- **单树砍伐计划（rules/woodcut/ChopPlan）**：按模式编排有序目标——原木模式
+  （圆木 + 挡叶/障碍 blocker + 圆木卡叶清理）+ 收集模式（圆木 + 整树树叶），
+  附拾取范围；"超出挖掘范围→靠近再挖"由 mc flow（woodcutFlow）
+- **工具策略（rules/woodcut/WoodcutRules）**：原木模式只用斧头策略（品阶优先 /
+  效率>耐久>精准>时运）；收集模式树叶用树叶策略（精准锄头 > 剪刀 > 任意精准工具，
+  强制应用——全背包扫描取最优，即使主手是精准斧头）
+- **测试命令 `/mp:woodcut [radius] [mode]`**：扫描树资源并展示最近一棵树的砍伐计划
+  （flow 诊断；mode=logs 原木模式 / collect 收集模式）
 
 ### 标签系统
 - 标签 = 假人行为的持久开关（共存 COEXIST / legacy 组 LEGACY：宝库/钓鱼/control 等旧标签）

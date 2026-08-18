@@ -22,6 +22,12 @@ export {
   type CoordinateSetResult,
   type TreeSetScanResult,
 } from "./treeScan";
+export {
+  chopOneTree,
+  describeChopPlan,
+  type WoodcutOutcome,
+  type WoodcutFailureReason,
+} from "./woodcutFlow";
 export { initRaidMode, cleanupRaidMode, type RaidDrinkResult } from "./raidMode";
 export {
   raidStarted,

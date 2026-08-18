@@ -106,10 +106,11 @@ export function showTagManagement(player: Player, botName: string): void {
         style("定点攻击模式", color.playerName),
         style("劫掠模式", color.warn),
         style("自动钓鱼模式", color.accent),
+        style("自动砍树模式", color.accent),
       ],
       {
         defaultValueIndex: WORK_MODE_INDEX[record.workMode] ?? 0,
-        tooltip: "单选工作模式（互斥，仅一项）：闲逛模式（近点散步）/ 定点挖掘模式（视线挖方块）/ 定点放置模式（面前放方块）/ 定点攻击模式（攻击面前目标）/ 劫掠模式（喝不祥之瓶刷袭击）/ 自动钓鱼模式（生物 AI + 共享钓鱼点，自动就位抛竿收竿）。砍树后期单独定制",
+        tooltip: "单选工作模式（互斥，仅一项）：闲逛模式（近点散步）/ 定点挖掘模式（视线挖方块）/ 定点放置模式（面前放方块）/ 定点攻击模式（攻击面前目标）/ 劫掠模式（喝不祥之瓶刷袭击）/ 自动钓鱼模式（生物 AI + 共享钓鱼点，自动就位抛竿收竿）/ 自动砍树模式（生物 AI + 共享树资源池，认领 16 格内树并砍伐收集，原木/收集模式）",
       },
     );
 
