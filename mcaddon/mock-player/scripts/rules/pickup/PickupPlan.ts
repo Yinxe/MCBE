@@ -16,10 +16,12 @@ import type { Vec3 } from "../Types";
 
 /** 单个候选掉落物（mc 层从 getEntities 快照构造） */
 export interface PickupItem {
-  /** 掉落物实体位置（整数格向下取整由调用方处理；这里用浮点实体坐标也可） */
+  /** 掉落物实体位置（浮点实体坐标；拾取导航用） */
   loc: Vec3;
   /** 掉落物物品 typeId（如 minecraft:oak_log / minecraft:apple） */
   typeId: string;
+  /** 掉落物实体 ID（mc 层填入；执行流用它精确判定"是否已被拾取"，缺省 undefined） */
+  entityId?: string;
 }
 
 /** 拾取任务说明（调用方提供）：工作范围 + 目标 typeId 白名单 */

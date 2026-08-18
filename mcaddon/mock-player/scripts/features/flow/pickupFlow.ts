@@ -9,6 +9,7 @@
 //
 // ⚠️ mc 适配层：按 flow 风格永不 reject；core 规划在 rules/pickup/PickupPlan（可单测）。
 
+import { world } from "@minecraft/server";
 import type { Entity } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
@@ -95,12 +96,23 @@ function freeSlots(bot: SimulatedPlayer): { free: number; total: number } {
 }
 
 /** 读掉落物物品 typeId（minecraft:item 组件；读取失败返回 "minecraft:item"） */
-function dropTypeId(entity: Entity): string {
+function dropTypeId(e: Entity): string {
   try {
-    const comp = entity.getComponent("minecraft:item") as { itemStack?: { typeId: string } } | undefined;
+    const comp = e.getComponent("minecraft:item") as { itemStack?: { typeId: string } } | undefined;
     return comp?.itemStack?.typeId ?? "minecraft:item";
   } catch {
     return "minecraft:item";
+  }
+}
+
+/** 掉落物实体是否仍存在（精确判定：同一 entityId 已被拾取/消失 → false） */
+function dropGone(entityId: string | undefined): boolean {
+  if (!entityId) return false; // 无 id（core 测试数据）无法精确判定 → 视为仍在
+  try {
+    const e = world.getEntity(entityId);
+    return !e;
+  } catch {
+    return false;
   }
 }
 
@@ -126,7 +138,7 @@ function scanDrops(bot: SimulatedPlayer, task: PickupTask): PickupItem[] {
     for (const e of entities) {
       if (items.length >= SCAN_CAP) break;
       const p = e.location;
-      items.push({ loc: { x: p.x, y: p.y, z: p.z }, typeId: dropTypeId(e) });
+      items.push({ loc: { x: p.x, y: p.y, z: p.z }, typeId: dropTypeId(e), entityId: e.id });
     }
     return items;
   } catch {
@@ -208,10 +220,9 @@ export async function runPickupFlow(botName: string, task: PickupTask, options: 
         if (nav === NavigateResult.Arrived || nav === NavigateResult.TooFar) break;
         await waitTicks(5);
       }
-      // 靠近后等待少量 tick 让自动吸入生效；仍不可达 → onUnreachable
+      // 靠近后等待少量 tick 让自动吸入生效；按 entityId 精确判定是否仍存在 → onUnreachable
       await waitTicks(waitPickupTicks);
-      const stillThere = scanDrops(bot, task).some((i) => i.typeId === item.typeId);
-      if (stillThere) {
+      if (!dropGone(item.entityId)) {
         const proceed = onUnreachable ? onUnreachable(item) : true;
         void proceed; // 回调语义：返回 true 继续（默认跳过）
       }
