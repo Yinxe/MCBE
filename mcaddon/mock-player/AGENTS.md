@@ -157,6 +157,12 @@ scripts/
 - **工具策略（rules/woodcut/WoodcutRules）**：原木模式只用斧头策略（品阶优先 /
   效率>耐久>精准>时运）；收集模式树叶用树叶策略（精准锄头 > 剪刀 > 任意精准工具，
   强制应用——全背包扫描取最优，即使主手是精准斧头）
+- **独立拾取 flow（features/flow/pickupFlow + rules/pickup/PickupPlan）**：可复用
+  拾取子流程——工作范围 + 目标 typeId 白名单（core 纯规划），先破**卡落遮挡**
+  （掉落物卡树叶 → 破除让掉落物掉下）再就近逐个拾取；背包满回调 / 不可达回调
+  由调用方处理。chopOneTree 已接入本 flow
+- **砍树子模式枚举（运行时可选）**：`/mp:woodcutmode <bot> <logs|collect>` 持久化
+  到 `BotRecord.woodcutMode`（缺省 logs），引擎注入大脑记忆驱动能力
 - **测试命令 `/mp:woodcut [radius] [mode]`**：扫描树资源并展示最近一棵树的砍伐计划
   （flow 诊断；mode=logs 原木模式 / collect 收集模式）
 

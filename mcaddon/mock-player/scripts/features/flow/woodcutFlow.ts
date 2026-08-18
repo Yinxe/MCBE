@@ -12,7 +12,6 @@
 // ⚠️ 工具策略：选工具前从假人**全背包**快照构造 ToolItem（强制策略即靠
 //   全背包扫描取最优实现）；未找到匹配工具 → 不换（用当前主手）。
 
-import type { Entity } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
@@ -28,6 +27,8 @@ import {
   type ToolItem,
 } from "../../rules/woodcut/WoodcutRules";
 import type { ChopPlan, ChopTarget } from "../../rules/woodcut/ChopPlan";
+import type { PickupTask } from "../../rules/pickup/PickupPlan";
+import { runPickupFlow } from "./pickupFlow";
 
 // ─── 结果类型 ──────────────────────────────────────────
 
@@ -45,19 +46,13 @@ export type WoodcutOutcome =
 const BREAK_MAX_DISTANCE = 6;
 /** 靠近目标后破坏前的微调容差（格）：已够近即可开挖 */
 const BREAK_NEAR_DISTANCE = 5;
-/** 拾取扫描半径（格，包围盒中心附近） */
-const PICKUP_QUERY_RADIUS = 4;
-/** 拾取等待（tick，靠近后等物品自动吸入背包） */
-const PICKUP_WAIT_TICKS = 10;
-/** 拾取轮次上限（防物品异常不可拾取死循环） */
-const PICKUP_MAX_PASSES = 3;
 /** 单目标破坏重试上限 */
 const BREAK_RETRY_LIMIT = 3;
 
 // ─── 背包工具快照（强制策略：全背包扫描取最优） ──────────
 
 /** 将假人背包快照为 ToolItem[]（core 选工具策略入参；所有匹配工具条目） */
-function snapshotTools(bot: SimulatedPlayer): ToolItem[] {
+export function snapshotTools(bot: SimulatedPlayer): ToolItem[] {
   const tools: ToolItem[] = [];
   const container = inventoryContainerOf(bot);
   if (!container) return tools;
@@ -98,15 +93,6 @@ function targetGone(bot: SimulatedPlayer, target: ChopTarget): boolean {
 /** 3D 距离（blockBreakOnce 同款） */
 function distance3d(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-}
-
-/** 拾取区域内最近掉落物实体（minecraft:item） */
-function nearestDrops(dimension: Entity["dimension"], center: { x: number; y: number; z: number }): Entity[] {
-  try {
-    return dimension.getEntities({ type: "minecraft:item", location: center, maxDistance: PICKUP_QUERY_RADIUS });
-  } catch {
-    return [];
-  }
 }
 
 // ─── 阶段实现 ──────────────────────────────────────────
@@ -152,33 +138,12 @@ async function breakTarget(botName: string, bot: SimulatedPlayer, target: ChopTa
   return "failed";
 }
 
-/** 拾取阶段：扫描树范围附近掉落物实体，逐个靠近等待自动拾取（多轮） */
-async function pickupDrops(botName: string, bot: SimulatedPlayer, plan: ChopPlan): Promise<number> {
-  const center = {
-    x: (plan.pickupMin.x + plan.pickupMax.x) / 2,
-    y: (plan.pickupMin.y + plan.pickupMax.y) / 2,
-    z: (plan.pickupMin.z + plan.pickupMax.z) / 2,
-  };
-  let picked = 0;
-  for (let pass = 0; pass < PICKUP_MAX_PASSES; pass++) {
-    const drops = nearestDrops(bot.dimension, center);
-    if (drops.length === 0) break;
-    for (const drop of drops) {
-      if (!bot.isValid) return picked;
-      const p = drop.location;
-      await longNavigateBot(botName, { x: p.x, y: p.y, z: p.z });
-      await waitTicks(PICKUP_WAIT_TICKS); // 靠近后等待物品自动吸入背包
-      picked++;
-    }
-  }
-  return picked;
-}
-
 // ─── 公开入口 ────────────────────────────────────────────
 
 /**
  * 完成一棵树的砍伐流程（闭包异步，永不 reject）：
- *   按 ChopPlan 逐目标（换工具/破块/靠近）→ 拾取阶段收集树范围掉落物。
+ *   按 ChopPlan 逐目标（换工具/破块/靠近）→ 拾取阶段调独立拾取 flow
+ *   （runPickupFlow）收集树范围全部掉落物。
  *
  * @param botName 假人名
  * @param plan    单树砍伐计划（core ChopPlan 输出）
@@ -201,9 +166,30 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
   }
 
   // 圆木卡叶清理已并入 plan（stuck-cleanup 目标）；此处正式进入拾取阶段
+  // —— 复用独立的拾取 flow：收集树范围内全部掉落物；卡在树叶上/新增的
+  //    掉落物由拾取 flow 的 allowCleanup 破除阻挡让掉落物掉下再拾取
   let picked = 0;
   if (bot.isValid) {
-    picked = await pickupDrops(botName, bot, plan);
+    const task: PickupTask = {
+      rangeMin: plan.pickupMin,
+      rangeMax: plan.pickupMax,
+      origin: bot.location,
+      // 卡落判定：正下方是树范围内树叶 → 需先破除（掉落物掉到地面才可拾取）
+      isBlockingBelow: (loc) =>
+        plan.targets.some((t) => t.kind === "leaf" && t.loc.x === loc.x && t.loc.y === loc.y && t.loc.z === loc.z),
+    };
+    const outcome = await runPickupFlow(botName, task, {
+      allowCleanup: true,
+      maxPasses: 2,
+      waitPickupTicks: 10,
+      onUnreachable: (item) => {
+        console.warn(
+          `[MockPlayer] chopOneTree ${botName} 掉落物不可达（${item.typeId} @ ${item.loc.x},${item.loc.y},${item.loc.z}），跳过`,
+        );
+        return true;
+      },
+    });
+    picked = outcome.kind === "failed" ? 0 : outcome.picked;
     await waitTicks(3); // 收尾等待（末班掉落物自动吸入）
   }
   return { kind: "done", broken, picked };

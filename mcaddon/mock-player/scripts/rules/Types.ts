@@ -220,6 +220,12 @@ export interface BotRecord {
    * 旧记录缺失 = "none"（升级兼容；aiBehavior 字段由迁移转换）。
    */
   workMode: string;
+  /**
+   * 砍树子模式（仅 workMode === "woodcut" 时有效）：
+   * "logs" = 原木模式 / "collect" = 收集模式；缺省 "logs"。
+   * 由 /mp:woodcutmode 设置；引擎注入大脑记忆驱动能力（core WoodcutRules 枚举）。
+   */
+  woodcutMode?: string;
   /** 体态控制器玩家 ID（仅当有 TAG_CONTROL 标签时有效） */
   controllerId?: string;
   /** 潜行状态 */

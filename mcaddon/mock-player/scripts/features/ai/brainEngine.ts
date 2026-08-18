@@ -139,6 +139,11 @@ export function startAiEngine(): void {
         // 记忆注入（用户拍板：主动 AI 行为直接注入记忆表达——行为从记忆
         // 读取当前 workMode，实体 TAG 不再参与行为表达）
         brain.memory.set("workMode", behaviorName);
+        // 砍树子模式注入（原木模式 logs / 收集模式 collect；缺省 logs——
+        // 由 record.woodcutMode 配置，/mp:woodcutmode 修改）
+        if (behaviorName === "woodcut") {
+          brain.memory.set("woodcutMode", record.woodcutMode ?? "logs");
+        }
         // 对账（仅行为变化时执行）：注册新行为 + 卸载旧行为（旧行为 reset 清状态）
         if (brain.behaviorName !== behaviorName) {
           for (const [name, make] of Object.entries(BEHAVIOR_BY_NAME)) {

@@ -134,11 +134,18 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
     }
   };
 
-  /** 发起砍树协程（chopOneTree：逐目标破块 + 拾取） */
+  /** 当前砍树模式（运行时：优先大脑记忆注入，缺省配置默认值 logs） */
+  const currentMode = (ai: AiBehaviorContext): ChopMode => {
+    const m = ai.memory.get<string>("woodcutMode");
+    return m === "collect" ? "collect" : m === "logs" ? "logs" : config.mode;
+  };
+
+  /** 发起砍树协程（chopOneTree：逐目标破块 + 独立拾取 flow） */
   const startChop = (ai: AiBehaviorContext, tree: PoolTree): void => {
     chopResult = undefined;
-    const plan = planChop(tree, config.mode);
-    chopRun = chopOneTree(ai.botName, plan, config.mode)
+    const mode = currentMode(ai);
+    const plan = planChop(tree, mode);
+    chopRun = chopOneTree(ai.botName, plan, mode)
       .then((o) => {
         chopResult = o;
       })
@@ -210,7 +217,8 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
     currentTree = pick;
     pool = claimTree(pool, currentId, botName);
     writePool(ai, pool);
-    notify(botName, `认领大树（${Math.floor(pick.base.y)} 层）`);
+    const label = currentMode(ai) === "collect" ? "收集模式" : "原木模式";
+    notify(botName, `认领大树（${label}，${Math.floor(pick.base.y)} 层）`);
     startChop(ai, pick);
     phase = "chop";
   };
