@@ -107,3 +107,18 @@ test("planChop（障碍）：world.isSolidForeign 返回 true 的非树叶实心
   assert.ok(obstacle, "实心障碍应入 plan");
   assert.equal(obstacle!.reason, "blocker-obstacle");
 });
+
+test("planChop（收集模式 + 障碍）：不破外围障碍（收集只指整棵树 = logs+leaves）", () => {
+  const world = { isSolidForeign: (loc: Vec3) => Math.floor(loc.x) === 6 && Math.floor(loc.y) === 65 && Math.floor(loc.z) === 5 };
+  const plan = planChop(makeTree(), "collect", world);
+  // 收集模式只有树内圆木/树叶目标，没有任何 blocker-obstacle
+  assert.equal(plan.targets.filter((t) => t.reason === "blocker-obstacle").length, 0);
+  // 树叶目标但仍完整覆盖 tree leafs
+  assert.equal(plan.targets.filter((t) => t.kind === "leaf").length, 9);
+});
+
+test("planChop（障碍关闭）：world 不报障碍 → 无 blocker-obstacle", () => {
+  const world = { isSolidForeign: () => false };
+  const plan = planChop(makeTree(), "logs", world);
+  assert.equal(plan.targets.filter((t) => t.reason === "blocker-obstacle").length, 0);
+});
