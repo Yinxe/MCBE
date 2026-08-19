@@ -196,20 +196,24 @@ export function planChop(tree: TreeResource, mode: ChopMode): ChopPlan {
 
 // ─── 树中心重扫的竖向范围（core 纯函数，可单测——防"树顶圆木漏扫"回归） ──
 
-/** 水平重扫半径（格；7×7 = base±3） */
+/** 水平重扫半径（格；7×7 = base±3，覆盖树冠宽度与散落分支） */
 export const RESCAN_RADIUS = 3;
 
+/** 整树扫描默认高度（格）：普通树普遍高 7~10 格 → 向上默认扫 12 格兜底 */
+export const DEFAULT_TREE_SCAN_HEIGHT = 12;
+
 /**
- * 树中心重扫的竖向 Y 范围。
- * 修复（用户反馈）：旧实现只有 base±3（7 高），树顶圆木/树叶被截断漏扫、永远砍不到；
- * 现保证竖向自 base−3 起、向上**至少到 base+3 且覆盖整树已知高度 topY+2**。
- * @param baseY 树中心（底部）Y
- * @param topY  已知最高圆木 Y（缺省 = baseY → 至少覆盖 7 高）
+ * 树中心重扫的竖向 Y 范围（只向上，不向下——base 是树桩/树根，木头全在上面）。
+ * 竖向自 **baseY 起**（最低圆木层），向上：
+ *   - 已知整树高度 topY → 覆盖到 topY+2（精确不漏树顶）
+ *   - 未知（无 topY）→ 向上默认扫 DEFAULT_TREE_SCAN_HEIGHT(12) 格，覆盖普通 7~10 格树
+ * @param baseY 树中心（底部/树桩）Y
+ * @param topY  已知最高圆木 Y（缺省 → 按默认高度）
  * @returns {fromY, toY}（已夹在 [-64, 320]）
  */
 export function treeRescanYRange(baseY: number, topY?: number): { fromY: number; toY: number } {
-  const fromY = Math.max(-64, baseY - RESCAN_RADIUS);
-  const topCeil = Math.max(baseY + RESCAN_RADIUS, topY === undefined ? baseY + RESCAN_RADIUS : topY + 2);
+  const fromY = Math.max(-64, baseY);
+  const topCeil = topY === undefined ? baseY + DEFAULT_TREE_SCAN_HEIGHT : topY + 2;
   return { fromY, toY: Math.min(320, Math.max(fromY, topCeil)) };
 }
 

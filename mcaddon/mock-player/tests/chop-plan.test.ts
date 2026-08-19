@@ -119,15 +119,15 @@ test("refreshTreeResource：7×7 重扫结果刷新 logs/leafs/top", () => {
   assert.equal(Math.floor(refreshed.top.y), 65); // top 取最高新圆木
 });
 
-test("treeRescanYRange：竖向覆盖整树高度（防树顶圆木漏扫）", () => {
-  // 低树：base±3 足够 → 覆盖 7 高
-  assert.deepEqual(treeRescanYRange(64), { fromY: 61, toY: 67 });
-  // 高树（树顶 baseY+12）：竖向必须覆盖 topY+2=78，绝不砍丢树顶
-  assert.deepEqual(treeRescanYRange(64, 76), { fromY: 61, toY: 78 });
-  // 至少 7 高：即使 topY 很小也不低于 base+3
-  assert.deepEqual(treeRescanYRange(64, 60), { fromY: 61, toY: 67 });
+test("treeRescanYRange：自树桩向上扫整树高度（木头全在上面）", () => {
+  // base 是树桩/树根：竖向从 base 起（不向下扫——木头都在上面）
+  assert.deepEqual(treeRescanYRange(64), { fromY: 64, toY: 76 }); // 无 topY → 默认向上 12 格（覆盖普通 7~10 格树）
+  // 已知整树高度 → 精确覆盖 topY+2，零漏扫树顶
+  assert.deepEqual(treeRescanYRange(64, 76), { fromY: 64, toY: 78 });
+  // 已知 topY → 精确覆盖 topY+2（比默认更准，也不低于 base）
+  assert.deepEqual(treeRescanYRange(64, 66), { fromY: 64, toY: 68 });
   // 边界夹取
-  assert.ok(treeRescanYRange(-70, 400).fromY >= -64);
+  assert.ok(treeRescanYRange(-70).fromY >= -64);
   assert.ok(treeRescanYRange(-70, 400).toY <= 320);
   assert.equal(RESCAN_RADIUS, 3); // 7×7 水平
 });

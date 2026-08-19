@@ -410,16 +410,17 @@ const RESCAN_WOOD_ID = "oak";
 /**
  * 以树中心（底部坐标）为中心的重扫，用于**砍伐前更新树资源清单**（用户规格）：
  *   - 水平：7×7（base ± RESCAN_RADIUS）——覆盖树冠直径与散落分支；
- *   - 垂直：自 base−3 到 ≥ base+3，且**延伸覆盖整树已知高度**（topY + 2）。
- *     修复：旧实现只扫 base±3（7 高），把高于 base+3 的树顶圆木/树叶丢出清单，
- *     导致**树顶圆木永远砍不到**（用户反馈"总在树顶剩几个圆木"）——现按树高补全。
+ *   - 垂直：自 base（树桩/树根）**向上**，且**覆盖整树已知高度**（topY + 2）。
+ *     修复①：旧实现向下扫 base−3（木头都在上面，向下无用）；
+ *     修复②：旧实现只到 base+3（7 高），把更高树顶圆木/树叶丢出清单 → 树顶
+ *     圆木永远砍不到——现按树高补全（缺 topY 时向上默认 12 格）。
  * 开销 = 2 次小范围 getBlocks。
  */
 export function rescanTree7x7(dimension: Dimension, base: Vec3, topY?: number): TreeRescanResult {
   const bx = Math.floor(base.x);
   const by = Math.floor(base.y);
   const bz = Math.floor(base.z);
-  // 竖向范围走 core 纯函数（覆盖整树高度，修复树顶漏扫回归）
+  // 竖向范围走 core 纯函数（只向上，覆盖整树高度，修复树顶漏扫回归）
   const { fromY, toY } = treeRescanYRange(by, topY);
   const center: Vec3 = { x: bx, y: by, z: bz };
 
