@@ -27,6 +27,8 @@ import {
   type TreeVerdict,
 } from "../../rules/tree/TreeRules";
 import type { Vec3 } from "../../rules/Types";
+import { treeRescanYRange, RESCAN_RADIUS } from "../../rules/woodcut/ChopPlan";
+export { RESCAN_RADIUS };
 
 /** 无效旧 id（1.20.30 方块拆分后已不存在，vanilla-data 1.26.20 校验）——
  *  getBlocks includeTypes 传入无效 id 可能被引擎拒绝（导致整轮扫描失败被
@@ -402,32 +404,30 @@ export interface TreeRescanResult {
   leafs: Vec3[];
 }
 
-/** 树中心重扫半径（格）：7×7×7 = base ±3 */
-export const RESCAN_RADIUS = 3;
-
 /** 重扫木材 id（规划不依赖种类；后续可由方块 states 归一细化） */
 const RESCAN_WOOD_ID = "oak";
 
 /**
- * 以树中心（底部坐标）为中心的 7×7×7 重扫：一次性采集圆木/树叶坐标集，
- * 用于**砍伐前更新树资源清单**（用户规格）。开销 = 2 次小范围 getBlocks。
+ * 以树中心（底部坐标）为中心的重扫，用于**砍伐前更新树资源清单**（用户规格）：
+ *   - 水平：7×7（base ± RESCAN_RADIUS）——覆盖树冠直径与散落分支；
+ *   - 垂直：自 base−3 到 ≥ base+3，且**延伸覆盖整树已知高度**（topY + 2）。
+ *     修复：旧实现只扫 base±3（7 高），把高于 base+3 的树顶圆木/树叶丢出清单，
+ *     导致**树顶圆木永远砍不到**（用户反馈"总在树顶剩几个圆木"）——现按树高补全。
+ * 开销 = 2 次小范围 getBlocks。
  */
-export function rescanTree7x7(dimension: Dimension, base: Vec3): TreeRescanResult {
+export function rescanTree7x7(dimension: Dimension, base: Vec3, topY?: number): TreeRescanResult {
   const bx = Math.floor(base.x);
   const by = Math.floor(base.y);
   const bz = Math.floor(base.z);
-  const fromY = Math.max(-64, by - RESCAN_RADIUS);
-  const toY = Math.min(320, by + RESCAN_RADIUS);
+  // 竖向范围走 core 纯函数（覆盖整树高度，修复树顶漏扫回归）
+  const { fromY, toY } = treeRescanYRange(by, topY);
   const center: Vec3 = { x: bx, y: by, z: bz };
 
   const logRes = collectCoordinateSet(dimension, center, RESCAN_RADIUS, VALID_LOG_TYPE_IDS, "原木(7×7)", fromY, toY, HORIZONTAL_LOG_PERMUTATIONS);
   const leafRes = collectCoordinateSet(dimension, center, RESCAN_RADIUS, VALID_LEAF_TYPE_IDS, "树叶(7×7)", fromY, toY);
 
   const leafs: Vec3[] = leafRes.coords.map((c) => ({ x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5 }));
-  // 只保留 7×7 范围内的原木（collectCoordinateSet 已含 center±RESCAN_RADIUS 的 x/z，
-  // 但 y 由 fromY/toY 控制——这里再按 base±3 的 y 严格过滤，防高树越界窜入）
   const logs: { x: number; y: number; z: number; woodId: string }[] = logRes.coords
-    .filter((c) => c.y >= by - RESCAN_RADIUS && c.y <= by + RESCAN_RADIUS)
     .map((c) => ({ x: c.x + 0.5, y: c.y + 0.5, z: c.z + 0.5, woodId: RESCAN_WOOD_ID }));
   return { logs, leafs };
 }

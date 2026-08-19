@@ -193,6 +193,26 @@ export function planChop(tree: TreeResource, mode: ChopMode): ChopPlan {
   };
 }
 
+
+// ─── 树中心重扫的竖向范围（core 纯函数，可单测——防"树顶圆木漏扫"回归） ──
+
+/** 水平重扫半径（格；7×7 = base±3） */
+export const RESCAN_RADIUS = 3;
+
+/**
+ * 树中心重扫的竖向 Y 范围。
+ * 修复（用户反馈）：旧实现只有 base±3（7 高），树顶圆木/树叶被截断漏扫、永远砍不到；
+ * 现保证竖向自 base−3 起、向上**至少到 base+3 且覆盖整树已知高度 topY+2**。
+ * @param baseY 树中心（底部）Y
+ * @param topY  已知最高圆木 Y（缺省 = baseY → 至少覆盖 7 高）
+ * @returns {fromY, toY}（已夹在 [-64, 320]）
+ */
+export function treeRescanYRange(baseY: number, topY?: number): { fromY: number; toY: number } {
+  const fromY = Math.max(-64, baseY - RESCAN_RADIUS);
+  const topCeil = Math.max(baseY + RESCAN_RADIUS, topY === undefined ? baseY + RESCAN_RADIUS : topY + 2);
+  return { fromY, toY: Math.min(320, Math.max(fromY, topCeil)) };
+}
+
 // ─── 砍伐前 7×7×7 重扫后更新树资源（重扫更新清单位置） ──
 
 /**

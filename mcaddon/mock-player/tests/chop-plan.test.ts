@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { planChop, refreshTreeResource, type ChopPlan, type ChopTarget } from "../scripts/rules/woodcut/ChopPlan";
+import { planChop, refreshTreeResource, RESCAN_RADIUS, treeRescanYRange, type ChopPlan, type ChopTarget } from "../scripts/rules/woodcut/ChopPlan";
 import type { TreeResource, TreeFactors } from "../scripts/rules/tree/TreeRules";
 import type { Vec3 } from "../scripts/rules/Types";
 
@@ -117,4 +117,17 @@ test("refreshTreeResource：7×7 重扫结果刷新 logs/leafs/top", () => {
   assert.equal(refreshed.logs.length, 2);
   assert.equal(refreshed.leafs.length, 1);
   assert.equal(Math.floor(refreshed.top.y), 65); // top 取最高新圆木
+});
+
+test("treeRescanYRange：竖向覆盖整树高度（防树顶圆木漏扫）", () => {
+  // 低树：base±3 足够 → 覆盖 7 高
+  assert.deepEqual(treeRescanYRange(64), { fromY: 61, toY: 67 });
+  // 高树（树顶 baseY+12）：竖向必须覆盖 topY+2=78，绝不砍丢树顶
+  assert.deepEqual(treeRescanYRange(64, 76), { fromY: 61, toY: 78 });
+  // 至少 7 高：即使 topY 很小也不低于 base+3
+  assert.deepEqual(treeRescanYRange(64, 60), { fromY: 61, toY: 67 });
+  // 边界夹取
+  assert.ok(treeRescanYRange(-70, 400).fromY >= -64);
+  assert.ok(treeRescanYRange(-70, 400).toY <= 320);
+  assert.equal(RESCAN_RADIUS, 3); // 7×7 水平
 });

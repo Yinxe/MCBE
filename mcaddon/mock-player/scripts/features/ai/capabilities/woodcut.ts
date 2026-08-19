@@ -166,7 +166,8 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
       // ① 7×7×7 重扫（树中心底部坐标）→ 更新圆木/树叶资源
       let effectiveTree: PoolTree = tree;
       try {
-        const rescan = rescanTree7x7(bot.dimension, tree.base);
+        // 竖向覆盖整树已知高度（topY+2）——修复树顶圆木被 7×7×7 截断漏砍的 BUG
+        const rescan = rescanTree7x7(bot.dimension, tree.base, tree.top.y);
         const refreshed = refreshTreeResource(tree, rescan.logs, rescan.leafs);
         effectiveTree = { ...tree, ...refreshed };
         // 写回共享池（后续认领者/他人看到的是更新后的清单）
@@ -235,6 +236,7 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
       wait = 2;
       return;
     }
+    console.warn(`[MockPlayer] woodcut ${botName} 进入找树阶段（tick ${ai.tick}）`);
     let pool = ai.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [];
     const botLocation = bot.location;
     const pickOptions: TreePickOptions = {
@@ -332,8 +334,9 @@ export function makeWoodcutBehavior(config: WoodcutBehaviorConfig = DEFAULT_WOOD
     canActivate: (ctx) => {
       return ctx.memory.get<string>("workMode") === "woodcut";
     },
-    onActivate: () => {
-      /* 无常驻协程需启动——砍树按目标逐个推进 */
+    onActivate: (ctx) => {
+      // 调度自检（可观测）：行为激活即打日志，便于确认"选择砍树模式后是否有调度"
+      console.warn(`[MockPlayer] woodcut 行为已调度激活（${ctx.botName}，模式=${currentMode(ctx as AiBehaviorContext)}）`);
     },
     reset,
     step: (ctx) => {

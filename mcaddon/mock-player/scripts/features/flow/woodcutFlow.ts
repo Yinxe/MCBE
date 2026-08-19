@@ -48,8 +48,11 @@ export type WoodcutOutcome =
 
 // ─── 常量 ──────────────────────────────────────────────
 
-/** 破坏距离（格，3D 自检；translated to breakBlockAt maxDistance） */
-const BREAK_MAX_DISTANCE = 6;
+/**
+ * 破坏距离（格，3D 自检；透传 breakBlockAt maxDistance）。
+ * 用户规格：因砍树时树顶圆木总因挖掘距离不够剩着 → 砍树模式的挖掘距离提升到 10。
+ */
+const BREAK_MAX_DISTANCE = 10;
 /** 单目标破坏重试上限（超距靠近 + 重试的次数） */
 const BREAK_RETRY_LIMIT = 3;
 
