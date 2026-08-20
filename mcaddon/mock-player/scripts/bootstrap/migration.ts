@@ -20,7 +20,7 @@ import { world } from "@minecraft/server";
 import { botRegistry, botStore, saveCoordinator } from "./context";
 import { normalizeRecord, DEFAULT_RESPAWN } from "../service/RecordMigration";
 import { deserializeLegacyItem } from "../service/port/LegacyCodec";
-import { DP_PREFIX, INVENTORY_SIZE } from "../rules/Types";
+import { BOT_NAME_PREFIX, DP_PREFIX, INVENTORY_SIZE, isValidBotName } from "../rules/Types";
 import { TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_WANDER_MODE, filterKnownTags } from "../rules/tags/BotTags";
 import { TAG_PREFIX } from "../rules/Types";
 import type { BotRecord, SerializedItemStack } from "../rules/Types";
@@ -157,6 +157,31 @@ function parseLegacy(raw: string): SerializedItemStack | undefined {
   }
 }
 
+/** 假人名前缀迁移：旧 "$" → 新 "sim-"（固定前缀变更） */
+function migrateBotPrefix(): void {
+  const all = [...botRegistry.all()];
+  for (const record of all) {
+    if (!record.name.startsWith("$")) continue;
+    const baseName = record.name.slice(1);
+    const newName = `${BOT_NAME_PREFIX}${baseName}`;
+    if (!isValidBotName(newName)) {
+      console.warn(`[MockPlayer] 前缀迁移跳过 ${record.name} -> ${newName} 长度非法`);
+      continue;
+    }
+    if (botRegistry.has(newName)) {
+      console.warn(`[MockPlayer] 前缀迁移跳过 ${record.name} -> ${newName} 目标已存在`);
+      continue;
+    }
+    try {
+      // BotRegistry.rename 内部完成内存 key 迁移 + 持久化 + 绑定表迁移 + 恢复标记随迁
+      botRegistry.rename(record.name, newName);
+      console.info(`[MockPlayer] 前缀迁移 ${record.name} -> ${newName}`);
+    } catch (e: any) {
+      console.warn(`[MockPlayer] 前缀迁移失败 ${record.name}: ${e?.message ?? e}`);
+    }
+  }
+}
+
 /**
  * 数据迁移入口（worldLoad 后、restoreAll 之后调用一次）。
  * 幂等：记录归一化每次执行安全；物品迁移后旧 key 已删不会重复。
@@ -164,6 +189,7 @@ function parseLegacy(raw: string): SerializedItemStack | undefined {
 export function runMigrations(): void {
   try {
     normalizeAllRecords();
+    migrateBotPrefix();
     migrateLegacyItems();
     cleanupUnknownTags();
     world.setDynamicProperty(DATA_VERSION_KEY, CURRENT_DATA_VERSION);

@@ -31,7 +31,7 @@ export function registerUiSubscriptions(): void {
 
 function doRename(player: Player, botName: string): void {
   ModalFormBuilder.showQuick(player, `${color.bold}修改名字`, (f) => {
-    f.textField("name", "新名字", { defaultValue: botName, tooltip: "自动加假人前缀 $，无需手动输入" });
+    f.textField("name", "新名字", { defaultValue: botName, tooltip: "自动加假人前缀 sim-，无需手动输入" });
   }).then((vals) => {
     if (!vals) return;
     // 名字规范化：自动加假人前缀（"刷铁机" → "$刷铁机"）

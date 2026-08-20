@@ -33,7 +33,7 @@ export interface CreateBotOptions {
 export async function createBot(options: CreateBotOptions): Promise<BotRecord> {
   const { name: rawName, ownerName, location, dimension, initialTags, rotation, lookTarget, isSneaking, spawnMode } = options;
 
-  // 名字规范化：自动加假人前缀（"刷铁机" → "$刷铁机"，防与真人撞名）
+  // 名字规范化：自动加假人前缀（"刷铁机" → "sim-刷铁机"，防与真人撞名）
   const name = normalizeBotName(rawName);
 
   // 名字校验：空名/超长/含 DP 子 key 分隔符（:inv: :equip: → 持久化 key 冲突，重启丢数据/误删）

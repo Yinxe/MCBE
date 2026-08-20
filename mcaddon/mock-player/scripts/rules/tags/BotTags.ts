@@ -45,7 +45,7 @@ export const STANDALONE_TAGS: TagDef[] = [];
  *  驱动；保留定义与解析能力，但不参与互斥、不进入 UI 行为选择） */
 export const LEGACY_TAGS: TagDef[] = [
   TAG_IDLE, TAG_AUTO_MINE, TAG_AUTO_PLACE, TAG_AUTO_ATTACK, TAG_CONTROL, TAG_AUTO_USE,
-  TAG_VAULT_MODE, TAG_FISH_MODE, TAG_WANDER_MODE,
+  TAG_VAULT_MODE, TAG_FISH_MODE, TAG_WANDER_MODE, TAG_AUTO_JUMP,
 ];
 
 /** 所有已定义的标签 */

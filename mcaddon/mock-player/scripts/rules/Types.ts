@@ -53,17 +53,20 @@ export const INVALID_NAME_SEGMENTS = [":inv:", ":equip:"] as const;
 /** MC 假人名最大长度（玩家名上限） */
 export const MAX_BOT_NAME_LENGTH = 16;
 
-/** 假人名字前缀：与真实玩家区分（防止与未上线真人撞名——真人默认名不带 $） */
-export const BOT_NAME_PREFIX = "$";
+/** 假人名字前缀：与真实玩家区分（防止与未上线真人撞名——真人默认名不带 sim-） */
+export const BOT_NAME_PREFIX = "sim-";
 
 /**
- * 规范化假人名字：去空白 + 无前缀时自动加前缀（"刷铁机" → "$刷铁机"）。
+ * 规范化假人名字：去空白 + 无前缀时自动加前缀（"刷铁机" → "sim-刷铁机"）。
  * 已有前缀不重复加；空输入原样返回。
+ * 兼容旧 "$" 前缀：自动迁移为 "sim-"（"$刷铁机" → "sim-刷铁机"）。
  */
 export function normalizeBotName(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) return trimmed;
-  return trimmed.startsWith(BOT_NAME_PREFIX) ? trimmed : `${BOT_NAME_PREFIX}${trimmed}`;
+  if (trimmed.startsWith(BOT_NAME_PREFIX)) return trimmed;
+  if (trimmed.startsWith("$")) return `${BOT_NAME_PREFIX}${trimmed.slice(1)}`;
+  return `${BOT_NAME_PREFIX}${trimmed}`;
 }
 
 /**
