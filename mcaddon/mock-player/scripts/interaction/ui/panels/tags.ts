@@ -13,42 +13,11 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { TAG_BOT, TAG_AUTO_JUMP, TAG_RESPAWN, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
 import { WORK_MODES, setWorkMode, type WorkMode } from "../../../features/state/behavior";
-import { saveCoordinator } from "../../../bootstrap/context";
-import { CHOP_MODE_LABEL, normalizeChopMode, type ChopMode } from "../../../rules/woodcut/WoodcutRules";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
 import { setTags } from "../../../features/state/setTags";
 import { isFollowing } from "../../../features/state/follow";
-
-/**
- * 切换到自动砍树模式后的**子表单**（用户规格：设置生物 AI 为砍树模式时，
- * 弹出新表单选择 圆木模式/收集模式）。持久化 BotRecord.woodcutMode。
- */
-function showWoodcutModeForm(player: Player, record: import("../../../rules/Types").BotRecord): void {
-  const builder = new ModalFormBuilder()
-    .title(`${color.bold}砍树模式 · ${record.name}`)
-    .dropdown(
-      "chopMode",
-      style("请选择砍树模式", color.accent),
-      [
-        style(CHOP_MODE_LABEL["logs"], color.playerName), // 圆木模式
-        style(CHOP_MODE_LABEL["collect"], color.accent), // 收集模式
-      ],
-      { defaultValueIndex: normalizeChopMode(record.woodcutMode) === "collect" ? 1 : 0 },
-    );
-  builder.show(player).then((vals) => {
-    if (!vals) return; // 取消 → 保留缺省（logs）
-    const idx = vals.chopMode as number;
-    const mode: ChopMode = idx === 1 ? "collect" : "logs";
-    const rec = resolveUiBotRecord(player, record.name) ?? record;
-    rec.woodcutMode = mode;
-    saveCoordinator.saveRecord(rec);
-    player.sendMessage(
-      `${color.success}已设置 ${color.playerName}${record.name}${color.success} 的砍树子模式为 ${color.info}${CHOP_MODE_LABEL[mode]}`,
-    );
-  });
-}
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
 // ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
@@ -138,11 +107,10 @@ export function showTagManagement(player: Player, botName: string): void {
         style("定点攻击模式", color.playerName),
         style("劫掠模式", color.warn),
         style("自动钓鱼模式", color.accent),
-        style("自动砍树模式", color.accent),
       ],
       {
         defaultValueIndex: WORK_MODE_INDEX[record.workMode] ?? 0,
-        tooltip: "单选工作模式（互斥，仅一项）：闲逛模式（近点散步）/ 定点挖掘模式（视线挖方块）/ 定点放置模式（面前放方块）/ 定点攻击模式（攻击面前目标）/ 劫掠模式（喝不祥之瓶刷袭击）/ 自动钓鱼模式（生物 AI + 共享钓鱼点，自动就位抛竿收竿）/ 自动砍树模式（生物 AI + 共享树资源池，认领 16 格内树并砍伐收集，原木/收集模式）",
+        tooltip: "单选工作模式（互斥，仅一项）：闲逛模式（近点散步）/ 定点挖掘模式（视线挖方块）/ 定点放置模式（面前放方块）/ 定点攻击模式（攻击面前目标）/ 劫掠模式（喝不祥之瓶刷袭击）/ 自动钓鱼模式（生物 AI + 共享钓鱼点，自动就位抛竿收竿）",
       },
     );
 
@@ -180,10 +148,6 @@ export function showTagManagement(player: Player, botName: string): void {
       // ── ② 工作模式落库（record.workMode 字段——驱动引擎按值启动；
       //     与标签同一 system.run 块、标签校验通过后才写——防部分应用） ──
       setWorkMode(currentRecord, pickedWorkMode);
-      // ── ②.5 自动砍树模式 → 弹出子表单选择 圆木/收集模式 ──
-      if (pickedWorkMode === "woodcut") {
-        showWoodcutModeForm(player, currentRecord);
-      }
       // ── ③ 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
       BotUiEvent.behaviorSubmitted.trigger({
         playerId: player.id,

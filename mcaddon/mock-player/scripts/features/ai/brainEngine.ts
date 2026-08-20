@@ -1,5 +1,5 @@
 // ─── 生物 AI 大脑引擎（新框架 scripts/ai 驱动） ────────
-// 对齐 woodcut 的 brainEngine 模式（用户拍板）：每假人一个 AIBrain =
+// 生物 AI 大脑引擎：每假人一个 AIBrain =
 // 私有记忆（AiMemory）+ 行为运行器（BehaviorRunner 单主目标优先级抢占），
 // 10 tick 驱动；能力 = Behavior 状态机（感知-决策-执行，step 同步短步）。
 // **跨假人共享记忆**：引擎另持全局 SharedMemory 单例（sharedMemory），
@@ -13,10 +13,9 @@
 //   "place"  定点放置模式（面前放置主手方块）
 //   "attack" 定点攻击模式（攻击面前目标）
 //   "fishing" 自动钓鱼模式（共享钓鱼点池 + 占用/失败标记，见 capabilities/fishing）
-//   "woodcut" 自动砍树模式（共享树资源池 + 单树砍伐流程，见 capabilities/woodcut）
+//   // "woodcut" 自动砍树模式已在代码层禁用（见 capabilities/woodcut）
 // 引擎每 10 tick 对账：record.workMode → 注册/卸载对应行为（切换 → 旧行为
-// reset 清状态 + 中断协程）。raid 由各自模块认领（互斥单字段；fishing/woodcut
-// 已入单选）。
+// reset 清状态 + 中断协程）。raid 由各自模块认领（互斥单字段；fishing 已入单选）。
 // 与旧引擎（legacy/ai/BotBrain 宝库 + features/state/behavior.ts 标签行为）
 // 并存——旧标签机制保留 legacy 内部使用。
 
@@ -32,7 +31,7 @@ import { makeMineBehavior } from "./capabilities/mine";
 import { makePlaceBehavior } from "./capabilities/place";
 import { makeAttackBehavior } from "./capabilities/attack";
 import { makeFishingBehavior } from "./capabilities/fishing";
-import { makeWoodcutBehavior } from "./capabilities/woodcut";
+// import { makeWoodcutBehavior } from "./capabilities/woodcut"; // 已禁用
 import type { BotRecord } from "../../rules/Types";
 
 /** 引擎驱动周期（tick） */
@@ -98,7 +97,7 @@ const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
   place: makePlaceBehavior,
   attack: makeAttackBehavior,
   fishing: makeFishingBehavior,
-  woodcut: makeWoodcutBehavior,
+  // woodcut: makeWoodcutBehavior, // 已在代码层禁用
 };
 
 /** 假人当前生物 AI 行为（record.workMode；未启用 → undefined） */
@@ -139,11 +138,10 @@ export function startAiEngine(): void {
         // 记忆注入（用户拍板：主动 AI 行为直接注入记忆表达——行为从记忆
         // 读取当前 workMode，实体 TAG 不再参与行为表达）
         brain.memory.set("workMode", behaviorName);
-        // 砍树子模式注入（原木模式 logs / 收集模式 collect；缺省 logs——
-        // 由 record.woodcutMode 配置，/mp:woodcutmode 修改）
-        if (behaviorName === "woodcut") {
-          brain.memory.set("woodcutMode", record.woodcutMode ?? "logs");
-        }
+        // 砍树子模式注入已随 woodcut 一起禁用
+        // if (behaviorName === "woodcut") {
+        //   brain.memory.set("woodcutMode", record.woodcutMode ?? "logs");
+        // }
         // 对账（仅行为变化时执行）：注册新行为 + 卸载旧行为（旧行为 reset 清状态）
         if (brain.behaviorName !== behaviorName) {
           for (const [name, make] of Object.entries(BEHAVIOR_BY_NAME)) {
