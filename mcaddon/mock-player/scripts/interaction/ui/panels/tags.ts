@@ -5,7 +5,7 @@
 // 感兴趣的字段执行，UI 不再直接调用任何业务动作函数。
 //
 // 表单布局（用户拍板）：自动重生置顶、强加载第 2；
-// 互斥行为（工作模式下拉，单选）：闲逛/挖掘/放置/攻击/劫掠/钓鱼等；劫掠已收编进互斥菜单（workMode="raid"）。
+// 互斥行为（工作模式下拉，单选）：闲逛/挖掘/放置/攻击/劫掠/钓鱼/跟随等；劫掠与跟随已收编进互斥菜单。
 
 import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
@@ -17,7 +17,6 @@ import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
 import { setTags } from "../../../features/state/setTags";
-import { isFollowing } from "../../../features/state/follow";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
 
@@ -83,11 +82,6 @@ export function showTagManagement(player: Player, botName: string): void {
       defaultValue: false,
       tooltip: "勾选提交＝使用主手物品并约 2 秒后自动停下（吃完喝完）；取消提交＝立即停止。一次性动作，默认关闭",
     })
-    // ── 自动跟随（独立开关，record.following 状态） ──
-    .toggle("follow", style("自动跟随", color.playerName), {
-      defaultValue: isFollowing(botName),
-      tooltip: "开启后假人会持续跟随你",
-    })
     .label("sep2", style("━━ 工作模式 ────", color.accent))
     // ── 工作模式（用户拍板：单选互斥——一个假人一个工作模式） ──
     .dropdown(
@@ -101,10 +95,11 @@ export function showTagManagement(player: Player, botName: string): void {
         style("定点攻击模式", color.playerName),
         style("劫掠模式", color.warn),
         style("自动钓鱼模式", color.accent),
+        style("自动跟随", color.playerName),
       ],
       {
         defaultValueIndex: WORK_MODE_INDEX[record.workMode] ?? 0,
-        tooltip: "单选工作模式（互斥，仅一项）：闲逛模式（近点散步）/ 定点挖掘模式（视线挖方块）/ 定点放置模式（面前放方块）/ 定点攻击模式（攻击面前目标）/ 劫掠模式（喝不祥之瓶刷袭击）/ 自动钓鱼模式（生物 AI + 共享钓鱼点，自动就位抛竿收竿）",
+        tooltip: "单选工作模式（互斥，仅一项）：闲逛模式（近点散步）/ 定点挖掘模式（视线挖方块）/ 定点放置模式（面前放方块）/ 定点攻击模式（攻击面前目标）/ 劫掠模式（喝不祥之瓶刷袭击）/ 自动钓鱼模式（生物 AI + 共享钓鱼点，自动就位抛竿收竿）/ 自动跟随（持续跟随你）",
       },
     );
 
@@ -128,7 +123,7 @@ export function showTagManagement(player: Player, botName: string): void {
     const useItemOn = vals.useItem as boolean;
     const wantSneaking = vals.sneaking as boolean;
     const wantChunkload = vals.chunkload as boolean;
-    const wantFollow = vals.follow as boolean;
+    const wantFollow = pickedWorkMode === "follow";
 
     system.run(() => {
       // ── ① 标签先落库（record.tags 最新 + 实体同步 + 持久化） ──

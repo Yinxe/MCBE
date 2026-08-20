@@ -5,6 +5,7 @@ import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { BotUiEvent } from "../../events/UiEvents";
+import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { color } from "@yinxe/toolkit";
@@ -74,24 +75,32 @@ export function getFollowCount(): number {
 
 // ─── UI 事件订阅（行为菜单提交 → 感知跟随开关） ────────
 
-/** 订阅行为菜单提交事件：跟随开关 diff 后启动/停止（record.following 状态，不落标签） */
+/** 订阅行为菜单提交/工作模式变更：跟随已收编进互斥菜单（workMode="follow"） */
 export function registerUiSubscriptions(): void {
+  // 行为菜单提交：workMode === "follow" → 启动跟随；切走 → 停止
   BotUiEvent.behaviorSubmitted.subscribe((e) => {
-    const wantFollow = e.follow;
-    if (wantFollow === isFollowing(e.botName)) return;
+    const wantFollow = e.workMode === "follow";
+    const isFollow = isFollowing(e.botName);
+    if (wantFollow === isFollow) return;
     const player = world.getEntity(e.playerId) as Player | undefined;
-    if (!player) return;
+    if (!player && wantFollow) return;
     system.run(() => {
       try {
-        if (wantFollow) {
+        if (wantFollow && player) {
           startFollow(e.botName, player.id);
           player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 正在跟随你`);
-        } else {
+        } else if (!wantFollow && isFollow) {
           stopFollow(e.botName);
-          player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已停止跟随`);
+          if (player) player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已停止跟随`);
         }
-      } catch (err: any) { player.sendMessage(`${color.error}切换跟随失败: ${err?.message ?? err}`); }
+      } catch (err: any) { if (player) player.sendMessage(`${color.error}切换跟随失败: ${err?.message ?? err}`); }
     });
+  });
+  // 工作模式变更（命令/其他路径）：非 follow → 停止跟随
+  BotEvents.botWorkModeChanged.subscribe((e) => {
+    if (e.workMode !== "follow" && isFollowing(e.botName)) {
+      stopFollow(e.botName);
+    }
   });
 }
 

@@ -81,12 +81,12 @@ export function startTagBehaviors(): void {
 
 // ─── 工作模式设置（替代旧行为标签 + 劫掠独立开关机制） ──
 // 用户拍板：统一「工作模式」单选互斥字段（record.workMode），
-// 各驱动引擎按值认领：wander/mine/place/attack/fishing → 生物 AI
+// 各驱动引擎按值认领：wander/mine/place/attack/fishing/follow → 生物 AI/跟随
 // 引擎；raid → 劫掠模块。互斥由单字段天然保证。
 // ⚠️ 自动砍树（woodcut）已在代码层禁用（workMode="woodcut" 保留兼容但不再调度）。
 
-/** 工作模式可选值（UI 下拉与各引擎对账共用；woodcut 已禁用） */
-export const WORK_MODES = ["none", "wander", "mine", "place", "attack", "raid", "fishing"] as const;
+/** 工作模式可选值（UI 下拉与各引擎对账共用；woodcut 已禁用，follow 已收编进互斥） */
+export const WORK_MODES = ["none", "wander", "mine", "place", "attack", "raid", "fishing", "follow"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];
 
 /** 设置假人工作模式（持久化 + 发布 botWorkModeChanged——驱动模块按值启动/停止） */
