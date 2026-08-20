@@ -5,13 +5,13 @@
 // 感兴趣的字段执行，UI 不再直接调用任何业务动作函数。
 //
 // 表单布局（用户拍板）：自动重生置顶、强加载第 2；
-// 自动跳跃/宝库等全部在互斥行为下拉（仅选一项），劫掠模式独立开关可并存。
+// 互斥行为（工作模式下拉，单选）：闲逛/挖掘/放置/攻击/劫掠/钓鱼等；劫掠已收编进互斥菜单（workMode="raid"）。
 
 import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
-import { TAG_BOT, TAG_AUTO_JUMP, TAG_RESPAWN, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
+import { TAG_BOT, TAG_RESPAWN, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
 import { WORK_MODES, setWorkMode, type WorkMode } from "../../../features/state/behavior";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
@@ -19,7 +19,6 @@ import { resolveUiBotRecord } from "../helpers";
 import { setTags } from "../../../features/state/setTags";
 import { isFollowing } from "../../../features/state/follow";
 
-// ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
 // ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
 
 /** 订阅 BOT 主菜单动作事件：行为标签 → 弹表单 */
@@ -49,7 +48,7 @@ export function showTagManagement(player: Player, botName: string): void {
     }
   }
 
-  // 共存标签（除 bot 标识外）：自动重生置顶单独开关，其余（自动跳跃）进共存区
+  // 共存标签（除 bot 标识外）：仅自动重生为可共存开关（自动跳跃已移除）
 
   // 工作模式下拉值列表 + 索引映射（从 canonical 列表 WORK_MODES 派生——
   // 与各引擎同源，避免三处手抄漏同步，审核 L4）
@@ -83,11 +82,6 @@ export function showTagManagement(player: Player, botName: string): void {
     .toggle("useItem", style("使用物品", color.accent), {
       defaultValue: false,
       tooltip: "勾选提交＝使用主手物品并约 2 秒后自动停下（吃完喝完）；取消提交＝立即停止。一次性动作，默认关闭",
-    })
-    // ── 自动跳跃（共存标签） ──
-    .toggle("autoJump", style("自动跳跃", color.playerName), {
-      defaultValue: record.tags.includes(TAG_AUTO_JUMP.value),
-      tooltip: "每 3 tick 自动跳跃",
     })
     // ── 自动跟随（独立开关，record.following 状态） ──
     .toggle("follow", style("自动跟随", color.playerName), {
@@ -124,7 +118,6 @@ export function showTagManagement(player: Player, botName: string): void {
     const pickedWorkMode = WORK_MODE_OPTIONS[workModeSel] ?? "none";
     const coexist: string[] = [];
     if (vals.respawn as boolean) coexist.push(TAG_RESPAWN.value);
-    if (vals.autoJump as boolean) coexist.push(TAG_AUTO_JUMP.value);
     const newTags = computeTagsFromBehaviorForm({ coexist });
     // 工作模式落库延迟到 system.run 内、标签校验成功后（审核 M1：
     // 避免 setTags 校验失败时模式字段已改写——部分应用残留）

@@ -11,7 +11,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry, inventoryStorage, saveCoordinator } from "../../bootstrap/context";
 import { BotEvents } from "../../events/DomainEvents";
-import { BOT_TAG, TAG_AUTO_JUMP, TAG_CONTROL } from "../../rules/tags/BotTags";
+import { BOT_TAG, TAG_CONTROL } from "../../rules/tags/BotTags";
 import { EQUIP_SLOT_NAMES } from "../../rules/Types";
 import { captureExperience } from "../basic/items/McItemCodec";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "../basic/PoseGateway";
@@ -32,11 +32,6 @@ export function startTagBehaviors(): void {
       if (!record) continue;
 
       const sim = bot as SimulatedPlayer;
-
-      // ── 自动跳跃 ── 每 3 tick ──
-      if (bot.hasTag(TAG_AUTO_JUMP.value) && tick % 3 === 0) {
-        try { sim.jump(); } catch (e: any) { console.warn(`[MockPlayer] 自动跳跃异常 ${bot.name}: ${e?.message ?? e}`); }
-      }
 
       // ── 体态控制 ── 每 2 tick ──
       if (bot.hasTag(TAG_CONTROL.value) && tick % 2 === 0) {

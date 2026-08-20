@@ -30,7 +30,6 @@ const HELP_SECTIONS: { title: string; content: string[] }[] = [
       "",
       `${color.accent}▶ 可共存标签`,
       `${color.muted}  ${color.playerName}自动重生${color.muted}: 死亡后自动复活到重生点`,
-      `${color.muted}  ${color.playerName}自动跳跃${color.muted}: 每 3 tick 自动跳跃一次`,
       "",
       `${color.accent}▶ 互斥行为标签（同一时间只能选一个）`,
       `${color.muted}  ${color.playerName}空闲${color.muted}: 默认状态，不执行任何行为`,

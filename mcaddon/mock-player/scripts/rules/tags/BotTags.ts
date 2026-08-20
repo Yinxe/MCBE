@@ -8,7 +8,9 @@ import { TagDef, TAG_PREFIX } from "../Types";
 // 可共存的标签（可同时拥有多个）
 export const TAG_BOT: TagDef = { label: "假人标识", value: `${TAG_PREFIX}bot` };
 export const TAG_RESPAWN: TagDef = { label: "自动重生", value: `${TAG_PREFIX}respawn` };
-export const TAG_AUTO_JUMP: TagDef = { label: "自动跳跃", value: `${TAG_PREFIX}autoJump` };
+// 已禁用：自动跳跃功能已移除（保留定义仅为旧存档兼容，UI与行为引擎不再使用）
+// export const TAG_AUTO_JUMP: TagDef = { label: "自动跳跃", value: `${TAG_PREFIX}autoJump` };
+export const TAG_AUTO_JUMP: TagDef = { label: "自动跳跃[已禁用]", value: `${TAG_PREFIX}autoJump` };
 
 // 互斥的标签（同一时间只能有一个生效）
 // ⚠️ 旧行为标签（用户拍板：行为标签机制已删除——行为统一走生物 AI 行为
@@ -28,8 +30,8 @@ export const TAG_WANDER_MODE: TagDef = { label: "随机游走", value: `${TAG_PR
 // ⚠️ TAG_RAID_MODE 已删除：劫掠模式收编进工作模式单选（workMode="raid"），
 //   旧存档中的 raidMode 标签由迁移转换并清理。
 
-/** 可共存的标签组 */
-export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN, TAG_AUTO_JUMP];
+/** 可共存的标签组（自动跳跃已移除，仅保留自动重生） */
+export const COEXIST_TAGS: TagDef[] = [TAG_BOT, TAG_RESPAWN];
 
 /** 互斥的标签组（行为标签机制已删除——现为空；保留集合供校验兼容） */
 export const EXCLUSIVE_TAGS: TagDef[] = [];
