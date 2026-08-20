@@ -57,22 +57,66 @@ test("remove：内存 + 记录 + 背包/装备 + 恢复标记全清理", () => {
   assert.equal(store.loadEquipment("bot1"), undefined);
 });
 
-test("restoreAll：重启后强制 offline / 非死亡 / 无实体 ID 并回写", () => {
+test("restoreAll：默认重启后离线（autoOnline 关闭）- 在线死亡带重生变为离线死亡", () => {
   const { store, registry } = makeRegistry();
-  // 模拟旧持久化数据（在线/死亡/有 entityId）
+  // bot1: 在线死亡带重生，bot2: 在线存活
   store.saveRecord(makeRecord("bot1", { online: true, death: true, entityId: "e1" }));
   store.saveRecord(makeRecord("bot2", { online: true }));
 
   const restored = registry.restoreAll();
 
   assert.equal(restored.length, 2);
-  for (const r of restored) {
-    assert.equal(r.online, false);
-    assert.equal(r.death, false);
-    assert.equal(r.entityId, undefined);
-  }
+  // 默认不自动上线：均变为离线
+  const r1 = restored.find(r => r.name === "bot1")!;
+  const r2 = restored.find(r => r.name === "bot2")!;
+  assert.equal(r1.online, false);
+  assert.equal(r1.death, true); // 保留死亡
+  assert.equal(r1.entityId, undefined);
+  assert.equal(r2.online, false);
+  assert.equal(r2.death, false);
+  assert.equal(r2.entityId, undefined);
   // 回写持久化
   assert.equal(store.loadRecord("bot1")?.online, false);
+  assert.equal(store.loadRecord("bot1")?.death, true);
+});
+
+test("restoreAll：autoOnline 开启时在线存活保持在线，在线死亡带重生自动复活", () => {
+  const { store, registry } = makeRegistry();
+  store.saveRecord(makeRecord("bot1", { online: true, death: true, entityId: "e1" }));
+  store.saveRecord(makeRecord("bot2", { online: true }));
+
+  const restored = registry.restoreAll({ autoOnlineOnRestart: true });
+
+  const r1 = restored.find(r => r.name === "bot1")!;
+  const r2 = restored.find(r => r.name === "bot2")!;
+  assert.equal(r1.online, true);
+  assert.equal(r1.death, false);
+  assert.equal(r1.deathPoint, null);
+  assert.equal(r1.entityId, undefined);
+  assert.equal(r2.online, true);
+  assert.equal(r2.death, false);
+});
+
+test("restoreAll：在线死亡无重生保持离线死亡（无论 autoOnline）", () => {
+  const { store, registry } = makeRegistry();
+  store.saveRecord(makeRecord("bot1", { online: true, death: true, entityId: "e1", tags: ["mockplayer:tag:bot"] }));
+  const restored = registry.restoreAll({ autoOnlineOnRestart: true });
+  const r1 = restored[0]!;
+  assert.equal(r1.online, false);
+  assert.equal(r1.death, true);
+});
+
+test("restoreAll：离线记录保持原状（离线死亡/离线存活均保留）", () => {
+  const { store, registry } = makeRegistry();
+  store.saveRecord(makeRecord("bot1", { online: false, death: true }));
+  store.saveRecord(makeRecord("bot2", { online: false, death: false }));
+  const restored = registry.restoreAll({ autoOnlineOnRestart: true });
+  const r1 = restored.find(r => r.name === "bot1")!;
+  const r2 = restored.find(r => r.name === "bot2")!;
+  assert.equal(r1.online, false);
+  assert.equal(r1.death, true);
+  assert.equal(r2.online, false);
+  assert.equal(r2.death, false);
 });
 
 test("restoreAll：loadAllRecords 返回全部已存记录（损坏过滤是 mc 层 JSON 解析职责）", () => {

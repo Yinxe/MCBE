@@ -13,13 +13,14 @@ import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 
 import { BOT_TAG } from "../rules/tags/BotTags";
 import { BotEvents } from "./DomainEvents";
-import { botRegistry, saveCoordinator } from "../bootstrap/context";
+import { botRegistry, configStore, saveCoordinator } from "../bootstrap/context";
 import { offlineBot } from "../features/manage/offlineBot";
 import { reconnectingBots } from "../features/manage/pendingRespawn";
 import { color } from "@yinxe/toolkit";
 
-/** 真实玩家下线 → 该主人名下全部在线假人安全下线 */
+/** 真实玩家下线 → 该主人名下全部在线假人安全下线（受 ownerOfflineAutoOffline 配置控制，默认不下线） */
 function offlineOwnerBots(ownerName: string): void {
+  if (!configStore.get().ownerOfflineAutoOffline) return;
   const owned = botRegistry.all().filter((r) => r.ownerName === ownerName && r.online);
   if (owned.length === 0) return;
   console.info(`[MockPlayer] 玩家 ${ownerName} 下线，联动下线 ${owned.length} 个假人`);

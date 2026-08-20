@@ -82,14 +82,48 @@ export class BotRegistry {
 
   /**
    * 世界重启时恢复全部记录
-   * 重启后所有假人默认为 offline / 非死亡 / 无实体 ID 状态，并回写持久化
+   * - offline 记录保持原状（entityId 清空）
+   * - online 记录按管理员配置 `autoOnlineOnRestart` 决定是否保持在线
+   * - online+死亡 且无自动重生 → 离线死亡；有自动重生且允许自动上线 → 在线存活
+   * 重启后所有假人 entityId 清空，并回写持久化
    */
-  restoreAll(): BotRecord[] {
+  restoreAll(options?: { autoOnlineOnRestart?: boolean }): BotRecord[] {
+    const autoOnline = options?.autoOnlineOnRestart ?? false;
     const loaded = this.store.loadAllRecords();
     for (const record of loaded) {
-      record.online = false;
-      record.death = false;
+      const wasOnline = record.online;
+      const wasDeath = record.death;
+      // 仅保留对在线死亡自动重生的判定需要的标签检查
+      const hasRespawn = Array.isArray(record.tags) && record.tags.includes("mockplayer:tag:respawn");
       record.entityId = undefined;
+      if (!wasOnline) {
+        // 离线记录保持原状（离线死亡/离线存活均保留）
+        record.online = false;
+      } else {
+        // 之前在线
+        if (wasDeath) {
+          // 在线死亡
+          if (hasRespawn && autoOnline) {
+            // 有自动重生且允许自动上线 → 在线存活（自动复活）
+            record.online = true;
+            record.death = false;
+            record.deathPoint = null;
+          } else {
+            // 无自动重生或禁止自动上线 → 离线死亡
+            record.online = false;
+            record.death = true;
+          }
+        } else {
+          // 在线存活
+          if (autoOnline) {
+            record.online = true;
+            record.death = false;
+          } else {
+            record.online = false;
+            record.death = false;
+          }
+        }
+      }
       this.records.set(record.name, record);
       this.store.saveRecord(record);
     }

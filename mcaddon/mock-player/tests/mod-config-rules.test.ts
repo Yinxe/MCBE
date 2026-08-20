@@ -70,5 +70,27 @@ test("admins 过滤：只保留非空字符串", () => {
 test("完整配置往返无损", () => {
   const saved = JSON.stringify({ defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"] });
   const cfg = mergeStoredConfig(saved);
-  assert.deepEqual(cfg, { defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"] });
+  assert.deepEqual(cfg, { defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"], autoOnlineOnRestart: true, ownerOfflineAutoOffline: false });
+});
+
+test("新增配置默认：autoOnlineOnRestart=true, ownerOfflineAutoOffline=false", () => {
+  const cfg = mergeStoredConfig(undefined);
+  assert.equal(cfg.autoOnlineOnRestart, true);
+  assert.equal(cfg.ownerOfflineAutoOffline, false);
+});
+
+test("新增配置布尔过滤：非法值回退默认", () => {
+  assert.equal(mergeStoredConfig(JSON.stringify({ autoOnlineOnRestart: "yes" })).autoOnlineOnRestart, true);
+  assert.equal(mergeStoredConfig(JSON.stringify({ autoOnlineOnRestart: 1 })).autoOnlineOnRestart, true);
+  assert.equal(mergeStoredConfig(JSON.stringify({ ownerOfflineAutoOffline: null })).ownerOfflineAutoOffline, false);
+  const cfg = mergeStoredConfig(JSON.stringify({ autoOnlineOnRestart: false, ownerOfflineAutoOffline: true }));
+  assert.equal(cfg.autoOnlineOnRestart, false);
+  assert.equal(cfg.ownerOfflineAutoOffline, true);
+});
+
+test("新增配置往返无损", () => {
+  const saved = JSON.stringify({ defaultQuota: 3, quotas: {}, admins: [], autoOnlineOnRestart: false, ownerOfflineAutoOffline: true });
+  const cfg = mergeStoredConfig(saved);
+  assert.equal(cfg.autoOnlineOnRestart, false);
+  assert.equal(cfg.ownerOfflineAutoOffline, true);
 });

@@ -80,6 +80,18 @@ export class McConfigStore {
     }
   }
 
+  /** 设置世界重启自动上线 */
+  setAutoOnlineOnRestart(enabled: boolean): void {
+    this.config.autoOnlineOnRestart = enabled;
+    this.persist();
+  }
+
+  /** 设置主人下线联动下线 */
+  setOwnerOfflineAutoOffline(enabled: boolean): void {
+    this.config.ownerOfflineAutoOffline = enabled;
+    this.persist();
+  }
+
   private persist(): void {
     try {
       world.setDynamicProperty(CONFIG_KEY, JSON.stringify(this.config));

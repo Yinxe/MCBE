@@ -34,6 +34,8 @@ export function mergeStoredConfig(raw: string | undefined): ModConfig {
     admins: Array.isArray(s.admins)
       ? s.admins.filter((a): a is string => typeof a === "string" && a.trim().length > 0)
       : [],
+    autoOnlineOnRestart: typeof s.autoOnlineOnRestart === "boolean" ? s.autoOnlineOnRestart : base.autoOnlineOnRestart,
+    ownerOfflineAutoOffline: typeof s.ownerOfflineAutoOffline === "boolean" ? s.ownerOfflineAutoOffline : base.ownerOfflineAutoOffline,
   };
 }
 

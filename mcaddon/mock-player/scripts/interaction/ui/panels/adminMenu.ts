@@ -28,7 +28,8 @@ export function showAdminMenu(player: Player): void {
     .body(
       `${color.muted}默认配额: ${color.info}${cfg.defaultQuota} ${color.muted}个/玩家\n` +
       `${color.muted}假人总数: ${color.info}${botRegistry.size} ${color.muted}（主人 ${color.info}${owners.size} ${color.muted}名，无主 ${color.warn}${ownerless} ${color.muted}个）\n` +
-      `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）`
+      `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）\n` +
+      `${color.muted}重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}${color.muted} / 主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}`
     )
     // ── 假人全览（管理员视角：不受主人过滤，全部可见） ──
     .button("全部假人列表", () => showBotList(player, () => showAdminMenu(player)))
@@ -36,6 +37,16 @@ export function showAdminMenu(player: Player): void {
     .button(`默认配额 ${color.info}${cfg.defaultQuota}`, () => editDefaultQuota(player))
     .button("逐玩家配额", () => showPlayerQuotaList(player))
     .button("管理员名单", () => showAdminList(player))
+    .button(`重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}`, () => {
+      configStore.setAutoOnlineOnRestart(!cfg.autoOnlineOnRestart);
+      player.sendMessage(`${color.success}世界重启自动上线已${!cfg.autoOnlineOnRestart ? "开启" : "关闭"}`);
+      showAdminMenu(player);
+    })
+    .button(`主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}`, () => {
+      configStore.setOwnerOfflineAutoOffline(!cfg.ownerOfflineAutoOffline);
+      player.sendMessage(`${color.success}主人下线联动下线已${!cfg.ownerOfflineAutoOffline ? "开启" : "关闭"}`);
+      showAdminMenu(player);
+    })
     .button(style("返回", color.darkGray), () => undefined)
     .show(player);
 }

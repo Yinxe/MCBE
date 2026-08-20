@@ -303,9 +303,19 @@ export interface ModConfig {
   quotas: Record<string, number>;
   /** 额外管理员名单（非 OP 玩家，如服务器服主/协作管理） */
   admins: string[];
+  /** 世界重启后是否自动上线之前在线的假人（管理员功能，默认开启） */
+  autoOnlineOnRestart: boolean;
+  /** 主人下线时是否联动下线其所属假人（默认不下线） */
+  ownerOfflineAutoOffline: boolean;
 }
 
 /** 默认配置（早执行创建用；worldLoad 后从持久化 refresh 合并） */
 export function createDefaultConfig(): ModConfig {
-  return { defaultQuota: DEFAULT_QUOTA, quotas: {}, admins: [] } as ModConfig;
+  return {
+    defaultQuota: DEFAULT_QUOTA,
+    quotas: {},
+    admins: [],
+    autoOnlineOnRestart: true,
+    ownerOfflineAutoOffline: false,
+  } as ModConfig;
 }
