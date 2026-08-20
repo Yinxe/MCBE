@@ -92,6 +92,26 @@ export class McConfigStore {
     this.persist();
   }
 
+  /** 工作模式是否启用（缺省启用） */
+  isWorkModeEnabled(mode: string): boolean {
+    return this.config.enabledWorkModes?.[mode] !== false;
+  }
+
+  /** 设置工作模式启用/禁用 */
+  setWorkModeEnabled(mode: string, enabled: boolean): void {
+    if (!this.config.enabledWorkModes) this.config.enabledWorkModes = {};
+    if (enabled) {
+      delete this.config.enabledWorkModes[mode];
+    } else {
+      this.config.enabledWorkModes[mode] = false;
+    }
+    // 清理空对象保持 JSON 简洁
+    if (this.config.enabledWorkModes && Object.keys(this.config.enabledWorkModes).length === 0) {
+      delete (this.config as any).enabledWorkModes;
+    }
+    this.persist();
+  }
+
   private persist(): void {
     try {
       world.setDynamicProperty(CONFIG_KEY, JSON.stringify(this.config));

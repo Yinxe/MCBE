@@ -32,7 +32,11 @@ function getPosSummary(record: import("../../../rules/Types").BotRecord): string
 
 export function showOnlineManagement(player: Player): void {
   // 可见性过滤：管理员看全部；普通玩家看自己的 + 无主的（无主可认领）
-  const records = visibleRecords(botRegistry.all(), player.name, isAdmin(player));
+  // 排序：在线置顶，其次按假人名
+  const records = [...visibleRecords(botRegistry.all(), player.name, isAdmin(player))].sort((a, b) => {
+    if (a.online !== b.online) return a.online ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
   if (records.length === 0) {
     player.sendMessage(`${color.warn}暂无可见的模拟玩家`);
     return;

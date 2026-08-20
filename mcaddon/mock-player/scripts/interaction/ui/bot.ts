@@ -107,9 +107,8 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
   }
 
   const sorted = [...records].sort((a, b) => {
-    const orderA = a.death ? 1 : a.online ? 2 : 0;
-    const orderB = b.death ? 1 : b.online ? 2 : 0;
-    return orderA - orderB;
+    if (a.online !== b.online) return a.online ? -1 : 1;
+    return a.name.localeCompare(b.name);
   });
 
   const builder = new ActionFormBuilder()

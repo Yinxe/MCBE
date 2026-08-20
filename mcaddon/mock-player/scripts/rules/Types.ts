@@ -50,8 +50,8 @@ export const INVENTORY_SIZE = 36;
 /** DP 子 key 分隔符（历史遗留：旧版背包/装备槽 key 用），名字含这些子串会与旧格式槽位 key 冲突 */
 export const INVALID_NAME_SEGMENTS = [":inv:", ":equip:"] as const;
 
-/** MC 假人名最大长度（玩家名上限） */
-export const MAX_BOT_NAME_LENGTH = 16;
+/** MC 假人名最大长度（玩家名上限，含前缀 sim-） */
+export const MAX_BOT_NAME_LENGTH = 32;
 
 /** 假人名字前缀：与真实玩家区分（防止与未上线真人撞名——真人默认名不带 sim-） */
 export const BOT_NAME_PREFIX = "sim-";
@@ -71,7 +71,7 @@ export function normalizeBotName(input: string): string {
 
 /**
  * 假人名字是否合法（**规范化后**的完整名，含前缀）。
- * 拒绝：空名、超长（>16，生成 "(2)" 重名防护的边界）、
+ * 拒绝：空名、超长（>32，生成 "(2)" 重名防护的边界）、
  *      含 `:inv:` / `:equip:` 子串（历史遗留限制：旧版 DP 槽位 key 冲突；
  *      新 NBT 存储后端已无此冲突，但保留校验以兼容旧数据格式）。
  */
@@ -310,6 +310,8 @@ export interface ModConfig {
   autoOnlineOnRestart: boolean;
   /** 主人下线时是否联动下线其所属假人（默认不下线） */
   ownerOfflineAutoOffline: boolean;
+  /** 各工作模式是否启用（key = workMode，false=禁用；缺省全启用） */
+  enabledWorkModes?: Record<string, boolean>;
 }
 
 /** 默认配置（早执行创建用；worldLoad 后从持久化 refresh 合并） */
@@ -320,5 +322,6 @@ export function createDefaultConfig(): ModConfig {
     admins: [],
     autoOnlineOnRestart: true,
     ownerOfflineAutoOffline: false,
+    enabledWorkModes: {},
   } as ModConfig;
 }

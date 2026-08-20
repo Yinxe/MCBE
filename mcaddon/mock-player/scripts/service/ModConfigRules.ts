@@ -36,6 +36,9 @@ export function mergeStoredConfig(raw: string | undefined): ModConfig {
       : [],
     autoOnlineOnRestart: typeof s.autoOnlineOnRestart === "boolean" ? s.autoOnlineOnRestart : base.autoOnlineOnRestart,
     ownerOfflineAutoOffline: typeof s.ownerOfflineAutoOffline === "boolean" ? s.ownerOfflineAutoOffline : base.ownerOfflineAutoOffline,
+    enabledWorkModes: s.enabledWorkModes !== null && typeof s.enabledWorkModes === "object" && !Array.isArray(s.enabledWorkModes)
+      ? sanitizeEnabledWorkModes(s.enabledWorkModes as Record<string, unknown>)
+      : {},
   };
 }
 
@@ -46,6 +49,15 @@ function sanitizeQuotas(quotas: Record<string, unknown>): Record<string, number>
     if (typeof value === "number" && Number.isFinite(value)) {
       result[name] = Math.max(0, Math.floor(value));
     }
+  }
+  return result;
+}
+
+/** 过滤非法工作模式开关：只保留 string → boolean */
+function sanitizeEnabledWorkModes(modes: Record<string, unknown>): Record<string, boolean> {
+  const result: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(modes)) {
+    if (typeof v === "boolean") result[k] = v;
   }
   return result;
 }

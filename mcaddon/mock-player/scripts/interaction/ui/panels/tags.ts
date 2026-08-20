@@ -13,6 +13,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { TAG_BOT, TAG_RESPAWN, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
 import { WORK_MODES, setWorkMode, type WorkMode } from "../../../features/state/behavior";
+import { configStore } from "../../../bootstrap/context";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
@@ -50,9 +51,9 @@ export function showTagManagement(player: Player, botName: string): void {
   // 共存标签（除 bot 标识外）：仅自动重生为可共存开关（自动跳跃已移除）
 
   // 工作模式下拉值列表 + 索引映射（从 canonical 列表 WORK_MODES 派生——
-  // 与各引擎同源，避免三处手抄漏同步，审核 L4）
-  const WORK_MODE_OPTIONS: readonly WorkMode[] = WORK_MODES;
-  const WORK_MODE_INDEX: Record<string, number> = Object.fromEntries(WORK_MODES.map((b, i) => [b, i]));
+  // 与各引擎同源，避免三处手抄漏同步，审核 L4；已禁用模式不在下拉中）
+  const WORK_MODE_OPTIONS: readonly WorkMode[] = WORK_MODES.filter(m => m === "none" || configStore.isWorkModeEnabled(m));
+  const WORK_MODE_INDEX: Record<string, number> = Object.fromEntries(WORK_MODE_OPTIONS.map((b, i) => [b, i]));
 
   const currentTagsText = record.tags
     .map((t) => { const d = getTagDef(t); return d ? d.label : t; })
@@ -83,23 +84,26 @@ export function showTagManagement(player: Player, botName: string): void {
       tooltip: "勾选提交＝使用主手物品并约 2 秒后自动停下（吃完喝完）；取消提交＝立即停止。一次性动作，默认关闭",
     })
     .label("sep2", style("━━ 工作模式 ────", color.accent))
-    // ── 工作模式（用户拍板：单选互斥——一个假人一个工作模式） ──
+    // ── 工作模式（用户拍板：单选互斥——一个假人一个工作模式，已禁用模式不在下拉中） ──
     .dropdown(
       "workMode",
       style("工作模式（仅选一项，互斥）", color.accent),
-      [
-        style("无", color.muted),
-        style("闲逛模式", color.playerName),
-        style("定点挖掘模式", color.playerName),
-        style("定点放置模式", color.playerName),
-        style("定点攻击模式", color.playerName),
-        style("劫掠模式", color.warn),
-        style("自动钓鱼模式", color.accent),
-        style("自动跟随", color.playerName),
-      ],
+      WORK_MODE_OPTIONS.map((m) => {
+        const labelMap: Record<string, string> = {
+          none: style("无", color.muted),
+          wander: style("闲逛模式", color.playerName),
+          mine: style("定点挖掘模式", color.playerName),
+          place: style("定点放置模式", color.playerName),
+          attack: style("定点攻击模式", color.playerName),
+          raid: style("劫掠模式", color.warn),
+          fishing: style("自动钓鱼模式", color.accent),
+          follow: style("自动跟随", color.playerName),
+        };
+        return labelMap[m] ?? style(m, color.muted);
+      }),
       {
         defaultValueIndex: WORK_MODE_INDEX[record.workMode] ?? 0,
-        tooltip: "单选工作模式（互斥，仅一项）：闲逛模式（近点散步）/ 定点挖掘模式（视线挖方块）/ 定点放置模式（面前放方块）/ 定点攻击模式（攻击面前目标）/ 劫掠模式（喝不祥之瓶刷袭击）/ 自动钓鱼模式（生物 AI + 共享钓鱼点，自动就位抛竿收竿）/ 自动跟随（持续跟随你）",
+        tooltip: "单选工作模式（互斥，仅一项）：已禁用的模式不在此列表（管理员可在全局配置中启用/禁用）",
       },
     );
 

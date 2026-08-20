@@ -25,7 +25,7 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { AiMemory, BehaviorRunner, SharedMemory, type Behavior, type BehaviorContext } from "../../ai";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { BotEvents } from "../../events/DomainEvents";
-import { botRegistry } from "../../bootstrap/context";
+import { botRegistry, configStore } from "../../bootstrap/context";
 import { makeWanderBehavior } from "./capabilities/wander";
 import { makeMineBehavior } from "./capabilities/mine";
 import { makePlaceBehavior } from "./capabilities/place";
@@ -103,7 +103,10 @@ const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
 /** 假人当前生物 AI 行为（record.workMode；未启用 → undefined） */
 function enabledBehaviorName(record: BotRecord): string | undefined {
   const name = record.workMode;
-  return name && BEHAVIOR_BY_NAME[name] ? name : undefined;
+  if (!name || !BEHAVIOR_BY_NAME[name]) return undefined;
+  // 已被管理员禁用的工作模式视为未启用
+  if (name !== "none" && !configStore.isWorkModeEnabled(name)) return undefined;
+  return name;
 }
 
 /**

@@ -8,6 +8,7 @@ import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder, ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
 import { botRegistry, configStore } from "../../../bootstrap/context";
+import { WORK_MODES } from "../../../features/state/behavior";
 import { isAdmin } from "../../commands/auth";
 import { showBotList } from "../bot";
 import { showOnlineManagement } from "./online";
@@ -26,7 +27,7 @@ export function showAdminMenu(player: Player): void {
   new ActionFormBuilder()
     .title(`${color.gold}⚙ 管理员菜单`)
     .body(
-      `${color.muted}默认配额: ${color.info}${cfg.defaultQuota} ${color.muted}个/玩家\n` +
+      `${color.muted}默认配额: ${color.info}${cfg.defaultQuota >= 999 ? "无限" : cfg.defaultQuota} ${color.muted}个/玩家\n` +
       `${color.muted}假人总数: ${color.info}${botRegistry.size} ${color.muted}（主人 ${color.info}${owners.size} ${color.muted}名，无主 ${color.warn}${ownerless} ${color.muted}个）\n` +
       `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）\n` +
       `${color.muted}重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}${color.muted} / 主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}`
@@ -34,24 +35,70 @@ export function showAdminMenu(player: Player): void {
     // ── 假人全览（管理员视角：不受主人过滤，全部可见） ──
     .button("全部假人列表", () => showBotList(player, () => showAdminMenu(player)))
     .button("全部假人在线管理", () => showOnlineManagement(player))
-    .button(`默认配额 ${color.info}${cfg.defaultQuota}`, () => editDefaultQuota(player))
+    .button("全局配置", () => showGlobalConfig(player))
     .button("逐玩家配额", () => showPlayerQuotaList(player))
     .button("管理员名单", () => showAdminList(player))
-    .button(`重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}`, () => {
-      configStore.setAutoOnlineOnRestart(!cfg.autoOnlineOnRestart);
-      player.sendMessage(`${color.success}世界重启自动上线已${!cfg.autoOnlineOnRestart ? "开启" : "关闭"}`);
-      showAdminMenu(player);
-    })
-    .button(`主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}`, () => {
-      configStore.setOwnerOfflineAutoOffline(!cfg.ownerOfflineAutoOffline);
-      player.sendMessage(`${color.success}主人下线联动下线已${!cfg.ownerOfflineAutoOffline ? "开启" : "关闭"}`);
-      showAdminMenu(player);
-    })
     .button(style("返回", color.darkGray), () => undefined)
     .show(player);
 }
 
-/** 修改默认配额 */
+/** 全局配置（整合：联动开关 + 重启自动上线 + 默认配额滑块 + 工作模式开关） */
+async function showGlobalConfig(player: Player): Promise<void> {
+  const cfg = configStore.get();
+  // 默认配额 1-10 + 无限(11) 映射：999/>=11 视为无限，0 视为 1
+  const quotaToSlider = (q: number): number => {
+    if (q >= 999) return 11;
+    if (q >= 1 && q <= 10) return q;
+    return q <= 0 ? 1 : 3;
+  };
+  const defaultSlider = quotaToSlider(cfg.defaultQuota);
+  const workModes = WORK_MODES.filter(m => m !== "none");
+
+  const builder = new ModalFormBuilder()
+    .title(`${color.gold}全局配置`)
+    .toggle("ownerOffline", "上下线联动（主人下线时假人联动下线）", { defaultValue: cfg.ownerOfflineAutoOffline, tooltip: "默认关：假人常驻不随主人上下线" })
+    .toggle("autoOnline", "服务器重启自动上线", { defaultValue: cfg.autoOnlineOnRestart, tooltip: "默认开：重启后在线的假人自动重建" })
+    .slider("quota", "默认每人配额", 1, 11, { defaultValue: defaultSlider, valueStep: 1, tooltip: "1-10 为具体数量，11=无限（默认3）" })
+    .label("workModeHeader", `${color.accent}— 工作模式启用 —`);
+
+  for (const mode of workModes) {
+    const enabled = cfg.enabledWorkModes?.[mode] !== false;
+    const labelMap: Record<string, string> = {
+      wander: "闲逛模式", mine: "自动挖掘", place: "自动放置", attack: "自动攻击",
+      raid: "劫掠模式", fishing: "自动钓鱼", follow: "自动跟随",
+    };
+    builder.toggle(`wm_${mode}`, labelMap[mode] ?? mode, { defaultValue: enabled });
+  }
+
+  const vals = await builder.show(player);
+  if (!vals) return;
+  // 保存联动开关
+  if (typeof vals.ownerOffline === "boolean" && vals.ownerOffline !== cfg.ownerOfflineAutoOffline) {
+    configStore.setOwnerOfflineAutoOffline(vals.ownerOffline as boolean);
+  }
+  if (typeof vals.autoOnline === "boolean" && vals.autoOnline !== cfg.autoOnlineOnRestart) {
+    configStore.setAutoOnlineOnRestart(vals.autoOnline as boolean);
+  }
+  // 保存配额
+  const sliderVal = vals.quota as number;
+  const newQuota = sliderVal >= 11 ? 999 : Math.max(1, Math.floor(sliderVal));
+  if (newQuota !== cfg.defaultQuota) {
+    configStore.setDefaultQuota(newQuota);
+  }
+  // 保存工作模式开关
+  let changedMode = false;
+  for (const mode of workModes) {
+    const v = vals[`wm_${mode}`] as boolean | undefined;
+    if (typeof v === "boolean" && (cfg.enabledWorkModes?.[mode] !== false) !== v) {
+      configStore.setWorkModeEnabled(mode, v);
+      changedMode = true;
+    }
+  }
+  player.sendMessage(`${color.success}全局配置已更新` + (changedMode ? "（工作模式变更立即生效）" : ""));
+  showAdminMenu(player);
+}
+
+/** 修改默认配额（保留入口，实际由全局配置统一管理） */
 async function editDefaultQuota(player: Player): Promise<void> {
   try {
     const cfg = configStore.get();
