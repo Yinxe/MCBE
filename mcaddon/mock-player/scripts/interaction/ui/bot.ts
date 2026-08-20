@@ -74,9 +74,10 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     // ── 同步/操作 ──
     .button(style("同步姿态", color.darkBlue), () => trigger("syncPose"))
     .button(style("选择主手", color.darkBlue), () => trigger("selectMainhand"))
-    // ── 互换/回收 ──
+    // ── 互换/回收/丢弃 ──
     .button(style("物品互换", color.darkBlue), () => trigger("swap"))
     .button(style("回收资源", color.darkBlue), () => trigger("reclaim"))
+    .button(style("丢弃物品", color.darkRed), () => trigger("discard"))
     // ── 标签/设置 ──
     .button(style("行为标签", color.darkGreen), () => trigger("openBehavior"))
     .button(style("设置重生", color.darkBlue), () => trigger("updateSpawn"))

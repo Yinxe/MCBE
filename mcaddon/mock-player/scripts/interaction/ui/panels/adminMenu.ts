@@ -43,7 +43,7 @@ export function showAdminMenu(player: Player): void {
 }
 
 /** 全局配置（整合：联动开关 + 重启自动上线 + 默认配额滑块 + 工作模式开关） */
-async function showGlobalConfig(player: Player): Promise<void> {
+export async function showGlobalConfig(player: Player): Promise<void> {
   const cfg = configStore.get();
   // 默认配额 1-10 + 无限(11) 映射：999/>=11 视为无限，0 视为 1
   const quotaToSlider = (q: number): number => {
@@ -121,7 +121,7 @@ async function editDefaultQuota(player: Player): Promise<void> {
 }
 
 /** 逐玩家配额列表：有覆盖的玩家 + 全部主人 */
-function showPlayerQuotaList(player: Player): void {
+export function showPlayerQuotaList(player: Player): void {
   const cfg = configStore.get();
   const owners = [...new Set([
     ...Object.keys(cfg.quotas),
@@ -179,7 +179,7 @@ async function editPlayerQuota(player: Player, targetName: string): Promise<void
 }
 
 /** 管理员名单管理 */
-function showAdminList(player: Player): void {
+export function showAdminList(player: Player): void {
   const admins = configStore.get().admins;
   const form = new ActionFormBuilder().title(`${color.gold}管理员名单`);
   form.body(`${color.muted}名单内的玩家（无需 OP）与 OP 一样不受配额限制、可管理所有假人`);

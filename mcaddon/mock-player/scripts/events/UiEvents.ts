@@ -18,6 +18,7 @@ export type BotPanelAction =
   | "selectMainhand"
   | "swap"
   | "reclaim"
+  | "discard"
   | "openBehavior"
   | "updateSpawn"
   | "rename"

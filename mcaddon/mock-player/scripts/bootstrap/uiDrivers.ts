@@ -17,6 +17,7 @@ import { registerUiSubscriptions as registerFollowUi } from "../features/state/f
 import { registerUiSubscriptions as registerSwapUi } from "../interaction/ui/panels/swap";
 import { registerUiSubscriptions as registerMainhandUi } from "../interaction/ui/panels/mainhand";
 import { registerUiSubscriptions as registerReclaimUi } from "../interaction/ui/panels/reclaim";
+import { registerUiSubscriptions as registerDiscardUi } from "../interaction/ui/panels/discard";
 import { registerUiSubscriptions as registerTagUi } from "../interaction/ui/panels/tags";
 import { registerUiSubscriptions as registerTridentUi } from "../interaction/ui/panels/trident";
 import { registerUiSubscriptions as registerTridentClaimUi } from "../interaction/ui/panels/tridentClaim";
@@ -37,6 +38,7 @@ export function registerUiDrivers(): void {
   registerSwapUi();
   registerMainhandUi();
   registerReclaimUi();
+  registerDiscardUi();
   registerTagUi();
   registerTridentUi();
   registerTridentClaimUi();
