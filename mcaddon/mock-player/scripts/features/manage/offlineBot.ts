@@ -14,6 +14,7 @@ import { BotRecord } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry, configStore, saveCoordinator } from "../../bootstrap/context";
+import { TICKS_PER_SECOND, UNLIMITED_QUOTA } from "../../rules/Types";
 import { trackBotOffline } from "../trident/tridentTracker";
 import {
   createSim4Area,
@@ -32,7 +33,7 @@ function delayTicks(ticks: number): Promise<void> {
 }
 function getCooldownTicks(): number {
   const sec = configStore.getSafeCooldownSeconds();
-  return Math.max(1, Math.min(5, sec)) * 20;
+  return sec * TICKS_PER_SECOND;
 }
 
 /** 内部：原始下线（无模拟4、无排队、无等待） */

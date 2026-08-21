@@ -17,6 +17,7 @@ import { color } from "@yinxe/toolkit";
 import { BotRecord } from "../../rules/Types";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, configStore, saveCoordinator } from "../../bootstrap/context";
+import { TICKS_PER_SECOND, UNLIMITED_QUOTA } from "../../rules/Types";
 import { spawnBot } from "./spawnMode";
 import { trackBotOnline } from "../trident/tridentTracker";
 import { canOnlineBot, remainingOnlineQuota } from "../../service/QuotaRules";
@@ -43,7 +44,7 @@ function delayTicks(ticks: number): Promise<void> {
 }
 function getCooldownTicks(): number {
   const sec = configStore.getSafeCooldownSeconds();
-  return Math.max(1, Math.min(5, sec)) * 20;
+  return sec * TICKS_PER_SECOND;
 }
 
 /** 内部：原始上线（无模拟4、无排队、无等待） */
@@ -106,7 +107,7 @@ export async function safeOnline(record: BotRecord): Promise<OnlineResult> {
     }
     if (!canOnlineBot(onlineCount, quota, ownerIsAdmin)) {
       const left = remainingOnlineQuota(onlineCount, quota, ownerIsAdmin);
-      const limitText = quota >= 999 ? "无限" : `${quota}`;
+      const limitText = quota >= UNLIMITED_QUOTA ? "无限" : `${quota}`;
       return { ok: false, reason: `同时在线已达上限（${limitText}个）${left >= 0 ? `，剩余 ${left} 个` : ""}，请先下线部分假人` };
     }
   }
@@ -229,7 +230,7 @@ export async function enforceOnlineQuotaForOwner(ownerName: string): Promise<num
     const p = world.getAllPlayers().find((pl) => pl.name === ownerName);
     if (p && isAdmin(p)) isAdminOwner = true;
   }
-  if (isAdminOwner || quota >= 999) return 0;
+  if (isAdminOwner || quota >= UNLIMITED_QUOTA) return 0;
   if (allOnline.length <= quota) return 0;
   // 按名字排序保留前 quota 个
   const sorted = [...allOnline].sort((a, b) => a.name.localeCompare(b.name));

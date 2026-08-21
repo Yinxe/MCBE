@@ -297,6 +297,25 @@ export const DEFAULT_QUOTA = 5;
 /** 全局配置默认值：每玩家默认可同时在线的假人数（管理员不受限制） */
 export const DEFAULT_ONLINE_QUOTA = 3;
 
+// ─── 系统常量（拒绝魔法值，统一使用常量/枚举） ──────────
+/** 每秒 tick 数（Minecraft 固定 20） */
+export const TICKS_PER_SECOND = 20;
+/** 安全上下线冷却范围（秒） */
+export const MIN_SAFE_COOLDOWN_SECONDS = 1;
+export const MAX_SAFE_COOLDOWN_SECONDS = 5;
+export const DEFAULT_SAFE_COOLDOWN_SECONDS = 1;
+/** 配额无限标记（对应滑块 11） */
+export const UNLIMITED_QUOTA = 999;
+/** 配额滑块最大值（11 表示无限） */
+export const QUOTA_SLIDER_MAX = 11;
+export const ONLINE_QUOTA_SLIDER_MAX = 11;
+/** 世界重启后自动上线延迟（15秒） */
+export const WORLD_RESTART_DELAY_TICKS = 15 * TICKS_PER_SECOND;
+/** 重连时下线后等待再上线（1秒） */
+export const RECONNECT_DELAY_TICKS = 1 * TICKS_PER_SECOND;
+/** 模拟4 常加载半径（区块） */
+export const SIM4_TICKING_RADIUS_CHUNKS = 4;
+
 /** 模组菜单触发信物默认值（木棍） */
 export const DEFAULT_MENU_TRIGGER_ITEM = "minecraft:stick";
 

@@ -26,7 +26,7 @@ import { startSharedMemorySweeper } from "./features/ai/brainEngine";
 import { initGameTestContext, registerTestDimension } from "./features/manage/gametestContext";
 import { registerUiDrivers } from "./bootstrap/uiDrivers";
 import { runMigrations } from "./bootstrap/migration";
-import { botRegistry, configStore } from "./bootstrap/context";
+import { botRegistry, configStore, saveCoordinator } from "./bootstrap/context";
 
 // Phase 1/2: 基础设施与业务装配在 mc/bootstrap/context 模块 import 时完成
 // （botStore = DynamicProperty 后端，botRegistry = 内存注册表 + 写穿持久化）
@@ -80,17 +80,32 @@ world.afterEvents.worldLoad.subscribe(() => {
   // 仅对在线存活的记录生效；在线死亡且有自动重生的已在 restore 阶段转为在线存活
   const toAutoOnline = botRegistry.all().filter((r) => r.online && !r.death && !r.entityId);
   if (toAutoOnline.length > 0) {
-    console.info(`[MockPlayer] 世界重启自动上线 ${toAutoOnline.length} 个假人`);
+    console.info(`[MockPlayer] 世界重启自动上线 ${toAutoOnline.length} 个假人（世界启动后立即排队，safeOnline 内置冷却与模拟4）`);
     system.run(async () => {
       const { safeOnline } = await import("./features/manage/onlineBot");
       for (const r of toAutoOnline) {
         try {
           const res = await safeOnline(r);
-          if (!res.ok) console.warn(`[MockPlayer] 自动上线失败 ${r.name}: ${res.reason}`);
+          if (!res.ok) {
+            console.warn(`[MockPlayer] 自动上线失败 ${r.name}: ${res.reason}，已置为离线`);
+            // 关键修复：失败时必须同步落库为离线，否则在线管理显示在线但实体未生成
+            try {
+              r.online = false;
+              (r as any).entityId = undefined;
+              saveCoordinator.saveRecord(r);
+            } catch {}
+          } else {
+            console.info(`[MockPlayer] 自动上线成功 ${r.name}`);
+          }
         } catch (e: any) {
           console.warn(`[MockPlayer] 自动上线异常 ${r.name}: ${e?.message ?? e}`);
+          try {
+            r.online = false;
+            (r as any).entityId = undefined;
+            saveCoordinator.saveRecord(r);
+          } catch {}
         }
-        // 避免一次性大量生成阻塞
+        // 避免一次性大量生成阻塞（2tick 让步）
         await new Promise<void>((resolve) => system.runTimeout(resolve, 2));
       }
     });

@@ -1,3 +1,5 @@
+import { UNLIMITED_QUOTA } from "../rules/Types";
+
 // ─── 配额规则（core 层） ───────────────────────────────
 // 纯逻辑：每玩家假人创建配额判定。管理员（OP 或名单）不受配额限制。
 
@@ -10,14 +12,14 @@
 export function canCreateBot(ownedCount: number, quota: number, isAdmin: boolean): boolean {
   if (isAdmin) return true;
   if (quota <= 0) return false;
-  if (quota >= 999) return true;
+  if (quota >= UNLIMITED_QUOTA) return true;
   return ownedCount < quota;
 }
 
 /** 剩余可创建名额（管理员返回 -1 表示无限） */
 export function remainingQuota(ownedCount: number, quota: number, isAdmin: boolean): number {
   if (isAdmin) return -1;
-  if (quota >= 999) return -1;
+  if (quota >= UNLIMITED_QUOTA) return -1;
   return Math.max(0, quota - ownedCount);
 }
 
@@ -30,13 +32,13 @@ export function remainingQuota(ownedCount: number, quota: number, isAdmin: boole
 export function canOnlineBot(onlineCount: number, quota: number, isAdmin: boolean): boolean {
   if (isAdmin) return true;
   if (quota <= 0) return false;
-  if (quota >= 999) return true;
+  if (quota >= UNLIMITED_QUOTA) return true;
   return onlineCount < quota;
 }
 
 /** 剩余可上线名额（管理员返回 -1 表示无限） */
 export function remainingOnlineQuota(onlineCount: number, quota: number, isAdmin: boolean): number {
   if (isAdmin) return -1;
-  if (quota >= 999) return -1;
+  if (quota >= UNLIMITED_QUOTA) return -1;
   return Math.max(0, quota - onlineCount);
 }

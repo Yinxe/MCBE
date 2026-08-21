@@ -9,6 +9,7 @@ import { ActionFormBuilder, ModalFormBuilder, MessageFormBuilder } from "@yinxe/
 
 import { botRegistry, configStore } from "../../../bootstrap/context";
 import { WORK_MODES, setWorkMode } from "../../../features/state/behavior";
+import { MAX_SAFE_COOLDOWN_SECONDS, MIN_SAFE_COOLDOWN_SECONDS, QUOTA_SLIDER_MAX, UNLIMITED_QUOTA } from "../../../rules/Types";
 import { MENU_TRIGGER_OPTIONS, DEFAULT_MENU_TRIGGER_ITEM } from "../../../rules/Types";
 import { isAdmin } from "../../commands/auth";
 import { showBotList } from "../bot";
@@ -67,9 +68,9 @@ export async function showGlobalConfig(player: Player): Promise<void> {
     .title(`${color.gold}全局配置`)
     .toggle("ownerOffline", "上下线联动（主人下线时假人联动下线）", { defaultValue: cfg.ownerOfflineAutoOffline, tooltip: "默认关：假人常驻不随主人上下线" })
     .toggle("autoOnline", "服务器重启自动上线", { defaultValue: cfg.autoOnlineOnRestart, tooltip: "默认开：重启后在线的假人自动重建" })
-    .slider("quota", "默认每人配额", 1, 11, { defaultValue: defaultSlider, valueStep: 1, tooltip: "1-10 为具体数量，11=无限（默认3）" })
+    .slider("quota", "默认每人配额", 1, QUOTA_SLIDER_MAX, { defaultValue: defaultSlider, valueStep: 1, tooltip: "1-10 为具体数量，11=无限（默认3）" })
       .slider("safeCooldown", "安全上下线冷却（秒）", 1, 5, { defaultValue: cfg.safeCooldownSeconds ?? 1, valueStep: 1, tooltip: "上线/下线共用，普通与常加载均等待此时间（默认1秒，1-5可选）" })
-      .slider("onlineQuota", "默认在线配额", 0, 11, { defaultValue: (()=>{const q=cfg.defaultOnlineQuota??3; if(q>=999) return 11; if(q>=0&&q<=10) return q; return 3;})(), valueStep: 1, tooltip: "0=禁止上线，1-10为数量，11=无限（默认3）" })
+      .slider("onlineQuota", "默认在线配额", 0, QUOTA_SLIDER_MAX, { defaultValue: (()=>{const q=cfg.defaultOnlineQuota??3; if(q>=999) return 11; if(q>=0&&q<=10) return q; return 3;})(), valueStep: 1, tooltip: "0=禁止上线，1-10为数量，11=无限（默认3）" })
     .dropdown(
       "menuTrigger",
       "模组菜单触发信物",
@@ -98,7 +99,7 @@ export async function showGlobalConfig(player: Player): Promise<void> {
   }
   // 保存配额
   const sliderVal = vals.quota as number;
-  const newQuota = sliderVal >= 11 ? 999 : Math.max(1, Math.floor(sliderVal));
+  const newQuota = sliderVal >= QUOTA_SLIDER_MAX ? UNLIMITED_QUOTA : Math.max(1, Math.floor(sliderVal));
   if (newQuota !== cfg.defaultQuota) {
     configStore.setDefaultQuota(newQuota);
   }
@@ -110,7 +111,7 @@ export async function showGlobalConfig(player: Player): Promise<void> {
   }
   // 保存在线配额
   const onlineSliderVal = vals.onlineQuota as number;
-  const newOnlineQuota = onlineSliderVal >= 11 ? 999 : Math.max(0, Math.floor(onlineSliderVal));
+  const newOnlineQuota = onlineSliderVal >= QUOTA_SLIDER_MAX ? UNLIMITED_QUOTA : Math.max(0, Math.floor(onlineSliderVal));
   const curOnlineQuota = cfg.defaultOnlineQuota ?? 3;
   if (newOnlineQuota !== curOnlineQuota) {
     configStore.setDefaultOnlineQuota(newOnlineQuota);
@@ -261,7 +262,7 @@ export function showPlayerOnlineQuotaList(player: Player): void {
   for (const name of owners) {
     const online = botRegistry.all().filter((r) => r.ownerName === name && r.online).length;
     const quota = cfg.onlineQuotas?.[name] !== undefined ? cfg.onlineQuotas[name] : (cfg.defaultOnlineQuota ?? 3);
-    const tag = quota >= 999 ? `${color.success}无限` : quota === 0 ? `${color.error}禁止` : `${color.info}${quota}`;
+    const tag = quota >= UNLIMITED_QUOTA ? `${color.success}无限` : quota === 0 ? `${color.error}禁止` : `${color.info}${quota}`;
     form.button(
       `${color.playerName}${name} ${color.muted}(${color.info}${online}${color.muted}/${tag}${color.muted})`,
       () => editPlayerOnlineQuota(player, name)
@@ -298,7 +299,7 @@ async function editPlayerOnlineQuota(player: Player, targetName: string): Promis
       player.sendMessage(`${color.error}无效的配额数字`);
       return;
     }
-    const normalized = quota >= 999 ? 999 : quota;
+    const normalized = quota >= UNLIMITED_QUOTA ? 999 : quota;
     configStore.setPlayerOnlineQuota(targetName, normalized);
     player.sendMessage(`${color.success}${targetName} 的在线配额已设为 ${color.info}${normalized >= 999 ? "无限" : normalized}${color.success} 个`);
     // 配额降低或设为0时强制下线超出部分

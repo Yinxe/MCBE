@@ -19,9 +19,10 @@
 
 import { world } from "@minecraft/server";
 import type { Dimension, Vector3 } from "@minecraft/server";
+import { SIM4_TICKING_RADIUS_CHUNKS } from "../../rules/Types";
 
 /** 模拟距离 4（区块半径） */
-export const SIM4_RADIUS = 4;
+export const SIM4_RADIUS = SIM4_TICKING_RADIUS_CHUNKS;
 
 /** 安全上线专用的固定常加载区域名（全局排队共享，不可并发） */
 export const SAFE_ONLINE_TICKING_AREA_NAME = "mockplayer:safe_online";

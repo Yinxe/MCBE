@@ -2,7 +2,7 @@
 // 纯逻辑：从持久化原始值解析并合并 ModConfig（损坏/缺失/部分字段回退默认）。
 // McConfigStore.refresh 调用本函数，保证配置解析可脱离 mcapi 单测。
 
-import { createDefaultConfig, MENU_TRIGGER_OPTIONS } from "../rules/Types";
+import { createDefaultConfig, MENU_TRIGGER_OPTIONS, MAX_SAFE_COOLDOWN_SECONDS, MIN_SAFE_COOLDOWN_SECONDS } from "../rules/Types";
 import type { ModConfig } from "../rules/Types";
 
 /**

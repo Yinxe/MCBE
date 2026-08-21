@@ -11,6 +11,7 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import type { BotRecord } from "../../rules/Types";
 import { safeOffline } from "./offlineBot";
 import { safeOnline } from "./onlineBot";
+import { RECONNECT_DELAY_TICKS } from "../../rules/Types";
 import { waitForNameAvailable } from "../../bot/PlayerGateway";
 import { saveCoordinator } from "../../bootstrap/context";
 
@@ -47,29 +48,49 @@ export function safeReconnect(record: BotRecord, options?: SafeReconnectOptions)
   }
   reconnectingBots.add(record.name);
 
-  system.run(async () => {
-    try {
-      const res = await safeOffline(record);
-      if (!res.ok) console.warn(`[MockPlayer] safeReconnect safeOffline 失败 ${record.name}: ${res.reason}`);
-    } catch (e: any) {
-      console.warn(`[MockPlayer] safeReconnect safeOffline 失败 ${record.name}: ${e?.message ?? e}`);
-    }
-    try {
-      options?.onOffline?.(record);
-    } catch (e: any) {
-      console.warn(`[MockPlayer] safeReconnect onOffline 回调异常 ${record.name}: ${e?.message ?? e}`);
-    }
-  });
+  // 优化：下线后等待1秒(20tick)再上线，确保旧实体完全释放且区块稳定
+  const runReconnect = async () => {
+    // 1. 下线 + onOffline 回调（在 system.run 上下文中执行，确保世界操作安全）
+    await new Promise<void>((resolve) => {
+      system.run(async () => {
+        try {
+          const res = await safeOffline(record);
+          if (!res.ok) console.warn(`[MockPlayer] safeReconnect safeOffline 失败 ${record.name}: ${res.reason}`);
+        } catch (e: any) {
+          console.warn(`[MockPlayer] safeReconnect safeOffline 失败 ${record.name}: ${e?.message ?? e}`);
+        }
+        try {
+          options?.onOffline?.(record);
+        } catch (e: any) {
+          console.warn(`[MockPlayer] safeReconnect onOffline 回调异常 ${record.name}: ${e?.message ?? e}`);
+        }
+        resolve();
+      });
+    });
 
-  waitForNameAvailable(record.name)
-    .then(() => doConnect(record, options?.onOnline))
-    // ⚠️ 防御性 catch：waitForNameAvailable 承诺永不 reject（超时也 resolve），
-    // 保留此分支防止未来回归引入 reject 导致重连状态卡死
-    .catch(() => {
+    // 2. 下线后等待1秒再继续，确保旧实体已完全清理
+    await new Promise<void>((resolve) => system.runTimeout(() => resolve(), RECONNECT_DELAY_TICKS));
+
+    // 3. 等待名称可用
+    try {
+      await waitForNameAvailable(record.name);
+    } catch {
       console.warn(`[MockPlayer] safeReconnect 等待名称释放异常 ${record.name}，强制执行上线`);
-      doConnect(record, options?.onOnline);
-    })
-    .finally(() => reconnectingBots.delete(record.name));
+    }
+
+    // 4. 安全上线
+    try {
+      await doConnect(record, options?.onOnline);
+    } finally {
+      reconnectingBots.delete(record.name);
+    }
+  };
+
+  // 启动重连流程（无需 system.run 包裹，内部已处理）
+  runReconnect().catch((e) => {
+    console.error(`[MockPlayer] safeReconnect 异常 ${record.name}: ${e?.message ?? e}`);
+    reconnectingBots.delete(record.name);
+  });
 }
 
 async function doConnect(

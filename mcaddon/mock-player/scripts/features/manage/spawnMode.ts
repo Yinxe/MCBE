@@ -16,6 +16,7 @@ import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametes
 
 import type { BotRecord } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
+import { TICKS_PER_SECOND } from "../../rules/Types";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { finalizeBotSpawn } from "./spawn";
@@ -194,6 +195,7 @@ export function spawnBot(
   lookTarget?: { x: number; y: number; z: number },
 ): Promise<SimulatedPlayer> {
   const mode = record.spawnMode ?? MODE_NORMAL;
+  console.info(`[MockPlayer] spawnBot ${record.name} 模式=${mode} 预期=${mode === MODE_CHUNKLOAD ? "test" : "module"}`);
   const makeResult = (): SpawnResult => {
     // 流程完全一致，仅两处差异：
     // 1. 生成 API：normal=模块级 / chunkload=test 实例方法
@@ -204,9 +206,11 @@ export function spawnBot(
         console.warn(`[MockPlayer] GameTest 未就绪，${record.name} 改用普通模式`);
         return makeSpawnResult(record, location, dimension, { x: 0, y: 0 }, undefined, moduleSpawner, location, true);
       }
-      return makeSpawnResult(record, location, dimension, rotation, lookTarget, spawner, CHUNKLOAD_SPAWN_POS);
+      console.info(`[MockPlayer] 强加载生成 ${record.name} 使用 testSpawner 中转 ${CHUNKLOAD_SPAWN_POS.x},${CHUNKLOAD_SPAWN_POS.y},${CHUNKLOAD_SPAWN_POS.z} → 目标 ${location.x},${location.y},${location.z}`);
+        return makeSpawnResult(record, location, dimension, rotation, lookTarget, spawner, CHUNKLOAD_SPAWN_POS);
     }
-    return makeSpawnResult(record, location, dimension, rotation, lookTarget, moduleSpawner, location);
+    console.info(`[MockPlayer] 普通生成 ${record.name} 使用 moduleSpawner 直生 ${location.x},${location.y},${location.z}`);
+      return makeSpawnResult(record, location, dimension, rotation, lookTarget, moduleSpawner, location);
   };
 
   // 前一个任务失败（reject）也必须放行后续生成，否则同名假人会被永久卡死
@@ -261,6 +265,7 @@ export function registerUiSubscriptions(): void {
 
     const player = world.getEntity(e.playerId) as Player | undefined;
     const wasOnline = record.online && !record.death;
+    console.info(`[MockPlayer] 模式切换 ${record.name} ${currentMode}->${targetMode} wasOnline=${wasOnline}`);
     if (wasOnline) {
       safeReconnect(record, {
         onOffline: () => switchSpawnMode(record, targetMode),
