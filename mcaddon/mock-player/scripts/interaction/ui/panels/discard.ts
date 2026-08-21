@@ -1,5 +1,5 @@
 // ─── 丢弃物品面板 ────────────────────────────────────
-// 面板按钮只发布 panelAction（ui/bot.ts），本文件订阅 discard 动作 → 弹表单 → 提交后直接丢弃。
+// 面板按钮只发布 panelAction（ui/bot.ts），本文件订阅 discard 动作 → 弹表单 → 提交后以掉落物形式丢弃。
 
 import { Player, EquipmentSlot, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
@@ -30,7 +30,7 @@ function getMainhandInfo(botName: string): string {
   try {
     const container = inventoryContainerOf(bot);
     if (!container) return `${color.muted}空`;
-    const slot = bot.selectedSlotIndex;
+    const slot = (bot as any).selectedSlotIndex ?? 0;
     const item = container.getItem(slot);
     if (!item) return `${color.muted}空`;
     return `${color.playerName}${item.typeId.replace("minecraft:", "")} x${item.amount}`;
@@ -65,7 +65,7 @@ function getEquipmentInfo(botName: string, slot: EquipmentSlot): string {
   const bot = resolveBotPlayer(botName);
   if (!bot) return `${color.muted}空`;
   try {
-    const comp = bot.getComponent("minecraft:equippable") as any;
+    const comp = (bot as any).getComponent("minecraft:equippable");
     if (!comp) return `${color.muted}空`;
     const item = comp.getEquipment(slot);
     if (!item) return `${color.muted}空`;
@@ -104,56 +104,98 @@ export function showDiscardForm(player: Player, botName: string): void {
       if (!record) return;
       system.run(() => {
         try {
-          const bot = resolveBotPlayer(botName);
+          const bot = resolveBotPlayer(botName) as any;
           if (!bot) { player.sendMessage(`${color.error}假人不在线`); return; }
-          let cleared = 0;
           const container = inventoryContainerOf(bot);
           const equippable = bot.getComponent("minecraft:equippable") as any;
-          const dim = bot.dimension;
-          const loc = bot.location;
+          if (!container) { player.sendMessage(`${color.error}无法获取背包`); return; }
 
-          const trySpawn = (item: any): void => {
-            try { dim.spawnItem(item, loc); } catch {}
+          const originalSelectedSlot: number = bot.selectedSlotIndex ?? 0;
+          const originalMainhandItem = container.getItem(originalSelectedSlot);
+
+          const slotsToDrop = new Set<number>();
+          if (vals.mainhand) slotsToDrop.add(originalSelectedSlot);
+          if (vals.hotbar) for (let i = 0; i < 9; i++) slotsToDrop.add(i);
+          if (vals.backpack) for (let i = 9; i < 36; i++) slotsToDrop.add(i);
+
+          const shouldRestoreMainhand = originalMainhandItem && !slotsToDrop.has(originalSelectedSlot);
+          let tempSlot0Item: any = null;
+          let hasTempSlot0 = false;
+          if (!slotsToDrop.has(0)) {
+            tempSlot0Item = container.getItem(0);
+            hasTempSlot0 = !!tempSlot0Item;
+          }
+
+          bot.selectedSlotIndex = 0;
+          let cleared = 0;
+
+          const dropSelected = (): boolean => {
+            try { return (bot as any).dropSelectedItem() === true; } catch { return false; }
           };
 
-          if (vals.mainhand && container) {
-            const slot = bot.selectedSlotIndex;
+          for (const slot of [...slotsToDrop].sort((a, b) => a - b)) {
             const item = container.getItem(slot);
-            if (item) { trySpawn(item); container.setItem(slot, undefined); cleared++; }
-          }
-          if (vals.hotbar && container) {
-            for (let i = 0; i < 9; i++) {
-              // 主手已在上面丢过则跳过，避免重复掉落
-              if (vals.mainhand && i === (bot as any).selectedSlotIndex) continue;
-              const item = container.getItem(i);
-              if (item) { trySpawn(item); container.setItem(i, undefined); cleared++; }
+            if (!item) continue;
+            if (slot === 0) {
+              if (dropSelected()) cleared++;
+              else {
+                try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, undefined); cleared++; } catch {}
+              }
+            } else {
+              const curSelected = container.getItem(0);
+              container.setItem(0, item);
+              container.setItem(slot, curSelected ?? undefined);
+              if (dropSelected()) {
+                cleared++;
+              } else {
+                try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, curSelected ?? undefined); cleared++; } catch {
+                  container.setItem(slot, item);
+                  container.setItem(0, curSelected ?? undefined);
+                }
+              }
             }
           }
-          if (vals.backpack && container) {
-            for (let i = 9; i < 36; i++) {
-              const item = container.getItem(i);
-              if (item) { trySpawn(item); container.setItem(i, undefined); cleared++; }
+
+          const dropEquipment = (eqSlot: EquipmentSlot): void => {
+            if (!equippable) return;
+            const item = equippable.getEquipment(eqSlot);
+            if (!item) return;
+            try { equippable.setEquipment(eqSlot, undefined); } catch {}
+            try {
+              const cur = container.getItem(0);
+              container.setItem(0, item as any);
+              if (dropSelected()) {
+                cleared++;
+              } else {
+                try { bot.dimension.spawnItem(item as any, bot.location); container.setItem(0, cur ?? undefined); cleared++; } catch {
+                  container.setItem(0, cur ?? undefined);
+                  try { equippable.setEquipment(eqSlot, item); } catch {}
+                }
+              }
+            } catch {
+              try { bot.dimension.spawnItem(item as any, bot.location); cleared++; } catch {}
             }
-          }
-          if (vals.offhand && equippable) {
-            const item = equippable.getEquipment(EquipmentSlot.Offhand);
-            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Offhand, undefined); cleared++; }
-          }
-          if (vals.head && equippable) {
-            const item = equippable.getEquipment(EquipmentSlot.Head);
-            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Head, undefined); cleared++; }
-          }
-          if (vals.chest && equippable) {
-            const item = equippable.getEquipment(EquipmentSlot.Chest);
-            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Chest, undefined); cleared++; }
-          }
-          if (vals.legs && equippable) {
-            const item = equippable.getEquipment(EquipmentSlot.Legs);
-            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Legs, undefined); cleared++; }
-          }
-          if (vals.feet && equippable) {
-            const item = equippable.getEquipment(EquipmentSlot.Feet);
-            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Feet, undefined); cleared++; }
+          };
+          if (vals.offhand) dropEquipment(EquipmentSlot.Offhand);
+          if (vals.head) dropEquipment(EquipmentSlot.Head);
+          if (vals.chest) dropEquipment(EquipmentSlot.Chest);
+          if (vals.legs) dropEquipment(EquipmentSlot.Legs);
+          if (vals.feet) dropEquipment(EquipmentSlot.Feet);
+
+          if (shouldRestoreMainhand && originalMainhandItem) {
+            try {
+              if (originalSelectedSlot === 0) {
+                if (!container.getItem(0)) container.setItem(0, originalMainhandItem);
+              } else {
+                if (!container.getItem(originalSelectedSlot)) container.setItem(originalSelectedSlot, originalMainhandItem);
+              }
+              bot.selectedSlotIndex = originalSelectedSlot;
+            } catch {}
+          } else if (hasTempSlot0 && tempSlot0Item && !container.getItem(0)) {
+            try { container.setItem(0, tempSlot0Item); } catch {}
+            if (shouldRestoreMainhand) {
+              try { bot.selectedSlotIndex = originalSelectedSlot; } catch {}
+            }
           }
 
           if (cleared === 0) {
