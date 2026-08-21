@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { MemoryIntervalScheduler } from "../scripts/core/storage/IntervalScheduler";
+import { MemoryIntervalScheduler } from "../scripts/service/port/IntervalScheduler";
 
 test("createInterval：按 tick 间隔触发", () => {
   const scheduler = new MemoryIntervalScheduler();

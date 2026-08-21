@@ -1,7 +1,7 @@
 // ─── 测试共享工具 ──────────────────────────────────────
 // 构造标准 BotRecord / Vec3 / SerializedItemStack 的工厂函数
 
-import type { BotRecord, PositionState, SerializedItemStack } from "../../scripts/core/model/Types";
+import type { BotRecord, PositionState, SerializedItemStack } from "../../scripts/rules/Types";
 
 export function makeState(overrides: Partial<PositionState> = {}): PositionState {
   return {
@@ -21,6 +21,7 @@ export function makeRecord(name = "bot1", overrides: Partial<BotRecord> = {}): B
     online: false,
     death: false,
     tags: ["mockplayer:tag:bot", "mockplayer:tag:respawn", "mockplayer:tag:idle"],
+    workMode: "none",
     isSneaking: false,
     lastPoint: null,
     respawnPoint: makeState(),

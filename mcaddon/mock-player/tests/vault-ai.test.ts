@@ -7,12 +7,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { Blackboard, Status, type AiContext } from "../scripts/core/ai";
+import { Blackboard, Status, type AiContext } from "../scripts/legacy/ai";
 import {
   createVaultTaskTree, OMINOUS_TRIAL_KEY, TRIAL_KEY,
   type VaultIdleReason, type VaultInteractResult, type VaultKnowledge, type VaultPorts,
-} from "../scripts/core/tasks/VaultTask";
-import type { Vec3 } from "../scripts/core/model/Types";
+} from "../scripts/legacy/ai/VaultTask";
+import type { Vec3 } from "../scripts/rules/Types";
 
 const NORMAL_VAULT: Vec3 = { x: 10, y: 64, z: 20 };
 const OMINOUS_VAULT: Vec3 = { x: -10, y: 64, z: 20 };

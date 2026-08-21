@@ -3,9 +3,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { EventSignal } from "../scripts/core/events/EventSignal";
-import { BotEvents } from "../scripts/core/events/DomainEvents";
-import { BotUiEvent } from "../scripts/core/events/UiEvents";
+import { EventSignal } from "../scripts/events/EventSignal";
+import { BotEvents } from "../scripts/events/DomainEvents";
+import { BotUiEvent } from "../scripts/events/UiEvents";
 
 test("EventSignal：订阅/触发/退订", () => {
   const signal = new EventSignal<number>();
@@ -158,6 +158,34 @@ test("领域事件：假人行为事件（主手切换/破坏/放置/使用/攻�
   off5();
 });
 
+test("领域事件：假人移动事件（botMoved）可触发并携带序列化负载", () => {
+  const events: string[] = [];
+  const off = BotEvents.botMoved.subscribe((e) =>
+    events.push(`${e.botName}@${e.position.x},${e.position.y},${e.position.z}:${e.dimension}:${e.rotation.x},${e.rotation.y}`)
+  );
+
+  BotEvents.botMoved.trigger({
+    botName: "bot1",
+    position: { x: 10.5, y: 64, z: -5 },
+    dimension: "minecraft:overworld",
+    rotation: { x: 0, y: 90 },
+  });
+
+  assert.deepEqual(events, ["bot1@10.5,64,-5:minecraft:overworld:0,90"]);
+  off();
+});
+
+test("领域事件：botMoved 订阅者异常隔离（单个崩溃不影响其他订阅者）", () => {
+  const received: string[] = [];
+  BotEvents.botMoved.subscribe(() => { throw new Error("boom"); });
+  const off = BotEvents.botMoved.subscribe((e) => received.push(e.botName));
+
+  BotEvents.botMoved.trigger({ botName: "bot1", position: { x: 1, y: 2, z: 3 }, dimension: "minecraft:overworld", rotation: { x: 0, y: 0 } });
+
+  assert.deepEqual(received, ["bot1"]);
+  off();
+});
+
 // ─── UiEvents（UI 领域事件：面板动作 + 行为菜单提交） ──
 
 test("BotUiEvent.panelAction：发布动作 → 订阅方按 action 过滤执行，退订生效", () => {
@@ -176,8 +204,8 @@ test("BotUiEvent.panelAction：发布动作 → 订阅方按 action 过滤执行
 
 test("BotUiEvent.behaviorSubmitted：负载全字段可序列化 + 多订阅者独立接收", () => {
   const received: string[] = [];
-  const off1 = BotUiEvent.behaviorSubmitted.subscribe((e) => received.push(`a:${e.botName}:${e.tags.length}:${e.exclusive ?? "无"}`));
-  const off2 = BotUiEvent.behaviorSubmitted.subscribe((e) => received.push(`b:${e.botName}:${e.raidMode}:${e.follow}`));
+  const off1 = BotUiEvent.behaviorSubmitted.subscribe((e) => received.push(`a:${e.botName}:${e.tags.length}`));
+  const off2 = BotUiEvent.behaviorSubmitted.subscribe((e) => received.push(`b:${e.botName}:${e.workMode}:${e.follow}`));
 
   BotUiEvent.behaviorSubmitted.trigger({
     playerId: "p1",
@@ -187,12 +215,11 @@ test("BotUiEvent.behaviorSubmitted：负载全字段可序列化 + 多订阅者�
     follow: false,
     useItem: true,
     coexist: ["mockplayer:tag:respawn"],
-    exclusive: "mockplayer:tag:vaultMode",
-    raidMode: true,
-    tags: ["mockplayer:tag:bot", "mockplayer:tag:respawn", "mockplayer:tag:vaultMode", "mockplayer:tag:raidMode"],
+    workMode: "raid",
+    tags: ["mockplayer:tag:bot", "mockplayer:tag:respawn"],
   });
 
-  assert.deepEqual(received, ["a:$矿工:4:mockplayer:tag:vaultMode", "b:$矿工:true:false"]);
+  assert.deepEqual(received, ["a:$矿工:2", "b:$矿工:raid:false"]);
 
   off1();
   off2();
@@ -205,7 +232,7 @@ test("BotUiEvent.behaviorSubmitted：订阅者异常隔离（单个崩溃不影�
 
   BotUiEvent.behaviorSubmitted.trigger({
     playerId: "p1", botName: "$矿工", sneaking: false, chunkload: false, follow: false, useItem: false,
-    coexist: [], exclusive: undefined, raidMode: false, tags: ["mockplayer:tag:bot"],
+    coexist: [], workMode: "none", tags: ["mockplayer:tag:bot"],
   });
 
   assert.deepEqual(received, ["$矿工"]);

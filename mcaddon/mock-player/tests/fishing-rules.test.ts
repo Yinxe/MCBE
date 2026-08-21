@@ -31,8 +31,8 @@ import {
   parseFisherTag,
   sortFishingSpots,
   updateBiteTracker,
-} from "../scripts/core/tasks/FishingRules";
-import type { Vec3 } from "../scripts/core/model/Types";
+} from "../scripts/rules/FishingRules";
+import type { Vec3 } from "../scripts/rules/Types";
 
 test("常量：钓鱼钩实体 ID 与 tag 前缀精确值", () => {
   assert.equal(FISHING_HOOK_ID, "minecraft:fishing_hook");

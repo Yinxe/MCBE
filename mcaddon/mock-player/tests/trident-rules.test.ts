@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { TRIDENT_ID, isTrident, scanTridentSlots } from "../scripts/core/items/TridentRules";
+import { TRIDENT_ID, isTrident, scanTridentSlots } from "../scripts/rules/items/TridentRules";
 import { makeItem } from "./helpers/factories";
 
 test("常量与识别", () => {

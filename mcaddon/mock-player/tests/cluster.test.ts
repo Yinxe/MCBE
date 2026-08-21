@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { computeClusterProbabilities, sortByClusterProbability, groupPointsByProximity } from "../scripts/core/coords/Cluster";
+import { computeClusterProbabilities, sortByClusterProbability, groupPointsByProximity } from "../scripts/rules/coords/Cluster";
 
 test("单点：概率为 0", () => {
   assert.deepEqual(computeClusterProbabilities([{ x: 0, y: 0, z: 0 }], 10), [0]);

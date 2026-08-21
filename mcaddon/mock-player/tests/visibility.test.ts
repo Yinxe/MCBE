@@ -4,8 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { visibleRecords } from "../scripts/core/service/BotVisibility";
-import type { BotRecord } from "../scripts/core/model/Types";
+import { visibleRecords } from "../scripts/service/BotVisibility";
+import type { BotRecord } from "../scripts/rules/Types";
 import { makeRecord } from "./helpers/factories";
 
 function rec(name: string, owner?: string): BotRecord {

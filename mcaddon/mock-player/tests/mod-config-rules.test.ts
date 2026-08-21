@@ -3,8 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { mergeStoredConfig } from "../scripts/core/service/ModConfigRules";
-import { DEFAULT_QUOTA } from "../scripts/core/model/Types";
+import { mergeStoredConfig } from "../scripts/service/ModConfigRules";
+import { DEFAULT_QUOTA } from "../scripts/rules/Types";
 
 test("从未保存（undefined）返回默认配置", () => {
   const cfg = mergeStoredConfig(undefined);
@@ -70,5 +70,46 @@ test("admins 过滤：只保留非空字符串", () => {
 test("完整配置往返无损", () => {
   const saved = JSON.stringify({ defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"] });
   const cfg = mergeStoredConfig(saved);
-  assert.deepEqual(cfg, { defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"] });
+  assert.deepEqual(cfg, { defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"], autoOnlineOnRestart: true, ownerOfflineAutoOffline: false, enabledWorkModes: {}, menuTriggerItemId: "minecraft:stick" });
+});
+
+test("新增配置默认：autoOnlineOnRestart=true, ownerOfflineAutoOffline=false", () => {
+  const cfg = mergeStoredConfig(undefined);
+  assert.equal(cfg.autoOnlineOnRestart, true);
+  assert.equal(cfg.ownerOfflineAutoOffline, false);
+});
+
+test("新增配置布尔过滤：非法值回退默认", () => {
+  assert.equal(mergeStoredConfig(JSON.stringify({ autoOnlineOnRestart: "yes" })).autoOnlineOnRestart, true);
+  assert.equal(mergeStoredConfig(JSON.stringify({ autoOnlineOnRestart: 1 })).autoOnlineOnRestart, true);
+  assert.equal(mergeStoredConfig(JSON.stringify({ ownerOfflineAutoOffline: null })).ownerOfflineAutoOffline, false);
+  const cfg = mergeStoredConfig(JSON.stringify({ autoOnlineOnRestart: false, ownerOfflineAutoOffline: true }));
+  assert.equal(cfg.autoOnlineOnRestart, false);
+  assert.equal(cfg.ownerOfflineAutoOffline, true);
+});
+
+test("新增配置往返无损", () => {
+  const saved = JSON.stringify({ defaultQuota: 3, quotas: {}, admins: [], autoOnlineOnRestart: false, ownerOfflineAutoOffline: true });
+  const cfg = mergeStoredConfig(saved);
+  assert.equal(cfg.autoOnlineOnRestart, false);
+  assert.equal(cfg.ownerOfflineAutoOffline, true);
+});
+
+test("触发信物默认：menuTriggerItemId=minecraft:stick", () => {
+  const cfg = mergeStoredConfig(undefined);
+  assert.equal(cfg.menuTriggerItemId, "minecraft:stick");
+});
+
+test("触发信物过滤：非法值回退默认，null 保留", () => {
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:stick" })).menuTriggerItemId, "minecraft:stick");
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: null })).menuTriggerItemId, null);
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:diamond_sword" })).menuTriggerItemId, "minecraft:stick"); // 非预设列表回退
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "" })).menuTriggerItemId, "minecraft:stick");
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: 123 })).menuTriggerItemId, "minecraft:stick");
+});
+
+test("触发信物往返无损：null 与预设值", () => {
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: null })).menuTriggerItemId, null);
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:wooden_hoe" })).menuTriggerItemId, "minecraft:wooden_hoe");
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:feather" })).menuTriggerItemId, "minecraft:feather");
 });

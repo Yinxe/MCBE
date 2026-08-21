@@ -4,8 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { normalizeRecord, DEFAULT_RESPAWN } from "../scripts/core/service/RecordMigration";
-import type { BotRecord } from "../scripts/core/model/Types";
+import { normalizeRecord, DEFAULT_RESPAWN } from "../scripts/service/RecordMigration";
+import type { BotRecord } from "../scripts/rules/Types";
 import { makeRecord, makeState } from "./helpers/factories";
 
 test("完整记录归一化：仅补缺失的 spawnMode（其余不动）", () => {

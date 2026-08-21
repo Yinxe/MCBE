@@ -1,12 +1,12 @@
-// ─── core/tasks — 劫掠规则（内聚在劫掠任务） ─────────────
+// ─── core/tasks — 劫掠规则（事件驱动模块 features/flow/raidMode 的决策纯函数） ──
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
   OMINOUS_BOTTLE_ID, BAD_OMEN, RAID_OMEN, VILLAGE_HERO, DRINK_DURATION, RAID_TRUCE_TICKS,
-  isOminousBottle, classifyRaidEffect,
-} from "../scripts/core/tasks/RaidRules";
+  isOminousBottle, classifyRaidEffect, canDrinkRaid, diagnoseRaidIdle,
+} from "../scripts/rules/RaidRules";
 
 test("常量：效果 ID 精确值", () => {
   assert.equal(OMINOUS_BOTTLE_ID, "minecraft:ominous_bottle");
@@ -35,4 +35,36 @@ test("classifyRaidEffect：无关效果返回 undefined", () => {
   assert.equal(classifyRaidEffect("minecraft:speed"), undefined);
   assert.equal(classifyRaidEffect(""), undefined);
   assert.equal(classifyRaidEffect("bad_omen"), undefined); // 缺前缀
+});
+
+// ─── 决策纯函数（事件驱动循环：开启/胜利后喝瓶 → 等袭击 → 胜利） ──
+
+const clean = { badOmen: false, raidOmen: false };
+
+test("canDrinkRaid：无兆头 + 有药水 + 未等待 → 可喝", () => {
+  assert.ok(canDrinkRaid(clean, 1, false));
+});
+
+test("canDrinkRaid：任一兆头在 → 不可喝（袭击酝酿/进行中不重复喝）", () => {
+  assert.ok(!canDrinkRaid({ badOmen: true, raidOmen: false }, 5, false));
+  assert.ok(!canDrinkRaid({ badOmen: false, raidOmen: true }, 5, false));
+});
+
+test("canDrinkRaid：无药水 → 不可喝", () => {
+  assert.ok(!canDrinkRaid(clean, 0, false));
+});
+
+test("canDrinkRaid：周期等待中 → 不可喝（本周期已喝过，兆头消失也不重复喝）", () => {
+  assert.ok(!canDrinkRaid(clean, 5, true));
+});
+
+test("diagnoseRaidIdle：周期等待/袭击中 → 静默等待", () => {
+  assert.equal(diagnoseRaidIdle(clean, 0, true), "waiting");
+  assert.equal(diagnoseRaidIdle({ badOmen: true, raidOmen: false }, 0, false), "waiting");
+  assert.equal(diagnoseRaidIdle({ badOmen: false, raidOmen: true }, 3, false), "waiting");
+  assert.equal(diagnoseRaidIdle(clean, 3, false), "waiting"); // 有药水但不可喝 → 等事件
+});
+
+test("diagnoseRaidIdle：无兆头 + 无药水 + 未等待 → 缺瓶（通知）", () => {
+  assert.equal(diagnoseRaidIdle(clean, 0, false), "no-bottle");
 });

@@ -12,8 +12,38 @@
     "rootDir": "."
   },
   "include": [
-    "scripts/core/**/*.ts",
+    "scripts/bot/BotCore.ts",
+    "scripts/rules/**/*.ts",
+    "scripts/legacy/ai/*.ts",
+    "scripts/ai/*.ts",
+    "scripts/events/DomainEvents.ts",
+    "scripts/events/EventSignal.ts",
+    "scripts/events/UiEvents.ts",
+    "scripts/service/**/*.ts",
     "tests/**/*.ts"
   ],
-  "exclude": ["node_modules", ".test-build", "lib", "dist", "scripts/mc/**/*.ts"]
+  "exclude": [
+    "node_modules",
+    ".test-build",
+    "lib",
+    "dist",
+    "scripts/legacy/ai/BotBrain.ts",
+    "scripts/legacy/ai/VaultPorts.ts",
+    "scripts/legacy/ai/FishingPorts.ts",
+    "scripts/bootstrap",
+    "scripts/features",
+    "scripts/interaction",
+    "scripts/bot/Bot.ts",
+    "scripts/bot/PlayerGateway.ts",
+    "scripts/events/botActions.ts",
+    "scripts/events/entityDie.ts",
+    "scripts/events/itemUse.ts",
+    "scripts/events/index.ts",
+    "scripts/events/playerInteractWithEntity.ts",
+    "scripts/events/playerInventoryItemChange.ts",
+    "scripts/events/playerJoin.ts",
+    "scripts/events/playerLeave.ts",
+    "scripts/events/playerSpawn.ts",
+    "scripts/main.ts"
+  ]
 }

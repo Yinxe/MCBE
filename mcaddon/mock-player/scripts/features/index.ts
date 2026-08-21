@@ -1,0 +1,23 @@
+// ─── Features barrel — re-exports all public API ────────
+// 归类：manage（生命周期管理）/ basic（基础原子操作）/ flow（工作流）/
+//       state（状态标签）/ trident（三叉戟）。决策调 rules/items 等纯规则，副作用留本地。
+
+export { createBot, type CreateBotOptions } from "./manage/createBot";
+export { onlineBot, type OnlineResult } from "./manage/onlineBot";
+export { offlineBot } from "./manage/offlineBot";
+export { deleteBot } from "./manage/deleteBot";
+export { killBot } from "./manage/killBot";
+export { tpPlayerToBot, tpBotToPlayer } from "./basic/teleport";
+export { longNavigateBot, navigateBot, NavigateResult, type NavigateCallbacks } from "./basic/move";
+export { toggleControl } from "./basic/control";
+export { setSneaking } from "./basic/sneak";
+export { reclaimBot, type ReclaimResult } from "./manage/reclaim";
+export type { ReclaimOptions } from "../service/ReclaimPlanner";
+export { swapMainhandWithBot, swapOffhandWithBot, swapEquipmentWithBot, SwapResult } from "./basic/items";
+export { InventoryStorage } from "./inventoryStorage";
+export { setTags } from "./state/setTags";
+export { checkMainHandDurability } from "./basic/items";
+export { startFollow, stopFollow, isFollowing } from "./state/follow";
+export { scanTridents, isMainhandTrident, throwTridents, ThrowResult } from "./trident/trident";
+export { getMainhandOptions, setMainhandSlot } from "./basic/items";
+export { startUseItem, stopUseItem, useItemOnce, UseItemResult } from "./basic/items";

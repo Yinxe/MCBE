@@ -381,6 +381,9 @@ importers:
       '@yinxe/nbt-data-storage':
         specifier: workspace:*
         version: link:../../packages/nbt-data-storage
+      '@yinxe/tool-strategy':
+        specifier: workspace:*
+        version: link:../../packages/tool-strategy
       '@yinxe/toolkit':
         specifier: workspace:*
         version: link:../../packages/toolkit
@@ -587,6 +590,15 @@ importers:
       ts-node:
         specifier: 10.9.1
         version: 10.9.1(@types/node@26.1.1)(typescript@5.0.2)
+      typescript:
+        specifier: 5.0.2
+        version: 5.0.2
+
+  packages/tool-strategy:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
       typescript:
         specifier: 5.0.2
         version: 5.0.2
