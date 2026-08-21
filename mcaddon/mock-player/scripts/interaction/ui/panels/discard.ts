@@ -102,7 +102,7 @@ export function showDiscardForm(player: Player, botName: string): void {
       if (!vals) return;
       const record = resolveUiBotRecord(player, botName);
       if (!record) return;
-      system.run(() => {
+      system.run(async () => {
         try {
           const bot = resolveBotPlayer(botName) as any;
           if (!bot) { player.sendMessage(`${color.error}假人不在线`); return; }
@@ -132,55 +132,76 @@ export function showDiscardForm(player: Player, botName: string): void {
           const dropSelected = (): boolean => {
             try { return (bot as any).dropSelectedItem() === true; } catch { return false; }
           };
+          const waitTicks = (ticks: number): Promise<void> => new Promise<void>(r => system.runTimeout(r, ticks));
 
-          for (const slot of [...slotsToDrop].sort((a, b) => a - b)) {
+          // 收集所有需要丢弃的槽位（去重后排序）
+          const inventorySlots = [...slotsToDrop].sort((a, b) => a - b);
+          const equipSlots: EquipmentSlot[] = [];
+          if (vals.offhand) equipSlots.push(EquipmentSlot.Offhand);
+          if (vals.head) equipSlots.push(EquipmentSlot.Head);
+          if (vals.chest) equipSlots.push(EquipmentSlot.Chest);
+          if (vals.legs) equipSlots.push(EquipmentSlot.Legs);
+          if (vals.feet) equipSlots.push(EquipmentSlot.Feet);
+
+          const totalDrops = inventorySlots.filter(s => !!container.getItem(s)).length + equipSlots.filter(s => {
+            try { return !!equippable?.getEquipment(s); } catch { return false; }
+          }).length;
+          const needWait = totalDrops > 1;
+
+          // 异步循环：while + timeout，每丢一个等待 3 tick 再丢下一个
+          let invIdx = 0;
+          while (invIdx < inventorySlots.length) {
+            const slot = inventorySlots[invIdx];
             const item = container.getItem(slot);
-            if (!item) continue;
-            if (slot === 0) {
-              if (dropSelected()) cleared++;
-              else {
-                try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, undefined); cleared++; } catch {}
-              }
-            } else {
-              const curSelected = container.getItem(0);
-              container.setItem(0, item);
-              container.setItem(slot, curSelected ?? undefined);
-              if (dropSelected()) {
-                cleared++;
+            if (item) {
+              if (slot === 0) {
+                if (dropSelected()) cleared++;
+                else {
+                  try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, undefined); cleared++; } catch {}
+                }
               } else {
-                try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, curSelected ?? undefined); cleared++; } catch {
-                  container.setItem(slot, item);
-                  container.setItem(0, curSelected ?? undefined);
+                const curSelected = container.getItem(0);
+                container.setItem(0, item);
+                container.setItem(slot, curSelected ?? undefined);
+                if (dropSelected()) {
+                  cleared++;
+                } else {
+                  try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, curSelected ?? undefined); cleared++; } catch {
+                    container.setItem(slot, item);
+                    container.setItem(0, curSelected ?? undefined);
+                  }
                 }
               }
             }
+            invIdx++;
+            if (needWait && invIdx < inventorySlots.length) await waitTicks(3);
+            else if (needWait && invIdx === inventorySlots.length && equipSlots.length > 0) await waitTicks(3);
           }
 
-          const dropEquipment = (eqSlot: EquipmentSlot): void => {
-            if (!equippable) return;
-            const item = equippable.getEquipment(eqSlot);
-            if (!item) return;
-            try { equippable.setEquipment(eqSlot, undefined); } catch {}
-            try {
-              const cur = container.getItem(0);
-              container.setItem(0, item as any);
-              if (dropSelected()) {
-                cleared++;
-              } else {
-                try { bot.dimension.spawnItem(item as any, bot.location); container.setItem(0, cur ?? undefined); cleared++; } catch {
-                  container.setItem(0, cur ?? undefined);
-                  try { equippable.setEquipment(eqSlot, item); } catch {}
+          let eqIdx = 0;
+          while (eqIdx < equipSlots.length) {
+            const eqSlot = equipSlots[eqIdx];
+            const item = (() => { try { return equippable.getEquipment(eqSlot); } catch { return undefined; } })();
+            if (item) {
+              try { equippable.setEquipment(eqSlot, undefined); } catch {}
+              try {
+                const cur = container.getItem(0);
+                container.setItem(0, item as any);
+                if (dropSelected()) {
+                  cleared++;
+                } else {
+                  try { bot.dimension.spawnItem(item as any, bot.location); container.setItem(0, cur ?? undefined); cleared++; } catch {
+                    container.setItem(0, cur ?? undefined);
+                    try { equippable.setEquipment(eqSlot, item); } catch {}
+                  }
                 }
+              } catch {
+                try { bot.dimension.spawnItem(item as any, bot.location); cleared++; } catch {}
               }
-            } catch {
-              try { bot.dimension.spawnItem(item as any, bot.location); cleared++; } catch {}
             }
-          };
-          if (vals.offhand) dropEquipment(EquipmentSlot.Offhand);
-          if (vals.head) dropEquipment(EquipmentSlot.Head);
-          if (vals.chest) dropEquipment(EquipmentSlot.Chest);
-          if (vals.legs) dropEquipment(EquipmentSlot.Legs);
-          if (vals.feet) dropEquipment(EquipmentSlot.Feet);
+            eqIdx++;
+            if (needWait && eqIdx < equipSlots.length) await waitTicks(3);
+          }
 
           if (shouldRestoreMainhand && originalMainhandItem) {
             try {
