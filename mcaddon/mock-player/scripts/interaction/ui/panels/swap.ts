@@ -3,6 +3,7 @@
 // 提交后直接执行容器/装备互换（并触发装备槽领域事件供持久化）。
 
 import { Player, EquipmentSlot, ItemStack, system, world } from "@minecraft/server";
+import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
@@ -57,6 +58,55 @@ function triggerEquipChangeUI(bot: Player, slot: EquipmentSlot): void {
  * 可选：主手 / 副手 / 装备（头/胸/腿/靴）/ 背包（含主手）
  * 所有操作在同一 system.run 内执行，避免竞态
  */
+function getMainhandInfo(bot: Player | SimulatedPlayer): string {
+  try {
+    const container = inventoryContainerOf(bot as any);
+    if (!container) return `${color.muted}空`;
+    const item = container.getItem((bot as any).selectedSlotIndex ?? 0);
+    if (!item) return `${color.muted}空`;
+    return `${color.playerName}${item.typeId.replace("minecraft:", "")} x${item.amount}`;
+  } catch { return `${color.muted}空`; }
+}
+
+function getOffhandInfo(bot: Player | SimulatedPlayer): string {
+  try {
+    const comp = (bot as any).getComponent("minecraft:equippable");
+    const item = comp?.getEquipment(EquipmentSlot.Offhand);
+    if (!item) return `${color.muted}空`;
+    return `${color.playerName}${item.typeId.replace("minecraft:", "")} x${item.amount ?? 1}`;
+  } catch { return `${color.muted}空`; }
+}
+
+function getArmorInfo(bot: Player | SimulatedPlayer): string {
+  try {
+    const comp = (bot as any).getComponent("minecraft:equippable");
+    if (!comp) return `${color.muted}空`;
+    const slots = [EquipmentSlot.Head, EquipmentSlot.Chest, EquipmentSlot.Legs, EquipmentSlot.Feet];
+    const names = ["头盔", "胸甲", "护腿", "靴子"];
+    const parts: string[] = [];
+    let filled = 0;
+    for (let i = 0; i < slots.length; i++) {
+      const item = comp.getEquipment(slots[i]);
+      if (item) {
+        filled++;
+        parts.push(`${names[i]}:${item.typeId.replace("minecraft:", "")}`);
+      }
+    }
+    if (filled === 0) return `${color.muted}空 (0/4)`;
+    return `${color.info}${filled}/4 ${color.muted}(${parts.join(" ")})`;
+  } catch { return `${color.muted}空`; }
+}
+
+function getInventoryInfo(bot: Player | SimulatedPlayer): string {
+  try {
+    const container = inventoryContainerOf(bot as any);
+    if (!container) return `${color.muted}0/36`;
+    let count = 0;
+    for (let i = 0; i < container.size; i++) if (container.getItem(i)) count++;
+    return count === 0 ? `${color.muted}空 (0/36)` : `${color.info}${count}/36 格有物品`;
+  } catch { return `${color.muted}0/36`; }
+}
+
 function doSwap(player: Player, botName: string): void {
   const r = resolveUiBotRecord(player, botName);
   if (!r) return;
@@ -64,12 +114,17 @@ function doSwap(player: Player, botName: string): void {
   const bot = resolveBotPlayer(botName);
   if (!bot) { player.sendMessage(`${color.error}无法获取假人实体`); return; }
 
+  const mainhandInfo = getMainhandInfo(bot);
+  const offhandInfo = getOffhandInfo(bot);
+  const armorInfo = getArmorInfo(bot);
+  const inventoryInfo = getInventoryInfo(bot);
+
   new ModalFormBuilder()
     .title(`${color.bold}互换项目`)
-    .toggle("mainhand", "互换主手", { defaultValue: false })
-    .toggle("offhand", "互换副手", { defaultValue: false })
-    .toggle("armor", "互换装备（头/胸/腿/靴）", { defaultValue: false })
-    .toggle("inventory", "互换背包（含主手）", { defaultValue: false })
+    .toggle("mainhand", `互换主手: ${mainhandInfo}`, { defaultValue: false })
+    .toggle("offhand", `互换副手: ${offhandInfo}`, { defaultValue: false })
+    .toggle("armor", `互换装备: ${armorInfo}`, { defaultValue: false })
+    .toggle("inventory", `互换背包: ${inventoryInfo}`, { defaultValue: false })
     .submitButton("互换")
     .show(player)
     .then((vals) => {
