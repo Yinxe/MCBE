@@ -119,24 +119,6 @@ export function showDiscardForm(player: Player, botName: string): void {
           if (vals.hotbar) for (let i = 0; i < 9; i++) slotsToDrop.add(i);
           if (vals.backpack) for (let i = 9; i < 36; i++) slotsToDrop.add(i);
 
-          const shouldRestoreMainhand = originalMainhandItem && !slotsToDrop.has(originalSelectedSlot);
-          let tempSlot0Item: any = null;
-          let hasTempSlot0 = false;
-          if (!slotsToDrop.has(0)) {
-            tempSlot0Item = container.getItem(0);
-            hasTempSlot0 = !!tempSlot0Item;
-          }
-
-          bot.selectedSlotIndex = 0;
-          let cleared = 0;
-
-          const dropSelected = (): boolean => {
-            try { return (bot as any).dropSelectedItem() === true; } catch { return false; }
-          };
-          const waitTicks = (ticks: number): Promise<void> => new Promise<void>(r => system.runTimeout(r, ticks));
-
-          // 收集所有需要丢弃的槽位（去重后排序）
-          const inventorySlots = [...slotsToDrop].sort((a, b) => a - b);
           const equipSlots: EquipmentSlot[] = [];
           if (vals.offhand) equipSlots.push(EquipmentSlot.Offhand);
           if (vals.head) equipSlots.push(EquipmentSlot.Head);
@@ -144,51 +126,65 @@ export function showDiscardForm(player: Player, botName: string): void {
           if (vals.legs) equipSlots.push(EquipmentSlot.Legs);
           if (vals.feet) equipSlots.push(EquipmentSlot.Feet);
 
-          const totalDrops = inventorySlots.filter(s => !!container.getItem(s)).length + equipSlots.filter(s => {
-            try { return !!equippable?.getEquipment(s); } catch { return false; }
-          }).length;
-          const needWait = totalDrops > 1;
+          const containsMainhand = slotsToDrop.has(originalSelectedSlot);
+          // 不含主手时暂存主手，丢完后恢复
+          let savedMainhand: any = null;
+          if (!containsMainhand && originalMainhandItem) {
+            savedMainhand = originalMainhandItem;
+          }
+          // slot0 暂存（若 slot0 不在丢弃集合，避免被覆盖丢失）
+          let savedSlot0: any = null;
+          let hasSavedSlot0 = false;
+          if (!slotsToDrop.has(0)) {
+            savedSlot0 = container.getItem(0);
+            hasSavedSlot0 = !!savedSlot0;
+          }
 
-          // 异步循环：while + timeout，每丢一个等待 3 tick 再丢下一个
-          let invIdx = 0;
-          while (invIdx < inventorySlots.length) {
-            const slot = inventorySlots[invIdx];
-            const item = container.getItem(slot);
-            if (item) {
-              if (slot === 0) {
-                if (dropSelected()) cleared++;
-                else {
-                  try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, undefined); cleared++; } catch {}
-                }
-              } else {
-                const curSelected = container.getItem(0);
-                container.setItem(0, item);
-                container.setItem(slot, curSelected ?? undefined);
-                if (dropSelected()) {
-                  cleared++;
+          bot.selectedSlotIndex = 0;
+          let cleared = 0;
+          const waitTicks = (ticks: number): Promise<void> => new Promise<void>(r => system.runTimeout(r, ticks));
+
+          // 统一丢弃序列：先背包槽位，再装备槽位，只用一个 while 循环
+          type DropOp = { kind: "inv"; slot: number } | { kind: "equip"; slot: EquipmentSlot };
+          const ops: DropOp[] = [];
+          for (const s of [...slotsToDrop].sort((a, b) => a - b)) ops.push({ kind: "inv", slot: s });
+          for (const s of equipSlots) ops.push({ kind: "equip", slot: s });
+
+          const needWait = ops.length > 1;
+          let idx = 0;
+          while (idx < ops.length) {
+            const op = ops[idx];
+            if (op.kind === "inv") {
+              const slot = op.slot;
+              const item = container.getItem(slot);
+              if (item) {
+                if (slot === 0) {
+                  if (dropSelectedItem(botName)) cleared++;
+                  else {
+                    try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, undefined); cleared++; } catch {}
+                  }
                 } else {
-                  try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, curSelected ?? undefined); cleared++; } catch {
-                    container.setItem(slot, item);
-                    container.setItem(0, curSelected ?? undefined);
+                  const curSelected = container.getItem(0);
+                  container.setItem(0, item);
+                  container.setItem(slot, curSelected ?? undefined);
+                  if (dropSelectedItem(botName)) {
+                    cleared++;
+                  } else {
+                    try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, curSelected ?? undefined); cleared++; } catch {
+                      container.setItem(slot, item);
+                      container.setItem(0, curSelected ?? undefined);
+                    }
                   }
                 }
               }
-            }
-            invIdx++;
-            if (needWait && invIdx < inventorySlots.length) await waitTicks(3);
-            else if (needWait && invIdx === inventorySlots.length && equipSlots.length > 0) await waitTicks(3);
-          }
-
-          let eqIdx = 0;
-          while (eqIdx < equipSlots.length) {
-            const eqSlot = equipSlots[eqIdx];
-            const item = (() => { try { return equippable.getEquipment(eqSlot); } catch { return undefined; } })();
-            if (item) {
-              try { equippable.setEquipment(eqSlot, undefined); } catch {}
-              try {
+            } else {
+              const eqSlot = op.slot;
+              const item = (() => { try { return equippable?.getEquipment(eqSlot); } catch { return undefined; } })();
+              if (item) {
+                try { equippable.setEquipment(eqSlot, undefined); } catch {}
                 const cur = container.getItem(0);
                 container.setItem(0, item as any);
-                if (dropSelected()) {
+                if (dropSelectedItem(botName)) {
                   cleared++;
                 } else {
                   try { bot.dimension.spawnItem(item as any, bot.location); container.setItem(0, cur ?? undefined); cleared++; } catch {
@@ -196,28 +192,23 @@ export function showDiscardForm(player: Player, botName: string): void {
                     try { equippable.setEquipment(eqSlot, item); } catch {}
                   }
                 }
-              } catch {
-                try { bot.dimension.spawnItem(item as any, bot.location); cleared++; } catch {}
               }
             }
-            eqIdx++;
-            if (needWait && eqIdx < equipSlots.length) await waitTicks(3);
+            idx++;
+            if (needWait && idx < ops.length) await waitTicks(3);
           }
 
-          if (shouldRestoreMainhand && originalMainhandItem) {
+          if (!containsMainhand && savedMainhand) {
             try {
               if (originalSelectedSlot === 0) {
-                if (!container.getItem(0)) container.setItem(0, originalMainhandItem);
+                if (!container.getItem(0)) container.setItem(0, savedMainhand);
               } else {
-                if (!container.getItem(originalSelectedSlot)) container.setItem(originalSelectedSlot, originalMainhandItem);
+                if (!container.getItem(originalSelectedSlot)) container.setItem(originalSelectedSlot, savedMainhand);
               }
               bot.selectedSlotIndex = originalSelectedSlot;
             } catch {}
-          } else if (hasTempSlot0 && tempSlot0Item && !container.getItem(0)) {
-            try { container.setItem(0, tempSlot0Item); } catch {}
-            if (shouldRestoreMainhand) {
-              try { bot.selectedSlotIndex = originalSelectedSlot; } catch {}
-            }
+          } else if (hasSavedSlot0 && savedSlot0 && !container.getItem(0)) {
+            try { container.setItem(0, savedSlot0); } catch {}
           }
 
           if (cleared === 0) {
