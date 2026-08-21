@@ -37,7 +37,9 @@ export function getMainhandOptions(botName: string): MainhandOption[] | undefine
   const options: MainhandOption[] = [];
 
   // 检查是否有空位可移除主手物品 — 无空位时不显示"清空"选项
-  if (canClearMainhand(containerItemArray(container), handSlot)) {
+  // 修复：若主手已为空则始终显示"固定:无"（保持为空），否则仅当有空位时显示
+  const handItem = container.getItem(handSlot);
+  if (!handItem || canClearMainhand(containerItemArray(container), handSlot)) {
     options.push({ value: -1, label: style("固定:无", color.darkGray) });
   }
 

@@ -8,7 +8,8 @@ import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder, ModalFormBuilder, MessageFormBuilder } from "@yinxe/toolkit";
 
 import { botRegistry, configStore } from "../../../bootstrap/context";
-import { WORK_MODES } from "../../../features/state/behavior";
+import { WORK_MODES, setWorkMode } from "../../../features/state/behavior";
+import { MENU_TRIGGER_OPTIONS, DEFAULT_MENU_TRIGGER_ITEM } from "../../../rules/Types";
 import { isAdmin } from "../../commands/auth";
 import { showBotList } from "../bot";
 import { showOnlineManagement } from "./online";
@@ -23,6 +24,8 @@ export function showAdminMenu(player: Player): void {
   const all = botRegistry.all();
   const owners = new Set(all.map((r) => r.ownerName).filter((n): n is string => !!n));
   const ownerless = all.filter((r) => !r.ownerName).length;
+  const triggerId = cfg.menuTriggerItemId !== undefined ? cfg.menuTriggerItemId : DEFAULT_MENU_TRIGGER_ITEM;
+  const triggerLabel = MENU_TRIGGER_OPTIONS.find((o) => o.itemId === triggerId)?.label ?? (triggerId === null ? "§7无 (仅命令)" : triggerId);
 
   new ActionFormBuilder()
     .title(`${color.gold}⚙ 管理员菜单`)
@@ -30,7 +33,8 @@ export function showAdminMenu(player: Player): void {
       `${color.muted}默认配额: ${color.info}${cfg.defaultQuota >= 999 ? "无限" : cfg.defaultQuota} ${color.muted}个/玩家\n` +
       `${color.muted}假人总数: ${color.info}${botRegistry.size} ${color.muted}（主人 ${color.info}${owners.size} ${color.muted}名，无主 ${color.warn}${ownerless} ${color.muted}个）\n` +
       `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）\n` +
-      `${color.muted}重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}${color.muted} / 主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}`
+      `${color.muted}重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}${color.muted} / 主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}\n` +
+      `${color.muted}触发信物: ${color.info}${triggerLabel}`
     )
     // ── 假人全览（管理员视角：不受主人过滤，全部可见） ──
     .button("全部假人列表", () => showBotList(player, () => showAdminMenu(player)))
@@ -42,7 +46,7 @@ export function showAdminMenu(player: Player): void {
     .show(player);
 }
 
-/** 全局配置（整合：联动开关 + 重启自动上线 + 默认配额滑块 + 工作模式开关） */
+/** 全局配置（整合：联动开关 + 重启自动上线 + 默认配额滑块 + 触发信物下拉 + 工作模式开关，参考 item-route） */
 export async function showGlobalConfig(player: Player): Promise<void> {
   const cfg = configStore.get();
   // 默认配额 1-10 + 无限(11) 映射：999/>=11 视为无限，0 视为 1
@@ -53,12 +57,20 @@ export async function showGlobalConfig(player: Player): Promise<void> {
   };
   const defaultSlider = quotaToSlider(cfg.defaultQuota);
   const workModes = WORK_MODES.filter(m => m !== "none");
+  const triggerId = cfg.menuTriggerItemId !== undefined ? cfg.menuTriggerItemId : DEFAULT_MENU_TRIGGER_ITEM;
+  const triggerIndex = Math.max(0, MENU_TRIGGER_OPTIONS.findIndex((o) => o.itemId === triggerId));
 
   const builder = new ModalFormBuilder()
     .title(`${color.gold}全局配置`)
     .toggle("ownerOffline", "上下线联动（主人下线时假人联动下线）", { defaultValue: cfg.ownerOfflineAutoOffline, tooltip: "默认关：假人常驻不随主人上下线" })
     .toggle("autoOnline", "服务器重启自动上线", { defaultValue: cfg.autoOnlineOnRestart, tooltip: "默认开：重启后在线的假人自动重建" })
     .slider("quota", "默认每人配额", 1, 11, { defaultValue: defaultSlider, valueStep: 1, tooltip: "1-10 为具体数量，11=无限（默认3）" })
+    .dropdown(
+      "menuTrigger",
+      "模组菜单触发信物",
+      MENU_TRIGGER_OPTIONS.map((o) => o.label),
+      { defaultValueIndex: triggerIndex >= 0 ? triggerIndex : 1, tooltip: "使用该物品右键可打开主菜单，选'无'则仅能通过命令 /mp:menu 打开（参考 item-route）" }
+    )
     .label("workModeHeader", `${color.accent}— 工作模式启用 —`);
 
   for (const mode of workModes) {
@@ -85,14 +97,42 @@ export async function showGlobalConfig(player: Player): Promise<void> {
   if (newQuota !== cfg.defaultQuota) {
     configStore.setDefaultQuota(newQuota);
   }
+  // 保存触发信物（下拉，参考 item-route）
+  const triggerIdx = vals.menuTrigger as number;
+  const newTrigger = MENU_TRIGGER_OPTIONS[triggerIdx]?.itemId ?? DEFAULT_MENU_TRIGGER_ITEM;
+  const normalizedTrigger = newTrigger as string | null;
+  const currentTrigger = cfg.menuTriggerItemId !== undefined ? cfg.menuTriggerItemId : DEFAULT_MENU_TRIGGER_ITEM;
+  let triggerChanged = false;
+  if (normalizedTrigger !== currentTrigger) {
+    configStore.setMenuTriggerItemId(normalizedTrigger);
+    triggerChanged = true;
+  }
   // 保存工作模式开关
   let changedMode = false;
+  let disabledModes: string[] = [];
   for (const mode of workModes) {
     const v = vals[`wm_${mode}`] as boolean | undefined;
     if (typeof v === "boolean" && (cfg.enabledWorkModes?.[mode] !== false) !== v) {
       configStore.setWorkModeEnabled(mode, v);
       changedMode = true;
+      if (v === false) disabledModes.push(mode);
     }
+  }
+  // 禁用某工作模式后，立即停止所有正处于该模式的假人
+  if (disabledModes.length > 0) {
+    let stopped = 0;
+    for (const mode of disabledModes) {
+      for (const rec of botRegistry.all().filter(r => r.workMode === mode)) {
+        try { setWorkMode(rec as any, "none"); stopped++; } catch {}
+      }
+    }
+    if (stopped > 0) {
+      player.sendMessage(`${color.warn}已停止 ${stopped} 个处于已禁用模式的假人`);
+    }
+  }
+  if (triggerChanged) {
+    const label = MENU_TRIGGER_OPTIONS.find((o) => o.itemId === normalizedTrigger)?.label ?? (normalizedTrigger ?? "无");
+    player.sendMessage(`${color.success}触发信物已更新为 ${color.info}${label}`);
   }
   player.sendMessage(`${color.success}全局配置已更新` + (changedMode ? "（工作模式变更立即生效）" : ""));
   showAdminMenu(player);
