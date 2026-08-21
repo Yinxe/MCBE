@@ -8,6 +8,7 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { inventoryContainerOf } from "../../../features/basic/items/ItemComponentRead";
+import { dropSelectedItem } from "../../../features/basic/items/drop";
 import { resolveUiBotRecord } from "../helpers";
 
 // ─── UI 事件订阅 ──────────────────────────────────────
