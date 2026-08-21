@@ -5,7 +5,7 @@
 // 感兴趣的字段执行，UI 不再直接调用任何业务动作函数。
 //
 // 表单布局（用户拍板）：自动重生置顶、强加载第 2；
-// 互斥行为（工作模式下拉，单选）：闲逛/挖掘/放置/攻击/劫掠/钓鱼/跟随等；劫掠与跟随已收编进互斥菜单。
+// 互斥行为（工作模式下拉，单选）：闲逛/挖掘/放置/攻击/劫掠/钓鱼/跟随等；劫掠与跟随已收编进互斥菜单；使用物品已移至主菜单按钮。
 
 import { Player, system, world } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
@@ -78,11 +78,6 @@ export function showTagManagement(player: Player, botName: string): void {
       defaultValue: record.isSneaking,
       tooltip: record.isSneaking ? "关闭将站起" : "开启将使假人潜行",
     })
-    // ── 使用物品（独立普通开关，每次打开默认关） ──
-    .toggle("useItem", style("使用物品", color.accent), {
-      defaultValue: false,
-      tooltip: "勾选提交＝使用主手物品并约 2 秒后自动停下（吃完喝完）；取消提交＝立即停止。一次性动作，默认关闭",
-    })
     .label("sep2", style("━━ 工作模式 ────", color.accent))
     // ── 工作模式（用户拍板：单选互斥——一个假人一个工作模式，已禁用模式不在下拉中） ──
     .dropdown(
@@ -122,9 +117,6 @@ export function showTagManagement(player: Player, botName: string): void {
     // 避免 setTags 校验失败时模式字段已改写——部分应用残留）
     // setWorkMode(currentRecord, pickedWorkMode);
 
-    // 一次性使用开关：勾选提交=使用一次（自动停下），取消提交=停止一次。
-    // 开关本身不落库（用后即停，无持续状态），每次打开行为菜单都默认关。
-    const useItemOn = vals.useItem as boolean;
     const wantSneaking = vals.sneaking as boolean;
     const wantChunkload = vals.chunkload as boolean;
     const wantFollow = pickedWorkMode === "follow";
@@ -147,7 +139,7 @@ export function showTagManagement(player: Player, botName: string): void {
         sneaking: wantSneaking,
         chunkload: wantChunkload,
         follow: wantFollow,
-        useItem: useItemOn,
+        useItem: false,
         coexist,
         workMode: pickedWorkMode,
         tags: newTags,

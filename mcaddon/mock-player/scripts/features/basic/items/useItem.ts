@@ -203,10 +203,23 @@ export function stopUseItem(player: Player, record: BotRecord): void {
   });
 }
 
-// ─── UI 事件订阅（行为菜单提交 → 感知使用物品字段） ─────
+// ─── UI 事件订阅 ──────────────────────────────────────
 
-/** 订阅行为菜单提交事件：使用物品勾选=使用一次 / 取消=停止（一次性动作，不落库） */
+/** 订阅主菜单“使用物品”按钮 → 直接使用一次主手物品 */
+function registerPanelAction(): void {
+  BotUiEvent.panelAction.subscribe((e) => {
+    if (e.action !== "useItem") return;
+    const record = botRegistry.get(e.botName);
+    if (!record) return;
+    const player = world.getEntity(e.playerId) as Player | undefined;
+    if (!player) return;
+    startUseItem(player, record);
+  });
+}
+
+/** 订阅行为菜单提交事件：使用物品勾选=使用一次 / 取消=停止（一次性动作，不落库；已移至主菜单按钮，保留兼容） */
 export function registerUiSubscriptions(): void {
+  registerPanelAction();
   BotUiEvent.behaviorSubmitted.subscribe((e) => {
     const record = botRegistry.get(e.botName);
     if (!record) return;

@@ -96,8 +96,9 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     .button(style("物品互换", color.darkBlue), () => trigger("swap"))
     .button(style("回收资源", color.darkBlue), () => trigger("reclaim"))
     .button(style("丢弃物品", color.darkRed), () => trigger("discard"))
-    // ── 标签/设置 ──
-    .button(style("行为标签", color.darkGreen), () => trigger("openBehavior"))
+    // ── 行为/使用 ──
+    .button(style("行为菜单", color.darkGreen), () => trigger("openBehavior"))
+    .button(style("使用物品", color.darkGreen), () => trigger("useItem"))
     .button(style("设置重生", color.darkBlue), () => trigger("updateSpawn"))
     .button(style("修改名字", color.darkBlue), () => trigger("rename"))
     // ── 战斗/工具 ──
