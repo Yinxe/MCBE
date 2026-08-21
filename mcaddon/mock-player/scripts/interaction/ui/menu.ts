@@ -13,7 +13,7 @@ import { showBotPanel, showBotList } from "./bot";
 import { showCreateForm } from "./panels/create";
 import { showOnlineManagement } from "./panels/online";
 import { showHelpGuide } from "./HelpGuide";
-import { showAdminMenu, showGlobalConfig, showPlayerQuotaList, showAdminList } from "./panels/adminMenu";
+import { showAdminMenu } from "./panels/adminMenu";
 import { isAdmin } from "../commands/auth";
 
 // ─── 主菜单 ──────────────────────────────────────────
@@ -26,13 +26,9 @@ export function showMainMenu(player: Player): void {
     .button(style("在线管理", color.darkBlue), () => showOnlineManagement(player))
     .button(style("帮助", color.darkBlue), () => showHelpGuide(player));
 
-  // 管理员功能（仅管理员可见，直接放入主菜单）
+  // 管理员菜单（仅管理员可见）
   if (isAdmin(player)) {
-    form.button(style("全部假人列表", color.gold), () => showBotList(player, () => showMainMenu(player)));
-    form.button(style("全部在线管理", color.gold), () => showOnlineManagement(player));
-    form.button(style("全局配置", color.gold), () => showGlobalConfig(player));
-    form.button(style("玩家配额", color.gold), () => showPlayerQuotaList(player));
-    form.button(style("管理员名单", color.gold), () => showAdminList(player));
+    form.button(style("⚙ 管理员菜单", color.gold), () => showAdminMenu(player));
   }
 
   form.show(player);
