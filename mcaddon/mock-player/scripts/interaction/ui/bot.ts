@@ -85,12 +85,8 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
   const form = new ActionFormBuilder()
       .title(`${color.bold}${botName} ${getStatusIcon(record)}`)
       .body(`${getPosSummary(record)}${ownerStr}${workModeStr}${tagStr}${expStr}`)
-      // ── 上线/下线（置顶，统一走安全上下线：onlineBot/offlineBot 已内置安全逻辑，普通/常加载均走此入口） ──
-      .button(record.online ? style("设为离线", color.darkGreen) : style("设为在线", color.darkGreen), () => trigger("toggleOnline"));
-    // 安全上线（统一安全入口，常加载申请模拟4排队3秒，普通直接2秒）对任何离线假人可见
-    if (!record.online) {
-      form.button(style("安全上线", color.darkGreen), () => trigger("safeOnline"));
-    }
+      // ── 上线/下线（置顶，统一安全：safeOnline/safeOffline 已内置排队+冷却+模拟4，仅一键） ──
+      .button(record.online ? style("安全下线", color.darkGreen) : style("安全上线", color.darkGreen), () => trigger("toggleOnline"));
     form
       // ── 传送 ──
       .button(style("传送过去", color.darkBlue), () => trigger("tpToBot"))
