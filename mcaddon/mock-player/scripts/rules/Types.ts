@@ -294,6 +294,8 @@ export interface ReclaimPreview {
 
 /** 全局配置默认值：每玩家默认配额（管理员不受配额限制） */
 export const DEFAULT_QUOTA = 5;
+/** 全局配置默认值：每玩家默认可同时在线的假人数（管理员不受限制） */
+export const DEFAULT_ONLINE_QUOTA = 3;
 
 /** 模组菜单触发信物默认值（木棍） */
 export const DEFAULT_MENU_TRIGGER_ITEM = "minecraft:stick";
@@ -335,6 +337,10 @@ export interface ModConfig {
   menuTriggerItemId?: string | null;
   /** 安全上下线冷却（秒），1-5，默认1，上线/下线/普通/常加载共用 */
   safeCooldownSeconds?: number;
+  /** 每玩家默认可同时在线的假人数（0 = 禁止上线，999=无限，管理员豁免） */
+  defaultOnlineQuota?: number;
+  /** 逐玩家覆盖同时在线配额（key = 玩家名，0=禁止，999=无限） */
+  onlineQuotas?: Record<string, number>;
 }
 
 /** 默认配置（早执行创建用；worldLoad 后从持久化 refresh 合并） */
@@ -348,5 +354,7 @@ export function createDefaultConfig(): ModConfig {
     enabledWorkModes: {},
     menuTriggerItemId: DEFAULT_MENU_TRIGGER_ITEM,
     safeCooldownSeconds: 1,
+    defaultOnlineQuota: DEFAULT_ONLINE_QUOTA,
+    onlineQuotas: {},
   } as ModConfig;
 }

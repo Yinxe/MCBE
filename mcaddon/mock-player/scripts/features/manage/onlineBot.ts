@@ -19,6 +19,8 @@ import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, configStore, saveCoordinator } from "../../bootstrap/context";
 import { spawnBot } from "./spawnMode";
 import { trackBotOnline } from "../trident/tridentTracker";
+import { canOnlineBot, remainingOnlineQuota } from "../../service/QuotaRules";
+import { isAdmin } from "../../interaction/commands/auth";
 import {
   createSim4Area,
   removeSim4Area,
@@ -89,6 +91,24 @@ export function getSafeOnlineAreaName(): string {
 export async function safeOnline(record: BotRecord): Promise<OnlineResult> {
   if (record.online) {
     return { ok: false, reason: `假人 ${record.name} 已在线` };
+  }
+  // ── 同时在线配额检查（管理员豁免；0=禁止，999=无限） ──
+  const ownerName = record.ownerName;
+  if (ownerName) {
+    const onlineCount = botRegistry.all().filter((r) => r.ownerName === ownerName && r.online).length;
+    const quota = configStore.onlineQuotaFor(ownerName);
+    // 管理员判定：配置名单或在线OP
+    let ownerIsAdmin = false;
+    if (configStore.get().admins.includes(ownerName)) ownerIsAdmin = true;
+    else {
+      const ownerPlayer = world.getAllPlayers().find((p) => p.name === ownerName);
+      if (ownerPlayer && isAdmin(ownerPlayer)) ownerIsAdmin = true;
+    }
+    if (!canOnlineBot(onlineCount, quota, ownerIsAdmin)) {
+      const left = remainingOnlineQuota(onlineCount, quota, ownerIsAdmin);
+      const limitText = quota >= 999 ? "无限" : `${quota}`;
+      return { ok: false, reason: `同时在线已达上限（${limitText}个）${left >= 0 ? `，剩余 ${left} 个` : ""}，请先下线部分假人` };
+    }
   }
   const isChunkload = (record.spawnMode ?? "normal") === "chunkload";
   if (!isChunkload) {
@@ -189,6 +209,55 @@ export async function safeOnline(record: BotRecord): Promise<OnlineResult> {
     }
     release();
   }
+}
+
+// ─── 在线配额强制执行 ──────────────────────────────────
+
+/**
+ * 对指定主人执行在线配额强制：按在线假人名排序保留前N个，其余强制安全下线
+ * @param ownerName 主人名
+ * @returns 被强制下线的数量
+ */
+export async function enforceOnlineQuotaForOwner(ownerName: string): Promise<number> {
+  const allOnline = botRegistry.all().filter((r) => r.ownerName === ownerName && r.online);
+  if (allOnline.length === 0) return 0;
+  const quota = configStore.onlineQuotaFor(ownerName);
+  // 管理员豁免
+  let isAdminOwner = false;
+  if (configStore.get().admins.includes(ownerName)) isAdminOwner = true;
+  else {
+    const p = world.getAllPlayers().find((pl) => pl.name === ownerName);
+    if (p && isAdmin(p)) isAdminOwner = true;
+  }
+  if (isAdminOwner || quota >= 999) return 0;
+  if (allOnline.length <= quota) return 0;
+  // 按名字排序保留前 quota 个
+  const sorted = [...allOnline].sort((a, b) => a.name.localeCompare(b.name));
+  const toKeep = new Set(sorted.slice(0, quota).map((r) => r.name));
+  const toOffline = sorted.filter((r) => !toKeep.has(r.name));
+  let count = 0;
+  for (const rec of toOffline) {
+    try {
+      const { safeOffline } = await import("./offlineBot");
+      const res = await safeOffline(rec);
+      if (res.ok) count++;
+      else console.warn(`[MockPlayer] 强制下线 ${rec.name} 失败: ${res.reason}`);
+    } catch (e: any) {
+      console.warn(`[MockPlayer] 强制下线 ${rec.name} 异常: ${e?.message ?? e}`);
+    }
+  }
+  if (count > 0) console.info(`[MockPlayer] 已对 ${ownerName} 强制下线 ${count} 个超出配额的假人（保留 ${quota} 个）`);
+  return count;
+}
+
+/** 对所有主人执行在线配额强制 */
+export async function enforceAllOnlineQuotas(): Promise<number> {
+  const owners = new Set(botRegistry.all().filter((r) => r.online && r.ownerName).map((r) => r.ownerName!));
+  let total = 0;
+  for (const owner of owners) {
+    total += await enforceOnlineQuotaForOwner(owner);
+  }
+  return total;
 }
 
 // 注意：不再提供 onlineBot 别名，请直接使用 safeOnline

@@ -31,6 +31,7 @@ export function showAdminMenu(player: Player): void {
     .title(`${color.gold}⚙ 管理员菜单`)
     .body(
       `${color.muted}默认配额: ${color.info}${cfg.defaultQuota >= 999 ? "无限" : cfg.defaultQuota} ${color.muted}个/玩家\n` +
+        `${color.muted}在线配额: ${color.info}${(cfg.defaultOnlineQuota ?? 3) >= 999 ? "无限" : (cfg.defaultOnlineQuota ?? 3) === 0 ? "禁止" : (cfg.defaultOnlineQuota ?? 3)}${color.muted}个/玩家\n` +
       `${color.muted}假人总数: ${color.info}${botRegistry.size} ${color.muted}（主人 ${color.info}${owners.size} ${color.muted}名，无主 ${color.warn}${ownerless} ${color.muted}个）\n` +
       `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）\n` +
       `${color.muted}重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}${color.muted} / 主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}\n` +
@@ -42,6 +43,7 @@ export function showAdminMenu(player: Player): void {
     .button("全部假人在线管理", () => showOnlineManagement(player))
     .button("全局配置", () => showGlobalConfig(player))
     .button("逐玩家配额", () => showPlayerQuotaList(player))
+      .button("逐玩家在线配额", () => showPlayerOnlineQuotaList(player))
     .button("管理员名单", () => showAdminList(player))
     .button(style("返回", color.darkGray), () => undefined)
     .show(player);
@@ -67,6 +69,7 @@ export async function showGlobalConfig(player: Player): Promise<void> {
     .toggle("autoOnline", "服务器重启自动上线", { defaultValue: cfg.autoOnlineOnRestart, tooltip: "默认开：重启后在线的假人自动重建" })
     .slider("quota", "默认每人配额", 1, 11, { defaultValue: defaultSlider, valueStep: 1, tooltip: "1-10 为具体数量，11=无限（默认3）" })
       .slider("safeCooldown", "安全上下线冷却（秒）", 1, 5, { defaultValue: cfg.safeCooldownSeconds ?? 1, valueStep: 1, tooltip: "上线/下线共用，普通与常加载均等待此时间（默认1秒，1-5可选）" })
+      .slider("onlineQuota", "默认在线配额", 0, 11, { defaultValue: (()=>{const q=cfg.defaultOnlineQuota??3; if(q>=999) return 11; if(q>=0&&q<=10) return q; return 3;})(), valueStep: 1, tooltip: "0=禁止上线，1-10为数量，11=无限（默认3）" })
     .dropdown(
       "menuTrigger",
       "模组菜单触发信物",
@@ -104,6 +107,21 @@ export async function showGlobalConfig(player: Player): Promise<void> {
   const newCooldown = Math.max(1, Math.min(5, Math.floor(cooldownVal ?? 1)));
   if (newCooldown !== (cfg.safeCooldownSeconds ?? 1)) {
     configStore.setSafeCooldownSeconds(newCooldown);
+  }
+  // 保存在线配额
+  const onlineSliderVal = vals.onlineQuota as number;
+  const newOnlineQuota = onlineSliderVal >= 11 ? 999 : Math.max(0, Math.floor(onlineSliderVal));
+  const curOnlineQuota = cfg.defaultOnlineQuota ?? 3;
+  if (newOnlineQuota !== curOnlineQuota) {
+    configStore.setDefaultOnlineQuota(newOnlineQuota);
+    // 配额降低时强制下线超出部分（按名字排序保留前N个）
+    try {
+      const { enforceAllOnlineQuotas } = await import("../../../features/manage/onlineBot");
+      const forced = await enforceAllOnlineQuotas();
+      if (forced > 0) player.sendMessage(`${color.warn}已强制下线 ${forced} 个超出在线配额的假人`);
+    } catch (e: any) {
+      console.warn(`[MockPlayer] 强制下线超出配额失败: ${e?.message ?? e}`);
+    }
   }
   // 保存触发信物（下拉，参考 item-route）
   const triggerIdx = vals.menuTrigger as number;
@@ -223,6 +241,77 @@ async function editPlayerQuota(player: Player, targetName: string): Promise<void
     // ⚠️ 永不 reject：表单异常 resolve 兜底
     console.warn(`[MockPlayer] editPlayerQuota 异常: ${e?.message ?? e}`);
     player.sendMessage(`${color.error}修改配额失败: ${e?.message ?? e}`);
+  }
+}
+
+/** 逐玩家在线配额列表：有覆盖的玩家 + 全部主人（在线数统计） */
+export function showPlayerOnlineQuotaList(player: Player): void {
+  const cfg = configStore.get();
+  const owners = [...new Set([
+    ...Object.keys(cfg.onlineQuotas ?? {}),
+    ...botRegistry.all().map((r) => r.ownerName).filter((n): n is string => !!n),
+  ])].sort();
+
+  if (owners.length === 0) {
+    player.sendMessage(`${color.muted}暂无玩家记录，先创建假人后再来配置`);
+    return;
+  }
+
+  const form = new ActionFormBuilder().title(`${color.gold}逐玩家在线配额`);
+  for (const name of owners) {
+    const online = botRegistry.all().filter((r) => r.ownerName === name && r.online).length;
+    const quota = cfg.onlineQuotas?.[name] !== undefined ? cfg.onlineQuotas[name] : (cfg.defaultOnlineQuota ?? 3);
+    const tag = quota >= 999 ? `${color.success}无限` : quota === 0 ? `${color.error}禁止` : `${color.info}${quota}`;
+    form.button(
+      `${color.playerName}${name} ${color.muted}(${color.info}${online}${color.muted}/${tag}${color.muted})`,
+      () => editPlayerOnlineQuota(player, name)
+    );
+  }
+  form.button(style("返回", color.darkGray), () => showAdminMenu(player));
+  form.show(player);
+}
+
+/** 修改单个玩家在线配额（留空 = 恢复默认） */
+async function editPlayerOnlineQuota(player: Player, targetName: string): Promise<void> {
+  try {
+    const cfg = configStore.get();
+    const online = botRegistry.all().filter((r) => r.ownerName === targetName && r.online).length;
+    const current = cfg.onlineQuotas?.[targetName] !== undefined ? `${cfg.onlineQuotas[targetName]}` : "";
+
+    const vals = await ModalFormBuilder.showQuick(player, `${color.bold}在线配额：${targetName}`, (f) => {
+      f.textField("quota", `在线配额（留空恢复默认 ${cfg.defaultOnlineQuota ?? 3}；0=禁止，999=无限）`, { defaultValue: current, tooltip: `当前在线 ${online} 个假人` });
+    });
+    if (!vals) return;
+    const raw = (vals.quota as string).trim();
+    if (raw === "") {
+      configStore.setPlayerOnlineQuota(targetName, undefined);
+      player.sendMessage(`${color.success}${targetName} 已恢复默认在线配额 ${color.info}${cfg.defaultOnlineQuota ?? 3}`);
+      // 恢复默认后若仍超出，需强制下线
+      try {
+        const { enforceOnlineQuotaForOwner } = await import("../../../features/manage/onlineBot");
+        await enforceOnlineQuotaForOwner(targetName);
+      } catch {}
+      return;
+    }
+    const quota = parseInt(raw, 10);
+    if (isNaN(quota) || quota < 0) {
+      player.sendMessage(`${color.error}无效的配额数字`);
+      return;
+    }
+    const normalized = quota >= 999 ? 999 : quota;
+    configStore.setPlayerOnlineQuota(targetName, normalized);
+    player.sendMessage(`${color.success}${targetName} 的在线配额已设为 ${color.info}${normalized >= 999 ? "无限" : normalized}${color.success} 个`);
+    // 配额降低或设为0时强制下线超出部分
+    try {
+      const { enforceOnlineQuotaForOwner } = await import("../../../features/manage/onlineBot");
+      const forced = await enforceOnlineQuotaForOwner(targetName);
+      if (forced > 0) player.sendMessage(`${color.warn}已强制下线 ${forced} 个超出在线配额的假人`);
+    } catch (e: any) {
+      console.warn(`[MockPlayer] 强制下线失败: ${e?.message ?? e}`);
+    }
+  } catch (e: any) {
+    console.warn(`[MockPlayer] editPlayerOnlineQuota 异常: ${e?.message ?? e}`);
+    player.sendMessage(`${color.error}修改在线配额失败: ${e?.message ?? e}`);
   }
 }
 

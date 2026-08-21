@@ -146,6 +146,31 @@ export class McConfigStore {
     this.persist();
   }
 
+  /** 更新默认同时在线配额（0=禁止，999=无限） */
+  setDefaultOnlineQuota(quota: number): void {
+    this.config.defaultOnlineQuota = Math.max(0, Math.floor(quota));
+    this.persist();
+  }
+
+  /** 更新单个玩家同时在线配额（undefined = 删除覆盖恢复默认） */
+  setPlayerOnlineQuota(playerName: string, quota: number | undefined): void {
+    if (!this.config.onlineQuotas) this.config.onlineQuotas = {};
+    if (quota === undefined) {
+      delete this.config.onlineQuotas[playerName];
+      if (Object.keys(this.config.onlineQuotas).length === 0) delete (this.config as any).onlineQuotas;
+    } else {
+      this.config.onlineQuotas[playerName] = Math.max(0, Math.floor(quota));
+    }
+    this.persist();
+  }
+
+  /** 单个玩家生效同时在线配额（覆盖值 ?? 默认值，999表示无限） */
+  onlineQuotaFor(playerName: string): number {
+    const override = this.config.onlineQuotas?.[playerName];
+    if (override !== undefined) return override;
+    return this.config.defaultOnlineQuota ?? 3;
+  }
+
   private persist(): void {
     try {
       world.setDynamicProperty(CONFIG_KEY, JSON.stringify(this.config));

@@ -5,7 +5,7 @@ import { Vector3, Dimension, world } from "@minecraft/server";
 import { BotRecord, isValidBotName, normalizeBotName, MAX_BOT_NAME_LENGTH } from "../../rules/Types";
 import { botRegistry, configStore } from "../../bootstrap/context";
 import { isNameOccupiedInWorld } from "../../bot/PlayerGateway";
-import { canCreateBot, remainingQuota } from "../../service/QuotaRules";
+import { canCreateBot, canOnlineBot, remainingOnlineQuota, remainingQuota } from "../../service/QuotaRules";
 import { isAdmin } from "../../interaction/commands/auth";
 import { spawnBot } from "./spawnMode";
 
@@ -63,6 +63,15 @@ export async function createBot(options: CreateBotOptions): Promise<BotRecord> {
   if (!canCreateBot(ownedCount, quota, ownerIsAdmin)) {
     const left = remainingQuota(ownedCount, quota, ownerIsAdmin);
     throw new Error(`创建失败：${ownerName} 的假人配额已达上限（${quota} 个）${left >= 0 ? `，剩余 ${left} 个` : ""}`);
+  }
+
+  // ── 同时在线配额检查（新创建即在线，管理员豁免；0=禁止，999=无限） ──
+  const onlineCount = botRegistry.all().filter((r) => r.ownerName === ownerName && r.online).length;
+  const onlineQuota = configStore.onlineQuotaFor(ownerName);
+  if (!canOnlineBot(onlineCount, onlineQuota, ownerIsAdmin)) {
+    const leftOnline = remainingOnlineQuota(onlineCount, onlineQuota, ownerIsAdmin);
+    const limitText = onlineQuota >= 999 ? "无限" : `${onlineQuota}`;
+    throw new Error(`创建失败：${ownerName} 同时在线假人已达上限（${limitText} 个）${leftOnline >= 0 ? `，剩余 ${leftOnline} 个` : ""}，请先下线部分假人`);
   }
 
   const rot2 = { x: rotation.x, y: rotation.y };

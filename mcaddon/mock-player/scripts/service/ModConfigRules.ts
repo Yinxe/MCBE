@@ -41,6 +41,12 @@ export function mergeStoredConfig(raw: string | undefined): ModConfig {
       : {},
     menuTriggerItemId: sanitizeMenuTrigger(s.menuTriggerItemId, base.menuTriggerItemId!),
     safeCooldownSeconds: sanitizeCooldown(s.safeCooldownSeconds, base.safeCooldownSeconds!),
+    defaultOnlineQuota: typeof s.defaultOnlineQuota === "number" && Number.isFinite(s.defaultOnlineQuota)
+      ? Math.max(0, Math.floor(s.defaultOnlineQuota))
+      : base.defaultOnlineQuota!,
+    onlineQuotas: s.onlineQuotas !== null && typeof s.onlineQuotas === "object" && !Array.isArray(s.onlineQuotas)
+      ? sanitizeQuotas(s.onlineQuotas as Record<string, unknown>)
+      : {},
   };
 }
 
