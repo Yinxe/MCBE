@@ -24,7 +24,7 @@ import { registerUiSubscriptions as registerTridentClaimUi } from "../interactio
 import { registerUiSubscriptions as registerMoveUi } from "../interaction/ui/panels/move";
 import { registerUiSubscriptions as registerDataUi } from "../interaction/commands/inspect/data";
 
-/** 注册全部 UI 领域事件订阅（worldLoad 后调用一次） */
+/** 注册全部 UI 领域事件订阅（worldLoad 后调用一次，online 已统一安全版，无需单独 safeOnline） */
 export function registerUiDrivers(): void {
   registerSneakUi();
   registerSpawnModeUi();

@@ -9,7 +9,7 @@ import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { setPose, getPlayerLookTarget, savePoseToRecord } from "./PoseGateway";
-import { onlineBot } from "../manage/onlineBot";
+import { safeOnline } from "../manage/onlineBot";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
   if (!record.online || record.death) {
@@ -52,22 +52,22 @@ export function registerUiSubscriptions(): void {
     const player = world.getEntity(e.playerId) as Player | undefined;
     if (!player) return;
 
-    // ── 传送过去：离线先上线，等 1 tick 实体就绪后传送 ──
+    // ── 传送过去：离线先上线（已统一为安全上线） ──
     if (e.action === "tpToBot") {
       const r = botRegistry.get(e.botName);
       if (!r) { player.sendMessage(`${color.error}模拟玩家 ${color.playerName}${e.botName}${color.error} 已不存在`); return; }
-      system.run(() => {
+      system.run(async () => {
         if (!r.online || r.death) {
-          onlineBot(r)
-            .then((result) => {
-              // onlineBot 永不 reject（失败 resolve { ok: false, reason }）
-              if (!result.ok) { player.sendMessage(`${color.error}${e.botName} 上线失败，无法传送: ${result.reason ?? "unknown"}`); return; }
-              player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已上线`);
-              system.run(() => {
-                tpPlayerToBot(player, botRegistry.get(e.botName)!);
-                player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);
-              });
-            });
+          const result = await safeOnline(r);
+          // 永不 reject（失败 resolve { ok: false, reason }）
+          if (!result.ok) { player.sendMessage(`${color.error}${e.botName} 上线失败，无法传送: ${result.reason ?? "unknown"}`); return; }
+          player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已上线`);
+          system.run(() => {
+            try {
+              tpPlayerToBot(player, botRegistry.get(e.botName)!);
+              player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);
+            } catch (err: any) { player.sendMessage(`${color.error}${err?.message ?? err}`); }
+          });
         } else {
           tpPlayerToBot(player, r);
           player.sendMessage(`${color.success}已传送到 ${color.playerName}${e.botName}${color.success} 身边`);

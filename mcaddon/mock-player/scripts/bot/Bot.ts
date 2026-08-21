@@ -16,8 +16,8 @@ import { tpPlayerToBot, tpBotToPlayer } from "../features/basic/teleport";
 import { checkMainHandDurability } from "../features/basic/items";
 import { deleteBot } from "../features/manage/deleteBot";
 import { killBot } from "../features/manage/killBot";
-import { offlineBot } from "../features/manage/offlineBot";
-import { onlineBot } from "../features/manage/onlineBot";
+import { safeOffline } from "../features/manage/offlineBot";
+import { safeOnline } from "../features/manage/onlineBot";
 import { safeReconnect } from "../features/manage/pendingRespawn";
 import { reclaimBot, getReclaimPreview } from "../features/manage/reclaim";
 import { switchSpawnMode } from "../features/manage/spawnMode";
@@ -146,14 +146,19 @@ export class Bot extends BotCore {
 
   // ─── 原子能力：生命周期（委托 manage） ───────────────
 
-  /** 上线（委托 manage/onlineBot；多状态结果，永不 reject） */
+  /** 上线（安全上线，含模拟4，已替代原 onlineBot） */
   async bringOnline(): Promise<import("../features/manage/onlineBot").OnlineResult> {
-    return onlineBot(this.record);
+    return safeOnline(this.record);
   }
 
-  /** 下线（委托 manage/offlineBot） */
-  takeOffline(): void {
-    offlineBot(this.record);
+  /** 安全上线（兼容别名，等价于 bringOnline） */
+  async bringOnlineSafely(): Promise<import("../features/manage/onlineBot").OnlineResult> {
+    return safeOnline(this.record);
+  }
+
+  /** 下线（安全下线，含模拟4） */
+  async takeOffline(): Promise<import("../features/manage/offlineBot").OfflineResult> {
+    return safeOffline(this.record);
   }
 
   /** 击杀（委托 manage/killBot） */

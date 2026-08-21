@@ -82,10 +82,10 @@ world.afterEvents.worldLoad.subscribe(() => {
   if (toAutoOnline.length > 0) {
     console.info(`[MockPlayer] 世界重启自动上线 ${toAutoOnline.length} 个假人`);
     system.run(async () => {
-      const { onlineBot } = await import("./features/manage/onlineBot");
+      const { safeOnline } = await import("./features/manage/onlineBot");
       for (const r of toAutoOnline) {
         try {
-          const res = await onlineBot(r);
+          const res = await safeOnline(r);
           if (!res.ok) console.warn(`[MockPlayer] 自动上线失败 ${r.name}: ${res.reason}`);
         } catch (e: any) {
           console.warn(`[MockPlayer] 自动上线异常 ${r.name}: ${e?.message ?? e}`);

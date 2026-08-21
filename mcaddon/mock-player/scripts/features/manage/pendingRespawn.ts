@@ -9,8 +9,8 @@ import { system } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "../../rules/Types";
-import { offlineBot } from "./offlineBot";
-import { onlineBot } from "./onlineBot";
+import { safeOffline } from "./offlineBot";
+import { safeOnline } from "./onlineBot";
 import { waitForNameAvailable } from "../../bot/PlayerGateway";
 import { saveCoordinator } from "../../bootstrap/context";
 
@@ -47,11 +47,12 @@ export function safeReconnect(record: BotRecord, options?: SafeReconnectOptions)
   }
   reconnectingBots.add(record.name);
 
-  system.run(() => {
+  system.run(async () => {
     try {
-      offlineBot(record);
+      const res = await safeOffline(record);
+      if (!res.ok) console.warn(`[MockPlayer] safeReconnect safeOffline 失败 ${record.name}: ${res.reason}`);
     } catch (e: any) {
-      console.warn(`[MockPlayer] safeReconnect offlineBot 失败 ${record.name}: ${e?.message ?? e}`);
+      console.warn(`[MockPlayer] safeReconnect safeOffline 失败 ${record.name}: ${e?.message ?? e}`);
     }
     try {
       options?.onOffline?.(record);
@@ -76,7 +77,7 @@ async function doConnect(
   onOnline?: (bot: SimulatedPlayer, record: BotRecord) => void,
 ): Promise<void> {
   // onlineBot 承诺永不 reject（失败 resolve { ok: false, reason }），此处判断结果即可
-  const result = await onlineBot(record);
+  const result = await safeOnline(record);
   if (!result.ok || !result.bot) {
     console.error(`[MockPlayer] safeReconnect 上线失败 ${record.name}: ${result.reason ?? "unknown"}`);
     record.online = false;

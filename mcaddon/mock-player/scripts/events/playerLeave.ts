@@ -9,12 +9,12 @@
 //   所以这里必须 try-catch 包裹
 //   可靠的保存时机是 entityDie（死亡）和 offlineBot（主动下线）
 
-import { world, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
+import { world, system, Player, PlayerLeaveAfterEvent } from "@minecraft/server";
 
 import { BOT_TAG } from "../rules/tags/BotTags";
 import { BotEvents } from "./DomainEvents";
 import { botRegistry, configStore, saveCoordinator } from "../bootstrap/context";
-import { offlineBot } from "../features/manage/offlineBot";
+import { safeOffline } from "../features/manage/offlineBot";
 import { reconnectingBots } from "../features/manage/pendingRespawn";
 import { color } from "@yinxe/toolkit";
 
@@ -24,13 +24,17 @@ function offlineOwnerBots(ownerName: string): void {
   const owned = botRegistry.all().filter((r) => r.ownerName === ownerName && r.online);
   if (owned.length === 0) return;
   console.info(`[MockPlayer] 玩家 ${ownerName} 下线，联动下线 ${owned.length} 个假人`);
-  for (const record of owned) {
-    try {
-      offlineBot(record);
-    } catch (e: any) {
-      console.warn(`[MockPlayer] 联动下线失败 ${record.name}: ${e?.message ?? e}`);
+  // 安全下线已内置排队与等待，无需外部冷却，顺序 await
+  system.run(async () => {
+    for (const record of owned) {
+      try {
+        const res = await safeOffline(record);
+        if (!res.ok) console.warn(`[MockPlayer] 联动安全下线失败 ${record.name}: ${res.reason}`);
+      } catch (e: any) {
+        console.warn(`[MockPlayer] 联动下线失败 ${record.name}: ${e?.message ?? e}`);
+      }
     }
-  }
+  });
 }
 
 export function onPlayerLeave(event: PlayerLeaveAfterEvent): void {

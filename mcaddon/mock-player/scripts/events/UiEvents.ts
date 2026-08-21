@@ -13,6 +13,7 @@ import { EventSignal } from "./EventSignal";
 /** BOT 主菜单面板动作 */
 export type BotPanelAction =
   | "toggleOnline"
+  | "safeOnline"
   | "tpToBot"
   | "syncPose"
   | "selectMainhand"

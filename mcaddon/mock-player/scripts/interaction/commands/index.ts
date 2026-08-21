@@ -28,6 +28,7 @@ import { registerTestCommand } from "./system/test";
 import { registerScanlogsCommand, registerScanleavesCommand, registerScantreeCommand } from "./system/blockscan";
 import { registerFishingCommands } from "./activity/fishing";
 import { registerBreakBlockCommand } from "./activity/blockbreak";
+import { registerSafeOnlineCommand, registerSafeOfflineCommand, registerTickingAreaCommand } from "./lifecycle/safeOnline";
 // import { registerWoodcutCommands } from "./activity/woodcut"; // 已禁用
 
 export function registerAllCommands(event: StartupEvent): void {
@@ -37,6 +38,9 @@ export function registerAllCommands(event: StartupEvent): void {
   registerListCommand(registry);
   registerDeleteCommand(registry);
   registerOnlineCommand(registry);
+  registerSafeOnlineCommand(registry);
+  registerSafeOfflineCommand(registry);
+  registerTickingAreaCommand(registry);
   registerOfflineCommand(registry);
   registerKillCommand(registry);
   registerRespawnCommand(registry);

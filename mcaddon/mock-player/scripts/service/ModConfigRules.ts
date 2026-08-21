@@ -40,6 +40,7 @@ export function mergeStoredConfig(raw: string | undefined): ModConfig {
       ? sanitizeEnabledWorkModes(s.enabledWorkModes as Record<string, unknown>)
       : {},
     menuTriggerItemId: sanitizeMenuTrigger(s.menuTriggerItemId, base.menuTriggerItemId!),
+    safeCooldownSeconds: sanitizeCooldown(s.safeCooldownSeconds, base.safeCooldownSeconds!),
   };
 }
 
@@ -68,6 +69,16 @@ function sanitizeMenuTrigger(value: unknown, fallback: string | null): string | 
   if (value === null) return null;
   if (typeof value === "string") {
     if (MENU_TRIGGER_OPTIONS.some((o) => o.itemId === value)) return value;
+  }
+  return fallback;
+}
+
+/** 过滤安全冷却：1-5秒，非法回退默认1 */
+function sanitizeCooldown(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const v = Math.floor(value);
+    if (v >= 1 && v <= 5) return v;
+    return Math.max(1, Math.min(5, v));
   }
   return fallback;
 }

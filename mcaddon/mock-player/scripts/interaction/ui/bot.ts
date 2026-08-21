@@ -82,35 +82,40 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     BotUiEvent.panelAction.trigger({ playerId: player.id, botName, action });
   };
 
-  new ActionFormBuilder()
-    .title(`${color.bold}${botName} ${getStatusIcon(record)}`)
-    .body(`${getPosSummary(record)}${ownerStr}${workModeStr}${tagStr}${expStr}`)
-    // ── 上线/下线（置顶） ──
-    .button(record.online ? style("设为离线", color.darkGreen) : style("设为在线", color.darkGreen), () => trigger("toggleOnline"))
-    // ── 传送 ──
-    .button(style("传送过去", color.darkBlue), () => trigger("tpToBot"))
-    // ── 同步/操作 ──
-    .button(style("同步姿态", color.darkBlue), () => trigger("syncPose"))
-    .button(style("选择主手", color.darkBlue), () => trigger("selectMainhand"))
-    // ── 互换/回收/丢弃 ──
-    .button(style("物品互换", color.darkBlue), () => trigger("swap"))
-    .button(style("回收资源", color.darkBlue), () => trigger("reclaim"))
-    .button(style("丢弃物品", color.darkRed), () => trigger("discard"))
-    // ── 行为/使用 ──
-    .button(style("行为菜单", color.darkGreen), () => trigger("openBehavior"))
-    .button(style("使用物品", color.darkGreen), () => trigger("useItem"))
-    .button(style("设置重生", color.darkBlue), () => trigger("updateSpawn"))
-    .button(style("修改名字", color.darkBlue), () => trigger("rename"))
-    // ── 战斗/工具 ──
-    .button(style("投三叉戟", color.darkBlue), () => trigger("throwTrident"))
-    .button(style("投掷物认主", color.darkBlue), () => trigger("claimTrident"))
-    .button(style("查看数据", color.darkBlue), () => trigger("viewData"))
-    // ── 危险 ──
-    .button(style("击杀假人", color.darkRed), () => trigger("kill"))
-    .buttonWithIcon(style("删除假人", color.darkRed), "textures/ui/icon_trash", () => trigger("delete"))
-    // ── UI 内部导航（不事件化） ──
-    .button(style("返回列表", color.darkBlue), () => { if (onBack) onBack(); })
-    .show(player);
+  const form = new ActionFormBuilder()
+      .title(`${color.bold}${botName} ${getStatusIcon(record)}`)
+      .body(`${getPosSummary(record)}${ownerStr}${workModeStr}${tagStr}${expStr}`)
+      // ── 上线/下线（置顶，统一走安全上下线：onlineBot/offlineBot 已内置安全逻辑，普通/常加载均走此入口） ──
+      .button(record.online ? style("设为离线", color.darkGreen) : style("设为在线", color.darkGreen), () => trigger("toggleOnline"));
+    // 安全上线（统一安全入口，常加载申请模拟4排队3秒，普通直接2秒）对任何离线假人可见
+    if (!record.online) {
+      form.button(style("安全上线", color.darkGreen), () => trigger("safeOnline"));
+    }
+    form
+      // ── 传送 ──
+      .button(style("传送过去", color.darkBlue), () => trigger("tpToBot"))
+      // ── 同步/操作 ──
+      .button(style("同步姿态", color.darkBlue), () => trigger("syncPose"))
+      .button(style("选择主手", color.darkBlue), () => trigger("selectMainhand"))
+      // ── 互换/回收/丢弃 ──
+      .button(style("物品互换", color.darkBlue), () => trigger("swap"))
+      .button(style("回收资源", color.darkBlue), () => trigger("reclaim"))
+      .button(style("丢弃物品", color.darkRed), () => trigger("discard"))
+      // ── 行为/使用 ──
+      .button(style("行为菜单", color.darkGreen), () => trigger("openBehavior"))
+      .button(style("使用物品", color.darkGreen), () => trigger("useItem"))
+      .button(style("设置重生", color.darkBlue), () => trigger("updateSpawn"))
+      .button(style("修改名字", color.darkBlue), () => trigger("rename"))
+      // ── 战斗/工具 ──
+      .button(style("投三叉戟", color.darkBlue), () => trigger("throwTrident"))
+      .button(style("投掷物认主", color.darkBlue), () => trigger("claimTrident"))
+      .button(style("查看数据", color.darkBlue), () => trigger("viewData"))
+      // ── 危险 ──
+      .button(style("击杀假人", color.darkRed), () => trigger("kill"))
+      .buttonWithIcon(style("删除假人", color.darkRed), "textures/ui/icon_trash", () => trigger("delete"))
+      // ── UI 内部导航（不事件化） ──
+      .button(style("返回列表", color.darkBlue), () => { if (onBack) onBack(); })
+      .show(player);
 }
 
 // ─── 假人列表 ──────────────────────────────────────────

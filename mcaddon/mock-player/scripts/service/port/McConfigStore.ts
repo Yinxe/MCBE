@@ -131,6 +131,21 @@ export class McConfigStore {
     this.persist();
   }
 
+  /** 获取安全上下线冷却（秒），默认1，范围1-5，上线/下线/普通/常加载共用 */
+  getSafeCooldownSeconds(): number {
+    const v = this.config.safeCooldownSeconds;
+    if (typeof v === "number" && Number.isFinite(v)) {
+      return Math.max(1, Math.min(5, Math.floor(v)));
+    }
+    return 1;
+  }
+
+  /** 设置安全上下线冷却（秒），1-5 */
+  setSafeCooldownSeconds(seconds: number): void {
+    this.config.safeCooldownSeconds = Math.max(1, Math.min(5, Math.floor(seconds)));
+    this.persist();
+  }
+
   private persist(): void {
     try {
       world.setDynamicProperty(CONFIG_KEY, JSON.stringify(this.config));

@@ -34,7 +34,8 @@ export function showAdminMenu(player: Player): void {
       `${color.muted}假人总数: ${color.info}${botRegistry.size} ${color.muted}（主人 ${color.info}${owners.size} ${color.muted}名，无主 ${color.warn}${ownerless} ${color.muted}个）\n` +
       `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）\n` +
       `${color.muted}重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}${color.muted} / 主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}\n` +
-      `${color.muted}触发信物: ${color.info}${triggerLabel}`
+      `${color.muted}触发信物: ${color.info}${triggerLabel}\n` +
+      `${color.muted}安全冷却: ${color.info}${cfg.safeCooldownSeconds ?? 1}s${color.muted}（上线/下线共用 1-5s）`
     )
     // ── 假人全览（管理员视角：不受主人过滤，全部可见） ──
     .button("全部假人列表", () => showBotList(player, () => showAdminMenu(player)))
@@ -65,6 +66,7 @@ export async function showGlobalConfig(player: Player): Promise<void> {
     .toggle("ownerOffline", "上下线联动（主人下线时假人联动下线）", { defaultValue: cfg.ownerOfflineAutoOffline, tooltip: "默认关：假人常驻不随主人上下线" })
     .toggle("autoOnline", "服务器重启自动上线", { defaultValue: cfg.autoOnlineOnRestart, tooltip: "默认开：重启后在线的假人自动重建" })
     .slider("quota", "默认每人配额", 1, 11, { defaultValue: defaultSlider, valueStep: 1, tooltip: "1-10 为具体数量，11=无限（默认3）" })
+      .slider("safeCooldown", "安全上下线冷却（秒）", 1, 5, { defaultValue: cfg.safeCooldownSeconds ?? 1, valueStep: 1, tooltip: "上线/下线共用，普通与常加载均等待此时间（默认1秒，1-5可选）" })
     .dropdown(
       "menuTrigger",
       "模组菜单触发信物",
@@ -96,6 +98,12 @@ export async function showGlobalConfig(player: Player): Promise<void> {
   const newQuota = sliderVal >= 11 ? 999 : Math.max(1, Math.floor(sliderVal));
   if (newQuota !== cfg.defaultQuota) {
     configStore.setDefaultQuota(newQuota);
+  }
+  // 保存安全冷却
+  const cooldownVal = vals.safeCooldown as number;
+  const newCooldown = Math.max(1, Math.min(5, Math.floor(cooldownVal ?? 1)));
+  if (newCooldown !== (cfg.safeCooldownSeconds ?? 1)) {
+    configStore.setSafeCooldownSeconds(newCooldown);
   }
   // 保存触发信物（下拉，参考 item-route）
   const triggerIdx = vals.menuTrigger as number;

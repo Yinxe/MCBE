@@ -3,8 +3,8 @@
 //       state（状态标签）/ trident（三叉戟）。决策调 rules/items 等纯规则，副作用留本地。
 
 export { createBot, type CreateBotOptions } from "./manage/createBot";
-export { onlineBot, type OnlineResult } from "./manage/onlineBot";
-export { offlineBot } from "./manage/offlineBot";
+export { safeOnline, type OnlineResult } from "./manage/onlineBot";
+export { safeOffline } from "./manage/offlineBot";
 export { deleteBot } from "./manage/deleteBot";
 export { killBot } from "./manage/killBot";
 export { tpPlayerToBot, tpBotToPlayer } from "./basic/teleport";

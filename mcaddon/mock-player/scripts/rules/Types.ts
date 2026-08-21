@@ -333,6 +333,8 @@ export interface ModConfig {
   enabledWorkModes?: Record<string, boolean>;
   /** 模组菜单触发信物物品 ID，null 表示关闭（仅命令触发） */
   menuTriggerItemId?: string | null;
+  /** 安全上下线冷却（秒），1-5，默认1，上线/下线/普通/常加载共用 */
+  safeCooldownSeconds?: number;
 }
 
 /** 默认配置（早执行创建用；worldLoad 后从持久化 refresh 合并） */
@@ -345,5 +347,6 @@ export function createDefaultConfig(): ModConfig {
     ownerOfflineAutoOffline: false,
     enabledWorkModes: {},
     menuTriggerItemId: DEFAULT_MENU_TRIGGER_ITEM,
+    safeCooldownSeconds: 1,
   } as ModConfig;
 }

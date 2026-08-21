@@ -11,8 +11,8 @@ import { botRegistry } from "../../../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../../commands/auth";
 import { visibleRecords } from "../../../service/BotVisibility";
 import { ownerLabel } from "../ownerLabel";
-import { onlineBot } from "../../../features/manage/onlineBot";
-import { offlineBot } from "../../../features/manage/offlineBot";
+import { safeOnline } from "../../../features/manage/onlineBot";
+import { safeOffline } from "../../../features/manage/offlineBot";
 
 function getWorkModeLabel(mode: string): string {
   const map: Record<string, string> = {
@@ -77,7 +77,7 @@ export function showOnlineManagement(player: Player): void {
 
   builder.show(player).then((vals) => {
     if (!vals) return;
-    let tickDelay = 0;
+    const pending: Array<{ record: any; newVal: boolean }> = [];
     let changedCount = 0;
 
     for (let i = 0; i < records.length; i++) {
@@ -96,27 +96,30 @@ export function showOnlineManagement(player: Player): void {
           continue;
         }
       }
-
-      system.runTimeout(() => {
-        try {
-          if (newVal && !record.online) {
-            // onlineBot 永不 reject（失败 resolve { ok: false, reason }）
-            onlineBot(record).then((result) => {
-              if (!result.ok) { player.sendMessage(`${color.error}${record.name} 上线失败: ${result.reason ?? "unknown"}`); return; }
-            });
-          } else if (!newVal && record.online) {
-            offlineBot(record);
-          }
-        } catch (e: any) {
-          player.sendMessage(`${color.error}${record.name} 状态切换失败: ${e.message}`);
-        }
-      }, tickDelay);
-      tickDelay += 20;
+      pending.push({ record, newVal });
       changedCount++;
     }
 
     if (changedCount > 0) {
-      player.sendMessage(`${color.success}正在更新 ${changedCount} 个模拟玩家的在线状态...`);
+      player.sendMessage(`${color.success}正在更新 ${changedCount} 个模拟玩家的在线状态（安全上下线已内置排队与等待，无需外部冷却）...`);
+      // 安全上下线已内置3秒/2秒等待与排队，批量时顺序 await 即可，无需 tickDelay
+      system.run(async () => {
+        for (const { record, newVal } of pending) {
+          try {
+            if (newVal && !record.online) {
+              const result = await safeOnline(record);
+              if (!result.ok) player.sendMessage(`${color.error}${record.name} 上线失败: ${result.reason ?? "unknown"}`);
+              else player.sendMessage(`${color.success}${record.name} 已上线`);
+            } else if (!newVal && record.online) {
+              const result = await safeOffline(record);
+              if (!result.ok) player.sendMessage(`${color.error}${record.name} 下线失败: ${result.reason ?? "unknown"}`);
+              else player.sendMessage(`${color.success}${record.name} 已下线`);
+            }
+          } catch (e: any) {
+            player.sendMessage(`${color.error}${record.name} 状态切换失败: ${e.message}`);
+          }
+        }
+      });
     }
   });
 }

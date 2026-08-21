@@ -1,4 +1,4 @@
-import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
+import { system, CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { resolveBotForCommand } from "../auth";
@@ -13,7 +13,14 @@ export function registerOfflineCommand(registry: any): void {
     const bot = resolveBotForCommand(player, targetName);
     if (!bot) return;
     if (!bot.isOnline) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已经离线`); return; }
-    bot.takeOffline();
-    player.sendMessage(`${color.success}假人 ${color.playerName}${targetName}${color.success} 已下线`);
+    player.sendMessage(`${color.muted}正在安全下线 ${color.playerName}${targetName}${color.muted} ...`);
+    system.run(async () => {
+      const res = await bot.takeOffline();
+      if (!res.ok) {
+        player.sendMessage(`${color.error}${targetName} 下线失败: ${res.reason ?? "unknown"}`);
+        return;
+      }
+      player.sendMessage(`${color.success}假人 ${color.playerName}${targetName}${color.success} 已安全下线`);
+    });
   });
 }

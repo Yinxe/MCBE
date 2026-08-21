@@ -3,7 +3,7 @@ import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry, botStore } from "../../../bootstrap/context";
 import { guardBotCommand } from "../auth";
-import { onlineBot } from "../../../features/manage/onlineBot";
+import { safeOnline } from "../../../features/manage/onlineBot";
 export function registerOnlineCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:online", description: "将一个已创建的假人上线并恢复所有状态",
@@ -18,8 +18,8 @@ export function registerOnlineCommand(registry: any): void {
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }
     if (record.online) { player.sendMessage(`${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已经在线`); return; }
     system.run(async () => {
-      // onlineBot 永不 reject（失败 resolve { ok: false, reason }）
-      const result = await onlineBot(record);
+      // safeOnline 永不 reject（失败 resolve { ok: false, reason }）
+      const result = await safeOnline(record);
       if (!result.ok) {
         player.sendMessage(`${color.error}${record.name} 上线失败: ${result.reason ?? "unknown"}`);
         return;
