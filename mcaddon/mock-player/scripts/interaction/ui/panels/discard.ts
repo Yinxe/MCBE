@@ -87,7 +87,7 @@ export function showDiscardForm(player: Player, botName: string): void {
 
   new ModalFormBuilder()
     .title(`${color.bold}丢弃物品 · ${botName}`)
-    .label("hint", `${color.muted}勾选需要丢弃的槽位，提交后直接清空（不可恢复）`)
+    .label("hint", `${color.muted}勾选需要丢弃的槽位，提交后以掉落物形式丢出`)
     .toggle("mainhand", `主手: ${mainhandInfo}`, { defaultValue: false })
     .toggle("hotbar", `热栏: ${hotbarInfo}`, { defaultValue: false })
     .toggle("backpack", `背包: ${backpackInfo}`, { defaultValue: false })
@@ -109,42 +109,57 @@ export function showDiscardForm(player: Player, botName: string): void {
           let cleared = 0;
           const container = inventoryContainerOf(bot);
           const equippable = bot.getComponent("minecraft:equippable") as any;
+          const dim = bot.dimension;
+          const loc = bot.location;
+
+          const trySpawn = (item: any): void => {
+            try { dim.spawnItem(item, loc); } catch {}
+          };
 
           if (vals.mainhand && container) {
             const slot = bot.selectedSlotIndex;
-            if (container.getItem(slot)) { container.setItem(slot, undefined); cleared++; }
+            const item = container.getItem(slot);
+            if (item) { trySpawn(item); container.setItem(slot, undefined); cleared++; }
           }
           if (vals.hotbar && container) {
-            for (let i = 0; i < 9; i++) if (container.getItem(i)) { container.setItem(i, undefined); cleared++; }
+            for (let i = 0; i < 9; i++) {
+              // 主手已在上面丢过则跳过，避免重复掉落
+              if (vals.mainhand && i === (bot as any).selectedSlotIndex) continue;
+              const item = container.getItem(i);
+              if (item) { trySpawn(item); container.setItem(i, undefined); cleared++; }
+            }
           }
           if (vals.backpack && container) {
-            for (let i = 9; i < 36; i++) if (container.getItem(i)) { container.setItem(i, undefined); cleared++; }
+            for (let i = 9; i < 36; i++) {
+              const item = container.getItem(i);
+              if (item) { trySpawn(item); container.setItem(i, undefined); cleared++; }
+            }
           }
           if (vals.offhand && equippable) {
             const item = equippable.getEquipment(EquipmentSlot.Offhand);
-            if (item) { equippable.setEquipment(EquipmentSlot.Offhand, undefined); cleared++; }
+            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Offhand, undefined); cleared++; }
           }
           if (vals.head && equippable) {
             const item = equippable.getEquipment(EquipmentSlot.Head);
-            if (item) { equippable.setEquipment(EquipmentSlot.Head, undefined); cleared++; }
+            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Head, undefined); cleared++; }
           }
           if (vals.chest && equippable) {
             const item = equippable.getEquipment(EquipmentSlot.Chest);
-            if (item) { equippable.setEquipment(EquipmentSlot.Chest, undefined); cleared++; }
+            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Chest, undefined); cleared++; }
           }
           if (vals.legs && equippable) {
             const item = equippable.getEquipment(EquipmentSlot.Legs);
-            if (item) { equippable.setEquipment(EquipmentSlot.Legs, undefined); cleared++; }
+            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Legs, undefined); cleared++; }
           }
           if (vals.feet && equippable) {
             const item = equippable.getEquipment(EquipmentSlot.Feet);
-            if (item) { equippable.setEquipment(EquipmentSlot.Feet, undefined); cleared++; }
+            if (item) { trySpawn(item); equippable.setEquipment(EquipmentSlot.Feet, undefined); cleared++; }
           }
 
           if (cleared === 0) {
             player.sendMessage(`${color.warn}没有可丢弃的物品`);
           } else {
-            player.sendMessage(`${color.success}已丢弃 ${color.info}${cleared}${color.success} 个槽位的物品`);
+            player.sendMessage(`${color.success}已丢出 ${color.info}${cleared}${color.success} 个槽位的物品为掉落物`);
           }
         } catch (e: any) {
           player.sendMessage(`${color.error}丢弃失败: ${e.message}`);
