@@ -38,12 +38,13 @@ test("normalizeBotName：空输入原样返回", () => {
 });
 
 test("normalizeBotName：规范化后名字仍符合长度限制（sim- 前缀占 4 字符）", () => {
-  // 16 字符原始名 + sim- 前缀 = 20 字符 → 规范化后超限（isValidBotName 拒绝）
+  // MAX 字符原始名 + sim- 前缀 = MAX+4 字符 → 规范化后超限（isValidBotName 拒绝）
   const normalized = normalizeBotName("a".repeat(MAX_BOT_NAME_LENGTH));
   assert.ok(isValidBotName(normalized) === false);
-  // 12 字符 + sim- = 16 刚好合法，13 字符 + sim- = 17 超限
-  assert.ok(isValidBotName(normalizeBotName("a".repeat(12))) === true);
-  assert.ok(isValidBotName(normalizeBotName("a".repeat(13))) === false);
+  // MAX-4 字符 + sim- = MAX 刚好合法，MAX-3 字符 + sim- = MAX+1 超限
+  const maxWithoutPrefix = MAX_BOT_NAME_LENGTH - BOT_NAME_PREFIX.length;
+  assert.ok(isValidBotName(normalizeBotName("a".repeat(maxWithoutPrefix))) === true);
+  assert.ok(isValidBotName(normalizeBotName("a".repeat(maxWithoutPrefix + 1))) === false);
 });
 
 test("常量：DP 前缀与标签前缀互不相同", () => {

@@ -31,9 +31,10 @@ function buildListMessage(records: BotRecord[], isAdminPlayer: boolean, filterOn
   if (filterDeath !== undefined) filtered = filtered.filter((r) => r.death === filterDeath);
   if (filtered.length === 0) return `${color.playerName}没有匹配的假人`;
 
+  const workModeLabels: Record<string, string> = { none: "空闲", wander: "闲逛", mine: "挖掘", place: "放置", attack: "攻击", raid: "劫掠", fishing: "钓鱼", follow: "跟随" };
   const lines = filtered.map((r) => {
     const icon = r.death ? `${color.error}💀` : r.online ? `${color.success}✔` : `${color.muted}❌`;
-    const txt = r.death ? `${color.error}死亡` : r.online ? `${color.success}在线` : `${color.muted}离线`;
+    const txt = r.death ? `${color.error}死亡` : r.online ? `${color.success}${workModeLabels[r.workMode] ?? r.workMode}` : `${color.muted}离线`;
     const pos =
       r.death && r.deathPoint
         ? `${formatPos(r.deathPoint.location)} ${color.darkGray}${formatDimensionId(r.deathPoint.dimension)} ${color.muted}(死亡点)`

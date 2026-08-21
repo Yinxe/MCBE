@@ -2,7 +2,7 @@
 // 纯逻辑：从持久化原始值解析并合并 ModConfig（损坏/缺失/部分字段回退默认）。
 // McConfigStore.refresh 调用本函数，保证配置解析可脱离 mcapi 单测。
 
-import { createDefaultConfig } from "../rules/Types";
+import { createDefaultConfig, MENU_TRIGGER_OPTIONS } from "../rules/Types";
 import type { ModConfig } from "../rules/Types";
 
 /**
@@ -39,6 +39,7 @@ export function mergeStoredConfig(raw: string | undefined): ModConfig {
     enabledWorkModes: s.enabledWorkModes !== null && typeof s.enabledWorkModes === "object" && !Array.isArray(s.enabledWorkModes)
       ? sanitizeEnabledWorkModes(s.enabledWorkModes as Record<string, unknown>)
       : {},
+    menuTriggerItemId: sanitizeMenuTrigger(s.menuTriggerItemId, base.menuTriggerItemId!),
   };
 }
 
@@ -60,4 +61,13 @@ function sanitizeEnabledWorkModes(modes: Record<string, unknown>): Record<string
     if (typeof v === "boolean") result[k] = v;
   }
   return result;
+}
+
+/** 过滤触发信物：null 表示关闭，仅允许预定义列表内的物品 ID，其余回退默认 */
+function sanitizeMenuTrigger(value: unknown, fallback: string | null): string | null {
+  if (value === null) return null;
+  if (typeof value === "string") {
+    if (MENU_TRIGGER_OPTIONS.some((o) => o.itemId === value)) return value;
+  }
+  return fallback;
 }

@@ -21,10 +21,26 @@ import { ownerLabel } from "./ownerLabel";
 
 // ─── 工具 ──────────────────────────────────────────────
 
+function getWorkModeLabel(mode: string): string {
+  const map: Record<string, string> = {
+    none: "空闲",
+    wander: "闲逛",
+    mine: "挖掘",
+    place: "放置",
+    attack: "攻击",
+    raid: "劫掠",
+    fishing: "钓鱼",
+    follow: "跟随",
+  };
+  return map[mode] ?? mode;
+}
+
 function getStatusIcon(record: BotRecord): string {
   if (record.death) return style("[死亡]", color.error);
-  if (record.online) return style("[在线]", color.success);
-  return style("[离线]", color.warn);
+  if (!record.online) return style("[离线]", color.warn);
+  // 在线时显示工作模式，不再显示固定"在线"
+  const label = getWorkModeLabel(record.workMode);
+  return style(`[${label}]`, record.workMode === "none" ? color.warn : color.success);
 }
 
 function getPosSummary(record: BotRecord): string {
@@ -55,7 +71,9 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
   }
 
   const ownerStr = record.ownerName ? `\n${color.accent}主人: ${color.playerName}${record.ownerName}` : `\n${color.muted}无主（仅管理员可管理）`;
-  const tagLabels = record.tags.filter(t => t !== BOT_TAG).map(t => { const d = getTagDef(t); return d ? d.label : t; });
+  const workModeStr = `\n${color.accent}模式: ${color.playerName}${getWorkModeLabel(record.workMode)}`;
+  // 标签中过滤掉空闲（已由工作模式展示，避免重复“空闲”）
+  const tagLabels = record.tags.filter(t => t !== BOT_TAG && t !== "mockplayer:tag:idle").map(t => { const d = getTagDef(t); return d ? d.label : t; });
   const tagStr = tagLabels.length > 0 ? `\n${color.accent}标签: ${color.playerName}${tagLabels.join(`${color.accent} | ${color.playerName}`)}` : "";
   const expStr = record.experience ? `\n${color.accent}经验: ${color.playerName}Lv.${record.experience.level} ${color.accent}(${record.experience.totalXp} XP)` : "";
 
@@ -66,7 +84,7 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
 
   new ActionFormBuilder()
     .title(`${color.bold}${botName} ${getStatusIcon(record)}`)
-    .body(`${getPosSummary(record)}${ownerStr}${tagStr}${expStr}`)
+    .body(`${getPosSummary(record)}${ownerStr}${workModeStr}${tagStr}${expStr}`)
     // ── 上线/下线（置顶） ──
     .button(record.online ? style("设为离线", color.darkGreen) : style("设为在线", color.darkGreen), () => trigger("toggleOnline"))
     // ── 传送 ──

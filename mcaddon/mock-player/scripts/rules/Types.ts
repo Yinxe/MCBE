@@ -295,6 +295,25 @@ export interface ReclaimPreview {
 /** 全局配置默认值：每玩家默认配额（管理员不受配额限制） */
 export const DEFAULT_QUOTA = 5;
 
+/** 模组菜单触发信物默认值（木棍） */
+export const DEFAULT_MENU_TRIGGER_ITEM = "minecraft:stick";
+
+/** 模组菜单触发信物选项（参考 item-route TOKEN_OPTIONS，默认木棍，null=无仅命令） */
+export const MENU_TRIGGER_OPTIONS: readonly { label: string; itemId: string | null }[] = [
+  { label: "§7无 (仅命令 /mp:menu)", itemId: null },
+  { label: "§e木棍 (默认)", itemId: "minecraft:stick" },
+  { label: "§e木锄", itemId: "minecraft:wooden_hoe" },
+  { label: "§b鹦鹉螺壳", itemId: "minecraft:nautilus_shell" },
+  { label: "§6唱片残片5", itemId: "minecraft:disc_fragment_5" },
+  { label: "§b下界之星", itemId: "minecraft:nether_star" },
+  { label: "§6烈焰粉", itemId: "minecraft:blaze_powder" },
+  { label: "§f羽毛", itemId: "minecraft:feather" },
+  { label: "§7燧石", itemId: "minecraft:flint" },
+  { label: "§6烈焰棒", itemId: "minecraft:blaze_rod" },
+  { label: "§b旋风棒", itemId: "minecraft:breeze_rod" },
+  { label: "§f箭", itemId: "minecraft:arrow" },
+];
+
 /**
  * 全局配置（管理员菜单可改），单键 DP `mockplayer:config` 存储。
  * 纯可序列化数据，core 层定义，mc 层 McConfigStore 负责读写。
@@ -312,6 +331,8 @@ export interface ModConfig {
   ownerOfflineAutoOffline: boolean;
   /** 各工作模式是否启用（key = workMode，false=禁用；缺省全启用） */
   enabledWorkModes?: Record<string, boolean>;
+  /** 模组菜单触发信物物品 ID，null 表示关闭（仅命令触发） */
+  menuTriggerItemId?: string | null;
 }
 
 /** 默认配置（早执行创建用；worldLoad 后从持久化 refresh 合并） */
@@ -323,5 +344,6 @@ export function createDefaultConfig(): ModConfig {
     autoOnlineOnRestart: true,
     ownerOfflineAutoOffline: false,
     enabledWorkModes: {},
+    menuTriggerItemId: DEFAULT_MENU_TRIGGER_ITEM,
   } as ModConfig;
 }

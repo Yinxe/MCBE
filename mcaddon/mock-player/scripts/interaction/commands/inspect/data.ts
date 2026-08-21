@@ -46,8 +46,9 @@ export function sendData(player: Player, record: BotRecord): void {
     }
   }
 
-  // ── 基础信息 ──
-  const status = record.death ? `${color.error}死亡` : record.online ? `${color.success}在线` : `${color.muted}离线`;
+  // ── 基础信息（工作模式：在线时显示具体模式，不再固定显示空闲） ──
+  const workModeLabels: Record<string, string> = { none: "空闲", wander: "闲逛", mine: "挖掘", place: "放置", attack: "攻击", raid: "劫掠", fishing: "钓鱼", follow: "跟随" };
+  const status = record.death ? `${color.error}死亡` : record.online ? `${color.success}${workModeLabels[record.workMode] ?? record.workMode}` : `${color.muted}离线`;
   lines.push(`${color.muted}状态: ${status}  ${color.muted}实体ID: ${color.info}${record.entityId ?? "无"}`);
   lines.push(`${color.muted}生成模式: ${record.spawnMode === "chunkload" ? `${color.accent}强加载` : `${color.success}普通`}`);
   lines.push(`${color.muted}潜行: ${record.isSneaking ? `${color.success}是` : `${color.muted}否`}  ${color.muted}控制器: ${record.controllerId ?? `${color.muted}无`}`);

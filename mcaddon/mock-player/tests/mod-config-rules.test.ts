@@ -70,7 +70,7 @@ test("admins 过滤：只保留非空字符串", () => {
 test("完整配置往返无损", () => {
   const saved = JSON.stringify({ defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"] });
   const cfg = mergeStoredConfig(saved);
-  assert.deepEqual(cfg, { defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"], autoOnlineOnRestart: true, ownerOfflineAutoOffline: false });
+  assert.deepEqual(cfg, { defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"], autoOnlineOnRestart: true, ownerOfflineAutoOffline: false, enabledWorkModes: {}, menuTriggerItemId: "minecraft:stick" });
 });
 
 test("新增配置默认：autoOnlineOnRestart=true, ownerOfflineAutoOffline=false", () => {
@@ -93,4 +93,23 @@ test("新增配置往返无损", () => {
   const cfg = mergeStoredConfig(saved);
   assert.equal(cfg.autoOnlineOnRestart, false);
   assert.equal(cfg.ownerOfflineAutoOffline, true);
+});
+
+test("触发信物默认：menuTriggerItemId=minecraft:stick", () => {
+  const cfg = mergeStoredConfig(undefined);
+  assert.equal(cfg.menuTriggerItemId, "minecraft:stick");
+});
+
+test("触发信物过滤：非法值回退默认，null 保留", () => {
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:stick" })).menuTriggerItemId, "minecraft:stick");
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: null })).menuTriggerItemId, null);
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:diamond_sword" })).menuTriggerItemId, "minecraft:stick"); // 非预设列表回退
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "" })).menuTriggerItemId, "minecraft:stick");
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: 123 })).menuTriggerItemId, "minecraft:stick");
+});
+
+test("触发信物往返无损：null 与预设值", () => {
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: null })).menuTriggerItemId, null);
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:wooden_hoe" })).menuTriggerItemId, "minecraft:wooden_hoe");
+  assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:feather" })).menuTriggerItemId, "minecraft:feather");
 });

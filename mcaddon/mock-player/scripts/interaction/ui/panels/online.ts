@@ -14,10 +14,19 @@ import { ownerLabel } from "../ownerLabel";
 import { onlineBot } from "../../../features/manage/onlineBot";
 import { offlineBot } from "../../../features/manage/offlineBot";
 
-function getStatusIcon(death: boolean, online: boolean): string {
+function getWorkModeLabel(mode: string): string {
+  const map: Record<string, string> = {
+    none: "空闲", wander: "闲逛", mine: "挖掘", place: "放置",
+    attack: "攻击", raid: "劫掠", fishing: "钓鱼", follow: "跟随",
+  };
+  return map[mode] ?? mode;
+}
+
+function getStatusIcon(death: boolean, online: boolean, workMode?: string): string {
   if (death) return style("[死亡]", color.error);
-  if (online) return style("[在线]", color.success);
-  return style("[离线]", color.warn);
+  if (!online) return style("[离线]", color.warn);
+  const label = getWorkModeLabel(workMode ?? "none");
+  return style(`[${label}]`, workMode === "none" || !workMode ? color.warn : color.success);
 }
 
 function getPosSummary(record: import("../../../rules/Types").BotRecord): string {
@@ -48,7 +57,7 @@ export function showOnlineManagement(player: Player): void {
 
   for (let i = 0; i < records.length; i++) {
     const record = records[i];
-    const icon = getStatusIcon(record.death, record.online);
+    const icon = getStatusIcon(record.death, record.online, record.workMode);
     const posSummary = getPosSummary(record);
     const tagSummary = record.tags
       .filter((t) => t !== BOT_TAG)

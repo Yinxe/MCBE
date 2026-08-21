@@ -4,7 +4,7 @@
 // ⚠️ 早执行安全：构造时只建默认值不读 DP；持久化值须 Phase 4 `refresh()` 读取合并。
 
 import { world } from "@minecraft/server";
-import { createDefaultConfig } from "../../rules/Types";
+import { createDefaultConfig, DEFAULT_MENU_TRIGGER_ITEM } from "../../rules/Types";
 import type { ModConfig } from "../../rules/Types";
 import { mergeStoredConfig } from "../ModConfigRules";
 
@@ -109,6 +109,25 @@ export class McConfigStore {
     if (this.config.enabledWorkModes && Object.keys(this.config.enabledWorkModes).length === 0) {
       delete (this.config as any).enabledWorkModes;
     }
+    this.persist();
+  }
+
+  /** 获取模组菜单触发信物物品 ID（null=仅命令） */
+  getMenuTriggerItemId(): string | null {
+    const v = this.config.menuTriggerItemId;
+    return v === undefined ? DEFAULT_MENU_TRIGGER_ITEM : v;
+  }
+
+  /** 判断物品是否为模组菜单触发信物（null 时永远 false，仅命令可触发） */
+  isMenuTrigger(itemTypeId: string | undefined): boolean {
+    const trigger = this.getMenuTriggerItemId();
+    if (trigger === null) return false;
+    return itemTypeId === trigger;
+  }
+
+  /** 设置模组菜单触发信物（null=关闭物品触发，仅命令） */
+  setMenuTriggerItemId(itemId: string | null): void {
+    this.config.menuTriggerItemId = itemId;
     this.persist();
   }
 
