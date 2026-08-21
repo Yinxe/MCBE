@@ -92,18 +92,18 @@ export class McConfigStore {
     this.persist();
   }
 
-  /** 工作模式是否启用（缺省启用） */
+  /** 工作模式是否启用（缺省禁用） */
   isWorkModeEnabled(mode: string): boolean {
-    return this.config.enabledWorkModes?.[mode] !== false;
+    return this.config.enabledWorkModes?.[mode] === true;
   }
 
   /** 设置工作模式启用/禁用 */
   setWorkModeEnabled(mode: string, enabled: boolean): void {
     if (!this.config.enabledWorkModes) this.config.enabledWorkModes = {};
     if (enabled) {
-      delete this.config.enabledWorkModes[mode];
+      this.config.enabledWorkModes[mode] = true;
     } else {
-      this.config.enabledWorkModes[mode] = false;
+      delete this.config.enabledWorkModes[mode];
     }
     // 清理空对象保持 JSON 简洁
     if (this.config.enabledWorkModes && Object.keys(this.config.enabledWorkModes).length === 0) {

@@ -329,7 +329,7 @@ export interface ModConfig {
   autoOnlineOnRestart: boolean;
   /** 主人下线时是否联动下线其所属假人（默认不下线） */
   ownerOfflineAutoOffline: boolean;
-  /** 各工作模式是否启用（key = workMode，false=禁用；缺省全启用） */
+  /** 各工作模式是否启用（key = workMode，true=启用；缺省全禁用） */
   enabledWorkModes?: Record<string, boolean>;
   /** 模组菜单触发信物物品 ID，null 表示关闭（仅命令触发） */
   menuTriggerItemId?: string | null;

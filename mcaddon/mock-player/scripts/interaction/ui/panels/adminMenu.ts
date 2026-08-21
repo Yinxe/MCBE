@@ -74,7 +74,7 @@ export async function showGlobalConfig(player: Player): Promise<void> {
     .label("workModeHeader", `${color.accent}— 工作模式启用 —`);
 
   for (const mode of workModes) {
-    const enabled = cfg.enabledWorkModes?.[mode] !== false;
+    const enabled = cfg.enabledWorkModes?.[mode] === true;
     const labelMap: Record<string, string> = {
       wander: "闲逛模式", mine: "自动挖掘", place: "自动放置", attack: "自动攻击",
       raid: "劫掠模式", fishing: "自动钓鱼", follow: "自动跟随",
@@ -112,7 +112,7 @@ export async function showGlobalConfig(player: Player): Promise<void> {
   let disabledModes: string[] = [];
   for (const mode of workModes) {
     const v = vals[`wm_${mode}`] as boolean | undefined;
-    if (typeof v === "boolean" && (cfg.enabledWorkModes?.[mode] !== false) !== v) {
+    if (typeof v === "boolean" && (cfg.enabledWorkModes?.[mode] === true) !== v) {
       configStore.setWorkModeEnabled(mode, v);
       changedMode = true;
       if (v === false) disabledModes.push(mode);
