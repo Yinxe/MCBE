@@ -59,6 +59,24 @@ export function handleWorldLoad(): void {
     console.warn(`[MockPlayer] 恢复记录失败: ${e?.message ?? e}`);
   }
 
+  // 辅助区块孤儿清理与 Set 同步（合规优化：修复重启后 Set 丢失与崩溃残留）
+  system.run(async () => {
+    try {
+      const { syncAuxFromWorld, cleanupOrphanAuxAreas } = await import("../features/manage/auxiliary");
+      const { syncCommandAreasFromWorld } = await import("../features/manage/tickingArea/sim4");
+      try {
+        syncCommandAreasFromWorld?.();
+      } catch {}
+      try {
+        syncAuxFromWorld();
+      } catch {}
+      const removed = cleanupOrphanAuxAreas();
+      if (removed > 0) console.info(`[MockPlayer] worldLoad 孤儿辅助清理 ${removed} 个`);
+    } catch (e: any) {
+      console.warn(`[MockPlayer] 辅助区块同步/清理失败: ${e?.message ?? e}`);
+    }
+  });
+
   try {
     runMigrations();
   } catch (e: any) {

@@ -538,3 +538,48 @@ onEntityDie(deadEntity has BOT_TAG && record):
 > 复核 Round5：52 处 safeOnline/safeOffline 调用均走辅助域，枚举 6 lifecycle 命令（create/delete/online/offline/kill/reclaim）均受 guard/per-bot 队列保护，tsc 0
 > 复核 Round6：4-Phase启动(worldLoad Ready守卫+ 8引擎try-catch)与tick双域(sim4/singleChunk)幂等移除均与main.ts/worldLoad.ts一致，tsc 0
 > 复核 Round7：新增持续验证计划 docs/superpowers/plans/2026-08-25-bot-lifecycle-verify.md，闭环证据链 79dcecf→d747b38→086d538，tsc 0
+
+---
+
+## 14. 复验与优化（2026-08-25 Round9 深度复验）
+
+> 应“复验辅助区块加载申请流程是否合理合规”要求，对 §5 双域与 §3-§4 上下线辅助进行合规审计与优化。
+
+### 14.1 合规性审计结论
+
+| 审计项 | 原实现 | 判定 | 依据 |
+|---|---|---|---|
+| **域隔离 claimed** | 代码注释“命令域 vs Manager 隔离” | ❌ 不合规 | 实测 `tickingarea` 命令与 `world.tickingAreaManager` 共享同一注册表（`getAllTickingAreas` 可见命令创建的区域），同名 `mockplayer:aux:<name>` 会冲突，原 `commandAreas` Set 与 Manager 未同步导致重启后 name 冲突 |
+| **Sim4 容量校验** | Sim4 直接 `tickingarea add circle`，无 `hasCapacity` | ❌ 不合规 | SingleChunk 有 `hasCapacity + chunkCount/maxChunkCount` 校验，Sim4 缺失会导致超限静默失败（`successCount=0`） |
+| **Set 持久化** | `commandAreas` 纯内存 Set | ❌ 不合规 | 世界重启后 Set 丢失，`hasTickingArea` 误判 false，重建同名失败 |
+| **孤儿残留** | 无 worldLoad 清理 | ❌ 不合规 | 崩溃/异常未移除的 `mockplayer:aux:*` 永久占 capacity |
+| **失败回退** | Sim4 失败直接 return | ⚠️ 可优化 | 容量不足时可降级 SingleChunk（1 块列）保底，而非完全无辅助 |
+| **下线前清理** | SingleChunk 创建前仅清 Manager | ⚠️ 可优化 | 需双域清理（命令+Manager）避免 Sim4 残留导致 SingleChunk 同名失败 |
+| **二次校验** | 仅 `successCount>0` | ⚠️ 可优化 | 应加 `hasTickingArea` 二次确认 |
+| **Vault 跳过** | 宝库模式跳过辅助 | ✅ 合规 | 宝库高频重连，跳过避免抖动，符合用户拍板 |
+| **时序** | 上线后 Sim4 / 下线前 SingleChunk | ✅ 合理 | 上线不依赖预申请（spawn 自带加载），下线前占位保障 saveFullState，延迟卸载防闪断 |
+
+### 14.2 优化落地
+
+| 优化 | 文件 | 改动 |
+|---|---|---|
+| **Sim4 容量预检+回退** | `tickingArea/sim4.ts` | 新增 `estimateSim4ChunkCount(81 上界)` + `hasCapacity` boundingBox 预检（`center±r*16`），失败返回 `容量不足→回退单区块`；创建后 `hasTickingArea` 二次校验 |
+| **Set 同步** | `tickingArea/sim4.ts` | 新增 `syncCommandAreasFromWorld()` 从 `getAllTickingAreas` 回填 `mockplayer:aux:*`，`hasTickingArea` 双重查询（Set OR Manager） |
+| **统一双域移除** | `tickingArea/sim4.ts` `offlineBot.ts` | `removeSim4Area` 同时尝试 Manager 移除；`offlineBot` 下线前/后双域清理（`removeSim4Area` + `Manager.remove`） |
+| **回退创建** | `auxiliary.ts` `onlineBot.ts` | 新增 `createAuxWithFallback`（Sim4→SingleChunk），`onlineBot` 改为 `createAuxWithFallback`，容量不足自动降级并日志 `fallback` |
+| **孤儿清理** | `auxiliary.ts` `bootstrap/worldLoad.ts` | 新增 `syncAuxFromWorld`/`cleanupOrphanAuxAreas`（遍历 Manager，移除离线/不存在假人的 `aux:*`），`worldLoad` `system.run(async)` 中调用 |
+
+### 14.3 优化后流程（合规）
+
+```
+上线： rawOnline → createAuxWithFallback(Sim4 81块预检 → 命令 → 校验 → 失败则 SingleChunk 1块回退) → 采样
+下线： 双域清理(Sim4+Manager) → createSingleChunkArea(1块 hasCapacity) → rawOffline → delay cooldown → 双域移除
+启动： restoreAll → system.run( syncCommandAreasFromWorld + syncAuxFromWorld + cleanupOrphanAuxAreas ) → autoOnline
+```
+
+- 同名 `mockplayer:aux:<name>` 仍为 per-bot 单例，但创建前双域清理、创建后双域校验，彻底消除跨域残留
+- 容量模型统一：Sim4 81 上界、SingleChunk 1 块，均受 `maxChunkCount` 约束
+- 孤儿零残留：重启自动回收，capacity 不泄漏
+- 回退保证：即使 50+ 假人并发导致 Sim4 超限，仍有 1 块保底，`test.spawn` 小范围兜底为最后防线
+
+> 验证：`tsc 0` / `tsc -p tsconfig.test.json 0` / 抽样 27 pass / 四提交证据链 `79dcecf→773550a` 保持

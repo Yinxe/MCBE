@@ -16,9 +16,9 @@ import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { spawnBot } from "./spawnMode";
 import { trackBotOnline } from "../trident/tridentTracker";
-import { createSim4Area } from "./tickingArea";
 import {
   checkOnlineQuota,
+  createAuxWithFallback,
   delayTicks,
   getAuxAreaName,
   getCooldownTicks,
@@ -105,28 +105,34 @@ export async function safeOnline(record: BotRecord): Promise<OnlineResult> {
     }
     console.info(`[MockPlayer] 非宝库，准备刷新 per-bot 模拟4 for ${record.name}`);
 
-    // 3. 上线后刷新 per-bot 模拟4（常驻）
+    // 3. 上线后刷新 per-bot 模拟4（常驻，容量不足自动回退单区块）
     const bot = result.bot;
     const areaName = getAuxAreaName(record.name);
     console.info(
-      `[MockPlayer] → createSim4Area ${areaName} @ ${bot.dimension.id} ${Math.floor(bot.location.x)},${Math.floor(bot.location.y)},${Math.floor(bot.location.z)} r=4`
+      `[MockPlayer] → createAuxWithFallback(Sim4→单区块) ${areaName} @ ${bot.dimension.id} ${Math.floor(bot.location.x)},${Math.floor(bot.location.y)},${Math.floor(bot.location.z)} r=4`
     );
-    const res = await createSim4Area(bot.location as Vector3, bot.dimension as Dimension, areaName);
+    const res = await createAuxWithFallback(bot.location as Vector3, bot.dimension as Dimension, areaName);
     if (!res.ok) {
       console.warn(
-        `[MockPlayer] 上线后刷新模拟4失败 ${record.name}: ${res.reason}（容量不足时仍保持上线，小范围已由 test 兜底）`
+        `[MockPlayer] 上线后辅助区块申请失败 ${record.name}: ${res.reason}（仍保持上线，小范围已由 test 兜底）`
       );
       // 通知主人容量不足
       const ownerName = record.ownerName;
       if (ownerName) {
         const owner = world.getAllPlayers().find((p) => p.name === ownerName);
-        owner?.sendMessage(`${color.warn}【${record.name}】模拟4申请失败: ${res.reason}，已回退小范围常加载`);
+        owner?.sendMessage(`${color.warn}【${record.name}】辅助常加载申请失败: ${res.reason}，已回退小范围常加载`);
       }
       return result;
     }
-    console.info(
-      `[MockPlayer] 上线后刷新模拟4成功 ${areaName} @ ${bot.dimension.id} ${Math.floor(bot.location.x)},${Math.floor(bot.location.z)} for ${record.name}`
-    );
+    if ((res as any).fallback) {
+      console.info(
+        `[MockPlayer] 上线后辅助区块成功（回退单区块） ${areaName} @ ${bot.dimension.id} ${Math.floor(bot.location.x)},${Math.floor(bot.location.z)} for ${record.name}（Sim4 容量不足降级）`
+      );
+    } else {
+      console.info(
+        `[MockPlayer] 上线后刷新模拟4成功 ${areaName} @ ${bot.dimension.id} ${Math.floor(bot.location.x)},${Math.floor(bot.location.z)} for ${record.name}`
+      );
+    }
 
     // 4. 采样自检并 ASCII 输出（仅主人），稍延迟让区块完成加载
     console.info(`[MockPlayer] → 采样模拟4 ${areaName} 延迟 2t 后`);

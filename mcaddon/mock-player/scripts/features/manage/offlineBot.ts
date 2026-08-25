@@ -11,6 +11,7 @@ import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { trackBotOffline } from "../trident/tridentTracker";
 import { createSingleChunkArea, removeSingleChunkArea } from "./tickingArea/singleChunk";
+import { removeSim4Area } from "./tickingArea/sim4";
 import { delayTicks, getAuxAreaName, getCooldownTicks, getPerBotQueue, isVaultMode, setPerBotQueue } from "./auxiliary";
 
 /** 下线结果 */
@@ -105,6 +106,15 @@ export async function safeOffline(record: BotRecord): Promise<OfflineResult> {
 
     const areaName = getAuxAreaName(record.name);
     // 下线前申请单区块常加载（Manager，支持 255 并发）
+    // ⚠️ 优化：先尝试清理旧 Sim4 残留（命令+Manager双域），避免同名冲突导致 SingleChunk 创建失败
+    try {
+      removeSim4Area(areaName, targetDim as any);
+    } catch {}
+    try {
+      if (world.tickingAreaManager.hasTickingArea(areaName)) {
+        world.tickingAreaManager.removeTickingArea(areaName);
+      }
+    } catch {}
     console.info(
       `[MockPlayer] safeOffline 下线前申请单区块 ${areaName} @ ${targetDim.id} ${Math.floor(center.x)},${Math.floor(center.z)} for ${record.name}`
     );
@@ -133,13 +143,17 @@ export async function safeOffline(record: BotRecord): Promise<OfflineResult> {
       offlineOk = false;
       offlineReason = e?.message ?? "unknown";
     } finally {
-      console.info(`[MockPlayer] → 延迟 ${getCooldownTicks()}t 后卸载单区块 ${areaName}`);
+      console.info(`[MockPlayer] → 延迟 ${getCooldownTicks()}t 后卸载辅助区块 ${areaName}`);
       await delayTicks(getCooldownTicks());
-      console.info(`[MockPlayer] → removeSingleChunkArea ${areaName}`);
+      console.info(`[MockPlayer] → 移除辅助区块 ${areaName}（双域兜底）`);
       try {
         const rr = removeSingleChunkArea(areaName);
+        // 同时尝试命令域移除（双重保障，防 Sim4 残留）
+        try {
+          removeSim4Area(areaName, targetDim as any);
+        } catch {}
         if (!rr.ok) console.warn(`[MockPlayer] 安全下线移除失败 ${record.name}: ${rr.reason}`);
-        else console.info(`[MockPlayer] 安全下线已延迟卸载单区块 ${areaName} for ${record.name}`);
+        else console.info(`[MockPlayer] 安全下线已延迟卸载辅助区块 ${areaName} for ${record.name}`);
       } catch (e: any) {
         console.warn(`[MockPlayer] 安全下线卸载异常 ${record.name}: ${e?.message ?? e}`);
       }

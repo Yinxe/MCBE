@@ -1,6 +1,9 @@
 // ─── 模拟4 常加载（命令域 9×9 圆形） ─────────────────
-// 仅走游戏命令 `tickingarea add circle <xyz> 4 <name>`，不使用 Manager
+// 仅走游戏命令 `tickingarea add circle <xyz> 4 <name>`，不使用 Manager API 直接创建
 // 供上线后刷新 per-bot `mockplayer:aux:<name>` 常驻辅助
+// ⚠️ 合规说明：命令与 Manager 共享同一世界 tickingArea 注册表（非双域隔离），
+//    故本模块的内存 Set 需与世界 Manager 保持同步（见 syncCommandAreasFromWorld），
+//    且 Sim4 亦需做容量预检（复用 Manager 的 hasCapacity）。
 
 import { world } from "@minecraft/server";
 import type { Dimension, Vector3 } from "@minecraft/server";
@@ -8,25 +11,100 @@ import { SIM4_TICKING_RADIUS_CHUNKS } from "../../../rules/Types";
 
 export const SIM4_RADIUS = SIM4_TICKING_RADIUS_CHUNKS;
 
+/** 内存镜像：已创建的 Sim4 名称（幂等/查询加速），需与世界 Manager 同步 */
 const commandAreas = new Set<string>();
 
+/** Sim4 圆形 r=4 的最坏 chunk 数（外接正方形 9×9=81），用于容量预检 */
+function estimateSim4ChunkCount(radius: number = SIM4_RADIUS): number {
+  const d = radius * 2 + 1;
+  return d * d; // 9×9=81，实际圆形 ~52，取上界保证不超限
+}
+
+/** 统一查询：内存 Set 命中 或 世界 Manager 已存在（双重保障，防重启后 Set 丢失） */
 export function hasTickingArea(name: string): boolean {
-  return commandAreas.has(name);
+  if (commandAreas.has(name)) return true;
+  try {
+    if (world.tickingAreaManager.hasTickingArea(name)) return true;
+  } catch {}
+  return false;
+}
+
+/** 同步内存 Set ← 世界 Manager（worldLoad 时调用，修复重启后 Set 丢失导致的 name 冲突） */
+export function syncCommandAreasFromWorld(): void {
+  try {
+    const all = world.tickingAreaManager.getAllTickingAreas?.() as any[] | undefined;
+    if (!all) return;
+    for (const a of all) {
+      const id = (a as any).identifier ?? (a as any).name;
+      if (typeof id === "string" && id.startsWith("mockplayer:aux:")) {
+        commandAreas.add(id);
+      }
+    }
+  } catch {}
 }
 
 export async function createSim4Area(center: Vector3, dimension: Dimension, name: string) {
   if (!name) return { ok: false, reason: "常加载区域名不能为空" } as const;
+  // 幂等：先清理同名残留（同时清内存 Set + 世界 Manager/命令，防止跨域残留导致创建失败）
   try {
     removeSim4Area(name, dimension);
   } catch {}
+  try {
+    if (world.tickingAreaManager.hasTickingArea(name)) {
+      world.tickingAreaManager.removeTickingArea(name);
+    }
+  } catch {}
+
+  // 容量预检（复用 Manager 的 hasCapacity，外接正方形 boundingBox 作为上界）
+  const est = estimateSim4ChunkCount();
+  try {
+    const r = SIM4_RADIUS;
+    const from = {
+      x: Math.floor(center.x / 16) * 16 - r * 16,
+      y: 0,
+      z: Math.floor(center.z / 16) * 16 - r * 16,
+    };
+    const to = {
+      x: Math.floor(center.x / 16) * 16 + r * 16 + 15,
+      y: 0,
+      z: Math.floor(center.z / 16) * 16 + r * 16 + 15,
+    };
+    const opts = { dimension, from, to } as any;
+    if (!world.tickingAreaManager.hasCapacity(opts)) {
+      const chunkCount = (world.tickingAreaManager as any).chunkCount ?? "?";
+      const maxChunkCount = (world.tickingAreaManager as any).maxChunkCount ?? "?";
+      return {
+        ok: false,
+        reason: `模拟4容量不足（预估 ${est} 块列，当前 ${chunkCount}/${maxChunkCount}），将回退单区块`,
+      } as const;
+    }
+  } catch (e: any) {
+    // hasCapacity 异常不阻断创建（降级为直接尝试命令，失败再回退）
+    console.warn(`[MockPlayer] Sim4 容量预检异常 ${name}: ${e?.message ?? e}`);
+  }
+
   const r = createViaCommand(center, dimension, name, SIM4_RADIUS);
-  if (r.ok) commandAreas.add(name);
+  if (r.ok) {
+    commandAreas.add(name);
+    // 创建后二次校验：Manager 是否可见（防 successCount 误报）
+    try {
+      if (!world.tickingAreaManager.hasTickingArea(name)) {
+        console.warn(`[MockPlayer] Sim4 创建后校验未见 ${name}（命令 successCount>0 但 Manager 无记录）`);
+      }
+    } catch {}
+  }
   return r;
 }
 
 export function removeSim4Area(name: string, dimension?: Dimension) {
   if (!name) return { ok: false, reason: "常加载区域名不能为空" } as const;
   const r = removeViaCommand(name, dimension);
+  // 同时尝试 Manager 移除（双域兜底，命令与 Manager 共享注册表）
+  try {
+    if (world.tickingAreaManager.hasTickingArea(name)) {
+      world.tickingAreaManager.removeTickingArea(name);
+    }
+  } catch {}
   // 无论命令是否匹配到（可能已被外部清理），本模块集合一律移除（幂等）
   commandAreas.delete(name);
   return r;

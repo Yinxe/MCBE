@@ -17,6 +17,7 @@ import { TAG_VAULT_MODE } from "../../rules/tags/BotTags";
 import { botRegistry, configStore } from "../../bootstrap/context";
 import { canOnlineBot, remainingOnlineQuota } from "../../service/QuotaRules";
 import { isAdmin } from "../../interaction/commands/auth";
+import { removeSim4Area, syncCommandAreasFromWorld } from "./tickingArea/sim4";
 
 export function isVaultMode(record: BotRecord): boolean {
   return record.tags.includes(TAG_VAULT_MODE.value);
@@ -109,6 +110,72 @@ export async function enforceAllOnlineQuotas(): Promise<number> {
   let total = 0;
   for (const owner of owners) total += await enforceOnlineQuotaForOwner(owner);
   return total;
+}
+
+// ─── 辅助区块生命周期增强（合规优化） ────────────────
+
+/** 同步内存 Set ← 世界 Manager（worldLoad 时修复重启后 Set 丢失） */
+export function syncAuxFromWorld(): void {
+  try {
+    syncCommandAreasFromWorld();
+  } catch {}
+}
+
+/**
+ * 清理孤儿辅助区块（worldLoad 时调用）：
+ * 遍历世界全部 tickingArea，移除 `mockplayer:aux:*` 中对应假人已离线/不存在的孤儿
+ * @returns 清理数量
+ */
+export function cleanupOrphanAuxAreas(): number {
+  let removed = 0;
+  try {
+    const all = (world.tickingAreaManager as any).getAllTickingAreas?.() as any[] | undefined;
+    if (!all) return 0;
+    for (const a of all) {
+      const id = (a as any).identifier ?? (a as any).name;
+      if (typeof id !== "string" || !id.startsWith("mockplayer:aux:")) continue;
+      const botName = id.replace("mockplayer:aux:", "");
+      const rec = botRegistry.get(botName);
+      if (rec?.online) continue; // 在线假人的辅助保留
+      try {
+        world.tickingAreaManager.removeTickingArea(id);
+        removed++;
+        console.info(`[MockPlayer] 清理孤儿辅助区块 ${id}`);
+      } catch {}
+      try {
+        removeSim4Area(id);
+      } catch {}
+    }
+    if (removed > 0) console.info(`[MockPlayer] 孤儿辅助区块清理完成 ${removed} 个`);
+  } catch (e: any) {
+    console.warn(`[MockPlayer] 孤儿辅助清理异常: ${e?.message ?? e}`);
+  }
+  return removed;
+}
+
+/**
+ * 带回退的辅助创建（上线优化）：
+ * 先尝试 Sim4（9×9 圆形，体验最好），若容量不足失败则自动回退单区块（1 块列，保底）
+ * @returns 创建结果 + 是否回退
+ */
+export async function createAuxWithFallback(
+  center: Vector3,
+  dimension: Dimension,
+  areaName: string
+): Promise<{ ok: boolean; reason?: string; fallback?: boolean }> {
+  const { createSim4Area } = await import("./tickingArea/sim4");
+  const sim4Res = await createSim4Area(center as any, dimension as any, areaName);
+  if (sim4Res.ok) return sim4Res;
+  // 仅容量不足时回退单区块，其余错误直接返回
+  if (!String(sim4Res.reason ?? "").includes("容量不足")) return sim4Res;
+  console.warn(`[MockPlayer] Sim4 容量不足 ${areaName}: ${sim4Res.reason}，回退单区块`);
+  const { createSingleChunkArea } = await import("./tickingArea/singleChunk");
+  const fallbackRes = await createSingleChunkArea(center as any, dimension as any, areaName);
+  if (fallbackRes.ok) {
+    console.info(`[MockPlayer] 回退单区块成功 ${areaName}（Sim4 降级）`);
+    return { ok: true, fallback: true } as const;
+  }
+  return { ok: false, reason: `Sim4 失败: ${sim4Res.reason}；回退单区块也失败: ${fallbackRes.reason}` } as const;
 }
 
 // ─── 采样 ASCII（几何渲染版，零世界查询） ──────────
