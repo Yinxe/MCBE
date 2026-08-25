@@ -535,3 +535,4 @@ onEntityDie(deadEntity has BOT_TAG && record):
 ---
 
 > 验证：2026-08-25 Round2 | tsc 0 error | core 27+79 pass | spec 落盘 docs/superpowers/specs/2026-08-25-bot-lifecycle-tickingarea-spec.md | workspace权威校验 via /tmp/verify_bot_lifecycle.sh
+> 复核 Round5：52 处 safeOnline/safeOffline 调用均走辅助域，枚举 6 lifecycle 命令（create/delete/online/offline/kill/reclaim）均受 guard/per-bot 队列保护，tsc 0
