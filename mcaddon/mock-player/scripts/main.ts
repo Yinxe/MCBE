@@ -23,10 +23,8 @@ import { initRaidMode } from "./features/flow/raidMode";
 import { startBrainEngine } from "./legacy/ai/BotBrain";
 import { startAiEngine } from "./features/ai/brainEngine";
 import { startSharedMemorySweeper } from "./features/ai/brainEngine";
-import { initGameTestContext, registerTestDimension } from "./features/manage/gametestContext";
-import { registerUiDrivers } from "./bootstrap/uiDrivers";
-import { runMigrations } from "./bootstrap/migration";
-import { botRegistry, configStore, saveCoordinator } from "./bootstrap/context";
+import { registerTestDimension } from "./features/manage/gametestContext";
+import { initWorldLoad } from "./bootstrap/worldLoad";
 
 // Phase 1/2: 基础设施与业务装配在 mc/bootstrap/context 模块 import 时完成
 // （botStore = DynamicProperty 后端，botRegistry = 内存注册表 + 写穿持久化）
@@ -37,112 +35,9 @@ import { botRegistry, configStore, saveCoordinator } from "./bootstrap/context";
 
 system.beforeEvents.startup.subscribe((event) => {
   registerAllCommands(event);
-  // 自定义测试维度必须在 startup 事件注册（early-execution mode）
+  // 测试维度保留：木桶阵列在 mockplayer:test 16,0,16，需注册维度；GameTest 装置本身禁用
   registerTestDimension(event);
 });
 
-// Phase 4: 世界加载：恢复持久化 + 启动引擎 + 注册事件
-// worldLoad 在 world 完全加载后触发，此时可以安全读写动态属性
-
-// ⚠️ 幂等守卫：同 runtime 内 worldLoad 可能触发多次（换世界不重启脚本/部分版本重载），
-// 重复执行会叠加注册全部事件/订阅 + 启动第二个行为引擎 + restoreAll 误清在线状态
-let worldLoadReady = false;
-
-world.afterEvents.worldLoad.subscribe(() => {
-  if (worldLoadReady) {
-    console.info(`[MockPlayer] worldLoad 已初始化，跳过重复启动`);
-    return;
-  }
-  worldLoadReady = true;
-
-  // 加载全局配置（默认配额/逐人配额/管理员名单）
-  configStore.refresh();
-
-  // 初始化 GameTest（供 chunkload 模式使用）
-  initGameTestContext();
-
-  // 注册所有事件监听（玩家加入/离开/死亡/背包变化/交互等）
-  console.info(`[MockPlayer] 注册事件`);
-  registerAllEvents();
-
-  // 注册 UI 领域事件订阅（各功能模块感知 panelAction / behaviorSubmitted）
-  registerUiDrivers();
-
-  // 从 DynamicProperty 加载所有假人记录（按管理员配置决定重启是否自动上线）
-  const restored = botRegistry.restoreAll({ autoOnlineOnRestart: configStore.get().autoOnlineOnRestart });
-  console.info(`[MockPlayer] 从持久化恢复 ${restored.length} 个模拟玩家记录（自动上线=${configStore.get().autoOnlineOnRestart}）`);
-
-  // 数据迁移：旧版本（≤1.1.48）升级通道——记录归一化 + 旧 DP 物品 → NBT 存储
-  // （必须在 restoreAll 之后：记录已在内存；存储区域此时可注册）
-  runMigrations();
-
-  // 世界重启自动上线：对 restore 后仍标记在线的假人，异步重建实体
-  // 仅对在线存活的记录生效；在线死亡且有自动重生的已在 restore 阶段转为在线存活
-  const toAutoOnline = botRegistry.all().filter((r) => r.online && !r.death && !r.entityId);
-  if (toAutoOnline.length > 0) {
-    console.info(`[MockPlayer] 世界重启自动上线 ${toAutoOnline.length} 个假人（世界启动后立即排队，safeOnline 内置冷却与模拟4）`);
-    system.run(async () => {
-      const { safeOnline } = await import("./features/manage/onlineBot");
-      for (const r of toAutoOnline) {
-        try {
-          const res = await safeOnline(r);
-          if (!res.ok) {
-            console.warn(`[MockPlayer] 自动上线失败 ${r.name}: ${res.reason}，已置为离线`);
-            // 关键修复：失败时必须同步落库为离线，否则在线管理显示在线但实体未生成
-            try {
-              r.online = false;
-              (r as any).entityId = undefined;
-              saveCoordinator.saveRecord(r);
-            } catch {}
-          } else {
-            console.info(`[MockPlayer] 自动上线成功 ${r.name}`);
-          }
-        } catch (e: any) {
-          console.warn(`[MockPlayer] 自动上线异常 ${r.name}: ${e?.message ?? e}`);
-          try {
-            r.online = false;
-            (r as any).entityId = undefined;
-            saveCoordinator.saveRecord(r);
-          } catch {}
-        }
-        // 避免一次性大量生成阻塞（2tick 让步）
-        await new Promise<void>((resolve) => system.runTimeout(resolve, 2));
-      }
-    });
-  }
-
-  // 启动标签行为引擎（自动挖掘/放置/攻击/跳跃/体态控制）
-  // 同时启动 100tick 周期持久化（位置/经验/装备栏）
-  console.info(`[MockPlayer] 启动引擎`);
-  startTagBehaviors();
-
-  // 初始化三叉戟认主机制（entitySpawn/entityLoad 标记 + 上线夺回/下线回退）——
-  // 纯事件驱动的自定义世界机制，独立初始化
-  initTridentTracker();
-
-  // 初始化钓鱼钩生成追踪（entitySpawn 监测鱼钩 + 读取主人名字）——
-  // 自动钓鱼感知基础，独立初始化
-  initFishingHookTracker();
-
-  // 初始化战利品感知（背包物品变化事件订阅 → 钓鱼模式假人战利品收集）——
-  // 事件驱动感知，独立初始化
-  initLootTracker();
-
-  // 初始化位置追踪（订阅 botMoved 领域事件 → lastPoint 落库 + 持久化）——
-  // 导航模块只发布事件，位置数据更新解耦到本订阅方，独立初始化
-  initPositionTracker();
-
-  // 初始化劫掠模式（effectAdd 事件订阅 + 生命周期/标签变更钩子驱动循环）——
-  // 事件驱动轻量模块（用户拍板：简单循环不配作为 task），独立初始化
-  initRaidMode();
-
-  // 启动 AI 行为引擎（宝库/钓鱼任务：每 10 tick 驱动各自行为树 + 标签对账）
-  startBrainEngine();
-
-  // 启动生物 AI 引擎（新框架 scripts/ai：行为状态机 + 标签对账——
-  // 随机游走等生物 AI 能力按标签启停）
-  startAiEngine();
-
-  // 启动共享记忆过期扫描（独立计时器，每秒一次——过期键直接删除）
-  startSharedMemorySweeper();
-});
+// Phase 4: 世界加载装配（仅调用 bootstrap/worldLoad，不含业务）
+initWorldLoad();

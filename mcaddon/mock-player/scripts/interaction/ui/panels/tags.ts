@@ -41,7 +41,9 @@ export function showTagManagement(player: Player, botName: string): void {
   // 无主假人（旧版升级数据）：首次打开 tag 菜单 → 自动认领成为主人（静默标记）
   if (!canManageBot(player, record)) {
     if (autoClaim(player, record)) {
-      player.sendMessage(`${color.success}已自动认领假人 ${color.playerName}${botName}${color.success}（旧版数据，首次操作生效）`);
+      player.sendMessage(
+        `${color.success}已自动认领假人 ${color.playerName}${botName}${color.success}（旧版数据，首次操作生效）`
+      );
     } else {
       player.sendMessage(`${color.error}假人 ${color.playerName}${botName}${color.error} 只允许主人或管理员操作`);
       return;
@@ -52,11 +54,16 @@ export function showTagManagement(player: Player, botName: string): void {
 
   // 工作模式下拉值列表 + 索引映射（从 canonical 列表 WORK_MODES 派生——
   // 与各引擎同源，避免三处手抄漏同步，审核 L4；已禁用模式不在下拉中）
-  const WORK_MODE_OPTIONS: readonly WorkMode[] = WORK_MODES.filter(m => m === "none" || configStore.isWorkModeEnabled(m));
+  const WORK_MODE_OPTIONS: readonly WorkMode[] = WORK_MODES.filter(
+    (m) => m === "none" || configStore.isWorkModeEnabled(m)
+  );
   const WORK_MODE_INDEX: Record<string, number> = Object.fromEntries(WORK_MODE_OPTIONS.map((b, i) => [b, i]));
 
   const currentTagsText = record.tags
-    .map((t) => { const d = getTagDef(t); return d ? d.label : t; })
+    .map((t) => {
+      const d = getTagDef(t);
+      return d ? d.label : t;
+    })
     .join(" · ");
 
   const builder = new ModalFormBuilder()
@@ -67,11 +74,7 @@ export function showTagManagement(player: Player, botName: string): void {
       defaultValue: record.tags.includes(TAG_RESPAWN.value),
       tooltip: "死亡后自动复活到重生点",
     })
-    // ── 第 2：强加载模式 ──
-    .toggle("chunkload", style("强加载模式", color.playerName), {
-      defaultValue: record.spawnMode === "chunkload",
-      tooltip: "区块持续加载，体态完全可操控。异地上线仅加载当前区块附近，需玩家靠近补足模拟距离；重新上线后需再次靠近。切换时自动重新上线",
-    })
+    // ── 第 2：强加载模式（已退役，统一继承，不再区分，隐藏开关） ──
     .label("sep1", style("━━ 其他开关 ────", color.accent))
     // ── 潜行 ──
     .toggle("sneaking", style("潜行", color.playerName), {
@@ -99,7 +102,7 @@ export function showTagManagement(player: Player, botName: string): void {
       {
         defaultValueIndex: WORK_MODE_INDEX[record.workMode] ?? 0,
         tooltip: "单选工作模式（互斥，仅一项）：已禁用的模式不在此列表（管理员可在全局配置中启用/禁用）",
-      },
+      }
     );
 
   builder.show(player).then((vals) => {
@@ -118,7 +121,7 @@ export function showTagManagement(player: Player, botName: string): void {
     // setWorkMode(currentRecord, pickedWorkMode);
 
     const wantSneaking = vals.sneaking as boolean;
-    const wantChunkload = vals.chunkload as boolean;
+    const wantChunkload = true; // 全量走 test
     const wantFollow = pickedWorkMode === "follow";
 
     system.run(() => {

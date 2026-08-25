@@ -15,7 +15,7 @@ import { ItemStorage } from "@yinxe/nbt-data-storage";
 import { BotRecord } from "../../../rules/Types";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../../../rules/Types";
 import { botRegistry, botStore } from "../../../bootstrap/context";
-import { guardBotCommand } from "../auth";
+import { guardBotCommand, isAdmin } from "../auth";
 
 /** 槽位 → 槽位标签（快捷栏/背包） */
 function slotLabel(i: number): string {
@@ -78,7 +78,7 @@ export function sendStorage(player: Player, record: BotRecord): void {
     const stats = ItemStorage.totalStats();
     lines.push(`${color.muted}━━ 存储区域总览 ━━`);
     lines.push(
-      ` ${color.muted}区域数: ${color.info}${stats.regionCount} ${color.muted}容量: ${color.info}${stats.totalCapacity} ${color.muted}已用: ${color.info}${stats.totalUsed}`,
+      ` ${color.muted}区域数: ${color.info}${stats.regionCount} ${color.muted}容量: ${color.info}${stats.totalCapacity} ${color.muted}已用: ${color.info}${stats.totalUsed}`
     );
   } catch (e: any) {
     lines.push(`${color.muted}存储区域统计失败: ${color.error}${e?.message ?? e}`);
@@ -91,25 +91,36 @@ export function sendStorage(player: Player, record: BotRecord): void {
 }
 
 export function registerStorageCommand(registry: any): void {
-  defineCommand(registry, {
-    name: "mp:storage",
-    description: "查看假人 NBT 存储绑定与实存物品（调试）",
-    cheatsRequired: false,
-    permissionLevel: CommandPermissionLevel.Any,
-    optionalParameters: [{ name: "name", type: CustomCommandParamType.String }],
-  }, ({ player, params }) => {
-    const nameInput = params.name as string | undefined;
-    if (!nameInput) {
-      player.sendMessage(`${color.error}用法: /mp:storage <假人名>`);
-      return;
+  defineCommand(
+    registry,
+    {
+      name: "mp:storage",
+      description: "查看假人 NBT 存储绑定与实存物品（调试）",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      optionalParameters: [{ name: "name", type: CustomCommandParamType.String }],
+    },
+    ({ player, params }) => {
+      if (!isAdmin(player)) {
+        player.sendMessage(`${color.error}该命令仅管理员可用`);
+        return;
+      }
+      const nameInput = params.name as string | undefined;
+      if (!nameInput) {
+        player.sendMessage(`${color.error}用法: /mp:storage <假人名>`);
+        return;
+      }
+      const denied = guardBotCommand(player, nameInput);
+      if (denied) {
+        player.sendMessage(`${color.error}${denied}`);
+        return;
+      }
+      const record = botRegistry.get(nameInput);
+      if (!record) {
+        player.sendMessage(`${color.error}未找到模拟玩家 ${color.playerName}${nameInput}`);
+        return;
+      }
+      sendStorage(player, record);
     }
-    const denied = guardBotCommand(player, nameInput);
-    if (denied) { player.sendMessage(`${color.error}${denied}`); return; }
-    const record = botRegistry.get(nameInput);
-    if (!record) {
-      player.sendMessage(`${color.error}未找到模拟玩家 ${color.playerName}${nameInput}`);
-      return;
-    }
-    sendStorage(player, record);
-  });
+  );
 }

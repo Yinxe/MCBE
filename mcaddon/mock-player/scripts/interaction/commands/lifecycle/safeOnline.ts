@@ -2,7 +2,7 @@ import { system, CommandPermissionLevel, CustomCommandParamType } from "@minecra
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { botRegistry, botStore } from "../../../bootstrap/context";
-import { guardBotCommand } from "../auth";
+import { guardBotCommand, isAdmin } from "../auth";
 import { safeOnline } from "../../../features/manage/onlineBot";
 import { safeOffline } from "../../../features/manage/offlineBot";
 
@@ -37,16 +37,20 @@ export function registerSafeOnlineCommand(registry: any): void {
         return;
       }
       const isChunkload = (record.spawnMode ?? "normal") === "chunkload";
-      player.sendMessage(`${color.muted}正在为 ${color.playerName}${record.name}${color.muted} ${isChunkload ? "申请模拟4并" : ""}安全上线${isChunkload ? "（排队中）" : "（2秒）"}...`);
+      player.sendMessage(
+        `${color.muted}正在为 ${color.playerName}${record.name}${color.muted} ${isChunkload ? "申请模拟4并" : ""}安全上线${isChunkload ? "（排队中）" : "（2秒）"}...`
+      );
       system.run(async () => {
         const result = await safeOnline(record);
         if (!result.ok) {
           player.sendMessage(`${color.error}${record.name} 安全上线失败: ${result.reason ?? "unknown"}`);
           return;
         }
-        player.sendMessage(`${color.success}假人 ${color.playerName}${record.name}${color.success} 已安全上线${isChunkload ? "（模拟4已卸载，区块由假人继承）" : ""}`);
+        player.sendMessage(
+          `${color.success}假人 ${color.playerName}${record.name}${color.success} 已安全上线${isChunkload ? "（模拟4已卸载，区块由假人继承）" : ""}`
+        );
       });
-    },
+    }
   );
 }
 
@@ -81,16 +85,20 @@ export function registerSafeOfflineCommand(registry: any): void {
         return;
       }
       const isChunkload = (record.spawnMode ?? "normal") === "chunkload";
-      player.sendMessage(`${color.muted}正在为 ${color.playerName}${record.name}${color.muted} ${isChunkload ? "申请模拟4并" : ""}安全下线${isChunkload ? "（排队中）" : "（2秒）"}...`);
+      player.sendMessage(
+        `${color.muted}正在为 ${color.playerName}${record.name}${color.muted} ${isChunkload ? "申请模拟4并" : ""}安全下线${isChunkload ? "（排队中）" : "（2秒）"}...`
+      );
       system.run(async () => {
         const result = await safeOffline(record);
         if (!result.ok) {
           player.sendMessage(`${color.error}${record.name} 安全下线失败: ${result.reason ?? "unknown"}`);
           return;
         }
-        player.sendMessage(`${color.success}假人 ${color.playerName}${record.name}${color.success} 已安全下线${isChunkload ? "（模拟4已卸载）" : ""}`);
+        player.sendMessage(
+          `${color.success}假人 ${color.playerName}${record.name}${color.success} 已安全下线${isChunkload ? "（模拟4已卸载）" : ""}`
+        );
       });
-    },
+    }
   );
 }
 
@@ -111,9 +119,15 @@ export function registerTickingAreaCommand(registry: any): void {
       ],
     },
     ({ player, params }) => {
+      if (!isAdmin(player)) {
+        player.sendMessage(`${color.error}该命令仅管理员可用`);
+        return;
+      }
       const action = (params.action as string)?.toLowerCase();
       if (!action || (action !== "add" && action !== "remove" && action !== "list")) {
-        player.sendMessage(`${color.error}用法: /mp:tickingarea add <x> <y> <z> <name>  或  /mp:tickingarea remove <name>  或  /mp:tickingarea list`);
+        player.sendMessage(
+          `${color.error}用法: /mp:tickingarea add <x> <y> <z> <name>  或  /mp:tickingarea remove <name>  或  /mp:tickingarea list`
+        );
         return;
       }
       system.run(async () => {
@@ -125,7 +139,9 @@ export function registerTickingAreaCommand(registry: any): void {
             const sz = params.arg3 as string | undefined;
             const areaName = params.arg4 as string | undefined;
             if (sx === undefined || sy === undefined || sz === undefined || !areaName) {
-              player.sendMessage(`${color.error}用法: /mp:tickingarea add <x> <y> <z> <name>  （将创建模拟4圆形常加载，等价 tickingarea add circle <xyz> 4 <name>）`);
+              player.sendMessage(
+                `${color.error}用法: /mp:tickingarea add <x> <y> <z> <name>  （将创建模拟4圆形常加载，等价 tickingarea add circle <xyz> 4 <name>）`
+              );
               return;
             }
             const x = Number(sx);
@@ -143,11 +159,15 @@ export function registerTickingAreaCommand(registry: any): void {
               player.sendMessage(`${color.error}创建常加载区域失败: ${res.reason}`);
               return;
             }
-            player.sendMessage(`${color.success}已创建模拟4常加载区域 ${color.playerName}${areaName}${color.success} @ ${dim.id} ${Math.floor(x)} ${Math.floor(y)} ${Math.floor(z)} 半径4（等价 tickingarea add circle）`);
+            player.sendMessage(
+              `${color.success}已创建模拟4常加载区域 ${color.playerName}${areaName}${color.success} @ ${dim.id} ${Math.floor(x)} ${Math.floor(y)} ${Math.floor(z)} 半径4（等价 tickingarea add circle）`
+            );
           } else if (action === "remove") {
             const areaName = (params.arg1 as string | undefined) ?? (params.arg4 as string | undefined);
             if (!areaName) {
-              player.sendMessage(`${color.error}用法: /mp:tickingarea remove <name>  （等价 tickingarea remove <name>）`);
+              player.sendMessage(
+                `${color.error}用法: /mp:tickingarea remove <name>  （等价 tickingarea remove <name>）`
+              );
               return;
             }
             const { removeSim4Area } = await import("../../../features/manage/tickingArea");
@@ -156,7 +176,9 @@ export function registerTickingAreaCommand(registry: any): void {
               player.sendMessage(`${color.error}移除常加载区域失败: ${res.reason}`);
               return;
             }
-            player.sendMessage(`${color.success}已移除常加载区域 ${color.playerName}${areaName}${color.success}（等价 tickingarea remove）`);
+            player.sendMessage(
+              `${color.success}已移除常加载区域 ${color.playerName}${areaName}${color.success}（等价 tickingarea remove）`
+            );
           } else if (action === "list") {
             const mgr = world.tickingAreaManager;
             const areas = mgr.getAllTickingAreas();
@@ -164,13 +186,16 @@ export function registerTickingAreaCommand(registry: any): void {
               player.sendMessage(`${color.muted}当前无本模组常加载区域（仅显示本包 TickingAreaManager 区域）`);
               return;
             }
-            const lines = areas.map((a: any) => `${color.playerName}${a.identifier}${color.muted} @ ${a.dimension.id} ${a.boundingBox.min.x},${a.boundingBox.min.z}~${a.boundingBox.max.x},${a.boundingBox.max.z} ${a.isFullyLoaded ? color.success + "已加载" : color.warn + "加载中"}`);
+            const lines = areas.map(
+              (a: any) =>
+                `${color.playerName}${a.identifier}${color.muted} @ ${a.dimension.id} ${a.boundingBox.min.x},${a.boundingBox.min.z}~${a.boundingBox.max.x},${a.boundingBox.max.z} ${a.isFullyLoaded ? color.success + "已加载" : color.warn + "加载中"}`
+            );
             player.sendMessage(`${color.success}本模组常加载区域 (${areas.length}):\n` + lines.join("\n"));
           }
         } catch (e: any) {
           player.sendMessage(`${color.error}常加载操作失败: ${e?.message ?? e}`);
         }
       });
-    },
+    }
   );
 }

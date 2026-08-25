@@ -1,10 +1,8 @@
-// ─── 生成模式管理 ──────────────────────────────────────
+// ─── 生成模式管理（全量走 test） ──────────────────────
 //
-// 两种模式**生成流程完全一致**，差异仅两处：
-//   1. 生成 API：normal → 模块级 spawnSimulatedPlayer；
-//      chunkload → globalTest.spawnSimulatedPlayer（测试实例方法，常加载能力来源）
-//   2. 生成点：normal → 目标位置直生；chunkload → 测试维度 (0,8,0) 中转
-//      （test.spawnSimulatedPlayer 只能在测试维度生成，finalize 统一传送目标）
+// 按用户要求：**所有生成全走 test**（`globalTest.spawnSimulatedPlayer`），不再区分 normal/chunkload。
+// 模拟4仅作辅助区块申请（onlineBot 侧 `createSim4Area → spawn → delay → remove → 继承`），
+// 生成本身与 GameTest 装置强绑定（结构方块 0,0,0 常驻）。
 //
 // ⚠️ 重名防护：任何生成必须先确保名称唯一可用（异步轮询 +
 //    残留实体清理），否则旧实体尚未释放时立即 spawn，引擎会
@@ -16,15 +14,13 @@ import { SimulatedPlayer, spawnSimulatedPlayer } from "@minecraft/server-gametes
 
 import type { BotRecord } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
-import { TICKS_PER_SECOND } from "../../rules/Types";
-import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 import { finalizeBotSpawn } from "./spawn";
-import { safeReconnect } from "./pendingRespawn";
 import { globalTest } from "./gametestContext";
 import { color } from "@yinxe/toolkit";
 
-export type SpawnMode = "normal" | "chunkload";
+export type SpawnMode = "chunkload";
+export type LegacySpawnMode = "normal" | "chunkload";
 
 export interface SpawnModeInfo {
   value: SpawnMode;
@@ -33,28 +29,21 @@ export interface SpawnModeInfo {
   limitations: string[];
 }
 
-const MODE_NORMAL = "normal" as const;
-const MODE_CHUNKLOAD = "chunkload" as const;
-
-export const MODE_NORMAL_INFO: SpawnModeInfo = {
-  value: MODE_NORMAL,
-  label: `${color.success}普通模式`,
-  desc: "不能加载区块，玩家离开后周围区块会被卸载",
-  limitations: [],
-};
-
 export const MODE_CHUNKLOAD_INFO: SpawnModeInfo = {
-  value: MODE_CHUNKLOAD,
+  value: "chunkload",
   label: `${color.accent}强加载模式`,
-  desc: "可以加载区块，远程挂机",
+  desc: "全量走 test + 模拟4辅助（已统一）",
   limitations: [
     "异地上线仅加载当前区块附近，需玩家靠近后补足模拟距离",
     "假人重新上线后，之前辅助加载的区块会失效，需玩家再次靠近",
   ],
 };
 
-export function getSpawnModeInfo(mode?: SpawnMode): SpawnModeInfo {
-  return mode === MODE_CHUNKLOAD ? MODE_CHUNKLOAD_INFO : MODE_NORMAL_INFO;
+// 兼容旧存量 normal → 统一映射到 chunkload
+export const MODE_NORMAL_INFO: SpawnModeInfo = MODE_CHUNKLOAD_INFO;
+
+export function getSpawnModeInfo(_mode?: LegacySpawnMode): SpawnModeInfo {
+  return MODE_CHUNKLOAD_INFO;
 }
 
 // ─── 重名防护：确保名称唯一后再真正生成 ────────────────
@@ -78,9 +67,7 @@ function isTrackedEntity(entityId: string): boolean {
 /** 找到阻碍 `name` 可用的实体：同名实体 + 历史残留的同名 "(N)" 幽灵 */
 function findNameBlockers(name: string): Player[] {
   const exact = world.getPlayers({ name });
-  const suffixGhosts = world
-    .getPlayers({ tags: [BOT_TAG] })
-    .filter((p) => p.name.startsWith(`${name}(`));
+  const suffixGhosts = world.getPlayers({ tags: [BOT_TAG] }).filter((p) => p.name.startsWith(`${name}(`));
   return exact.length > 0 ? [exact[0], ...suffixGhosts] : suffixGhosts;
 }
 
@@ -91,14 +78,21 @@ function waitNameFree(name: string): Promise<void> {
 
     function check(): void {
       const blockers = findNameBlockers(name);
-      if (blockers.length === 0) { resolve(); return; }
+      if (blockers.length === 0) {
+        resolve();
+        return;
+      }
 
       // 可安全释放的残留实体（无 record 认领）→ 强制 disconnect 以加速
       for (const p of blockers) {
         if (isTrackedEntity(p.id)) continue; // 在线假人，不碰
         // ⚠️ 真实玩家同名（改名撞名边缘场景）不可 disconnect（会把真人踢下线），等超时兜底
         if (!p.hasTag(BOT_TAG)) continue;
-        try { (p as unknown as SimulatedPlayer).disconnect(); } catch { /* 实体可能刚消失 */ }
+        try {
+          (p as unknown as SimulatedPlayer).disconnect();
+        } catch {
+          /* 实体可能刚消失 */
+        }
       }
 
       attempts++;
@@ -151,7 +145,7 @@ function makeSpawnResult(
   lookTarget: any,
   spawner: Spawner,
   spawnAt: { x: number; y: number; z: number },
-  noPose?: boolean,
+  noPose?: boolean
 ): SpawnResult {
   const rot2 = noPose ? { x: 0, y: 0 } : rotation;
   const target = noPose ? undefined : lookTarget;
@@ -192,25 +186,19 @@ export function spawnBot(
   location: { x: number; y: number; z: number },
   dimension: any,
   rotation: { x: number; y: number },
-  lookTarget?: { x: number; y: number; z: number },
+  lookTarget?: { x: number; y: number; z: number }
 ): Promise<SimulatedPlayer> {
-  const mode = record.spawnMode ?? MODE_NORMAL;
-  console.info(`[MockPlayer] spawnBot ${record.name} 模式=${mode} 预期=${mode === MODE_CHUNKLOAD ? "test" : "module"}`);
+  console.info(`[MockPlayer] spawnBot ${record.name} 全量走 test（原模式=${record.spawnMode ?? "normal"} 忽略）`);
   const makeResult = (): SpawnResult => {
-    // 流程完全一致，仅两处差异：
-    // 1. 生成 API：normal=模块级 / chunkload=test 实例方法
-    // 2. 生成点：normal=目标位置直生 / chunkload=测试维度中转
-    if (mode === MODE_CHUNKLOAD) {
-      const spawner = chunkloadSpawner();
-      if (!spawner) {
-        console.warn(`[MockPlayer] GameTest 未就绪，${record.name} 改用普通模式`);
-        return makeSpawnResult(record, location, dimension, { x: 0, y: 0 }, undefined, moduleSpawner, location, true);
-      }
-      console.info(`[MockPlayer] 强加载生成 ${record.name} 使用 testSpawner 中转 ${CHUNKLOAD_SPAWN_POS.x},${CHUNKLOAD_SPAWN_POS.y},${CHUNKLOAD_SPAWN_POS.z} → 目标 ${location.x},${location.y},${location.z}`);
-        return makeSpawnResult(record, location, dimension, rotation, lookTarget, spawner, CHUNKLOAD_SPAWN_POS);
+    const spawner = chunkloadSpawner();
+    if (!spawner) {
+      console.warn(`[MockPlayer] GameTest 未就绪，${record.name} 回退模块直生（临时）`);
+      return makeSpawnResult(record, location, dimension, { x: 0, y: 0 }, undefined, moduleSpawner, location, true);
     }
-    console.info(`[MockPlayer] 普通生成 ${record.name} 使用 moduleSpawner 直生 ${location.x},${location.y},${location.z}`);
-      return makeSpawnResult(record, location, dimension, rotation, lookTarget, moduleSpawner, location);
+    console.info(
+      `[MockPlayer] test 生成 ${record.name} 中转 ${CHUNKLOAD_SPAWN_POS.x},${CHUNKLOAD_SPAWN_POS.y},${CHUNKLOAD_SPAWN_POS.z} → 目标 ${location.x},${location.y},${location.z}`
+    );
+    return makeSpawnResult(record, location, dimension, rotation, lookTarget, spawner, CHUNKLOAD_SPAWN_POS);
   };
 
   // 前一个任务失败（reject）也必须放行后续生成，否则同名假人会被永久卡死
@@ -226,11 +214,19 @@ export function spawnBot(
 
     // 名称校验未通过：销毁并重试一次
     console.warn(`[MockPlayer] 生成后检测到重名 ${first.bot.name}（目标 ${record.name}），清理重试`);
-    try { first.bot.disconnect(); } catch { /* ignore */ }
+    try {
+      first.bot.disconnect();
+    } catch {
+      /* ignore */
+    }
     const retry = makeResult();
     if (retry.bot.name !== record.name) {
       console.error(`[MockPlayer] 重试后仍重名 ${retry.bot.name}，放弃生成 ${record.name}`);
-      try { retry.bot.disconnect(); } catch { /* ignore */ }
+      try {
+        retry.bot.disconnect();
+      } catch {
+        /* ignore */
+      }
       throw new Error(`无法为假人 ${record.name} 获得唯一名称，已取消生成（避免数据丢失）`);
     }
     retry.finalize();
@@ -244,35 +240,14 @@ export function spawnBot(
   return run;
 }
 
-// ─── 模式切换 ──────────────────────────────────────────
-
-export function switchSpawnMode(record: BotRecord, newMode: SpawnMode): void {
-  record.spawnMode = newMode;
-  // ⚠️ 离线路径（行为面板直接切换）无 playerJoin 兜底，必须显式写穿持久化
+// ─── 模式切换（已统一为单 test 模式，保留兼容旧 normal 写入） ───────
+export function switchSpawnMode(record: BotRecord, _newMode: SpawnMode): void {
+  record.spawnMode = "chunkload";
   saveCoordinator.saveRecord(record);
 }
 
-// ─── UI 事件订阅（行为菜单提交 → 感知强加载字段） ───────
-
-/** 订阅行为菜单提交事件：强加载开关 diff 后切换（在线假人走安全重连） */
+// ─── UI 事件订阅（已废弃：全量走 test，不再响应强加载开关） ───────
 export function registerUiSubscriptions(): void {
-  BotUiEvent.behaviorSubmitted.subscribe((e) => {
-    const record = botRegistry.get(e.botName);
-    if (!record) return;
-    const currentMode = record.spawnMode ?? "normal";
-    const targetMode = e.chunkload ? "chunkload" : "normal";
-    if (targetMode === currentMode) return;
-
-    const player = world.getEntity(e.playerId) as Player | undefined;
-    const wasOnline = record.online && !record.death;
-    console.info(`[MockPlayer] 模式切换 ${record.name} ${currentMode}->${targetMode} wasOnline=${wasOnline}`);
-    if (wasOnline) {
-      safeReconnect(record, {
-        onOffline: () => switchSpawnMode(record, targetMode),
-        onOnline: () => player?.sendMessage(`${color.success}已切换为 ${targetMode === "chunkload" ? "强加载" : "普通"}模式`),
-      });
-    } else {
-      switchSpawnMode(record, targetMode);
-    }
-  });
+  // 保留空实现以兼容旧 bootstrap 调用，行为面板的 chunkload 开关已在 tags.ts 隐藏
+  console.info("[MockPlayer] spawnMode UI 订阅已废弃（全量走 test）");
 }

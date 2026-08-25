@@ -25,16 +25,34 @@ function formatState(state: PositionState): string {
 }
 
 /** 构建列表消息 */
-function buildListMessage(records: BotRecord[], isAdminPlayer: boolean, filterOnline?: boolean, filterDeath?: boolean): string {
+function buildListMessage(
+  records: BotRecord[],
+  isAdminPlayer: boolean,
+  filterOnline?: boolean,
+  filterDeath?: boolean
+): string {
   let filtered = records;
   if (filterOnline !== undefined) filtered = filtered.filter((r) => r.online === filterOnline);
   if (filterDeath !== undefined) filtered = filtered.filter((r) => r.death === filterDeath);
   if (filtered.length === 0) return `${color.playerName}没有匹配的假人`;
 
-  const workModeLabels: Record<string, string> = { none: "空闲", wander: "闲逛", mine: "挖掘", place: "放置", attack: "攻击", raid: "劫掠", fishing: "钓鱼", follow: "跟随" };
+  const workModeLabels: Record<string, string> = {
+    none: "空闲",
+    wander: "闲逛",
+    mine: "挖掘",
+    place: "放置",
+    attack: "攻击",
+    raid: "劫掠",
+    fishing: "钓鱼",
+    follow: "跟随",
+  };
   const lines = filtered.map((r) => {
     const icon = r.death ? `${color.error}💀` : r.online ? `${color.success}✔` : `${color.muted}❌`;
-    const txt = r.death ? `${color.error}死亡` : r.online ? `${color.success}${workModeLabels[r.workMode] ?? r.workMode}` : `${color.muted}离线`;
+    const txt = r.death
+      ? `${color.error}死亡`
+      : r.online
+        ? `${color.success}${workModeLabels[r.workMode] ?? r.workMode}`
+        : `${color.muted}离线`;
     const pos =
       r.death && r.deathPoint
         ? `${formatPos(r.deathPoint.location)} ${color.darkGray}${formatDimensionId(r.deathPoint.dimension)} ${color.muted}(死亡点)`
@@ -53,31 +71,40 @@ function buildListMessage(records: BotRecord[], isAdminPlayer: boolean, filterOn
     return `${icon} ${color.playerName}${r.name}${owner ? ` ${owner}` : ""}${color.muted} — ${txt}${color.muted} | ${pos}${tagHint}`;
   });
 
-  lines.unshift(`${color.success}假人列表 (${color.accent}${filtered.length}${color.success}/${records.length}${color.success}):`);
+  lines.unshift(
+    `${color.success}假人列表 (${color.accent}${filtered.length}${color.success}/${records.length}${color.success}):`
+  );
   return lines.join("\n");
 }
 
 export function registerListCommand(registry: any): void {
-  defineCommand(registry, {
-    name: "mp:list",
-    description: "列出所有已创建的假人（可按在线/死亡筛选）",
-    cheatsRequired: false,
-    permissionLevel: CommandPermissionLevel.Any,
-    optionalParameters: [
-      { name: "online", type: CustomCommandParamType.Boolean },
-      { name: "death", type: CustomCommandParamType.Boolean },
-    ],
-  }, ({ player, params }) => {
-    const filterOnline = params.online as boolean | undefined;
-    const filterDeath = params.death as boolean | undefined;
+  defineCommand(
+    registry,
+    {
+      name: "mp:list",
+      description: "列出所有已创建的假人（可按在线/死亡筛选）",
+      cheatsRequired: false,
+      permissionLevel: CommandPermissionLevel.Any,
+      optionalParameters: [
+        { name: "online", type: CustomCommandParamType.Boolean },
+        { name: "death", type: CustomCommandParamType.Boolean },
+      ],
+    },
+    ({ player, params }) => {
+      const filterOnline = params.online as boolean | undefined;
+      const filterDeath = params.death as boolean | undefined;
 
-    // 刷新在线假人的最新位置
-    for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
-      const record = botRegistry.get(bot.name);
-      if (record && record.lastPoint) {
-        savePoseToRecord(record, bot.location, bot.dimension.id, bot.getRotation());
+      // 刷新在线假人的最新位置
+      for (const bot of world.getPlayers({ tags: [BOT_TAG] })) {
+        const record = botRegistry.get(bot.name);
+        if (record && record.lastPoint) {
+          savePoseToRecord(record, bot.location, bot.dimension.id, bot.getRotation());
+        }
       }
+      // 非管理员仅看自己名下假人（按归属过滤）
+      const isAdminPlayer = isAdmin(player);
+      const all = isAdminPlayer ? botRegistry.all() : botRegistry.all().filter((r) => r.ownerName === player.name);
+      player.sendMessage(buildListMessage(all, isAdminPlayer, filterOnline, filterDeath));
     }
-    player.sendMessage(buildListMessage(botRegistry.all(), isAdmin(player), filterOnline, filterDeath));
-  });
+  );
 }

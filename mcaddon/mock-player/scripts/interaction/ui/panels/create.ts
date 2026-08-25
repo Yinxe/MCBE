@@ -14,13 +14,28 @@ export function showCreateForm(player: Player): void {
   const dimOptions = ["跟随玩家", "主世界 (overworld)", "下界 (nether)", "末地 (the_end)"];
 
   ModalFormBuilder.showQuick(player, `${color.bold}创建模拟玩家`, (f) => {
-    f.textField("name", "名称（必填，不能留空）", { defaultValue: "", tooltip: "输入假人名称；名字将以玩家身份出现在世界中，需唯一" })
-     .textField("coord", "坐标（留空使用玩家位置）", { defaultValue: "", tooltip: "格式: x y z，留空则生成在玩家当前位置" })
-     .dropdown("dim", "维度", dimOptions, { defaultValueIndex: 0, tooltip: "假人所在的维度，跟随玩家则为当前维度" })
-      .toggle("copyPosture", style("复刻玩家体态（同步潜行/朝向）", color.playerName), { defaultValue: true, tooltip: "创建时复制玩家的潜行和面向方向" })
-      .toggle("respawn", style("自动重生", color.playerName), { defaultValue: true, tooltip: "开启后假人死亡会自动复活到重生点" })
-      .toggle("idle", style("空闲状态", color.playerName), { defaultValue: true, tooltip: "开启后假人默认处于空闲状态，不执行任何行为" })
-      .toggle("chunkload", style("强加载模式", color.playerName), { defaultValue: false, tooltip: "区块持续加载，但不可设置身体朝向。异地上线需玩家靠近后补足模拟距离" });
+    f.textField("name", "名称（必填，不能留空）", {
+      defaultValue: "",
+      tooltip: "输入假人名称；名字将以玩家身份出现在世界中，需唯一",
+    })
+      .textField("coord", "坐标（留空使用玩家位置）", {
+        defaultValue: "",
+        tooltip: "格式: x y z，留空则生成在玩家当前位置",
+      })
+      .dropdown("dim", "维度", dimOptions, { defaultValueIndex: 0, tooltip: "假人所在的维度，跟随玩家则为当前维度" })
+      .toggle("copyPosture", style("复刻玩家体态（同步潜行/朝向）", color.playerName), {
+        defaultValue: true,
+        tooltip: "创建时复制玩家的潜行和面向方向",
+      })
+      .toggle("respawn", style("自动重生", color.playerName), {
+        defaultValue: true,
+        tooltip: "开启后假人死亡会自动复活到重生点",
+      })
+      .toggle("idle", style("空闲状态", color.playerName), {
+        defaultValue: true,
+        tooltip: "开启后假人默认处于空闲状态，不执行任何行为",
+      });
+    // 旧强加载开关已退役（统一模块级+模拟4继承，无需区分）
   }).then((vals) => {
     if (!vals) return;
     const botName = (vals.name as string).trim();
@@ -66,7 +81,7 @@ export function showCreateForm(player: Player): void {
           rotation: { x: playerRot.x, y: playerRot.y, z: 0 },
           lookTarget: copyPosture ? lookTarget : { x: pos.x, y: pos.y, z: pos.z + 1 },
           isSneaking: sneaking,
-          spawnMode: vals.chunkload ? "chunkload" : "normal",
+          spawnMode: "chunkload",
         });
         player.sendMessage(`${color.success}成功创建模拟玩家 ${color.playerName}${botName}`);
       } catch (e: any) {
