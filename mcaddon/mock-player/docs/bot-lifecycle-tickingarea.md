@@ -537,3 +537,4 @@ onEntityDie(deadEntity has BOT_TAG && record):
 > 验证：2026-08-25 Round2 | tsc 0 error | core 27+79 pass | spec 落盘 docs/superpowers/specs/2026-08-25-bot-lifecycle-tickingarea-spec.md | workspace权威校验 via /tmp/verify_bot_lifecycle.sh
 > 复核 Round5：52 处 safeOnline/safeOffline 调用均走辅助域，枚举 6 lifecycle 命令（create/delete/online/offline/kill/reclaim）均受 guard/per-bot 队列保护，tsc 0
 > 复核 Round6：4-Phase启动(worldLoad Ready守卫+ 8引擎try-catch)与tick双域(sim4/singleChunk)幂等移除均与main.ts/worldLoad.ts一致，tsc 0
+> 复核 Round7：新增持续验证计划 docs/superpowers/plans/2026-08-25-bot-lifecycle-verify.md，闭环证据链 79dcecf→d747b38→086d538，tsc 0
