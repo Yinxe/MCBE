@@ -1,9 +1,12 @@
-// ─── 模拟4 常加载（命令域 9×9 圆形） ─────────────────
+// ─── 模拟4 常加载（命令域 圆形 r=4，49 区块） ───────────
 // 仅走游戏命令 `tickingarea add circle <xyz> 4 <name>`，不使用 Manager API 直接创建
 // 供上线后刷新 per-bot `mockplayer:aux:<name>` 常驻辅助
+// 区块数：wiki 定义 `tickingarea add circle` 以中心区块向外各延伸 4 区块，构成圆形
+//   半径 r=4 时为 49 区块（4+1+4 直径上 9 区块，但四角剔除：1+5+7+7+9+7+7+5+1=49），
+//   非 81（81 为外接正方形上界，仅作容量估算的悲观值，实际按 49 计费）。
 // ⚠️ 合规说明：命令与 Manager 共享同一世界 tickingArea 注册表（非双域隔离），
 //    故本模块的内存 Set 需与世界 Manager 保持同步（见 syncCommandAreasFromWorld），
-//    且 Sim4 亦需做容量预检（复用 Manager 的 hasCapacity）。
+//    且 Sim4 亦需做容量预检（按 49 块计费）。
 
 import { world } from "@minecraft/server";
 import type { Dimension, Vector3 } from "@minecraft/server";
@@ -14,10 +17,13 @@ export const SIM4_RADIUS = SIM4_TICKING_RADIUS_CHUNKS;
 /** 内存镜像：已创建的 Sim4 名称（幂等/查询加速），需与世界 Manager 同步 */
 const commandAreas = new Set<string>();
 
-/** Sim4 圆形 r=4 的最坏 chunk 数（外接正方形 9×9=81），用于容量预检 */
-function estimateSim4ChunkCount(radius: number = SIM4_RADIUS): number {
-  const d = radius * 2 + 1;
-  return d * d; // 9×9=81，实际圆形 ~52，取上界保证不超限
+/** Sim4 圆形 r=4 的精确 chunk 数（wiki：4+1+4 圆形，49 区块） */
+export function estimateSim4ChunkCount(radius: number = SIM4_RADIUS): number {
+  if (radius === 4) return 49; // 1+5+7+7+9+7+7+5+1 = 49（r=4 圆形精确值）
+  // 通用：按圆形 dx²+dz²≤r² 计数（以中心区块为原点）
+  let c = 0;
+  for (let dx = -radius; dx <= radius; dx++) for (let dz = -radius; dz <= radius; dz++) if (dx * dx + dz * dz <= radius * radius) c++;
+  return c;
 }
 
 /** 统一查询：内存 Set 命中 或 世界 Manager 已存在（双重保障，防重启后 Set 丢失） */
@@ -55,31 +61,43 @@ export async function createSim4Area(center: Vector3, dimension: Dimension, name
     }
   } catch {}
 
-  // 容量预检（复用 Manager 的 hasCapacity，外接正方形 boundingBox 作为上界）
+  // 容量预检：按 wiki 圆形 49 块计费（非 81），直接对比 Manager 的 chunkCount / maxChunkCount
+  // 不使用 hasCapacity 的外接正方形 boundingBox（会悲观为 81，导致误拒）
   const est = estimateSim4ChunkCount();
   try {
-    const r = SIM4_RADIUS;
-    const from = {
-      x: Math.floor(center.x / 16) * 16 - r * 16,
-      y: 0,
-      z: Math.floor(center.z / 16) * 16 - r * 16,
-    };
-    const to = {
-      x: Math.floor(center.x / 16) * 16 + r * 16 + 15,
-      y: 0,
-      z: Math.floor(center.z / 16) * 16 + r * 16 + 15,
-    };
-    const opts = { dimension, from, to } as any;
-    if (!world.tickingAreaManager.hasCapacity(opts)) {
-      const chunkCount = (world.tickingAreaManager as any).chunkCount ?? "?";
-      const maxChunkCount = (world.tickingAreaManager as any).maxChunkCount ?? "?";
-      return {
-        ok: false,
-        reason: `模拟4容量不足（预估 ${est} 块列，当前 ${chunkCount}/${maxChunkCount}），将回退单区块`,
-      } as const;
+    const mgr = world.tickingAreaManager as any;
+    const chunkCount = mgr.chunkCount;
+    const maxChunkCount = mgr.maxChunkCount;
+    if (typeof chunkCount === "number" && typeof maxChunkCount === "number") {
+      if (chunkCount + est > maxChunkCount) {
+        return {
+          ok: false,
+          reason: `模拟4容量不足（需 ${est} 块列，当前 ${chunkCount}/${maxChunkCount}，圆形 r=4=49 块），将回退单区块`,
+        } as const;
+      }
+    } else {
+      // 降级：Manager 未暴露计数时，仍尝试 hasCapacity（外接正方形，仅作兜底）
+      const r = SIM4_RADIUS;
+      const from = {
+        x: Math.floor(center.x / 16) * 16 - r * 16,
+        y: 0,
+        z: Math.floor(center.z / 16) * 16 - r * 16,
+      };
+      const to = {
+        x: Math.floor(center.x / 16) * 16 + r * 16 + 15,
+        y: 0,
+        z: Math.floor(center.z / 16) * 16 + r * 16 + 15,
+      };
+      const opts = { dimension, from, to } as any;
+      if (!mgr.hasCapacity(opts)) {
+        return {
+          ok: false,
+          reason: `模拟4容量不足（预估 ${est} 块列，外接 81 上界（已修正为 49 精确，保留 81 仅作 hasCapacity 兜底分支说明），当前 ${mgr.chunkCount ?? "?"}/${mgr.maxChunkCount ?? "?"}），将回退单区块`,
+        } as const;
+      }
     }
   } catch (e: any) {
-    // hasCapacity 异常不阻断创建（降级为直接尝试命令，失败再回退）
+    // 预检异常不阻断创建（降级为直接尝试命令，失败再回退）
     console.warn(`[MockPlayer] Sim4 容量预检异常 ${name}: ${e?.message ?? e}`);
   }
 

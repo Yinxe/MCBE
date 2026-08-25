@@ -1,5 +1,5 @@
 // ─── TickingArea barrel（单职拆分后兼容层） ──────────
-// 模拟4（命令域 9×9）与单区块（Manager）已拆至子模块，保留本文件作重导出以兼容旧 import 路径
+// 模拟4（命令域 圆形 49 块 r=4）与单区块（Manager）已拆至子模块，保留本文件作重导出以兼容旧 import 路径
 // 新代码请直接 `from "./tickingArea/sim4"` / `from "./tickingArea/singleChunk"`
 
 export interface TickingAreaResult {

@@ -292,13 +292,13 @@ sequenceDiagram
 | 维度 | 模拟4 Sim4（上线辅助） | 单区块 SingleChunk（下线辅助） |
 |---|---|---|
 | 文件 | `tickingArea/sim4.ts` | `tickingArea/singleChunk.ts` |
-| 底层 API | 游戏命令 `tickingarea add circle <xyz> 4 <name>`（命令域，9×9 区块圆形，r=4） | `world.tickingAreaManager.createTickingArea(name, {dimension, from,to})` （Manager 域，矩形单 chunk） |
+| 底层 API | 游戏命令 `tickingarea add circle <xyz> 4 <name>`（命令域，圆形 r=4，49 区块，4+1+4） | `world.tickingAreaManager.createTickingArea(name, {dimension, from,to})` （Manager 域，矩形单 chunk） |
 | 范围 | 以假人为中心 `dx²+dz² ≤ r²` 覆盖（`sampleAndSendAscii` 几何渲染） | 单 chunk `floor(x/16)*16 ~ +15` |
 | 命名 | `mockplayer:aux:<name>` per-bot 常驻 | 同 `mockplayer:aux:<name>` 复用名，下线前刷新→下线后卸载 |
 | 并发 | 命令域容量由世界 tickingarea 限制（通常充足） | Manager 域 `maxChunkCount` 255 块列，满则 `hasCapacity` 失败 |
 | 生命周期 | 上线后创建→常驻→下线时 `removeSingleChunkArea` 卸载（同一名，先 Manager 覆盖后清） | 下线前创建→延迟 `cooldown` 后卸载 |
 | 宝库 | 跳过（不申请） | 跳过（直接 rawOffline） |
-| 采样自检 | `auxiliary.sampleAndSendAscii` 9×9 ASCII（◎假人 ■覆盖 ·圆外）私信主人 | 无 |
+| 采样自检 | `auxiliary.sampleAndSendAscii` 9×9 网格中圆形 49 块 ASCII（◎假人 ■覆盖 ·圆外）私信主人 | 无 |
 
 旧固定名 `mockplayer:safe_online/safe_offline` 已废弃，仅作残留清理兼容。
 
@@ -355,7 +355,7 @@ delayTicks(n) = new Promise(res=>system.runTimeout(res, n))
 ### 5.5 采样 ASCII（`auxiliary.sampleAndSendAscii`）
 
 - 按 `tickingarea add circle r=4` 几何直接渲染，不触世界（旧方案 `dimension.getBlock` 会强制加载区块污染测量，已废除）。
-- 输出 `9×9`（`2r+1`）：圆心 `◎`（假人区块），覆盖 `■`（`dx²+dz²≤r²`），圆外 `·`。
+- 输出 `9×9` 网格（`2r+1`）中圆形 49 块：圆心 `◎`（假人区块），覆盖 `■`（`dx²+dz²≤r²`），圆外 `·`。
 - 日志 `console.info` + 仅主人私信（`world.getAllPlayers().find(p=>name==ownerName)`）。
 
 ### 5.6 GameTest 装置常加载（`manage/gametestContext.ts`）
@@ -563,7 +563,7 @@ onEntityDie(deadEntity has BOT_TAG && record):
 
 | 优化 | 文件 | 改动 |
 |---|---|---|
-| **Sim4 容量预检+回退** | `tickingArea/sim4.ts` | 新增 `estimateSim4ChunkCount(81 上界)` + `hasCapacity` boundingBox 预检（`center±r*16`），失败返回 `容量不足→回退单区块`；创建后 `hasTickingArea` 二次校验 |
+| **Sim4 容量预检+回退** | `tickingArea/sim4.ts` | 新增 `estimateSim4ChunkCount(49 圆形)` + `hasCapacity` boundingBox 预检（`center±r*16`），失败返回 `容量不足→回退单区块`；创建后 `hasTickingArea` 二次校验 |
 | **Set 同步** | `tickingArea/sim4.ts` | 新增 `syncCommandAreasFromWorld()` 从 `getAllTickingAreas` 回填 `mockplayer:aux:*`，`hasTickingArea` 双重查询（Set OR Manager） |
 | **统一双域移除** | `tickingArea/sim4.ts` `offlineBot.ts` | `removeSim4Area` 同时尝试 Manager 移除；`offlineBot` 下线前/后双域清理（`removeSim4Area` + `Manager.remove`） |
 | **回退创建** | `auxiliary.ts` `onlineBot.ts` | 新增 `createAuxWithFallback`（Sim4→SingleChunk），`onlineBot` 改为 `createAuxWithFallback`，容量不足自动降级并日志 `fallback` |
@@ -572,13 +572,13 @@ onEntityDie(deadEntity has BOT_TAG && record):
 ### 14.3 优化后流程（合规）
 
 ```
-上线： rawOnline → createAuxWithFallback(Sim4 81块预检 → 命令 → 校验 → 失败则 SingleChunk 1块回退) → 采样
+上线： rawOnline → createAuxWithFallback(Sim4 49块预检 → 命令 → 校验 → 失败则 SingleChunk 1块回退) → 采样
 下线： 双域清理(Sim4+Manager) → createSingleChunkArea(1块 hasCapacity) → rawOffline → delay cooldown → 双域移除
 启动： restoreAll → system.run( syncCommandAreasFromWorld + syncAuxFromWorld + cleanupOrphanAuxAreas ) → autoOnline
 ```
 
 - 同名 `mockplayer:aux:<name>` 仍为 per-bot 单例，但创建前双域清理、创建后双域校验，彻底消除跨域残留
-- 容量模型统一：Sim4 81 上界、SingleChunk 1 块，均受 `maxChunkCount` 约束
+- 容量模型统一：Sim4 49 圆形、SingleChunk 1 块，均受 `maxChunkCount` 约束
 - 孤儿零残留：重启自动回收，capacity 不泄漏
 - 回退保证：即使 50+ 假人并发导致 Sim4 超限，仍有 1 块保底，`test.spawn` 小范围兜底为最后防线
 

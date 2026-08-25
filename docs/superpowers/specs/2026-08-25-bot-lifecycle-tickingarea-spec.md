@@ -14,7 +14,7 @@
 - [x] 下线 `safeOffline` 唯一入口，永不 throw，覆盖 5 类触发源（命令/UI/死亡/重连/联动），finally 单次卸载
 - [x] per-bot 队列防同名并发，重名防护三层（waitNameFree→串行锁→生成后校验重试）
 - [x] 恢复标记 `restoredBots` 防空背包覆写，指纹对账只写变化
-- [x] 辅助双域隔离：Sim4（命令域 circle r=4, 9×9）上线后常驻 vs SingleChunk（Manager 单chunk 255并发）下线前占位延迟卸载，同名 `mockplayer:aux:<name>`
+- [x] 辅助双域隔离：Sim4（命令域 circle r=4, 49 块圆形 4+1+4）上线后常驻 vs SingleChunk（Manager 单chunk 255并发）下线前占位延迟卸载，同名 `mockplayer:aux:<name>`
 - [x] GameTest 装置几何 0,0,0 常驻，40t就绪，4区块列tick
 - [x] 配额强制与可见性隔离（onlineQuota/可见记录过滤）
 - [x] 构建 0 错误、core 79+ 单测通过、文档 533 行与代码注释/日志一一对应

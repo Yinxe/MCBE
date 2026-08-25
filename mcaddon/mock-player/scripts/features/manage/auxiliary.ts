@@ -3,7 +3,7 @@
 //   - vault 判定（宝库模式跳过辅助）
 //   - per-bot 辅助区块名（mockplayer:aux:<name>）
 //   - per-bot 串行队列（防同名并发）
-//   - 采样图生成（9×9 区块，以假人为中心）
+//   - 采样图生成（9×9 网格中圆形 49 块，以假人为中心）
 
 import { world, type Dimension, type Vector3 } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
@@ -155,7 +155,7 @@ export function cleanupOrphanAuxAreas(): number {
 
 /**
  * 带回退的辅助创建（上线优化）：
- * 先尝试 Sim4（9×9 圆形，体验最好），若容量不足失败则自动回退单区块（1 块列，保底）
+ * 先尝试 Sim4（圆形 49 块，体验最好），若容量不足失败则自动回退单区块（1 块列，保底）
  * @returns 创建结果 + 是否回退
  */
 export async function createAuxWithFallback(
@@ -178,7 +178,7 @@ export async function createAuxWithFallback(
   return { ok: false, reason: `Sim4 失败: ${sim4Res.reason}；回退单区块也失败: ${fallbackRes.reason}` } as const;
 }
 
-// ─── 采样 ASCII（几何渲染版，零世界查询） ──────────
+// ─── 采样 ASCII（几何渲染版，零世界查询，49 块圆形） ──────────
 // ⚠️ 审查修正：旧实现用 isChunkLoaded（内部 dimension.getBlock）逐块探测，
 //    但 getBlock 会**强制加载区块**——探针自身污染测量对象（圆外角落被强拉载 +
 //    结果恒为全■）。现按 `tickingarea add circle r=4` 的几何定义直接渲染
