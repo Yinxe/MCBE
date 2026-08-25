@@ -201,6 +201,14 @@ scripts/
 - 背包/装备事件驱动增量保存（playerInventoryItemChange + 槽位事件）；死亡 = 存储时机点"有什么存什么"
 - 数据迁移 `runMigrations` 为旧版本升级通道（记录归一化 + 旧 DP → NBT）
 
+### 上线/下线/辅助常加载（详见 `docs/bot-lifecycle-tickingarea.md` 权威梳理）
+
+- **上线 `safeOnline`**（唯一入口，永不 reject）：`checkOnlineQuota`（同时在线配额，管理员豁免）→ per-bot 队列串行 → `rawOnline`（`spawnBot` 全量走 `test.spawnSimulatedPlayer(0,8,0)` 中转再 `teleport` 目标，三层重名防护：`waitNameFree` 轮询+幽灵清理→串行锁→生成后 `bot.name` 校验重试，GameTest 未就绪回退模块直生）→ 非宝库则 `createSim4Area(mockplayer:aux:<name>, circle r=4, 命令域9×9)` 常驻 → `delay 2t` 后 `sampleAndSendAscii` 几何渲染私信主人；`playerJoin` 再 `restoreInto` 真 ItemStack 回写 + `markRestored` + `botOnline` 事件
+- **下线 `safeOffline`**（永不 throw）：宝库直落 `rawOffline`；非宝库先 `createSingleChunkArea(mockplayer:aux:<name>, Manager单chunk,255并发校验)` 预占位 → `rawOffline`（保存 `lastPoint/isSneaking` + `saveFullState(对账式指纹只写变化)` + `disconnect` + `saveRecord` + `botOffline`）→ `delay cooldown(1-5s可配)` 后 `removeSingleChunkArea` 幂等卸载；`playerLeave` 幂等兜底（`!online` 或 `entityId!=event.playerId` 跳过旧实体）+ `ownerOfflineAutoOffline` 联动
+- **辅助双域隔离**：`Sim4`（`tickingArea/sim4.ts`，命令 `tickingarea add circle 4`，9×9 圆形，中转后常驻，上线后刷新） vs `SingleChunk`（`singleChunk.ts`，`Manager.createTickingArea` 单 chunk 矩形，255块列容量，下线前占位延迟卸载）；同名 `mockplayer:aux:<name>` per-bot，旧固定名已废弃；`auxiliary.ts` 单源：`isVaultMode/perBotQueue/cooldown/sampleAscii`（几何渲染，已修 `getBlock` 强拉载污染）
+- **GameTest 装置**（`gametestContext.ts`）：`startup registerCustomDimension(mockplayer:test)` → `worldLoad initGameTestContext` `system.run` 40t后 `createEmpty void + register keepalive(maxTicks 2e9)` → `startGameTest` 创4区块列tick→ `getBlock(0,0,0)` 监测结构方块→ `runthis` 复用或 `buildGrassPad(5×5)`+`gametest run` 物化重试3次，几何必须 0,0,0（执行点 0,-1,-3+草坪y=-1）；初始化后移除 ticking 由 GameTest 保持常驻
+- **重连 `safeReconnect`**：`reconnectingBots` 抑制消息 → `system.run(safeOffline+onOffline)` → `delay 1s` → `waitForNameAvailable` → `safeOnline+onOnline`；`autoOnline` 世界重启 60t后排队 `safeOnline` 失败置离线
+
 ---
 
 ## 玩家隔离与权限
