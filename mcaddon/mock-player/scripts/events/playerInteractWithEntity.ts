@@ -13,6 +13,7 @@ import { system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/
 import { TAG_BOT } from "../rules/tags/BotTags";
 import { showBotPanel } from "../interaction/ui/bot";
 import { showTagManagement } from "../interaction/ui/panels/tags";
+import { tryClaimMenuCooldown } from "./itemUse";
 
 export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBeforeEvent): void {
   const { player, target, itemStack } = event;
@@ -27,6 +28,10 @@ export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBefore
 
   // 取消默认交互行为（玩家之间默认行为不可预测）
   event.cancel = true;
+
+  // 去重：与 itemUse 共享 700ms 冷却（修复手持信物点假人时主菜单与 bot 面板同 tick 双弹）
+  // 交互面板优先级高于主菜单（beforeEvent 先于 afterEvent，先 claim 则 itemUse 的主菜单将被抑制）
+  if (!tryClaimMenuCooldown(player.id)) return;
 
   // before 回调在 restricted mode，需要 system.run 延迟执行
   system.run(() => {
