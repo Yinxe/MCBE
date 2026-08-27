@@ -45,55 +45,8 @@ export function getReclaimPreview(record: BotRecord): {
   feet: ItemPreview | null;
   inventorySummary: string;
 } {
-  if (record.online && !record.death) {
-    const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-    if (entity?.hasTag(BOT_TAG)) {
-      const bot = entity as Player;
-
-      // 经验
-      const xpData = record.experience && record.experience.totalXp > 0
-        ? { level: record.experience.level, totalXp: record.experience.totalXp }
-        : null;
-
-      // 主手
-      const invContainer = inventoryContainerOf(bot);
-      let mainhand: ItemPreview | null = null;
-      if (invContainer) {
-        const handSlot = bot.selectedSlotIndex;
-        const item = invContainer.getItem(handSlot);
-        if (item) mainhand = itemStackToPreview(item);
-      }
-
-      // 装备
-      const equip = bot.getComponent("minecraft:equippable");
-      const equipMap: Record<string, ItemPreview | null> = { head: null, chest: null, legs: null, feet: null, offhand: null };
-      if (equip) {
-        const slotMap: Record<string, EquipmentSlot> = {
-          head: EquipmentSlot.Head, chest: EquipmentSlot.Chest,
-          legs: EquipmentSlot.Legs, feet: EquipmentSlot.Feet,
-          offhand: EquipmentSlot.Offhand,
-        };
-        for (const [name, slot] of Object.entries(slotMap)) {
-          const item = equip.getEquipment(slot);
-          if (item) equipMap[name] = itemStackToPreview(item);
-        }
-      }
-
-      // 背包略写
-      const invCounts: Record<string, number> = {};
-      if (invContainer) {
-        const handSlot = bot.selectedSlotIndex;
-        for (let i = 0; i < invContainer.size; i++) {
-          if (i === handSlot) continue;
-          const item = invContainer.getItem(i);
-          if (!item) continue;
-          const shortName = item.typeId.replace("minecraft:", "");
-          invCounts[shortName] = (invCounts[shortName] || 0) + item.amount;
-        }
-      }
-      return { xp: xpData, mainhand, offhand: equipMap.offhand ?? null, head: equipMap.head ?? null, chest: equipMap.chest ?? null, legs: equipMap.legs ?? null, feet: equipMap.feet ?? null, inventorySummary: buildInventorySummary(invCounts) };
-    }
-  }
+  const onlinePreview = buildOnlinePreview(record);
+  if (onlinePreview) return onlinePreview;
 
   // ── 离线/死亡：从持久化读取（core 纯数据计算；真实物品转预览） ──
   const savedInv = botStore.loadInventory(record.name);
@@ -103,6 +56,45 @@ export function getReclaimPreview(record: BotRecord): {
     ? Object.fromEntries(Object.entries(savedEquip).map(([k, v]) => [k, serializeItemStack(v)]))
     : undefined;
   return buildOfflineReclaimPreview(record, invData, equipData);
+}
+
+/**
+ * 在线假人预览：从实体读取（完整 NBT）
+ */
+function buildOnlinePreview(record: BotRecord): ReturnType<typeof getReclaimPreview> | null {
+  if (!record.online || record.death) return null;
+  const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+  if (!entity?.hasTag(BOT_TAG)) return null;
+  const bot = entity as Player;
+  const xpData = record.experience && record.experience.totalXp > 0 ? { level: record.experience.level, totalXp: record.experience.totalXp } : null;
+  const invContainer = inventoryContainerOf(bot);
+  let mainhand: ItemPreview | null = null;
+  if (invContainer) {
+    const handSlot = bot.selectedSlotIndex;
+    const item = invContainer.getItem(handSlot);
+    if (item) mainhand = itemStackToPreview(item);
+  }
+  const equip = bot.getComponent("minecraft:equippable");
+  const equipMap: Record<string, ItemPreview | null> = { head: null, chest: null, legs: null, feet: null, offhand: null };
+  if (equip) {
+    const slotMap: Record<string, EquipmentSlot> = { head: EquipmentSlot.Head, chest: EquipmentSlot.Chest, legs: EquipmentSlot.Legs, feet: EquipmentSlot.Feet, offhand: EquipmentSlot.Offhand };
+    for (const [name, slot] of Object.entries(slotMap)) {
+      const item = equip.getEquipment(slot);
+      if (item) equipMap[name] = itemStackToPreview(item);
+    }
+  }
+  const invCounts: Record<string, number> = {};
+  if (invContainer) {
+    const handSlot = bot.selectedSlotIndex;
+    for (let i = 0; i < invContainer.size; i++) {
+      if (i === handSlot) continue;
+      const item = invContainer.getItem(i);
+      if (!item) continue;
+      const shortName = item.typeId.replace("minecraft:", "");
+      invCounts[shortName] = (invCounts[shortName] || 0) + item.amount;
+    }
+  }
+  return { xp: xpData, mainhand, offhand: equipMap.offhand ?? null, head: equipMap.head ?? null, chest: equipMap.chest ?? null, legs: equipMap.legs ?? null, feet: equipMap.feet ?? null, inventorySummary: buildInventorySummary(invCounts) };
 }
 
 /**

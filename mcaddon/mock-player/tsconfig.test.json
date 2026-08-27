@@ -44,6 +44,8 @@
     "scripts/events/playerJoin.ts",
     "scripts/events/playerLeave.ts",
     "scripts/events/playerSpawn.ts",
-    "scripts/main.ts"
+    "scripts/main.ts",
+    "../../packages/toolkit",
+    "../../packages/toolkit-build"
   ]
 }

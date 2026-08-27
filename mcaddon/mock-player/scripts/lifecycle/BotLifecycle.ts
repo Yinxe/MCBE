@@ -57,7 +57,7 @@ export class BotLifecycle {
     try {
       component.onRegister?.(this.ctx);
     } catch (e: any) {
-      console.warn(`[${this.name}] 组件 ${component.id} onRegister 异常: ${e?.message ?? e}`);
+      console.warn(`[${this.name}] 组件 ${component.id} onRegister 异常: ${(e as any)?.message ?? String(e)}`);
     }
     console.info(`[${this.name}] + 组件 ${component.id} (priority=${component.priority ?? 100})`);
     return this;
@@ -67,7 +67,7 @@ export class BotLifecycle {
   unuse(id: string): boolean {
     const idx = this.components.findIndex((c) => c.id === id);
     if (idx < 0) return false;
-    const [removed] = this.components.splice(idx, 1);
+    const removed = this.components.splice(idx, 1)[0]!;
     try {
       removed.onUnregister?.(this.ctx);
     } catch (e: any) {
