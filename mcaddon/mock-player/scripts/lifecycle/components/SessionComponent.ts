@@ -30,14 +30,20 @@ export class SessionComponent implements LifecycleComponent {
     this.ctx = ctx;
 
     this.joinHandler = (event: PlayerJoinAfterEvent) => {
-      void this.handleJoin(event).catch(e => console.warn(`[Session] playerJoin 异常 ${event.playerName}: ${e?.message ?? e}`));
+      void this.handleJoin(event).catch((e: unknown) => {
+        const err = e as Error;
+        console.warn(`[Session] playerJoin 异常 ${event.playerName}: ${err?.message ?? String(err)}`);
+      });
     };
     this.leaveHandler = (event: PlayerLeaveAfterEvent) => {
-      void this.handleLeave(event).catch(e => console.warn(`[Session] playerLeave 异常 ${event.playerName}: ${e?.message ?? e}`));
+      void this.handleLeave(event).catch((e: unknown) => {
+        const err = e as Error;
+        console.warn(`[Session] playerLeave 异常 ${event.playerName}: ${err?.message ?? String(err)}`);
+      });
     };
 
-    try { world.afterEvents.playerJoin.subscribe(this.joinHandler); } catch (e: any) { console.warn(`[Session] 订阅 playerJoin 失败: ${e?.message ?? e}`); }
-    try { world.afterEvents.playerLeave.subscribe(this.leaveHandler); } catch (e: any) { console.warn(`[Session] 订阅 playerLeave 失败: ${e?.message ?? e}`); }
+    try { world.afterEvents.playerJoin.subscribe(this.joinHandler); } catch (e: unknown) { const err = e as Error; console.warn(`[Session] 订阅 playerJoin 失败: ${err?.message ?? String(err)}`); }
+    try { world.afterEvents.playerLeave.subscribe(this.leaveHandler); } catch (e: unknown) { const err = e as Error; console.warn(`[Session] 订阅 playerLeave 失败: ${err?.message ?? String(err)}`); }
 
     console.info(`[Session] 已集中订阅 playerJoin / playerLeave（生命周期内聚）`);
   }
@@ -70,8 +76,9 @@ export class SessionComponent implements LifecycleComponent {
             if (exp.totalXp > current) player.addExperience(exp.totalXp - current);
           } catch {}
         }
-      } catch (e: any) {
-        console.warn(`[Session] 恢复 ${record.name} 失败: ${e?.message ?? e}`);
+      } catch (e: unknown) {
+        const err = e as Error;
+        console.warn(`[Session] 恢复 ${record.name} 失败: ${err?.message ?? String(err)}`);
       }
     }
 
@@ -157,7 +164,10 @@ export class SessionComponent implements LifecycleComponent {
         try {
           const res = await offlineFn(r);
           if (!res.ok) console.warn(`[Session] 联动下线失败 ${r.name}: ${res.reason}`);
-        } catch (e: any) { console.warn(`[Session] 联动下线异常 ${r.name}: ${e?.message ?? e}`); }
+        } catch (e: unknown) {
+          const err = e as Error;
+          console.warn(`[Session] 联动下线异常 ${r.name}: ${err?.message ?? String(err)}`);
+        }
       }
     });
   }
