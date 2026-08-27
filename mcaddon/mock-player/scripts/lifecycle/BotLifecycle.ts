@@ -11,7 +11,7 @@
 //   - 所有对外方法永不 reject（返回 { ok, reason, bot? }），调用方可直接展示 reason
 //   - 组件可通过实现接口 hook 或订阅 LifecycleEvents 两种方式介入，二选一或兼用
 
-import { system, world } from "@minecraft/server";
+import { system, world, type Player } from "@minecraft/server";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "../rules/Types";
@@ -110,10 +110,10 @@ export class BotLifecycle {
   /** 前置守卫：任一组件抛错即中断并向上抛 */
   private async runBefore<K extends keyof LifecycleComponent>(
     hook: K,
-    ...args: any[]
+    ...args: unknown[]
   ): Promise<void> {
     for (const c of this.components) {
-      const fn = c[hook] as any;
+      const fn = c[hook] as unknown as (...args: unknown[]) => unknown;
       if (typeof fn === "function") {
         await fn.apply(c, [this.ctx, ...args]);
       }
@@ -123,10 +123,10 @@ export class BotLifecycle {
   /** 后置副作用：异常隔离，仅告警 */
   private async runAfter<K extends keyof LifecycleComponent>(
     hook: K,
-    ...args: any[]
+    ...args: unknown[]
   ): Promise<void> {
     for (const c of this.components) {
-      const fn = c[hook] as any;
+      const fn = c[hook] as unknown as (...args: unknown[]) => unknown;
       if (typeof fn === "function") {
         try {
           await fn.apply(c, [this.ctx, ...args]);
@@ -141,13 +141,13 @@ export class BotLifecycle {
 
   private async doSpawn(
     record: BotRecord,
-    location: { x: number; y: number; z: number },
-    dimension: any,
-    rotation: { x: number; y: number },
-    lookTarget?: { x: number; y: number; z: number }
+    location: import("@minecraft/server").Vector3,
+    dimension: import("@minecraft/server").Dimension,
+    rotation: import("@minecraft/server").Vector2,
+    lookTarget?: import("@minecraft/server").Vector3
   ): Promise<SimulatedPlayer> {
     const { spawnBot } = await import("../features/manage/spawnMode");
-    return spawnBot(record, location as any, dimension, rotation as any, lookTarget as any);
+    return spawnBot(record, location, dimension, rotation, lookTarget);
   }
 
   // ─── 对外 API：创建 ────────────────────────────────
@@ -159,8 +159,8 @@ export class BotLifecycle {
   async create(options: {
     rawName: string;
     ownerName: string;
-    location: { x: number; y: number; z: number };
-    dimension: any;
+    location: import("@minecraft/server").Vector3;
+    dimension: import("@minecraft/server").Dimension;
     initialTags: string[];
     rotation: { x: number; y: number; z: number };
     lookTarget: { x: number; y: number; z: number };
@@ -286,7 +286,7 @@ export class BotLifecycle {
 
         // 核心生成
         const state = record.lastPoint ?? record.respawnPoint;
-        let dim: any;
+        let dim: import("@minecraft/server").Dimension;
         try {
           dim = world.getDimension(state.dimension);
         } catch (e: any) {
@@ -294,10 +294,10 @@ export class BotLifecycle {
         }
         const bot = await this.doSpawn(
           record,
-          state.location as any,
+          state.location,
           dim,
-          state.rotation as any,
-          state.lookTarget as any
+          state.rotation,
+          state.lookTarget
         );
         record.online = true;
         record.death = false;
@@ -314,7 +314,7 @@ export class BotLifecycle {
 
         LifecycleEvents.afterOnline.trigger({
           botName: record.name,
-          location: bot.location as any,
+          location: bot.location,
           dimension: bot.dimension.id,
         });
 
@@ -368,15 +368,15 @@ export class BotLifecycle {
     const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
     const online = entity as SimulatedPlayer | undefined;
     const oldEntityId = record.entityId;
-    if (online && (online as any).hasTag?.(BOT_TAG)) {
+    if (online && (online as unknown as { hasTag?: (tag: string) => boolean }).hasTag?.(BOT_TAG)) {
       record.lastPoint = {
-        location: online.location as any,
+        location: online.location,
         dimension: online.dimension.id,
-        rotation: (online as any).getRotation(),
+        rotation: (online as unknown as SimulatedPlayer).getRotation(),
         lookTarget: record.lastPoint?.lookTarget ?? record.respawnPoint.lookTarget,
       };
-      record.isSneaking = (online as any).isSneaking;
-      this.ctx.save.saveFullState(online as any, record);
+      record.isSneaking = (online as unknown as SimulatedPlayer).isSneaking;
+      this.ctx.save.saveFullState(online as unknown as Player, record);
       try {
         (online as SimulatedPlayer).disconnect();
       } catch {}
@@ -400,7 +400,7 @@ export class BotLifecycle {
 
   // ─── 删除 ──────────────────────────────────────────
 
-  async delete(record: BotRecord, reclaimTo?: any): Promise<LifecycleResult> {
+  async delete(record: BotRecord, reclaimTo?: Player): Promise<LifecycleResult> {
     const botName = record.name;
     return this.withQueue(botName, async () => {
       try {
@@ -431,7 +431,7 @@ export class BotLifecycle {
         // 断开在线实体
         if (record.online) {
           const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-          if (entity && (entity as any).hasTag?.(BOT_TAG)) {
+          if (entity && (entity as unknown as { hasTag?: (tag: string) => boolean }).hasTag?.(BOT_TAG)) {
             try {
               const { trackBotOffline } = await import("../features/trident/tridentTracker");
               trackBotOffline(entity.id);
@@ -474,7 +474,7 @@ export class BotLifecycle {
       await this.runBefore("onBeforeKill", record);
 
       const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
-      if (!entity || !(entity as any).hasTag?.(BOT_TAG)) {
+      if (!entity || !(entity as unknown as { hasTag?: (tag: string) => boolean }).hasTag?.(BOT_TAG)) {
         throw new Error("无法在世界中找到该模拟玩家");
       }
       (entity as SimulatedPlayer).kill();
