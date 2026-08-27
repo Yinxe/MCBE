@@ -150,20 +150,6 @@ export class BotLifecycle {
     return spawnBot(record, location as any, dimension, rotation as any, lookTarget as any);
   }
 
-  private doFinalizeAfterSpawn(
-    record: BotRecord,
-    bot: SimulatedPlayer,
-    rotation: { x: number; y: number },
-    lookTarget?: { x: number; y: number; z: number }
-  ): void {
-    // finalize 由 spawnMode.spawnBot 内部已调用 finalizeBotSpawn（saveRecord 含落库）
-    // 此处仅补充日志与事件；spawnBot 失败会抛错
-    void rotation;
-    void lookTarget;
-    void bot;
-    void record;
-  }
-
   // ─── 对外 API：创建 ────────────────────────────────
 
   /**
@@ -249,7 +235,6 @@ export class BotLifecycle {
         };
 
         const bot = await this.doSpawn(record, options.location, options.dimension, rot2, options.lookTarget);
-        this.doFinalizeAfterSpawn(record, bot, rot2, options.lookTarget);
 
         console.info(
           `[${this.name}] 创建假人 ${name} 主人=${options.ownerName} @ ${options.dimension.id} ${Math.floor(options.location.x)} ${Math.floor(options.location.y)} ${Math.floor(options.location.z)}`
