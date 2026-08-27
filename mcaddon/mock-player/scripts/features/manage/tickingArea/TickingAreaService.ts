@@ -8,8 +8,7 @@
 //   - sync(): 同步两者镜像
 
 import type { Dimension, Vector3 } from "@minecraft/server";
-import { CommandCircleProvider } from "./CommandCircleProvider";
-import { ManagerSingleChunkProvider } from "./ManagerSingleChunkProvider";
+import { CommandCircleProvider, ManagerSingleChunkProvider } from "./providers";
 import type { TickingAreaProvider } from "./TickingAreaProvider";
 
 const circleProvider = new CommandCircleProvider();

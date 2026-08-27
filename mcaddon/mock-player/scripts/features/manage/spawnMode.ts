@@ -70,7 +70,7 @@ function isTrackedEntity(entityId: string): boolean {
 function findNameBlockers(name: string): Player[] {
   const exact = world.getPlayers({ name });
   const suffixGhosts = world.getPlayers({ tags: [BOT_TAG] }).filter((p) => p.name.startsWith(`${name}(`));
-  return exact.length > 0 ? [exact[0], ...suffixGhosts] : suffixGhosts;
+  return exact.length > 0 ? [exact[0]!, ...suffixGhosts] : suffixGhosts;
 }
 
 /** 等待名称可用：放行条件=无同名实体且无残留 "(N)" 幽灵。超时也 resolve，交给生成后校验兜底 */

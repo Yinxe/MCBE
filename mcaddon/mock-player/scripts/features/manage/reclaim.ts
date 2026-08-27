@@ -91,7 +91,7 @@ export function getReclaimPreview(record: BotRecord): {
           invCounts[shortName] = (invCounts[shortName] || 0) + item.amount;
         }
       }
-      return { xp: xpData, mainhand, offhand: equipMap.offhand, head: equipMap.head, chest: equipMap.chest, legs: equipMap.legs, feet: equipMap.feet, inventorySummary: buildInventorySummary(invCounts) };
+      return { xp: xpData, mainhand, offhand: equipMap.offhand ?? null, head: equipMap.head ?? null, chest: equipMap.chest ?? null, legs: equipMap.legs ?? null, feet: equipMap.feet ?? null, inventorySummary: buildInventorySummary(invCounts) };
     }
   }
 
@@ -267,8 +267,8 @@ function reclaimFromStorage(
       const remainingInv: (ItemStack | null)[] = [];
       for (let i = 0; i < savedInv.length; i++) {
         const isHand = i === 0; // 离线假人假设主手在 slot 0
-        if (isHand && !opts.mainhand) { remainingInv.push(savedInv[i]); continue; }
-        if (!isHand && !opts.inventory) { remainingInv.push(savedInv[i]); continue; }
+        if (isHand && !opts.mainhand) { remainingInv.push(savedInv[i] ?? null); continue; }
+        if (!isHand && !opts.inventory) { remainingInv.push(savedInv[i] ?? null); continue; }
         if (!savedInv[i]) { remainingInv.push(null); continue; }
         transferItemToPlayer(savedInv[i]!, pContainer, player, result);
         remainingInv.push(null); // 已回收，清空

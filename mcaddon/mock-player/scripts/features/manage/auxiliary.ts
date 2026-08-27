@@ -1,8 +1,11 @@
 // DEPRECATED: 辅助域已完全内聚至 lifecycle（TickingAreaComponent + SharedTickingQueue + TickingAreaService）
 // 此文件仅保留兼容 re-export，实际实现已迁移，避免“辅助”与“生命周期”两处各持一份队列/采样逻辑的重复
 
-// 兼容：旧 isVaultMode / checkOnlineQuota 仍被外部零星引用，保留薄转发至新址
-export { isVaultMode } from "../../lifecycle/components/TickingAreaComponent";
+// 兼容：旧 isVaultMode 仍被外部引用，保留本地实现（与 TickingAreaComponent 逻辑一致）
+import { TAG_VAULT_MODE as _TAG_VAULT_MODE } from "../../rules/tags/BotTags";
+export function isVaultMode(record: import("../../rules/Types").BotRecord): boolean {
+  return record.tags.includes(_TAG_VAULT_MODE.value);
+}
 // checkOnlineQuota 已由 lifecycle/QuotaComponent 接管，此处转发以兼容旧 import
 export function checkOnlineQuota(record: import("../../rules/Types").BotRecord): string | undefined {
   // 动态转发，避免循环：auxiliary → bootstrap/context → lifecycle → auxiliary
