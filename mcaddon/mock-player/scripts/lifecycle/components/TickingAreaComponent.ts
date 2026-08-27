@@ -26,7 +26,7 @@ export class TickingAreaComponent implements LifecycleComponent {
   onRegister(ctx: LifecycleContext): void {
     this.ctx = ctx;
     this.offAuxCompleted = LifecycleEvents.auxCompleted.subscribe((e) => {
-      try { this.notifyOwner(e); } catch (err: any) { console.warn(`[TickingArea] 通知失败 ${e.botName}: ${err?.message ?? err}`); }
+      try { this.notifyOwner(e); } catch (err: unknown) { const _e = err as Error; console.warn(`[TickingArea] 通知失败 ${e.botName}: ${_e?.message ?? String(_e)}`); }
     });
     console.info(`[TickingArea] 已注册共享队列(上线) + 单区块保活(下线) + auxCompleted通知`);
   }
@@ -60,8 +60,9 @@ export class TickingAreaComponent implements LifecycleComponent {
       }
       enqueueAuxRequest(record.name, record.ownerName, loc, dim);
       console.info(`[TickingArea] ${record.name} 已入队共享辅助 r=${radius} 队列（排队 ${this.getQueueLenForLog()}）`);
-    } catch (e: any) {
-      console.warn(`[TickingArea] 入队异常 ${record.name}: ${e?.message ?? e}`);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.warn(`[TickingArea] 入队异常 ${record.name}: ${err?.message ?? String(err)}`);
     }
   }
 
@@ -85,7 +86,7 @@ export class TickingAreaComponent implements LifecycleComponent {
       if (record.entityId) {
         try {
           const e = world.getEntity(record.entityId) as import("@minecraft/server").Player | undefined;
-          if (e && (e as any).hasTag?.(BOT_TAG)) {
+          if (e && (e as unknown as { hasTag?: (tag: string) => boolean }).hasTag?.(BOT_TAG)) {
             center = e.location;
             targetDim = e.dimension;
           }
@@ -110,10 +111,11 @@ export class TickingAreaComponent implements LifecycleComponent {
       const areaName = getAuxAreaName(record.name);
       console.info(`[TickingArea] 下线前申请单区块保活 ${areaName} @ ${targetDim.id} ${Math.floor(center.x)},${Math.floor(center.z)} for ${record.name}`);
       const cr = await createSingleChunk(center!, targetDim!, areaName);
-      if (!cr.ok) console.warn(`[TickingArea] 下线前保活失败 ${record.name}: ${(cr as any).reason}（仍继续下线）`);
-      else console.info(`[TickingArea] 下线前保活成功 ${areaName} for ${record.name} via ${(cr as any).kind}`);
-    } catch (e: any) {
-      console.warn(`[TickingArea] 下线前保活异常 ${record.name}: ${e?.message ?? e}`);
+      if (!cr.ok) console.warn(`[TickingArea] 下线前保活失败 ${record.name}: ${cr.reason}（仍继续下线）`);
+      else console.info(`[TickingArea] 下线前保活成功 ${areaName} for ${record.name} via ${cr.kind}`);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.warn(`[TickingArea] 下线前保活异常 ${record.name}: ${err?.message ?? String(err)}`);
     }
   }
 
@@ -132,10 +134,11 @@ export class TickingAreaComponent implements LifecycleComponent {
         try {
           const { removeTickingArea } = await import("../../features/manage/tickingArea/TickingAreaService");
           const rr = await removeTickingArea(areaName);
-          if (!rr.ok) console.warn(`[TickingArea] 2s卸载失败 ${record.name}: ${(rr as any).reason}`);
+          if (!rr.ok) console.warn(`[TickingArea] 2s卸载失败 ${record.name}: ${rr.reason}`);
           else console.info(`[TickingArea] 2s已配套卸载单区块保活 ${areaName} for ${record.name}`);
-        } catch (e: any) {
-          console.warn(`[TickingArea] 2s卸载异常 ${record.name}: ${e?.message ?? e}`);
+        } catch (e: unknown) {
+          const err = e as Error;
+          console.warn(`[TickingArea] 2s卸载异常 ${record.name}: ${err?.message ?? String(err)}`);
         }
       }, 40);
 
@@ -145,12 +148,14 @@ export class TickingAreaComponent implements LifecycleComponent {
           const { removeTickingArea } = await import("../../features/manage/tickingArea/TickingAreaService");
           const r = await removeTickingArea(areaName);
           if (r.ok) console.info(`[TickingArea] 4s强制配套卸载完成 ${areaName} for ${record.name}`);
-        } catch (e: any) {
-          console.warn(`[TickingArea] 4s强卸异常 ${record.name}: ${e?.message ?? e}`);
+        } catch (e: unknown) {
+          const err = e as Error;
+          console.warn(`[TickingArea] 4s强卸异常 ${record.name}: ${err?.message ?? String(err)}`);
         }
       }, 80);
-    } catch (e: any) {
-      console.warn(`[TickingArea] 下线后调度异常 ${record.name}: ${e?.message ?? e}`);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.warn(`[TickingArea] 下线后调度异常 ${record.name}: ${err?.message ?? String(err)}`);
     }
   }
 
@@ -181,12 +186,14 @@ export class TickingAreaComponent implements LifecycleComponent {
             } catch {}
           } catch {}
           if (removed > 0) console.info(`[TickingArea] 孤儿辅助清理 ${removed} 个（含旧独占）`);
-        } catch (e: any) {
-          console.warn(`[TickingArea] 孤儿清理异常: ${e?.message ?? e}`);
+        } catch (e: unknown) {
+          const err = e as Error;
+          console.warn(`[TickingArea] 孤儿清理异常: ${err?.message ?? String(err)}`);
         }
       });
-    } catch (e: any) {
-      console.warn(`[TickingArea] onWorldLoad 异常: ${e?.message ?? e}`);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.warn(`[TickingArea] onWorldLoad 异常: ${err?.message ?? String(err)}`);
     }
   }
 
