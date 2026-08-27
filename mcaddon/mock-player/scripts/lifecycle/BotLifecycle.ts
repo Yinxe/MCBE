@@ -56,8 +56,9 @@ export class BotLifecycle {
     this.components.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
     try {
       component.onRegister?.(this.ctx);
-    } catch (e: any) {
-      console.warn(`[${this.name}] 组件 ${component.id} onRegister 异常: ${(e as any)?.message ?? String(e)}`);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.warn(`[${this.name}] 组件 ${component.id} onRegister 异常: ${err?.message ?? String(err)}`);
     }
     console.info(`[${this.name}] + 组件 ${component.id} (priority=${component.priority ?? 100})`);
     return this;
@@ -70,8 +71,9 @@ export class BotLifecycle {
     const removed = this.components.splice(idx, 1)[0]!;
     try {
       removed.onUnregister?.(this.ctx);
-    } catch (e: any) {
-      console.warn(`[${this.name}] 组件 ${id} onUnregister 异常: ${e?.message ?? e}`);
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.warn(`[${this.name}] 组件 ${id} onUnregister 异常: ${err?.message ?? String(err)}`);
     }
     console.info(`[${this.name}] - 组件 ${id}`);
     return true;
@@ -258,6 +260,11 @@ export class BotLifecycle {
     });
   }
 
+  /**
+   * 判断假人是否真正在线（记录在线且实体有效）
+   * @param record 假人记录
+   * @returns 真正在线则 true，否则 false（需重建）
+   */
   private isActuallyOnline(record: BotRecord): boolean {
     if (!record.online) return false;
     if (!record.entityId) return false;
