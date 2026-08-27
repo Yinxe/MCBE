@@ -30,7 +30,7 @@ export async function createCircleWithFallback(center: Vector3, dimension: Dimen
     createdBy.set(name, circleProvider.kind);
     return { ok: true, fallback: false, kind: circleProvider.kind };
   }
-  const reason1 = (r1 as any).reason ?? "";
+  const reason1 = !r1.ok ? r1.reason ?? "" : "";
   // 仅容量不足回退，其他错误直接返回（避免把语法错误也回退）
   if (!String(reason1).includes("容量不足")) {
     return { ok: false, reason: reason1 };
@@ -41,7 +41,7 @@ export async function createCircleWithFallback(center: Vector3, dimension: Dimen
     createdBy.set(name, singleProvider.kind);
     return { ok: true, fallback: true, kind: singleProvider.kind };
   }
-  return { ok: false, reason: `Circle:${reason1}; Single:${(r2 as any).reason ?? "未知"}` };
+  return { ok: false, reason: `Circle:${reason1}; Single:${!r2.ok ? r2.reason ?? "未知" : "未知"}` };
 }
 
 export async function createSingleChunk(center: Vector3, dimension: Dimension, name: string): Promise<{ ok: true; kind: TickingAreaProvider["kind"] } | { ok: false; reason: string }> {
@@ -51,36 +51,35 @@ export async function createSingleChunk(center: Vector3, dimension: Dimension, n
     createdBy.set(name, singleProvider.kind);
     return { ok: true, kind: singleProvider.kind };
   }
-  return { ok: false, reason: (r as any).reason ?? "创建失败" };
+  return { ok: false, reason: !r.ok ? r.reason ?? "创建失败" : "创建失败" };
 }
 
 export async function removeTickingArea(name: string, dimension?: Dimension): Promise<{ ok: true } | { ok: false; reason: string }> {
   const kind = createdBy.get(name);
   if (kind) {
     const p = getProvider(kind);
-    const res = await p.remove(name, dimension as any);
+    const res = await p.remove(name, dimension);
     createdBy.delete(name);
-    // 配套销毁后，再兜底清另一域残留（防旧版本跨域残留）
     try {
       const otherKind = kind === "command:circle" ? singleProvider.kind : circleProvider.kind;
       const other = getProvider(otherKind);
-      if (other.has(name)) await other.remove(name, dimension as any).catch(()=>{});
+      if (other.has(name)) await other.remove(name, dimension).catch(()=>{});
     } catch {}
-    if ((res as any).ok) return { ok: true };
-    return { ok: false, reason: (res as any).reason ?? "销毁失败" };
+    if (res.ok) return { ok: true };
+    return { ok: false, reason: res.reason ?? "销毁失败" };
   }
   // 未知来源（重启后 Map 丢失或旧残留）：双试兜底，按 Manager→Command 顺序
   let lastReason = "";
   try {
-    const r1 = await singleProvider.remove(name, dimension as any);
-    if ((r1 as any).ok) return { ok: true };
-    lastReason = (r1 as any).reason ?? "";
-  } catch (e: any){ lastReason = e?.message ?? String(e); }
+    const r1 = await singleProvider.remove(name, dimension);
+    if (r1.ok) return { ok: true };
+    lastReason = r1.reason ?? "";
+  } catch (e: unknown){ const err = e as Error; lastReason = err?.message ?? String(err); }
   try {
-    const r2 = await circleProvider.remove(name, dimension as any);
-    if ((r2 as any).ok) return { ok: true };
-    lastReason = lastReason ? `${lastReason}; ${(r2 as any).reason ?? ""}` : (r2 as any).reason ?? "";
-  } catch (e: any){ lastReason = lastReason ? `${lastReason}; ${e?.message ?? String(e)}` : e?.message ?? String(e); }
+    const r2 = await circleProvider.remove(name, dimension);
+    if (r2.ok) return { ok: true };
+    lastReason = lastReason ? `${lastReason}; ${r2.reason ?? ""}` : r2.reason ?? "";
+  } catch (e: unknown){ const err = e as Error; lastReason = lastReason ? `${lastReason}; ${err?.message ?? String(err)}` : err?.message ?? String(err); }
   // 幂等：未找到也视为成功（已清理）
   if (String(lastReason).includes("未找到") || String(lastReason).includes("不存在")) return { ok: true };
   return { ok: false, reason: lastReason || "未知" };
