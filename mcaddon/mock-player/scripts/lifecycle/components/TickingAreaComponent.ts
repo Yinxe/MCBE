@@ -52,8 +52,8 @@ export class TickingAreaComponent implements LifecycleComponent {
         console.info(`[TickingArea] 辅助已关闭(半径0)，跳过 ${record.name}`);
         return;
       }
-      const loc = (bot as any).location;
-      const dim = (bot as any).dimension;
+      const loc = (bot as SimulatedPlayer).location;
+      const dim = (bot as SimulatedPlayer).dimension;
       if (!loc || !dim) {
         console.warn(`[TickingArea] ${record.name} 无位置/维度，跳过入队`);
         return;
@@ -80,19 +80,19 @@ export class TickingAreaComponent implements LifecycleComponent {
       const { getAuxAreaName } = await import("../../features/manage/auxiliary");
       const { createSingleChunk } = await import("../../features/manage/tickingArea/TickingAreaService");
 
-      let center: any = undefined;
-      let targetDim: any = undefined;
+      let center: import("@minecraft/server").Vector3 | undefined = undefined;
+      let targetDim: import("@minecraft/server").Dimension | undefined = undefined;
       if (record.entityId) {
         try {
-          const e = world.getEntity(record.entityId) as any;
-          if (e && e.hasTag?.(BOT_TAG)) {
+          const e = world.getEntity(record.entityId) as import("@minecraft/server").Player | undefined;
+          if (e && (e as any).hasTag?.(BOT_TAG)) {
             center = e.location;
             targetDim = e.dimension;
           }
         } catch {}
         if (!center || !targetDim) {
           try {
-            const e2 = world.getEntity(record.entityId) as any;
+            const e2 = world.getEntity(record.entityId) as import("@minecraft/server").Player | undefined;
             if (e2) { center = e2.location; targetDim = e2.dimension; }
           } catch {}
         }
@@ -109,8 +109,8 @@ export class TickingAreaComponent implements LifecycleComponent {
 
       const areaName = getAuxAreaName(record.name);
       console.info(`[TickingArea] 下线前申请单区块保活 ${areaName} @ ${targetDim.id} ${Math.floor(center.x)},${Math.floor(center.z)} for ${record.name}`);
-      const cr = await createSingleChunk(center as any, targetDim as any, areaName);
-      if (!(cr as any).ok) console.warn(`[TickingArea] 下线前保活失败 ${record.name}: ${(cr as any).reason}（仍继续下线）`);
+      const cr = await createSingleChunk(center!, targetDim!, areaName);
+      if (!cr.ok) console.warn(`[TickingArea] 下线前保活失败 ${record.name}: ${(cr as any).reason}（仍继续下线）`);
       else console.info(`[TickingArea] 下线前保活成功 ${areaName} for ${record.name} via ${(cr as any).kind}`);
     } catch (e: any) {
       console.warn(`[TickingArea] 下线前保活异常 ${record.name}: ${e?.message ?? e}`);
@@ -132,7 +132,7 @@ export class TickingAreaComponent implements LifecycleComponent {
         try {
           const { removeTickingArea } = await import("../../features/manage/tickingArea/TickingAreaService");
           const rr = await removeTickingArea(areaName);
-          if (!(rr as any).ok) console.warn(`[TickingArea] 2s卸载失败 ${record.name}: ${(rr as any).reason}`);
+          if (!rr.ok) console.warn(`[TickingArea] 2s卸载失败 ${record.name}: ${(rr as any).reason}`);
           else console.info(`[TickingArea] 2s已配套卸载单区块保活 ${areaName} for ${record.name}`);
         } catch (e: any) {
           console.warn(`[TickingArea] 2s卸载异常 ${record.name}: ${e?.message ?? e}`);
@@ -144,7 +144,7 @@ export class TickingAreaComponent implements LifecycleComponent {
         try {
           const { removeTickingArea } = await import("../../features/manage/tickingArea/TickingAreaService");
           const r = await removeTickingArea(areaName);
-          if ((r as any).ok) console.info(`[TickingArea] 4s强制配套卸载完成 ${areaName} for ${record.name}`);
+          if (r.ok) console.info(`[TickingArea] 4s强制配套卸载完成 ${areaName} for ${record.name}`);
         } catch (e: any) {
           console.warn(`[TickingArea] 4s强卸异常 ${record.name}: ${e?.message ?? e}`);
         }
@@ -169,8 +169,8 @@ export class TickingAreaComponent implements LifecycleComponent {
             const { world } = await import("@minecraft/server");
             const SHARED = "mockplayer:aux:shared";
             try {
-              if ((world as any).tickingAreaManager?.hasTickingArea?.(SHARED)) {
-                (world as any).tickingAreaManager.removeTickingArea(SHARED);
+              if (world.tickingAreaManager?.hasTickingArea?.(SHARED)) {
+                world.tickingAreaManager.removeTickingArea(SHARED);
                 console.info(`[TickingArea] 清理共享残留 ${SHARED}`);
                 removed++;
               }
@@ -196,14 +196,14 @@ export class TickingAreaComponent implements LifecycleComponent {
     if (!ownerName) return;
     try {
       const { world } = await import("@minecraft/server");
-      const owner = world.getAllPlayers().find((p: any) => p.name === ownerName);
+      const owner = world.getAllPlayers().find((p) => p.name === ownerName);
       if (!owner) return;
       if (e.success) {
         try {
           const { sampleAndSendAscii } = await import("../../features/manage/auxiliary");
-          const fakeBot = { location: e.location, dimension: { id: e.dimension } } as any;
-          const fakeRecord = { name: e.botName, ownerName } as any;
-          sampleAndSendAscii(fakeBot as any, fakeRecord as any);
+          const fakeBot = { location: e.location, dimension: { id: e.dimension } as unknown as import("@minecraft/server").Dimension } as unknown as SimulatedPlayer;
+          const fakeRecord = { name: e.botName, ownerName } as unknown as import("../../rules/Types").BotRecord;
+          sampleAndSendAscii(fakeBot, fakeRecord);
         } catch {
           const { color } = await import("@yinxe/toolkit");
           const fallbackNote = e.fallback ? "（回退单区块）" : "（Sim4 49块）";
