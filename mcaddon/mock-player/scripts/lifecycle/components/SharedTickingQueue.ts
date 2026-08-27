@@ -23,6 +23,7 @@ interface AuxRequest {
 }
 
 const queue: AuxRequest[] = [];
+let head = 0;
 let processing = false;
 
 function delayTicks(ticks: number): Promise<void> {
@@ -40,7 +41,7 @@ export function enqueueAuxRequest(botName: string, ownerName: string | undefined
     return;
   }
   queue.push({ botName, ownerName, location: { ...location }, dimension, enqueueAt: Date.now() });
-  console.info(`[SharedAux] 入队 ${botName} @ ${dimension.id} ${Math.floor(location.x)},${Math.floor(location.z)} r=${radius} 队列长度=${queue.length}`);
+  console.info(`[SharedAux] 入队 ${botName} @ ${dimension.id} ${Math.floor(location.x)},${Math.floor(location.z)} r=${radius} 队列长度=${queue.length - head}`);
   if (!processing) void processQueue();
 }
 
@@ -115,13 +116,21 @@ async function processQueue(): Promise<void> {
     }
   } finally {
     processing = false;
-    if (queue.length > 0) void processQueue();
+    if (head < queue.length) void processQueue();
+    // 压缩已消费的前缀，避免数组无限增长（30并发下每轮最多30，定期回收）
+    if (head > 30 && head >= queue.length) {
+      queue.length = 0;
+      head = 0;
+    } else if (head > 100) {
+      queue.splice(0, head);
+      head = 0;
+    }
   }
 }
 
-/** 供测试/诊断：当前队列长度 */
-export function getQueueLength(): number { return queue.length; }
+/** 供测试/诊断：当前队列长度（未消费） */
+export function getQueueLength(): number { return queue.length - head; }
 /** 供测试：是否正在处理 */
 export function isProcessing(): boolean { return processing; }
 /** 清空队列（仅测试用） */
-export function clearQueue(): void { queue.length = 0; }
+export function clearQueue(): void { queue.length = 0; head = 0; }

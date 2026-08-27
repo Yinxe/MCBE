@@ -46,7 +46,7 @@ export class InventoryComponent implements LifecycleComponent {
     this.worldHandler = (event: PlayerInventoryItemChangeAfterEvent) => {
       const { player, slot, itemStack, beforeItemStack } = event;
       try {
-        if (!(player as any).hasTag?.(BOT_TAG)) return;
+        if (!(player as unknown as { hasTag?: (tag: string) => boolean })?.hasTag?.(BOT_TAG)) return;
       } catch { return; }
       try {
         this.ctx.inventory.saveInventorySlot(player as Player, slot, itemStack ?? null, beforeItemStack ?? null);
@@ -91,8 +91,8 @@ export class InventoryComponent implements LifecycleComponent {
     } catch {}
   }
 
-  get storage(): any {
-    return (this.ctx as any)?.inventory;
+  get storage(): import("../../features/inventoryStorage").InventoryStorage | undefined {
+    return this.ctx.inventory;
   }
 
   static ensureRegistered(): void {
