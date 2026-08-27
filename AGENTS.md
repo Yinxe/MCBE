@@ -147,6 +147,49 @@ bump version → build → pack → commit → tag → push
 | 社区 WIKI（自定义物品/方块/实体/UI/粒子） | https://wiki.bedrock.dev/ |
 | 全物品中文翻译表 | https://raw.githubusercontent.com/SkyEye-FAST/mcbe-chinese-patch/main/extracted/release/vanilla/zh_CN.json |
 
+## API 文档查寻指引
+
+> 统一查寻入口，避免自写类型。严禁手写 `NbtCompound` / `Entity` 等声明，一律以依赖中的 `d.ts` 为准。分三类：WIKI（游戏机制）、官方 ScriptAPI（`mcaddon`/`packages`）、非官方 LSE（`plugins`）。
+
+### 1. 官方 WIKI（游戏机制 / 方块 / 实体 / 村民等）
+
+* **中文 WIKI（推荐）**：`https://zh.minecraft.wiki/w/${keyword}`，如村民 `https://zh.minecraft.wiki/w/村民`、交易 `https://zh.minecraft.wiki/w/交易`、命令 `https://zh.minecraft.wiki/w/命令`
+* 用于查机制、NBT 结构（如村民 `Offers`、`VillagerData`）、方块状态等；与代码中 `minecraft:villager_v2` 等 `typeId` 一一对应
+
+### 2. 官方 Addon ScriptAPI（`mcaddon/*` / `packages/*` / `server-plugin/*`）
+
+* **版本锁定（本仓当前）**：以各 `mcaddon/<name>/package.json` 的 `dependencies` 为准
+  ```json
+  "dependencies": {
+    "@minecraft/math": "2.2.7",
+    "@minecraft/server": "2.6.0",
+    "@minecraft/server-gametest": "1.0.0-beta.1.26.0-stable",
+    "@minecraft/server-ui": "2.0.0",
+    "@minecraft/vanilla-data": "1.26.20"
+  }
+  ```
+  全仓通过 `pnpm-workspace.yaml#overrides` 强制收敛到 `@minecraft/server: 2.8.0`，避免类型分裂
+* **本地定义（优先查）**：
+  * `node_modules/@minecraft/server/index.d.ts`、`@minecraft/server-ui/index.d.ts`、`@minecraft/vanilla-data/lib/index.d.ts`
+  * 本仓镜像 `docs/mc-api/server.d.ts`（2.6.0 快照，供离线速查）
+  * `grep -n "class Entity" node_modules/@minecraft/server/index.d.ts` 快速定位
+* **在线文档**：https://learn.microsoft.com/zh-cn/minecraft/creator/ （Creator 文档，与本地 `d.ts` 同源）
+
+### 3. 非官方 BDS 插件 LegacyScriptEngine（`plugins/*`，分支 `ll-plugins`）
+
+* **版本锁定（本仓当前）**：
+  ```json
+  "devDependencies": {
+    "@levimc-lse/types": "^2.18.7"
+  }
+  ```
+  来自 `plugins/_template/package.json` / `plugins/villager-trade/package.json`（见 `ll-plugins` 分支）
+* **本地定义（优先查）**：`node_modules/@levimc-lse/types/src/**/*.d.ts`（`GameAPI/Entity/Entity.d.ts`、`GameAPI/Player.d.ts`、`NbtAPI/NBTCompound.d.ts` 等），`tsconfig.json` 已配 `types: ["@levimc-lse/types"]`
+* **在线文档与声明来源**：
+  * 官方介绍与安装：https://github.com/LiteLDev/legacy-script-engine-api/blob/develop/platforms/javascript/README.md
+  * 在线 API：https://lse.levimc.org/zh/apis/
+  * 仓库：https://github.com/LiteLDev/legacy-script-engine-api
+
 ---
 
 ## 通用代码规范
