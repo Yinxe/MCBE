@@ -263,7 +263,7 @@ export class BotLifecycle {
     if (!record.entityId) return false;
     try {
       const e = world.getEntity(record.entityId);
-      return !!e && (e as any).isValid !== false;
+      return !!e && (e as { isValid?: boolean }).isValid !== false;
     } catch {
       return false;
     }
@@ -530,7 +530,7 @@ export class BotLifecycle {
       if (!result.ok || !result.bot) {
         console.error(`[${this.name}] 重连上线失败 ${record.name}: ${result.reason ?? "unknown"}`);
         record.online = false;
-        (record as any).entityId = undefined;
+        record.entityId = undefined;
         this.ctx.save.saveRecord(record);
         return;
       }
