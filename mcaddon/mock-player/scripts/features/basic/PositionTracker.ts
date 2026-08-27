@@ -1,3 +1,5 @@
+// DEPRECATED: 已内聚至 lifecycle/components/PositionComponent，worldLoad 不再单独调用 initPositionTracker，外部订阅已集中管理。
+
 // ─── 位置追踪（mc 层，事件订阅落库） ─────────────────────
 // 订阅 botMoved 领域事件 → 更新假人位置数据（record.lastPoint）+ 持久化。
 // **解耦约定**：导航模块（features/basic/move）只在监测到位置变化时发布

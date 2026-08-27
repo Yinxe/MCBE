@@ -1,3 +1,5 @@
+// DEPRECATED: 已内聚至 lifecycle/components/SessionComponent，events/index 不再订阅此处理器，逻辑由组件集中维护。
+
 // ─── playerJoin — 假人加入世界 → 恢复背包/装备/经验 ────
 //
 // playerJoin 是恢复背包的正确时机，因为它只在首次加入世界时触发：

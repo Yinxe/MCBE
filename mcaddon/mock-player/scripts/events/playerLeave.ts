@@ -1,3 +1,5 @@
+// DEPRECATED: 已内聚至 lifecycle/components/SessionComponent
+
 // ─── playerLeave — 假人离开世界 ──────────────────────────
 //
 // 这是一个"尽力保存"的兜底节点——实体可能已不可访问

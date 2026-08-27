@@ -1,11 +1,10 @@
 // ─── playerInteractWithEntity — 站立→操作面板 / 潜行→标签 ─
 //
 // 交互逻辑：
-//   站立 + 长按 → 打开操作面板（无空手条件限制）
-//   潜行 + 长按 → 打开标签管理（无空手条件限制）
+//   站立 + 长按 → 打开操作面板（任意物品均可）
+//   潜行 + 长按 → 打开标签管理（任意物品均可）
 //
-// ⚠️ 踩坑：
-//   beforeEvents 回调运行在 restricted-execution mode
+// ⚠️ beforeEvents 回调运行在 restricted-execution mode
 //   不能直接调用 form.show()，需要用 system.run() 延迟执行
 
 import { system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/server";
@@ -13,27 +12,16 @@ import { system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/
 import { TAG_BOT } from "../rules/tags/BotTags";
 import { showBotPanel } from "../interaction/ui/bot";
 import { showTagManagement } from "../interaction/ui/panels/tags";
-import { tryClaimMenuCooldown } from "./itemUse";
 
 export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBeforeEvent): void {
   const { player, target, itemStack } = event;
-
-  // 不是模拟玩家则不处理
   try {
     if (!target.hasTag(TAG_BOT.value)) return;
   } catch {
-    return; // 非假人实体
+    return;
   }
   console.info(`[MockPlayer] 交互 ${(target as Player).name}（手持 ${itemStack?.typeId ?? "空"} 潜行=${player.isSneaking}）`);
-
-  // 取消默认交互行为（玩家之间默认行为不可预测）
   event.cancel = true;
-
-  // 去重：与 itemUse 共享 700ms 冷却（修复手持信物点假人时主菜单与 bot 面板同 tick 双弹）
-  // 交互面板优先级高于主菜单（beforeEvent 先于 afterEvent，先 claim 则 itemUse 的主菜单将被抑制）
-  if (!tryClaimMenuCooldown(player.id)) return;
-
-  // before 回调在 restricted mode，需要 system.run 延迟执行
   system.run(() => {
     if (player.isSneaking) {
       showTagManagement(player, (target as Player).name);

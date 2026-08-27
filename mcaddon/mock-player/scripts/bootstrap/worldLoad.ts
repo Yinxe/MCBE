@@ -5,7 +5,7 @@ import { system, world } from "@minecraft/server";
 
 import { registerAllEvents } from "../events/index";
 import { startTagBehaviors } from "../features/state/behavior";
-import { initPositionTracker } from "../features/basic/PositionTracker";
+// initPositionTracker 已内聚至 lifecycle/PositionComponent，此处不再单独初始化（保留导入兼容旧调用）
 import { initTridentTracker } from "../features/trident/tridentTracker";
 import { initFishingHookTracker, initLootTracker } from "../features/flow";
 import { initRaidMode } from "../features/flow/raidMode";
@@ -13,13 +13,13 @@ import { startBrainEngine } from "../legacy/ai/BotBrain";
 import { startAiEngine, startSharedMemorySweeper } from "../features/ai/brainEngine";
 import { registerUiDrivers } from "./uiDrivers";
 import { runMigrations } from "./migration";
-import { botRegistry, configStore } from "./context";
+import { botLifecycle, configStore } from "./context";
 import { initGameTestContext } from "../features/manage/gametestContext";
-import { initAutoOnline } from "../features/manage/autoOnline";
+// initAutoOnline 已内聚至 lifecycle/AutoOnlineComponent，worldLoad 不再单独调用
 
 let worldLoadReady = false;
 
-export function handleWorldLoad(): void {
+export async function handleWorldLoad(): Promise<void> {
   if (worldLoadReady) {
     console.info(`[MockPlayer] worldLoad 已初始化，跳过重复启动`);
     return;
@@ -31,13 +31,15 @@ export function handleWorldLoad(): void {
   } catch (e: any) {
     console.warn(`[MockPlayer] config 刷新失败: ${e?.message ?? e}`);
   }
+  let gameTestReady = false;
   try {
-    initGameTestContext();
+    gameTestReady = await initGameTestContext();
+    console.info(`[MockPlayer] GameTest ${gameTestReady ? "就绪" : "未就绪，回退"}`);
   } catch (e: any) {
     console.warn(`[MockPlayer] GameTest 初始化失败: ${e?.message ?? e}`);
   }
 
-  console.info(`[MockPlayer] 注册事件`);
+  console.info(`[MockPlayer] 注册事件（GameTest ${gameTestReady ? "就绪" : "未就绪"}后）`);
   try {
     registerAllEvents();
   } catch (e: any) {
@@ -51,49 +53,30 @@ export function handleWorldLoad(): void {
 
   let restored: any[] = [];
   try {
-    restored = botRegistry.restoreAll({ autoOnlineOnRestart: configStore.get().autoOnlineOnRestart });
+    // ── 组件化生命周期：恢复经编排器统一入口，触发 onWorldLoad 钩子与 LifecycleEvents.worldLoad ──
+    restored = await botLifecycle.worldLoad();
     console.info(
-      `[MockPlayer] 从持久化恢复 ${restored.length} 个模拟玩家记录（自动上线=${configStore.get().autoOnlineOnRestart}）`
+      `[MockPlayer] 从持久化恢复 ${restored.length} 个模拟玩家记录（自动上线=${configStore.get().autoOnlineOnRestart}） 组件[${botLifecycle.listComponents().join(", ")}]`
     );
   } catch (e: any) {
     console.warn(`[MockPlayer] 恢复记录失败: ${e?.message ?? e}`);
   }
-
-  // 辅助区块孤儿清理与 Set 同步（合规优化：修复重启后 Set 丢失与崩溃残留）
-  system.run(async () => {
-    try {
-      const { syncAuxFromWorld, cleanupOrphanAuxAreas } = await import("../features/manage/auxiliary");
-      const { syncCommandAreasFromWorld } = await import("../features/manage/tickingArea/sim4");
-      try {
-        syncCommandAreasFromWorld?.();
-      } catch {}
-      try {
-        syncAuxFromWorld();
-      } catch {}
-      const removed = cleanupOrphanAuxAreas();
-      if (removed > 0) console.info(`[MockPlayer] worldLoad 孤儿辅助清理 ${removed} 个`);
-    } catch (e: any) {
-      console.warn(`[MockPlayer] 辅助区块同步/清理失败: ${e?.message ?? e}`);
-    }
-  });
+    // 辅助区块孤儿清理已内聚至 lifecycle/TickingAreaComponent.onWorldLoad
 
   try {
     runMigrations();
   } catch (e: any) {
     console.warn(`[MockPlayer] 迁移失败: ${e?.message ?? e}`);
   }
+    // 自动上线已内聚至 lifecycle/AutoOnlineComponent.onWorldLoad
 
-  system.run(() => {
-    void initAutoOnline().catch((e: any) => console.warn(`[MockPlayer] 自动上线异常: ${e?.message ?? e}`));
-  });
-
-  console.info(`[MockPlayer] 启动引擎`);
+  console.info(`[MockPlayer] 启动引擎（lifecycle 已接管 Session/Death/Inventory/Position，剩余引擎按需启动）`);
   for (const fn of [
     startTagBehaviors,
     initTridentTracker,
     initFishingHookTracker,
     initLootTracker,
-    initPositionTracker,
+    // initPositionTracker 已由 lifecycle/PositionComponent 内聚，此处不再重复订阅
     initRaidMode,
     startBrainEngine,
     startAiEngine,
@@ -108,5 +91,7 @@ export function handleWorldLoad(): void {
 }
 
 export function initWorldLoad(): void {
-  world.afterEvents.worldLoad.subscribe(() => handleWorldLoad());
+  world.afterEvents.worldLoad.subscribe(() => {
+    void handleWorldLoad().catch((e: any) => console.warn(`[MockPlayer] worldLoad 异常: ${e?.message ?? e}`));
+  });
 }

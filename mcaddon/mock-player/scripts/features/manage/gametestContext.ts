@@ -85,45 +85,52 @@ export function registerTestDimension(event: StartupEvent): void {
 /**
  * 初始化 GameTest 上下文：注册永续测试并启动。
  * 需在 registerTestDimension（startup）之后调用。
+ * @returns GameTest 是否就绪（true=可用，false=回退 normal）
  */
-export function initGameTestContext(): void {
-  system.run(async () => {
-    try {
-      // 1. 创建空结构
-      if (!world.structureManager.get(STRUCTURE_ID)) {
-        world.structureManager.createEmpty(STRUCTURE_ID, { x: 1, y: 1, z: 1 }, StructureSaveMode.World);
-      }
+export function initGameTestContext(): Promise<boolean> {
+  return new Promise((resolve) => {
+    system.run(async () => {
+      try {
+        // 1. 创建空结构
+        if (!world.structureManager.get(STRUCTURE_ID)) {
+          world.structureManager.createEmpty(STRUCTURE_ID, { x: 1, y: 1, z: 1 }, StructureSaveMode.World);
+        }
 
-      // 2. 保存当前游戏规则（GameTest 启动时会篡改它们）
-      const savedTick = world.gameRules.randomTickSpeed;
-      const savedDay = world.gameRules.doDayLightCycle;
-      const savedMob = world.gameRules.doMobSpawning;
+        // 2. 保存当前游戏规则（GameTest 启动时会篡改它们）
+        const savedTick = world.gameRules.randomTickSpeed;
+        const savedDay = world.gameRules.doDayLightCycle;
+        const savedMob = world.gameRules.doMobSpawning;
 
-      // 3. 注册永续 GameTest（回调在测试启动时触发）
-      register(CLASS, NAME, (test: Test) => {
-        globalTest = test;
-        // 立即恢复游戏规则
-        world.gameRules.randomTickSpeed = savedTick;
-        world.gameRules.doDayLightCycle = savedDay;
-        world.gameRules.doMobSpawning = savedMob;
-        console.info("[MockPlayer] GameTest 上下文就绪");
-      })
-        .maxTicks(2_000_000_000)
-        .structureName(STRUCTURE_ID);
+        // 3. 注册永续 GameTest（回调在测试启动时触发）
+        register(CLASS, NAME, (test: Test) => {
+          globalTest = test;
+          // 立即恢复游戏规则
+          world.gameRules.randomTickSpeed = savedTick;
+          world.gameRules.doDayLightCycle = savedDay;
+          world.gameRules.doMobSpawning = savedMob;
+          console.info("[MockPlayer] GameTest 上下文就绪");
+        })
+          .maxTicks(2_000_000_000)
+          .structureName(STRUCTURE_ID);
 
-      // 4. 等待 GameTest 系统就绪（注册后立即 run 会失败——实测装置不生成）
-      await delayTicks(GAMETEST_READY_DELAY_TICKS);
+        // 4. 等待 GameTest 系统就绪（注册后立即 run 会失败——实测装置不生成）
+        await delayTicks(GAMETEST_READY_DELAY_TICKS);
 
-      // 5. 启动测试（常加载装置区块 → 监测结构方块 → 复用/初始化，见 startGameTest）
-      const started = await startGameTest();
-      if (!started) {
+        // 5. 启动测试（常加载装置区块 → 监测结构方块 → 复用/初始化，见 startGameTest）
+        const started = await startGameTest();
+        if (!started) {
+          globalTest = null;
+          console.error("[MockPlayer] GameTest 启动失败，GameTest 不可用（chunkload 回退 normal）");
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      } catch (e: any) {
         globalTest = null;
-        console.error("[MockPlayer] GameTest 启动失败，GameTest 不可用（chunkload 回退 normal）");
+        console.error(`[MockPlayer] GameTest 初始化失败: ${e?.message ?? e}`);
+        resolve(false);
       }
-    } catch (e: any) {
-      globalTest = null;
-      console.error(`[MockPlayer] GameTest 初始化失败: ${e?.message ?? e}`);
-    }
+    });
   });
 }
 

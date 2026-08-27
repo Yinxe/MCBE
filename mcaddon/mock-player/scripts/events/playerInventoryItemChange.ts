@@ -1,3 +1,5 @@
+// DEPRECATED: 已内聚至 lifecycle/components/InventoryComponent，订阅已集中管理
+
 // ─── playerInventoryItemChange — 模拟玩家背包变化实时持久化 ─
 //
 // 当假人捡起物品、移动物品、丢弃物品、合成等操作时触发

@@ -1,3 +1,5 @@
+// DEPRECATED: 订阅已内聚至 lifecycle/components/InventoryComponent，外部不再直接调用 register()。存储实现仍保留于此，组件通过 ctx.inventory 委托。
+
 // ─── 库存存储（独立模块，事件驱动 + 对账式兜底） ────────
 // 假人库存（背包 36 格 + 装备 5 槽）↔ NBT 木桶阵列槽位绑定存储的业务模块：
 //   - 背包单格：playerInventoryItemChange 事件薄壳转发 → saveInventorySlot

@@ -4,7 +4,7 @@
 // ⚠️ 早执行安全：构造时只建默认值不读 DP；持久化值须 Phase 4 `refresh()` 读取合并。
 
 import { world } from "@minecraft/server";
-import { createDefaultConfig, DEFAULT_MENU_TRIGGER_ITEM, MAX_SAFE_COOLDOWN_SECONDS, MIN_SAFE_COOLDOWN_SECONDS, UNLIMITED_QUOTA } from "../../rules/Types";
+import { createDefaultConfig, DEFAULT_MENU_TRIGGER_ITEM, MAX_SAFE_COOLDOWN_SECONDS, MIN_SAFE_COOLDOWN_SECONDS, UNLIMITED_QUOTA, DEFAULT_AUX_TICKING_RADIUS, AUX_TICKING_RADIUS_OPTIONS } from "../../rules/Types";
 import type { ModConfig } from "../../rules/Types";
 import { mergeStoredConfig } from "../ModConfigRules";
 
@@ -169,6 +169,24 @@ export class McConfigStore {
     const override = this.config.onlineQuotas?.[playerName];
     if (override !== undefined) return override;
     return this.config.defaultOnlineQuota ?? 3;
+  }
+
+  /** 获取单次BOT上线辅助常加载半径（0=关闭，4/6/8） */
+  getAuxTickingRadius(): number {
+    const v = this.config.auxTickingRadius;
+    if (typeof v === "number" && (AUX_TICKING_RADIUS_OPTIONS as readonly number[]).includes(v)) return v;
+    return DEFAULT_AUX_TICKING_RADIUS;
+  }
+
+  /** 设置单次BOT上线辅助常加载半径（0/4/6/8） */
+  setAuxTickingRadius(radius: number): void {
+    const v = Math.floor(radius) as typeof AUX_TICKING_RADIUS_OPTIONS[number];
+    if (!(AUX_TICKING_RADIUS_OPTIONS as readonly number[]).includes(v)) {
+      console.warn(`[McConfigStore] 非法辅助半径 ${radius}，已忽略`);
+      return;
+    }
+    this.config.auxTickingRadius = v;
+    this.persist();
   }
 
   private persist(): void {

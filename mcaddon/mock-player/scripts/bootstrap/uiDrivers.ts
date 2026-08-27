@@ -24,8 +24,14 @@ import { registerUiSubscriptions as registerTridentClaimUi } from "../interactio
 import { registerUiSubscriptions as registerMoveUi } from "../interaction/ui/panels/move";
 import { registerUiSubscriptions as registerDataUi } from "../interaction/commands/inspect/data";
 
-/** 注册全部 UI 领域事件订阅（worldLoad 后调用一次，online 已统一安全版，无需单独 safeOnline） */
+let registered = false;
+/** 注册全部 UI 领域事件订阅（worldLoad 后调用一次，防重复导致双倍触发） */
 export function registerUiDrivers(): void {
+  if (registered) {
+    console.warn(`[uiDrivers] 重复调用，已忽略（防 BotUiEvent 重复订阅导致双倍面板）`);
+    return;
+  }
+  registered = true;
   registerSneakUi();
   registerSpawnModeUi();
   registerUseItemUi();

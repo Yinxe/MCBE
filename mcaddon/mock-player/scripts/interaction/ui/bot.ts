@@ -124,6 +124,7 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
   const records = visibleRecords(botRegistry.all(), player.name, isAdmin(player));
   if (records.length === 0) {
     player.sendMessage(`${color.warn}暂无可见的模拟玩家，请先创建`);
+    void 0;
     return;
   }
 

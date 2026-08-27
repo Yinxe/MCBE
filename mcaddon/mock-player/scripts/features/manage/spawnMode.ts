@@ -1,3 +1,5 @@
+// DEPRECATED: 生成逻辑已内聚至 lifecycle/components/SpawnComponent，外部请通过 botLifecycle.create/online 间接调用，勿直接 import spawnMode。
+
 // ─── 生成模式管理（全量走 test） ──────────────────────
 //
 // 按用户要求：**所有生成全走 test**（`globalTest.spawnSimulatedPlayer`），不再区分 normal/chunkload。

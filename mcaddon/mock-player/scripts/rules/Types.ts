@@ -315,6 +315,9 @@ export const WORLD_RESTART_DELAY_TICKS = 15 * TICKS_PER_SECOND;
 export const RECONNECT_DELAY_TICKS = 1 * TICKS_PER_SECOND;
 /** 模拟4 常加载半径（区块） */
 export const SIM4_TICKING_RADIUS_CHUNKS = 4;
+/** 单次BOT上线辅助常加载可选半径（0=关闭，4/6/8=圆形半径） */
+export const AUX_TICKING_RADIUS_OPTIONS = [0, 4, 6, 8] as const;
+export const DEFAULT_AUX_TICKING_RADIUS = 4;
 
 /** 模组菜单触发信物默认值（木棍） */
 export const DEFAULT_MENU_TRIGGER_ITEM = "minecraft:stick";
@@ -360,6 +363,8 @@ export interface ModConfig {
   defaultOnlineQuota?: number;
   /** 逐玩家覆盖同时在线配额（key = 玩家名，0=禁止，999=无限） */
   onlineQuotas?: Record<string, number>;
+  /** 单次BOT上线辅助常加载半径（0=关闭，4/6/8=圆形半径，默认4） */
+  auxTickingRadius?: number;
 }
 
 /** 默认配置（早执行创建用；worldLoad 后从持久化 refresh 合并） */
@@ -370,10 +375,16 @@ export function createDefaultConfig(): ModConfig {
     admins: [],
     autoOnlineOnRestart: true,
     ownerOfflineAutoOffline: false,
-    enabledWorkModes: {},
+    // 基础行为默认启用，高消耗/常驻型默认禁用（用户要求：自动钓鱼/跟随、劫掠/闲逛先禁用）
+    enabledWorkModes: {
+      mine: true,
+      place: true,
+      attack: true,
+    },
     menuTriggerItemId: DEFAULT_MENU_TRIGGER_ITEM,
     safeCooldownSeconds: 1,
     defaultOnlineQuota: DEFAULT_ONLINE_QUOTA,
     onlineQuotas: {},
+    auxTickingRadius: DEFAULT_AUX_TICKING_RADIUS,
   } as ModConfig;
 }

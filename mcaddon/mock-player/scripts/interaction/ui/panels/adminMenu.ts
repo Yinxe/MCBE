@@ -9,7 +9,7 @@ import { ActionFormBuilder, ModalFormBuilder, MessageFormBuilder } from "@yinxe/
 
 import { botRegistry, configStore } from "../../../bootstrap/context";
 import { WORK_MODES, setWorkMode } from "../../../features/state/behavior";
-import { MAX_SAFE_COOLDOWN_SECONDS, MIN_SAFE_COOLDOWN_SECONDS, QUOTA_SLIDER_MAX, UNLIMITED_QUOTA } from "../../../rules/Types";
+import { MAX_SAFE_COOLDOWN_SECONDS, MIN_SAFE_COOLDOWN_SECONDS, QUOTA_SLIDER_MAX, UNLIMITED_QUOTA, AUX_TICKING_RADIUS_OPTIONS, DEFAULT_AUX_TICKING_RADIUS } from "../../../rules/Types";
 import { MENU_TRIGGER_OPTIONS, DEFAULT_MENU_TRIGGER_ITEM } from "../../../rules/Types";
 import { isAdmin } from "../../commands/auth";
 import { showBotList } from "../bot";
@@ -37,7 +37,8 @@ export function showAdminMenu(player: Player): void {
       `${color.muted}管理员: ${color.info}${cfg.admins.length} ${color.muted}名（名单）\n` +
       `${color.muted}重启自动上线: ${cfg.autoOnlineOnRestart ? color.success + "开" : color.error + "关"}${color.muted} / 主人下线联动: ${cfg.ownerOfflineAutoOffline ? color.success + "开" : color.error + "关"}\n` +
       `${color.muted}触发信物: ${color.info}${triggerLabel}\n` +
-      `${color.muted}安全冷却: ${color.info}${cfg.safeCooldownSeconds ?? 1}s${color.muted}（上线/下线共用 1-5s）`
+      `${color.muted}安全冷却: ${color.info}${cfg.safeCooldownSeconds ?? 1}s${color.muted}（上线/下线共用 1-5s）\n` +
+      `${color.muted}辅助区块: ${color.info}${(cfg.auxTickingRadius ?? DEFAULT_AUX_TICKING_RADIUS) === 0 ? "关闭" : "模拟" + (cfg.auxTickingRadius ?? DEFAULT_AUX_TICKING_RADIUS)}${color.muted}（0=关闭 4/6/8）`
     )
     // ── 假人全览（管理员视角：不受主人过滤，全部可见） ──
     .button("全部假人列表", () => showBotList(player, () => showAdminMenu(player)))
@@ -71,6 +72,7 @@ export async function showGlobalConfig(player: Player): Promise<void> {
     .slider("quota", "默认每人配额", 1, QUOTA_SLIDER_MAX, { defaultValue: defaultSlider, valueStep: 1, tooltip: "1-10 为具体数量，11=无限（默认3）" })
       .slider("safeCooldown", "安全上下线冷却（秒）", 1, 5, { defaultValue: cfg.safeCooldownSeconds ?? 1, valueStep: 1, tooltip: "上线/下线共用，普通与常加载均等待此时间（默认1秒，1-5可选）" })
       .slider("onlineQuota", "默认在线配额", 0, QUOTA_SLIDER_MAX, { defaultValue: (()=>{const q=cfg.defaultOnlineQuota??3; if(q>=999) return 11; if(q>=0&&q<=10) return q; return 3;})(), valueStep: 1, tooltip: "0=禁止上线，1-10为数量，11=无限（默认3）" })
+      .dropdown("auxRadius", "辅助区块", ["关闭", "模拟4", "模拟6", "模拟8"], { defaultValueIndex: (()=>{const r=cfg.auxTickingRadius??DEFAULT_AUX_TICKING_RADIUS; const idx=(AUX_TICKING_RADIUS_OPTIONS as readonly number[]).indexOf(r as any); return idx>=0?idx:1;})(), tooltip: "0=关闭上线辅助，4/6/8为圆形半径（默认4）" })
     .dropdown(
       "menuTrigger",
       "模组菜单触发信物",
@@ -108,6 +110,13 @@ export async function showGlobalConfig(player: Player): Promise<void> {
   const newCooldown = Math.max(1, Math.min(5, Math.floor(cooldownVal ?? 1)));
   if (newCooldown !== (cfg.safeCooldownSeconds ?? 1)) {
     configStore.setSafeCooldownSeconds(newCooldown);
+  }
+  // 保存辅助区块
+  const auxIdx = vals.auxRadius as number;
+  const newAuxRadius = (AUX_TICKING_RADIUS_OPTIONS[auxIdx] ?? DEFAULT_AUX_TICKING_RADIUS) as number;
+  if (newAuxRadius !== (cfg.auxTickingRadius ?? DEFAULT_AUX_TICKING_RADIUS)) {
+    configStore.setAuxTickingRadius(newAuxRadius);
+    player.sendMessage(`${color.success}辅助区块已设为 ${color.info}${newAuxRadius === 0 ? "关闭" : "模拟" + newAuxRadius}`);
   }
   // 保存在线配额
   const onlineSliderVal = vals.onlineQuota as number;

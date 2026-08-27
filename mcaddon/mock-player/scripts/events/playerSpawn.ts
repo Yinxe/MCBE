@@ -1,3 +1,5 @@
+// DEPRECATED: 已内聚至 lifecycle/components/DeathComponent
+
 // ─── playerSpawn — 假人重生（死亡后重生） ───────────────
 //
 // 注意区分两个场景：

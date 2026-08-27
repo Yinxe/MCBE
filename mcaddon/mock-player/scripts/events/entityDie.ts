@@ -1,3 +1,5 @@
+// DEPRECATED: 已内聚至 lifecycle/components/DeathComponent
+
 // ─── entityDie — 假人死亡处理 ────────────────────────────
 //
 // 处理流程：

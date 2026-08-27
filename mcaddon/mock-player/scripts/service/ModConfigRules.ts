@@ -2,7 +2,7 @@
 // 纯逻辑：从持久化原始值解析并合并 ModConfig（损坏/缺失/部分字段回退默认）。
 // McConfigStore.refresh 调用本函数，保证配置解析可脱离 mcapi 单测。
 
-import { createDefaultConfig, MENU_TRIGGER_OPTIONS, MAX_SAFE_COOLDOWN_SECONDS, MIN_SAFE_COOLDOWN_SECONDS } from "../rules/Types";
+import { createDefaultConfig, MENU_TRIGGER_OPTIONS, MAX_SAFE_COOLDOWN_SECONDS, MIN_SAFE_COOLDOWN_SECONDS, AUX_TICKING_RADIUS_OPTIONS, DEFAULT_AUX_TICKING_RADIUS } from "../rules/Types";
 import type { ModConfig } from "../rules/Types";
 
 /**
@@ -85,6 +85,15 @@ function sanitizeCooldown(value: unknown, fallback: number): number {
     const v = Math.floor(value);
     if (v >= 1 && v <= 5) return v;
     return Math.max(1, Math.min(5, v));
+  }
+  return fallback;
+}
+
+/** 过滤辅助常加载半径：仅允许 0/4/6/8，非法回退默认4 */
+function sanitizeAuxRadius(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const v = Math.floor(value) as typeof AUX_TICKING_RADIUS_OPTIONS[number];
+    if ((AUX_TICKING_RADIUS_OPTIONS as readonly number[]).includes(v)) return v;
   }
   return fallback;
 }

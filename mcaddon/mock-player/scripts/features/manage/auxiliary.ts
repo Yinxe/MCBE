@@ -1,3 +1,5 @@
+// DEPRECATED: 辅助常加载逻辑已内聚至 lifecycle/components/TickingAreaComponent（onAfterOnline/onBeforeOffline/onAfterOffline/onWorldLoad），外部请通过 lifecycle 组件扩展。
+
 // ─── 辅助域公共能力 ────────────────────────────────
 // 供上线后刷新模拟4 / 下线单区块 / 采样 ASCII 共用：
 //   - vault 判定（宝库模式跳过辅助）
