@@ -31,7 +31,7 @@ scripts/
 │                              #   Status / Tree / ResourceLock / Action。零 @minecraft 可单测
 ├── bootstrap/                 # 启动初始化（装配 + 统一入口 + 迁移）
 │   ├── context.ts             # 运行时装配上下文：mc 层单例（botRegistry / botStore /
-│   │                          #   configStore / saveCoordinator / inventoryStorage）
+│   │                          #   configStore / saveCoordinator / inventoryStorage / botLifecycle + lifecycleContext）
 │   ├── save.ts                # SaveCoordinator：全部持久化**写**的唯一入口
 │   ├── migration.ts           # 数据迁移（旧版本升级通道，幂等）
 │   └── uiDrivers.ts           # UI 领域事件订阅装配（各模块 registerUiSubscriptions 聚合）
@@ -39,12 +39,21 @@ scripts/
 │   ├── Bot.ts / BotCore.ts    # Bot 类：能力即方法（navigateTo/swapMainhand/...）；
 │   │                          #   BotCore = 纯逻辑基座（可单测），Bot = mc 委托扩展
 │   └── PlayerGateway.ts       # SimulatedPlayer 解析唯一入口（含缓存/名称占用/区块检测）
-├── events/                    # 事件订阅与事件声明
+├── events/                    # 事件订阅与事件声明（薄壳，生命周期已内聚至 lifecycle）
 │   ├── DomainEvents.ts        # BotEvents 领域事件（生命周期/认主/行为/标签/工作模式）
 │   ├── EventSignal.ts         # 事件信号实现（core 零依赖）
 │   ├── UiEvents.ts            # BotUiEvent（UI 只发布事件，零功能 import）
-│   └── *.ts                   # world 事件订阅薄壳（playerJoin/playerLeave/entityDie/...）
-├── features/                  # 核心功能封装（副作用层）
+│   └── *.ts                   # world 事件订阅薄壳（itemUse/playerInteract 等非生命周期；playerJoin/Leave等已迁移）
+├── lifecycle/                 # 假人生命周期编排（OOP + 事件驱动，组件化）
+│   ├── BotLifecycle.ts        # 编排器：per-bot队列/hook调度/事件广播，组件通过 DI 注入
+│   ├── LifecycleContext.ts    # DI 容器：registry/store/config/save/inventory/reconnecting
+│   ├── LifecycleEvents.ts     # 生命周期领域事件（before/after/fail + auxCompleted）
+│   ├── LifecycleComponent.ts  # 组件接口：id/priority/onRegister/10+生命周期钩子
+│   └── components/            # 单一职责组件（按 priority 升序执行）
+│       ├── QuotaComponent(10) / NameGuard(11) / Spawn(20) / Session(30) / Death(40)
+│       ├── Inventory(60) / Position(70) / TickingArea(80,共享排队+单块保活) / AutoOnline(85) / Cleanup(90) / Logging(200)
+│       └── SharedTickingQueue # 共享常加载队列（单名 mockplayer:aux:shared，FIFO，用完即释）
+├── features/                  # 核心功能封装（副作用层，生命周期相关已薄壳化至 lifecycle）
 │   ├── ai/                    # 生物 AI 行为：brainEngine（10 tick 对账 + 驱动）+ capabilities
 │   │                          #   （wander 闲逛 / mine 定点挖掘 / place 定点放置 /
 │   │                          #   attack 定点攻击 / fishing 自动钓鱼——共享钓鱼点池 +
@@ -52,22 +61,20 @@ scripts/
 │   ├── basic/                 # 基础**原子性**功能（单动作不可细分）：blocks（破坏/放置）/
 │   │                          #   items（背包/主手/使用/装备）/ fishing（发杆/收竿）/
 │   │                          #   control / move（导航，发布 botMoved 事件）/
-│   │                          #   PositionTracker（订阅 botMoved → lastPoint 落库）/
+│   │                          #   PositionTracker（DEPRECATED→PositionComponent）/
 │   │                          #   PoseGateway（体态）/ sneak / teleport / EntityTags
-│   ├── manage/                # 假人生命周期管理（create/delete/kill/online/offline/spawn/
-│   │                          #   reclaim/rename/spawnPoint/spawnMode/gametestContext...）
-│   ├── raid/                  # 劫掠模式（事件驱动轻量模块：无树、无端口、零轮询）
+│   ├── manage/                # 假人生命周期管理（DEPRECATED薄壳，委托 botLifecycle；保留 create/delete等兼容）
+│   │                          #   单例辅助（auxiliary→TickingAreaService）/ spawnMode→SpawnComponent / gametestContext
 │   ├── flow/                  # **工作流（flow）**：一组原子功能（basic）组合的流程——
 │   │                          #   fishingFlow（钓鱼流程）、fishingHookTracker（感知基础）、
 │   │                          #   treeScan（woodcut 扫描壳）；barrel 统一出口
-│   ├── state/                 # ⚠️ 定位待确认：旧标签行为引擎（behavior，TAG 驱动
-│   │                          #   autoMine/autoPlace/...）+ 跟随（follow）+ 标签渠道（setTags）
-│   ├── trident/               # ⚠️ 三叉戟 mc 副作用（投掷/认主标记/上线夺回）
-│   └── inventoryStorage.ts    # ⚠️ 库存存储（事件驱动增量保存 + 对账兜底；位置待定）
+│   ├── state/                 # 旧标签行为引擎（behavior，TAG 驱动）+ 跟随（follow）+ 标签渠道（setTags）
+│   ├── trident/               # 三叉戟 mc 副作用（投掷/认主标记/上线夺回）
+│   └── inventoryStorage.ts    # 库存存储（DEPRECATED订阅已迁移至 InventoryComponent，存储实现保留）
 ├── interaction/               # 交互层：命令 + UI
 │   ├── commands/              # /mp:* 命令注册（lifecycle / navigation / behavior /
 │   │                          #   activity / inspect / system）
-│   └── ui/                    # ActionForm 面板（bot / panels/*）+ 格式化 / 帮助
+│   └── ui/                    # ActionForm 面板（bot / panels/*）+ menuTrigger 单例（木棍唯一注册）+ 格式化 / 帮助
 ├── legacy/                    # 旧时代遗留（保留运行，部分功能未重写）
 │   └── ai/                    # 行为树框架（VaultTask / FishingTask 端口契约 + 树装配）+
 │                              #   BotBrain 引擎（10 tick 驱动宝库/钓鱼树；劫掠已剥离）+
