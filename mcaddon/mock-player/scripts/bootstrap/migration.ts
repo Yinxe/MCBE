@@ -106,29 +106,51 @@ function migrateLegacyItems(): void {
   console.info(`[MockPlayer] 旧版背包数据迁移完成`);
 }
 
-/** 迁移单个假人的旧背包/装备（读旧 key → 写入 ItemStorage → 删旧 key） */
+/**
+ * 迁移单个假人的旧背包/装备
+ * @param name 假人名（已规范化，含 sim- 前缀）
+ */
 function migrateOneBot(name: string): void {
   const { inv: invPrefix, equip: equipPrefix } = legacyKeyPrefix(name);
   const ids = world.getDynamicPropertyIds();
   let migrated = 0;
 
-  // ── 背包 36 格 ──
+  migrated += migrateLegacyBackpack(name, invPrefix);
+  migrated += migrateLegacyEquipment(name, equipPrefix);
+
+  if (migrated > 0) {
+    console.info(`[MockPlayer] 迁移 ${name}：${migrated} 件物品 → NBT 存储`);
+  }
+}
+
+/**
+ * 迁移单个假人的旧背包 36 格
+ * @returns 成功迁移的格数
+ */
+function migrateLegacyBackpack(name: string, invPrefix: string): number {
+  let count = 0;
   for (let slot = 0; slot < INVENTORY_SIZE; slot++) {
     const key = `${invPrefix}${slot}`;
     const raw = world.getDynamicProperty(key);
     if (typeof raw !== "string") continue;
     const data = parseLegacy(raw);
-    world.setDynamicProperty(key, undefined); // 先删旧 key（防迁移中断后重复）
+    world.setDynamicProperty(key, undefined);
     if (!data) continue;
     const item = deserializeLegacyItem(data);
-    if (!item) continue; // 坏数据跳过
-    // 绑定写入 NBT 槽（首次写自动分配 + 记录绑定表）
+    if (!item) continue;
     saveCoordinator.saveSlot(name, slot, item);
-    migrated++;
+    count++;
   }
+  return count;
+}
 
-  // ── 装备 5 槽 ──
-  for (const slotName of ["head", "chest", "legs", "feet", "offhand"]) {
+/**
+ * 迁移单个假人的旧装备 5 槽
+ * @returns 成功迁移的槽数
+ */
+function migrateLegacyEquipment(name: string, equipPrefix: string): number {
+  let count = 0;
+  for (const slotName of ["head", "chest", "legs", "feet", "offhand"] as const) {
     const key = `${equipPrefix}${slotName}`;
     const raw = world.getDynamicProperty(key);
     if (typeof raw !== "string") continue;
@@ -138,12 +160,9 @@ function migrateOneBot(name: string): void {
     const item = deserializeLegacyItem(data);
     if (!item) continue;
     saveCoordinator.saveEquipSlot(name, slotName, item);
-    migrated++;
+    count++;
   }
-
-  if (migrated > 0) {
-    console.info(`[MockPlayer] 迁移 ${name}：${migrated} 件物品 → NBT 存储`);
-  }
+  return count;
 }
 
 /** 解析旧物品 JSON（损坏返回 undefined） */
