@@ -36,7 +36,7 @@ export class InventoryComponent implements LifecycleComponent {
     const offEquip = BotEvents.botEquipSlotChanged.subscribe((event) => {
       try {
         this.ctx.inventory.handleEquipSlotChanged(event.botName, event.slot);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.warn(`[Inventory] 装备保存异常 ${event.botName} ${event.slot}: ${e?.message ?? e}`);
       }
     });
@@ -50,7 +50,7 @@ export class InventoryComponent implements LifecycleComponent {
       } catch { return; }
       try {
         this.ctx.inventory.saveInventorySlot(player as Player, slot, itemStack ?? null, beforeItemStack ?? null);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.warn(`[Inventory] 背包保存异常 ${player.name} slot=${slot}: ${e?.message ?? e}`);
       }
       // 额外：检视主手工具耐久（原 playerInventoryItemChange 逻辑，现内聚）
@@ -61,7 +61,7 @@ export class InventoryComponent implements LifecycleComponent {
 
     try {
       world.afterEvents.playerInventoryItemChange.subscribe(this.worldHandler);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.warn(`[Inventory] 订阅 playerInventoryItemChange 失败: ${e?.message ?? e}`);
     }
 
