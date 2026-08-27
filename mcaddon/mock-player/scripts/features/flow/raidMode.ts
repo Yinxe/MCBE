@@ -270,63 +270,67 @@ function finishDrink(botName: string, result: RaidDrinkResult): void {
 
 // ─── 效果事件监听（核心循环驱动） ───────────────────────
 
-function handleEffectAdd(e: EffectAddAfterEvent): void {
-  try {
-    const effect = e.effect;
-    const typeId = (effect?.typeId as string | undefined) ?? "";
-    const amp = effect?.amplifier ?? 0;
-    const name = e.entity?.nameTag ?? "";
-    const record = botRegistry.get(name);
+  function handleEffectAdd(e: EffectAddAfterEvent): void {
+    try {
+      const effect = e.effect;
+      const typeId = (effect?.typeId as string | undefined) ?? "";
+      const amp = effect?.amplifier ?? 0;
+      const name = e.entity?.nameTag ?? "";
+      const record = botRegistry.get(name);
 
-    // 调试：所有 MockPlayer 假人的效果事件都打印，确认村庄英雄等效果真实 typeId
-    if (record) {
-      console.info(`[MockPlayer] ${name} 效果事件 typeId=${typeId || "(空)"} Lv.${amp}`);
+      if (record) {
+        console.info(`[MockPlayer] ${name} 效果事件 typeId=${typeId || "(空)"} Lv.${amp}`);
+      }
+
+      if (!record || record.workMode !== "raid") return;
+      if (!typeId) return;
+
+      const kind = classifyRaidEffect(typeId);
+      if (!kind) return;
+
+      if (kind === "raid-omen") {
+        handleRaidOmen(name, amp, e.entity.location);
+        return;
+      }
+
+      if (kind === "bad-omen") {
+        handleBadOmen(name);
+        return;
+      }
+
+      if (kind === "village-hero") {
+        handleVillageHero(name, amp);
+      }
+    } catch (err) {
+      console.warn(`[MockPlayer] 劫掠效果监听异常: ${err}`);
     }
-
-    if (!record || record.workMode !== "raid") return;
-    if (!typeId) return;
-
-    const kind = classifyRaidEffect(typeId);
-    if (!kind) return;
-
-    if (kind === "raid-omen") {
-      // ⚠️ 转化时刻记录：不祥之兆结束检查据此区分"已转化（袭击酝酿/进行中）"
-      //    与"未转化（不在村庄）"——袭击开始后 raid_omen 移除但无兆头 ≠ 不在村庄
-      const s = sessionOf(name);
-      s.convertedToRaidTick = system.currentTick;
-      // ⚠️ 袭击即将开始：获得袭击之兆 = 30 秒后 buff 结束、袭击完全开始
-      //    （基岩版机制：袭击之兆 0:30，结束后在获得位置触发袭击）
-      s.raidOmenSince = system.currentTick;
-      // ⚠️ **劫掠开始信号**：只有转化为袭击之兆才是真正的劫掠开始——
-      //    不祥之兆可能 100 分钟挂着（不在村庄）或转化为试炼之兆，不算劫掠
-      raidStarted.trigger({ botName: name, amplifier: amp });
-      const loc = e.entity.location;
-      setRaidPhase(name, "pre-trigger", "预触发：获得袭击之兆，30 秒后袭击完全开始");
-      console.info(
-        `[MockPlayer] ${name} 袭击即将开始（袭击之兆 30 秒后完全开始）——触发点 (${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)})`,
-      );
-      scheduleRaidStartCheck(name);
-      scheduleTruceCheck(name);
-      return;
-    }
-
-    // 不祥之兆 = 喝瓶成功（在村庄内会转化为袭击之兆；也可能试炼之兆/100 分钟挂着）
-    if (kind === "bad-omen") {
-      scheduleBadOmenEndCheck(name); // 30 秒后检查是否转化为袭击之兆（不在村庄提醒）
-      return;
-    }
-
-    // 村庄英雄 = 袭击胜利：记录事件时刻 + 胜利处理（幂等）→ 完成后自动喝下一瓶
-    if (kind === "village-hero") {
-      sessionOf(name).lastHeroTick = system.currentTick;
-      raidVictory.trigger({ botName: name, amplifier: amp });
-      // 延迟一拍处理（effectAdd 回调内避免世界操作风险——removeEffect/addEffect）
-      system.run(() => handleVictory(name));
-    }
-  } catch (err) {
-    console.warn(`[MockPlayer] 劫掠效果监听异常: ${err}`);
   }
-}
+
+  /** 处理袭击之兆：记录转化时刻，触发开始信号与阶段 */
+  function handleRaidOmen(botName: string, amplifier: number, location: import("@minecraft/server").Vector3): void {
+    const s = sessionOf(botName);
+    s.convertedToRaidTick = system.currentTick;
+    s.raidOmenSince = system.currentTick;
+    raidStarted.trigger({ botName, amplifier });
+    setRaidPhase(botName, "pre-trigger", "预触发：获得袭击之兆，30 秒后袭击完全开始");
+    console.info(
+      `[MockPlayer] ${botName} 袭击即将开始（袭击之兆 30 秒后完全开始）——触发点 (${Math.floor(location.x)}, ${Math.floor(location.y)}, ${Math.floor(location.z)})`,
+    );
+    scheduleRaidStartCheck(botName);
+    scheduleTruceCheck(botName);
+  }
+
+  /** 处理不祥之兆：喝瓶成功，30秒后检查是否转化 */
+  function handleBadOmen(botName: string): void {
+    scheduleBadOmenEndCheck(botName);
+  }
+
+  /** 处理村庄英雄：记录时刻，触发胜利事件，延迟一拍处理 */
+  function handleVillageHero(botName: string, amplifier: number): void {
+    sessionOf(botName).lastHeroTick = system.currentTick;
+    raidVictory.trigger({ botName, amplifier });
+    system.run(() => handleVictory(botName));
+  }
 
 // ─── 胜利处理 ────────────────────────────────────────────
 
