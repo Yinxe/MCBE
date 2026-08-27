@@ -68,25 +68,25 @@ async function processQueue(): Promise<void> {
           const res = await createCircleWithFallback(req.location, req.dimension, SHARED_AUX_NAME, radius);
           if (!res.ok) {
             success = false;
-            reason = (res as any).reason ?? "未知原因";
+            reason = res.reason ?? "未知原因";
             console.warn(`[SharedAux] 申请失败 ${req.botName}: ${reason}`);
           } else {
             success = true;
-            fallback = !!(res as any).fallback;
-            console.info(`[SharedAux] 申请成功 ${req.botName} @ ${req.dimension.id} ${Math.floor(req.location.x)},${Math.floor(req.location.z)} ${fallback ? "(回退单区块)" : "(Sim4 r=4)"} via ${(res as any).kind}`);
+            fallback = res.fallback;
+            console.info(`[SharedAux] 申请成功 ${req.botName} @ ${req.dimension.id} ${Math.floor(req.location.x)},${Math.floor(req.location.z)} ${fallback ? "(回退单区块)" : "(Sim4 r=4)"} via ${res.kind}`);
             await delayTicks(2);
             try {
               const rm = await removeTickingArea(SHARED_AUX_NAME, req.dimension);
-              if ((rm as any).ok) console.info(`[SharedAux] 已释放 ${SHARED_AUX_NAME} for ${req.botName} via配套销毁`);
-              else console.warn(`[SharedAux] 释放异常 ${req.botName}: ${(rm as any).reason}`);
-            } catch (e: any) {
-              const err = e as any;
+              if (rm.ok) console.info(`[SharedAux] 已释放 ${SHARED_AUX_NAME} for ${req.botName} via配套销毁`);
+              else console.warn(`[SharedAux] 释放异常 ${req.botName}: ${rm.reason}`);
+            } catch (e: unknown) {
+              const err = e as Error;
               console.warn(`[SharedAux] 释放异常 ${req.botName}: ${err?.message ?? String(err)}`);
             }
           }
         }
-      } catch (e: any) {
-        const err = e as any;
+      } catch (e: unknown) {
+        const err = e as Error;
         success = false;
         reason = err?.message ?? String(err);
         console.warn(`[SharedAux] 处理异常 ${req.botName}: ${reason}`);
@@ -106,8 +106,8 @@ async function processQueue(): Promise<void> {
           reason,
           fallback,
         });
-      } catch (e: any) {
-        const err = e as any;
+      } catch (e: unknown) {
+        const err = e as Error;
         console.warn(`[SharedAux] 事件触发失败 ${req.botName}: ${err?.message ?? String(err)}`);
       }
 
