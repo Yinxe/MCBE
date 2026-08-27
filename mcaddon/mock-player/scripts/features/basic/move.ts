@@ -93,6 +93,25 @@ const LONG_NAV_SEGMENT_TIMEOUT_TICKS = 400;
 /** 长途单段最多重试次数（用户规格：长距离移动小差错容错——最多重试 3 次） */
 const LONG_NAV_SEGMENT_RETRY_ATTEMPTS = 3;
 
+/**
+ * 触发 botMoved 领域事件（位置落库由 PositionTracker 订阅方负责）
+ * @param botName 假人名
+ * @param bot 假人实体
+ * @param location 当前位置（已缓存，避免重复读取）
+ */
+function triggerBotMoved(botName: string, bot: SimulatedPlayer, location: Vector3): void {
+  try {
+    BotEvents.botMoved.trigger({
+      botName,
+      position: location,
+      dimension: bot.dimension.id,
+      rotation: bot.getRotation(),
+    });
+  } catch {
+    // 事件触发异常隔离，不影响移动主流程
+  }
+}
+
 /** 导航结果枚举（多出口：成功 / 各类失败原因） */
 export enum NavigateResult {
   /** 已到达目标（静止且距目标 ≤ 到达距离） */
@@ -213,14 +232,7 @@ export async function navigateBot(
       if (loc.x !== lastLoc.x || loc.y !== lastLoc.y || loc.z !== lastLoc.z) {
         // 位置变化 → 假人仍在移动 → 重置静止计数，继续等待
         stillCount = 0;
-        // 移动监听：发布 botMoved 领域事件（位置落库由 PositionTracker 订阅方
-        // 负责——解耦）；触发移动中回调
-        BotEvents.botMoved.trigger({
-          botName,
-          position: loc,
-          dimension: bot.dimension.id,
-          rotation: bot.getRotation(),
-        });
+        triggerBotMoved(botName, bot, loc);
         callbacks?.onMoving?.(loc);
       } else {
         stillCount++;
@@ -315,13 +327,7 @@ async function runSegment(
       const moving = loc.x !== lastLoc.x || loc.y !== lastLoc.y || loc.z !== lastLoc.z;
       if (moving) {
         stillCount = 0;
-        // 移动监听：发布 botMoved 领域事件（位置落库由 PositionTracker 订阅方负责）
-        BotEvents.botMoved.trigger({
-          botName,
-          position: loc,
-          dimension: bot.dimension.id,
-          rotation: bot.getRotation(),
-        });
+        triggerBotMoved(botName, bot, loc);
         callbacks?.onMoving?.(loc);
       } else {
         stillCount++;
