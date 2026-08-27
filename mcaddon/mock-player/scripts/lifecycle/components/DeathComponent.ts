@@ -36,8 +36,8 @@ export class DeathComponent implements LifecycleComponent {
     this.ctx = ctx;
     this.dieHandler = (e) => { void this.handleDie(e).catch(err=>console.warn(`[Death] entityDie 异常: ${err?.message ?? err}`)); };
     this.spawnHandler = (e) => { void this.handleSpawn(e).catch(err=>console.warn(`[Death] playerSpawn 异常: ${err?.message ?? err}`)); };
-    try { world.afterEvents.entityDie.subscribe(this.dieHandler); } catch (e: any){ console.warn(`[Death] 订阅 entityDie 失败: ${e?.message ?? e}`); }
-    try { world.afterEvents.playerSpawn.subscribe(this.spawnHandler); } catch (e: any){ console.warn(`[Death] 订阅 playerSpawn 失败: ${e?.message ?? e}`); }
+    try { world.afterEvents.entityDie.subscribe(this.dieHandler); } catch (e: unknown) { const err = e as Error; console.warn(`[Death] 订阅 entityDie 失败: ${err?.message ?? String(err)}`); }
+    try { world.afterEvents.playerSpawn.subscribe(this.spawnHandler); } catch (e: unknown) { const err = e as Error; console.warn(`[Death] 订阅 playerSpawn 失败: ${err?.message ?? String(err)}`); }
     console.info(`[Death] 已集中订阅 entityDie / playerSpawn（生命周期内聚）`);
   }
 
@@ -78,7 +78,7 @@ export class DeathComponent implements LifecycleComponent {
 
       if (await this.maybeAutoRespawn(bot, record)) return;
       await this.dieOffline(bot, record);
-    } catch (e: any) { console.warn(`[Death] 处理异常 ${record.name}: ${e?.message ?? e}`); }
+    } catch (e: unknown) { const err = e as Error; console.warn(`[Death] 处理异常 ${record.name}: ${err?.message ?? String(err)}`); }
   }
 
   private recordDeathStorage(bot: SimulatedPlayer, record: import("../../rules/Types").BotRecord): void {
@@ -106,10 +106,10 @@ export class DeathComponent implements LifecycleComponent {
           record.lastPoint = { ...record.respawnPoint };
           this.ctx.save.saveRecord(record);
           try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 已自动复活`); } catch {}
-        } catch (e: any){ try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动复活失败: ${e.message}`);} catch {}}
+        } catch (e: unknown){ const err = e as Error; try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动复活失败: ${err.message}`);} catch {}}
       }, RESPAWN_DELAY_TICKS);
       return true;
-    } catch (e: any){ try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动重生失败: ${e.message}`);} catch {} return false; }
+    } catch (e: unknown){ const err = e as Error; try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动重生失败: ${err.message}`);} catch {} return false; }
   }
 
   private async dieOffline(bot: SimulatedPlayer, record: import("../../rules/Types").BotRecord): Promise<void> {
