@@ -116,7 +116,7 @@ export class SessionComponent implements LifecycleComponent {
     if (record.entityId) {
       try {
         const bot = world.getEntity(record.entityId) as Player | undefined;
-        if ((bot as any)?.hasTag?.(BOT_TAG)) this.ctx.save.saveFullState(bot as Player, record);
+        if ((bot as unknown as { hasTag?: (tag: string) => boolean })?.hasTag?.(BOT_TAG)) this.ctx.save.saveFullState(bot as Player, record);
       } catch {}
     }
 
@@ -141,10 +141,11 @@ export class SessionComponent implements LifecycleComponent {
     if (owned.length === 0) return;
     console.info(`[Session] 玩家 ${ownerName} 下线，联动下线 ${owned.length} 个假人`);
     system.run(async () => {
-      let offlineFn: any;
+      let offlineFn: ((r: import("../../rules/Types").BotRecord) => Promise<{ ok: boolean; reason?: string }>) | undefined;
       try {
         const mod = await import("../../bootstrap/context");
-        offlineFn = (mod as any).botLifecycle?.offline?.bind((mod as any).botLifecycle);
+        const bl = (mod as unknown as { botLifecycle?: { offline: (r: import("../../rules/Types").BotRecord) => Promise<{ ok: boolean; reason?: string }> } }).botLifecycle;
+        if (bl) offlineFn = bl.offline.bind(bl);
       } catch {}
       if (!offlineFn) {
         try {
