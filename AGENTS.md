@@ -1,299 +1,171 @@
 # @yinxe/mc — MCBE Addon Monorepo
 
-MCBE（Minecraft Bedrock）Addon 单体仓库：TypeScript Script API 模组 + 服务端插件 + 共享构建工具。
+> Minecraft Bedrock Addon 单体仓库：官方 ScriptAPI (`mcaddon/`) + 轻量 BP (`server-plugin/`) + BDS 专用 LL 插件 (`plugins/`) + 共享包 (`packages/`)。本文档为 **AI Agent / 贡献者** 专用，改动前必读。
 
-## 仓库清单
+## 1. 仓库清单
 
-**Addon（`mcaddon/<name>/`，TypeScript + just-scripts 构建）**
+| 目录 | 包名 | 说明 |
+|------|------|------|
+| `mcaddon/mock-player` | 模拟玩家 | GameTest 假人：生成/行为/交互/持久化 |
+| `mcaddon/smartwarehouse` | 智能仓库 | 仓库 v1，分拣/整理/统计/预警（`item-route` 前身） |
+| `mcaddon/item-route` | 物品路由 | **参考架构**：六边形 `core/mc` 分层，零 `@minecraft` 可测 |
+| `mcaddon/keepinventory` | 死亡不掉落 | 免作弊保成就 |
+| `mcaddon/auto-refill` | 自动替换 | 消耗品补货 + 工具/武器自动切换 |
+| `mcaddon/craftablerarities` | 合成扩展 | 稀有方块/物品合成 |
+| `mcaddon/teleporter` | 传送 | TPA/TPHERE/返回点 |
+| `mcaddon/spectator-mode` | 灵魂出窍 | 旁观侦查 |
+| `server-plugin/antibundledup` | 反收纳袋刷物 | 收纳袋改食物防刷 |
+| `plugins/villager-trade` | 村民交易示例 | LL 下 `Offers.Recipes` 读写演示 |
+| `plugins/_template` | LL 模板 | `@levimc-lse/types` + `tsc` |
+| `packages/toolkit` | @yinxe/toolkit | 运行时共享：color/ui/command/player |
+| `packages/toolkit-build` | @yinxe/toolkit-build | 构建：版本同步/esbuild 配置 |
+| `packages/nbt-data-storage` | @yinxe/nbt-data-storage | 区块锚定木桶矩阵，完整 NBT |
+| `packages/tool-strategy` | @yinxe/tool-strategy | 工具策略 |
 
-| 包名 | 显示名 | 说明 |
-|------|--------|------|
-| `mock-player` | 模拟玩家 | GameTest 假人管理：生成/行为控制/物品交互/数据持久化（核心交互示例） |
-| `smartwarehouse` | 智能仓库 | 仓库管理 v1：自动分拣 + 容器整理 + 统计 + 容量预警（item-route 的前身） |
-| `item-route` | 物品路由 | **参考架构**：六边形 core/mc 分层，自动分拣/容器整理/统计/预警，core 零 `@minecraft` 可单测 |
-| `keepinventory` | 死亡不掉落 | 死亡掉落保护：无需作弊、保留成就、极限复活 |
-| `auto-refill` | 自动替换 | 消耗品自动补货 + 工具/武器按偏好自动切换 + 耐久保护 + 挖掘防误触 |
-| `craftablerarities` | 合成配方扩展 | 合成稀有/不可再生物品，创造模式快速获取隐藏方块 |
-| `teleporter` | 传送 | 玩家间传送请求 TPA / TPHERE / 返回点 |
-| `spectator-mode` | 灵魂出窍 | 飞离真身旁观侦查，距离容忍自动回归 |
-
-**服务端插件（`server-plugin/<name>/`，纯 JSON / 轻量 BP）**
-
-- `antibundledup`（反收纳袋刷物）— 收纳袋改为可食用食物，防刷物漏洞
-
-**共享包（`packages/`）**
-
-- `toolkit`（`@yinxe/toolkit`）— 共享运行时模块（color / ui / command / player）
-- `toolkit-build`（`@yinxe/toolkit-build`）— 构建工具（版本同步等）
-- `item-matrix` — 容器簇物品存储（物理木桶矩阵，完整 NBT 保留）
-
-## 项目结构
+## 2. 项目结构
 
 ```
 mc/
-├── mcaddon/<name>/       # MCBE Addon 项目（TypeScript + 构建脚本）
-│   ├── BP/<Project>/     # 行为包（manifest.json）
-│   ├── RP/<Project>/     # 资源包（可选）
-│   ├── scripts/          # TypeScript 源码
-│   ├── just.config.ts    # 构建配置
-│   ├── tsconfig.json     # 编译器配置（item-route 另有 tsconfig.test.json）
-│   └── package.json      # 独立版本号（mcbe.packName = 中文显示名）
-├── server-plugin/<name>/ # 服务端插件（纯 JSON / 轻量 BP）
-│   ├── BP/<Project>/     # 行为包
-│   ├── scripts/          # 打包脚本（可选）
-│   └── package.json      # 独立版本号
-├── packages/<pkg>/       # 共享包（toolkit / toolkit-build / item-matrix）
-└── package.json          # 根 workspace
+├── mcaddon/<name>/        # 官方 Addon：TS + just-scripts
+│   ├── BP/<Project>/      # 行为包（含 manifest.json）
+│   ├── RP/<Project>/      # 资源包（可选）
+│   ├── scripts/           # TS 源码
+│   ├── just.config.ts     # 构建
+│   ├── tsconfig.json      # 2.6.0 基准（item-route 另有 tsconfig.test.json）
+│   └── package.json       # version + mcbe.packName（中文显示名）
+├── server-plugin/<name>/  # 纯 JSON/BP 插件
+├── plugins/<name>/        # BDS 专用 LL 插件：@levimc-lse/types + tsc
+│   ├── src/main.ts        # 入口（全局 ll/mc/NbtCompound）
+│   ├── package.json       # @plugins/<name>
+│   └── tsconfig.json      # types: ["@levimc-lse/types"]，与 mcaddon 隔离
+├── packages/<pkg>/        # 共享包
+├── docs/mc-api/           # 本地 d.ts 镜像（server.d.ts 2.6.0）
+├── pnpm-workspace.yaml    # packages/* + mcaddon/* + server-plugin/* + plugins/*
+└── package.json           # 根 workspace + 快捷脚本
 ```
 
-## 构建命令
+## 3. 环境与快速开始
 
-所有构建通过 `just-scripts`（via pnpm）。各模组独有命令见模组级 AGENTS.md。
+* **要求**：`Node >=20` `pnpm >=11.1.3`
+* **安装**：`pnpm install`（根目录一次，`overrides` 统一 `@minecraft/server: 2.8.0`）
+* **日常**：`改代码 → pnpm run build:<mod> → pnpm run pack:<mod> → 部署 .mcpack/.js → 进游戏/BDS 测试`
 
 ```bash
-pnpm run build:<mod>   # 编译（TypeScript → esbuild）；如 build:item-route
-pnpm run pack:<mod>    # 打包（BP/RP → .mcpack / .mcaddon）；如 pack:item-route
-pnpm run build         # 全仓构建（pnpm -r）
-pnpm run clean         # 全部清理
-pnpm run format        # prettier 全仓格式化
-pnpm run lint          # eslint（全仓；item-route 个别 addon 有环境性解析器问题，非本次改动引入）
+pnpm install
+pnpm run build              # 全仓
+pnpm run build:mock-player  # 单 Addon
+pnpm run build:plugins      # 全部 LL 插件
+pnpm run build:villager-trade
+pnpm run pack:mock-player   # BP/RP → .mcaddon/.mcpack
+pnpm run lint / format / clean
 ```
 
-**版本同步**：构建时 `just-scripts` 会把 `package.json` 的版本同步到 `BP/manifest.json`（幂等，版本不变时不产生改动）。`manifest.json` / `package.json` 的版本改动是 **release-only**，日常提交源码时不纳入 commit。
+**版本同步**：`just-scripts` 构建时把 `package.json#version` 同步到 `BP/manifest.json`（幂等）。该改动为 **release-only**，日常不提交。
 
-## 测试（item-route 参考）
+## 4. 测试
 
 ```bash
-cd mcaddon/item-route && pnpm run test:core   # tsc -p tsconfig.test.json + node --test
+cd mcaddon/item-route && pnpm run test:core   # tsc -p tsconfig.test.json && node --test
+pnpm --filter @yinxe/tool-strategy run test
+pnpm run test:nbt-data-storage
 ```
 
-- core 层**零 `@minecraft` 依赖**（纯 TS），可被 `tsconfig.test.json` 单独编译进 node 测试；mc 层不进 node 测试构建。
-- 测试文件在 `tests/`（`*.test.ts`），用 `node:test` + `node:assert/strict` + `InMemory*` 替身（InMemoryContainer / InMemoryKeyValueStore / MemoryIntervalScheduler / StubProximity）。
-- 核心纯逻辑（routing/index/scheduler/stats/organize/services/ContainerId/几何）必须有单测覆盖；mc 适配/UI/交互层改动靠游戏内冒烟。
+* `core` 零 `@minecraft` 可 `node:test`；`mc` 层仅游戏内冒烟
+* 用 `InMemory*` 替身 + `node:assert/strict`
 
-## 开发流程
+## 5. 开发流程
 
-### 日常迭代
+**版本规则**（`2.0.0` 起，semver）：架构重构 `+1.0.0` / 新功能 `+0.1.0` / 修复 `+0.01`
+* `package.json#version` 维护版本，`commit: <包名>@<版本>: 中文`，`tag: <包名>@<版本>`，`push` 同时推 tag
 
-```
-修改代码 → pnpm run build → pnpm run pack → 部署 .mcpack → 进游戏测试
-```
+**分支**
+* `main` 稳定（`tag` → Release） / `dev` 集成（→ prerelease） / `feat/<name>` 新模块
+* `release.yml` 仅处理 `main`/`dev` 上的 `*@*` tag
 
-### 版本迭代
+**新建模块**
+* Addon：复制 `just.config.ts/tsconfig.json/package.json/BP/manifest.json` → 改 `package.json` → `pnpm install` → `build` → 补根 `build:<mod>/pack:<mod>` → 写模块 `AGENTS.md`
+* LL 插件：`cp -r plugins/_template plugins/<name>` → 改 `package.json#name=@plugins/<name>` → `pnpm install` → `pnpm --filter @plugins/<name> run build`（`tsc → dist/main.js`）→ 部署到 `BDS/plugins/`
 
-```
-bump version → build → pack → commit → tag → push
-```
+## 6. 架构参考（`item-route`）
 
-**版本号提升规则**（用户拍板 2.0.0 起）：
-- **架构完全升级** → `+1.0.0`（如 mock-player 行为树架构重构 → 2.0.0）
-- **新功能** → `+0.1`（如新增砍树任务 → 2.1.0）
-- **功能小改动/修复/试错调整** → `+0.01`（如宝库细节修复 → 2.0.1）
-- 按标准 semver 机制提升，不攒版本、不随意跳号
+六边形 `core`（纯领域，事件驱动）/`mc`（副作用） via `EventBus`。详见 `mcaddon/item-route/AGENTS.md`。
 
-- 版本在 `mcaddon/<name>/package.json` 中维护
-- commit message 格式：`<包名>@<新版本>: <中文描述>`（如 `mock-player@2.0.1: 宝库细节修复`）
-- tag 格式：`<包名>@<版本>`（如 `mock-player@2.0.0`）
-- 发布时同时 push commit + tag
-- 源码提交时**排除** `manifest.json` / `package.json`（release-only）；仅提交 `scripts/` 源码与 `tests/`
+* `core` 无副作用，事件负载仅 `string/number`
+* 按需加载 + 统一生命周期，`ir2:c:{cid}` 等 DP 键单容器单键，事件写穿
+* 概念 `ItemStack` 保留源 `mc.ItemStack`，堆叠以 `mc.addItem` 为准，防刷/防覆盖
+* 区块访问 `try-catch`，`beforeEvents` 内不触世界（延至 `system.run`）
 
-### 分支管理
+## 7. 关键约束（必读）
 
-- `main`：稳定分支，正式发布（main 上的 tag → 稳定版 Release）
-- `dev`：集成/测试分支，默认发布测试版（dev 上的 tag → 预发布 beta Release）
-- `feat/<name>`：新 addon 开发分支（如 `feat/auto-refill`）
-- 新 addon 完成构建验证后，切出 feature branch 提交，main 保持干净
-- 发布通道：`.github/workflows/release.yml` 只处理 main / dev 上的 tag，其它分支的 tag 不构建不发布
+* **`system.run` 上下文**：所有世界操作（维度/方块/容器/DP）必须在 `system.run` 或事件回调内；`world.getDynamicProperty` 需在 Phase4 `system.run` 后
+* **4 Phase 启动**：1 无状态 2 有状态 3 注册事件/命令 4 `system.run(()=>scheduler.start())`
+* **命令**：`system.beforeEvents.startup` 中 `customCommandRegistry.registerCommand`
+* **区块安全**：方块/容器访问 `try-catch`，回调内 `try-catch` 隔离
+* **日志**：`console.warn("[前缀] 消息")`，玩家提示中文，调试英文；`GameTest` 假人 `disconnect` 后 20tick 再 `spawnSimulatedPlayer`
 
-### 新建 Addon
+## 8. 参考文档 & API 查寻
 
-1. 复制现有项目结构（`just.config.ts` / `tsconfig.json` / `package.json` / `BP/<Project>/manifest.json`）
-2. `pnpm install` 安装依赖
-3. 按依赖版本匹配 `@minecraft/server` 版本
-4. 确保构建通过后切 feature branch 提交
-5. 新 addon 需在根 `package.json` 的 `build:` / `pack:` 脚本补一条快捷命令（`pnpm --filter <pkg> run ...`）
-6. 写一份该 addon 的 `AGENTS.md`（架构/命令/约定）
-
-## item-route 参考架构（新 TS addon 可借鉴）
-
-`mcaddon/item-route` 是六边形/分层架构的参考实现：`core/`（纯领域，**零 @minecraft 依赖、可 node 单测**）与 `mc/`（适配层，只做持久化/视觉/通知副作用）通过 `EventBus` 领域事件解耦。完整架构树、`ir:*` 命令清单、权限矩阵、持久化键约定、交互/测试约定见 **`mcaddon/item-route/AGENTS.md`**（item-route 自有）。
-
-关键设计约定（新 TS addon 建议遵循）：
-- **core 无副作用**：core 只发领域事件，mc 层订阅做副作用；事件负载只用可序列化 string/number。
-- **按需加载 + 统一生命周期**：启动只载 meta；容器在激活/菜单/命令访问时按需加载，闲置卸载。
-- **持久化最小单位**：容器级数据每容器一条 DP 键（`ir2:c:{cid}` / `ir2:idx:{cid}` / `ir2:cst:{cid}`），事件驱动写穿、无定时 flush。
-- **不吞/不覆盖/不刷物**：概念 ItemStack 是缩减视图，写回经 `McItemAdapter` 携带源 mc.ItemStack 保留 NBT；堆叠判定委托 `mc.addItem` 权威。
-- **区块安全**：方块/容器访问 try-catch；`beforeEvents` 回调受限上下文内不触世界操作（延迟到 `system.run`）。
-## 调试技巧
-
-- 日志通过 `console.warn` 输出，格式 `[前缀] 消息`
-- 面向玩家的错误消息使用中文；调试日志使用英文
-- GameTest 生成的假人触发 `playerJoin` 事件恢复背包，使用 `isBotRestored` 防护空背包覆写
-- `disconnect()` 后至少等待 20 tick 才能重新 `spawnSimulatedPlayer`，否则出现 "(2)" 重复名导致数据丢失
-- 常加载模式（chunkload）假人受限的是扭头/瞄准（GameTest 限制，无 lookAt/setRotation），但 `useItemInSlot` 使用物品（喝药水/进食）不受影响
-
-## 命名与版本
-
-- **显示名称**: 中文（`header.name` 与 `package.json#mcbe.packName`），如"模拟玩家"、"智能仓库"、"物品路由"
-- **打包产物**: `{中文名}-v{version}.{mcaddon,mcpack}`
-- **标签**: `<包名>@<版本>`，如 `mock-player@1.0.0`
-- 版本号在 `package.json` 中维护，构建时自动同步到 manifest.json
-
-## 参考文档
+> 严禁手写 `Entity`/`NbtCompound` 等类型，一律以依赖 `d.ts` 为准
 
 | 资源 | 链接 |
 |------|------|
-| 官方 Script API 文档 | https://learn.microsoft.com/zh-cn/minecraft/creator/?view=minecraft-bedrock-stable |
-| 社区 WIKI（自定义物品/方块/实体/UI/粒子） | https://wiki.bedrock.dev/ |
-| 全物品中文翻译表 | https://raw.githubusercontent.com/SkyEye-FAST/mcbe-chinese-patch/main/extracted/release/vanilla/zh_CN.json |
+| 官方 ScriptAPI | https://learn.microsoft.com/zh-cn/minecraft/creator/?view=minecraft-bedrock-stable |
+| 社区 WIKI | https://wiki.bedrock.dev/ |
+| LeviLamina | https://docs.levilamina.org/ / https://lamina.levimc.org/ |
+| 中文翻译表 | https://raw.githubusercontent.com/SkyEye-FAST/mcbe-chinese-patch/main/.../zh_CN.json |
 
-## API 文档查寻指引
+**① WIKI（游戏机制）**：`https://zh.minecraft.wiki/w/${keyword}` 如 `村民`/`交易`/`命令`，查 NBT（`Offers`/`VillagerData`）与机制
 
-> 统一查寻入口，避免自写类型。严禁手写 `NbtCompound` / `Entity` 等声明，一律以依赖中的 `d.ts` 为准。分三类：WIKI（游戏机制）、官方 ScriptAPI（`mcaddon`/`packages`）、非官方 LSE（`plugins`）。
-
-### 1. 官方 WIKI（游戏机制 / 方块 / 实体 / 村民等）
-
-* **中文 WIKI（推荐）**：`https://zh.minecraft.wiki/w/${keyword}`，如村民 `https://zh.minecraft.wiki/w/村民`、交易 `https://zh.minecraft.wiki/w/交易`、命令 `https://zh.minecraft.wiki/w/命令`
-* 用于查机制、NBT 结构（如村民 `Offers`、`VillagerData`）、方块状态等；与代码中 `minecraft:villager_v2` 等 `typeId` 一一对应
-
-### 2. 官方 Addon ScriptAPI（`mcaddon/*` / `packages/*` / `server-plugin/*`）
-
-* **版本锁定（本仓当前）**：以各 `mcaddon/<name>/package.json` 的 `dependencies` 为准
-  ```json
-  "dependencies": {
-    "@minecraft/math": "2.2.7",
-    "@minecraft/server": "2.6.0",
-    "@minecraft/server-gametest": "1.0.0-beta.1.26.0-stable",
-    "@minecraft/server-ui": "2.0.0",
-    "@minecraft/vanilla-data": "1.26.20"
-  }
-  ```
-  全仓通过 `pnpm-workspace.yaml#overrides` 强制收敛到 `@minecraft/server: 2.8.0`，避免类型分裂
-* **本地定义（优先查）**：
-  * `node_modules/@minecraft/server/index.d.ts`、`@minecraft/server-ui/index.d.ts`、`@minecraft/vanilla-data/lib/index.d.ts`
-  * 本仓镜像 `docs/mc-api/server.d.ts`（2.6.0 快照，供离线速查）
-  * `grep -n "class Entity" node_modules/@minecraft/server/index.d.ts` 快速定位
-* **在线文档**：https://learn.microsoft.com/zh-cn/minecraft/creator/ （Creator 文档，与本地 `d.ts` 同源）
-
-### 3. 非官方 BDS 插件 LegacyScriptEngine（`plugins/*`，分支 `ll-plugins`）
-
-* **版本锁定（本仓当前）**：
-  ```json
-  "devDependencies": {
-    "@levimc-lse/types": "^2.18.7"
-  }
-  ```
-  来自 `plugins/_template/package.json` / `plugins/villager-trade/package.json`（见 `ll-plugins` 分支）
-* **本地定义（优先查）**：`node_modules/@levimc-lse/types/src/**/*.d.ts`（`GameAPI/Entity/Entity.d.ts`、`GameAPI/Player.d.ts`、`NbtAPI/NBTCompound.d.ts` 等），`tsconfig.json` 已配 `types: ["@levimc-lse/types"]`
-* **在线文档与声明来源**：
-  * 官方介绍与安装：https://github.com/LiteLDev/legacy-script-engine-api/blob/develop/platforms/javascript/README.md
-  * 在线 API：https://lse.levimc.org/zh/apis/
-  * 仓库：https://github.com/LiteLDev/legacy-script-engine-api
-
----
-
-## 通用代码规范
-
-### 技术栈
-- **语言**: TypeScript (`target: es6`, `strict: true`, `noUncheckedIndexedAccess` 可选)
-- **运行时**: Minecraft Bedrock Script API (`@minecraft/server`)
-- **构建**: `just-scripts` + TypeScript 编译器 + esbuild
-- **格式化**: Prettier (printWidth: 120, tabWidth: 2, semi, singleQuote: false)
-- **UI**: `@minecraft/server-ui` (ActionForm / ModalForm)
-
-### 命名规范
-
-| 类别 | 风格 | 示例 |
-|------|------|------|
-| 类 | PascalCase | `WarehouseService`, `SorterEngine` |
-| 接口 | PascalCase | `BotRecord`, `WarehouseData` |
-| 类型别名 | PascalCase | `WarehouseId`, `ContainerRole` |
-| 文件 | PascalCase | `WarehouseService.ts`, `Logger.ts` |
-| 导出函数 | camelCase | `createWarehouse()`, `locationKey()` |
-| 私有方法 | camelCase | `handleCreate()`, `checkAreaLoaded()` |
-| 模块级常量 | UPPER_SNAKE_CASE | `MAX_SCAN_VOLUME`, `DEBOUNCE_MS` |
-| `main.ts` / `types.ts` | 小写（约定入口和类型文件） | |
-
-### 导入顺序
-```typescript
-// 1. 外部依赖
-import { world, system } from "@minecraft/server";
-// 2. 仅类型导入
-import type { Vector3 } from "@minecraft/server";
-// 3. 内部模块
-import { normalizeId } from "../storage/Repository";
-// 4. 混合导入
-import { world, type Player } from "@minecraft/server";
-```
-
-### JSDoc
-- 使用中文描述
-- 每个导出函数必须有 JSDoc
-- 格式: 简短描述 + 详细说明（可选）+ `@param` + `@returns` + `@throws`
-
-### 代码分段
-```
-// ── 生命周期管理 ──────────────────────────────────────────
-// ─── 公开入口 ──────────────────────────────────────────────
-// ─── 私有方法 ─────────────────────────────────────────────
-```
-
-### 错误处理
-
-| 模式 | 场景 | 做法 |
-|------|------|------|
-| 返回错误消息 | 轻量校验（命令解析） | `return "该命令只能由玩家执行"` |
-| 抛出异常 | 业务逻辑层 | `throw new Error(...)` |
-| 安全执行 | 可能失败的 IO | try-catch 返回 undefined |
-| 事件内捕获 | 防止单事件崩溃 | try-catch 包住整个事件回调 |
-
-### 依赖注入
-```typescript
-// 构造函数注入，可选依赖用默认参数
-export class MyService {
-  constructor(
-    private readonly repository: Repository,
-    private readonly scanner = new ContainerScanner(),
-    private readonly onNotify: (id: string) => void = () => undefined
-  ) {}
+**② 官方 ScriptAPI（`mcaddon`）**
+```json
+"dependencies": {
+  "@minecraft/math": "2.2.7",
+  "@minecraft/server": "2.6.0",
+  "@minecraft/server-gametest": "1.0.0-beta.1.26.0-stable",
+  "@minecraft/server-ui": "2.0.0",
+  "@minecraft/vanilla-data": "1.26.20"
 }
 ```
+本地优先：`node_modules/@minecraft/server/index.d.ts`、`@minecraft/server-ui`、`@minecraft/vanilla-data`、`docs/mc-api/server.d.ts`（2.6.0 快照）；`grep -n "class Entity" node_modules/@minecraft/server/index.d.ts`
 
-### Minecraft 特有模式
+**③ 非官方 LSE（`plugins`）**
+```json
+"devDependencies": { "@levimc-lse/types": "^2.18.7" }
+```
+本地：`node_modules/@levimc-lse/types/src/**/*.d.ts`（`Entity`/`Player`/`NbtCompound`），`tsconfig.json: types: ["@levimc-lse/types"]`
+在线：https://github.com/LiteLDev/legacy-script-engine-api/blob/develop/platforms/javascript/README.md / https://lse.levimc.org/zh/apis/
 
-**system.run() 执行上下文（重要！）:**
-- 所有世界状态操作（维度、方块、容器、dynamic property）必须在 `system.run()` 回调或事件处理器中执行
-- 类型定义、工具函数、无状态对象实例化可以在顶层执行
-- **早执行安全**：`world.getDynamicProperty` 等在世界完全加载前（早执行）调用会抛错；DP 读取放 Phase 4 `system.run()` 内
+## 9. 命名与发布
 
-**4 Phase 启动时序:**
-```typescript
-// Phase 1: 无状态基础设施
-// Phase 2: 有状态业务逻辑
-// Phase 3: 注册事件和命令
-// Phase 4: 延迟启动（dynamicProperty 需世界完全加载）
-system.run(() => { scheduler.start(); });
+* 显示名中文（`manifest header.name` / `package.json#mcbe.packName`）
+* 产物 `{中文名}-v{version}.{mcaddon,mcpack}`，`tag: <包名>@<版本>`
+* 构建产物不提交，`manifest.json` 仅 release 提交
+
+## 10. 代码规范
+
+**技术栈**：`TS es6 strict` / `mcaddon: just-scripts+esbuild` / `plugins: tsc` / `prettier 120/2/semi`
+
+**命名**：类/接口/类型 `PascalCase`，文件 `PascalCase`，函数/私有方法 `camelCase`，常量 `UPPER_SNAKE`，入口 `main.ts/types.ts` 小写
+
+**导入顺序**
+```ts
+import { world, system } from "@minecraft/server";
+import type { Vector3 } from "@minecraft/server";
+import { normalizeId } from "../storage/Repository";
 ```
 
-**命令注册:**
-```typescript
-system.beforeEvents.startup.subscribe((event) => {
-  event.customCommandRegistry.registerCommand(
-    regionCommand("prefix:command", "描述"),
-    (origin, ...args) => handler(...)
-  );
-});
+**JSDoc**：中文，导出函数必写 `@param/@returns/@throws`
+
+**分段注释**
+```
+// ── 生命周期 ──
+// ── 公开入口 ──
+// ── 私有方法 ──
 ```
 
-**区块安全访问:**
-- 任何方块/容器访问都必须用 try-catch 保护
-- 容器操作需在事件处理器或 `system.run()` 内执行
-- 事件订阅回调内部 try-catch 隔离（单事件崩溃不影响其他订阅者）
+**错误处理**：轻校验 `return "中文"` / 业务 `throw` / IO `try-catch→undefined` / 事件回调整体 `try-catch`
 
-### 通用编码习惯
-- `private readonly` 构造参数简写
-- Map/Record 显式声明泛型
-- 面向玩家的错误消息使用中文；调试日志使用英文
-- 日志格式: `[前缀] 消息`，通过 `console.warn` 输出
-- 常量就近定义，不集中塞到 constants 文件
-- 模块级 AGENTS.md 约定：每个 addon 一份，记录该模组独有命令/架构/约定（如 `mcaddon/smartwarehouse/AGENTS.md`）
+**依赖注入**：构造函数注入，可选参数给默认值
+
+**通用**：`private readonly` 简写，`Map/Record` 显式泛型，常量就近，模块级 `AGENTS.md` 单独维护
+
