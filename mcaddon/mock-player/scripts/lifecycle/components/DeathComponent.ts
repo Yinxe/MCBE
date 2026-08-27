@@ -58,14 +58,14 @@ export class DeathComponent implements LifecycleComponent {
       console.info(`[Death] entityDie ${record.name} @ ${entity.dimension.id} ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y)} ${Math.floor(entity.location.z)}`);
       const bot = entity as unknown as SimulatedPlayer;
       const deathState: PositionState = {
-        location: entity.location as any,
+        location: entity.location,
         dimension: entity.dimension.id,
-        rotation: (bot as any).getRotation(),
+        rotation: (bot as unknown as SimulatedPlayer).getRotation(),
         lookTarget: record.lastPoint?.lookTarget ?? record.respawnPoint.lookTarget,
       };
 
       record.death = true;
-      this.recordDeathStorage(bot as any, record);
+      this.recordDeathStorage(bot, record);
       console.info(`[Death] 死亡存储 ${record.name}`);
 
       record.deathPoint = deathState;
@@ -76,19 +76,19 @@ export class DeathComponent implements LifecycleComponent {
 
       try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 死亡了 ${color.muted}@ ${formatPos(deathState.location)} ${color.darkGray}${formatDimensionId(deathState.dimension)}`); } catch {}
 
-      if (await this.maybeAutoRespawn(bot as any, record)) return;
-      await this.dieOffline(bot as any, record);
+      if (await this.maybeAutoRespawn(bot, record)) return;
+      await this.dieOffline(bot, record);
     } catch (e: any) { console.warn(`[Death] 处理异常 ${record.name}: ${e?.message ?? e}`); }
   }
 
-  private recordDeathStorage(bot: SimulatedPlayer, record: any): void {
-    record.experience = captureExperience(bot as any);
+  private recordDeathStorage(bot: SimulatedPlayer, record: import("../../rules/Types").BotRecord): void {
+    record.experience = captureExperience(bot as unknown as import("@minecraft/server").Player);
     for (const slot of EQUIP_SLOT_NAMES) {
-      BotEvents.botEquipSlotChanged.trigger({ botName: record.name, slot: slot as any, via: "death" });
+      BotEvents.botEquipSlotChanged.trigger({ botName: record.name, slot: slot as import("../../rules/Types").EquipSlotName, via: "death" });
     }
   }
 
-  private async maybeAutoRespawn(bot: SimulatedPlayer, record: any): Promise<boolean> {
+  private async maybeAutoRespawn(bot: SimulatedPlayer, record: import("../../rules/Types").BotRecord): Promise<boolean> {
     if (!record.tags.includes(TAG_RESPAWN.value)) return false;
     try {
       try { const { trackBotOffline } = await import("../../features/trident/tridentTracker"); trackBotOffline(bot.id); } catch {}
@@ -97,10 +97,10 @@ export class DeathComponent implements LifecycleComponent {
         try {
           if (!bot.isValid) return;
           const dim = world.getDimension(record.respawnPoint.dimension);
-          bot.teleport(record.respawnPoint.location as any, { dimension: dim });
-          setPose(bot as any, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
+          bot.teleport(record.respawnPoint.location, { dimension: dim });
+          setPose(bot as unknown as import("@minecraft/server").Player, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
           record.entityId = bot.id;
-          syncEntityTags(bot as any, record.tags);
+          syncEntityTags(bot as unknown as import("@minecraft/server").Player, record.tags);
           record.death = false;
           record.deathPoint = null;
           record.lastPoint = { ...record.respawnPoint };
@@ -112,7 +112,7 @@ export class DeathComponent implements LifecycleComponent {
     } catch (e: any){ try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动重生失败: ${e.message}`);} catch {} return false; }
   }
 
-  private async dieOffline(bot: SimulatedPlayer, record: any): Promise<void> {
+  private async dieOffline(bot: SimulatedPlayer, record: import("../../rules/Types").BotRecord): Promise<void> {
     try { const { trackBotOffline } = await import("../../features/trident/tridentTracker"); trackBotOffline(bot.id); } catch {}
     record.online = false;
     record.entityId = undefined;
@@ -124,7 +124,7 @@ export class DeathComponent implements LifecycleComponent {
 
   private async handleSpawn(event: PlayerSpawnAfterEvent): Promise<void> {
     if (event.initialSpawn) return;
-    const player = event.player as any;
+    const player = event.player as import("@minecraft/server").Player;
     try { if (!player.hasTag(BOT_TAG)) return; } catch { return; }
     const record = this.ctx.registry.get(player.name);
     if (!record) return;
