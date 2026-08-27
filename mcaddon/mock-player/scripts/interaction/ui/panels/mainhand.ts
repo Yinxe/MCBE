@@ -48,6 +48,7 @@ export function showMainhandSelector(player: Player, botName: string): void {
       const idx = (vals as Record<string, any>)["slot"] as number;
       if (idx === undefined || idx < 0 || idx >= options.length) return;
       const selected = options[idx];
+      if (!selected) return;
       system.run(() => {
         const ok = setMainhandSlot(botName, selected.value);
         if (!ok) {

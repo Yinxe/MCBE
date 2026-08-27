@@ -1,4 +1,4 @@
-// ─── /mp:list — 列出模拟玩家 ──────────────────────────
+// ─── /mp:listbots — 列出模拟玩家 ──────────────────────
 
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
@@ -81,7 +81,7 @@ export function registerListCommand(registry: any): void {
   defineCommand(
     registry,
     {
-      name: "mp:list",
+      name: "mp:listbots",
       description: "列出所有已创建的假人（可按在线/死亡筛选）",
       cheatsRequired: false,
       permissionLevel: CommandPermissionLevel.Any,

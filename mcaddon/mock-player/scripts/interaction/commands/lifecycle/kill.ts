@@ -5,7 +5,7 @@ import { resolveBotForCommand } from "../auth";
 
 export function registerKillCommand(registry: any): void {
   defineCommand(registry, {
-    name: "mp:kill", description: "杀死一个在线的假人",
+    name: "mp:killbot", description: "杀死一个在线的假人",
     cheatsRequired: false, permissionLevel: CommandPermissionLevel.Any,
     mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
   }, ({ player, params }) => {

@@ -57,6 +57,7 @@ export function showOnlineManagement(player: Player): void {
 
   for (let i = 0; i < records.length; i++) {
     const record = records[i];
+    if (!record) continue;
     const icon = getStatusIcon(record.death, record.online, record.workMode);
     const posSummary = getPosSummary(record);
     const tagSummary = record.tags
@@ -81,9 +82,11 @@ export function showOnlineManagement(player: Player): void {
     let changedCount = 0;
 
     for (let i = 0; i < records.length; i++) {
+      const rec = records[i];
+      if (!rec) continue;
       const newVal = vals[`s${i}`] as boolean;
       if (newVal === initialState[i]) continue;
-      const record = botRegistry.get(records[i].name);
+      const record = botRegistry.get(rec.name);
       if (!record) continue;
 
       // ── 管理权限：只有主人或管理员可以切换他人的假人上下线 ──

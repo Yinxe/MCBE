@@ -188,6 +188,7 @@ function doThrowLoop(
     }
 
     const tridentSlot = slots[index++];
+    if (tridentSlot === undefined) { throwNext(); return; }
     const tridentItem = c.getItem(tridentSlot);
 
     if (!tridentItem || !isTrident(tridentItem.typeId)) {

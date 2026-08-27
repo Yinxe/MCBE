@@ -162,6 +162,7 @@ export class SessionComponent implements LifecycleComponent {
       }
       for (const r of owned) {
         try {
+          if (!offlineFn) { console.warn(`[Session] 联动下线失败 ${r.name}: offlineFn 不可用`); continue; }
           const res = await offlineFn(r);
           if (!res.ok) console.warn(`[Session] 联动下线失败 ${r.name}: ${res.reason}`);
         } catch (e: unknown) {

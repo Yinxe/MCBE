@@ -47,6 +47,7 @@ export function mergeStoredConfig(raw: string | undefined): ModConfig {
     onlineQuotas: s.onlineQuotas !== null && typeof s.onlineQuotas === "object" && !Array.isArray(s.onlineQuotas)
       ? sanitizeQuotas(s.onlineQuotas as Record<string, unknown>)
       : {},
+    auxTickingRadius: sanitizeAuxRadius(s.auxTickingRadius, base.auxTickingRadius!),
   };
 }
 

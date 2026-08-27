@@ -4,7 +4,7 @@ import { color } from "@yinxe/toolkit";
 import { resolveBotForCommand } from "../auth";
 export function registerTpCommand(registry: any): void {
   defineCommand(registry, {
-    name: "mp:tp", description: "传送到假人身边",
+    name: "mp:teleportbot", description: "传送到假人身边",
     cheatsRequired: false, permissionLevel: CommandPermissionLevel.Any,
     mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
   }, ({ player, params }) => {

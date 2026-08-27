@@ -69,10 +69,11 @@ export function showTridentSelector(player: Player, botName: string): void {
   const labels: string[] = tridents.map((t) => makeTridentLabel(t.item, t.slotIndex, t.isMainhand));
 
   // ── 快速路径：仅主手有三叉戟 → 直接投掷 ──
-  if (tridents.length === 1 && tridents[0].isMainhand) {
+  const firstTrident = tridents[0];
+  if (tridents.length === 1 && firstTrident?.isMainhand) {
     player.sendMessage(`${color.success}主手已装备三叉戟，直接投掷`);
     system.run(() => {
-      throwTridents(botName, player.id, [tridents[0].slotIndex], () => {
+      throwTridents(botName, player.id, [firstTrident!.slotIndex], () => {
         player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 已投掷三叉戟`);
       });
     });
@@ -84,7 +85,10 @@ export function showTridentSelector(player: Player, botName: string): void {
   builder.title(`${color.bold}选择要投掷的三叉戟`);
 
   for (let i = 0; i < tridents.length; i++) {
-    builder.toggle(`slot_${tridents[i].slotIndex}`, labels[i], { defaultValue: tridents[i].isMainhand });
+    const tr = tridents[i];
+    const label = labels[i];
+    if (!tr || label === undefined) continue;
+    builder.toggle(`slot_${tr.slotIndex}`, label, { defaultValue: tr.isMainhand });
   }
 
   builder.show(player).then((vals) => {

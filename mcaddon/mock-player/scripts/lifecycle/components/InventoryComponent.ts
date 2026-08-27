@@ -37,7 +37,7 @@ export class InventoryComponent implements LifecycleComponent {
       try {
         this.ctx.inventory.handleEquipSlotChanged(event.botName, event.slot);
       } catch (e: unknown) {
-        console.warn(`[Inventory] 装备保存异常 ${event.botName} ${event.slot}: ${e?.message ?? e}`);
+        console.warn(`[Inventory] 装备保存异常 ${event.botName} ${event.slot}: ${(e as Error)?.message ?? String(e)}`);
       }
     });
     this.unsubs.push(offEquip);
@@ -51,7 +51,7 @@ export class InventoryComponent implements LifecycleComponent {
       try {
         this.ctx.inventory.saveInventorySlot(player as Player, slot, itemStack ?? null, beforeItemStack ?? null);
       } catch (e: unknown) {
-        console.warn(`[Inventory] 背包保存异常 ${player.name} slot=${slot}: ${e?.message ?? e}`);
+        console.warn(`[Inventory] 背包保存异常 ${player.name} slot=${slot}: ${(e as Error)?.message ?? String(e)}`);
       }
       // 额外：检视主手工具耐久（原 playerInventoryItemChange 逻辑，现内聚）
       try {
@@ -62,7 +62,7 @@ export class InventoryComponent implements LifecycleComponent {
     try {
       world.afterEvents.playerInventoryItemChange.subscribe(this.worldHandler);
     } catch (e: unknown) {
-      console.warn(`[Inventory] 订阅 playerInventoryItemChange 失败: ${e?.message ?? e}`);
+      console.warn(`[Inventory] 订阅 playerInventoryItemChange 失败: ${(e as Error)?.message ?? String(e)}`);
     }
 
     console.info(`[Inventory] 已集中订阅 背包单格 + 装备槽 变化事件（生命周期内聚）`);

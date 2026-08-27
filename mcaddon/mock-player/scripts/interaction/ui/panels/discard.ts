@@ -154,8 +154,9 @@ export function showDiscardForm(player: Player, botName: string): void {
           let idx = 0;
           while (idx < ops.length) {
             const op = ops[idx];
+            if (!op) { idx++; continue; }
             if (op.kind === "inv") {
-              const slot = op.slot;
+              const slot: number = op.slot;
               const item = container.getItem(slot);
               if (item) {
                 if (slot === 0) {
@@ -178,7 +179,7 @@ export function showDiscardForm(player: Player, botName: string): void {
                 }
               }
             } else {
-              const eqSlot = op.slot;
+              const eqSlot: EquipmentSlot = op.slot;
               const item = (() => { try { return equippable?.getEquipment(eqSlot); } catch { return undefined; } })();
               if (item) {
                 try { equippable.setEquipment(eqSlot, undefined); } catch {}

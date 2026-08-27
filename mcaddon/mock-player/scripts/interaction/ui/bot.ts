@@ -4,20 +4,21 @@
 //    各功能模块独立订阅执行——本文件不 import 任何业务动作函数。
 //    「返回列表」是 UI 内部导航，保持内联回调（不事件化）。
 
-import { Player } from "@minecraft/server";
+import { Player, world, EquipmentSlot, type ItemStack, EntityEquippableComponent } from "@minecraft/server";
 import { color, style } from "@yinxe/toolkit";
 import { ActionFormBuilder } from "@yinxe/toolkit";
 
 import { BotRecord } from "../../rules/Types";
 import { BOT_TAG, getTagDef } from "../../rules/tags/BotTags";
 import { BotUiEvent, type BotPanelAction } from "../../events/UiEvents";
-import { formatPos } from "./format";
+import { formatPos, formatEnchantments, formatDurability } from "./format";
 import { formatDimensionId } from "../../rules/format/Format";
-import { botRegistry } from "../../bootstrap/context";
+import { botRegistry, botStore } from "../../bootstrap/context";
 import { canManageBot, autoClaim, isAdmin } from "../commands/auth";
 import { resolveUiBotRecord } from "./helpers";
 import { visibleRecords } from "../../service/BotVisibility";
 import { ownerLabel } from "./ownerLabel";
+import { inventoryContainerOf } from "../../features/basic/items/ItemComponentRead";
 
 // ─── 工具 ──────────────────────────────────────────────
 
@@ -44,13 +45,231 @@ function getStatusIcon(record: BotRecord): string {
 }
 
 function getPosSummary(record: BotRecord): string {
-  if (record.lastPoint) {
-    return `${formatPos(record.lastPoint.location)} ${color.gold}${formatDimensionId(record.lastPoint.dimension)}`;
+  try {
+    if ((record as any).lastPoint) {
+      const p: any = (record as any).lastPoint;
+      try { return `${formatPos(p.location)} ${color.gold}${formatDimensionId(p.dimension)}`; } catch { return `${color.muted}无法统计`; }
+    }
+    if (record.death && (record as any).deathPoint) {
+      const p: any = (record as any).deathPoint;
+      try { return `${formatPos(p.location)} ${color.gold}${formatDimensionId(p.dimension)} ${style("(死亡点)", color.gold)}`; } catch { return `${color.muted}无法统计`; }
+    }
+    const rp: any = (record as any).respawnPoint;
+    if (!rp || !rp.location || !rp.dimension) return `${color.muted}无法统计`;
+    return `${formatPos(rp.location)} ${color.gold}${formatDimensionId(rp.dimension)} ${style("(重生点)", color.gold)}`;
+  } catch {
+    return `${color.muted}无法统计`;
   }
-  if (record.death && record.deathPoint) {
-    return `${formatPos(record.deathPoint.location)} ${color.gold}${formatDimensionId(record.deathPoint.dimension)} ${style("(死亡点)", color.gold)}`;
+}
+
+// ─── 富信息格式化 ──────────────────────────────────────
+
+function formatLiveItem(item: ItemStack | undefined): string {
+  if (!item) return `${color.muted}空`;
+  try {
+    const name = item.nameTag ? `${color.playerName}${item.nameTag}§r` : `${color.info}${item.typeId.replace("minecraft:", "")}`;
+    const amt = item.amount > 1 ? ` ${color.muted}x${item.amount}` : "";
+    let ench = "";
+    try { ench = formatEnchantments(item); } catch {}
+    let dur = "";
+    try { dur = formatDurability(item); } catch {}
+    const enchStr = ench ? ` ${ench}` : "";
+    const durStr = dur ? ` ${dur}` : "";
+    return `${name}${amt}${enchStr}${durStr}`;
+  } catch {
+    return `${color.info}${item.typeId} ${color.muted}x${item.amount}`;
   }
-  return `${formatPos(record.respawnPoint.location)} ${color.gold}${formatDimensionId(record.respawnPoint.dimension)} ${style("(重生点)", color.gold)}`;
+}
+
+function formatStoredItem(item: any): string {
+  if (!item) return `${color.muted}空`;
+  try {
+    return formatLiveItem(item as ItemStack);
+  } catch {
+    return `${color.info}${item.typeId ?? "unknown"} ${color.muted}x${item.amount ?? 1}`;
+  }
+}
+
+function getMainhandSummary(record: BotRecord): string {
+  if (record.online && record.entityId) {
+    try {
+      const ent = world.getEntity(record.entityId) as Player | undefined;
+      if (ent) {
+        const equip = ent.getComponent("minecraft:equippable") as EntityEquippableComponent | undefined;
+        const main = equip?.getEquipment(EquipmentSlot.Mainhand);
+        if (main) return formatLiveItem(main);
+        try {
+          const container = inventoryContainerOf(ent as any);
+          if (container) {
+            const sel = (ent as any).selectedSlotIndex ?? 0;
+            const cItem = container.getItem(sel);
+            if (cItem) return `${formatLiveItem(cItem)} ${color.muted}[槽${sel}]`;
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+  try {
+    const inv = botStore.loadInventory(record.name);
+    if (inv) {
+      for (let i = 0; i < inv.length; i++) {
+        const it = inv[i];
+        if (it) return `${formatStoredItem(it)} ${color.muted}[背包槽${i}] ${color.muted}(离线缓存)`;
+      }
+    }
+    const storedEquip = botStore.loadEquipment(record.name) as Record<string, any> | undefined;
+    if (storedEquip) {
+      const off = storedEquip["offhand"];
+      if (off) return `${color.muted}主手空 §7| 副手: ${formatStoredItem(off)} ${color.muted}(离线)`;
+    }
+  } catch {}
+  return `${color.muted}空 ${record.online ? "" : color.muted + "(离线)"}`;
+}
+
+function getArmorSummary(record: BotRecord): string {
+  const parts: string[] = [];
+  const slotOrder: Array<{ key: string; label: string; slot: EquipmentSlot }> = [
+    { key: "head", label: "头", slot: EquipmentSlot.Head },
+    { key: "chest", label: "胸", slot: EquipmentSlot.Chest },
+    { key: "legs", label: "腿", slot: EquipmentSlot.Legs },
+    { key: "feet", label: "靴", slot: EquipmentSlot.Feet },
+    { key: "offhand", label: "副手", slot: EquipmentSlot.Offhand },
+  ];
+  if (record.online && record.entityId) {
+    try {
+      const ent = world.getEntity(record.entityId) as Player | undefined;
+      if (ent) {
+        const equip = ent.getComponent("minecraft:equippable") as EntityEquippableComponent | undefined;
+        if (equip) {
+          for (const s of slotOrder) {
+            const it = equip.getEquipment(s.slot);
+            parts.push(`${s.label}:${it ? formatLiveItem(it) : color.muted + "空"}`);
+          }
+          return parts.join(` ${color.muted}| `);
+        }
+      }
+    } catch {}
+  }
+  try {
+    const stored = botStore.loadEquipment(record.name) as Record<string, any> | undefined;
+    if (stored) {
+      for (const s of slotOrder) {
+        const it = stored[s.key];
+        parts.push(`${s.label}:${it ? formatStoredItem(it) : color.muted + "空"}`);
+      }
+      if (parts.length) return parts.join(` ${color.muted}| `) + ` ${color.muted}(离线)`;
+    }
+  } catch {}
+  return `${color.muted}无装备信息`;
+}
+
+function getInventorySummary(record: BotRecord): string {
+  if (record.online && record.entityId) {
+    try {
+      const ent = world.getEntity(record.entityId) as Player | undefined;
+      if (ent) {
+        const container = inventoryContainerOf(ent as any);
+        if (container) {
+          let filled = 0;
+          let total = 0;
+          for (let i = 0; i < container.size; i++) {
+            const it = container.getItem(i);
+            if (it) { filled++; total += it.amount; }
+          }
+          const hotbar = (() => {
+            let c = 0;
+            for (let i = 0; i < 9; i++) if (container.getItem(i)) c++;
+            return c;
+          })();
+          return `${color.info}${filled}/36 ${color.muted}格 §7| ${color.info}${total} ${color.muted}件 §7| 热栏 ${color.info}${hotbar}/9`;
+        }
+      }
+    } catch {}
+  }
+  try {
+    const inv = botStore.loadInventory(record.name);
+    if (inv) {
+      let filled = 0;
+      let total = 0;
+      for (const it of inv) if (it) { filled++; total += (it as any).amount ?? 1; }
+      return `${color.info}${filled}/36 ${color.muted}格 §7| ${color.info}${total} ${color.muted}件 ${color.muted}(离线缓存)`;
+    }
+  } catch {}
+  return `${color.muted}无背包信息`;
+}
+
+function getEffectSummary(record: BotRecord): string {
+  const eff = record.effects;
+  if (!eff || eff.length === 0) return `${color.muted}无`;
+  return eff.map(e => `${color.info}${e.id.replace("minecraft:", "")} ${color.muted}${e.amplifier + 1}级 ${color.muted}${e.duration}tick`).join(` ${color.muted}| `);
+}
+
+function buildBotPanelBody(record: BotRecord): string {
+  // 仅保留 4 行核心摘要，详情请点「查看数据」
+  // 任意单行统计失败仅显示“无法统计”，不影响其余行与表单正常弹出
+  const safe = (fn: () => string, fallback = `${color.muted}无法统计`): string => {
+    try { const v = fn(); return v ?? fallback; } catch { return fallback; }
+  };
+  const line1 = safe(() => {
+    const workLabel = getWorkModeLabel(record.workMode ?? "none");
+    const workColor = record.workMode === "none" ? color.muted : color.success;
+    const deathStr = record.death ? `${color.error}死亡` : `${color.success}存活`;
+    const onlineStr = record.online ? `${color.success}在线` : `${color.warn}离线`;
+    const sneakStr = record.isSneaking ? `${color.success}潜行` : `${color.muted}正常`;
+    const woodcutExtra = record.workMode === "woodcut" && (record as any).woodcutMode ? `${color.muted}(${(record as any).woodcutMode})` : "";
+    return `${deathStr} ${color.muted}| ${onlineStr} ${color.muted}| ${color.accent}模式:${workColor}${workLabel}${woodcutExtra} ${color.muted}| ${sneakStr}`;
+  });
+  const line2 = safe(() => {
+    const cur = (record as any).lastPoint ?? (record.death && (record as any).deathPoint ? (record as any).deathPoint : null);
+    let curPos: string;
+    try {
+      curPos = cur ? `${formatPos(cur.location)} ${color.gold}${formatDimensionId(cur.dimension)}` : `${color.muted}无`;
+    } catch { curPos = `${color.muted}无法统计`; }
+    const curTag = (record as any).lastPoint ? "" : record.death && (record as any).deathPoint ? ` ${color.error}(死亡点)` : ` ${color.muted}(重生待机)`;
+    let rpPos: string;
+    try {
+      const rp = (record as any).respawnPoint;
+      if (!rp || !rp.location || !rp.dimension) throw new Error("respawn missing");
+      rpPos = `${formatPos(rp.location)} ${color.gold}${formatDimensionId(rp.dimension)}`;
+    } catch { rpPos = `${color.muted}无法统计`; }
+    let line = `${color.accent}位置:${color.muted} ${curPos}${curTag} ${color.muted}→ 重生:${color.muted} ${rpPos}`;
+    try {
+      if ((record as any).deathPoint && !record.death) {
+        const dp = (record as any).deathPoint;
+        line += ` ${color.muted}| 亡:${formatPos(dp.location)}`;
+      }
+    } catch {}
+    return line;
+  });
+  const line3 = safe(() => {
+    const mainhandShort = (() => {
+      const s = safe(() => getMainhandSummary(record), `${color.muted}无法统计`);
+      const idx = s.indexOf(" §");
+      if (idx > 0 && s.includes("§9")) return s.slice(0, idx);
+      return s;
+    })();
+    const invRaw = safe(() => getInventorySummary(record), `${color.muted}无法统计`);
+    return `${color.accent}持有:${color.muted} 主手 ${mainhandShort} ${color.muted}| 背包 ${invRaw}`;
+  });
+  const line4 = safe(() => {
+    const owner = (record as any).ownerName ? `${color.playerName}${(record as any).ownerName}` : `${color.muted}无主`;
+    let expShort: string;
+    try {
+      const exp = (record as any).experience;
+      if (!exp || typeof exp.level !== "number" || typeof exp.totalXp !== "number") throw new Error("exp missing");
+      expShort = `Lv.${exp.level} ${color.muted}(${exp.totalXp}XP)`;
+    } catch { expShort = `${color.muted}无法统计`; }
+    let tagShort: string;
+    try {
+      const tags = (record as any).tags;
+      if (!Array.isArray(tags)) throw new Error("tags missing");
+      const tagLabels = tags.filter((t: string) => t !== BOT_TAG && t !== "mockplayer:tag:idle").map((t: string) => { const d = getTagDef(t); return d ? d.label : t.replace("mockplayer:tag:", ""); });
+      tagShort = tagLabels.length ? tagLabels.slice(0, 2).join(`${color.muted},`) + (tagLabels.length > 2 ? `${color.muted}…` : "") : `${color.muted}无`;
+    } catch { tagShort = `${color.muted}无法统计`; }
+    const spawnShort = ((record as any).spawnMode ?? "normal") === "chunkload" ? `${color.gold}强加载` : `${color.muted}普通`;
+    return `${color.accent}归属:${owner} ${color.muted}| 经验:${color.playerName}${expShort} ${color.muted}| 标签:${tagShort} ${color.muted}| 生成:${spawnShort}`;
+  });
+  return [line1, line2, line3, line4].join("\n");
 }
 
 // ─── 统一假人操作面板（v3，showBotPanel 主菜单） ──────
@@ -70,13 +289,6 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
     }
   }
 
-  const ownerStr = record.ownerName ? `\n${color.accent}主人: ${color.playerName}${record.ownerName}` : `\n${color.muted}无主（仅管理员可管理）`;
-  const workModeStr = `\n${color.accent}模式: ${color.playerName}${getWorkModeLabel(record.workMode)}`;
-  // 标签中过滤掉空闲（已由工作模式展示，避免重复“空闲”）
-  const tagLabels = record.tags.filter(t => t !== BOT_TAG && t !== "mockplayer:tag:idle").map(t => { const d = getTagDef(t); return d ? d.label : t; });
-  const tagStr = tagLabels.length > 0 ? `\n${color.accent}标签: ${color.playerName}${tagLabels.join(`${color.accent} | ${color.playerName}`)}` : "";
-  const expStr = record.experience ? `\n${color.accent}经验: ${color.playerName}Lv.${record.experience.level} ${color.accent}(${record.experience.totalXp} XP)` : "";
-
   // 发布 panelAction 领域事件（订阅方：各功能模块按 action 过滤执行）
   const trigger = (action: BotPanelAction): void => {
     BotUiEvent.panelAction.trigger({ playerId: player.id, botName, action });
@@ -84,33 +296,33 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
 
   const form = new ActionFormBuilder()
       .title(`${color.bold}${botName} ${getStatusIcon(record)}`)
-      .body(`${getPosSummary(record)}${ownerStr}${workModeStr}${tagStr}${expStr}`)
+      .body(buildBotPanelBody(record))
       // ── 上线/下线（置顶，统一安全：safeOnline/safeOffline 已内置排队+冷却+模拟4，仅一键） ──
-      .button(record.online ? style("安全下线", color.darkGreen) : style("安全上线", color.darkGreen), () => trigger("toggleOnline"));
+      .buttonWithIcon(record.online ? style("安全下线", color.darkGreen) : style("安全上线", color.darkGreen), "textures/ui/mockplayer/toggle_online", () => trigger("toggleOnline"));
     form
       // ── 传送 ──
-      .button(style("传送过去", color.darkBlue), () => trigger("tpToBot"))
+      .buttonWithIcon(style("传送过去", color.darkBlue), "textures/ui/mockplayer/teleport", () => trigger("tpToBot"))
       // ── 同步/操作 ──
-      .button(style("同步姿态", color.darkBlue), () => trigger("syncPose"))
-      .button(style("选择主手", color.darkBlue), () => trigger("selectMainhand"))
+      .buttonWithIcon(style("同步姿态", color.darkBlue), "textures/ui/mockplayer/sync_pose", () => trigger("syncPose"))
+      .buttonWithIcon(style("选择主手", color.darkBlue), "textures/ui/mockplayer/select_mainhand", () => trigger("selectMainhand"))
       // ── 互换/回收/丢弃 ──
-      .button(style("物品互换", color.darkBlue), () => trigger("swap"))
-      .button(style("回收资源", color.darkBlue), () => trigger("reclaim"))
-      .button(style("丢弃物品", color.darkRed), () => trigger("discard"))
+      .buttonWithIcon(style("物品互换", color.darkBlue), "textures/ui/mockplayer/swap_items", () => trigger("swap"))
+      .buttonWithIcon(style("回收资源", color.darkBlue), "textures/ui/mockplayer/reclaim", () => trigger("reclaim"))
+      .buttonWithIcon(style("丢弃物品", color.darkRed), "textures/ui/mockplayer/discard", () => trigger("discard"))
       // ── 行为/使用 ──
-      .button(style("行为菜单", color.darkGreen), () => trigger("openBehavior"))
-      .button(style("使用物品", color.darkGreen), () => trigger("useItem"))
-      .button(style("设置重生", color.darkBlue), () => trigger("updateSpawn"))
-      .button(style("修改名字", color.darkBlue), () => trigger("rename"))
+      .buttonWithIcon(style("行为菜单", color.darkGreen), "textures/ui/mockplayer/inventory", () => trigger("openBehavior"))
+      .buttonWithIcon(style("使用物品", color.darkGreen), "textures/ui/mockplayer/use_item", () => trigger("useItem"))
+      .buttonWithIcon(style("设置重生", color.darkBlue), "textures/ui/mockplayer/set_spawn", () => trigger("updateSpawn"))
+      .buttonWithIcon(style("修改名字", color.darkBlue), "textures/ui/mockplayer/rename", () => trigger("rename"))
       // ── 战斗/工具 ──
-      .button(style("投三叉戟", color.darkBlue), () => trigger("throwTrident"))
-      .button(style("投掷物认主", color.darkBlue), () => trigger("claimTrident"))
-      .button(style("查看数据", color.darkBlue), () => trigger("viewData"))
+      .buttonWithIcon(style("投三叉戟", color.darkBlue), "textures/ui/mockplayer/throw_trident", () => trigger("throwTrident"))
+      .buttonWithIcon(style("投掷物认主", color.darkBlue), "textures/ui/mockplayer/throw_trident", () => trigger("claimTrident"))
+      .buttonWithIcon(style("查看数据", color.darkBlue), "textures/ui/mockplayer/view_data", () => trigger("viewData"))
       // ── 危险 ──
-      .button(style("击杀假人", color.darkRed), () => trigger("kill"))
-      .buttonWithIcon(style("删除假人", color.darkRed), "textures/ui/icon_trash", () => trigger("delete"))
+      .buttonWithIcon(style("击杀假人", color.darkRed), "textures/ui/mockplayer/kill_bot", () => trigger("kill"))
+      .buttonWithIcon(style("删除假人", color.darkRed), "textures/ui/mockplayer/delete_bot", () => trigger("delete"))
       // ── UI 内部导航（不事件化） ──
-      .button(style("返回列表", color.darkBlue), () => { if (onBack) onBack(); })
+      .buttonWithIcon(style("返回列表", color.darkBlue), "textures/ui/mockplayer/back", () => { if (onBack) onBack(); })
       .show(player);
 }
 
@@ -145,11 +357,13 @@ export function showBotList(player: Player, onMainMenu?: () => void): void {
         : formatDimensionId(record.respawnPoint.dimension);
     // 主人/无主标签：管理员看全览需归属信息；普通玩家看无主假人的 [无主] tag
     const owner = ownerLabel(record, isAdmin(player));
-    builder.button(
+    const icon = record.death ? "textures/ui/mockplayer/kill_bot" : record.online ? "textures/ui/mockplayer/toggle_online" : "textures/ui/mockplayer/bot_list";
+      builder.buttonWithIcon(
       `${getStatusIcon(record)} ${color.black}${record.name} ${color.black}${dim}${owner ? ` ${owner}` : ""}`,
+        icon,
       () => showBotPanel(player, record.name, () => showBotList(player, onMainMenu)),
     );
   }
 
-  builder.button(style("← 返回", color.darkBlue), () => { if (onMainMenu) onMainMenu(); }).show(player);
+  builder.buttonWithIcon(style("← 返回", color.darkBlue), "textures/ui/mockplayer/back", () => { if (onMainMenu) onMainMenu(); }).show(player);
 }

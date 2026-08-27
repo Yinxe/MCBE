@@ -158,8 +158,10 @@ export class ModalFormBuilder {
     if (labelsOccupy) {
       for (let i = 0; i < this.fields.length; i++) {
         const f = this.fields[i];
+        if (!f) continue;
         if (valueTypes.includes(f.type)) {
-          result[f.name] = values[i];
+          const v = values[i];
+          result[f.name] = v;
         }
       }
     } else {
@@ -167,7 +169,8 @@ export class ModalFormBuilder {
       let vi = 0;
       for (const f of this.fields) {
         if (valueTypes.includes(f.type)) {
-          result[f.name] = values[vi];
+          const v = values[vi];
+          result[f.name] = v;
           vi++;
         }
       }

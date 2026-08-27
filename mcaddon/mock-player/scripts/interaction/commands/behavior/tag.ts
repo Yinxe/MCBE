@@ -31,10 +31,10 @@ export function registerTagsCommand(registry: any): void {
   }, () => ({ status: CustomCommandStatus.Success, message: buildTagListMessage() }));
 }
 
-/** /mp:tag — 管理假人的 tag */
+/** /mp:tagmanage — 管理假人的 tag */
 export function registerTagCommand(registry: any): void {
   defineCommand(registry, {
-    name: "mp:tag",
+    name: "mp:tagmanage",
     description: "管理假人的标签：add / remove / list",
     cheatsRequired: false, permissionLevel: CommandPermissionLevel.Any,
     mandatoryParameters: [
@@ -46,7 +46,7 @@ export function registerTagCommand(registry: any): void {
     const targetName = params.name as string;
     const action = (params.action as string)?.toLowerCase();
     const tagInput = params.tagName as string | undefined;
-    if (!targetName || !action) { player.sendMessage(`${color.error}用法: /mp:tag <假人> <add|remove|list> [标签名]`); return; }
+    if (!targetName || !action) { player.sendMessage(`${color.error}用法: /mp:tagmanage <假人> <add|remove|list> [标签名]`); return; }
 
     const record = botRegistry.get(targetName);
     if (!record) { player.sendMessage(`${color.error}未找到假人 ${color.playerName}${targetName}${color.error} 的记录`); return; }

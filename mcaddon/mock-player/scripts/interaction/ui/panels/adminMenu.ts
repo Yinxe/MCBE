@@ -41,13 +41,13 @@ export function showAdminMenu(player: Player): void {
       `${color.muted}辅助区块: ${color.info}${(cfg.auxTickingRadius ?? DEFAULT_AUX_TICKING_RADIUS) === 0 ? "关闭" : "模拟" + (cfg.auxTickingRadius ?? DEFAULT_AUX_TICKING_RADIUS)}${color.muted}（0=关闭 4/6/8）`
     )
     // ── 假人全览（管理员视角：不受主人过滤，全部可见） ──
-    .button("全部假人列表", () => showBotList(player, () => showAdminMenu(player)))
-    .button("全部假人在线管理", () => showOnlineManagement(player))
-    .button("全局配置", () => showGlobalConfig(player))
-    .button("逐玩家配额", () => showPlayerQuotaList(player))
-      .button("逐玩家在线配额", () => showPlayerOnlineQuotaList(player))
-    .button("管理员名单", () => showAdminList(player))
-    .button(style("返回", color.darkGray), () => undefined)
+    .buttonWithIcon("全部假人列表", "textures/ui/mockplayer/bot_list", () => showBotList(player, () => showAdminMenu(player)))
+    .buttonWithIcon("全部假人在线管理", "textures/ui/mockplayer/online_management", () => showOnlineManagement(player))
+    .buttonWithIcon("全局配置", "textures/ui/mockplayer/admin_settings", () => showGlobalConfig(player))
+    .buttonWithIcon("逐玩家配额", "textures/ui/mockplayer/inventory", () => showPlayerQuotaList(player))
+      .buttonWithIcon("逐玩家在线配额", "textures/ui/mockplayer/toggle_online", () => showPlayerOnlineQuotaList(player))
+    .buttonWithIcon("管理员名单", "textures/ui/mockplayer/admin_settings", () => showAdminList(player))
+    .buttonWithIcon(style("返回", color.darkGray), "textures/ui/mockplayer/back", () => undefined)
     .show(player);
 }
 
@@ -79,16 +79,50 @@ export async function showGlobalConfig(player: Player): Promise<void> {
       MENU_TRIGGER_OPTIONS.map((o) => o.label),
       { defaultValueIndex: triggerIndex >= 0 ? triggerIndex : 1, tooltip: "使用该物品右键可打开主菜单，选'无'则仅能通过命令 /mp:menu 打开（参考 item-route）" }
     )
-    .label("workModeHeader", `${color.accent}— 工作模式启用 —`);
+    .label("workModeHeader", `${color.accent}— 工作模式启用 —`)
+      .label("workModeHint", `${color.muted}提示: ${color.warn}⚠§r${color.muted} 标记为性能敏感模式（持续寻路/定时器/全局监听），默认关闭，按需开启；${color.success}已启用§r${color.muted}的为轻量常用模式`);
+
+  // 工作模式元信息：标签 + 悬浮提示 + 性能强调
+  const workModeMeta: Record<string, { label: string; tooltip: string }> = {
+    wander: {
+      label: `${color.warn}⚠ ${color.gold}闲逛模式`,
+      tooltip: "随机游走探索周围方块，持续寻路与碰撞检测，§c性能开销较高§r。默认§7关闭§r，需手动开启",
+    },
+    mine: {
+      label: `${color.success}⛏ 自动挖掘`,
+      tooltip: "定点挖掘前方方块，需频繁方块扫描与破坏。默认§a开启§r，适中开销",
+    },
+    place: {
+      label: `${color.success}▣ 自动放置`,
+      tooltip: "定点放置方块，适中开销。默认§a开启§r",
+    },
+    attack: {
+      label: `${color.success}⚔ 自动攻击`,
+      tooltip: "定点攻击生物，范围实体扫描。默认§a开启§r，适中开销",
+    },
+    raid: {
+      label: `${color.warn}⚠ ${color.error}劫掠模式`,
+      tooltip: "监听袭击/不祥之兆，全局效果分发与生物管理，§c常驻事件监听§r。默认§7关闭§r，多人同时开启注意性能",
+    },
+    fishing: {
+      label: `${color.warn}⚠ ${color.aqua}自动钓鱼`,
+      tooltip: "水体探测+抛竿循环+鱼钩追踪，§c常驻定时器§r。默认§7关闭§r，占用较高",
+    },
+    follow: {
+      label: `${color.warn}⚠ ${color.info}自动跟随`,
+      tooltip: "高频追踪主人位置与寻路，§c持续移动§r。默认§7关闭§r，随主人移动频繁时开销明显",
+    },
+  };
 
   for (const mode of workModes) {
     const enabled = cfg.enabledWorkModes?.[mode] === true;
-    const labelMap: Record<string, string> = {
-      wander: "闲逛模式", mine: "自动挖掘", place: "自动放置", attack: "自动攻击",
-      raid: "劫掠模式", fishing: "自动钓鱼", follow: "自动跟随",
-    };
-    builder.toggle(`wm_${mode}`, labelMap[mode] ?? mode, { defaultValue: enabled });
+    const meta = workModeMeta[mode];
+    const label = meta?.label ?? mode;
+    const tooltip = meta?.tooltip ?? (enabled ? "已启用" : "已禁用");
+    builder.toggle(`wm_${mode}`, label, { defaultValue: enabled, tooltip });
   }
+
+
 
   const vals = await builder.show(player);
   if (!vals) return;
@@ -214,12 +248,13 @@ export function showPlayerQuotaList(player: Player): void {
     const owned = botRegistry.all().filter((r) => r.ownerName === name).length;
     const quota = cfg.quotas[name] !== undefined ? cfg.quotas[name] : cfg.defaultQuota;
     const tag = quota === 0 ? `${color.error}禁止` : `${color.info}${quota}`;
-    form.button(
+    form.buttonWithIcon(
       `${color.playerName}${name} ${color.muted}(${color.info}${owned}${color.muted}/${tag}${color.muted})`,
+      "textures/ui/mockplayer/bot_list",
       () => editPlayerQuota(player, name)
     );
   }
-  form.button(style("返回", color.darkGray), () => showAdminMenu(player));
+  form.buttonWithIcon(style("返回", color.darkGray), "textures/ui/mockplayer/back", () => showAdminMenu(player));
   form.show(player);
 }
 
@@ -270,14 +305,15 @@ export function showPlayerOnlineQuotaList(player: Player): void {
   const form = new ActionFormBuilder().title(`${color.gold}逐玩家在线配额`);
   for (const name of owners) {
     const online = botRegistry.all().filter((r) => r.ownerName === name && r.online).length;
-    const quota = cfg.onlineQuotas?.[name] !== undefined ? cfg.onlineQuotas[name] : (cfg.defaultOnlineQuota ?? 3);
+    const quota: number = cfg.onlineQuotas?.[name] ?? (cfg.defaultOnlineQuota ?? 3);
     const tag = quota >= UNLIMITED_QUOTA ? `${color.success}无限` : quota === 0 ? `${color.error}禁止` : `${color.info}${quota}`;
-    form.button(
+    form.buttonWithIcon(
       `${color.playerName}${name} ${color.muted}(${color.info}${online}${color.muted}/${tag}${color.muted})`,
+      "textures/ui/mockplayer/online_management",
       () => editPlayerOnlineQuota(player, name)
     );
   }
-  form.button(style("返回", color.darkGray), () => showAdminMenu(player));
+  form.buttonWithIcon(style("返回", color.darkGray), "textures/ui/mockplayer/back", () => showAdminMenu(player));
   form.show(player);
 }
 
@@ -332,7 +368,7 @@ export function showAdminList(player: Player): void {
   form.body(`${color.muted}名单内的玩家（无需 OP）与 OP 一样不受配额限制、可管理所有假人`);
 
   for (const name of admins) {
-    form.button(`${color.playerName}${name}`, () => {
+    form.buttonWithIcon(`${color.playerName}${name}`, "textures/ui/mockplayer/admin_settings", () => {
       MessageFormBuilder.confirm(player, "移除管理员", `确定将 ${color.playerName}${name}${color.info} 移出管理员名单？`, () => {
         configStore.removeAdmin(name);
         player.sendMessage(`${color.success}已移除管理员 ${color.playerName}${name}`);
@@ -341,7 +377,7 @@ export function showAdminList(player: Player): void {
     });
   }
 
-  form.button(`${color.success}+ 添加管理员`, async () => {
+  form.buttonWithIcon(`${color.success}+ 添加管理员`, "textures/ui/mockplayer/create_bot", async () => {
     const vals = await ModalFormBuilder.showQuick(player, `${color.bold}添加管理员`, (f) => {
       f.textField("name", "玩家名", { defaultValue: "", tooltip: "该玩家无需 OP 也可管理所有假人、不受配额限制" });
     });
@@ -356,6 +392,6 @@ export function showAdminList(player: Player): void {
     showAdminList(player);
   });
 
-  form.button(style("返回", color.darkGray), () => showAdminMenu(player));
+  form.buttonWithIcon(style("返回", color.darkGray), "textures/ui/mockplayer/back", () => showAdminMenu(player));
   form.show(player);
 }

@@ -21,14 +21,14 @@ import { isAdmin } from "../commands/auth";
 export function showMainMenu(player: Player): void {
   const form = new ActionFormBuilder()
     .title(`${color.bold}模拟玩家管理`)
-    .button(style("创建模拟玩家", color.darkGreen), () => showCreateForm(player))
-    .button(style("模拟玩家列表", color.darkBlue), () => showBotList(player, () => showMainMenu(player)))
-    .button(style("在线管理", color.darkBlue), () => showOnlineManagement(player))
-    .button(style("帮助", color.darkBlue), () => showHelpGuide(player));
+    .buttonWithIcon(style("创建模拟玩家", color.darkGreen), "textures/ui/mockplayer/create_bot", () => showCreateForm(player))
+    .buttonWithIcon(style("模拟玩家列表", color.darkBlue), "textures/ui/mockplayer/bot_list", () => showBotList(player, () => showMainMenu(player)))
+    .buttonWithIcon(style("在线管理", color.darkBlue), "textures/ui/mockplayer/online_management", () => showOnlineManagement(player))
+    .buttonWithIcon(style("帮助", color.darkBlue), "textures/ui/mockplayer/help", () => showHelpGuide(player));
 
   // 管理员菜单（仅管理员可见）
   if (isAdmin(player)) {
-    form.button(style("⚙ 管理员菜单", color.gold), () => showAdminMenu(player));
+    form.buttonWithIcon(style("⚙ 管理员菜单", color.gold), "textures/ui/mockplayer/admin_settings", () => showAdminMenu(player));
   }
 
   form.show(player);

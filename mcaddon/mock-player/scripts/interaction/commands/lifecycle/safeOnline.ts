@@ -106,7 +106,7 @@ export function registerTickingAreaCommand(registry: any): void {
   defineCommand(
     registry,
     {
-      name: "mp:tickingarea",
+      name: "mp:chunkarea",
       description: "模拟4常加载区域管理（tickingarea add circle 4 / remove）",
       cheatsRequired: false,
       permissionLevel: CommandPermissionLevel.Any,
@@ -126,7 +126,7 @@ export function registerTickingAreaCommand(registry: any): void {
       const action = (params.action as string)?.toLowerCase();
       if (!action || (action !== "add" && action !== "remove" && action !== "list")) {
         player.sendMessage(
-          `${color.error}用法: /mp:tickingarea add <x> <y> <z> <name>  或  /mp:tickingarea remove <name>  或  /mp:tickingarea list`
+          `${color.error}用法: /mp:chunkarea add <x> <y> <z> <name>  或  /mp:chunkarea remove <name>  或  /mp:chunkarea list`
         );
         return;
       }
@@ -140,7 +140,7 @@ export function registerTickingAreaCommand(registry: any): void {
             const areaName = params.arg4 as string | undefined;
             if (sx === undefined || sy === undefined || sz === undefined || !areaName) {
               player.sendMessage(
-                `${color.error}用法: /mp:tickingarea add <x> <y> <z> <name>  （将创建模拟4圆形常加载，等价 tickingarea add circle <xyz> 4 <name>）`
+                `${color.error}用法: /mp:chunkarea add <x> <y> <z> <name>  （将创建模拟4圆形常加载，等价 tickingarea add circle <xyz> 4 <name>）`
               );
               return;
             }
@@ -166,7 +166,7 @@ export function registerTickingAreaCommand(registry: any): void {
             const areaName = (params.arg1 as string | undefined) ?? (params.arg4 as string | undefined);
             if (!areaName) {
               player.sendMessage(
-                `${color.error}用法: /mp:tickingarea remove <name>  （等价 tickingarea remove <name>）`
+                `${color.error}用法: /mp:chunkarea remove <name>  （等价 tickingarea remove <name>）`
               );
               return;
             }

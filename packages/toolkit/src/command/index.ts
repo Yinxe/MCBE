@@ -86,8 +86,9 @@ export function defineCommand<T extends Record<string, unknown> = Record<string,
     const player = entity;
     const params: Record<string, unknown> = {};
     for (let i = 0; i < args.length; i++) {
-      if (allParams[i]) {
-        params[allParams[i].name] = args[i];
+      const param = allParams[i];
+      if (param) {
+        params[param.name] = args[i];
       }
     }
 

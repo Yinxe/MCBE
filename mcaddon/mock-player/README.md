@@ -6,7 +6,7 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 
 - **创建模拟玩家** — 在当前位置或指定坐标生成假人（`/mp:create`）
 - **在线/离线管理** — 上线（重新生成）、下线（保存状态并断开）（`/mp:online` `/mp:offline`）
-- **传送** — TPHERE（假人传送到玩家）、TPA（玩家传送到假人）（`/mp:tphere` `/mp:tp`）
+- **传送** — TPHERE（假人传送到玩家）、TPA（玩家传送到假人）（`/mp:tphere` `/mp:teleportbot`）
 - **移动** — 假人自动寻路到目标位置（`/mp:move`）
 - **自动行为** — 通过标签系统控制：自动挖掘、自动攻击、自动跳跃、自动放置、宝库模式
 - **使用物品** — 行为菜单一次性开关：让假人使用一次主手物品（吃食物/喝药水/射箭/投掷），约 2 秒蓄力后自动停止（默认关闭）
@@ -26,17 +26,17 @@ Minecraft Bedrock 模拟玩家（假人）Add-On。基于 `@minecraft/server` Sc
 | 命令 | 描述 |
 |---|---|
 | `/mp:create [name] [location] [dimension]` | 创建模拟玩家 |
-| `/mp:list` | 列出所有假人 |
+| `/mp:listbots` | 列出所有假人 |
 | `/mp:online <name>` | 假人上线 |
 | `/mp:offline <name>` | 假人下线 |
-| `/mp:kill <name>` | 杀死假人 |
-| `/mp:tp <name>` | 传送到假人 |
+| `/mp:killbot <name>` | 杀死假人 |
+| `/mp:teleportbot <name>` | 传送到假人 |
 | `/mp:tphere <name>` | 假人传送到身边 |
 | `/mp:move <name> <location>` | 假人移动到目标位置 |
 | `/mp:follow <name>` | 自动跟随 |
 | `/mp:control <name>` | 切换控制模式 |
 | `/mp:sneak <name>` | 切换潜行状态 |
-| `/mp:tag <name> <add\|remove\|list> [tag]` | 管理标签 |
+| `/mp:tagmanage <name> <add\|remove\|list> [tag]` | 管理标签 |
 | `/mp:tags` | 列出所有可用标签 |
 | `/mp:respawn <name>` | 假人重生 |
 | `/mp:setrespawn <name>` | 设置重生点 |

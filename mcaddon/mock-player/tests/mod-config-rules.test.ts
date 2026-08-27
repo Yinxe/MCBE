@@ -70,7 +70,7 @@ test("admins 过滤：只保留非空字符串", () => {
 test("完整配置往返无损", () => {
   const saved = JSON.stringify({ defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"] });
   const cfg = mergeStoredConfig(saved);
-  assert.deepEqual(cfg, { defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"], autoOnlineOnRestart: true, ownerOfflineAutoOffline: false, enabledWorkModes: {}, menuTriggerItemId: "minecraft:stick" });
+  assert.deepEqual(cfg, { defaultQuota: 3, quotas: { steve: 7 }, admins: ["Notch"], autoOnlineOnRestart: true, ownerOfflineAutoOffline: false, enabledWorkModes: {}, menuTriggerItemId: "minecraft:stick", safeCooldownSeconds: 1, defaultOnlineQuota: 3, onlineQuotas: {}, auxTickingRadius: 4 });
 });
 
 test("新增配置默认：autoOnlineOnRestart=true, ownerOfflineAutoOffline=false", () => {
@@ -112,4 +112,15 @@ test("触发信物往返无损：null 与预设值", () => {
   assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: null })).menuTriggerItemId, null);
   assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:wooden_hoe" })).menuTriggerItemId, "minecraft:wooden_hoe");
   assert.equal(mergeStoredConfig(JSON.stringify({ menuTriggerItemId: "minecraft:feather" })).menuTriggerItemId, "minecraft:feather");
+});
+
+test("auxTickingRadius: 仅 0/4/6/8 合法，其余回退默认4", () => {
+  assert.equal(mergeStoredConfig(JSON.stringify({ auxTickingRadius: 0 })).auxTickingRadius, 0);
+  assert.equal(mergeStoredConfig(JSON.stringify({ auxTickingRadius: 4 })).auxTickingRadius, 4);
+  assert.equal(mergeStoredConfig(JSON.stringify({ auxTickingRadius: 6 })).auxTickingRadius, 6);
+  assert.equal(mergeStoredConfig(JSON.stringify({ auxTickingRadius: 8 })).auxTickingRadius, 8);
+  assert.equal(mergeStoredConfig(JSON.stringify({ auxTickingRadius: 5 })).auxTickingRadius, 4);
+  assert.equal(mergeStoredConfig(JSON.stringify({ auxTickingRadius: "4" })).auxTickingRadius, 4);
+  assert.equal(mergeStoredConfig(JSON.stringify({ auxTickingRadius: null })).auxTickingRadius, 4);
+  assert.equal(mergeStoredConfig(JSON.stringify({})).auxTickingRadius, 4);
 });

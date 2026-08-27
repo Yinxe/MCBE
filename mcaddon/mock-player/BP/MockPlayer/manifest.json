@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "模拟玩家 v2.2.32",
+    "name": "模拟玩家 v2.3.0",
     "description": "创建和管理 AI 模拟玩家（假人），支持行为控制、物品交互、数据持久化",
     "uuid": "49df180b-e16a-4740-9edd-c655127fcd22",
     "version": [
       2,
-      2,
-      32
+      3,
+      0
     ],
     "min_engine_version": [
       1,
@@ -20,8 +20,8 @@
       "description": "Behavior",
       "version": [
         2,
-        2,
-        32
+        3,
+        0
       ],
       "uuid": "256118ca-af02-43d2-a0f1-da5b460474d6",
       "type": "data"
@@ -33,13 +33,21 @@
       "uuid": "cda1f72a-5834-4494-af4c-871df2e22e0a",
       "version": [
         2,
-        2,
-        32
+        3,
+        0
       ],
       "entry": "scripts/main.js"
     }
   ],
   "dependencies": [
+    {
+      "uuid": "4497ec44-a22f-4f7f-a723-1f18d14c4e04",
+      "version": [
+        2,
+        3,
+        0
+      ]
+    },
     {
       "module_name": "@minecraft/server",
       "version": "3.0.0-alpha"
