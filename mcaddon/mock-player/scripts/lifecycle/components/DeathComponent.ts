@@ -117,6 +117,8 @@ export class DeathComponent implements LifecycleComponent {
     record.online = false;
     record.entityId = undefined;
     this.ctx.save.saveRecord(record);
+    // 死亡下线同样清除恢复标记，防空背包在下次上线恢复前被旧标记放行保存
+    this.ctx.registry.removeRestored(record.name);
     try { bot.disconnect(); } catch {}
     BotEvents.botOffline.trigger({ botName: record.name });
     try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.playerName}${record.name} 已死亡下线`);} catch {}

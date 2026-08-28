@@ -14,7 +14,6 @@ import { defineCommand, color } from "@yinxe/toolkit";
 
 import { botRegistry, inventoryStorage } from "../../../bootstrap/context";
 import { resolveBotForCommand } from "../auth";
-import { getTotalXpForLevels } from "../../../rules/xp/XpMath";
 
 export function registerRecoverCommand(registry: any): void {
   defineCommand(registry, {
@@ -47,29 +46,22 @@ export function registerRecoverCommand(registry: any): void {
     const record = bot.record;
     let restored = false;
 
-    // ── 恢复背包/装备（复用 InventoryStorage.restoreInto：真实物品直写，占位跳过） ──
+    // ── 恢复背包/装备/经验（复用 InventoryStorage 统一恢复入口，避免逻辑散落） ──
     try {
-      restored = inventoryStorage.restoreInto(entityPlayer, record);
+      const itemRestored = inventoryStorage.restoreInto(entityPlayer, record);
+      const xpRestored = inventoryStorage.restoreExperience(entityPlayer, record);
+      restored = itemRestored || xpRestored;
+
+      if (itemRestored) {
+        player.sendMessage(`${color.success}背包/装备恢复成功`);
+      } else {
+        player.sendMessage(`${color.muted}无可恢复的背包/装备数据`);
+      }
+      if (xpRestored) {
+        player.sendMessage(`${color.success}经验恢复成功 (Lv.${record.experience.level} 总经验 ${record.experience.totalXp})`);
+      }
     } catch (e: any) {
       player.sendMessage(`${color.error}恢复数据失败: ${e?.message ?? e}`);
-    }
-    if (restored) {
-      player.sendMessage(`${color.success}背包/装备恢复成功`);
-    } else {
-      player.sendMessage(`${color.muted}无可恢复的背包/装备数据`);
-    }
-
-    // ── 恢复经验 ──
-    const exp = record.experience;
-    if (exp.totalXp > 0) {
-      try {
-        const current = getTotalXpForLevels(entityPlayer.level) + entityPlayer.xpEarnedAtCurrentLevel;
-        entityPlayer.addExperience(exp.totalXp - current);
-        player.sendMessage(`${color.success}经验恢复成功 (Lv.${exp.level} 总经验 ${exp.totalXp})`);
-        restored = true;
-      } catch {
-        player.sendMessage(`${color.muted}经验恢复失败，跳过`);
-      }
     }
 
     // 标记恢复完成，后续自动保存不再跳过

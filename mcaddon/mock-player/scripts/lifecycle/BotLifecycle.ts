@@ -19,6 +19,7 @@ import { BOT_TAG } from "../rules/tags/BotTags";
 import { LifecycleEvents } from "./LifecycleEvents";
 import type { LifecycleComponent, CreateOptions } from "./LifecycleComponent";
 import type { LifecycleContext } from "./LifecycleContext";
+import type { SpawnComponent } from "./components/SpawnComponent";
 
 // ─── 结果类型 ────────────────────────────────────────
 
@@ -139,7 +140,7 @@ export class BotLifecycle {
     }
   }
 
-  // ─── 核心动作：真实生成（不经组件，直接调 spawnMode.spawnBot） ─
+  // ─── 核心动作：真实生成（统一委托 SpawnComponent，不再直连 spawnMode） ─
 
   private async doSpawn(
     record: BotRecord,
@@ -148,8 +149,11 @@ export class BotLifecycle {
     rotation: import("@minecraft/server").Vector2,
     lookTarget?: import("@minecraft/server").Vector3
   ): Promise<SimulatedPlayer> {
-    const { spawnBot } = await import("../features/manage/spawnMode");
-    return spawnBot(record, location, dimension, rotation, lookTarget);
+    const spawnComp = this.getComponent("spawn") as SpawnComponent | undefined;
+    if (!spawnComp?.spawn) {
+      throw new Error("SpawnComponent 未注册，无法生成假人");
+    }
+    return spawnComp.spawn(record, location, dimension, rotation, lookTarget);
   }
 
   // ─── 对外 API：创建 ────────────────────────────────
@@ -384,16 +388,22 @@ export class BotLifecycle {
       };
       record.isSneaking = (online as unknown as SimulatedPlayer).isSneaking;
       this.ctx.save.saveFullState(online as unknown as Player, record);
-      try {
-        (online as SimulatedPlayer).disconnect();
-      } catch {}
     } else {
       // 无实体也做一次 saveRecord 保证 offline 标记落库
       // 避免 saveFullState 被守卫拦截后记录仍显示在线
     }
+    // 先标记离线再 disconnect，playerLeave 兜底看到 online=false 会直接跳过，
+    // 防止 disconnect 触发的 playerLeave 与 doRawOffline 重复发布 botOffline。
     record.online = false;
     record.entityId = undefined;
     this.ctx.save.saveRecord(record);
+    // 下线即清除恢复标记，避免下一次上线 playerJoin 恢复前旧标记放行空背包保存
+    this.ctx.registry.removeRestored(record.name);
+    if (online && (online as unknown as { hasTag?: (tag: string) => boolean }).hasTag?.(BOT_TAG)) {
+      try {
+        (online as SimulatedPlayer).disconnect();
+      } catch {}
+    }
     if (oldEntityId) {
       try {
         const { trackBotOffline } = await import("../features/trident/tridentTracker");
@@ -435,9 +445,11 @@ export class BotLifecycle {
           }
         }
 
-        // 断开在线实体
+        // 断开在线实体：先置离线再 disconnect，playerLeave 兜底不会重复发布 botOffline
         if (record.online) {
           const entity = record.entityId ? world.getEntity(record.entityId) : undefined;
+          record.online = false;
+          record.entityId = undefined;
           if (entity && (entity as unknown as { hasTag?: (tag: string) => boolean }).hasTag?.(BOT_TAG)) {
             try {
               const { trackBotOffline } = await import("../features/trident/tridentTracker");

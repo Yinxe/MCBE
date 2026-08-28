@@ -16,7 +16,6 @@ import { system, world } from "@minecraft/server";
 import { registerAllCommands } from "./interaction/commands";
 import { registerAllEvents } from "./events/index";
 import { startTagBehaviors } from "./features/state/behavior";
-import { initPositionTracker } from "./features/basic/PositionTracker";
 import { initTridentTracker } from "./features/trident/tridentTracker";
 import { initFishingHookTracker, initLootTracker } from "./features/flow";
 import { initRaidMode } from "./features/flow/raidMode";

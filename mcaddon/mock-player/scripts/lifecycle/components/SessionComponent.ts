@@ -14,7 +14,6 @@ import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotEvents } from "../../events/DomainEvents";
-import { getTotalXpForLevels } from "../../rules/xp/XpMath";
 import type { LifecycleComponent } from "../LifecycleComponent";
 import type { LifecycleContext } from "../LifecycleContext";
 
@@ -68,14 +67,7 @@ export class SessionComponent implements LifecycleComponent {
     const player = players[0] as Player | undefined;
     if (player) {
       try {
-        this.ctx.inventory.restoreInto(player, record);
-        const exp = record.experience;
-        if (exp.totalXp > 0) {
-          try {
-            const current = getTotalXpForLevels(player.level) + player.xpEarnedAtCurrentLevel;
-            if (exp.totalXp > current) player.addExperience(exp.totalXp - current);
-          } catch {}
-        }
+        this.ctx.inventory.restorePlayerState(player, record);
       } catch (e: unknown) {
         const err = e as Error;
         console.warn(`[Session] 恢复 ${record.name} 失败: ${err?.message ?? String(err)}`);

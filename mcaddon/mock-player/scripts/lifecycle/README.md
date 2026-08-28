@@ -82,7 +82,7 @@ await lc.create({ rawName: "test", ... });
 
 ## 兼容
 
-- 旧 `events/*.ts` 文件保留，仅作兼容兜底（`events/index` 检测到 `botLifecycle` 未就绪时才补订阅），正常环境不再触发，避免双重订阅。
-- 旧 `features/inventoryStorage.register()` / `initPositionTracker()` 已加入幂等守卫，重复调用自动跳过。
+- 旧 `events/*.ts` / `PositionTracker.initPositionTracker()` / `autoOnline.initAutoOnline()` 保留为空实现或兼容壳，不再包含领域事件触发/恢复/订阅逻辑；正常环境全部由生命周期组件（Session/Death/Inventory/Position/AutoOnline）统一处理，避免双重订阅与重复触发。
+- 旧 `features/inventoryStorage.register()` / `initPositionTracker()` 已改为空实现，重复调用不会产生额外订阅。
 - 对外 `safeOnline` / `createBot` 等薄壳仍可用，内部已委托 `botLifecycle`。
 

@@ -8,17 +8,18 @@
 //     → 读实体该槽 → 与指纹快照对比 → **变化才覆盖写绑定槽**（受伤但没变零写入）
 //   - 生命周期兜底：reconcile(player, record)（死亡/下线/离开/vaultMode 调用）
 //     → 读实体全部槽 → 指纹对比 → **只写变化的格/槽**（不再全量重写 41 格）
-//   - 恢复：restoreInto(player, record)（playerJoin / /mp:recover 复用）
+//   - 恢复：restoreInto(player, record) / restorePlayerState(player, record)
+//     （playerJoin / /mp:recover 复用）
 // 与 SaveCoordinator 职责分离：后者管记录写 + 全量兜底编排；本模块管
-// 物品的增量保存/对账/恢复。槽位按需分配、空位占位保持绑定、仅删除假人释放。
+// 物品/经验/效果的增量保存、对账与恢复。槽位按需分配、空位占位保持绑定、仅删除假人释放。
 
 import { world } from "@minecraft/server";
 import type { Player, ItemStack } from "@minecraft/server";
 
 import { readDurability, inventoryContainerOf } from "./basic/items/ItemComponentRead";
-import { BotEvents } from "../events/DomainEvents";
 import type { BotRecord, EquipSlotName } from "../rules/Types";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../rules/Types";
+import { getTotalXpForLevels } from "../rules/xp/XpMath";
 import type { BotRegistry } from "../service/BotRegistry";
 import type { BotStore } from "../service/port/BotStore";
 import { EQUIP_SLOT_MAP } from "./basic/items/EquipmentSlots";
@@ -39,15 +40,13 @@ export class InventoryStorage {
     private readonly store: BotStore<ItemStack>
   ) {}
 
-  /** 订阅装备槽变化领域事件（worldLoad 后调用一次） */
+  /**
+   * 订阅装备槽变化领域事件。
+   * @deprecated 已由 lifecycle/components/InventoryComponent.onRegister 统一订阅；
+   * 此处保留空实现，避免旧调用在组件之外重复订阅导致双倍保存。
+   */
   register(): void {
-    BotEvents.botEquipSlotChanged.subscribe((event) => {
-      try {
-        this.handleEquipSlotChanged(event.botName, event.slot);
-      } catch (e: any) {
-        console.warn(`[MockPlayer] 装备保存异常 ${event.botName} ${event.slot}: ${e?.message ?? e}`);
-      }
-    });
+    console.info(`[InventoryStorage] register() 已废弃，装备保存订阅由 InventoryComponent 管理`);
   }
 
   /** 清空某假人的全部指纹快照（删除假人时调用，防内存残留） */
@@ -203,6 +202,40 @@ export class InventoryStorage {
     }
 
     return restored;
+  }
+
+  /**
+   * 恢复假人经验：按存档 totalXp 一次性补差额（不扣减，防止异常数据导致扣玩家经验）。
+   * @param player 假人实体
+   * @param record 假人记录
+   * @returns 是否成功补了经验
+   */
+  restoreExperience(player: Player, record: BotRecord): boolean {
+    const exp = record.experience;
+    if (!exp || exp.totalXp <= 0) return false;
+    try {
+      const current = getTotalXpForLevels(player.level) + player.xpEarnedAtCurrentLevel;
+      const delta = exp.totalXp - current;
+      if (delta <= 0) return false; // 当前经验不低于存档，无需补
+      player.addExperience(delta);
+      return true;
+    } catch {
+      // 经验恢复失败不影响背包/装备恢复
+      return false;
+    }
+  }
+
+  /**
+   * 完整恢复假人玩家状态：背包/装备/效果 + 经验。
+   * 生命周期（playerJoin）与 /mp:recover 共用同一入口，避免恢复逻辑散落。
+   * @param player 假人实体
+   * @param record 假人记录
+   * @returns 是否恢复了任何数据（背包/装备/效果或经验）
+   */
+  restorePlayerState(player: Player, record: BotRecord): boolean {
+    const itemRestored = this.restoreInto(player, record);
+    const xpRestored = this.restoreExperience(player, record);
+    return itemRestored || xpRestored;
   }
 
   // ── 私有 ──
