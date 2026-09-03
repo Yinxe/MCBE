@@ -74,7 +74,7 @@ scripts/
 │   │                          #   tasks/（循环任务：timed 定时 mine/place/attack；
 │   │                          #   natural 自然流程 wander/fishing/woodcut——共享池在
 │   │                          #   rules/FishingPool 与 rules/woodcut/TreePool）；barrel 统一出口
-│   ├── state/                 # 旧标签行为引擎（behavior，TAG 驱动）+ 跟随（follow）+ 标签渠道（setTags）
+│   ├── state/                 # 行为引擎（behavior：体态控制+周期持久化）+ 跟随兼容门面（follow）+ 标签渠道（setTags）
 │   ├── trident/               # 三叉戟 mc 副作用（投掷/认主标记/上线夺回）
 │   └── inventoryStorage.ts    # 库存存储（DEPRECATED订阅已迁移至 InventoryComponent，存储实现保留）
 ├── interaction/               # 交互层：命令 + UI
@@ -109,9 +109,9 @@ scripts/
   已删除。改为「任务运行时」：任务 = 纯 async 协程（CancelToken 协作式取消），
   **生命周期事件驱动**（botWorkModeChanged / botOnline / botOffline / botDeath → 对账），
   无任何常驻轮询
-- **任务三类（flow/tasks）**：`timed` 定时触发的循环（mine/place/attack）；`event` 基于
-  事件的循环（raidMode 自订阅事件，独立模块）；`natural` 基于自然复杂流程的循环
-  （wander/fishing/woodcut）
+- **任务两类（flow/tasks，全部工作模式独立调度 loop）**：`timed` 定时触发的循环
+  （mine/place/attack——连续动作节奏机）；`event` 基于事件的循环（raidMode 自订阅
+  事件，独立模块）；`natural` 基于自然复杂流程的循环（wander/fishing/woodcut/follow）
 - **统一规范（flow/tasks/spec.ts，用户拍板：循环任务禁止各写各的 while 面向过程）**：
   全部循环任务经 `defineLoopTask` 声明为**阶段机**——任务只写阶段表（每阶段 label +
   run(ctx)，返回下一阶段 id 或 TASK_DONE），运行骨架统一承担：循环分派（按阶段流转）、
@@ -133,6 +133,21 @@ scripts/
   `extraUsable`（如维度一致）。FishingPool / TreePool 是「策略 + 类型化薄壳」，
   对外函数签名不变；选点约束（center/maxDistance/isValid 现场回调）与扫描合并
   （同 key 保留已有状态，新资源按 free 入池）为公共语义
+- **任务能力增强（2026-09-03 用户规格：挖掘/放置/攻击/跟随完善）**：
+  - **mine**：每块破坏前 `ensureTool` 回调注入（rules/items/MineToolRules——方块类型
+    → 镐/斧/锹/锄/剑类别映射 + 品阶/附魔评分选最优，全背包扫描；主手已最优不折腾）；
+    `expectedTypeId` 定点守卫（changed 回探测重选，绝不挖类型不符方块）
+  - **place**：主手方块自动补位——主手空/不可放置（`BlockTypes.get(typeId)` 判定）→
+    从背包找第一个可放置方块换上；背包没有 → 通知 + 低息等待
+  - **attack**：probe（`getEntitiesFromViewDirection` 视线最近实体）→ strike
+    （`attackEntity` 定向连击同一目标，失效/击杀回探测）；武器策略
+    （rules/items/MineToolRules：剑 > 同品阶斧 + 锋利加分）
+  - **follow**：收编任务运行时（follow/catchup 两阶段：寻路跟随 + 近距守候，
+    全程 `lookAtEntity` 注视——BUG2 语义保留）；目标持久化
+    `record.followTargetId/followTargetName`（ID 失效按名重找，重启恢复）；
+    目标离线/超距 128 格 → 自然完成；trident 投掷期 `pauseFollowTask/
+    resumeFollowTask` 协作（任务自旋等待不寻路）；旧 state/follow 的
+    10 tick 共享轮询引擎（followMap + 常驻 runInterval）已删除，文件仅剩兼容门面
 - **原子工具（flow/tasks/loops）**：waitTicksCancellable（取消即唤醒）/
   createThrottledNotifier（附近 16 格玩家通知节流）
 - ⚠️ `@yinxe/workflow`（packages/workflow）**未接入**也不计划接入：毫秒延迟/独立取消
@@ -148,7 +163,7 @@ scripts/
 | 生物 AI 移除 | ✅ scripts/ai + features/ai + legacy/ai + DefenseRules 已删除 | 高频计算致游戏挂起崩溃（用户拍板）；能力改写为 flow/tasks 循环任务 |
 | `features/trident/` | 投掷 / 认主标记 / 上线夺回（mc 副作用） | 规则在 rules/items（TridentRules / TridentClaimRules）；本体属规则 + 工作流一小部分 |
 | `features/inventoryStorage.ts` | 库存增量保存 + 对账兜底 + 恢复 | 位置不对，属数据/持久化层，待挪出 features |
-| `features/state/` | behavior（体态控制+周期持久化）/ follow（跟随引擎）/ setTags | behavior 仅保留控制模式同步与周期持久化；follow 承接 workMode="follow" |
+| `features/state/` | behavior（体态控制+周期持久化）/ follow（兼容门面）/ setTags | behavior 仅保留控制模式同步与周期持久化；follow 调度已收编 flow/tasks/followTask（本文件只剩启停门面：写目标字段 + setWorkMode） |
 
 ---
 
@@ -184,7 +199,7 @@ scripts/
   woodcut（自动砍树模式）。互斥由单字段天然保证
 - 各驱动模块按值认领（事件驱动，无轮询）：wander/mine/place/attack/fishing/woodcut →
   任务运行时（runtime/BotTask → flow/tasks 协程任务）；raid → 劫掠模块（事件订阅）；
-  follow → 跟随引擎（state/follow）；none → 空档不启任务
+  follow → 任务运行时（followTask）；none → 空档不启任务
 - **修改唯一渠道 `setWorkMode`**：落库 + 发布 `botWorkModeChanged`（任务运行时/劫掠按值
   启动/停止）；UI 提交前先 setTags 校验通过再 setWorkMode（防部分应用）
 - **管理员启用门槛**：工作模式还须在全局配置启用（configStore.isWorkModeEnabled，

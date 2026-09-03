@@ -1,186 +1,104 @@
-// ─── 寻路跟随 ──────────────────────────────────────────
-// 让假人持续寻路跟随目标玩家，直到停止跟随或超出范围
+// ─── 跟随（兼容薄壳——调度已收编任务运行时） ──────────
+// 旧 10 tick 共享轮询引擎（followMap + 常驻 runInterval）已由
+// flow/tasks/followTask（阶段机，事件驱动独立调度）替代：
+//   - 跟随目标持久化 record.followTargetId/followTargetName（重启恢复）
+//   - 启停 = setWorkMode("follow"/"none") → 任务运行时对账启动/停止
+//   - 注视/近距守候/超距放弃/目标离线自然完成 → 全在 followTask
+//   - trident 投掷暂停 → pauseFollowTask/resumeFollowTask（任务自旋）
+// 本文件只留兼容门面（Bot 门面/命令/UI 旧调用点），语义 = 设置目标 + 切模式。
 
-import { Player, system, world } from "@minecraft/server";
-import { SimulatedPlayer } from "@minecraft/server-gametest";
+import { world, type Player } from "@minecraft/server";
 
-import { BotUiEvent } from "../../events/UiEvents";
-import { BotEvents } from "../../events/DomainEvents";
-import { botRegistry } from "../../bootstrap/context";
-import { resolveBotPlayer } from "../../bot/PlayerGateway";
-import { describeError } from "../../errors";
-import { lookAtEntity } from "../basic/PoseGateway";
-import { color } from "@yinxe/toolkit";
-
-// ─── 跟随状态 ──────────────────────────────────────────
-// Map<假人名, 目标玩家 ID> 跟踪当前跟随关系
-
-const followMap = new Map<string, string>();
-
-let followPaused = false;
-
-const FOLLOW_TICK = 10; // 每 10 tick 更新一次寻路
-const STOP_DIST = 3;    // 距离目标 3 格内停止寻路
-const MAX_DIST = 128;   // 超过 128 格停止跟随
-
-// ─── 公开 API ──────────────────────────────────────────
+import { botRegistry, saveCoordinator } from "../../bootstrap/context";
+import { setWorkMode } from "./behavior";
+import { pauseFollowTask, resumeFollowTask, isFollowPaused } from "../flow/tasks/followTask";
 
 /**
- * 让假人开始跟随目标玩家。
- * @returns 是否成功启动
+ * 让假人开始跟随目标玩家（兼容门面）：写入跟随目标 + 切 workMode="follow"
+ * （任务运行时事件驱动启动 followTask 协程）。
+ * @returns 是否成功（记录不存在 → false）
  */
 export function startFollow(botName: string, targetId: string): boolean {
-  if (!botRegistry.has(botName)) return false;
-  followMap.set(botName, targetId);
-  ensureEngine();
+  const record = botRegistry.get(botName);
+  if (!record) return false;
+  const target = world.getEntity(targetId) as Player | undefined;
+  record.followTargetId = targetId;
+  record.followTargetName = target?.name; // 实体 ID 失效时按名兜底重找
+  saveCoordinator.saveRecord(record);
+  setWorkMode(record, "follow");
   return true;
 }
 
 /**
- * 停止假人跟随。
+ * 停止假人跟随（兼容门面）：切 workMode="none"（任务运行时取消令牌收尾）
+ * + 清跟随目标 + 清暂停标志。
  */
 export function stopFollow(botName: string): void {
-  followMap.delete(botName);
-  const entity = resolveBotPlayer(botName);
-  if (entity) {
-    try { entity.stopMoving(); } catch { /* ignore */ }
+  const record = botRegistry.get(botName);
+  if (record) {
+    record.followTargetId = undefined;
+    record.followTargetName = undefined;
+    setWorkMode(record, "none");
+  }
+  resumeFollowTask(botName); // 清残留暂停标志（幂等）
+}
+
+/**
+ * 检查假人是否正在跟随（workMode 判定 + 目标在册）。
+ */
+export function isFollowing(botName: string): boolean {
+  const record = botRegistry.get(botName);
+  return record?.workMode === "follow" && !!record.followTargetId;
+}
+
+/** 暂停全部跟随中假人的跟随任务（trident 投掷期；任务自旋等待不寻路） */
+export function pauseFollow(): void {
+  for (const record of botRegistry.all()) {
+    if (record.workMode === "follow" && record.online) pauseFollowTask(record.name);
   }
 }
 
-/**
- * 检查假人是否正在跟随。
- */
-export function isFollowing(botName: string): boolean {
-  return followMap.has(botName);
-}
-
-/**
- * 暂停所有假人跟随导航（不删除跟随关系）。
- */
-export function pauseFollow(): void {
-  followPaused = true;
-}
-
-/**
- * 恢复所有假人跟随导航。
- */
+/** 恢复全部暂停的跟随任务 */
 export function resumeFollow(): void {
-  followPaused = false;
+  for (const record of botRegistry.all()) {
+    if (record.workMode === "follow") resumeFollowTask(record.name);
+  }
 }
 
-/**
- * 返回当前跟随关系数量。
- */
-export function getFollowCount(): number {
-  return followMap.size;
+/** 某假人跟随是否暂停中（透传任务协作标志查询） */
+export function isFollowTaskPaused(botName: string): boolean {
+  return isFollowPaused(botName);
 }
 
-// ─── UI 事件订阅（行为菜单提交 → 感知跟随开关） ────────
+// ─── UI 事件订阅（行为菜单提交：跟随目标 = 操作者） ─────
 
-/** 订阅行为菜单提交/工作模式变更：跟随已收编进互斥菜单（workMode="follow"） */
+import { system } from "@minecraft/server";
+import { BotUiEvent } from "../../events/UiEvents";
+
 export function registerUiSubscriptions(): void {
-  // 行为菜单提交：workMode === "follow" → 启动跟随；切走 → 停止
+  // 行为菜单提交：workMode="follow" → 目标 = 操作玩家（写 record 供
+  // followTask 消费）；切走 follow → 清跟随目标（stopFollow 兼容语义）。
   BotUiEvent.behaviorSubmitted.subscribe((e) => {
-    const wantFollow = e.workMode === "follow";
-    const isFollow = isFollowing(e.botName);
-    if (wantFollow === isFollow) return;
-    const player = world.getEntity(e.playerId) as Player | undefined;
-    if (!player && wantFollow) return;
-    system.run(() => {
-      try {
-        if (wantFollow && player) {
-          startFollow(e.botName, player.id);
-          player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 正在跟随你`);
-        } else if (!wantFollow && isFollow) {
-          stopFollow(e.botName);
-          if (player) player.sendMessage(`${color.success}${color.playerName}${e.botName}${color.success} 已停止跟随`);
-        }
-      } catch (err: any) { if (player) player.sendMessage(`${color.error}切换跟随失败: ${err?.message ?? err}`); }
-    });
-  });
-  // 工作模式变更（命令/其他路径）：非 follow → 停止跟随
-  BotEvents.botWorkModeChanged.subscribe((e) => {
-    if (e.workMode !== "follow" && isFollowing(e.botName)) {
-      stopFollow(e.botName);
-    }
-  });
-}
-
-// ─── 内部 ──────────────────────────────────────────────
-
-let followIntervalId: number | undefined;
-
-function ensureEngine(): void {
-  if (followIntervalId !== undefined) return;
-  followIntervalId = system.runInterval(() => {
-    if (followMap.size === 0) {
-      // 没有跟随关系，停止引擎
-      system.clearRun(followIntervalId!);
-      followIntervalId = undefined;
+    if (e.workMode !== "follow") {
+      // 从跟随切走：清目标字段（任务运行时随 workMode 变更自然停止）
+      const rec = botRegistry.get(e.botName);
+      if (rec?.followTargetId) {
+        rec.followTargetId = undefined;
+        rec.followTargetName = undefined;
+        saveCoordinator.saveRecord(rec, true);
+      }
       return;
     }
-
-    for (const [botName, targetId] of followMap) {
-      if (followPaused) return;
-
-      const record = botRegistry.get(botName);
-      if (!record) { followMap.delete(botName); continue; }
-
-      const bot = resolveBotPlayer(botName);
-      // ⚠️ 不下线即删除：跟随关系应存活跨 offline/online 周期（如投掷三叉戟模式切换）
-      if (!bot) {
-        // 仅当记录也被删除时才清除跟随关系
-        if (!botRegistry.has(botName)) followMap.delete(botName);
-        continue;
-      }
-
-      if (record.death) {
-        // ⚠️ 死亡不删除跟随关系：自动重生假人复活后（playerSpawn 清 death）继续跟随，
-        //   与"跟随关系应存活跨 offline/online 周期"的注释语义一致（记录被删才清除）
-        continue;
-      }
-
-      const target = world.getEntity(targetId) as Player | undefined;
-      if (!target?.isValid) {
-        bot.sendMessage(`${color.error}跟随目标已离线，停止跟随`);
-        try { bot.stopMoving(); } catch { /* ignore */ }
-        followMap.delete(botName);
-        continue;
-      }
-
-      // 计算距离
-      const d = {
-        x: bot.location.x - target.location.x,
-        y: bot.location.y - target.location.y,
-        z: bot.location.z - target.location.z,
-      };
-      const dist = Math.sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
-
-      if (dist > MAX_DIST) {
-        bot.sendMessage(`${color.error}距离目标过远，停止跟随`);
-        try { bot.stopMoving(); } catch { /* ignore */ }
-        followMap.delete(botName);
-        continue;
-      }
-
-      if (dist <= STOP_DIST) {
-        try { bot.stopMoving(); } catch { /* ignore */ }
-      } else {
-        try {
-          bot.navigateToEntity(target, 1);
-        } catch {
-          // 导航失败时静默忽略
-        }
-      }
-
-      // ⚠️ 注视目标（跟随姿态，用户拍板 BUG2：跟随中要看向目标玩家）——
-      // 移动中与到位停住后都保持看向玩家（navigateToEntity 只管寻路，停住后
-      // 假人保持最后移动朝向）。用引擎 lookAtEntity 实体注视（API 直接提供，
-      // 引擎持续追踪实体位置，无需自算头部坐标拍快照）；微动作下一 tick 执行，
-      // 引擎失败记日志不中断跟随循环。
-      void lookAtEntity(bot, target).catch((e: unknown) => {
-        console.warn(`[MockPlayer] 跟随注视失败 ${botName}: ${describeError(e)}`);
-      });
-    }
-  }, FOLLOW_TICK);
+    system.run(() => {
+      const player = world.getEntity(e.playerId) as Player | undefined;
+      if (!player) return;
+      const record = botRegistry.get(e.botName);
+      if (!record) return;
+      record.followTargetId = player.id;
+      record.followTargetName = player.name;
+      saveCoordinator.saveRecord(record);
+      player.sendMessage(`§a§l${e.botName}§r§a 正在跟随你`);
+    });
+  });
 }
+

@@ -8,7 +8,8 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
-import { pauseFollow, resumeFollow, isFollowing } from "../state/follow";
+import { pauseFollowTask, resumeFollowTask } from "../flow/tasks/followTask";
+import { isFollowing } from "../state/follow";
 import { registerPendingTridentItem, discardPendingTridentItem } from "./tridentTracker";
 import { TRIDENT_ID, isTrident, scanTridentSlots } from "../../rules/items/TridentRules";
 import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
@@ -120,13 +121,13 @@ export function throwTridents(
     throwingBots.add(botName);
 
     const wasFollowing = isFollowing(botName);
-    if (wasFollowing) pauseFollow();
+    if (wasFollowing) pauseFollowTask(botName); // 只暂停本假人（任务自旋等待，不寻路）
 
     // 闭包异步：done（doThrowLoop 的 finishThrow 统一出口）时 resolve + 兼容回调
     return new Promise<ThrowResult>((resolve) => {
       const done = () => {
         throwingBots.delete(botName);
-        if (wasFollowing) resumeFollow();
+        if (wasFollowing) resumeFollowTask(botName);
         onComplete?.();
         resolve(ThrowResult.Ok);
       };

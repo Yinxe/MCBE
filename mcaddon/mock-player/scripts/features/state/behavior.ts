@@ -85,9 +85,9 @@ export function startTagBehaviors(): void {
 // ─── 工作模式设置（统一单选互斥字段） ──────────────────
 // 用户拍板：统一「工作模式」单选互斥字段（record.workMode），
 // 各驱动模块按值认领（事件驱动，无轮询）：
-//   wander/mine/place/attack/fishing/woodcut → 任务运行时（runtime/BotTask
-//   → flow/tasks 协程任务）；raid → 劫掠模块（raidMode 事件订阅）；
-//   follow → 跟随引擎（state/follow）。互斥由单字段天然保证。
+//   wander/mine/place/attack/fishing/woodcut/follow → 任务运行时（runtime/BotTask
+//   → flow/tasks 协程任务——全部工作模式独立调度 loop）；raid → 劫掠模块
+//   （raidMode 事件订阅）。互斥由单字段天然保证。
 
 /** 工作模式可选值（UI 下拉与任务运行时对账共用；none=空档不启任务） */
 export const WORK_MODES = ["none", "wander", "mine", "place", "attack", "raid", "fishing", "woodcut", "follow"] as const;

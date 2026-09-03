@@ -21,15 +21,14 @@ import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { breakBlockAt } from "../basic/blocks";
 import { navigateBot, longNavigateBot, NavigateResult } from "../basic/move";
 import { setMainhandSlot } from "../basic/items/mainhand";
-import { inventoryContainerOf, enchantableOf } from "../basic/items/ItemComponentRead";
+import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
+import { snapshotTools } from "../basic/items/ToolSnapshot";
 import { waitTicks } from "../utils";
 import {
   hasSuitableLeafTool,
   pickBestTool,
-  toolCategoryOf,
   type ChopMode,
   type ChopTargetKind,
-  type ToolItem,
 } from "../../rules/woodcut/WoodcutRules";
 import { TREE_LEAF_TYPE_IDS, TREE_LOG_TYPE_IDS, classifyTreeBlock } from "../../rules/tree/TreeRules";
 import type { ChopPlan, ChopStage, ChopTarget } from "../../rules/woodcut/ChopPlan";
@@ -57,28 +56,9 @@ const BREAK_MAX_DISTANCE = 10;
 const BREAK_RETRY_LIMIT = 3;
 
 // ─── 背包工具快照（强制策略：全背包扫描取最优） ──────────
+// 实现已下沉 basic/items/ToolSnapshot（挖掘任务共用）；此处 re-export 兼容旧引用。
 
-/** 将假人背包快照为 ToolItem[]（core 选工具策略入参；所有匹配工具条目） */
-export function snapshotTools(bot: SimulatedPlayer): ToolItem[] {
-  const tools: ToolItem[] = [];
-  const container = inventoryContainerOf(bot);
-  if (!container) return tools;
-  for (let i = 0; i < container.size; i++) {
-    const item = container.getItem(i);
-    if (!item) continue;
-    const typeId = item.typeId;
-    const category = toolCategoryOf(typeId); // 统一入口（core）
-    const ench = enchantableOf(item);
-    let enchantments: { id: string; level: number }[] = [];
-    try {
-      if (ench) enchantments = ench.getEnchantments().map((e) => ({ id: e.type.id, level: e.level }));
-    } catch {
-      /* 附魔读取失败按无附魔 */
-    }
-    tools.push({ slot: i, typeId, enchantments, category });
-  }
-  return tools;
-}
+export { snapshotTools };
 
 /** 目标方块是否已消失（空气/液体——原方块已破坏，跳过） */
 function targetGone(bot: SimulatedPlayer, target: ChopTarget): boolean {

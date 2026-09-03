@@ -110,7 +110,7 @@ export async function showGlobalConfig(player: Player): Promise<void> {
     },
     follow: {
       label: `${color.warn}⚠ ${color.info}自动跟随`,
-      tooltip: "高频追踪主人位置与寻路，§c持续移动§r。默认§7关闭§r，随主人移动频繁时开销明显",
+      tooltip: "寻路跟随目标玩家（0.5 秒决策 + 持续注视），事件驱动独立调度。默认§7关闭§r，随主人移动频繁时开销明显",
     },
   };
 

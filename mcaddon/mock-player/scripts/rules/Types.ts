@@ -229,6 +229,13 @@ export interface BotRecord {
    * 由 /mp:woodcutmode 设置；引擎注入大脑记忆驱动能力（core WoodcutRules 枚举）。
    */
   woodcutMode?: string;
+  /**
+   * 跟随目标玩家实体 ID（仅 workMode === "follow" 时有效；任务运行时
+   * followTask 消费）。实体 ID 重连后会变——配对 followTargetName 兜底重找。
+   */
+  followTargetId?: string;
+  /** 跟随目标玩家名（ID 失效时按名重找目标） */
+  followTargetName?: string;
   /** 体态控制器玩家 ID（仅当有 TAG_CONTROL 标签时有效） */
   controllerId?: string;
   /** 潜行状态 */
