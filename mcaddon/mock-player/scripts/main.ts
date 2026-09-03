@@ -6,10 +6,7 @@
 //   Phase 2 有状态业务 —— （core 服务均为构造注入，无状态容器）
 //   Phase 3 注册副作用 —— startup 注册自定义命令（early-execution mode）
 //   Phase 4 延迟启动 —— worldLoad 后：GameTest 上下文 → 事件订阅 → 恢复持久化
-//             → 行为引擎 → 三叉戟认主机制 → 工作流（劫掠/宝库）
-//
-// 依赖注入贯穿始终：core 服务以构造函数收依赖（测试用 InMemory 替身），
-// mc 层经 bootstrap/context 持有单例。
+//             → 任务运行时（工作模式 → 任务协程）→ 三叉戟认主机制 → 劫掠模式
 
 import { system, world } from "@minecraft/server";
 
@@ -19,9 +16,8 @@ import { startTagBehaviors } from "./features/state/behavior";
 import { initTridentTracker } from "./features/trident/tridentTracker";
 import { initFishingHookTracker, initLootTracker } from "./features/flow";
 import { initRaidMode } from "./features/flow/raidMode";
-import { startBrainEngine } from "./legacy/ai/BotBrain";
-import { startAiEngine } from "./features/ai/brainEngine";
-import { startSharedMemorySweeper } from "./features/ai/brainEngine";
+import { registerBotTasks } from "./features/flow/tasks";
+import { startBotTaskRuntime } from "./runtime";
 import { registerTestDimension } from "./features/manage/gametestContext";
 import { initWorldLoad } from "./bootstrap/worldLoad";
 

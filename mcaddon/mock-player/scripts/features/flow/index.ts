@@ -8,7 +8,7 @@
 //   - raidMode           劫掠模式（纯事件驱动循环：喝瓶→兆头→袭击/胜利→回药）
 //   - RaidEvents         劫掠领域事件（raidStarted/raidVictory/raidPhase：通知/联动用）
 //
-// ⚠️ 旧 Ports（VaultPorts/FishingPorts）已随旧树架构迁入 legacy/ai，不在此 barrel。
+// 循环任务（timed/natural）在 tasks/ 子目录（workMode 驱动，runtime/BotTask 编排）。
 
 export { initLootTracker, failureLabel, fishOnce } from "./fishingFlow";
 export type { FishingOutcome, FishingFailureReason, BackpackInfo, LootItem } from "./fishingFlow";

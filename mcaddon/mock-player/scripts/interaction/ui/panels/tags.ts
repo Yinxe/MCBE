@@ -13,7 +13,8 @@ import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { TAG_BOT, TAG_RESPAWN, getTagDef, computeTagsFromBehaviorForm } from "../../../rules/tags/BotTags";
 import { WORK_MODES, setWorkMode, type WorkMode } from "../../../features/state/behavior";
-import { configStore } from "../../../bootstrap/context";
+import { CHOP_MODE_LABEL, normalizeChopMode, type ChopMode } from "../../../rules/woodcut/WoodcutRules";
+import { configStore, saveCoordinator } from "../../../bootstrap/context";
 import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
@@ -68,7 +69,7 @@ export function showTagManagement(player: Player, botName: string): void {
 
   const builder = new ModalFormBuilder()
     .title(`${color.bold}行为 · ${botName}`)
-    .label("current", `${color.accent}当前: ${color.black}${currentTagsText}`)
+    .label("current", `${color.accent}当前: ${currentTagsText}`)
     // ── 置顶：自动重生（最常用开关） ──
     .toggle("respawn", style("自动重生", color.playerName), {
       defaultValue: record.tags.includes(TAG_RESPAWN.value),
@@ -95,6 +96,7 @@ export function showTagManagement(player: Player, botName: string): void {
           attack: style("定点攻击模式", color.playerName),
           raid: style("劫掠模式", color.warn),
           fishing: style("自动钓鱼模式", color.accent),
+          woodcut: style("自动砍树模式", color.accent),
           follow: style("自动跟随", color.playerName),
         };
         return labelMap[m] ?? style(m, color.muted);
@@ -102,6 +104,16 @@ export function showTagManagement(player: Player, botName: string): void {
       {
         defaultValueIndex: WORK_MODE_INDEX[record.workMode] ?? 0,
         tooltip: "单选工作模式（互斥，仅一项）：已禁用的模式不在此列表（管理员可在全局配置中启用/禁用）",
+      }
+    )
+    // ── 砍树子模式（仅 workMode=自动砍树时生效；用户拍板 BUG：树叶采集模式无入口） ──
+    .dropdown(
+      "chopMode",
+      style("砍树子模式（仅自动砍树模式生效）", color.accent),
+      (Object.keys(CHOP_MODE_LABEL) as ChopMode[]).map((m) => style(CHOP_MODE_LABEL[m], color.playerName)),
+      {
+        defaultValueIndex: normalizeChopMode(record.woodcutMode) === "collect" ? 1 : 0,
+        tooltip: "logs=原木模式（只砍原木）/ collect=收集模式（原木 + 强制树叶工具挖全部树叶）",
       }
     );
 
@@ -132,7 +144,12 @@ export function showTagManagement(player: Player, botName: string): void {
         player.sendMessage(`${color.error}${rejected}`);
         return;
       }
-      // ── ② 工作模式落库（record.workMode 字段——驱动引擎按值启动；
+      // ── ② 砍树子模式落库（仅自动砍树模式生效；woodcutTask 从记录读取）──
+      //     先写子模式再 setWorkMode（setWorkMode 内含持久化，一次落盘带上）
+      const chopModeSel = vals.chopMode as number;
+      const CHOP_MODE_OPTIONS: readonly ChopMode[] = Object.keys(CHOP_MODE_LABEL) as ChopMode[];
+      currentRecord.woodcutMode = CHOP_MODE_OPTIONS[chopModeSel] ?? "logs";
+      // ── ③ 工作模式落库（record.workMode 字段——驱动任务运行时按值启动；
       //     与标签同一 system.run 块、标签校验通过后才写——防部分应用） ──
       setWorkMode(currentRecord, pickedWorkMode);
       // ── ③ 发布行为菜单提交领域事件（负载带表单参数 + tags） ──

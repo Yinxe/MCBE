@@ -3,7 +3,7 @@
 // UI 事件字段/动作），此处统一 import 并调用——保证模块可达（esbuild bundle
 // 只包含被引用模块）且订阅代码内聚在各功能文件内。
 // UI 层（ui/bot.ts、ui/tags.ts）只发布事件，不 import 任何业务动作函数；
-// AI 任务的 UI 反馈订阅（宝库/劫掠不在线提示）在 mc/ai/BotBrain.startBrainEngine。
+// 劫掠不在线提示等任务侧反馈订阅在各任务模块内（features/flow/raidMode 等）。
 
 import { registerUiSubscriptions as registerSneakUi } from "../features/basic/sneak";
 import { registerUiSubscriptions as registerSpawnModeUi } from "../features/manage/spawnMode";

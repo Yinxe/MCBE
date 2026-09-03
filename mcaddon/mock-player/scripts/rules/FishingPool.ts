@@ -1,32 +1,47 @@
-// ─── 共享钓鱼点池（core 纯逻辑） ─────────────────────
-// 生物 AI 自动钓鱼的跨假人共享数据模型：所有钓鱼假人共用一个池
-// （存 SharedMemory "fishing:pool"，renewing TTL——活跃即延长）。
+// ─── 共享钓鱼点池（core 纯逻辑——统一资源模型的钓鱼策略） ──
+// 自动钓鱼任务（flow/tasks/fishingTask）的跨假人共享数据模型：
+// 所有钓鱼假人共用一个池（存 runtime/SharedMemory "fishing:pool"，
+// renewing TTL——活跃即延长）。
 //
-// 占用机制（用户规格 2026-08-18）：
-//   - free  → 任何假人可选用（并独占占用 claimSpot）
-//   - occupied → 被某假人独占占用（claimant），**只有占用者本人可用**
+// ⚠️ 机制本体在**统一资源模型**（rules/resource/ResourcePool）：
+//   共享 / 独占认领（防抢）/ 失败标记 / 扫描合并——本文件只声明钓鱼的
+//   **差异规则**（PoolPolicy：站立点+水平距离、星级降序排序、连续失败
+//   3 次标记不可用、维度一致性过滤）+ 钓鱼点类型与扫描结果转换。
+//
+// 钓鱼特有规则（用户规格 2026-08-18）：
 //   - unavailable → 该点连续抛竿失败 ≥ 上限（SPOT_MAX_FAIL_STRIKES=3），
 //     已标记不可用并共享——选点跳过
 //   - 现场**任何实体**占用（mc 层 isSpotUsable 判定）→ 不可用；假人可以
 //     使用自己独占的这个点（isSpotUsableFor 的 claimant 语义）
-//
-// 选点约束（用户规格）：假人只能从池里选**自身 16 格内**（SPOT_MAX_DISTANCE）
-// **且点位半径 1 内无其他实体**（mc 层 isValid 回调注入）的有效钓鱼点。
-//
-// 可用性下限（POOL_MIN_USABLE=3）：池内**有效点**（状态 + 距离 + 现场实体
-// 全合格）不足时，下次寻找的假人主动扫描发现新钓鱼点并合并进池共享
-// （mergeScanned）。
+//   - 选点约束：假人只能从池里选**自身 16 格内**（SPOT_MAX_DISTANCE）且
+//     点位半径 1 内无其他实体（mc 层 isValid 回调注入）的有效钓鱼点
+//   - 可用性下限（POOL_MIN_USABLE=3）：池内有效点不足 → 主动扫描发现新
+//     钓鱼点并合并进池共享（mergeScanned）
 //
 // 本模块纯函数（零 @minecraft，可单测）：所有函数**不修改入参**，返回新值。
 
+import {
+  claimEntry,
+  horizontalDistSq,
+  isUsableFor,
+  markFail,
+  mergeEntries,
+  passesPickConstraints,
+  pickBest,
+  releaseEntry,
+  resetFail,
+  type FailCounted,
+  type PoolEntry,
+  type PoolPolicy,
+} from "./resource/ResourcePool";
 import type { CastAim, FishingSpot } from "./FishingRules";
 import type { Vec3 } from "./Types";
 
-/** 共享钓鱼点状态 */
+/** 共享钓鱼点状态（统一状态机的钓鱼别名，兼容既有导入） */
 export type SpotStatus = "free" | "occupied" | "unavailable";
 
 /** 共享钓鱼点条目（可序列化，存 SharedMemory） */
-export interface PoolSpot {
+export interface PoolSpot extends PoolEntry, FailCounted {
   /** 定位键 "维度@x,y,z"（去重/定位用） */
   key: string;
   /** 所在维度（跨假人共享——维度不符不可用） */
@@ -39,12 +54,6 @@ export interface PoolSpot {
   waters: Vec3[];
   /** 抛竿瞄准点（星级评分） */
   aim: CastAim;
-  /** free=空闲 / occupied=被某假人独占 / unavailable=连续失败标记不可用 */
-  status: SpotStatus;
-  /** 独占占用者的假人名（仅 occupied 时有意义） */
-  claimant?: string;
-  /** 连续抛竿失败次数（≥ SPOT_MAX_FAIL_STRIKES → unavailable） */
-  failCount: number;
 }
 
 /** 共享池键（SharedMemory） */
@@ -62,34 +71,47 @@ export const SPOT_MAX_DISTANCE = 16;
 /** 池 TTL（tick = 60 秒；renewing——数据持续被写入/更新即延长） */
 export const POOL_TTL_TICKS = 1200;
 
+/** 钓鱼点策略（统一资源模型的钓鱼差异规则） */
+export const FISH_SPOT_POLICY: PoolPolicy<PoolSpot> = {
+  keyOf: (spot) => spot.key,
+  centerOf: (spot) => spot.stand,
+  distance: horizontalDistSq,
+  maxDistance: SPOT_MAX_DISTANCE,
+  // 星级评分降序 → 距中心距离升序（好钓点优先，同星级就近）
+  compare: (a, b, botPos) => {
+    if (a.aim.level !== b.aim.level) return b.aim.level - a.aim.level;
+    return horizontalDistSq(a.stand, botPos) - horizontalDistSq(b.stand, botPos);
+  },
+  maxFailStrikes: SPOT_MAX_FAIL_STRIKES,
+};
+
 /** 站立方格定位键（维度内去重/定位） */
 export function spotKey(dimension: string, stand: Vec3): string {
   return `${dimension}@${Math.floor(stand.x)},${Math.floor(stand.y)},${Math.floor(stand.z)}`;
 }
 
+/** 扫描结果 → 池条目（新钓鱼点按 free 入池，失败计数清零） */
+function toPoolSpot(fs: FishingSpot, dimension: string): PoolSpot {
+  return {
+    key: spotKey(dimension, fs.stand),
+    dimension,
+    stand: fs.stand,
+    support: fs.support,
+    waters: fs.waters,
+    aim: fs.aim,
+    status: "free",
+    failCount: 0,
+  };
+}
+
 /** 扫描结果合并进池（去重）：同 key 保留已有状态/占用/失败计数，新点按 free 加入 */
 export function mergeScanned(spots: readonly PoolSpot[], scanned: readonly FishingSpot[], dimension: string): PoolSpot[] {
-  const byKey = new Map(spots.map((s) => [s.key, s]));
-  for (const fs of scanned) {
-    const key = spotKey(dimension, fs.stand);
-    if (!byKey.has(key)) {
-      byKey.set(key, {
-        key,
-        dimension,
-        stand: fs.stand,
-        support: fs.support,
-        waters: fs.waters,
-        aim: fs.aim,
-        status: "free",
-        failCount: 0,
-      });
-    }
-  }
-  return [...byKey.values()];
+  return mergeEntries(spots, FISH_SPOT_POLICY, scanned.map((fs) => toPoolSpot(fs, dimension)));
 }
 
 /**
- * 某假人视角下该点是否可用（状态 + 独占语义；现场实体占用由 mc 层叠加判定）。
+ * 某假人视角下该点是否可用（状态 + 独占语义 + 维度一致；现场实体占用由
+ * mc 层叠加判定）。
  *   - unavailable → 不可用
  *   - occupied → 仅占用者本人可用（假人可使用自己独占的点）
  *   - free → 可用
@@ -97,9 +119,7 @@ export function mergeScanned(spots: readonly PoolSpot[], scanned: readonly Fishi
  */
 export function isSpotUsableFor(spot: PoolSpot, botName: string, dimension?: string): boolean {
   if (dimension !== undefined && spot.dimension !== dimension) return false;
-  if (spot.status === "unavailable") return false;
-  if (spot.status === "occupied") return spot.claimant === botName;
-  return true;
+  return isUsableFor(spot, botName, FISH_SPOT_POLICY);
 }
 
 /**
@@ -122,13 +142,7 @@ export interface SpotPickOptions {
 
 /** 点位是否通过选点约束（距离 + 现场有效性）——纯逻辑，可单测 */
 export function passesSpotConstraints(spot: PoolSpot, options: SpotPickOptions | undefined): boolean {
-  if (!options) return true;
-  if (options.center) {
-    const maxDistance = options.maxDistance ?? SPOT_MAX_DISTANCE;
-    if (distSq(spot.stand, options.center) > maxDistance * maxDistance) return false;
-  }
-  if (options.isValid && !options.isValid(spot)) return false;
-  return true;
+  return passesPickConstraints(spot, FISH_SPOT_POLICY, options);
 }
 
 /**
@@ -161,29 +175,19 @@ export function pickBestSpot(
   dimension?: string,
   options?: SpotPickOptions,
 ): PoolSpot | undefined {
-  const usable = spots.filter(
-    (s) => isSpotUsableFor(s, botName, dimension) && passesSpotConstraints(s, options),
-  );
+  const usable = spots.filter((s) => isSpotUsableFor(s, botName, dimension) && passesSpotConstraints(s, options));
   if (usable.length === 0) return undefined;
-  usable.sort((a, b) => {
-    if (a.aim.level !== b.aim.level) return b.aim.level - a.aim.level;
-    return distSq(a.stand, center) - distSq(b.stand, center);
-  });
-  return usable[0];
+  return pickBest(usable, botName, FISH_SPOT_POLICY, center);
 }
 
 /** 独占占用（标记共享——其他假人不再选它） */
 export function claimSpot(spots: readonly PoolSpot[], key: string, botName: string): PoolSpot[] {
-  return spots.map((s) => (s.key === key ? { ...s, status: "occupied", claimant: botName } : s));
+  return claimEntry(spots, FISH_SPOT_POLICY, key, botName);
 }
 
 /** 释放独占占用：失败计数已达上限 → unavailable（不可用点不复活）；否则回 free */
 export function releaseSpot(spots: readonly PoolSpot[], key: string): PoolSpot[] {
-  return spots.map((s) =>
-    s.key === key
-      ? { ...s, status: s.failCount >= SPOT_MAX_FAIL_STRIKES ? "unavailable" : "free", claimant: undefined }
-      : s,
-  );
+  return releaseEntry(spots, FISH_SPOT_POLICY, key);
 }
 
 /**
@@ -194,27 +198,11 @@ export function markFailSpot(
   spots: readonly PoolSpot[],
   key: string,
 ): { spots: PoolSpot[]; failCount: number; unavailable: boolean } {
-  const cur = spots.find((s) => s.key === key);
-  const failCount = (cur?.failCount ?? 0) + 1;
-  const unavailable = failCount >= SPOT_MAX_FAIL_STRIKES;
-  return {
-    failCount,
-    unavailable,
-    spots: spots.map((s) =>
-      s.key === key ? { ...s, failCount, status: unavailable ? "unavailable" : "occupied" } : s,
-    ),
-  };
+  const result = markFail(spots, FISH_SPOT_POLICY, key);
+  return { spots: result.pool, failCount: result.failCount, unavailable: result.unavailable };
 }
 
 /** 抛竿成功（钓到鱼）→ 清零该点失败计数（仍保持占用直到主动释放） */
 export function resetFailSpot(spots: readonly PoolSpot[], key: string): PoolSpot[] {
-  return spots.map((s) => (s.key === key ? { ...s, failCount: 0 } : s));
-}
-
-/** 水平距离平方（选点排序用） */
-function distSq(a: Vec3, b: Vec3): number {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  const dz = a.z - b.z;
-  return dx * dx + dy * dy + dz * dz;
+  return resetFail(spots, FISH_SPOT_POLICY, key);
 }

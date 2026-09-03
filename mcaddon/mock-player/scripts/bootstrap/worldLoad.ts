@@ -9,8 +9,8 @@ import { startTagBehaviors } from "../features/state/behavior";
 import { initTridentTracker } from "../features/trident/tridentTracker";
 import { initFishingHookTracker, initLootTracker } from "../features/flow";
 import { initRaidMode } from "../features/flow/raidMode";
-import { startBrainEngine } from "../legacy/ai/BotBrain";
-import { startAiEngine, startSharedMemorySweeper } from "../features/ai/brainEngine";
+import { registerBotTasks } from "../features/flow/tasks";
+import { startBotTaskRuntime } from "../runtime";
 import { registerUiDrivers } from "./uiDrivers";
 import { runMigrations } from "./migration";
 import { botLifecycle, configStore } from "./context";
@@ -78,9 +78,8 @@ export async function handleWorldLoad(): Promise<void> {
     initLootTracker,
     // initPositionTracker 已由 lifecycle/PositionComponent 内聚，此处不再重复订阅
     initRaidMode,
-    startBrainEngine,
-    startAiEngine,
-    startSharedMemorySweeper,
+    registerBotTasks, // workMode → 任务注册（先注册，后启动运行时）
+    startBotTaskRuntime, // 任务运行时：事件驱动对账 + 共享记忆过期扫描
   ] as const) {
     try {
       (fn as any)();

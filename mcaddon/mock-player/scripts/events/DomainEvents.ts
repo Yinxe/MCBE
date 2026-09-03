@@ -24,7 +24,7 @@ export interface VaultOpenedEvent {
   remaining: number;
 }
 
-/** 宝库开箱成功信号（⚠️ 预留：目前仅 VaultPorts 生产端触发，无订阅方，供通知/统计联动） */
+/** 宝库开箱成功信号（⚠️ 预留：暂无生产端/订阅方，供未来宝库功能通知/统计联动） */
 export const vaultOpened = new EventSignal<VaultOpenedEvent>();
 
 // ─── 三叉戟认主事件 ────────────────────────────────────
@@ -124,8 +124,9 @@ export const botTagsChanged = new EventSignal<BotTagsChangedEvent>();
 
 // ─── 工作模式变更事件 ──────────────────────────────────
 // 工作模式（workMode，用户拍板命名）是互斥单选字段（none/wander/mine/place/
-// attack/raid/fishing）——setWorkMode 落库后发布，工作模式驱动模块（生物 AI
-// 引擎/劫掠模式/钓鱼）按需订阅启动/停止，替代旧 10 tick 标签轮询。
+// attack/raid/fishing/woodcut/follow）——setWorkMode 落库后发布，工作模式
+// 驱动模块（任务运行时/劫掠模式/跟随引擎）按需订阅启动/停止（事件驱动，
+// 无轮询）。
 
 /** 假人工作模式变更事件：setWorkMode 成功后 */
 export interface BotWorkModeChangedEvent {

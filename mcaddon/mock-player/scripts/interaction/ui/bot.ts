@@ -19,6 +19,7 @@ import { resolveUiBotRecord } from "./helpers";
 import { visibleRecords } from "../../service/BotVisibility";
 import { ownerLabel } from "./ownerLabel";
 import { inventoryContainerOf } from "../../features/basic/items/ItemComponentRead";
+import { CHOP_MODE_LABEL, normalizeChopMode } from "../../rules/woodcut/WoodcutRules";
 
 // ─── 工具 ──────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ function getWorkModeLabel(mode: string): string {
     attack: "攻击",
     raid: "劫掠",
     fishing: "钓鱼",
+    woodcut: "砍树",
     follow: "跟随",
   };
   return map[mode] ?? mode;
@@ -216,7 +218,12 @@ function buildBotPanelBody(record: BotRecord): string {
     const deathStr = record.death ? `${color.error}死亡` : `${color.success}存活`;
     const onlineStr = record.online ? `${color.success}在线` : `${color.warn}离线`;
     const sneakStr = record.isSneaking ? `${color.success}潜行` : `${color.muted}正常`;
-    const woodcutExtra = record.workMode === "woodcut" && (record as any).woodcutMode ? `${color.muted}(${(record as any).woodcutMode})` : "";
+    // 砍树子模式括注（仅砍树模式显示；值转中文标签，不露内部枚举）
+    const chopMode = normalizeChopMode(record.woodcutMode);
+    const woodcutExtra =
+      record.workMode === "woodcut" && chopMode !== "logs"
+        ? `${color.muted}(${CHOP_MODE_LABEL[chopMode]})`
+        : "";
     return `${deathStr} ${color.muted}| ${onlineStr} ${color.muted}| ${color.accent}模式:${workColor}${workLabel}${woodcutExtra} ${color.muted}| ${sneakStr}`;
   });
   const line2 = safe(() => {

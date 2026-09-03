@@ -1,9 +1,9 @@
-// ─── core/ai — 跨假人共享记忆（SharedMemory） ─────────
+// ─── runtime — 跨假人共享记忆（SharedMemory） ──────────
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { SharedMemory, AiMemory } from "../scripts/ai";
+import { SharedMemory } from "../scripts/runtime/SharedMemory";
 
 test("SharedMemory：基本读写/存在/删除/清空", () => {
   const mem = new SharedMemory();
@@ -24,31 +24,13 @@ test("SharedMemory：基本读写/存在/删除/清空", () => {
 });
 
 test("SharedMemory：跨假人共享——一个实例写入，其他假人即可读取", () => {
-  // 引擎语义：所有假人的 ctx.shared 指向同一个 SharedMemory 实例——
+  // 运行时语义：所有任务的 ctx.shared 指向同一个 SharedMemory 实例（全局单例）——
   // 模拟 botA 写入、botB（同一实例）读取
   const mem = new SharedMemory();
-  const ctxA = { botName: "$矿工A", tick: 10, memory: new AiMemory(), shared: mem };
-  const ctxB = { botName: "$矿工B", tick: 10, memory: new AiMemory(), shared: mem };
-
-  ctxA.shared.set("threat:seen:100,64,200", { type: "zombie", at: 20 });
-  // botB 直接可读
-  assert.deepEqual(ctxB.shared.get("threat:seen:100,64,200"), { type: "zombie", at: 20 });
-  ctxB.shared.set("resource:iron", 3);
-  assert.equal(ctxA.shared.get<number>("resource:iron"), 3);
-});
-
-test("SharedMemory：与私有记忆 AiMemory 隔离——共享 vs 单假人", () => {
-  const shared = new SharedMemory();
-  const memA = new AiMemory();
-  const memB = new AiMemory();
-  shared.set("notice", "群通知");
-  memA.set("notice", "A 私有");
-  memB.set("notice", "B 私有");
-  // 私有记忆互不可见
-  assert.equal(memA.get("notice"), "A 私有");
-  assert.equal(memB.get("notice"), "B 私有");
-  // 共享记忆对所有人可见
-  assert.equal(shared.get("notice"), "群通知");
+  mem.set("fishing:pool", [{ key: "minecraft:overworld@10,64,-4" }]);
+  // botB 直接可读（同一实例）
+  const pool = mem.get<Array<{ key: string }>>("fishing:pool");
+  assert.equal(pool?.[0]?.key, "minecraft:overworld@10,64,-4");
 });
 
 test("SharedMemory：命名空间前缀键防碰撞", () => {

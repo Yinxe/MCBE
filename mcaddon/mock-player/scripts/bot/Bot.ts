@@ -113,16 +113,16 @@ export class Bot extends BotCore {
     return getMainhandOptions(this.name);
   }
 
-  /** 设置主手槽（-1=清空；>=0=背包槽位；异步动作：失败抛 ActionError） */
-  async setMainhand(slotValue: number): Promise<void> {
-    await setMainhandSlot(this.name, slotValue);
+  /** 设置主手槽（-1=清空；>=0=背包槽位；微动作：成功 true，失败抛 ActionError） */
+  async setMainhand(slotValue: number): Promise<boolean> {
+    return setMainhandSlot(this.name, slotValue);
   }
 
   // ─── 原子能力：控制/状态 ─────────────────────────────
 
-  /** 切换控制权（异步动作：失败抛 ActionError；委托 basic/control） */
-  async toggleControl(controller: Player): Promise<void> {
-    await toggleControl(this.record, controller);
+  /** 切换控制权（微动作：成功 true，失败抛 ActionError；委托 basic/control） */
+  async toggleControl(controller: Player): Promise<boolean> {
+    return toggleControl(this.record, controller);
   }
 
   /** 检查主手耐久（事件驱动补充；委托 basic/toolHealth） */
@@ -181,14 +181,14 @@ export class Bot extends BotCore {
     switchSpawnMode(this.record, newMode);
   }
 
-  /** 传送玩家到自己（异步动作：失败抛 ActionError；委托 basic/teleport） */
-  async tpPlayerHere(player: Player): Promise<void> {
-    await tpPlayerToBot(player, this.record);
+  /** 传送玩家到自己（微动作：成功 true，失败抛 ActionError；委托 basic/teleport） */
+  async tpPlayerHere(player: Player): Promise<boolean> {
+    return tpPlayerToBot(player, this.record);
   }
 
-  /** 传送自己到玩家（异步动作：失败抛 ActionError；委托 basic/teleport） */
-  async tpToPlayer(player: Player): Promise<void> {
-    await tpBotToPlayer(this.record, player);
+  /** 传送自己到玩家（微动作：成功 true，失败抛 ActionError；委托 basic/teleport） */
+  async tpToPlayer(player: Player): Promise<boolean> {
+    return tpBotToPlayer(this.record, player);
   }
 
   // ─── 原子能力：装备交换（委托 basic/equip，闭包异步） ──

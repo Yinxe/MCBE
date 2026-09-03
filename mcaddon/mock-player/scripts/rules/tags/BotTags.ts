@@ -13,11 +13,9 @@ export const TAG_RESPAWN: TagDef = { label: "自动重生", value: `${TAG_PREFIX
 export const TAG_AUTO_JUMP: TagDef = { label: "自动跳跃[已禁用]", value: `${TAG_PREFIX}autoJump` };
 
 // 互斥的标签（同一时间只能有一个生效）
-// ⚠️ 旧行为标签（用户拍板：行为标签机制已删除——行为统一走生物 AI 行为
-//   record.workMode 字段（工作模式单选，用户拍板）。以下定义**保留仅供
-//   legacy 引擎内部使用**（features/state/behavior.ts 的 autoAttack/control/
-//   autoJump 等标签行为 + legacy/ai/BotBrain 的宝库/劫掠/钓鱼），
-//   不再参与 UI 行为选择、不再进互斥组。
+// ⚠️ 旧行为标签（用户拍板：行为标签机制已删除——行为统一走
+//   record.workMode 字段（工作模式单选）。以下定义**保留仅供存量数据
+//   兼容**（旧记录 tags 里可能残留），不再参与 UI 行为选择、不再进互斥组。
 export const TAG_IDLE: TagDef = { label: "空闲", value: `${TAG_PREFIX}idle` };
 export const TAG_AUTO_MINE: TagDef = { label: "自动挖掘", value: `${TAG_PREFIX}autoMine` };
 export const TAG_AUTO_PLACE: TagDef = { label: "自动放置", value: `${TAG_PREFIX}autoPlace` };

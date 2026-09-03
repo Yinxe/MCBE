@@ -1,10 +1,6 @@
-// ─── 共享记忆（core/ai） ─────────────────────────────
-// 跨假人共享记忆层：所有假人的生物大脑共用一个 SharedMemory 实例——
-// 一个假人的能力写入、其他假人即可读取（如"某处发现威胁/资源/目标点"）。
-// 与 AiMemory（botName 级、每假人独立）的区别：
-//   AiMemory      = 大脑级私有记忆（同假人跨目标共享；brain.memory）
-//   SharedMemory  = 群组级共享记忆（跨假人共享；引擎全局单例注入 ctx.shared）
-//
+// ─── 跨假人共享记忆（runtime 层） ───────────────────────
+// 群组级共享记忆（跨假人共享；全局单例注入任务上下文 ctx.shared）——
+// 一个任务写入、其他假人即可读取（如共享钓鱼点池/树资源池）。
 // ⚠️ 过期机制（用户规格 2026-08-18）：
 //   - 每键可带 TTL（tick 数）；**独立计时器每秒（20 tick）扫描**，到期的键
 //     直接删除（sweepExpired）；get/has 另做惰性过期兜底
@@ -12,7 +8,7 @@
 //     renewing=延长过期（**默认**，每次写入/更新重置到期时刻——数据更新
 //     即延长寿命）
 //   - 内部时钟由 sweepExpired(nowTick) 推进；set 可显式传 nowTick 精确计时
-//     （能力内传 ctx.tick），省略则用最近一次扫描的时钟（秒级粒度）
+//     （任务内传系统 tick），省略则用最近一次扫描的时钟（秒级粒度）
 // ⚠️ 运行时内存，不持久化（重启/重载清空）；键用命名空间前缀防碰撞。
 // 零 @minecraft 依赖，可 node 单测。
 
@@ -28,7 +24,7 @@ interface SharedEntry {
   expireAt?: number;
 }
 
-/** 跨假人共享记忆（键值存储 + 过期；引擎全局单例，所有假人可读可写） */
+/** 跨假人共享记忆（键值存储 + 过期；全局单例，所有假人任务可读可写） */
 export class SharedMemory {
   private store = new Map<string, SharedEntry>();
   /** 内部时钟（tick）：由 sweepExpired 推进；set 可显式传 nowTick 覆盖 */
