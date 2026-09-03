@@ -508,7 +508,7 @@ export async function longNavigateBot(
 //      光照单调递增 + 草方块偏好 10）
 // 决策核心（selectStrollTarget/稳定方块/行走目标值）在 rules/coords/Stroll
 // 纯逻辑可单测；本函数做世界查询（getBlock）采样 10 个候选并导航。
-// 持续游走由生物 AI 能力（features/ai/capabilities/wander）周期性调用。
+// 持续游走由闲逛任务（features/flow/tasks/wanderTask）循环调用。
 
 /** 最大修正高度（格）：固体向上修正上限，防死循环 */
 const STROLL_MAX_RAISE = 8;

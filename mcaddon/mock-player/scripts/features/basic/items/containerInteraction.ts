@@ -97,7 +97,7 @@ export async function withContainer(
 
   // 看向容器（用户规格：扭头看向容器保留——假人面向容器操作）
   try {
-    lookAt(bot, { x: pos.x + 0.5, y: pos.y + 0.5, z: pos.z + 0.5 });
+    await lookAt(bot, { x: pos.x + 0.5, y: pos.y + 0.5, z: pos.z + 0.5 });
   } catch (e) {
     console.warn(`[MockPlayer] withContainer ${botName} lookAt error: ${e}`);
   }

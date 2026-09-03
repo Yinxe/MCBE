@@ -26,6 +26,7 @@ function resultLabel(result: BreakResult): string {
     case "offline": return `${color.error}假人不可用`;
     case "busy": return `${color.warn}已有破坏进行中（拒绝重复）`;
     case "blocked": return `${color.warn}目标被遮挡（放弃）`;
+    case "changed": return `${color.warn}目标已变为其他方块（放弃）`;
   }
 }
 

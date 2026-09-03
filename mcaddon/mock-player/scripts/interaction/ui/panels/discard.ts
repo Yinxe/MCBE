@@ -11,6 +11,16 @@ import { inventoryContainerOf } from "../../../features/basic/items/ItemComponen
 import { dropSelectedItem } from "../../../features/basic/items/drop";
 import { resolveUiBotRecord } from "../helpers";
 
+/** 丢弃尝试（丢弃失败走面板本地兜底：spawnItem 手动补丢） */
+async function tryDrop(botName: string): Promise<boolean> {
+  try {
+    await dropSelectedItem(botName);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─── UI 事件订阅 ──────────────────────────────────────
 
 /** 订阅 BOT 主菜单动作事件：丢弃物品 → 弹表单 */
@@ -160,7 +170,7 @@ export function showDiscardForm(player: Player, botName: string): void {
               const item = container.getItem(slot);
               if (item) {
                 if (slot === 0) {
-                  if (dropSelectedItem(botName)) cleared++;
+                  if (await tryDrop(botName)) cleared++;
                   else {
                     try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, undefined); cleared++; } catch {}
                   }
@@ -168,7 +178,7 @@ export function showDiscardForm(player: Player, botName: string): void {
                   const curSelected = container.getItem(0);
                   container.setItem(0, item);
                   container.setItem(slot, curSelected ?? undefined);
-                  if (dropSelectedItem(botName)) {
+                  if (await tryDrop(botName)) {
                     cleared++;
                   } else {
                     try { bot.dimension.spawnItem(item, bot.location); container.setItem(0, curSelected ?? undefined); cleared++; } catch {
@@ -185,7 +195,7 @@ export function showDiscardForm(player: Player, botName: string): void {
                 try { equippable.setEquipment(eqSlot, undefined); } catch {}
                 const cur = container.getItem(0);
                 container.setItem(0, item as any);
-                if (dropSelectedItem(botName)) {
+                if (await tryDrop(botName)) {
                   cleared++;
                 } else {
                   try { bot.dimension.spawnItem(item as any, bot.location); container.setItem(0, cur ?? undefined); cleared++; } catch {

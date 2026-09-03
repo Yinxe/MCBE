@@ -5,6 +5,7 @@
 import { Vector2, Vector3 } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
+import { describeError } from "../../errors";
 import type { BotRecord } from "../../rules/Types";
 import { syncEntityTags } from "../basic/EntityTags";
 import { saveCoordinator } from "../../bootstrap/context";
@@ -19,7 +20,11 @@ export function finalizeBotSpawn(
 ): void {
   syncEntityTags(bot, record.tags);
   bot.isSneaking = record.isSneaking;
-  if (!noPose) setPose(bot, rotation, lookTarget);
+  if (!noPose) {
+    void setPose(bot, rotation, lookTarget).catch((e: unknown) => {
+      console.warn(`[MockPlayer] 初始体态设置失败（${record.name}）: ${describeError(e)}`);
+    });
+  }
 
   // 注册 + 写穿（saveRecord 内含内存 set）
   saveCoordinator.saveRecord(record);

@@ -31,7 +31,7 @@ import {
   type ChopTargetKind,
   type ToolItem,
 } from "../../rules/woodcut/WoodcutRules";
-import { TREE_LEAF_TYPE_IDS, TREE_LOG_TYPE_IDS } from "../../rules/tree/TreeRules";
+import { TREE_LEAF_TYPE_IDS, TREE_LOG_TYPE_IDS, classifyTreeBlock } from "../../rules/tree/TreeRules";
 import type { ChopPlan, ChopStage, ChopTarget } from "../../rules/woodcut/ChopPlan";
 import type { PickupTask } from "../../rules/pickup/PickupPlan";
 import { runPickupFlow } from "./pickupFlow";
@@ -95,15 +95,43 @@ function targetGone(bot: SimulatedPlayer, target: ChopTarget): boolean {
 
 /**
  * 持续破坏单个目标直到被摧毁（用户规格：breakBlock 的"直到破坏方块"模式）：
- *   breakBlockAt 会**看向目标方块中心**并持续挖掘直到目标消失；超出挖掘距离
- *   （far）→ 靠近目标方块缩短距离后重试。工具每块按模式/目标自动切换。
+ *   breakBlockAt 会**面向目标方块中心**（身体+视线）并定点持续挖掘目标坐标
+ *   直到目标消失；超出挖掘距离（far）→ 靠近目标方块缩短距离后重试。
+ *   工具每块按模式/目标自动切换。
  *
- * @returns "broken"=已摧毁 / "skip"=本就不存在 / "failed"=多次尝试仍失败（含不可达）
+ * ⚠️ 砍树铁律（挖泥巴/挖坑 BUG 根治闸门）：破坏开始前读一次目标方块——
+ *   已消失 → skip；**类型与计划 kind 不符（泥巴/石头/建筑等）→ 绝不挖**；
+ *   通过后锁定 expectedTypeId 交 breakBlockAt 全程类型守卫（中途被换 → changed）。
+ *
+ * @returns "broken"=已摧毁 / "skip"=不存在或类型不符（绝不挖）/ "far"=靠近后
+ *   仍超距（竖向够不到——供上层剪枝其上方目标，杜绝大树浮空木下的无效寻路）/
+ *   "failed"=其他失败
  */
-async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMode): Promise<"broken" | "skip" | "failed"> {
+async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMode): Promise<"broken" | "skip" | "far" | "failed"> {
+  let sawFar = false; // 重试期间出现过超距（靠近后仍 far → 竖向不可达信号）
   const bot = resolveBotPlayer(botName);
   if (!bot) return "failed";
-  if (targetGone(bot, target)) return "skip"; // 已消失 → 成功信号
+
+  // ── 目标状态 + 类型守卫（一次读块）：砍树只认木头/树叶 ──
+  let expectedTypeId: string;
+  try {
+    const block = bot.dimension.getBlock({
+      x: Math.floor(target.loc.x),
+      y: Math.floor(target.loc.y),
+      z: Math.floor(target.loc.z),
+    });
+    if (!block || block.isAir || block.isLiquid) return "skip"; // 已消失 → 跳过
+    if (classifyTreeBlock(block.typeId) !== target.kind) {
+      console.warn(
+        `[MockPlayer] chopOneTree ${botName} 目标 (${target.loc.x},${target.loc.y},${target.loc.z}) ` +
+          `当前为 ${block.typeId}（非${target.kind === "log" ? "原木" : "树叶"}），跳过——绝不挖非木头方块`,
+      );
+      return "skip";
+    }
+    expectedTypeId = block.typeId;
+  } catch {
+    return "skip"; // 区块未加载/读取失败 → 目标不可信，跳过（重扫计划会纠正）
+  }
 
   // 工具策略（每块破坏前注入；全背包强制策略——core 决策）
   const ensureTool = async (): Promise<void> => {
@@ -112,7 +140,8 @@ async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMod
     const kind: ChopTargetKind = target.kind;
     const slot = pickBestTool(kind, mode, snapshotTools(cur));
     if (slot !== undefined) {
-      setMainhandSlot(botName, slot);
+      // 换工具失败抛 ActionError → breakBlockOnce 内部消化（按不切换继续挖）
+      await setMainhandSlot(botName, slot);
       await waitTicks(1); // 工具入主手后等待 1 tick 生效
     }
   };
@@ -123,7 +152,13 @@ async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMod
     if (!cur) return;
     stopMining(botName); // ⚠️ 移动前必须立刻停止正在挖掘的动作
     // 导航到目标正下方（y 用假人当前层——地面可达时生成导航目标）
-    const navTarget = { x: target.loc.x + 0.5, y: Math.max(target.loc.y - 1, cur.location.y - 2), z: target.loc.z + 0.5 };
+    // 导航高度钳制在假人脚下 2 格内：不对浮空点寻路（够不到的目标由竖向
+    // 不可达判定直接剪枝，走不到这里）
+    const navTarget = {
+      x: target.loc.x + 0.5,
+      y: Math.min(target.loc.y - 1, cur.location.y + 2),
+      z: target.loc.z + 0.5,
+    };
     const nav = await longNavigateBot(botName, navTarget);
     if (nav !== NavigateResult.Arrived) {
       await navigateBot(botName, navTarget);
@@ -140,10 +175,31 @@ async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMod
       maxDistance: BREAK_MAX_DISTANCE,
       pollTicks: 3,
       ensureTool, // 每块破坏前自动换工具（斧头/树叶策略）
+      expectedTypeId, // 全程类型守卫：只挖破坏开始时验证过的那块木头
       skipLook: false, // 看向目标方块中心再挖（breakBlockAt 内置扭头）
     });
     if (res === "broken") return "broken"; // 持续挖掘直到目标被破坏 ✓
+    if (res === "changed") {
+      // 目标中途被换成其他方块（外部改动/衰亡替换）→ 不挖，跳过（铁律）
+      console.warn(
+        `[MockPlayer] chopOneTree ${botName} 目标 (${target.loc.x},${target.loc.y},${target.loc.z}) 挖掘中途变为其他方块，跳过`,
+      );
+      return "skip";
+    }
     if (res === "far") {
+      sawFar = true;
+      // ⚠️ 竖向不可达快速判定（用户拍板 BUG：对着够不着的浮空木疯狂寻路）——
+      // 目标就在正上/正下方（水平 ≤2 格）且垂直差已超挖掘距离 → 靠近无意义，
+      // 立即判 far 交上层剪枝（其上方目标全部跳过），不做任何导航
+      const cur = resolveBotPlayer(botName);
+      if (cur) {
+        const dx = target.loc.x + 0.5 - cur.location.x;
+        const dz = target.loc.z + 0.5 - cur.location.z;
+        const dy = target.loc.y - cur.location.y;
+        if (dx * dx + dz * dz <= 4 && Math.abs(dy) > BREAK_MAX_DISTANCE - 1) {
+          return "far";
+        }
+      }
       // 目标超出挖掘距离 → 靠近目标方块缩短距离再挖（用户规格）
       await approach();
       continue;
@@ -154,7 +210,7 @@ async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMod
     }
     return "failed"; // aborted/error → 交给调用方（尽力砍）
   }
-  return "failed";
+  return sawFar ? "far" : "failed";
 }
 
 /** 停止假人正在挖掘的动作（用户规格：任何移动操作进行时，都要立刻停止挖矿） */
@@ -203,6 +259,10 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
   let broken = 0;
   let effectiveMode: ChopMode = mode;
   let fellBack = false;
+  // 大树留顶剪枝（用户拍板 BUG：高大树挖完范围内原木后，剩余浮空木够不到，
+  // 旧逻辑会反复寻路）——一旦确认某高度竖向够不到，其上方目标全部跳过
+  let unreachableY: number | undefined;
+  let pruned = 0;
   for (const stage of plan.stages) {
     if (stage.kind === "leaf" && effectiveMode === "collect") {
       // 收集模式挖树叶：无合适树叶工具 → 自动 fallback 圆木模式
@@ -216,16 +276,31 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
       }
     }
     for (const target of stage.targets) {
+      if (unreachableY !== undefined && target.loc.y > unreachableY + 1) {
+        pruned++;
+        continue; // 够不着高度以上的目标：不寻路直接跳过（留顶）
+      }
       if (!resolveBotPlayer(botName)?.isValid) return { kind: "failed", reason: "aborted" };
       stopMining(botName); // ⚠️ 每个目标处理前（含 move 前）确保停挖
       const r = await breakUntilGone(botName, target, effectiveMode);
-      if (r === "broken") broken++;
-      else if (r === "failed") {
+      if (r === "broken") {
+        broken++;
+        unreachableY = undefined; // 回到可达高度（散落圆木等低目标仍要挖）
+      } else if (r === "far") {
+        // 靠近后仍超距 = 竖向够不到 → 记录高度，上方目标全部剪枝
+        unreachableY = unreachableY === undefined ? target.loc.y : Math.min(unreachableY, target.loc.y);
         console.warn(
-          `[MockPlayer] chopOneTree ${botName} 目标 ${target.loc.x},${target.loc.y},${target.loc.z} 无法破坏（可能超出竖向挖掘距离），跳过`,
+          `[MockPlayer] chopOneTree ${botName} 高度 ${target.loc.y} 超出竖向挖掘距离，跳过其上方剩余目标（留顶）`,
+        );
+      } else if (r === "failed") {
+        console.warn(
+          `[MockPlayer] chopOneTree ${botName} 目标 ${target.loc.x},${target.loc.y},${target.loc.z} 无法破坏，跳过`,
         );
       }
     }
+  }
+  if (pruned > 0) {
+    console.info(`[MockPlayer] chopOneTree ${botName} 剪枝 ${pruned} 个够不着的高处目标（大树留顶）`);
   }
 
   // ── ④ 拾取：树中心 7×7 范围内圆木/树叶两类掉落物（独立拾取 flow，卡叶破除） ──

@@ -1,6 +1,7 @@
 import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/server";
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
+import { describeError } from "../../../errors";
 import { resolveBotForCommand } from "../auth";
 export function registerTpCommand(registry: any): void {
   defineCommand(registry, {
@@ -12,12 +13,10 @@ export function registerTpCommand(registry: any): void {
     if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
     const bot = resolveBotForCommand(player, targetName);
     if (!bot) return;
-    try {
-      bot.tpPlayerHere(player);
-      player.sendMessage(`${color.success}已传送到假人 ${color.playerName}${targetName}${color.success} 身边`);
-    } catch (e: any) {
-      player.sendMessage(`${color.error}传送失败: ${e?.message ?? e}`);
-    }
+    bot
+      .tpPlayerHere(player)
+      .then(() => player.sendMessage(`${color.success}已传送到假人 ${color.playerName}${targetName}${color.success} 身边`))
+      .catch((e: unknown) => player.sendMessage(`${color.error}传送失败: ${describeError(e)}`));
   });
 }
 export function registerTpHereCommand(registry: any): void {
@@ -30,11 +29,9 @@ export function registerTpHereCommand(registry: any): void {
     if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
     const bot = resolveBotForCommand(player, targetName);
     if (!bot) return;
-    try {
-      bot.tpToPlayer(player);
-      player.sendMessage(`${color.success}假人 ${color.playerName}${targetName}${color.success} 已传送到你身边`);
-    } catch (e: any) {
-      player.sendMessage(`${color.error}传送失败: ${e?.message ?? e}`);
-    }
+    bot
+      .tpToPlayer(player)
+      .then(() => player.sendMessage(`${color.success}假人 ${color.playerName}${targetName}${color.success} 已传送到你身边`))
+      .catch((e: unknown) => player.sendMessage(`${color.error}传送失败: ${describeError(e)}`));
   });
 }

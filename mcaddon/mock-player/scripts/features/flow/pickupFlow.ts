@@ -15,12 +15,14 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { breakBlockOnce } from "../basic/blocks";
+import { faceTowards } from "../basic/PoseGateway";
 import { longNavigateBot, NavigateResult } from "../basic/move";
 import { setMainhandSlot } from "../basic/items/mainhand";
 import { inventoryContainerOf, enchantableOf } from "../basic/items/ItemComponentRead";
 import { waitTicks } from "../utils";
 import { planPickup, type PickupItem, type PickupTask } from "../../rules/pickup/PickupPlan";
 import { pickBestTool, toolCategoryOf } from "../../rules/woodcut/WoodcutRules";
+import { classifyTreeBlock } from "../../rules/tree/TreeRules";
 
 // ─── 结果类型 ──────────────────────────────────────────
 
@@ -155,10 +157,23 @@ async function breakCleanup(botName: string, bot: SimulatedPlayer, loc: { x: num
     await longNavigateBot(botName, { x: loc.x + 0.5, y: loc.y, z: loc.z + 0.5 });
   }
   if (!bot.isValid) return;
+  // ⚠️ 砍树铁律：卡落遮挡只破树叶——坐标上的方块已不是树叶（衰亡替换/外部
+  //   改动）→ 不挖（绝不把泥巴/石头当遮挡挖）
+  try {
+    const block = bot.dimension.getBlock({ x: Math.floor(loc.x), y: Math.floor(loc.y), z: Math.floor(loc.z) });
+    if (!block || block.isAir || block.isLiquid) return; // 已消失 → 无需破除
+    if (classifyTreeBlock(block.typeId) !== "leaf") return;
+  } catch {
+    return; // 读取失败 → 不挖
+  }
   // 树叶策略（收集模式语义：精准锄头 > 剪刀 > 任意工具）选工具
   const slot = pickBestTool("leaf", "collect", snapshotTools(bot));
   if (slot !== undefined) {
-    setMainhandSlot(botName, slot);
+    try {
+      await setMainhandSlot(botName, slot);
+    } catch {
+      /* 换工具失败不致命（无工具继续破遮挡） */
+    }
     await waitTicks(1);
   }
   try {
@@ -205,9 +220,11 @@ export async function runPickupFlow(botName: string, task: PickupTask, options: 
       }
     }
 
-    // ② 就近拾取
+    // ② 就近拾取（用户拍板：拾取要有"兴趣点"——走过去的同时身体与视线面向掉落物）
     for (const item of plan.targets) {
       if (!bot.isValid) return { kind: "failed", reason: "error", picked, remained: 0 };
+      // 已消失（上一轮顺路被吸入）→ 提前跳过，不为空目标导航（动作更流畅）
+      if (dropGone(item.entityId)) continue;
       // 背包满 → 回调（返回 true 表示已处理可继续，false/缺省停止）
       const slots = freeSlots(bot);
       if (slots.free === 0) {
@@ -219,6 +236,11 @@ export async function runPickupFlow(botName: string, task: PickupTask, options: 
         const nav = await longNavigateBot(botName, { x: item.loc.x, y: item.loc.y, z: item.loc.z });
         if (nav === NavigateResult.Arrived || nav === NavigateResult.TooFar) break;
         await waitTicks(5);
+      }
+      const cur = resolveBotPlayer(botName);
+      if (cur && !dropGone(item.entityId)) {
+        // 面向掉落物（身体 + 视线；用户拍板 BUG：走过去了眼睛还看着别处）
+        await faceTowards(cur, { x: item.loc.x + 0.5, y: item.loc.y + 0.5, z: item.loc.z + 0.5 });
       }
       // 靠近后等待少量 tick 让自动吸入生效；按 entityId 精确判定是否仍存在 → onUnreachable
       await waitTicks(waitPickupTicks);

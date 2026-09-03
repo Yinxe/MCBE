@@ -98,7 +98,7 @@ export class DeathComponent implements LifecycleComponent {
           if (!bot.isValid) return;
           const dim = world.getDimension(record.respawnPoint.dimension);
           bot.teleport(record.respawnPoint.location, { dimension: dim });
-          setPose(bot, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
+          await setPose(bot, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
           record.entityId = bot.id;
           syncEntityTags(bot as unknown as import("@minecraft/server").Player, record.tags);
           record.death = false;

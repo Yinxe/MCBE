@@ -8,6 +8,8 @@ import { BotUiEvent } from "../../events/UiEvents";
 import { BotEvents } from "../../events/DomainEvents";
 import { botRegistry } from "../../bootstrap/context";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
+import { describeError } from "../../errors";
+import { lookAtEntity } from "../basic/PoseGateway";
 import { color } from "@yinxe/toolkit";
 
 // ─── 跟随状态 ──────────────────────────────────────────
@@ -163,14 +165,22 @@ function ensureEngine(): void {
 
       if (dist <= STOP_DIST) {
         try { bot.stopMoving(); } catch { /* ignore */ }
-        continue;
+      } else {
+        try {
+          bot.navigateToEntity(target, 1);
+        } catch {
+          // 导航失败时静默忽略
+        }
       }
 
-      try {
-        bot.navigateToEntity(target, 1);
-      } catch {
-        // 导航失败时静默忽略
-      }
+      // ⚠️ 注视目标（跟随姿态，用户拍板 BUG2：跟随中要看向目标玩家）——
+      // 移动中与到位停住后都保持看向玩家（navigateToEntity 只管寻路，停住后
+      // 假人保持最后移动朝向）。用引擎 lookAtEntity 实体注视（API 直接提供，
+      // 引擎持续追踪实体位置，无需自算头部坐标拍快照）；微动作下一 tick 执行，
+      // 引擎失败记日志不中断跟随循环。
+      void lookAtEntity(bot, target).catch((e: unknown) => {
+        console.warn(`[MockPlayer] 跟随注视失败 ${botName}: ${describeError(e)}`);
+      });
     }
   }, FOLLOW_TICK);
 }

@@ -9,6 +9,7 @@
 import { Player, system, world } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
+import { describeError } from "../../errors";
 import { botRegistry, inventoryStorage, saveCoordinator } from "../../bootstrap/context";
 import { BotEvents } from "../../events/DomainEvents";
 import { BOT_TAG, TAG_CONTROL } from "../../rules/tags/BotTags";
@@ -40,10 +41,12 @@ export function startTagBehaviors(): void {
             const controller = world.getEntity(record.controllerId);
             if (controller) {
               sim.teleport(controller.location, { dimension: controller.dimension });
-              // 姿态统一应用（setPose 内部 try-catch 防御，位置照常保存）
               const playerRot = (controller as Player).getRotation();
               const lookTarget = getPlayerLookTarget(controller as Player);
-              setPose(sim, playerRot, lookTarget);
+              // 姿态统一应用（setPose 异步动作：拒绝经 catch 记日志，不中断控制循环）
+              void setPose(sim, playerRot, lookTarget).catch((e: unknown) => {
+                console.warn(`[MockPlayer] 体态同步失败（${record.name}）: ${describeError(e)}`);
+              });
               savePoseToRecord(record, controller.location, controller.dimension.id, playerRot, lookTarget);
               sim.isSneaking = (controller as Player).isSneaking;
               record.isSneaking = sim.isSneaking;

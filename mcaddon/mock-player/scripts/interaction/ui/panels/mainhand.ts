@@ -8,6 +8,7 @@ import { color, style } from "@yinxe/toolkit";
 import { ModalFormBuilder } from "@yinxe/toolkit";
 
 import { BotUiEvent } from "../../../events/UiEvents";
+import { describeError } from "../../../errors";
 import { getMainhandOptions, setMainhandSlot } from "../../../features/basic/items";
 import { ensureUiBotAvailable, resolveUiBotRecord } from "../helpers";
 
@@ -50,17 +51,18 @@ export function showMainhandSelector(player: Player, botName: string): void {
       const selected = options[idx];
       if (!selected) return;
       system.run(() => {
-        const ok = setMainhandSlot(botName, selected.value);
-        if (!ok) {
-          // 无空位/主手为空/失败：未处理，物品保留（绝不吞物品）
-          player.sendMessage(`${color.warn}${color.playerName}${botName}${color.warn} 主手未清空：背包没有空位可放置（物品已保留）`);
-          return;
-        }
-        if (selected.value === -1) {
-          player.sendMessage(`${color.success}已将 ${color.playerName}${botName}${color.success} 的主手物品移至背包空位`);
-        } else {
-          player.sendMessage(`${color.success}已将 ${color.playerName}${botName}${color.success} 的物品设置为主手`);
-        }
+        setMainhandSlot(botName, selected.value)
+          .then(() => {
+            if (selected.value === -1) {
+              player.sendMessage(`${color.success}已将 ${color.playerName}${botName}${color.success} 的主手物品移至背包空位`);
+            } else {
+              player.sendMessage(`${color.success}已将 ${color.playerName}${botName}${color.success} 的物品设置为主手`);
+            }
+          })
+          .catch((err: unknown) => {
+            // 无法清空/槽位无效/失败：未处理，物品保留（绝不吞物品）
+            player.sendMessage(`${color.warn}${color.playerName}${botName}${color.warn} 主手未切换：${describeError(err)}`);
+          });
       });
     });
 }

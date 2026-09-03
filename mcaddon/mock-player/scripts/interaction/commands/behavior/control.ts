@@ -4,6 +4,7 @@ import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/serve
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { TAG_CONTROL } from "../../../rules/tags/BotTags";
+import { describeError } from "../../../errors";
 import { resolveBotForCommand } from "../auth";
 
 export function registerControlCommand(registry: any): void {
@@ -23,8 +24,18 @@ export function registerControlCommand(registry: any): void {
 
     const turnOn = (params.enable as boolean | undefined) ?? true;
     const isOn = bot.hasTag(TAG_CONTROL.value);
-    if (turnOn && !isOn) { bot.toggleControl(player); player.sendMessage(`${color.success}已开启假人 ${color.playerName}${targetName}${color.success} 的体态控制`); }
-    else if (!turnOn && isOn) { bot.toggleControl(player); player.sendMessage(`${color.playerName}已关闭假人 ${color.playerName}${targetName}${color.playerName} 的体态控制，体态固定`); }
+    if (turnOn && !isOn) {
+      bot
+        .toggleControl(player)
+        .then(() => player.sendMessage(`${color.success}已开启假人 ${color.playerName}${targetName}${color.success} 的体态控制`))
+        .catch((e: unknown) => player.sendMessage(`${color.error}开启控制失败: ${describeError(e)}`));
+    }
+    else if (!turnOn && isOn) {
+      bot
+        .toggleControl(player)
+        .then(() => player.sendMessage(`${color.playerName}已关闭假人 ${color.playerName}${targetName}${color.playerName} 的体态控制，体态固定`))
+        .catch((e: unknown) => player.sendMessage(`${color.error}关闭控制失败: ${describeError(e)}`));
+    }
     else { player.sendMessage(turnOn ? `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 已处于控制模式` : `${color.playerName}假人 ${color.playerName}${targetName}${color.playerName} 未处于控制模式`); }
   });
 }

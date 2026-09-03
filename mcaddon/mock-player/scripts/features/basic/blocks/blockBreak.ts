@@ -6,22 +6,25 @@
 //     **不传 direction**——引擎可选参数默认方向，2026-08-15 确认非必要）
 //   - 并发防护：同一假人已有进行中的破坏 → **拒绝处理并返回当前状态 busy**
 //   - 成功信号：方块被摧毁 → 返回 "broken"；全退出路径 stopBreakingBlock 清理
-// breakBlockAt：持续破坏直到指定方块被摧毁——每轮感知射线方块（viewBlock）
-//   → 工具策略 → breakBlockOnce 原子破掉该块 → 直到目标消失。
+//   - 类型守卫：expectedTypeId 全程校验目标坐标方块类型——类型变化 → "changed"
+//     不挖（定点破坏铁律：绝不把泥巴/石头当目标挖）
+// breakBlockAt：定点持续破坏——目标坐标为唯一破坏点（expectedTypeId 类型守卫
+//   + faceTowards 对准目标中心 + breakBlockOnce 原子破坏，直到目标消失）。
+//   ⚠️ 不使用视线射线替代目标（旧版"看哪破哪"是挖泥巴/挖坑 BUG 根因）。
 // 自动挖掘（TAG_AUTO_MINE）协程与 breakBlockAt 共用 viewBlock + breakBlockOnce。
 //
 // 用户规格（2026-08-14/15，含修正）：工具替换以回调注入、看向目标方块中心
 // 等待扭头到位后循环内不再 lookAt、无超时（破到目标消失为止）。
 
 import type { Block, Container, Dimension, Vector3 } from "@minecraft/server";
-import { system } from "@minecraft/server";
 import { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import { botRegistry } from "../../../bootstrap/context";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import type { CancelToken } from "../../../rules/utils/CancelToken";
-import { lookAt } from "../PoseGateway";
+import { faceTowards } from "../PoseGateway";
 import { inventoryContainerOf } from "../items/ItemComponentRead";
+import { waitTicks } from "../../utils";
 
 // ─── 结果类型 ──────────────────────────────────────────
 
@@ -33,6 +36,8 @@ import { inventoryContainerOf } from "../items/ItemComponentRead";
  *  - busy：并发防护拒绝（同假人已有进行中的破坏）
  *  - blocked：视线复核开启时目标被遮挡（视线方块已不是目标——中途插入
  *    阻挡块；调用方应重新探测视线，先挖阻挡块而非"隔山打牛"）
+ *  - changed：目标坐标上的方块类型与预期不符（被外部改动/衰亡替换等）——
+ *    ⚠️ 定点破坏铁律：**绝不挖类型不符的方块**，调用方应跳过该目标重新探测
  */
 export const BreakResult = {
   Broken: "broken",
@@ -41,6 +46,7 @@ export const BreakResult = {
   Offline: "offline",
   Busy: "busy",
   Blocked: "blocked",
+  Changed: "changed",
 } as const;
 
 /** 破坏结果值（联合类型，由枚举派生——单源） */
@@ -115,6 +121,12 @@ export interface BreakOnceOptions {
    * 视线读取失败（viewBlock undefined）不误判，继续挖掘原目标。
    */
   requireLineOfSight?: boolean;
+  /**
+   * 预期方块类型（默认 undefined = 不校验）：破坏全程校验目标坐标上的方块
+   * 类型保持一致——类型变化（非消失）→ 返回 "changed" 不挖。定点破坏铁律：
+   * 只挖"坐标 + 类型"双重验证过的方块，杜绝把泥巴/石头当目标挖（挖坑 BUG 根治闸门）。
+   */
+  expectedTypeId?: string;
 }
 
 /** 持续破坏选项（breakBlockAt） */
@@ -128,11 +140,6 @@ export interface BreakBlockOptions extends BreakOnceOptions {
 }
 
 // ─── 工具 ──────────────────────────────────────────────
-
-/** 延迟等待（异步协程节奏控制——闭包内部自调度，不走主循环） */
-export function waitTicks(ticks: number): Promise<void> {
-  return new Promise((resolve) => system.runTimeout(resolve, ticks));
-}
 
 /**
  * 可取消等待：期待到期或被 token 取消（signal resolve）中**先到者**唤醒；
@@ -241,6 +248,7 @@ export async function breakBlockOnce(
     token,
     shouldStop,
     requireLineOfSight = false,
+    expectedTypeId,
   } = options;
   const dimension = bot.dimension;
   const targetLoc: Vector3 = { x: Math.floor(loc.x), y: Math.floor(loc.y), z: Math.floor(loc.z) };
@@ -253,9 +261,12 @@ export async function breakBlockOnce(
   activeBreaks.add(bot.name);
 
   try {
-    // 前置：目标可读检查（已消失 → 快路径 broken 成功信号）+ 距离自检（超距放弃）
+    // 前置：目标可读检查（已消失 → 快路径 broken 成功信号）+ 类型守卫 +
+    // 距离自检（超距放弃）
     const targetBlock = readBlock(dimension, targetLoc);
     if (blockGone(targetBlock)) return "broken";
+    // ⚠️ 类型守卫：坐标上的方块已不是预期类型 → 不挖（定点破坏铁律）
+    if (expectedTypeId && targetBlock!.typeId !== expectedTypeId) return "changed";
     if (distance3d(bot.location, targetLoc) > maxDistance) return "far";
 
     // 工具替换策略（每块一次，破坏前注入；异常不影响破坏）
@@ -270,9 +281,20 @@ export async function breakBlockOnce(
       /* 回调失败按不切换处理 */
     }
 
-    // 持续挖掘循环（每 1 tick 起手；敲击失败静默下 tick 重试）
+    // ⚠️ 挖掘对准（用户规格：身体朝向与视线都看向目标方块——身体不面向时
+    // 引擎的挖掘判定会打到无效方块）。faceTowards 微动作下一 tick 执行。
+    await faceTowards(bot, targetBlock!.center());
+
+    // 持续挖掘循环（**先敲后等**：每 1 tick 起手，消除接手新目标首击前的空挡）
     let sinceCheck = 0;
     while (true) {
+      // 每 tick 起手（不传 direction——引擎可选参数默认方向）
+      try {
+        bot.breakBlock(targetLoc);
+      } catch {
+        /* 敲击失败下 tick 重试 */
+      }
+
       // 可取消等待：token cancel() 时 signal 立即唤醒（不等本 tick 定时器到期——
       // 主动取消核心；无 token 时等价 waitTicks(1)）
       await waitTicksSignal(1, token);
@@ -281,14 +303,16 @@ export async function breakBlockOnce(
       // ⚠️ token 取消即时检测（每 tick，非 pollTicks——主动取消要快）
       if (token?.cancelled) return "aborted";
 
-      // 每 tick 起手（不传 direction——引擎可选参数默认方向）
-      try {
-        bot.breakBlock(targetLoc);
-      } catch {
-        /* 敲击失败下 tick 重试 */
-      }
+      // ⚠️ 目标消失检测**每 tick**（单块 getBlock 开销小）——方块一被摧毁立即
+      // 交接下一个目标；按 pollTicks 检测会留下最多 5 tick 的挖掘空挡
+      //（连续挖掘关键）。读取失败按未消失处理（下 tick 再查）。
+      // ⚠️ 类型守卫同 tick 复核（一次读块）：坐标上的方块被换成其他类型 →
+      //   立即停手返回 changed，绝不挖后续出现的无关方块。
+      const tickBlock = readBlock(dimension, targetLoc);
+      if (blockGone(tickBlock)) return "broken"; // 成功信号：已摧毁
+      if (expectedTypeId && tickBlock && tickBlock.typeId !== expectedTypeId) return "changed";
 
-      // 实时检测（按 pollTicks 轮询——读块/距离有开销，不每 tick 做；
+      // 实时检测（距离/实体有效性/外部中止/视线复核有开销，按 pollTicks 轮询；
       // shouldStop 回调保持 pollTicks 粒度避免高频闭包调用）
       if (sinceCheck < pollTicks) continue;
       sinceCheck = 0;
@@ -296,7 +320,6 @@ export async function breakBlockOnce(
       if (shouldStop?.()) return "aborted"; // 外部中止（调用方生命周期控制）
       if (!bot.isValid) return "aborted"; // 实体失效（重连/移除）
       if (distance3d(bot.location, targetLoc) > maxDistance) return "far";
-      if (blockGone(readBlock(dimension, targetLoc))) return "broken"; // 成功信号：已摧毁
 
       // ⚠️ 视线复核（仅自动挖掘等"视线挖方块"调用方开启）：目标不再是当前
       //   视线方块 = 中途被插入方块遮挡（如玩家放基岩挡路）→ 中止返回 blocked，
@@ -326,20 +349,23 @@ export async function breakBlockOnce(
 // ─── 持续破坏（直到指定方块被摧毁，复用单块破坏） ───────
 
 /**
- * 持续破坏指定坐标方块（异步协程，直到该方块被摧毁）。
- * 每轮：外部中止检查（shouldStop）→ 死亡检查（记录标记，尸体实体仍在世界
- * 但记录 death=true）→ 刷新实体（每块一次，非每 tick）→ 目标状态检查
- * （消失 → broken）→ 距离自检（far）→ 感知射线方块（viewBlock，读取失败
- * 回退目标块——看哪破哪）→ 工具策略（透传单块破坏）→ 原子破坏射线方块
- * （breakBlockOnce）→ 直到目标消失。前置：可用性 → 距离自检 → 目标可读 →
- * 看向目标方块中心（引擎 Block.center() 权威值）→ 等待 0.25 秒扭头到位。
- * **无超时**（破到目标消失为止；不可破方块由调用方通过 shouldStop 放弃）；
- * 循环内不再 lookAt，视线稳定。
+ * 定点持续破坏指定坐标方块（异步协程，直到该方块被摧毁）。
+ * ⚠️ 定点破坏铁律：**只挖目标坐标上、类型与预期一致的方块**——全程以目标
+ * 坐标为唯一破坏点，不用视线射线替代（旧版"看哪破哪"是挖泥巴/挖坑 BUG
+ * 的根因：瞄准稍有偏差射线命中地面 → 挖掉泥土 → 视线跟随刚挖的方块继续
+ * 朝下 → 无限挖坑，目标原木永远轮不到）。
+ * 每轮：中止检查（shouldStop/token）→ 死亡检查（记录标记）→ 刷新实体 →
+ * 目标状态检查（消失 → broken / 类型变化 → changed）→ 距离自检（far）→
+ * 原子破坏**目标坐标**（breakBlockOnce 透传 expectedTypeId 全程类型守卫）。
+ * 前置：可用性 → 距离自检 → 目标可读 + 类型守卫 → 看向目标方块中心
+ * （引擎 Block.center() 权威值）→ 等待 0.25 秒扭头到位。**无超时**（破到
+ * 目标消失为止；不可破方块由调用方通过 shouldStop 放弃）。
  *
  * @param botName 假人名
  * @param target 目标方块坐标（自动 floor）
- * @param options 选项（工具策略回调 / 距离 / 检测间隔 / 外部中止）
- * @returns 破坏结果（broken 表示目标已摧毁）
+ * @param options 选项（工具策略回调 / 距离 / 检测间隔 / 外部中止 /
+ *   expectedTypeId 预期类型——缺省取破坏开始时目标坐标的实际类型）
+ * @returns 破坏结果（broken 表示目标已摧毁；changed 表示目标已被换成其他方块）
  */
 export async function breakBlockAt(botName: string, target: Vector3, options: BreakBlockOptions = {}): Promise<BreakResult> {
   const {
@@ -364,13 +390,18 @@ export async function breakBlockAt(botName: string, target: Vector3, options: Br
   // 目标可读检查 + 目标中心（引擎权威值；已破坏/液体 → 快路径 broken）
   const targetBlock = readBlock(dimension, targetLoc);
   if (blockGone(targetBlock)) return "broken";
+  // 预期类型：调用方显式指定优先（砍树流程传木头类型），否则锁定破坏开始时
+  // 的实际类型——后续全程只认这个类型，类型变化即停手
+  const expectedTypeId = options.expectedTypeId ?? targetBlock!.typeId;
+  if (targetBlock!.typeId !== expectedTypeId) return "changed";
   const targetCenter = targetBlock!.center();
 
   // 扭头看向目标方块中心（引擎权威值），等待 0.25 秒扭头到位；
   // **循环内不再 lookAt**——视线全程稳定指向目标，射线不因转头偏移。
   // skipLook（连续同向破坏）：视线已对准 → 跳过扭头（每块省 5 tick 停顿）
   if (!skipLook) {
-    lookAt(bot, targetCenter);
+    // 面向目标（身体朝向 + 视线，用户规格：挖掘判定需身体与视线都对准）
+    await faceTowards(bot, targetCenter);
     // 扭头等待亦可被 token 取消（取消了就不必等扭头到位）
     if (token) {
       const settled = await Promise.race([
@@ -397,19 +428,17 @@ export async function breakBlockAt(botName: string, target: Vector3, options: Br
       bot = resolveBotPlayer(botName);
       if (!bot) return botRegistryAlive(botName) ? "aborted" : "offline";
 
-      // 目标状态（每轮读块；空气/液体/不可读 = 已消失）→ 完成
-      if (blockGone(readBlock(dimension, targetLoc))) return "broken";
+      // 目标状态（每轮读块；空气/液体 = 已消失 → broken；类型变化 → changed）
+      const current = readBlock(dimension, targetLoc);
+      if (blockGone(current)) return "broken";
+      if (expectedTypeId && current && current.typeId !== expectedTypeId) return "changed";
 
       // 距离超限（目标掉落/被推走/假人被传送）→ 放弃
       if (distance3d(bot.location, target) > maxDistance) return "far";
 
-      // 感知射线方块（引擎视角射线；失败回退目标块——看哪破哪；
-      // 循环头已保证目标可读未消失 → fallback 必然命中，无 undefined 分支）
-      const inSight =
-        viewBlock(bot, maxDistance) ?? { typeId: targetBlock!.typeId, location: targetLoc, center: targetCenter };
-
-      // 原子破坏射线方块（工具策略/取消令牌透传；内部实时检测/并发防护/成功信号/中止）
-      const result = await breakBlockOnce(bot, inSight.location, { ensureTool, maxDistance, pollTicks, token, shouldStop });
+      // 原子破坏**目标坐标**（工具策略/取消令牌/类型守卫透传；内部实时检测/
+      // 并发防护/成功信号/中止）——绝不挖坐标以外的方块
+      const result = await breakBlockOnce(bot, targetLoc, { expectedTypeId, ensureTool, maxDistance, pollTicks, token, shouldStop });
       if (result === "broken") continue; // 该块已摧毁 → 下一轮（目标可能还没消失）
       if (result === "busy") {
         // 并发保护（另一破坏进行中，如手动 /mp:breakblock）→ 等待后重试；
@@ -418,7 +447,7 @@ export async function breakBlockAt(botName: string, target: Vector3, options: Br
         await waitTicksSignal(pollTicks, token); // busy 等待亦支持取消唤醒
         continue;
       }
-      return result; // far / aborted / offline 直接结束
+      return result; // far / aborted / offline / changed 直接结束
     }
   } finally {
     // 所有退出路径清理（取最新实体——破坏中假人重连/重生后初始实体可能失效）
