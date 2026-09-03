@@ -22,13 +22,7 @@ scripts/
 ├── main.ts                    # 4-Phase 启动装配（组合根，只装配不写业务）：startup 注册
 │                              #   命令/测试维度 → worldLoad 恢复持久化 → 数据迁移 →
 │                              #   标签行为引擎 → 三叉戟/钓鱼钩/战利品追踪 → 劫掠模式 →
-│                              #   旧 AI 引擎（legacy BotBrain）→ 生物 AI 引擎（新框架）
-├── ai/                        # 生物 AI 框架（驱动 features/ai 的能力状态机）
-│   └── Behavior.ts            # BehaviorRunner：能力 = 感知-决策-同步短步（step 无循环
-│                              #   无 await）；同目录 Memory / SharedMemory（跨假人共享+
-│                              #   过期：独立每秒扫描 / fixed 定时 / renewing 延长默认）/
-│                              #   Goal / GoalSelector / Sensor /
-│                              #   Status / Tree / ResourceLock / Action。零 @minecraft 可单测
+│                              #   任务注册 + 任务运行时（workMode → 任务协程，事件驱动）
 ├── bootstrap/                 # 启动初始化（装配 + 统一入口 + 迁移）
 │   ├── context.ts             # 运行时装配上下文：mc 层单例（botRegistry / botStore /
 │   │                          #   configStore / saveCoordinator / inventoryStorage / botLifecycle + lifecycleContext）
@@ -39,6 +33,16 @@ scripts/
 │   ├── Bot.ts / BotCore.ts    # Bot 类：能力即方法（navigateTo/swapMainhand/...）；
 │   │                          #   BotCore = 纯逻辑基座（可单测），Bot = mc 委托扩展
 │   └── PlayerGateway.ts       # SimulatedPlayer 解析唯一入口（含缓存/名称占用/区块检测）
+├── errors/                    # 自定义异常体系（BotError/ActionError/CancelledError/
+│                              #   FlowError + describeError）——basic 动作统一错误通道；
+│                              #   引擎异常内部消化转 ActionError（reason 码 + cause 根因）
+├── runtime/                   # 任务运行时（事件驱动，替代旧 10 tick 生物 AI 引擎）
+│   ├── BotTask.ts             # BotTask 契约（timed/event/natural）+ BotTaskManager
+│   │                          #   （workMode 对账：启动/停止/切换，每假人至多一个任务）+
+│   │                          #   startBotTaskRuntime（botWorkModeChanged/上下线/死亡
+│   │                          #   事件驱动，零常驻轮询）+ 共享记忆过期扫描
+│   └── SharedMemory.ts        # 跨假人共享记忆（TTL：fixed 定时 / renewing 延长默认；
+│                              #   独立每秒扫描）——共享钓鱼点池/树资源池的存储层。纯 TS 可单测
 ├── events/                    # 事件订阅与事件声明（薄壳，生命周期已内聚至 lifecycle）
 │   ├── DomainEvents.ts        # BotEvents 领域事件（生命周期/认主/行为/标签/工作模式）
 │   ├── EventSignal.ts         # 事件信号实现（core 零依赖）
@@ -54,20 +58,22 @@ scripts/
 │       ├── Inventory(60) / Position(70) / TickingArea(80,共享排队+单块保活) / AutoOnline(85) / Cleanup(90) / Logging(200)
 │       └── SharedTickingQueue # 共享常加载队列（单名 mockplayer:aux:shared，FIFO，用完即释）
 ├── features/                  # 核心功能封装（副作用层，生命周期相关已薄壳化至 lifecycle）
-│   ├── ai/                    # 生物 AI 行为：brainEngine（10 tick 对账 + 驱动）+ capabilities
-│   │                          #   （wander 闲逛 / mine 定点挖掘 / place 定点放置 /
-│   │                          #   attack 定点攻击 / fishing 自动钓鱼——共享钓鱼点池 +
-│   │                          #   占用/连续失败不可用标记，规则在 rules/FishingPool）
 │   ├── basic/                 # 基础**原子性**功能（单动作不可细分）：blocks（破坏/放置）/
 │   │                          #   items（背包/主手/使用/装备）/ fishing（发杆/收竿）/
 │   │                          #   control / move（导航，发布 botMoved 事件）/
 │   │                          #   PositionTracker（DEPRECATED→PositionComponent）/
-│   │                          #   PoseGateway（体态）/ sneak / teleport / EntityTags
+│   │                          #   PoseGateway（体态）/ sneak / teleport / EntityTags。
+│   │                          #   ⚠️ 动作统一契约：async + runActionNextTick（system.run
+│   │                          #   下一 tick 执行，成功 resolve(true)，引擎异常内部消化
+│   │                          #   转 ActionError）；读函数保持防御默认值不参与异常
 │   ├── manage/                # 假人生命周期管理（DEPRECATED薄壳，委托 botLifecycle；保留 create/delete等兼容）
 │   │                          #   单例辅助（auxiliary→TickingAreaService）/ spawnMode→SpawnComponent / gametestContext
-│   ├── flow/                  # **工作流（flow）**：一组原子功能（basic）组合的流程——
-│   │                          #   fishingFlow（钓鱼流程）、fishingHookTracker（感知基础）、
-│   │                          #   treeScan（woodcut 扫描壳）；barrel 统一出口
+│   ├── flow/                  # **工作流（flow）**：单次编排（fishingFlow 钓鱼流程 /
+│   │                          #   woodcutFlow 单树砍伐 / pickupFlow 拾取 / treeScan 扫描壳 /
+│   │                          #   fishingHookTracker 感知基础 / raidMode 事件驱动劫掠）+
+│   │                          #   tasks/（循环任务：timed 定时 mine/place/attack；
+│   │                          #   natural 自然流程 wander/fishing/woodcut——共享池在
+│   │                          #   rules/FishingPool 与 rules/woodcut/TreePool）；barrel 统一出口
 │   ├── state/                 # 旧标签行为引擎（behavior，TAG 驱动）+ 跟随（follow）+ 标签渠道（setTags）
 │   ├── trident/               # 三叉戟 mc 副作用（投掷/认主标记/上线夺回）
 │   └── inventoryStorage.ts    # 库存存储（DEPRECATED订阅已迁移至 InventoryComponent，存储实现保留）
@@ -75,13 +81,9 @@ scripts/
 │   ├── commands/              # /mp:* 命令注册（lifecycle / navigation / behavior /
 │   │                          #   activity / inspect / system）
 │   └── ui/                    # ActionForm 面板（bot / panels/*）+ menuTrigger 单例（木棍唯一注册）+ 格式化 / 帮助
-├── legacy/                    # 旧时代遗留（保留运行，部分功能未重写）
-│   └── ai/                    # 行为树框架（VaultTask / FishingTask 端口契约 + 树装配）+
-│                              #   BotBrain 引擎（10 tick 驱动宝库/钓鱼树；劫掠已剥离）+
-│                              #   任务 mc 适配（VaultPorts / FishingPorts，随旧架构退役）
 ├── rules/                     # 规则模块（纯逻辑，零 @minecraft 可单测）
 │   ├── coords/ items/ format/ tags/ tree/ utils/ xp/
-│   └── DefenseRules / FishingRules / RaidRules / Types
+│   └── FishingRules / RaidRules / Types
 └── service/                   # 服务模块（core 纯逻辑 + 端口）
     ├── BotRegistry / BotVisibility / QuotaRules / ReclaimPlanner /
     │   RecordMigration / ModConfigRules
@@ -90,25 +92,52 @@ scripts/
 ```
 
 ### 纯/副作用分层界限（tsconfig.test.json 权威）
-- **可 node 单测（零 `@minecraft/*`、零 `@yinxe/toolkit` 导入）**：`ai/`、`rules/`、`service/`
-  （含 port 接口）、`bot/BotCore.ts`、`legacy/ai/*`（除 BotBrain.ts）、
+- **可 node 单测（零 `@minecraft/*`、零 `@yinxe/toolkit` 导入）**：`errors/`、`rules/`、`service/`
+  （含 port 接口）、`bot/BotCore.ts`、`runtime/SharedMemory.ts`、
   `events/DomainEvents + EventSignal + UiEvents`
-- **mc 副作用层**：`bootstrap/`、`features/`、`interaction/`、`bot/Bot.ts + PlayerGateway`、
-  `events/` 订阅薄壳、`main.ts`
+- **mc 副作用层**：`bootstrap/`、`features/`、`runtime/BotTask.ts`、`interaction/`、
+  `bot/Bot.ts + PlayerGateway`、`events/` 订阅薄壳、`main.ts`
 - 类型本地化：`Vector3/Vector2` → `Vec3/Vec2`；`EquipmentSlot` 枚举 → 字符串槽名（mc 边界转换）
 - 领域事件负载只用可序列化 string/number；端口（BotStore/IntervalScheduler）接口 + mc 实现同界
 
 ### 测试纪律
 - 纯层逻辑必须有单测（tests/*.test.ts，Fake/InMemory 替身断言场景序列）；mc 层靠游戏内冒烟
 
-### 两套 AI 引擎（并存）
-- **新框架（ai/ + features/ai，生物 AI）**：Behavior 状态机 + BehaviorRunner 优先级抢占；
-  brainEngine 每 10 tick 注入 ctx.bot / ctx.shared 驱动；能力形态 = 常驻协程（mine：token 可取消）或
-  同步短步（wander / place / attack）；私有记忆经 AiMemory（brain.memory）注入，
-  **跨假人共享记忆经 SharedMemory 全局单例（ctx.shared）注入——所有假人都能读写**，决策在行为内
-- **旧框架（legacy/ai/BotBrain，宝库/钓鱼任务）**：行为树（Sequence/Selector/黑板/Sense）
-  + 端口契约；VaultPorts / FishingPorts 任务适配同在 legacy/ai/；劫掠已剥离为
-  事件驱动模块 features/raid（无树、无端口、零轮询）
+### 任务运行时（runtime/，替代已移除的生物 AI）
+- **架构决策（用户拍板 2026-08-30）**：生物 AI 方案（感知-决策每 10 tick 高频计算）
+  易导致游戏挂起崩溃，**整体放弃**；scripts/ai、features/ai、legacy/ai、rules/DefenseRules
+  已删除。改为「任务运行时」：任务 = 纯 async 协程（CancelToken 协作式取消），
+  **生命周期事件驱动**（botWorkModeChanged / botOnline / botOffline / botDeath → 对账），
+  无任何常驻轮询
+- **任务三类（flow/tasks）**：`timed` 定时触发的循环（mine/place/attack）；`event` 基于
+  事件的循环（raidMode 自订阅事件，独立模块）；`natural` 基于自然复杂流程的循环
+  （wander/fishing/woodcut）
+- **统一规范（flow/tasks/spec.ts，用户拍板：循环任务禁止各写各的 while 面向过程）**：
+  全部循环任务经 `defineLoopTask` 声明为**阶段机**——任务只写阶段表（每阶段 label +
+  run(ctx)，返回下一阶段 id 或 TASK_DONE），运行骨架统一承担：循环分派（按阶段流转）、
+  异常消化（warn + 退避重跑当前阶段，连续失败达上限终止）、流转日志（`阶段 find →
+  navigate`，可排查卡点）、收尾（停动作 + cleanup 释放认领 + 收口令牌）。约定：
+  节奏用 `ctx.wait(ticks)`（取消即唤醒）；阶段间状态放 `ctx.data`（createData 声明），
+  不藏闭包；预期瞬态失败就地 warn，意外异常直接抛交骨架退避
+- **每假人至多一个任务**（workMode 单选互斥天然保证）；同假人停止/启动经 per-bot 链串行
+  （防切换竞态）；任务异常由运行时兜底记日志并终止，取消（CancelledError）静默收尾
+- **跨假人共享数据**走 `SharedMemory` 全局单例（taskManager.shared，注入 ctx.shared）——
+  共享钓鱼点池 `"fishing:pool"` / 树资源池 `"woodcut:pool"`（renewing TTL，独立每秒扫描）
+- **统一资源模型（rules/resource/ResourcePool，用户拍板：共享/认领/扫描隔离机制
+  只实现一遍，不同资源声明差异规则，杜绝共抢）**：泛型核心 + `PoolPolicy` 策略插件。
+  统一状态机：`free →（claim 独占认领）→ occupied →（release）→ free`；
+  `occupied →（markFail 连续失败达上限）→ unavailable`（选点跳过不复活）；
+  `任意 →（remove 完成/永久放弃）→ 池移除`。策略差异点：`keyOf`（定位键）/
+  `centerOf`+`distance`（距离基准：钓鱼=站立点+水平，树=基座+3D）/`compare`
+  （排序：钓鱼=星级降序→距离升序，树=距离升序）/`maxFailStrikes`（0=无失败标记）/
+  `extraUsable`（如维度一致）。FishingPool / TreePool 是「策略 + 类型化薄壳」，
+  对外函数签名不变；选点约束（center/maxDistance/isValid 现场回调）与扫描合并
+  （同 key 保留已有状态，新资源按 free 入池）为公共语义
+- **原子工具（flow/tasks/loops）**：waitTicksCancellable（取消即唤醒）/
+  createThrottledNotifier（附近 16 格玩家通知节流）
+- ⚠️ `@yinxe/workflow`（packages/workflow）**未接入**也不计划接入：毫秒延迟/独立取消
+  令牌/步骤粒度与游戏 tick 语义不匹配（适配壳即仪式感）；包保留在仓库供将来
+  非游戏绑定的离散步骤编排使用
 
 ### 目录语义与定位修正（用户拍板；✅=已办，其余待重构）
 | 目录 | 现状 | 定位判定 |
@@ -116,10 +145,10 @@ scripts/
 | `features/task/` | ✅ 已改名 **`features/flow/`** | 概念 = **flow（流程）**——一组原子功能组合而成的工作流；fishingFlow 为范例 |
 | 原子能力归位 | ✅ fishing.ts（发杆/收竿）已入 **basic** | 原子性功能应在 **basic**（如飞行 fly 原子能力 → basic；飞行 flow 才属 flow 模块） |
 | task 内工具集 | treeScan（树资源坐标集扫描） | 规则/算法部分已抽 **rules/tree**（规则化已达成）；mc 扫描壳属 woodcut flow 的一部分，留在 flow |
-| Ports 命名 | ✅ FishingPorts / VaultPorts 已移入 **legacy/ai/** | 旧时代遗留命名（legacy 树任务端口的 mc 适配），随旧架构退役清理 |
+| 生物 AI 移除 | ✅ scripts/ai + features/ai + legacy/ai + DefenseRules 已删除 | 高频计算致游戏挂起崩溃（用户拍板）；能力改写为 flow/tasks 循环任务 |
 | `features/trident/` | 投掷 / 认主标记 / 上线夺回（mc 副作用） | 规则在 rules/items（TridentRules / TridentClaimRules）；本体属规则 + 工作流一小部分 |
 | `features/inventoryStorage.ts` | 库存增量保存 + 对账兜底 + 恢复 | 位置不对，属数据/持久化层，待挪出 features |
-| `features/state/` | behavior（TAG 行为引擎）/ follow / setTags | 旧标签行为体系遗留，用途待确认（可能收编或淘汰） |
+| `features/state/` | behavior（体态控制+周期持久化）/ follow（跟随引擎）/ setTags | behavior 仅保留控制模式同步与周期持久化；follow 承接 workMode="follow" |
 
 ---
 
@@ -136,17 +165,30 @@ scripts/
 ### UI 事件驱动（BotUiEvent 双领域事件）
 - **UI 只发布事件，零功能 import**：面板按钮 → `panelAction`；行为菜单提交 → `behaviorSubmitted`（setTags 先落库再发布）
 - 功能模块各自 `registerUiSubscriptions()` 分散订阅，`bootstrap/uiDrivers.ts` 统一装配
-- AI 任务的 UI 反馈（不在线提示）在 `startBrainEngine` 注册
+- 任务侧 UI 反馈（不在线提示等）在各任务模块内注册（features/flow/raidMode 等）
+
+### 自定义异常体系（errors/，用户规格：动作消化引擎异常抛自定义异常）
+- **basic 动作统一契约**：async + `runActionNextTick`（features/utils）——system.run 推迟
+  下一 tick 执行、成功 resolve(true)；引擎异常**内部消化**转 ActionError（reason 码
+  busy/far/blocked/offline/unavailable/failed + cause 根因），ActionError 原样透传不二次包装
+- **BotError 家族**：`ActionError`（动作失败）/ `CancelledError`（取消——控制流信号，
+  收尾静默不告警）/ `FlowError`（流程编排失败）；日志统一 `describeError(e)`
+- **调用方约定**：await 感知结果或 void+.catch（未接住的拒绝=unhandledrejection）；
+  结果枚举（NavigateResult / FishingOutcome / WoodcutOutcome / BreakResult / SwapResult）
+  是**领域结果**不是异常——保持返回值语义，不强行抛出
+- 读函数（hasFishingRod/inventoryContainerOf 等）保持防御默认值（false/undefined），不参与异常体系
 
 ### 工作模式（record.workMode，用户拍板）
 - **互斥单选**：一个假人一个工作模式——none / wander（闲逛模式）/ mine（定点挖掘模式）/
   place（定点放置模式）/ attack（定点攻击模式）/ raid（劫掠模式）/ fishing（自动钓鱼模式）/
   woodcut（自动砍树模式）。互斥由单字段天然保证
-- 各引擎按值认领：wander/mine/place/attack/fishing/woodcut → 生物 AI 引擎；raid → 劫掠模块
-- **修改唯一渠道 `setWorkMode`**：落库 + 发布 `botWorkModeChanged`（驱动模块按值启动/停止，
-  替代旧 10 tick 标签轮询）；UI 提交前先 setTags 校验通过再 setWorkMode（防部分应用）
-- ⚠️ 自动钓鱼：新版走 workMode="fishing"（生物 AI + 共享钓鱼点池）；旧 TAG_FISH_MODE
-  驱动路径（legacy 树）保留兼容——两套并存，按启用方式二选一
+- 各驱动模块按值认领（事件驱动，无轮询）：wander/mine/place/attack/fishing/woodcut →
+  任务运行时（runtime/BotTask → flow/tasks 协程任务）；raid → 劫掠模块（事件订阅）；
+  follow → 跟随引擎（state/follow）；none → 空档不启任务
+- **修改唯一渠道 `setWorkMode`**：落库 + 发布 `botWorkModeChanged`（任务运行时/劫掠按值
+  启动/停止）；UI 提交前先 setTags 校验通过再 setWorkMode（防部分应用）
+- **管理员启用门槛**：工作模式还须在全局配置启用（configStore.isWorkModeEnabled，
+  adminMenu 可开关）——任务运行时对账时双重校验
 - **共享钓鱼点池选点规则（新版 workMode="fishing"，rules/FishingPool）**：
   假人只能从池里选**自身 16 格内**（SPOT_MAX_DISTANCE）且**点位半径 1 格内无
   其他实体**（现场实时判定 isSpotUsable）的有效钓鱼点；池内**有效点**不足
@@ -168,6 +210,12 @@ scripts/
   向上垂直砍主干（每根用 **breakBlockAt"直到破坏方块"模式**：看向目标 + 持续挖到被破坏）；
   目标**超出挖掘距离**（far）→ **移动到目标正下方缩短距离再挖**；**任何移动前都
   停止正在挖掘的动作**（stopBreakingBlock）
+- ⚠️ **定点破坏铁律（basic/blocks/blockBreak，根治"挖泥巴/挖坑"BUG）**：
+  破坏执行只挖**目标坐标上类型已验证**的方块——`breakBlockAt` 不用视线射线替代目标
+  （引擎 `SimulatedPlayer.breakBlock(location)` 本就按坐标定点破坏，射线替代是旧版
+  根因：瞄准偏差命中地面 → 挖掉 → 视线跟随刚挖方块继续朝下 → 无限挖坑）；全程
+  `expectedTypeId` 类型守卫（类型变化 → `changed` 不挖）。砍树流程破坏前另做
+  `classifyTreeBlock` 木头/树叶 kind 校验（非木头绝不挖）；拾取卡叶破除同款树叶校验
 - **收集模式树叶 fallback**：挖树叶前检查是否有合适树叶工具（剪刀/锄类/任意精准），
   **无则自动 fallback 圆木模式**（跳过树叶直接拾取，结果带回 fellBack 标记）
 - **工具策略（rules/woodcut/WoodcutRules）**：原木模式只用斧头策略（品阶优先 /
@@ -178,7 +226,7 @@ scripts/
   （掉落物卡树叶 → 破除让掉落物掉下）再就近逐个拾取；背包满回调 / 不可达回调
   由调用方处理。chopOneTree 已接入本 flow
 - **砍树子模式枚举（运行时可选）**：`/mp:woodcutmode <bot> <logs|collect>` 持久化
-  到 `BotRecord.woodcutMode`（缺省 logs），引擎注入大脑记忆驱动能力
+  到 `BotRecord.woodcutMode`（缺省 logs），砍树任务每轮从记录读取
 - **测试命令 `/mp:woodcut [radius] [mode]`**：扫描树资源并展示最近一棵树的砍伐计划
   （flow 诊断；mode=logs 原木模式 / collect 收集模式）
 - **树扫描时机与节流（⚠️ 树坐标集扫描很贵 ~50ms ≈ 1 游戏刻）**：`find` 阶段只有当
@@ -190,7 +238,7 @@ scripts/
 ### 标签系统
 - 标签 = 假人行为的持久开关（共存 COEXIST / legacy 组 LEGACY：宝库/钓鱼/control 等旧标签）
 - **标签修改唯一渠道 `setTags`**（UI 命令全走它）：实体同步 syncEntityTags + 持久化统一 +
-  发布 `botTagsChanged`；**移除标签 = 行为立即停止**（BotBrain 对账清树，重开重新开始）
+  发布 `botTagsChanged`；**标签驱动模块按需订阅**（替代旧引擎轮询对账）
 - ⚠️ 互斥组 EXCLUSIVE / 独立开关组 STANDALONE 均已清空（行为/劫掠收编进工作模式）
 
 ### 物品组件类型化读取（ItemComponentRead）
@@ -236,7 +284,7 @@ scripts/
 
 ---
 
-## 劫掠模式（features/raid/raidMode.ts，事件驱动轻量模块）
+## 劫掠模式（features/flow/raidMode.ts，事件驱动轻量模块——event 类任务范例）
 
 用户拍板：劫掠只是"监听事件 → 喝药 → 监听事件 → 回药"的简单循环，**不配作为 task**
 （旧 legacy/ai/RaidTask 行为树 + RaidPorts 端口契约已废除）。重写为纯事件驱动——
@@ -271,17 +319,6 @@ scripts/
 
 ---
 
-## 宝库模式（legacy/ai/VaultTask 契约 + legacy/ai/VaultPorts）
-
-核心规则：
-- **感知驱动**：sense() 返回背包钥匙分类 + 附近宝库分类（普通/不详，按距离排序）
-- **目标选择**：优先不详宝库（有不祥钥匙时）；普通宝库**只能使用普通钥匙**（不详钥匙不可替代）
-- **缺因诊断**（idle 通知精确原因）：缺钥匙 / 缺宝库 / 缺不详钥匙 / 缺普通钥匙
-- **防假成功**：交互后回读钥匙总量基准（< 基准才判定成功）；**持续点击直到真消耗，不判断宝库已开过**（重连新实体可重复开）；宝库被拆（typeId 验证失败）→ 清目标重扫不卡死
-- **重连循环**：开箱成功 → safeReconnect → 黑板目标保留 → 重连后继续同一宝库
-
----
-
 ## 领域事件
 
 **BotEvents**（events/DomainEvents）：生命周期 / 认主 / 宝库 / 行为 / 标签变更 / 工作模式变更
@@ -297,7 +334,7 @@ scripts/
 
 **RaidEvents**（features/raid/raidMode.ts 内聚）：`raidStarted` / `raidVictory` / `raidPhase`（阶段通知日志）
 
-- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（botActions）、认主（tridentTracker/tridentClaim）、宝库（VaultPorts 开箱）、劫掠（raidMode effectAdd + 阶段扫描）
+- 生产端：生命周期（playerJoin/playerSpawn/entityDie/offlineBot/playerLeave）、行为（botActions）、认主（tridentTracker/tridentClaim）、劫掠（raidMode effectAdd + 阶段扫描）
 - 新领域事件一律经对应命名空间聚合导出
 
 ---
