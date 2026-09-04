@@ -121,6 +121,11 @@ scripts/
   不藏闭包；预期瞬态失败就地 warn，意外异常直接抛交骨架退避
 - **每假人至多一个任务**（workMode 单选互斥天然保证）；同假人停止/启动经 per-bot 链串行
   （防切换竞态）；任务异常由运行时兜底记日志并终止，取消（CancelledError）静默收尾
+- **任务自然完成（TASK_DONE）→ workMode 归零 "none"**（BotTaskManager 统一收口：
+  持久化 + 日志；已切走其他模式则不动）——记录/UI 与实际一致，根治 reconcile
+  空转重启秒退任务的状态漂移；取消退出（stop/切换/下线/死亡）**不**归零
+  （任务只是暂停，模式保留等补启）。跟随目标字段写入必须在 setWorkMode 事件
+  发布**前**完成（命令/UI 均按此顺序；followTask 对"目标字段迟到"另有短等容错）
 - **跨假人共享数据**走 `SharedMemory` 全局单例（taskManager.shared，注入 ctx.shared）——
   共享钓鱼点池 `"fishing:pool"` / 树资源池 `"woodcut:pool"`（renewing TTL，独立每秒扫描）
 - **统一资源模型（rules/resource/ResourcePool，用户拍板：共享/认领/扫描隔离机制

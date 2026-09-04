@@ -19,7 +19,7 @@ import { describeError, isCancelledError } from "../errors";
 import { BotEvents } from "../events/DomainEvents";
 import { createCancelToken } from "../rules/utils/CancelToken";
 import type { CancelToken } from "../rules/utils/CancelToken";
-import { botRegistry, configStore } from "../bootstrap/context";
+import { botRegistry, configStore, saveCoordinator } from "../bootstrap/context";
 import { SharedMemory } from "./SharedMemory";
 
 // ─── 任务契约 ──────────────────────────────────────────
@@ -164,10 +164,18 @@ export class BotTaskManager {
     const token = createCancelToken();
     const done = task
       .run({ botName, token, shared: this.shared })
-      .catch((e: unknown) => {
-        if (token.cancelled || isCancelledError(e)) return; // 取消属正常收尾
-        console.warn(`[MockPlayer] 任务异常终止 ${botName}[${task.label}]: ${describeError(e)}`);
-      })
+      .then(
+        () => {
+          // 自然完成（TASK_DONE：砍树扫完无树/跟随目标离线等）：协程正常退出
+          // 且非取消 → 落 workMode="none"（记录/UI 与实际一致，防 reconcile
+          // 空转重启秒退任务——状态漂移根治）
+          if (!token.cancelled) this.settleDoneWorkMode(botName, mode, task.label);
+        },
+        (e: unknown) => {
+          if (token.cancelled || isCancelledError(e)) return; // 取消属正常收尾
+          console.warn(`[MockPlayer] 任务异常终止 ${botName}[${task.label}]: ${describeError(e)}`);
+        },
+      )
       .finally(() => {
         // 仅当占位仍是本任务时清理（防误删切换后的新任务）
         const cur = this.active.get(botName);
@@ -175,6 +183,20 @@ export class BotTaskManager {
       });
     this.active.set(botName, { botName, workMode: mode, label: task.label, token, done });
     console.info(`[MockPlayer] 任务启动 ${botName}[${task.label}]（${task.kind}）`);
+  }
+
+  /**
+   * 任务自然完成后收口工作模式：
+   * 记录仍处于该模式 → 落 "none"（持久化；UI/记录与实际一致）。异常路径
+   * 不归零（管理员手动排查；模式仍启用时 reconcile 可重试）。
+   * 静默保存防高频日志。
+   */
+  private settleDoneWorkMode(botName: string, mode: string, label: string): void {
+    const record = botRegistry.get(botName);
+    if (!record || record.workMode !== mode) return; // 已被切走（并发安全）
+    record.workMode = "none";
+    saveCoordinator.saveRecord(record, true);
+    console.info(`[MockPlayer] 任务自然完成 ${botName}[${label}]，工作模式已归零`);
   }
 }
 

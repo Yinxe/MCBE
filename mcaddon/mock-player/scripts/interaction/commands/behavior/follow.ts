@@ -2,7 +2,6 @@ import { CommandPermissionLevel, CustomCommandParamType } from "@minecraft/serve
 import { defineCommand } from "@yinxe/toolkit";
 import { color } from "@yinxe/toolkit";
 import { resolveBotForCommand } from "../auth";
-import { setWorkMode } from "../../../features/state/behavior";
 
 export function registerFollowCommand(registry: any): void {
   defineCommand(registry, {
@@ -16,14 +15,13 @@ export function registerFollowCommand(registry: any): void {
     if (!bot) return;
 
     if (bot.isFollowing) {
-      // 已跟随（互斥跟随中）→ 切回无，停止跟随
+      // 已跟随（互斥跟随中）→ 切回无，停止跟随（unfollow 内部清目标+切模式）
       bot.unfollow();
-      try { setWorkMode(bot.record, "none"); } catch {}
       player.sendMessage(`${color.success}已停止 ${color.playerName}${botName}${color.success} 的跟随`);
     } else {
-      // 未跟随 → 设为跟随模式并开始跟随（互斥）
+      // 未跟随 → 开始跟随（bot.follow 内部：先写目标字段再 setWorkMode——
+      // 目标就位后才发布模式变更事件启动任务，防任务秒退归零竞态）
       if (!bot.isAvailable) { player.sendMessage(`${color.error}假人不在线或已死亡`); return; }
-      try { setWorkMode(bot.record, "follow"); } catch {}
       const ok = bot.follow(player.id);
       if (ok) {
         player.sendMessage(`${color.success}${color.playerName}${botName}${color.success} 正在跟随你（已切至跟随模式）`);

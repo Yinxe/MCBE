@@ -18,6 +18,7 @@ import { botRegistry, saveCoordinator } from "../../../bootstrap/context";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { lookAtEntity } from "../../basic/PoseGateway";
 import { describeError } from "../../../errors";
+import type { BotRecord } from "../../../rules/Types";
 import { defineLoopTask, TASK_DONE, warnTaskError } from "./spec";
 
 // ─── 配置（tick / 格） ─────────────────────────────────
@@ -58,18 +59,12 @@ export function isFollowPaused(botName: string): boolean {
 
 // ─── 目标解析 ──────────────────────────────────────────
 
-/** BotRecord 简化类型（目标解析入参；避免循环 import Types） */
-interface FollowRecord {
-  followTargetId?: string;
-  followTargetName?: string;
-}
-
 /**
  * 解析跟随目标：followTargetId 优先；实体 ID 失效（玩家重连后变化）→
  * 按 followTargetName 重找并回写 record（持久化新 ID）。
  * @returns 目标玩家实体；找不到 → undefined
  */
-function resolveFollowTarget(record: FollowRecord | undefined): Player | undefined {
+function resolveFollowTarget(record: BotRecord | undefined): Player | undefined {
   if (!record?.followTargetId) return undefined;
 
   let target = world.getEntity(record.followTargetId) as Player | undefined;
@@ -78,7 +73,7 @@ function resolveFollowTarget(record: FollowRecord | undefined): Player | undefin
     const byName = world.getPlayers({ name: record.followTargetName })[0];
     if (byName?.isValid) {
       record.followTargetId = byName.id;
-      saveCoordinator.saveRecord(record as Parameters<typeof saveCoordinator.saveRecord>[0], true);
+      saveCoordinator.saveRecord(record, true);
       target = byName;
     }
   }
@@ -134,7 +129,13 @@ export const followTask = defineLoopTask<FollowData>({
           return "follow";
         }
         if (!target) {
-          // 目标彻底不可达（离线且按名找不到）→ 自然完成
+          if (record && !record.followTargetId) {
+            // 目标字段尚未写入（UI 行为菜单提交的 system.run 写入与本任务
+            // 启动存在毫秒级窗口）：短等重读——不秒退归零（写入马上到）
+            await ctx.wait(FOLLOW_TICKS);
+            return "follow";
+          }
+          // 目标在册但彻底不可达（离线且按名找不到）→ 自然完成
           ctx.notify("跟随目标已离线，停止跟随");
           return TASK_DONE;
         }

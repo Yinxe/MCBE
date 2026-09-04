@@ -30,15 +30,19 @@ export function startFollow(botName: string, targetId: string): boolean {
 }
 
 /**
- * 停止假人跟随（兼容门面）：切 workMode="none"（任务运行时取消令牌收尾）
- * + 清跟随目标 + 清暂停标志。
+ * 停止假人跟随（兼容门面）：清跟随目标 + 清暂停标志；仅当当前模式确为
+ * follow 时切 workMode="none"（防误伤其他模式——如玩家已手动切 mine）。
  */
 export function stopFollow(botName: string): void {
   const record = botRegistry.get(botName);
   if (record) {
     record.followTargetId = undefined;
     record.followTargetName = undefined;
-    setWorkMode(record, "none");
+    if (record.workMode === "follow") {
+      setWorkMode(record, "none"); // 内部含持久化；任务运行时取消令牌收尾
+    } else {
+      saveCoordinator.saveRecord(record, true); // 只清目标字段（静默）
+    }
   }
   resumeFollowTask(botName); // 清残留暂停标志（幂等）
 }
