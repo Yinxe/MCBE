@@ -4,18 +4,19 @@
 // 攻击距离 → 回探测重新锁定）。
 // 目标选择：getEntitiesFromViewDirection 最近命中（对齐引擎 attack() 的
 // 射线语义，拿到实体句柄可定向连击同一目标，避免每击重选抖动）。
-// 武器策略：锁定目标时换一次最优武器（剑 > 同品阶斧 + 锋利加分；全
-// 背包快照一次）；strike 连击期间不再扫背包（武器集不变，避免每 4 tick
-// 36 格快照浪费）。
+// 武器策略（@yinxe/tool-strategy 引擎——ToolStrategyTrees.decideWeapon）：
+// 锁定目标时换一次最优武器（档位手排：剑 > 斧；档内锋利 → 品阶 → 耐久链
+// + 耐久紧急排除——快断武器不当选/主手紧急强制换）；strike 连击期间不再
+// 扫背包（武器集不变，避免每 4 tick 36 格快照浪费）。
 // ⚠️ attackEntity 引擎语义「任意距离可打、无需视线」——连击中途目标被
 //   击退跑远会无限追打，故 strike 自检 3D 距离超 ATTACK_DISTANCE 即回探测。
 
 import { world } from "@minecraft/server";
 
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
-import { snapshotTools } from "../../basic/items/ToolSnapshot";
+import { snapshotToolCandidates } from "../../basic/items/ToolSnapshot";
 import { setMainhandSlot } from "../../basic/items/mainhand";
-import { pickBestWeapon } from "../../../rules/items/MineToolRules";
+import { decideWeapon } from "../../../rules/items/ToolStrategyTrees";
 import { defineLoopTask, warnTaskError } from "./spec";
 
 /** 视线探测/攻击距离（格） */
@@ -100,13 +101,15 @@ export const attackTask = defineLoopTask<AttackData>({
   },
 });
 
-/** 确保主手是最优武器（全背包扫描一次：剑 > 斧；主手已最优不折腾） */
-async function ensureBestWeapon(botName: string, bot: Parameters<typeof snapshotTools>[0]): Promise<void> {
-  const slot = pickBestWeapon(snapshotTools(bot), bot.selectedSlotIndex);
-  if (slot === undefined) return;
-  try {
-    await setMainhandSlot(botName, slot);
-  } catch {
-    /* 换武器失败：用当前主手继续 */
+/** 确保主手是最优武器（引擎决策：剑 > 斧档位手排 + 锋利/耐久链） */
+async function ensureBestWeapon(botName: string, bot: Parameters<typeof snapshotToolCandidates>[0]): Promise<void> {
+  const { current, candidates } = snapshotToolCandidates(bot);
+  const decision = decideWeapon(current, candidates);
+  if (decision.action === "swap") {
+    try {
+      await setMainhandSlot(botName, decision.tool.slot);
+    } catch {
+      /* 换武器失败：用当前主手继续 */
+    }
   }
 }

@@ -144,10 +144,9 @@ scripts/
     （`breakBlockOnce skipLook: true`——不 faceTowards 不扭头，与"智能挖掘会
     自己瞄准"的本质区别）；沿当前视线射线持续挖：probe 每轮重读视线第一块
     实心方块，挖穿后射线自然伸到下一块（连续挖掘）；视线被插方块遮挡 →
-    blocked 回探测沿新视线挖（不隔山打牛）。工具策略保留：每块破坏前
-    `ensureTool` 回调注入（rules/items/MineToolRules——方块类型 → 镐/斧/锹/
-    锄/剑类别映射 + 品阶/附魔评分选最优，全背包扫描；主手已最优不折腾）；
-    `expectedTypeId` 定点守卫（changed 回探测重选，绝不挖类型不符方块）
+    blocked 回探测沿新视线挖（不隔山打牛）。工具策略保留（引擎版）：
+    `ensureTool` → decideTool(MINE_TREE)；`expectedTypeId` 定点守卫
+    （changed 回探测重选，绝不挖类型不符方块）
   - **place**：主手方块自动补位——主手空/不可放置（`BlockTypes.get(typeId)` 判定）→
     从背包找第一个可放置方块换上；背包没有 → 通知 + 低息等待
   - **attack**：probe（`getEntitiesFromViewDirection` 视线最近实体）→ strike
@@ -244,14 +243,20 @@ scripts/
   `classifyTreeBlock` 木头/树叶 kind 校验（非木头绝不挖）；拾取卡叶破除同款树叶校验
 - **收集模式树叶 fallback**：挖树叶前检查是否有合适树叶工具（剪刀/锄类/任意精准），
   **无则自动 fallback 圆木模式**（跳过树叶直接拾取，结果带回 fellBack 标记）
-- **工具策略（rules/woodcut/WoodcutRules）**：原木模式只用斧头策略（品阶优先 /
-  效率>耐久>精准>时运）；收集模式树叶用树叶策略（精准锄头 > 剪刀 > 任意精准工具，
-  强制应用——全背包扫描取最优，即使主手是精准斧头）
-  - ⚠️ **真工具甄别 + 主手不倒腾（BUG2 修复 2026-09-03）**：`toolCategoryOf` 对
-    未知物品兜底归 axe（泥土/圆木 0 分也能过 `s<0` 甄别）——`pickBestTool` 按
-    typeId 后缀特征只认真工具（`_axe`/`_hoe`/shears/精准附魔）；并传入 handSlot，
-    **主手已最优 → undefined 不折腾**（否则斧头入主手后选优指向主手槽自身 →
-    setMainhandSlot 抛无效槽位被吞 → 背包有斧头却永远换不上）
+- **工具策略 = @yinxe/tool-strategy 引擎（2026-09-03 用户指引接入，替代三处
+  自写加权评分——WoodcutRules.scoreAxe/scoreLeavesTool/pickBestTool、
+  MineToolRules 全部已退役删除）**：
+  - **rules/items/ToolStrategyTrees**：场景树编排——`MINE_TREE`（方块关键字 →
+    镐/斧/锹/锄/剑档位）、`WOODCUT_TREE`（原木→效率斧 / 树叶→**档位手排**：
+    精准锄>剪刀>任意精准>任意工具）、`decideWeapon`（剑>斧 + 锋利链）；
+    `decideTool` 封装：耐久紧急候选排除 + 主手紧急强制换 + keep/swap 决策
+  - **basic/items/ToolSnapshot.snapshotToolCandidates**：背包 profile 为引擎
+    `ToolCandidate`（角色/品阶/耐久/附魔键映射 silk_touch→silk 等；非工具不入池
+    ——BUG2 的"杂物兜底 axe"根因从数据层根除）
+  - 引擎语义优势（此前加权评分表达不了）：**档位手排**（跨档交叉如
+    `效率5铁斧 > 精准钻石镐 > 效率3铁斧`）、**附魔硬门槛**（require 等级区间）、
+    **耐久维度**（sortBy durability + 紧急排除——快断工具不当选，此前完全没考虑）
+  - 主手已最优 → keep 不折腾（BUG2 倒腾死锁天然消除：引擎 isCurrent 判定）
 - **磁吸拾取（features/flow/pickupFlow.vacuumNearbyDrops，2026-09-03 用户规格——
   废弃旧"导航走近+等吸入"思路）**：砍树每棵树完成后、钓鱼每轮收竿后，扫描假人
   **半径 10 格**内感兴趣掉落物 → **teleport 到假人脚下** → 0.5 秒自动入包。

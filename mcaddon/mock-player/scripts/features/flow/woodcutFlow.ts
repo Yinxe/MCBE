@@ -23,14 +23,10 @@ import { breakBlockAt } from "../basic/blocks";
 import { navigateBot, longNavigateBot, NavigateResult } from "../basic/move";
 import { setMainhandSlot } from "../basic/items/mainhand";
 import { inventoryContainerOf } from "../basic/items/ItemComponentRead";
-import { snapshotTools } from "../basic/items/ToolSnapshot";
+import { snapshotToolCandidates } from "../basic/items/ToolSnapshot";
+import { decideTool, WOODCUT_TREE } from "../../rules/items/ToolStrategyTrees";
 import { waitTicks } from "../utils";
-import {
-  hasSuitableLeafTool,
-  pickBestTool,
-  type ChopMode,
-  type ChopTargetKind,
-} from "../../rules/woodcut/WoodcutRules";
+import type { ChopMode } from "../../rules/woodcut/WoodcutRules";
 import { classifyTreeBlock } from "../../rules/tree/TreeRules";
 import { WOODCUT_LOOT_TYPES } from "../../rules/woodcut/LootWhitelist";
 import type { ChopPlan, ChopStage, ChopTarget } from "../../rules/woodcut/ChopPlan";
@@ -56,10 +52,6 @@ const BREAK_MAX_DISTANCE = 10;
 /** 单目标破坏重试上限（超距靠近 + 重试的次数） */
 const BREAK_RETRY_LIMIT = 3;
 
-// ─── 背包工具快照（强制策略：全背包扫描取最优） ──────────
-// 实现已下沉 basic/items/ToolSnapshot（挖掘任务共用）；此处 re-export 兼容旧引用。
-
-export { snapshotTools };
 
 /** 目标方块是否已消失（空气/液体——原方块已破坏，跳过） */
 function targetGone(bot: SimulatedPlayer, target: ChopTarget): boolean {
@@ -114,18 +106,23 @@ async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMod
     return "skip"; // 区块未加载/读取失败 → 目标不可信，跳过（重扫计划会纠正）
   }
 
-  // 工具策略（每块破坏前注入；全背包强制策略——core 决策）
-  // ⚠️ 传 handSlot：主手已最优 → 不折腾（BUG2 防倒腾；斧头已入主手后
-  //   pickBestTool 指向主手槽自身 → setMainhandSlot 抛无效槽位被吞 →
-  //   背包明明有斧头却永远换不上）
+  // 工具策略（每块破坏前注入；@yinxe/tool-strategy 引擎决策——ToolStrategyTrees）
+  //   原木→效率斧（品阶/耐久链）；树叶→精准锄>剪刀>任意精准>任意工具
+  //   （档位手排——加权分数模拟优先级的时代结束）；耐久紧急排除（快断
+  //   工具不当选/主手紧急强制换）；主手已最优 → keep 不折腾（BUG2 防倒腾）
   const ensureTool = async (): Promise<void> => {
     const cur = resolveBotPlayer(botName);
     if (!cur) return;
-    const kind: ChopTargetKind = target.kind;
-    const slot = pickBestTool(kind, mode, snapshotTools(cur), cur.selectedSlotIndex);
-    if (slot !== undefined) {
+    const { current, candidates } = snapshotToolCandidates(cur);
+    // 砍树目标键：原木 → log 键（树分发）；树叶 → leaves 键。logs 模式树叶
+    // 走斧头策略（用户规格：原木模式只用斧头）——树叶键在 logs 模式下重写为
+    // 原木键即可（同走 WOODCUT_LOG_STRATEGY）
+    const isLogTarget = target.kind === "log" || mode === "logs";
+    const blockKey = isLogTarget ? "minecraft:oak_log" : "minecraft:oak_leaves";
+    const decision = decideTool(blockKey, current, candidates, WOODCUT_TREE);
+    if (decision.action === "swap") {
       // 换工具失败抛 ActionError → breakBlockOnce 内部消化（按不切换继续挖）
-      await setMainhandSlot(botName, slot);
+      await setMainhandSlot(botName, decision.tool.slot);
       await waitTicks(1); // 工具入主手后等待 1 tick 生效
     }
   };
@@ -250,9 +247,14 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
   for (const stage of plan.stages) {
     if (stage.kind === "leaf" && effectiveMode === "collect") {
       // 收集模式挖树叶：无合适树叶工具 → 自动 fallback 圆木模式
+      //   合适 = 树叶策略档1~3有候选（精准锄 / 剪刀 / 任意精准——引擎候选判定）
       const cur = resolveBotPlayer(botName);
-      const tools = cur ? snapshotTools(cur) : [];
-      if (!cur || !hasSuitableLeafTool(tools)) {
+      const { current, candidates } = cur ? snapshotToolCandidates(cur) : { current: undefined, candidates: [] };
+      const leafPool = [...(current ? [current] : []), ...candidates];
+      const hasLeafTool = leafPool.some(
+        (c) => c.role === "hoe" && (c.enchants.silk ?? 0) > 0 || c.role === "shears" || (c.enchants.silk ?? 0) > 0,
+      );
+      if (!cur || !hasLeafTool) {
         fellBack = true;
         console.warn(`[MockPlayer] chopOneTree ${botName} 收集模式无合适树叶工具，自动 fallback 圆木模式`);
         // 通知（如果有附近玩家）——flow 内不直接依赖 world 通知，交给能力层/日志

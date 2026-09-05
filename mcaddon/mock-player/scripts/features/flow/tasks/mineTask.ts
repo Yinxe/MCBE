@@ -8,18 +8,19 @@
 //   - 视线被插入方块遮挡（blocked）→ 回探测重新读视线（沿新视线挖，
 //     不"隔山打牛"锁定旧坐标）；目标类型被换（changed）→ 回探测重选。
 //
-// 工具策略（rules/items/MineToolRules）：每块破坏前按视线方块类型从全
-// 背包选最优工具（镐/斧/锹/锄/剑映射 + 品阶/附魔评分）自动换主手；
-// 未映射类型或无匹配 → 用当前主手不折腾。expectedTypeId 定点守卫保留
-// （单块破坏中类型被换 → changed 回探测，铁律不破）。
+// 工具策略（@yinxe/tool-strategy 引擎——rules/items/ToolStrategyTrees）：
+// 每块破坏前按视线方块类型决策（MINE_TREE：方块关键字 → 镐/斧/锹/锄/剑
+// 档位手排 + sortBy 品阶/效率/耐久链 + 耐久紧急排除——快断工具不当选、
+// 主手紧急强制换）；未命中方块 → keep 主手不动（无意识挂机不折腾）。
+// expectedTypeId 定点守卫保留（单块破坏中类型被换 → changed 回探测，铁律不破）。
 
 import type { Vector3 } from "@minecraft/server";
 
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { breakBlockOnce, viewBlock, type EnsureToolContext } from "../../basic/blocks";
-import { snapshotTools } from "../../basic/items/ToolSnapshot";
+import { snapshotToolCandidates } from "../../basic/items/ToolSnapshot";
 import { setMainhandSlot } from "../../basic/items/mainhand";
-import { pickBestMineTool } from "../../../rules/items/MineToolRules";
+import { decideTool, MINE_TREE } from "../../../rules/items/ToolStrategyTrees";
 import { defineLoopTask } from "./spec";
 
 /** 视线探测/挖掘最大距离（格） */
@@ -94,14 +95,15 @@ export const mineTask = defineLoopTask<MineData>({
 
 /**
  * 挖掘工具策略（ensureTool 回调——breakBlockOnce 每块破坏前调用）：
- * 按即将破坏的方块类型从全背包快照选最优工具槽位换主手。
+ * 引擎决策（MINE_TREE + 耐久紧急排除）——keep 保持主手 / swap 换入最优。
  * 换工具失败（背包不可读等）→ 静默用当前主手继续（不中断挖掘）。
  */
 async function ensureMineTool(botName: string, toolCtx: EnsureToolContext): Promise<void> {
-  const slot = pickBestMineTool(toolCtx.blockTypeId, snapshotTools(toolCtx.bot), toolCtx.handSlot);
-  if (slot !== undefined) {
+  const { current, candidates } = snapshotToolCandidates(toolCtx.bot);
+  const decision = decideTool(toolCtx.blockTypeId, current, candidates, MINE_TREE);
+  if (decision.action === "swap") {
     try {
-      await setMainhandSlot(botName, slot);
+      await setMainhandSlot(botName, decision.tool.slot);
     } catch {
       /* 换工具失败：用当前主手继续 */
     }
