@@ -31,11 +31,7 @@ export {
   type WoodcutOutcome,
   type WoodcutFailureReason,
 } from "./woodcutFlow";
-export {
-  runPickupFlow,
-  type PickupOutcome,
-  type PickupOptions,
-} from "./pickupFlow";
+export { vacuumNearbyDrops } from "./pickupFlow";
 export { initRaidMode, cleanupRaidMode, type RaidDrinkResult } from "./raidMode";
 export {
   raidStarted,

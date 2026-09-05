@@ -8,7 +8,8 @@
 //     ③ 完整砍树模式（collect）：再挖掘掉**全部树叶**资源（已并入 plan；
 //       树叶用树叶策略：精准锄头>剪刀>任意精准工具，强制应用）
 //     ④ 圆木卡叶清理并入 plan（stuck-cleanup：破树叶让掉落物掉下来）
-//     ⑤ 拾取：独立拾取 flow（runPickupFlow）收集树范围全部掉落物
+//     ⑤ 拾取：磁吸传送拾取（vacuumNearbyDrops）——半径 10 格内圆木/树叶
+//        掉落物 teleport 脚下自动入包（零寻路零走动）
 //
 // ⚠️ 本流程为 mc 适配层：core 已由 ChopPlan / WoodcutRules 覆盖并可单测，
 //   这里的副作用（导航/破块/换工具/拾取）按 fishingFlow 风格**永不 reject**。
@@ -30,10 +31,10 @@ import {
   type ChopMode,
   type ChopTargetKind,
 } from "../../rules/woodcut/WoodcutRules";
-import { TREE_LEAF_TYPE_IDS, TREE_LOG_TYPE_IDS, classifyTreeBlock } from "../../rules/tree/TreeRules";
+import { classifyTreeBlock } from "../../rules/tree/TreeRules";
+import { WOODCUT_LOOT_TYPES } from "../../rules/woodcut/LootWhitelist";
 import type { ChopPlan, ChopStage, ChopTarget } from "../../rules/woodcut/ChopPlan";
-import type { PickupTask } from "../../rules/pickup/PickupPlan";
-import { runPickupFlow } from "./pickupFlow";
+import { vacuumNearbyDrops } from "./pickupFlow";
 
 // ─── 结果类型 ──────────────────────────────────────────
 
@@ -114,11 +115,14 @@ async function breakUntilGone(botName: string, target: ChopTarget, mode: ChopMod
   }
 
   // 工具策略（每块破坏前注入；全背包强制策略——core 决策）
+  // ⚠️ 传 handSlot：主手已最优 → 不折腾（BUG2 防倒腾；斧头已入主手后
+  //   pickBestTool 指向主手槽自身 → setMainhandSlot 抛无效槽位被吞 →
+  //   背包明明有斧头却永远换不上）
   const ensureTool = async (): Promise<void> => {
     const cur = resolveBotPlayer(botName);
     if (!cur) return;
     const kind: ChopTargetKind = target.kind;
-    const slot = pickBestTool(kind, mode, snapshotTools(cur));
+    const slot = pickBestTool(kind, mode, snapshotTools(cur), cur.selectedSlotIndex);
     if (slot !== undefined) {
       // 换工具失败抛 ActionError → breakBlockOnce 内部消化（按不切换继续挖）
       await setMainhandSlot(botName, slot);
@@ -283,30 +287,15 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
     console.info(`[MockPlayer] chopOneTree ${botName} 剪枝 ${pruned} 个够不着的高处目标（大树留顶）`);
   }
 
-  // ── ④ 拾取：树中心 7×7 范围内圆木/树叶两类掉落物（独立拾取 flow，卡叶破除） ──
+  // ── ④ 拾取：磁吸传送拾取（2026-09-03 用户规格，替代旧导航式 runPickupFlow）
+  //    假人半径 10 格内圆木/树叶掉落物 → teleport 脚下 → 0.5s 自动入包；
+  //    零寻路零走动（旧思路导航逐个靠近——慢且可能卡地形）。卡叶残留由
+  //    收集模式的树叶清理阶段统一磁吸，不再破遮挡专程跑一趟。
   let picked = 0;
   if (resolveBotPlayer(botName)?.isValid) {
-    const task: PickupTask = {
-      rangeMin: plan.pickupMin,
-      rangeMax: plan.pickupMax,
-      origin: resolveBotPlayer(botName)!.location,
-      includeTypes: [...(TREE_LOG_TYPE_IDS as readonly string[]), ...(TREE_LEAF_TYPE_IDS as readonly string[])],
-      isBlockingBelow: (loc) =>
-        plan.targets.some((t) => t.kind === "leaf" && t.loc.x === loc.x && t.loc.y === loc.y && t.loc.z === loc.z),
-    };
-    const outcome = await runPickupFlow(botName, task, {
-      allowCleanup: true,
-      maxPasses: 2,
-      waitPickupTicks: 10,
-      onUnreachable: (item) => {
-        console.warn(
-          `[MockPlayer] chopOneTree ${botName} 掉落物不可达（${item.typeId} @ ${item.loc.x},${item.loc.y},${item.loc.z}），跳过`,
-        );
-        return true;
-      },
-    });
-    picked = outcome.kind === "failed" ? 0 : outcome.picked;
-    await waitTicks(3); // 收尾等待（末班掉落物自动吸入）
+    // 白名单 = 圆木本体 + 树叶掉落物（树苗/果实——方块 id ≠ 物品 id，
+    // 树叶方块破坏掉的是 sapling 而不是 leaves）
+    picked = await vacuumNearbyDrops(botName, WOODCUT_LOOT_TYPES);
   }
   return { kind: "done", broken, picked, fellBack };
 }

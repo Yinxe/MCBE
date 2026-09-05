@@ -152,21 +152,45 @@ export function scoreLeavesTool(item: ToolItem): number {
  * @param items     背包快照（含全部工具条目，mc 层从全背包构造——强制策略
  *                  即靠"全背包扫描取最优"实现：即使主手是精准斧头，只要背包
  *                  有剪刀/精准锄头，树叶目标仍会选到它）
- * @returns 最优工具槽位（无 → undefined）
+ * @param handSlot  当前主手槽位（-1 = 未知；主手已是最优 → undefined 不折腾，
+ *                  防换装倒腾：斧头换到主手后再次选优会指向主手槽自身）
+ * @returns 最优工具槽位（无需更换 → undefined）
  */
-export function pickBestTool(kind: ChopTargetKind, mode: ChopMode, items: readonly ToolItem[]): number | undefined {
+export function pickBestTool(
+  kind: ChopTargetKind,
+  mode: ChopMode,
+  items: readonly ToolItem[],
+  handSlot = -1,
+): number | undefined {
+  const isLog = kind === "log" || mode === "logs";
   let best: ToolItem | undefined;
   let bestScore = -Infinity;
-  const scorer = kind === "log" || mode === "logs" ? scoreAxe : scoreLeavesTool;
   for (const item of items) {
-    const s = scorer(item);
-    if (s < 0) continue; // scorer 对不匹配类别返回 -1（如斧头评分只看斧头）
+    // ⚠️ 真工具甄别（BUG2 修复）：toolCategoryOf 对未知物品兜底归 axe
+    //（泥土/圆木等非工具 0 分也会通过 s<0 甄别）——斧头策略只认 _axe
+    // 后缀；树叶策略只认锄/剪刀/精准（杜背包杂物挤掉真工具）
+    if (isLog && !item.typeId.endsWith("_axe")) continue;
+    if (!isLog && !isLeafCapable(item)) continue;
+    const s = isLog ? scoreAxe(item) : scoreLeavesTool(item);
+    if (s < 0) continue;
     if (s > bestScore) {
       bestScore = s;
       best = item;
     }
   }
-  return best?.slot;
+  // 主手已是最优（同槽位）→ undefined 不折腾（防换装倒腾：斧头已入主手后
+  // 再次选优会指向主手槽自身 → setMainhandSlot 抛无效槽位被吞 → 永不换）
+  if (!best || best.slot === handSlot) return undefined;
+  return best.slot;
+}
+
+/** 树叶能力甄别：锄/剪刀/任意精准（silk_touch）——其余（含非工具）不参与 */
+function isLeafCapable(item: ToolItem): boolean {
+  return (
+    item.typeId.endsWith("_hoe") ||
+    item.typeId === "minecraft:shears" ||
+    enchantLevel(item, "silk_touch") > 0
+  );
 }
 
 /**

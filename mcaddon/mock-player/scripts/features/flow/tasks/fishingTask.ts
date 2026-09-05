@@ -29,6 +29,8 @@ import {
 } from "../../../rules/FishingPool";
 import type { SharedMemory } from "../../../runtime";
 import { fishOnce, type FishingOutcome } from "../fishingFlow";
+import { vacuumNearbyDrops } from "../pickupFlow";
+import { FISHING_LOOT_TYPES } from "../../../rules/fishing/LootWhitelist";
 import { defineLoopTask, type PhaseContext } from "./spec";
 
 // ─── 配置（tick / 格） ─────────────────────────────────
@@ -219,6 +221,16 @@ export const fishingTask = defineLoopTask<FishingData>({
         const spot = ctx.data.spot;
         if (!spot) return "find";
         const outcome = await fishOnce(ctx.botName);
+        // ⚠️ 战利品掉落物磁吸（2026-09-03 用户规格）：每轮收竿后扫描假人
+        //   半径 10 格内**鱼获类**掉落物（FISHING_LOOT_TYPES 白名单——不误吸
+        //   其他玩家/环境掉落）teleport 脚下，0.5s 自动入包
+        if (outcome.kind === "caught" || outcome.kind === "failed") {
+          try {
+            await vacuumNearbyDrops(ctx.botName, FISHING_LOOT_TYPES);
+          } catch {
+            /* 磁吸失败不影响钓鱼流转 */
+          }
+        }
         return handleOutcome(ctx, outcome);
       },
     },

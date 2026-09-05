@@ -69,7 +69,7 @@ scripts/
 │   ├── manage/                # 假人生命周期管理（DEPRECATED薄壳，委托 botLifecycle；保留 create/delete等兼容）
 │   │                          #   单例辅助（auxiliary→TickingAreaService）/ spawnMode→SpawnComponent / gametestContext
 │   ├── flow/                  # **工作流（flow）**：单次编排（fishingFlow 钓鱼流程 /
-│   │                          #   woodcutFlow 单树砍伐 / pickupFlow 拾取 / treeScan 扫描壳 /
+│   │                          #   woodcutFlow 单树砍伐 / pickupFlow 磁吸拾取 / treeScan 扫描壳 /
 │   │                          #   fishingHookTracker 感知基础 / raidMode 事件驱动劫掠）+
 │   │                          #   tasks/（循环任务：timed 定时 mine/place/attack；
 │   │                          #   natural 自然流程 wander/fishing/woodcut——共享池在
@@ -247,10 +247,19 @@ scripts/
 - **工具策略（rules/woodcut/WoodcutRules）**：原木模式只用斧头策略（品阶优先 /
   效率>耐久>精准>时运）；收集模式树叶用树叶策略（精准锄头 > 剪刀 > 任意精准工具，
   强制应用——全背包扫描取最优，即使主手是精准斧头）
-- **独立拾取 flow（features/flow/pickupFlow + rules/pickup/PickupPlan）**：可复用
-  拾取子流程——工作范围 + 目标 typeId 白名单（core 纯规划），先破**卡落遮挡**
-  （掉落物卡树叶 → 破除让掉落物掉下）再就近逐个拾取；背包满回调 / 不可达回调
-  由调用方处理。chopOneTree 已接入本 flow
+  - ⚠️ **真工具甄别 + 主手不倒腾（BUG2 修复 2026-09-03）**：`toolCategoryOf` 对
+    未知物品兜底归 axe（泥土/圆木 0 分也能过 `s<0` 甄别）——`pickBestTool` 按
+    typeId 后缀特征只认真工具（`_axe`/`_hoe`/shears/精准附魔）；并传入 handSlot，
+    **主手已最优 → undefined 不折腾**（否则斧头入主手后选优指向主手槽自身 →
+    setMainhandSlot 抛无效槽位被吞 → 背包有斧头却永远换不上）
+- **磁吸拾取（features/flow/pickupFlow.vacuumNearbyDrops，2026-09-03 用户规格——
+  废弃旧"导航走近+等吸入"思路）**：砍树每棵树完成后、钓鱼每轮收竿后，扫描假人
+  **半径 10 格**内感兴趣掉落物 → **teleport 到假人脚下** → 0.5 秒自动入包。
+  零寻路零走动（旧思路导航逐个靠近——慢、卡地形、多目标来回跑）；旧
+  runPickupFlow + rules/pickup/PickupPlan 已删除
+  - ⚠️ **方块 id ≠ 掉落物物品 id**：树叶方块 oak_leaves 破坏掉的是**树苗
+    sapling/苹果/木棍**——磁吸白名单必须按**物品 id** 列举（rules/woodcut/
+    LootWhitelist：圆木本体+树苗+果实；rules/fishing/LootWhitelist：鱼获类）
 - **砍树子模式枚举（运行时可选）**：`/mp:woodcutmode <bot> <logs|collect>` 持久化
   到 `BotRecord.woodcutMode`（缺省 logs），砍树任务每轮从记录读取
 - **测试命令 `/mp:woodcut [radius] [mode]`**：扫描树资源并展示最近一棵树的砍伐计划

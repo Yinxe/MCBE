@@ -116,3 +116,39 @@ test("pickBestTool：空背包 / 无匹配 → undefined（不换工具）", () 
   // 砍圆木但背包只有剪刀 → 无斧头可换
   assert.equal(pickBestTool("log", "logs", [item({ typeId: "minecraft:shears" })]), undefined);
 });
+
+test("pickBestTool BUG2 回归：杂物兜底 axe 不挤掉真斧头；主手已最优不倒腾", () => {
+  // 背包全是非工具杂物（泥土/圆木——toolCategoryOf 兜底归 axe，score 0 分）
+  // + 一把铁斧：必须选到真斧头（slot 3），绝不让 0 分杂物当选
+  const junkAndAxe: ToolItem[] = [
+    item({ slot: 0, typeId: "minecraft:dirt", category: "axe" }), // 兜底 axe 的杂物
+    item({ slot: 1, typeId: "minecraft:oak_log", category: "axe" }), // 圆木杂物
+    item({ slot: 2, typeId: "minecraft:bread", category: "axe" }), // 食物杂物
+    item({ slot: 3, typeId: "minecraft:iron_axe", category: "axe" }),
+  ];
+  assert.equal(pickBestTool("log", "logs", junkAndAxe), 3);
+
+  // 只有杂物（无任何 _axe 后缀）→ undefined（用当前主手，不换）
+  const onlyJunk: ToolItem[] = [
+    item({ slot: 0, typeId: "minecraft:dirt", category: "axe" }),
+    item({ slot: 1, typeId: "minecraft:oak_log", category: "axe" }),
+  ];
+  assert.equal(pickBestTool("log", "logs", onlyJunk), undefined);
+
+  // 主手已是最优（斧头在主手槽 4）→ undefined 不折腾（防换装倒腾：
+  // 斧头入主手后再次选优指向主手槽自身 → setMainhandSlot 抛无效槽位被吞）
+  const axeInHand: ToolItem[] = [
+    item({ slot: 2, typeId: "minecraft:stone_axe", category: "axe" }),
+    item({ slot: 4, typeId: "minecraft:diamond_axe", category: "axe" }),
+  ];
+  assert.equal(pickBestTool("log", "logs", axeInHand, 4), undefined);
+  // 主手是次优（石斧在主手槽 2）→ 换钻石斧（slot 4）
+  assert.equal(pickBestTool("log", "logs", axeInHand, 2), 4);
+
+  // 树叶策略同款甄别：杂物（无锄/剪/精准特征）不参与树叶候选
+  const leafJunkAndShears: ToolItem[] = [
+    item({ slot: 0, typeId: "minecraft:dirt", category: "axe" }),
+    item({ slot: 1, typeId: "minecraft:shears" }),
+  ];
+  assert.equal(pickBestTool("leaf", "collect", leafJunkAndShears), 1);
+});
