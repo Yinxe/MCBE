@@ -1,13 +1,17 @@
-// ─── 定点挖掘任务（timed：阶段机，连续挖掘 + 最优工具） ──
-// workMode="mine"。两阶段循环：probe（视线射线取方块；无目标快速重探衔接
-// 下一块）→ break（原子破坏，视线复核防隔山打牛）→ broken 立即回 probe
-// 连续挖掘。far/busy/blocked 一律回探测重新选目标——blocked = 视线被插入
-// 阻挡块，原地重敲会隔山打牛（恢复旧引擎"每轮重新视线探测"语义）。
+// ─── 定点挖掘任务（timed：阶段机，无意识挂机 + 最优工具） ──
+// workMode="mine"。**无意识挂机**语义（用户规格 2026-09-03）：
+//   - 用户预先调整好假人姿态与视角（控体态/转头），**视角 = 任务输入**；
+//   - 任务**绝不改动姿态/视角**（breakBlockOnce skipLook——不 faceTowards
+//     不扭头，与智能挖掘的本质区别：智能挖掘会自己瞄准目标）；
+//   - 沿**当前视线射线**持续挖掘：probe 每轮重新探测视线第一块实心方块，
+//     挖穿后射线自然伸到下一块，连续挖掘无空挡；
+//   - 视线被插入方块遮挡（blocked）→ 回探测重新读视线（沿新视线挖，
+//     不"隔山打牛"锁定旧坐标）；目标类型被换（changed）→ 回探测重选。
 //
-// 工具策略（rules/items/MineToolRules）：每块破坏前按目标方块类型从全背包
-// 选最优工具（镐/斧/锹/锄/剑映射 + 品阶/附魔评分）自动换主手；未映射类型
-// 或背包无匹配 → 用当前主手不折腾。与砍树 ensureTool 同款回调注入。
-// expectedTypeId 定点守卫：目标被外部改动 → changed 回探测重新选（铁律）。
+// 工具策略（rules/items/MineToolRules）：每块破坏前按视线方块类型从全
+// 背包选最优工具（镐/斧/锹/锄/剑映射 + 品阶/附魔评分）自动换主手；
+// 未映射类型或无匹配 → 用当前主手不折腾。expectedTypeId 定点守卫保留
+// （单块破坏中类型被换 → changed 回探测，铁律不破）。
 
 import type { Vector3 } from "@minecraft/server";
 
@@ -69,7 +73,9 @@ export const mineTask = defineLoopTask<MineData>({
           pollTicks: POLL_TICKS,
           token: ctx.token,
           requireLineOfSight: true,
-          // 按目标方块类型自动换最优工具（全背包扫描；主手已最优不折腾）
+          // ⚠️ 无意识挂机：不动姿态/视角（用户预先摆好；不 faceTowards）
+          skipLook: true,
+          // 按视线方块类型自动换最优工具（全背包扫描；主手已最优不折腾）
           ensureTool: (toolCtx) => ensureMineTool(ctx.botName, toolCtx),
           expectedTypeId: ctx.data.targetTypeId,
         });

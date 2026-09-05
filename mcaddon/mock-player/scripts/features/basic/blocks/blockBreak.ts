@@ -127,17 +127,20 @@ export interface BreakOnceOptions {
    * 只挖"坐标 + 类型"双重验证过的方块，杜绝把泥巴/石头当目标挖（挖坑 BUG 根治闸门）。
    */
   expectedTypeId?: string;
-}
-
-/** 持续破坏选项（breakBlockAt） */
-export interface BreakBlockOptions extends BreakOnceOptions {
   /**
-   * 跳过扭头（默认 false）：连续破坏同一方向方块（如持续挖掘）时视线已
-   * 对准，跳过 lookAt + 扭头等待——每块省 5 tick 停顿，挖掘更流畅
-   * （3.3.9）。目标方向变化时不要传（须重新对准）。
+   * 跳过对准（默认 false = 破坏前 faceTowards 目标方块中心——身体朝向 +
+   * 视线合一，引擎挖掘判定需要身体面向目标）：
+   * true = **绝不动假人姿态/视角**——定点挖掘（无意识挂机）语义：用户已
+   * 预先控体态/转头，视角是任务输入，任务期间保持原样；目标取自当前视线
+   * 射线（probe 每轮重新探测），命中变化即自然衔接下一块。
+   * 连续破坏同一方向（skipLook=true 探测结果不变）时省 5 tick 停顿更流畅；
+   * 方向变化时不要传（须重新对准）。
    */
   skipLook?: boolean;
 }
+
+/** 持续破坏选项（breakBlockAt；skipLook 语义同上，自 BreakOnceOptions 继承） */
+export interface BreakBlockOptions extends BreakOnceOptions {}
 
 // ─── 工具 ──────────────────────────────────────────────
 
@@ -249,6 +252,7 @@ export async function breakBlockOnce(
     shouldStop,
     requireLineOfSight = false,
     expectedTypeId,
+    skipLook = false,
   } = options;
   const dimension = bot.dimension;
   const targetLoc: Vector3 = { x: Math.floor(loc.x), y: Math.floor(loc.y), z: Math.floor(loc.z) };
@@ -281,9 +285,13 @@ export async function breakBlockOnce(
       /* 回调失败按不切换处理 */
     }
 
-    // ⚠️ 挖掘对准（用户规格：身体朝向与视线都看向目标方块——身体不面向时
-    // 引擎的挖掘判定会打到无效方块）。faceTowards 微动作下一 tick 执行。
-    await faceTowards(bot, targetBlock!.center());
+    // ⚠️ 挖掘对准（默认：身体朝向与视线都看向目标方块——身体不面向时引擎
+    // 的挖掘判定会打到无效方块；faceTowards 微动作下一 tick 执行）。
+    // skipLook=true：**绝不动姿态/视角**——定点挖掘（无意识挂机）语义：
+    // 视角是用户预先摆好的任务输入，任务只沿视线挖不调整。
+    if (!skipLook) {
+      await faceTowards(bot, targetBlock!.center());
+    }
 
     // 持续挖掘循环（**先敲后等**：每 1 tick 起手，消除接手新目标首击前的空挡）
     let sinceCheck = 0;
