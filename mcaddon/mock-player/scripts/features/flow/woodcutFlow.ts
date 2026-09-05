@@ -39,7 +39,7 @@ export type WoodcutFailureReason = "offline" | "aborted" | "error";
 
 /** 一次砍树流程结果 */
 export type WoodcutOutcome =
-  | { kind: "done"; broken: number; picked: number; fellBack?: boolean }
+  | { kind: "done"; broken: number; picked: number; fellBack?: boolean; pruned: number }
   | { kind: "failed"; reason: WoodcutFailureReason };
 
 // ─── 常量 ──────────────────────────────────────────────
@@ -299,7 +299,7 @@ export async function chopOneTree(botName: string, plan: ChopPlan, mode: ChopMod
     // 树叶方块破坏掉的是 sapling 而不是 leaves）
     picked = await vacuumNearbyDrops(botName, WOODCUT_LOOT_TYPES);
   }
-  return { kind: "done", broken, picked, fellBack };
+  return { kind: "done", broken, picked, fellBack, pruned };
 }
 // ─── 测试诊断入口（游戏内命令） ─────────────────────────
 

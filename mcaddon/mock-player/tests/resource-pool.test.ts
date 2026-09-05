@@ -9,6 +9,7 @@ import {
   claimEntry,
   countUsable,
   dist3dSq,
+  exhaustEntry,
   horizontalDistSq,
   isUsableFor,
   markFail,
@@ -137,4 +138,119 @@ test("内置距离度量：水平忽略 Y，3D 计入 Y", () => {
   const b: Vec3 = { x: 3, y: 4, z: 0 };
   assert.equal(horizontalDistSq(a, b), 9, "水平距离不含 y");
   assert.equal(dist3dSq(a, b), 25, "3D 距离含 y");
+});
+
+test("认领租约：过期后他人视为已释放；持有者本人不受租期影响", () => {
+  const LEASE_POLICY: PoolPolicy<FakeResource> = { ...NEAREST_POLICY, claimLeaseTicks: 100 };
+  let pool = [makeEntry("r1")];
+  pool = claimEntry(pool, LEASE_POLICY, "r1", "botA", 1000);
+  assert.equal(pool[0]?.claimedAt, 1000);
+  // 租约内：他人不可用
+  assert.equal(isUsableFor(pool[0]!, "botB", LEASE_POLICY, { nowTick: 1050 }), false);
+  // 租约过期（1000+100<=1100）：他人视为已释放
+  assert.equal(isUsableFor(pool[0]!, "botB", LEASE_POLICY, { nowTick: 1100 }), true, "租约过期→他人可抢占");
+  // 持有者本人读自己：恒可用（不受租期影响）
+  assert.equal(isUsableFor(pool[0]!, "botA", LEASE_POLICY, { nowTick: 99999 }), true);
+  // 不传 nowTick = 旧行为（认领恒活）
+  assert.equal(isUsableFor(pool[0]!, "botB", LEASE_POLICY), false);
+});
+
+test("持有者活性：任务已不在跑 → 认领视为已释放（崩溃兜底）", () => {
+  const LEASE_POLICY: PoolPolicy<FakeResource> = { ...NEAREST_POLICY, claimLeaseTicks: 3600 };
+  let pool = [makeEntry("r1")];
+  pool = claimEntry(pool, LEASE_POLICY, "r1", "botA", 1000);
+  const dead = { nowTick: 1100, holderActive: (_name: string) => false };
+  assert.equal(isUsableFor(pool[0]!, "botB", LEASE_POLICY, dead), true, "持有者已死→他人可用");
+  const alive = { nowTick: 1100, holderActive: (name: string) => name === "botA" };
+  assert.equal(isUsableFor(pool[0]!, "botB", LEASE_POLICY, alive), false, "持有者还活着→他人不可用");
+  assert.equal(isUsableFor(pool[0]!, "botA", LEASE_POLICY, alive), true, "本人恒可用");
+});
+
+test("墓碑复活：unavailable 复活期后惰性复活为 free", () => {
+  const TOMB_POLICY: PoolPolicy<FakeResource> = { ...NEAREST_POLICY, unavailableTtlTicks: 1000 };
+  let pool = [makeEntry("r1")];
+  pool = claimEntry(pool, TOMB_POLICY, "r1", "botA");
+  pool = markFail(pool, TOMB_POLICY, "r1", 500).pool;
+  const second = markFail(pool, TOMB_POLICY, "r1", 500);
+  assert.equal(second.unavailable, true);
+  assert.equal(second.pool[0]?.unavailableAt, 500);
+  // 复活期未过：不可用
+  assert.equal(isUsableFor(second.pool[0]!, "botB", TOMB_POLICY, { nowTick: 1000 }), false);
+  // 复活期已过（500+1000<=1500）：视为 free 可用
+  assert.equal(isUsableFor(second.pool[0]!, "botB", TOMB_POLICY, { nowTick: 1500 }), true, "复活期过→复活");
+  // 无复活期策略 = 永不复活（旧行为）
+  assert.equal(isUsableFor(second.pool[0]!, "botB", NEAREST_POLICY, { nowTick: 99999 }), false);
+});
+
+test("exhaustEntry：放弃立墓碑（保留条目防重扫复活）", () => {
+  const TOMB_POLICY: PoolPolicy<FakeResource> = { ...NEAREST_POLICY, unavailableTtlTicks: 1000 };
+  let pool = [makeEntry("r1")];
+  pool = claimEntry(pool, TOMB_POLICY, "r1", "botA", 100);
+  pool = exhaustEntry(pool, TOMB_POLICY, "r1", 200);
+  assert.equal(pool[0]?.status, "unavailable");
+  assert.equal(pool[0]?.claimant, undefined, "墓碑不带认领者");
+  assert.equal(pool[0]?.unavailableAt, 200);
+  assert.equal(isUsableFor(pool[0]!, "botB", TOMB_POLICY, { nowTick: 500 }), false, "复活期前不可用");
+  assert.equal(isUsableFor(pool[0]!, "botB", TOMB_POLICY, { nowTick: 1200 }), true, "复活期后复活");
+});
+
+test("merge：占用保留 / 墓碑保留 / free 刷新数据", () => {
+  const TOMB_POLICY: PoolPolicy<FakeResource> = { ...NEAREST_POLICY, unavailableTtlTicks: 1000 };
+  const occupied = { ...makeEntry("a"), status: "occupied" as const, claimant: "botA", claimedAt: 100 };
+  const tomb = { ...makeEntry("b"), status: "unavailable" as const, unavailableAt: 100 };
+  const staleFree = { ...makeEntry("c", { x: 1, y: 0, z: 0 }), scannedAt: 100 };
+  const pool = [occupied, tomb, staleFree];
+  // 重扫到了 a（别人视角的旧数据）、b、c（新数据 pos 变了）
+  const scanned = [
+    { ...makeEntry("a", { x: 9, y: 9, z: 9 }) },
+    { ...makeEntry("b", { x: 9, y: 9, z: 9 }) },
+    { ...makeEntry("c", { x: 2, y: 0, z: 0 }) },
+  ];
+  const merged = mergeEntries(pool, TOMB_POLICY, scanned, 500);
+  const byId = new Map(merged.map((e) => [e.id, e]));
+  assert.equal(byId.get("a")?.pos.x, 0, "占用条目保留持有者视图（不被重扫覆盖）");
+  assert.equal(byId.get("a")?.claimant, "botA");
+  assert.equal(byId.get("b")?.status, "unavailable", "墓碑保留");
+  assert.equal(byId.get("b")?.unavailableAt, 100, "墓碑时间戳不动");
+  assert.equal(byId.get("c")?.pos.x, 2, "free 用扫描新数据刷新");
+  assert.equal(byId.get("c")?.scannedAt, 500, "刷新打新时间戳");
+  assert.equal(byId.get("c")?.status, "free");
+});
+
+test("release 占用者校验：误释他人认领时原样返回", () => {
+  let pool = [makeEntry("r1")];
+  pool = claimEntry(pool, NEAREST_POLICY, "r1", "botA", 100);
+  const wrong = releaseEntry(pool, NEAREST_POLICY, "r1", "botB");
+  assert.equal(wrong[0]?.status, "occupied", "非持有者释放不动条目");
+  assert.equal(wrong[0]?.claimant, "botA");
+  const right = releaseEntry(pool, NEAREST_POLICY, "r1", "botA");
+  assert.equal(right[0]?.status, "free");
+  assert.equal(right[0]?.claimedAt, undefined, "释放清租约起点");
+  // 不传期望持有者 = 旧行为（无条件释放）
+  const legacy = releaseEntry(pool, NEAREST_POLICY, "r1");
+  assert.equal(legacy[0]?.status, "free");
+});
+
+test("排除集：excludeKeys 命中的键选点跳过", () => {
+  const pool = [makeEntry("a", { x: 1, y: 0, z: 0 }), makeEntry("b", { x: 2, y: 0, z: 0 })];
+  const picked = pickBest(pool, "botA", NEAREST_POLICY, ORIGIN, { excludeKeys: new Set(["a"]) });
+  assert.equal(picked?.id, "b", "排除 a 后选 b");
+  const pickedArr = pickBest(pool, "botA", NEAREST_POLICY, ORIGIN, { excludeKeys: ["a", "b"] });
+  assert.equal(pickedArr, undefined, "全排除 → 无可用");
+  assert.equal(countUsable(pool, "botA", NEAREST_POLICY, { excludeKeys: ["a"] }), 1);
+});
+
+test("free 新鲜度：过期 free 不参与选点/计数（触发重扫），但 merge known 仍含", () => {
+  const FRESH_POLICY: PoolPolicy<FakeResource> = { ...NEAREST_POLICY, dataTtlTicks: 100 };
+  const fresh = { ...makeEntry("a", { x: 1, y: 0, z: 0 }), scannedAt: 1100 };
+  const stale = { ...makeEntry("b", { x: 2, y: 0, z: 0 }), scannedAt: 100 };
+  const pool = [fresh, stale];
+  assert.equal(countUsable(pool, "botA", FRESH_POLICY, { nowTick: 1150 }), 1, "过期 free 不计数");
+  assert.equal(pickBest(pool, "botA", FRESH_POLICY, ORIGIN, { nowTick: 1150 })?.id, "a");
+  // 不传 nowTick = 旧行为（全算新鲜）
+  assert.equal(countUsable(pool, "botA", FRESH_POLICY), 2);
+  // merge known 仍含过期键：重扫出 b → 刷新而非"新发现"
+  const merged = mergeEntries(pool, FRESH_POLICY, [makeEntry("b", { x: 3, y: 0, z: 0 })], 1150);
+  assert.equal(merged.length, 2, "不过度膨胀");
+  assert.equal(merged.find((e) => e.id === "b")?.pos.x, 3, "过期 free 被扫描新数据刷新");
 });

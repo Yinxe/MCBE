@@ -127,17 +127,26 @@ scripts/
   （任务只是暂停，模式保留等补启）。跟随目标字段写入必须在 setWorkMode 事件
   发布**前**完成（命令/UI 均按此顺序；followTask 对"目标字段迟到"另有短等容错）
 - **跨假人共享数据**走 `SharedMemory` 全局单例（taskManager.shared，注入 ctx.shared）——
-  共享钓鱼点池 `"fishing:pool"` / 树资源池 `"woodcut:pool"`（renewing TTL，独立每秒扫描）
+  共享钓鱼点池 `"fishing:pool"` / 树资源池 `"woodcut:pool"`（池键永不过期；
+  认领/复活/新鲜度由条目级时间戳承担，见下）
 - **统一资源模型（rules/resource/ResourcePool，用户拍板：共享/认领/扫描隔离机制
   只实现一遍，不同资源声明差异规则，杜绝共抢）**：泛型核心 + `PoolPolicy` 策略插件。
-  统一状态机：`free →（claim 独占认领）→ occupied →（release）→ free`；
-  `occupied →（markFail 连续失败达上限）→ unavailable`（选点跳过不复活）；
-  `任意 →（remove 完成/永久放弃）→ 池移除`。策略差异点：`keyOf`（定位键）/
+  统一状态机：`free →（claim 独占认领，带 claimedAt）→ occupied →（release）→ free`；
+  `occupied →（markFail 连续失败达上限 / exhaust 放弃）→ unavailable`（墓碑：带
+  unavailableAt，复活期后惰性复活；merge 同 key 保留——"移除"只用于资源真的没了）；
+  `任意 →（remove 资源耗尽/消失）→ 池移除`。策略差异点：`keyOf`（定位键）/
   `centerOf`+`distance`（距离基准：钓鱼=站立点+水平，树=基座+3D）/`compare`
   （排序：钓鱼=星级降序→距离升序，树=距离升序）/`maxFailStrikes`（0=无失败标记）/
-  `extraUsable`（如维度一致）。FishingPool / TreePool 是「策略 + 类型化薄壳」，
-  对外函数签名不变；选点约束（center/maxDistance/isValid 现场回调）与扫描合并
-  （同 key 保留已有状态，新资源按 free 入池）为公共语义
+  `extraUsable`（如维度一致）/`claimLeaseTicks`（认领租期）/`unavailableTtlTicks`
+  （墓碑复活期）/`dataTtlTicks`（free 新鲜期）。FishingPool / TreePool 是「策略 +
+  类型化薄壳」；选点约束（center/maxDistance/isValid 现场回调/excludeKeys 排除集）
+  与扫描合并（占用/墓碑保留，其余同 key 用扫描值刷新+打 scannedAt）为公共语义。
+  ⚠️ **认领有效性 ≠ 池整体 TTL（2026-09 设计修正）**：认领是"持有者生命周期"的
+  函数——读时惰性判定（`PoolReadOptions.nowTick` 时钟 + `holderActive` 任务活性
+  查询：租约过期 / 持有者任务已不在跑 → 视为 free；持有者本人读自己恒可用），
+  不靠整池 renewing TTL 续命（长作业 chop/fish 期间不写池，旧模型会丢认领导致
+  双占；树池无现场校验兜底，损害全额兑现）。释放带占用者校验（`expectClaimant`，
+  防误释他人认领）；预重扫回写只替换自己仍持有的条目（防 stomp-write）
 - **任务能力增强（2026-09-03 用户规格：挖掘/放置/攻击/跟随完善）**：
   - **mine（⚠️ 无意识挂机语义，2026-09-03 用户拍板）**：用户预先调整好假人
     姿态与视角（控体态/转头）后开启——**视角 = 任务输入，任务绝不改动姿态/视角**
@@ -217,14 +226,19 @@ scripts/
 - **共享钓鱼点池选点规则（新版 workMode="fishing"，rules/FishingPool）**：
   假人只能从池里选**自身 16 格内**（SPOT_MAX_DISTANCE）且**点位半径 1 格内无
   其他实体**（现场实时判定 isSpotUsable）的有效钓鱼点；池内**有效点**不足
-  下限（POOL_MIN_USABLE=3）→ 下次寻找的假人主动扫描发现新点并合并进池共享
+  下限（POOL_MIN_USABLE=3）→ 下次寻找的假人主动扫描发现新点并合并进池共享；
+  align/navigate 失败的点进本轮排除集（防释放后重选回同一个坏点打转，钓到鱼清空）；
+  三振出局的点立墓碑（复活期 10 分钟后惰性复活，不再"永不复活"）
 
 ### 自动砍树（新版 workMode="woodcut"）
 - **共享树资源池（rules/woodcut/TreePool）**：所有砍树假人共用 SharedMemory
-  `"woodcut:pool"` 池（renewing TTL，活跃即延长）——一个假人发现的树全体可见；
-  **只认领附近 16 格**（TREE_POOL_MAX_DISTANCE）、**多假人不抢夺**（claimTree 独占）、
-  **处理完移除**（removeTree）、可认领树资源不足（POOL_MIN_TREES=3）→ 主动扫描
-  发现新树并合并进池共享（mergeScannedTrees）
+  `"woodcut:pool"` 池（池键永不过期）——一个假人发现的树全体可见；
+  **只认领附近 16 格**（TREE_POOL_MAX_DISTANCE）、**多假人不抢夺**（claimTree 独占，
+  读时活性判定防长作业丢认领双占）、认领前现场校验基座仍是原木（池数据陈旧
+  的最后一道门；不在的树真移除+排除再试）、**砍光移除**（removeTree）/
+  **放弃立墓碑**（exhaustTree：留顶剪枝的高树顶还在世界里，保留条目防重扫
+  复活永动机，复活期后惰性复活）、可认领树资源不足（POOL_MIN_TREES=3）→
+  主动扫描发现新树并合并进池共享（mergeScannedTrees，占用/墓碑保留）
 - **砍伐前 7×7×7 重扫（features/flow/treeScan.rescanTree7x7）**：认领后以**树中心
   （底部坐标）**为中心 7×7×7 重扫圆木/树叶，`refreshTreeResource` 更新树资源清单
   并写回共享池，再生成计划（清单不失真）

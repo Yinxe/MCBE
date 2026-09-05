@@ -9,6 +9,7 @@
 import { system } from "@minecraft/server";
 
 import { botRegistry } from "../../../bootstrap/context";
+import { taskManager } from "../../../runtime";
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
 import { scanTreesFromSets, rescanTree7x7 } from "../treeScan";
 import { chopOneTree, type WoodcutOutcome } from "../woodcutFlow";
@@ -20,7 +21,7 @@ import {
   mergeScannedTrees,
   pickBestTree,
   POOL_MIN_TREES,
-  POOL_TTL_TICKS,
+  exhaustTree,
   releaseTree,
   removeTree,
   TREE_POOL_KEY,
@@ -28,6 +29,7 @@ import {
   type PoolTree,
   type TreePickOptions,
 } from "../../../rules/woodcut/TreePool";
+import { classifyTreeBlock } from "../../../rules/tree/TreeRules";
 import { defineLoopTask, TASK_DONE, type PhaseContext } from "./spec";
 
 // ─── 配置（tick / 格） ─────────────────────────────────
@@ -41,9 +43,21 @@ const MIN_POOL_TREES = POOL_MIN_TREES;
 /** 无树重查间隔（tick = 2.5 秒） */
 const RECHECK_TICKS = 50;
 
-/** 回写共享池（renewing TTL：活跃即延长） */
+/** 回写共享池（池键永不过期——认领/复活/新鲜度由条目级时间戳承担；
+ * 整池 renewing TTL 已弃用（长作业期间不写池会丢认领导致双占）） */
 function writePool(shared: PhaseContext<WoodcutData>["shared"], pool: PoolTree[]): void {
-  shared.set(TREE_POOL_KEY, pool, POOL_TTL_TICKS, "renewing", system.currentTick);
+  shared.set(TREE_POOL_KEY, pool);
+}
+
+/**
+ * 读时判定选项（惰性降级/复活时钟 + 持有者活性）：认领是否还活着看
+ * "持有者任务还在不在跑"，不看"整池最近有没有写过"。
+ */
+function readOpts(): TreePickOptions {
+  return {
+    nowTick: system.currentTick,
+    holderActive: (claimant: string) => taskManager.runningTaskOf(claimant)?.workMode === "woodcut",
+  };
 }
 
 /** 砍树任务共享状态 */
@@ -54,14 +68,32 @@ interface WoodcutData {
   tree?: PoolTree;
   /** 扫描会话终态：扫过且无新树 → 附近已无树（任务自然完成） */
   noTreeFound: boolean;
+  /** 本轮已试过现场无效的树 id（排除集，成功砍完一棵后清空） */
+  triedIds: string[];
 }
 
 /** 释放当前认领（树还在，回池供他人认领；幂等） */
 function releaseClaim(ctx: PhaseContext<WoodcutData>): void {
   if (!ctx.data.treeId) return;
-  writePool(ctx.shared, releaseTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], ctx.data.treeId));
+  writePool(ctx.shared, releaseTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], ctx.data.treeId, ctx.botName));
   ctx.data.treeId = undefined;
   ctx.data.tree = undefined;
+}
+
+/**
+ * 现场校验：树基座处仍是原木类方块（一次 getBlock；树已被玩家/别人砍掉 → 不再是树）。
+ * 池数据陈旧的唯一可靠判定——认领前最后一道门。
+ */
+function isTreeStillThere(
+  bot: { dimension: { getBlock: (loc: { x: number; y: number; z: number }) => { typeId: string } | undefined } },
+  tree: PoolTree,
+): boolean {
+  try {
+    const block = bot.dimension.getBlock({ x: Math.floor(tree.base.x), y: Math.floor(tree.base.y), z: Math.floor(tree.base.z) });
+    return !!block && classifyTreeBlock(block.typeId) === "log";
+  } catch {
+    return false; // 读取失败（区块未加载）→ 当做不在，放弃认领（安全侧）
+  }
 }
 
 // ─── 任务定义 ──────────────────────────────────────────
@@ -71,17 +103,15 @@ export const woodcutTask = defineLoopTask<WoodcutData>({
   workMode: "woodcut",
   kind: "natural",
   label: "自动砍树",
-  createData: () => ({ noTreeFound: false }),
+  createData: () => ({ noTreeFound: false, triedIds: [] }),
   initial: "find",
   cleanup: (ctx) => {
-    // 兜底：任务结束（取消/完成/失败）释放认领（chop 完成已移除则空操作）
+    // 兜底：任务结束（取消/完成/失败）释放认领（chop 完成已移除/立墓碑则空操作；
+    // 持有人校验——只释放自己的认领，防误释他人）
     if (ctx.data.treeId) {
-      ctx.shared.set(
-        TREE_POOL_KEY,
-        releaseTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], ctx.data.treeId),
-        POOL_TTL_TICKS,
-        "renewing",
-        system.currentTick,
+      writePool(
+        ctx.shared,
+        releaseTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], ctx.data.treeId, ctx.botName),
       );
     }
   },
@@ -99,20 +129,26 @@ export const woodcutTask = defineLoopTask<WoodcutData>({
           ctx.notify("任务完成：附近已无树可砍");
           return TASK_DONE;
         }
-        // ── 选树 ──
+        // ── 选树（读时判定：租约/活性/新鲜度；现场校验在 pick 重试环里做） ──
         const record = botRegistry.get(ctx.botName);
         const mode: ChopMode = normalizeChopMode(record?.woodcutMode, "logs");
-        const pickOptions: TreePickOptions = { center: bot.location, maxDistance: MAX_DISTANCE };
+        const baseOpts: TreePickOptions = {
+          ...readOpts(),
+          center: bot.location,
+          maxDistance: MAX_DISTANCE,
+          excludeKeys: ctx.data.triedIds,
+        };
         const pool = ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [];
-        // 池内可认领不足 → 主动扫描（await；扫描有开销 ~50ms，结果合并共享）
-        if (countClaimable(pool, ctx.botName, pickOptions) < MIN_POOL_TREES) {
+        // 池内可认领不足 → 主动扫描（await；扫描有开销 ~50ms，结果合并共享；
+        // 合并带 nowTick：新条目打 scannedAt，过期 free 刷新数据，占用/墓碑保留）
+        if (countClaimable(pool, ctx.botName, baseOpts) < MIN_POOL_TREES) {
           try {
             const scan = await scanTreesFromSets(bot.location, bot.dimension, SCAN_RADIUS);
             const fresh = ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [];
             const known = new Set(fresh.map((t) => t.id));
             const newTrees = scan.trees.filter((t) => !known.has(t.id));
             if (newTrees.length > 0) {
-              writePool(ctx.shared, mergeScannedTrees(fresh, newTrees));
+              writePool(ctx.shared, mergeScannedTrees(fresh, newTrees, system.currentTick));
             } else {
               ctx.data.noTreeFound = true; // 扫描成功但无新树 → 终态
             }
@@ -120,16 +156,34 @@ export const woodcutTask = defineLoopTask<WoodcutData>({
             /* 扫描异常不计终态（下轮重试；骨架退避兜底意外异常） */
           }
         }
-        const pick = pickBestTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], ctx.botName, bot.location, pickOptions);
-        if (!pick) {
-          await ctx.wait(RECHECK_TICKS);
-          return "find";
+        // ── 认领重试环（最多 3 棵）：现场校验 base 仍是原木 → 认领；
+        //   树已不在（被玩家/别人砍掉）→ 真移除 + 排除再试（自清洁，不 whitewash 墓碑） ──
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const opts: TreePickOptions = { ...baseOpts, excludeKeys: [...ctx.data.triedIds] };
+          const pick = pickBestTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], ctx.botName, bot.location, opts);
+          if (!pick) break;
+          const cur = resolveBotPlayer(ctx.botName);
+          if (!cur) {
+            await ctx.wait(RECHECK_TICKS);
+            return "find";
+          }
+          if (!isTreeStillThere(cur, pick)) {
+            // 树已不在世界 → 真移除（不是墓碑：资源真的没了）+ 排除再试
+            writePool(ctx.shared, removeTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], pick.id));
+            if (!ctx.data.triedIds.includes(pick.id)) ctx.data.triedIds.push(pick.id);
+            continue;
+          }
+          ctx.data.treeId = pick.id;
+          ctx.data.tree = pick;
+          writePool(
+            ctx.shared,
+            claimTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], pick.id, ctx.botName, system.currentTick),
+          );
+          ctx.notify(`认领大树（${mode === "logs" ? "原木" : "收集"}模式）`);
+          return "chop";
         }
-        ctx.data.treeId = pick.id;
-        ctx.data.tree = pick;
-        writePool(ctx.shared, claimTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], pick.id, ctx.botName));
-        ctx.notify(`认领大树（${mode === "logs" ? "原木" : "收集"}模式）`);
-        return "chop";
+        await ctx.wait(RECHECK_TICKS);
+        return "find";
       },
     },
     chop: {
@@ -145,11 +199,21 @@ export const woodcutTask = defineLoopTask<WoodcutData>({
             ? `砍伐完成（破 ${outcome.broken} 块，拾取 ${outcome.picked} 件${outcome.fellBack ? "，收集模式缺工具已回退原木" : ""}）`
             : "本次砍树中断（可重试）",
         );
-        // 完成/放弃都从池移除（树资源不再复用；取消场景由 cleanup 释放）
+        // 收尾二选一（墓碑 vs 移除——"放弃"≠"没了"）：
+        //   pruned > 0（留顶剪枝，高处还有木头）→ exhaustTree 立墓碑（保留条目防重扫复活）；
+        //   否则（砍光/目标全消失）→ removeTree 真移除。取消场景由 cleanup 释放。
         if (ctx.data.treeId) {
-          writePool(ctx.shared, removeTree(ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [], ctx.data.treeId));
+          const pool = ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [];
+          const now = system.currentTick;
+          writePool(
+            ctx.shared,
+            outcome.kind === "done" && outcome.pruned > 0
+              ? exhaustTree(pool, ctx.data.treeId, now)
+              : removeTree(pool, ctx.data.treeId),
+          );
           ctx.data.treeId = undefined;
           ctx.data.tree = undefined;
+          ctx.data.triedIds.length = 0; // 世界已变，排除集失效 → 清空
         }
         return "find";
       },
@@ -165,16 +229,22 @@ async function chopClaimedTree(ctx: PhaseContext<WoodcutData>, tree: PoolTree, m
   const bot = resolveBotPlayer(ctx.botName);
   if (!bot) return { kind: "failed", reason: "offline" };
 
-  // ① 预重扫 7×7×7（修复认领清单树顶截断）+ 回写共享池
+  // ① 预重扫 7×7×7（修复认领清单树顶截断）+ 条件回写共享池
   let effectiveTree = tree;
   try {
     const rescan = rescanTree7x7(bot.dimension, tree.base, tree.top.y);
     effectiveTree = { ...tree, ...refreshTreeResource(tree, rescan.logs, rescan.leafs) };
     const fresh = ctx.shared.get<PoolTree[]>(TREE_POOL_KEY) ?? [];
-    writePool(
-      ctx.shared,
-      fresh.map((t) => (t.id === effectiveTree.id ? effectiveTree : t)),
-    );
+    const current = fresh.find((t) => t.id === effectiveTree.id);
+    // 条件回写：条目仍是我的认领（或已回 free）才替换——中途若被他人认领
+    // （池抖动/竞态窗口），不动别人的条目（防 stomp-write 覆盖他人认领；
+    // 本地 effectiveTree 照常用于本次砍伐计划）
+    if (!current || current.status === "free" || current.claimant === ctx.botName) {
+      writePool(
+        ctx.shared,
+        fresh.map((t) => (t.id === effectiveTree.id ? effectiveTree : t)),
+      );
+    }
   } catch {
     /* 重扫失败 → 回退认领清单 */
   }

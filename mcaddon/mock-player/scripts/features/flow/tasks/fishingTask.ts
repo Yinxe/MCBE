@@ -8,6 +8,7 @@
 import { system } from "@minecraft/server";
 
 import { resolveBotPlayer } from "../../../bot/PlayerGateway";
+import { taskManager } from "../../../runtime";
 import { hasFishingRod, findFishingSpots, isSpotUsable } from "../../basic/fishing";
 import { faceTowards } from "../../basic/PoseGateway";
 import { NavigateResult, longNavigateBot, navigateBot } from "../../basic/move";
@@ -20,7 +21,6 @@ import {
   mergeScanned,
   pickBestSpot,
   POOL_MIN_USABLE,
-  POOL_TTL_TICKS,
   releaseSpot,
   resetFailSpot,
   SPOT_MAX_DISTANCE,
@@ -62,13 +62,27 @@ interface FishingData {
   spot?: PoolSpot;
   /** 下次允许扫描的 tick（限频 getBlocks） */
   nextScanTick: number;
+  /** 本轮已试过失败的点键（align 失败/占用——排除集，钓到鱼后清空） */
+  excluded: string[];
 }
 
 // ─── 池操作（阶段辅助） ────────────────────────────────
 
-/** 回写共享池（renewing TTL：活跃即延长） */
+/** 回写共享池（池键永不过期——认领/复活/新鲜度由条目级时间戳承担；
+ * 整池 renewing TTL 已弃用（长导航+长咬钩期间不写池会丢认领）） */
 function writePool(shared: SharedMemory, pool: PoolSpot[]): void {
-  shared.set(FISH_POOL_KEY, pool, POOL_TTL_TICKS, "renewing", system.currentTick);
+  shared.set(FISH_POOL_KEY, pool);
+}
+
+/**
+ * 读时判定选项（惰性降级/复活时钟 + 持有者活性）：认领是否还活着看
+ * "持有者任务还在不在跑"，不看"整池最近有没有写过"。
+ */
+function readOpts(): SpotPickOptions {
+  return {
+    nowTick: system.currentTick,
+    holderActive: (claimant: string) => taskManager.runningTaskOf(claimant)?.workMode === "fishing",
+  };
 }
 
 /** 站立点中心（导航目标：格子中心水平坐标，y 取站立层） */
@@ -79,7 +93,7 @@ function standCenter(spot: PoolSpot): { x: number; y: number; z: number } {
 /** 释放当前认领点（幂等；清空 data 记录） */
 function releaseClaim(ctx: PhaseContext<FishingData>): void {
   if (!ctx.data.key) return;
-  writePool(ctx.shared, releaseSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], ctx.data.key));
+  writePool(ctx.shared, releaseSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], ctx.data.key, ctx.botName));
   ctx.data.key = undefined;
   ctx.data.spot = undefined;
 }
@@ -87,7 +101,7 @@ function releaseClaim(ctx: PhaseContext<FishingData>): void {
 /** 失败计数回写；返回是否已标记不可用（连续失败 ≥ 上限） */
 function markFail(ctx: PhaseContext<FishingData>): boolean {
   if (!ctx.data.key) return false;
-  const prob = markFailSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], ctx.data.key);
+  const prob = markFailSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], ctx.data.key, system.currentTick);
   writePool(ctx.shared, prob.spots);
   return prob.unavailable;
 }
@@ -128,17 +142,15 @@ export const fishingTask = defineLoopTask<FishingData>({
   workMode: "fishing",
   kind: "natural",
   label: "自动钓鱼",
-  createData: () => ({ nextScanTick: 0 }),
+  createData: () => ({ nextScanTick: 0, excluded: [] }),
   initial: "find",
   cleanup: (ctx) => {
-    // 兜底：任务结束（取消/完成/失败）释放认领（正常流转中已释放则空操作）
+    // 兜底：任务结束（取消/完成/失败）释放认领（正常流转中已释放则空操作；
+    // 持有人校验——只释放自己的认领）
     if (ctx.data.key) {
-      ctx.shared.set(
-        FISH_POOL_KEY,
-        releaseSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], ctx.data.key),
-        POOL_TTL_TICKS,
-        "renewing",
-        system.currentTick,
+      writePool(
+        ctx.shared,
+        releaseSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], ctx.data.key, ctx.botName),
       );
     }
   },
@@ -158,16 +170,18 @@ export const fishingTask = defineLoopTask<FishingData>({
         }
         const dimensionId = bot.dimension.id;
         const spotOptions: SpotPickOptions = {
+          ...readOpts(),
           center: bot.location,
           maxDistance: MAX_DISTANCE,
           isValid: (spot) => isSpotUsable(bot.dimension, spot.stand, bot.id),
+          excludeKeys: ctx.data.excluded,
         };
-        // 池内可用点不足 → 主动扫描（限频；getBlocks 有开销）
+        // 池内可用点不足 → 主动扫描（限频；getBlocks 有开销；合并带 nowTick）
         const pool = ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [];
         if (countUsable(pool, ctx.botName, dimensionId, spotOptions) < MIN_POOL_USABLE && system.currentTick >= ctx.data.nextScanTick) {
           const scanned = findFishingSpots(bot.location, bot.dimension, SCAN_RADIUS);
           if (!scanned.reason && scanned.spots.length > 0) {
-            writePool(ctx.shared, mergeScanned(pool, scanned.spots, dimensionId));
+            writePool(ctx.shared, mergeScanned(pool, scanned.spots, dimensionId, system.currentTick));
           }
           ctx.data.nextScanTick = system.currentTick + SCAN_COOLDOWN_TICKS;
         }
@@ -181,7 +195,10 @@ export const fishingTask = defineLoopTask<FishingData>({
         if (ctx.data.key && ctx.data.key !== pick.key) releaseClaim(ctx);
         ctx.data.key = pick.key;
         ctx.data.spot = pick;
-        writePool(ctx.shared, claimSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], pick.key, ctx.botName));
+        writePool(
+          ctx.shared,
+          claimSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], pick.key, ctx.botName, system.currentTick),
+        );
         ctx.notify(`找到钓鱼点，前往（${pick.aim.level} 星）`);
         return "navigate";
       },
@@ -208,6 +225,12 @@ export const fishingTask = defineLoopTask<FishingData>({
         const aligned = await alignToSpot(ctx);
         if (!aligned.ok) {
           if (aligned.occupied) ctx.notify("钓鱼点被占用或失效，换点");
+          // 排除集：刚失败的点本轮不再选（释放后它又是 free 最优——不排除会
+          // 无限选回同一个坏点打转；钓到鱼后清空排除集）
+          if (ctx.data.key && !ctx.data.excluded.includes(ctx.data.key)) {
+            ctx.data.excluded.push(ctx.data.key);
+            if (ctx.data.excluded.length > 32) ctx.data.excluded.shift();
+          }
           releaseClaim(ctx);
           await ctx.wait(RECHECK_TICKS);
           return "find";
@@ -240,7 +263,8 @@ export const fishingTask = defineLoopTask<FishingData>({
 /** 单次钓鱼结果 → 阶段流转（回写池 + 释放/续钓决策） */
 function handleOutcome(ctx: PhaseContext<FishingData>, outcome: FishingOutcome): string {
   if (outcome.kind === "caught") {
-    // 成功：清零失败计数，同点续钓
+    // 成功：清零失败计数 + 清空排除集（世界已变，之前失败的点可再试），同点续钓
+    ctx.data.excluded.length = 0;
     if (ctx.data.key) {
       writePool(ctx.shared, resetFailSpot(ctx.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [], ctx.data.key));
     }

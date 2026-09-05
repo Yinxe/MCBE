@@ -21,6 +21,7 @@
 import {
   claimEntry,
   dist3dSq,
+  exhaustEntry,
   isUsableFor,
   mergeEntries,
   passesPickConstraints,
@@ -29,6 +30,8 @@ import {
   removeEntry,
   type PoolEntry,
   type PoolPolicy,
+  type PoolReadOptions,
+  isClaimLive,
 } from "../resource/ResourcePool";
 import type { TreeResource } from "../tree/TreeRules";
 import type { Vec3 } from "../Types";
@@ -50,8 +53,20 @@ export const TREE_POOL_MAX_DISTANCE = 16;
 /** 可认领树资源下限：池内可认领数 < 此值 → 下次寻找的假人主动扫描发现新树并共享 */
 export const POOL_MIN_TREES = 3;
 
-/** 池 TTL（tick = 60 秒；renewing——数据持续被写入/更新即延长） */
-export const POOL_TTL_TICKS = 1200;
+/**
+ * 认领租期（tick = 6 分钟，覆盖最大树 collect 全砍一轮）：持有者任务活性是主防线
+ * （读时 holderActive 判定），租期只是兜底。持有者本人读自己的认领不受租期影响。
+ */
+export const CLAIM_LEASE_TICKS = 7200;
+/**
+ * 墓碑复活期（tick = 10 分钟）：放弃的树（高顶够不着留顶）复活期后惰性复活为 free
+ * （树可能又长了/环境变化）；复活前 merge 同 key 保留墓碑，不再被认领（防欸尸丸機空转）。
+ */
+export const EXHAUSTED_TTL_TICKS = 12000;
+/**
+ * free 数据新鲜期（tick = 5 分钟）：过期 free 不参与选点/计数（触发重扫刷新）。
+ */
+export const TREE_DATA_TTL_TICKS = 6000;
 
 /** 树资源策略（统一资源模型的树差异规则；树无失败标记——maxFailStrikes=0） */
 export const TREE_POOL_POLICY: PoolPolicy<PoolTree> = {
@@ -62,10 +77,13 @@ export const TREE_POOL_POLICY: PoolPolicy<PoolTree> = {
   // 就近优先（3D 距离升序）
   compare: (a, b, botPos) => dist3dSq(a.base, botPos) - dist3dSq(b.base, botPos),
   maxFailStrikes: 0,
+  claimLeaseTicks: CLAIM_LEASE_TICKS,
+  unavailableTtlTicks: EXHAUSTED_TTL_TICKS,
+  dataTtlTicks: TREE_DATA_TTL_TICKS,
 };
 
-/** 认领约束选项（距离 + 可选现场有效性回调——core 零 @minecraft） */
-export interface TreePickOptions {
+/** 认领约束选项（距离 + 可选现场有效性回调 + 读时判定——core 零 @minecraft） */
+export interface TreePickOptions extends PoolReadOptions {
   /** 距离过滤中心（通常为假人位置）；传入则启用距离约束 */
   center?: Vec3;
   /** 最大距离（格，用户规格：只认领附近 16 格；缺省 TREE_POOL_MAX_DISTANCE） */
@@ -86,7 +104,13 @@ export function passesTreeConstraints(tree: PoolTree, options?: TreePickOptions)
  * 防止相邻/连体树被扫描成两个条目后，两个假人各认领一棵"名义不同"的树、
  * 实际抢同一批原木。
  */
-function overlapsClaimed(pool: readonly PoolTree[], tree: PoolTree, botName: string): boolean {
+function overlapsClaimed(
+  pool: readonly PoolTree[],
+  tree: PoolTree,
+  botName: string,
+  read?: PoolReadOptions,
+  policy: PoolPolicy<PoolTree> = TREE_POOL_POLICY,
+): boolean {
   const cells = new Set(tree.footprint.map((c) => `${c.x},${c.z}`));
   return pool.some(
     (other) =>
@@ -94,21 +118,28 @@ function overlapsClaimed(pool: readonly PoolTree[], tree: PoolTree, botName: str
       other.status === "occupied" &&
       other.claimant !== undefined &&
       other.claimant !== botName &&
+      // 死认领（租约过期/持有者已不活跃）不挡路——与 isUsableFor 同口径
+      isClaimLive(other, policy, read) &&
       other.footprint.some((c) => cells.has(`${c.x},${c.z}`)),
   );
 }
 
-/** 某假人视角下该树是否可认领（状态 + 独占语义 + 整树占地不与他人重叠） */
-export function isTreeClaimableFor(tree: PoolTree, botName: string, pool?: readonly PoolTree[]): boolean {
-  if (!isUsableFor(tree, botName, TREE_POOL_POLICY)) return false;
-  if (pool && overlapsClaimed(pool, tree, botName)) return false;
+/** 某假人视角下该树是否可认领（状态/租约/活性 + 整树占地不与他人重叠） */
+export function isTreeClaimableFor(
+  tree: PoolTree,
+  botName: string,
+  pool?: readonly PoolTree[],
+  read?: PoolReadOptions,
+): boolean {
+  if (!isUsableFor(tree, botName, TREE_POOL_POLICY, read)) return false;
+  if (pool && overlapsClaimed(pool, tree, botName, read)) return false;
   return true;
 }
 
 /** 池内对某假人可认领且通过约束的树数（不足下限 → 主动扫描共享） */
 export function countClaimable(pool: readonly PoolTree[], botName: string, options?: TreePickOptions): number {
   return pool.filter(
-    (t) => isTreeClaimableFor(t, botName, pool) && passesTreeConstraints(t, options),
+    (t) => isTreeClaimableFor(t, botName, pool, options) && passesTreeConstraints(t, options),
   ).length;
 }
 
@@ -119,24 +150,37 @@ export function pickBestTree(
   center: Vec3,
   options?: TreePickOptions,
 ): PoolTree | undefined {
-  const claimable = pool.filter((t) => isTreeClaimableFor(t, botName, pool) && passesTreeConstraints(t, options));
+  const claimable = pool.filter((t) => isTreeClaimableFor(t, botName, pool, options) && passesTreeConstraints(t, options));
   if (claimable.length === 0) return undefined;
-  return pickBest(claimable, botName, TREE_POOL_POLICY, center);
+  return pickBest(claimable, botName, TREE_POOL_POLICY, center, options);
 }
 
-/** 扫描结果合并进池（去重）：同 id 保留已有状态/认领，新树按 free 加入 */
-export function mergeScannedTrees(pool: readonly PoolTree[], scanned: readonly TreeResource[]): PoolTree[] {
-  return mergeEntries(pool, TREE_POOL_POLICY, scanned.map((tree) => ({ ...tree, status: "free" as const })));
+/** 扫描结果合并进池（去重 + 刷新）：已占用/墓碑保留，其余同 id 用扫描值刷新（free） */
+export function mergeScannedTrees(
+  pool: readonly PoolTree[],
+  scanned: readonly TreeResource[],
+  nowTick?: number,
+): PoolTree[] {
+  return mergeEntries(pool, TREE_POOL_POLICY, scanned.map((tree) => ({ ...tree, status: "free" as const })), nowTick);
 }
 
-/** 独占认领某棵树（标记共享——其他假人不再抢它） */
-export function claimTree(pool: readonly PoolTree[], treeId: string, botName: string): PoolTree[] {
-  return claimEntry(pool, TREE_POOL_POLICY, treeId, botName);
+/** 独占认领某棵树（标记共享——其他假人不再抢它；写 claimedAt 租约起点） */
+export function claimTree(pool: readonly PoolTree[], treeId: string, botName: string, nowTick?: number): PoolTree[] {
+  return claimEntry(pool, TREE_POOL_POLICY, treeId, botName, nowTick);
 }
 
 /** 释放认领（树还在/换树/暂撤离 → 回 free 共享；树无失败标记，恒回 free） */
-export function releaseTree(pool: readonly PoolTree[], treeId: string): PoolTree[] {
-  return releaseEntry(pool, TREE_POOL_POLICY, treeId);
+export function releaseTree(pool: readonly PoolTree[], treeId: string, expectClaimant?: string): PoolTree[] {
+  return releaseEntry(pool, TREE_POOL_POLICY, treeId, expectClaimant);
+}
+
+/**
+ * 放弃某棵树 → 墓碑（unavailable + unavailableAt）：树还在世界里但本次放弃
+ * （如高顶够不着留顶剪枝），从"可认领"摘除但保留条目防重扫复活；
+ * 复活期后惰性复活（树可能又长了）。"移除"只用于树真的没了。
+ */
+export function exhaustTree(pool: readonly PoolTree[], treeId: string, nowTick?: number): PoolTree[] {
+  return exhaustEntry(pool, TREE_POOL_POLICY, treeId, nowTick);
 }
 
 /** 处理完移除树资源（树已砍光/永久放弃 → 从池删除不再共享） */
