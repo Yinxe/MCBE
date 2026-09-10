@@ -64,6 +64,8 @@ export interface BehaviorSubmittedEvent {
   coexist: string[];
   /** 工作模式（单选互斥：none/wander/mine/place/attack/raid/fishing；发布前已落库） */
   workMode: string;
+  /** 动作间隔（GT；mine/place/attack/autoInteract 速度档，发布前已写入 record） */
+  actionIntervalTicks: number;
   /** 完整新标签集（含 bot 标识标签；发布前已写入 record.tags） */
   tags: string[];
 }
