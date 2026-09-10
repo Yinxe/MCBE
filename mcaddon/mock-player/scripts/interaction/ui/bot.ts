@@ -312,6 +312,7 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
       // ── 行为/使用 ──
       .buttonWithIcon(style("行为菜单", color.darkGreen), "textures/ui/mockplayer/inventory", () => trigger("openBehavior"))
       .buttonWithIcon(style("使用物品", color.darkGreen), "textures/ui/mockplayer/use_item", () => trigger("useItem"))
+      .buttonWithIcon(style("交互", color.darkGreen), "textures/ui/mockplayer/use_item", () => trigger("interact"))
       .buttonWithIcon(style("设置重生", color.darkBlue), "textures/ui/mockplayer/set_spawn", () => trigger("updateSpawn"))
       .buttonWithIcon(style("修改名字", color.darkBlue), "textures/ui/mockplayer/rename", () => trigger("rename"))
       // ── 战斗/工具 ──

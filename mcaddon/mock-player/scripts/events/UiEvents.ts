@@ -21,6 +21,7 @@ export type BotPanelAction =
   | "reclaim"
   | "discard"
   | "useItem"
+  | "interact"
   | "openBehavior"
   | "updateSpawn"
   | "rename"

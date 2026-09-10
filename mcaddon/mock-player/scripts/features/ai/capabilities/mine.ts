@@ -27,6 +27,7 @@ export interface MineBehaviorConfig {
   idleRecheckTicks: number;
   /** 单块破坏状态检测间隔（tick；透传 breakBlockOnce） */
   pollTicks: number;
+  actionIntervalTicks: number;
 }
 
 /** 默认配置（统一管理；makeMineBehavior 可传自定义配置覆盖） */
@@ -34,6 +35,7 @@ export const DEFAULT_MINE_CONFIG: MineBehaviorConfig = {
   distance: 6,
   idleRecheckTicks: 10,
   pollTicks: 5,
+  actionIntervalTicks: 4,
 };
 
 /** 延迟等待（tick），可被 token 取消立即唤醒 */
@@ -86,7 +88,9 @@ async function runMineLoop(
       requireLineOfSight: true,
     });
     if (result === "aborted") return; // 被取消（能力卸载/实体失效）→ 协程退出
-    if (result !== "broken") {
+    if (result === "broken") {
+      await waitTicks(config.actionIntervalTicks, token);
+    } else {
       // far/offline/busy/blocked → 低息重试（blocked：重新探测视线，挖阻挡块）
       await waitTicks(1, token);
     }

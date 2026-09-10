@@ -223,6 +223,8 @@ export interface BotRecord {
    * 旧记录缺失 = "none"（升级兼容；aiBehavior 字段由迁移转换）。
    */
   workMode: string;
+  /** 自动放置/挖掘/交互/攻击的动作间隔（游戏 tick），默认 4 */
+  actionIntervalTicks?: number;
   /**
    * 砍树子模式（仅 workMode === "woodcut" 时有效）：
    * "logs" = 原木模式 / "collect" = 收集模式；缺省 "logs"。

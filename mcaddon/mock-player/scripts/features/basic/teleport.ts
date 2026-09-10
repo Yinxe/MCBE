@@ -8,7 +8,7 @@ import { BotRecord } from "../../rules/Types";
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
-import { setPose, getPlayerLookTarget, savePoseToRecord } from "./PoseGateway";
+import { releaseStoredPose, setPose, getPlayerLookTarget, savePoseToRecord } from "./PoseGateway";
 import { safeOnline } from "../manage/onlineBot";
 
 export function tpPlayerToBot(player: Player, record: BotRecord): void {
@@ -37,7 +37,8 @@ export function tpBotToPlayer(record: BotRecord, player: Player): void {
   bot.isSneaking = player.isSneaking;
   record.isSneaking = player.isSneaking;
 
-  // 姿态/视角/朝向：普通与常加载模式统一应用（setPose 内部 try-catch 防御，位置照常保存）
+  // 这是玩家明确发起的姿态同步：先解除复活保护，再保存新的方向。
+  releaseStoredPose(record);
   const lookTarget = getPlayerLookTarget(player);
   setPose(bot, player.getRotation(), lookTarget);
   savePoseToRecord(record, player.location, player.dimension.id, player.getRotation(), lookTarget);

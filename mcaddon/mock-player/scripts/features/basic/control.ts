@@ -8,7 +8,7 @@ import { BotRecord } from "../../rules/Types";
 import { TAG_CONTROL, TAG_IDLE, EXCLUSIVE_SET, STANDALONE_SET, BOT_TAG } from "../../rules/tags/BotTags";
 import { syncEntityTags } from "./EntityTags";
 import { botRegistry } from "../../bootstrap/context";
-import { setPose, getPlayerLookTarget, savePoseToRecord } from "./PoseGateway";
+import { releaseStoredPose, setPose, getPlayerLookTarget, savePoseToRecord } from "./PoseGateway";
 import { setTags } from "../state/setTags";
 
 export function toggleControl(record: BotRecord, player: Player): void {
@@ -41,7 +41,8 @@ export function toggleControl(record: BotRecord, player: Player): void {
       const bot = entity as SimulatedPlayer;
       bot.teleport(player.location, { dimension: player.dimension });
 
-      // 姿态统一应用（setPose 内部 try-catch 防御，位置照常保存）
+      // 这是玩家明确发起的姿态同步：先解除复活保护，再保存新的方向。
+      releaseStoredPose(record);
       setPose(bot, player.getRotation(), getPlayerLookTarget(player));
       savePoseToRecord(record, player.location, player.dimension.id, player.getRotation());
     }

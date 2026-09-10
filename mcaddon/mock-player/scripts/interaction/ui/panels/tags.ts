@@ -96,6 +96,7 @@ export function showTagManagement(player: Player, botName: string): void {
           raid: style("劫掠模式", color.warn),
           fishing: style("自动钓鱼模式", color.accent),
           follow: style("自动跟随", color.playerName),
+          autoInteract: style("定点交互模式", color.gold),
         };
         return labelMap[m] ?? style(m, color.muted);
       }),
@@ -104,6 +105,14 @@ export function showTagManagement(player: Player, botName: string): void {
         tooltip: "单选工作模式（互斥，仅一项）：已禁用的模式不在此列表（管理员可在全局配置中启用/禁用）",
       }
     );
+
+  const speedModes = new Set(["mine", "place", "attack", "autoInteract"]);
+  if (speedModes.has(record.workMode)) {
+    builder.textField("actionIntervalTicks", style("动作速度（GT）", color.accent), {
+      defaultValue: String(record.actionIntervalTicks ?? 4),
+      tooltip: "只输入正整数；留空恢复默认 4 GT。数值越小越快。",
+    });
+  }
 
   builder.show(player).then((vals) => {
     if (!vals) return;
@@ -123,6 +132,9 @@ export function showTagManagement(player: Player, botName: string): void {
     const wantSneaking = vals.sneaking as boolean;
     const wantChunkload = true; // 全量走 test
     const wantFollow = pickedWorkMode === "follow";
+    const speedText = typeof vals.actionIntervalTicks === "string" ? vals.actionIntervalTicks.trim() : "";
+    const parsedSpeed = speedText === "" ? 4 : (/^[1-9]\d*$/.test(speedText) ? Number(speedText) : 4);
+    const actionIntervalTicks = Number.isSafeInteger(parsedSpeed) && parsedSpeed > 0 ? parsedSpeed : 4;
 
     system.run(() => {
       // ── ① 标签先落库（record.tags 最新 + 实体同步 + 持久化） ──
@@ -134,6 +146,9 @@ export function showTagManagement(player: Player, botName: string): void {
       }
       // ── ② 工作模式落库（record.workMode 字段——驱动引擎按值启动；
       //     与标签同一 system.run 块、标签校验通过后才写——防部分应用） ──
+      // 速度必须先写入记录，再调用 setWorkMode。setWorkMode 会立即保存记录；
+      // 若顺序反过来，速度值会在这次提交中漏保存，导致攻击/放置/挖掘继续使用旧间隔。
+      if (speedModes.has(pickedWorkMode)) currentRecord.actionIntervalTicks = actionIntervalTicks;
       setWorkMode(currentRecord, pickedWorkMode);
       // ── ③ 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
       BotUiEvent.behaviorSubmitted.trigger({
@@ -145,6 +160,7 @@ export function showTagManagement(player: Player, botName: string): void {
         useItem: false,
         coexist,
         workMode: pickedWorkMode,
+        actionIntervalTicks,
         tags: newTags,
       });
     });

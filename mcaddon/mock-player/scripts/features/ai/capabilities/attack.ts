@@ -88,7 +88,16 @@ export function makeAttackBehavior(config: AttackBehaviorConfig = DEFAULT_ATTACK
     step: (ctx) => {
       // ① 接收引擎注入的 ctx.bot（每周期最新实体）→ 协程双通道的权威源
       sharedBot.current = (ctx as AiBehaviorContext).bot;
-      // ② 确保常驻攻击协程已启动（幂等）
+      // ② 动态读取假人当前动作间隔。
+      // 行为实例不会因同一工作模式下修改表单而重建，若只在 make 时读取，
+      // 旧协程会一直使用旧间隔。brainEngine 每周期把记录同步到记忆。
+      const savedInterval = ctx.memory.get<number>("actionIntervalTicks");
+      if (typeof savedInterval === "number" && Number.isSafeInteger(savedInterval) && savedInterval > 0) {
+        config.intervalTicks = savedInterval;
+      } else {
+        config.intervalTicks = DEFAULT_ATTACK_CONFIG.intervalTicks;
+      }
+      // ③ 确保常驻攻击协程已启动（幂等）
       startLoop(ctx.botName);
     },
     reset: () => {

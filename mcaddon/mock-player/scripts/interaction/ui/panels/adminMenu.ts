@@ -112,6 +112,10 @@ export async function showGlobalConfig(player: Player): Promise<void> {
       label: `${color.warn}⚠ ${color.info}自动跟随`,
       tooltip: "高频追踪主人位置与寻路，§c持续移动§r。默认§7关闭§r，随主人移动频繁时开销明显",
     },
+    autoInteract: {
+      label: `${color.gold}⚙ 定点交互模式`,
+      tooltip: "只交互准星正对的方块或实体，并按最短调度间隔重复尝试。默认§7关闭§r",
+    },
   };
 
   for (const mode of workModes) {

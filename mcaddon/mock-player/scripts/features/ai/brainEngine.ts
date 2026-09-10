@@ -25,6 +25,7 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { AiMemory, BehaviorRunner, SharedMemory, type Behavior, type BehaviorContext } from "../../ai";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { BotEvents } from "../../events/DomainEvents";
+import { BotUiEvent } from "../../events/UiEvents";
 import { botRegistry, configStore } from "../../bootstrap/context";
 import { makeWanderBehavior } from "./capabilities/wander";
 import { makeMineBehavior } from "./capabilities/mine";
@@ -78,6 +79,14 @@ interface AiBrain {
 const brains = new Map<string, AiBrain>();
 let engineStarted = false;
 
+/** 速度设置提交后，强制当前行为重新创建，避免旧协程继续持有旧计时器。 */
+function refreshBotBehavior(botName: string): void {
+  const brain = brains.get(botName);
+  if (!brain) return;
+  brain.runner.unregisterAll();
+  brain.behaviorName = undefined;
+}
+
 /**
  * 引擎注入上下文（mc 层扩展 BehaviorContext）：
  * bot = 引擎每周期解析一次的假人实体（resolveBotPlayer 唯一入口，含缓存）——
@@ -91,7 +100,7 @@ export interface AiBehaviorContext extends BehaviorContext {
 }
 
 /** 行为构造器（workMode 值 → 能力） */
-const BEHAVIOR_BY_NAME: Record<string, () => Behavior> = {
+const BEHAVIOR_BY_NAME: Record<string, (config?: any) => Behavior> = {
   wander: makeWanderBehavior,
   mine: makeMineBehavior,
   place: makePlaceBehavior,
@@ -117,6 +126,9 @@ export function startAiEngine(): void {
   if (engineStarted) return;
   engineStarted = true;
 
+  // 行为设置提交后立即刷新当前行为；不需要先切换到“无”再切回来。
+  BotUiEvent.behaviorSubmitted.subscribe((e) => refreshBotBehavior(e.botName));
+
   // 实体缓存失效由 PlayerGateway（resolveBotPlayer 唯一入口）内部订阅
   // 生命周期事件处理——引擎只管大脑清理
   BotEvents.botOffline.subscribe((e) => disposeBotBrain(e.botName));
@@ -141,6 +153,9 @@ export function startAiEngine(): void {
         // 记忆注入（用户拍板：主动 AI 行为直接注入记忆表达——行为从记忆
         // 读取当前 workMode，实体 TAG 不再参与行为表达）
         brain.memory.set("workMode", behaviorName);
+        // 每个引擎周期同步动作间隔。行为实例可能在同一工作模式下长期复用，
+        // 因此不能只在切换模式时把速度写入构造参数，否则修改设置后旧实例仍会使用旧值。
+        brain.memory.set("actionIntervalTicks", record.actionIntervalTicks ?? 4);
         // 砍树子模式注入已随 woodcut 一起禁用
         // if (behaviorName === "woodcut") {
         //   brain.memory.set("woodcutMode", record.woodcutMode ?? "logs");
@@ -149,7 +164,7 @@ export function startAiEngine(): void {
         if (brain.behaviorName !== behaviorName) {
           for (const [name, make] of Object.entries(BEHAVIOR_BY_NAME)) {
             if (name === behaviorName) {
-              brain.runner.register(make());
+              brain.runner.register((name === "mine" ? make({ distance: 6, idleRecheckTicks: 10, pollTicks: 5, actionIntervalTicks: record.actionIntervalTicks ?? 4 }) : name === "place" ? make({ intervalTicks: record.actionIntervalTicks ?? 4 }) : name === "attack" ? make({ intervalTicks: record.actionIntervalTicks ?? 4 }) : make()));
             } else {
               brain.runner.unregister(name);
             }

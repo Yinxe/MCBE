@@ -8,6 +8,7 @@
 import { registerUiSubscriptions as registerSneakUi } from "../features/basic/sneak";
 import { registerUiSubscriptions as registerSpawnModeUi } from "../features/manage/spawnMode";
 import { registerUiSubscriptions as registerUseItemUi } from "../features/basic/items";
+import { registerUiSubscriptions as registerInteractUi } from "../features/basic/interact";
 import { registerUiSubscriptions as registerOnlineUi } from "../features/manage/onlineBot";
 import { registerUiSubscriptions as registerTeleportUi } from "../features/basic/teleport";
 import { registerUiSubscriptions as registerSpawnPointUi } from "../features/manage/spawnPoint";
@@ -35,6 +36,7 @@ export function registerUiDrivers(): void {
   registerSneakUi();
   registerSpawnModeUi();
   registerUseItemUi();
+  registerInteractUi();
   registerOnlineUi();
   registerTeleportUi();
   registerSpawnPointUi();

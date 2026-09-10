@@ -18,11 +18,16 @@ import { syncEntityTags } from "../../features/basic/EntityTags";
 import { formatPos } from "../../interaction/ui/format";
 import { formatDimensionId } from "../../rules/format/Format";
 import { captureExperience } from "../../features/basic/items";
-import { setPose } from "../../features/basic/PoseGateway";
+import {
+  clonePositionState,
+  protectStoredPose,
+  restoreStoredBodyPose,
+  restoreStoredPoint,
+} from "../../features/basic/PoseGateway";
 import type { LifecycleComponent } from "../LifecycleComponent";
 import type { LifecycleContext } from "../LifecycleContext";
-
 const RESPAWN_DELAY_TICKS = 20;
+
 
 export class DeathComponent implements LifecycleComponent {
   readonly id = "death";
@@ -57,13 +62,21 @@ export class DeathComponent implements LifecycleComponent {
     try {
       console.info(`[Death] entityDie ${record.name} @ ${entity.dimension.id} ${Math.floor(entity.location.x)} ${Math.floor(entity.location.y)} ${Math.floor(entity.location.z)}`);
       const bot = entity as unknown as SimulatedPlayer;
+      // 在清空运行态之前冻结最后一份已保存点位。复活必须使用这个快照，
+      // 不能在死亡窗口读取实体当前旋转，也不能退回旧 respawnPoint 姿态。
+      const storedPoint = record.lastPoint
+        ? clonePositionState(record.lastPoint)
+        : clonePositionState(record.respawnPoint);
       const deathState: PositionState = {
         location: entity.location,
         dimension: entity.dimension.id,
-        rotation: (bot as unknown as SimulatedPlayer).getRotation(),
-        lookTarget: record.lastPoint?.lookTarget ?? record.respawnPoint.lookTarget,
+        rotation: bot.getRotation(),
+        lookTarget: storedPoint.lookTarget,
       };
 
+      // 保护从进入死亡处理开始生效，先于清空 lastPoint 和任何异步复活。
+      // 这样死亡窗口中的移动/周期保存不能把引擎临时姿态写回记录。
+      protectStoredPose(record);
       record.death = true;
       this.recordDeathStorage(bot, record);
       console.info(`[Death] 死亡存储 ${record.name}`);
@@ -76,7 +89,7 @@ export class DeathComponent implements LifecycleComponent {
 
       try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 死亡了 ${color.muted}@ ${formatPos(deathState.location)} ${color.darkGray}${formatDimensionId(deathState.dimension)}`); } catch {}
 
-      if (await this.maybeAutoRespawn(bot, record)) return;
+      if (await this.maybeAutoRespawn(bot, record, storedPoint)) return;
       await this.dieOffline(bot, record);
     } catch (e: unknown) { const err = e as Error; console.warn(`[Death] 处理异常 ${record.name}: ${err?.message ?? String(err)}`); }
   }
@@ -88,8 +101,18 @@ export class DeathComponent implements LifecycleComponent {
     }
   }
 
-  private async maybeAutoRespawn(bot: SimulatedPlayer, record: import("../../rules/Types").BotRecord): Promise<boolean> {
+  private async maybeAutoRespawn(
+    bot: SimulatedPlayer,
+    record: import("../../rules/Types").BotRecord,
+    storedPoint?: PositionState,
+  ): Promise<boolean> {
     if (!record.tags.includes(TAG_RESPAWN.value)) return false;
+    // 复活姿态唯一来源：死亡处理时冻结的保存快照（lastPoint ?? respawnPoint）。
+    // 兜底：万一未传入（旧调用路径），此处再取一次快照。
+    const poseSource = storedPoint ??
+      (record.lastPoint
+        ? clonePositionState(record.lastPoint)
+        : clonePositionState(record.respawnPoint));
     try {
       try { const { trackBotOffline } = await import("../../features/trident/tridentTracker"); trackBotOffline(bot.id); } catch {}
       bot.respawn();
@@ -98,12 +121,21 @@ export class DeathComponent implements LifecycleComponent {
           if (!bot.isValid) return;
           const dim = world.getDimension(record.respawnPoint.dimension);
           bot.teleport(record.respawnPoint.location, { dimension: dim });
-          setPose(bot, record.respawnPoint.rotation, record.respawnPoint.lookTarget);
+          // 只恢复身体方向，不启动持续视角（持续视角是复活后方向回归的来源之一）。
+          restoreStoredBodyPose(bot, poseSource);
+          protectStoredPose(record);
+          // 重生后的方向由保存状态作为唯一来源；不使用重复定时器反复覆盖实体姿态。
           record.entityId = bot.id;
           syncEntityTags(bot as unknown as import("@minecraft/server").Player, record.tags);
           record.death = false;
           record.deathPoint = null;
-          record.lastPoint = { ...record.respawnPoint };
+          // lastPoint 用保存快照重建：位置取重生点（实体实际所在），方向取冻结快照。
+          restoreStoredPoint(record, {
+            location: record.respawnPoint.location,
+            dimension: record.respawnPoint.dimension,
+            rotation: poseSource.rotation,
+            lookTarget: poseSource.lookTarget,
+          });
           this.ctx.save.saveRecord(record);
           try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 已自动复活`); } catch {}
         } catch (e: unknown){ const err = e as Error; try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动复活失败: ${err.message}`);} catch {}}

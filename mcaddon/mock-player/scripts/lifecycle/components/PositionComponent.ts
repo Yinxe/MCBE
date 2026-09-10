@@ -4,6 +4,7 @@
 
 import { BotEvents } from "../../events/DomainEvents";
 import { distance3d } from "../../features/utils";
+import { savePoseToRecord } from "../../features/basic/PoseGateway";
 import type { LifecycleComponent } from "../LifecycleComponent";
 import type { LifecycleContext } from "../LifecycleContext";
 
@@ -33,12 +34,15 @@ export class PositionComponent implements LifecycleComponent {
           try { dist = distance3d(last.location as any, event.position as any); } catch { dist = Math.hypot(dx, dy, dz); }
           if (dist < POSITION_UPDATE_DISTANCE) return;
         }
-        record.lastPoint = {
-          location: event.position,
-          dimension: event.dimension,
-          rotation: event.rotation,
-          lookTarget: last?.lookTarget ?? record.respawnPoint.lookTarget,
-        };
+        if (!record.lastPoint) {
+          // lastPoint 为空只发生在死亡窗口。此时姿态保护已开启，
+          // 不能把事件里的引擎临时朝向重建进记录——复活流程会用
+          // 死亡时冻结的保存快照重建，这里直接跳过避免污染。
+          return;
+        } else {
+          // 姿态写入统一经过 PoseGateway，复活保护期间不会把引擎默认方向落库。
+          savePoseToRecord(record, event.position, event.dimension, event.rotation);
+        }
         this.ctx.save.saveRecord(record, true);
       } catch (e: any){ console.warn(`[Position] 更新失败 ${event.botName}: ${e?.message ?? e}`); }
     });

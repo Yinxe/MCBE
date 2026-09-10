@@ -16,6 +16,7 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "../rules/Types";
 import { BOT_TAG } from "../rules/tags/BotTags";
+import { savePoseToRecord } from "../features/basic/PoseGateway";
 import { LifecycleEvents } from "./LifecycleEvents";
 import type { LifecycleComponent, CreateOptions } from "./LifecycleComponent";
 import type { LifecycleContext } from "./LifecycleContext";
@@ -380,12 +381,11 @@ export class BotLifecycle {
     const online = entity as SimulatedPlayer | undefined;
     const oldEntityId = record.entityId;
     if (online && (online as unknown as { hasTag?: (tag: string) => boolean }).hasTag?.(BOT_TAG)) {
-      record.lastPoint = {
-        location: online.location,
-        dimension: online.dimension.id,
-        rotation: (online as unknown as SimulatedPlayer).getRotation(),
-        lookTarget: record.lastPoint?.lookTarget ?? record.respawnPoint.lookTarget,
-      };
+      // 姿态写回尊重保护：保护期间（复活后）不读取实体当前旋转覆盖已保存方向。
+      if (record.lastPoint) {
+        savePoseToRecord(record, online.location, online.dimension.id, online.getRotation());
+      }
+      // lastPoint 为空（死亡窗口）时保留空值，等复活流程用保存快照重建。
       record.isSneaking = (online as unknown as SimulatedPlayer).isSneaking;
       this.ctx.save.saveFullState(online as unknown as Player, record);
     } else {

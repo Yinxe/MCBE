@@ -8,7 +8,7 @@ import { SimulatedPlayer } from "@minecraft/server-gametest";
 import type { BotRecord } from "../../rules/Types";
 import { syncEntityTags } from "../basic/EntityTags";
 import { saveCoordinator } from "../../bootstrap/context";
-import { setPose } from "../basic/PoseGateway";
+import { setBodyPose } from "../basic/PoseGateway";
 
 export function finalizeBotSpawn(
   bot: SimulatedPlayer,
@@ -19,7 +19,8 @@ export function finalizeBotSpawn(
 ): void {
   syncEntityTags(bot, record.tags);
   bot.isSneaking = record.isSneaking;
-  if (!noPose) setPose(bot, rotation, lookTarget);
+  // 生成/上线恢复只设置身体方向，不启动持续视角；玩家主动同步走 setPose。
+  if (!noPose) setBodyPose(bot, rotation);
 
   // 注册 + 写穿（saveRecord 内含内存 set）
   saveCoordinator.saveRecord(record);

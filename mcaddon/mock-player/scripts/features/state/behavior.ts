@@ -14,7 +14,7 @@ import { BotEvents } from "../../events/DomainEvents";
 import { BOT_TAG, TAG_CONTROL } from "../../rules/tags/BotTags";
 import { EQUIP_SLOT_NAMES } from "../../rules/Types";
 import { captureExperience } from "../basic/items/McItemCodec";
-import { setPose, getPlayerLookTarget, savePoseToRecord } from "../basic/PoseGateway";
+import { reconcileStoredPose, releaseStoredPose, setPose, getPlayerLookTarget, savePoseToRecord } from "../basic/PoseGateway";
 
 // ─── 启动引擎 ──────────────────────────────────────────
 // 单 runInterval 1tick 轮询，通过 tick 计数控制各行为频次
@@ -33,6 +33,13 @@ export function startTagBehaviors(): void {
 
       const sim = bot as SimulatedPlayer;
 
+      // 自动复活保护只在姿态实际被引擎改写时重新应用，不创建额外定时器。
+      // 有主动行为（控制模式/工作模式）时跳过强制拉回，避免与 AI 转头互相覆盖。
+      const activeBehavior = Boolean(bot.hasTag(TAG_CONTROL.value) || (record.workMode && record.workMode !== "none"));
+      try { reconcileStoredPose(sim, record, activeBehavior); } catch (e: any) {
+        console.warn(`[MockPlayer] 姿态校准异常 ${bot.name}: ${e?.message ?? e}`);
+      }
+
       // ── 体态控制 ── 每 2 tick ──
       if (bot.hasTag(TAG_CONTROL.value) && tick % 2 === 0) {
         if (record.controllerId) {
@@ -40,6 +47,8 @@ export function startTagBehaviors(): void {
             const controller = world.getEntity(record.controllerId);
             if (controller) {
               sim.teleport(controller.location, { dimension: controller.dimension });
+              // 控制模式是持续的玩家主动姿态同步，解除复活保护后允许保存新方向。
+              releaseStoredPose(record);
               // 姿态统一应用（setPose 内部 try-catch 防御，位置照常保存）
               const playerRot = (controller as Player).getRotation();
               const lookTarget = getPlayerLookTarget(controller as Player);
@@ -61,11 +70,11 @@ export function startTagBehaviors(): void {
         if (!record || record.death) continue;
         if (!botRegistry.isRestored(record.name)) continue;
         const bot = entity as Player;
-        if (!record.lastPoint) {
-          record.lastPoint = { location: bot.location, dimension: bot.dimension.id, rotation: bot.getRotation(), lookTarget: record.respawnPoint.lookTarget };
-        } else {
+        if (record.lastPoint) {
           savePoseToRecord(record, bot.location, bot.dimension.id, bot.getRotation());
         }
+        // lastPoint 为空（死亡窗口）时周期保存跳过姿态重建，交给复活流程；
+        // 复活后 lastPoint 已由保存快照重建，这里只做位置更新。
         record.isSneaking = bot.isSneaking;
         record.experience = captureExperience(bot);
         saveCoordinator.saveRecord(record, true);
@@ -86,7 +95,7 @@ export function startTagBehaviors(): void {
 // ⚠️ 自动砍树（woodcut）已在代码层禁用（workMode="woodcut" 保留兼容但不再调度）。
 
 /** 工作模式可选值（UI 下拉与各引擎对账共用；woodcut 已禁用，follow 已收编进互斥） */
-export const WORK_MODES = ["none", "wander", "mine", "place", "attack", "raid", "fishing", "follow"] as const;
+export const WORK_MODES = ["none", "wander", "mine", "place", "attack", "autoInteract", "raid", "fishing", "follow"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];
 
 /** 设置假人工作模式（持久化 + 发布 botWorkModeChanged——驱动模块按值启动/停止） */

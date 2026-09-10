@@ -94,7 +94,12 @@ export function makePlaceBehavior(config: PlaceBehaviorConfig = DEFAULT_PLACE_CO
     step: (ctx) => {
       // ① 接收引擎注入的 ctx.bot（每周期最新实体）→ 协程双通道的权威源
       sharedBot.current = (ctx as AiBehaviorContext).bot;
-      // ② 确保常驻放置协程已启动（幂等）
+      // ② 每周期同步最新设置。不能只在 make 时读取，否则同一工作模式
+      // 下修改 GT 后，旧协程仍会继续使用旧值。
+      const savedInterval = ctx.memory.get<number>("actionIntervalTicks");
+      config.intervalTicks = typeof savedInterval === "number" && Number.isSafeInteger(savedInterval) && savedInterval > 0
+        ? savedInterval : DEFAULT_PLACE_CONFIG.intervalTicks;
+      // ③ 确保常驻放置协程已启动（幂等）
       startLoop(ctx.botName);
     },
     reset: () => {
