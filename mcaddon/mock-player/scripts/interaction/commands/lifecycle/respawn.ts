@@ -5,7 +5,6 @@ import { TAG_RESPAWN, TAG_BOT } from "../../../rules/tags/BotTags";
 import { saveCoordinator } from "../../../bootstrap/context";
 import { resolveBotForCommand } from "../auth";
 import { setTags } from "../../../features/state/setTags";
-import { getPlayerLookTarget } from "../../../features/basic/PoseGateway";
 export function registerRespawnCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:respawn", description: "切换假人的自动重生标签",
@@ -32,7 +31,7 @@ export function registerRespawnCommand(registry: any): void {
 export function registerSetRespawnCommand(registry: any): void {
   defineCommand(registry, {
     name: "mp:setrespawn",
-    description: "将假人的重生点设为玩家当前位置和姿态",
+    description: "将假人的重生点设为玩家当前位置（不改变保存的视角）",
     cheatsRequired: false,
     permissionLevel: CommandPermissionLevel.Any,
     mandatoryParameters: [{ name: "name", type: CustomCommandParamType.String }],
@@ -41,8 +40,13 @@ export function registerSetRespawnCommand(registry: any): void {
     if (!targetName) { player.sendMessage(`${color.error}请指定假人名字`); return; }
     const bot = resolveBotForCommand(player, targetName);
     if (!bot) return;
-    const lookTarget = getPlayerLookTarget(player);
-    bot.record.respawnPoint = { location: player.location, dimension: player.dimension.id, rotation: player.getRotation(), lookTarget };
+    // 只更新重生位置；保留原有朝向/视线——设置重生点不应改动保存的视角。
+    bot.record.respawnPoint = {
+      location: player.location,
+      dimension: player.dimension.id,
+      rotation: bot.record.respawnPoint.rotation,
+      lookTarget: bot.record.respawnPoint.lookTarget,
+    };
     try {
       if (bot.record.online && bot.record.entityId) {
         const e = world.getEntity(bot.record.entityId);
