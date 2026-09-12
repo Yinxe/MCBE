@@ -23,6 +23,7 @@ import {
   protectStoredPose,
   restoreStoredBodyPose,
   restoreStoredPoint,
+  startViewSettle,
 } from "../../features/basic/PoseGateway";
 import type { LifecycleComponent } from "../LifecycleComponent";
 import type { LifecycleContext } from "../LifecycleContext";
@@ -137,6 +138,8 @@ export class DeathComponent implements LifecycleComponent {
             lookTarget: poseSource.lookTarget,
           });
           this.ctx.save.saveRecord(record);
+          // 复活后启动有界视线校正：对准保存的视线目标并保持（持续注视）。
+          startViewSettle(record);
           try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.accent}${record.name} 已自动复活`); } catch {}
         } catch (e: unknown){ const err = e as Error; try { world.sendMessage(`${color.muted}[${color.success}假人${color.muted}] ${color.error}${record.name} 自动复活失败: ${err.message}`);} catch {}}
       }, RESPAWN_DELAY_TICKS);

@@ -16,7 +16,7 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
 import type { BotRecord } from "../rules/Types";
 import { BOT_TAG } from "../rules/tags/BotTags";
-import { savePoseToRecord } from "../features/basic/PoseGateway";
+import { savePoseToRecord, startViewSettle } from "../features/basic/PoseGateway";
 import { LifecycleEvents } from "./LifecycleEvents";
 import type { LifecycleComponent, CreateOptions } from "./LifecycleComponent";
 import type { LifecycleContext } from "./LifecycleContext";
@@ -251,6 +251,9 @@ export class BotLifecycle {
 
         await this.runAfter("onAfterCreate", record);
 
+        // 创建后启动有界视线校正：对准并保持创建时保存的视线目标。
+        startViewSettle(record);
+
         // 自动触发上线后处理（ticking area 等）——复用 online 的 afterOnline 组件链
         // 注意：create 已在线，无需再走 online 流程；但 ticking area 等 afterOnline 逻辑需补一次
         // 由各组件自行决定：onAfterCreate vs onAfterOnline 的复用
@@ -331,6 +334,9 @@ export class BotLifecycle {
         });
 
         await this.runAfter("onAfterOnline", record, bot);
+
+        // 上线后启动有界视线校正：对准并保持保存的视线目标。
+        startViewSettle(record);
 
         return { ok: true, bot };
       } catch (e: any) {

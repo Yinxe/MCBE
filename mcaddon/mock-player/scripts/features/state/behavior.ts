@@ -14,7 +14,7 @@ import { BotEvents } from "../../events/DomainEvents";
 import { BOT_TAG, TAG_CONTROL } from "../../rules/tags/BotTags";
 import { EQUIP_SLOT_NAMES } from "../../rules/Types";
 import { captureExperience } from "../basic/items/McItemCodec";
-import { reconcileStoredPose, releaseStoredPose, setPose, getPlayerLookTarget, savePoseToRecord } from "../basic/PoseGateway";
+import { releaseStoredPose, setPose, getPlayerLookTarget, savePoseToRecord, tickViewSettle } from "../basic/PoseGateway";
 
 // ─── 启动引擎 ──────────────────────────────────────────
 // 单 runInterval 1tick 轮询，通过 tick 计数控制各行为频次
@@ -33,11 +33,10 @@ export function startTagBehaviors(): void {
 
       const sim = bot as SimulatedPlayer;
 
-      // 自动复活保护只在姿态实际被引擎改写时重新应用，不创建额外定时器。
-      // 有主动行为（控制模式/工作模式）时跳过强制拉回，避免与 AI 转头互相覆盖。
-      const activeBehavior = Boolean(bot.hasTag(TAG_CONTROL.value) || (record.workMode && record.workMode !== "none"));
-      try { reconcileStoredPose(sim, record, activeBehavior); } catch (e: any) {
-        console.warn(`[MockPlayer] 姿态校准异常 ${bot.name}: ${e?.message ?? e}`);
+      // 保存视线保持（复活/上线/创建后的有界校正）：对准即收尾并保留注视；
+      // 控制模式接管时自动终止，避免与控制同步互抢方向。
+      try { tickViewSettle(sim, record); } catch (e: any) {
+        console.warn(`[MockPlayer] 视线校准异常 ${bot.name}: ${e?.message ?? e}`);
       }
 
       // ── 体态控制 ── 每 2 tick ──

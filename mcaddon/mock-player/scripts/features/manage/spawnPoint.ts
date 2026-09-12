@@ -5,7 +5,6 @@ import { color } from "@yinxe/toolkit";
 
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { BotUiEvent } from "../../events/UiEvents";
-import { getPlayerLookTarget } from "../basic/PoseGateway";
 import { botRegistry, saveCoordinator } from "../../bootstrap/context";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知设置重生动作） ──────
@@ -25,11 +24,12 @@ function updateSpawn(player: Player, botName: string): void {
   if (!r) return;
   system.run(() => {
     try {
+      // 只更新重生位置；保留原有朝向/视线——设置重生点不应改动保存的视角。
       r.respawnPoint = {
         location: player.location,
         dimension: player.dimension.id,
-        rotation: player.getRotation(),
-        lookTarget: getPlayerLookTarget(player),
+        rotation: r.respawnPoint.rotation,
+        lookTarget: r.respawnPoint.lookTarget,
       };
       if (r.online && r.entityId) {
         const e = world.getEntity(r.entityId);
