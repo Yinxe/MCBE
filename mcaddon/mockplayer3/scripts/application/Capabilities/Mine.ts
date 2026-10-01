@@ -14,6 +14,7 @@ import { IDLE_RECHECK_TICKS, MINE_SWING_TICKS, isMineCandidate, toolStrategyForB
 import { clock } from "../../engine/Clock";
 import { breaker } from "../../engine/Breaker";
 import { makeEnsureToolForBlock } from "../../engine/ToolKit";
+import type { Runtime } from "../Runtime";
 import { ctxOf } from "./Common";
 
 /** 射线最远端=挖掘距离 */
@@ -36,6 +37,8 @@ interface MineCtx {
 /** 机械挖掘行为（record.workMode=mine） */
 export class MineCap implements Capability {
   readonly id = "mine" as const;
+
+  constructor(private readonly runtime: Runtime) {}
 
   requires(): LeaseRequest[] {
     // 对准属掘进原子内聚语义（首格锚定后钉死射线），不走 gaze 租约/HOLD 任务表；
@@ -89,6 +92,8 @@ export class MineCap implements Capability {
         maxDistance: REACH,
         isCandidate: isMineCandidate,
         onTarget: (loc) => this.hold(session, ctx, loc),
+        // 破坏成功逐格入挖掘产物账本（工作箱搬运的 mine 模式判据数据源）
+        onBroken: (typeId) => this.runtime.recordMined(session.botId, typeId),
         idleTicks: IDLE_RECHECK_TICKS,
         swingTicks: MINE_SWING_TICKS,
         ensureTool,

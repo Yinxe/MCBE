@@ -363,6 +363,7 @@ export function migrateRecord(raw: unknown, ctx: MigrateContext): MigrateOutcome
     experience: migrateExperience(raw.experience, notices),
     effects: migrateEffects(raw.effects, notices),
     followTarget: null,
+    workChestId: null,
     raidVictories: 0, // 旧格式没有胜场字段，迁移后从 0 起算
     // 在线声明与死亡标注原样搬运——重启归一在启动对账（残留在线声明一律落离线）
     declaredOnline: raw.online === true,

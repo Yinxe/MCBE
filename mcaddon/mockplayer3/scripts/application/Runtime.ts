@@ -61,6 +61,30 @@ export class Runtime {
     this.vaultStates.delete(botId);
   }
 
+  /**
+   * 挖掘产物账本（botId → 本进程挖过的方块 id）：工作箱搬运在 mine 模式按
+   * "挖过的方块→其掉落"筛背包，用户塞进背包的杂物不会被搬走。
+   * 仅进程内存活；下线保留（背包物品跨下线还在），删假人清。
+   */
+  private readonly minedLedger = new Map<number, Set<string>>();
+
+  recordMined(botId: number, blockTypeId: string): void {
+    let set = this.minedLedger.get(botId);
+    if (!set) {
+      set = new Set();
+      this.minedLedger.set(botId, set);
+    }
+    set.add(blockTypeId);
+  }
+
+  minedOf(botId: number): Iterable<string> {
+    return this.minedLedger.get(botId) ?? [];
+  }
+
+  forgetMined(botId: number): void {
+    this.minedLedger.delete(botId);
+  }
+
   // ─── 记录 ──
 
   setRecords(list: BotRecord[]): void {

@@ -22,6 +22,8 @@ import {
 import { botOf, botValid, inventoryContainer } from "./Atomic";
 import { entityGateway } from "./EntityGateway";
 import { inventoryChanged } from "./Hooks";
+import type { NotifyLevel } from "../domain/NotifyRules";
+import { sendNotify } from "./NotifyStore";
 
 // ─── 实体在场 ──
 
@@ -251,43 +253,27 @@ export function broadcastWorld(text: string): void {
 
 /**
  * 主人私信：只按名字寻址，不依赖假人实体快照——假人离场（死亡/下线瞬态）时
- * 这一路是消息能送到主人的唯一路径。
+ * 这一路是消息能送到主人的唯一路径。总开关/档位不达个人设置时静默不发。
  */
-export function notifyOwner(ownerName: string | null, text: string): void {
+export function notifyOwner(ownerName: string | null, text: string, level: NotifyLevel = "info"): void {
   if (!ownerName) return;
-  const owner = entityGateway.findRealPlayer(ownerName);
-  if (!owner) return;
-  try {
-    owner.sendMessage(text);
-  } catch {
-    /* 瞬态失效 */
-  }
+  sendNotify(ownerName, text, level);
 }
 
 /**
  * 阶段通知：主人（无论距离）+ 附近玩家（radius 内，排除假人自己），
- * 按实体 id 去重——主人在附近时不重复发送。
+ * 按玩家名去重——主人在附近时不重复发送；每个收件人各按自己的个人设置过滤。
  */
 export function notifyOwnerAndNearby(
   ownerName: string | null,
   dimId: string,
   center: Vec3,
   radius: number,
-  text: string
+  text: string,
+  level: NotifyLevel = "info"
 ): void {
-  const targets = new Map<string, Player>();
-  if (ownerName) {
-    const owner = entityGateway.findRealPlayer(ownerName);
-    if (owner) targets.set(owner.id, owner);
-  }
-  for (const p of entityGateway.realPlayersNear(dimId, center, radius)) {
-    targets.set(p.id, p);
-  }
-  for (const p of targets.values()) {
-    try {
-      p.sendMessage(text);
-    } catch {
-      /* 瞬态失效 */
-    }
-  }
+  const targets = new Set<string>();
+  if (ownerName) targets.add(ownerName);
+  for (const p of entityGateway.realPlayersNear(dimId, center, radius)) targets.add(p.name);
+  for (const name of targets) sendNotify(name, text, level);
 }

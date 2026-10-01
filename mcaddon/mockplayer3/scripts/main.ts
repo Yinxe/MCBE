@@ -8,7 +8,7 @@ import { ALL_COMMANDS } from "./interface/Commands";
 import { installBridges } from "./engine/Bridges";
 import { installNotify } from "./interface/Notify";
 import { installClaimReport } from "./interface/ClaimReport";
-import { onBotInteract, onTokenItemUse } from "./interface/Panels/Menu";
+import { onBotInteract, onRealPlayerBlockClick, onTokenItemUse } from "./interface/Panels/Menu";
 import { clock } from "./engine/Clock";
 import { entityGateway } from "./engine/EntityGateway";
 import { initTestField, registerTestDimension } from "./engine/Rig";
@@ -89,6 +89,8 @@ async function boot(): Promise<void> {
     onBotInteract: (viewerName, botName) => onBotInteract(viewerName, botName),
     // 误点拦截：判定同步给结论，策略与状态在 Composition，桥只执行 cancel
     onBotBlockClick: decideBotBlockClick,
+    // 信物+潜行+点击箱子开工作箱绑定面板：判定同步取消开箱，开表单在 interface 侧 system.run
+    onRealPlayerBlockClick: (info) => onRealPlayerBlockClick(info),
   });
   clock.start();
   installNotify();

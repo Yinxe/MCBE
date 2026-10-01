@@ -232,7 +232,7 @@ export class RaidCap implements Capability {
       const bottlesLeft = countBottles(botId);
       const report = raidVictoryReport(record.name, bottlesLeft, record.raidVictories, hero, fee);
       this.notifyStatus(record, "victory", report);
-      if (transfer === "grantFailed") notifyOwner(record.ownerKey, `[劫掠] ${HERO_GRANT_FAILED_MESSAGE}`);
+      if (transfer === "grantFailed") notifyOwner(record.ownerKey, `[劫掠] ${HERO_GRANT_FAILED_MESSAGE}`, "warn");
 
       // 扣不起 = 瓶尽：清兆头停止施加并落空闲（胜场与英雄已计入并转移，本轮胜利不作废）
       if (st.sustaining && !charged) {

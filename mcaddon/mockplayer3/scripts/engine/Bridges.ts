@@ -57,12 +57,28 @@ export interface BridgeHandlers {
    */
   onBotInteract?(viewerName: string, botName: string): void;
   /**
-   * 假人点击方块 before（假人限定桥内降噪，真人点击一律不参与判定）：
-   * 返回 true = 取消这次点击（误点拦截）。须同步给结论，本回调是桥里唯一
-   * 带返回值的缝——消费方只读配置与交互许可记录，不碰世界；抛穿或返回非 true
-   * 一律保守放行（绝不误杀作业）。
+   * 假人点击方块 before（假人限定桥内降噪，真人点击一律不参与本判定）：
+   * 返回 true = 取消这次点击（误点拦截）。须同步给结论——消费方只读配置与
+   * 交互许可记录，不碰世界；抛穿或返回非 true 一律保守放行（绝不误杀作业）。
    */
   onBotBlockClick?(botName: string, blockTypeId: string): boolean;
+  /**
+   * 真人点击方块 before（假人一律不转发）：上达纯数据（格坐标/方块 id/主手
+   * 物品 id/潜行态/点击首拍标志），供工作箱绑定等信物入口判定。返回 true =
+   * 取消这次点击（如拦截开箱界面改开面板）；开表单须由消费方 system.run
+   * （F-11：before 回调内不能开表单）。
+   */
+  onRealPlayerBlockClick?(info: {
+    playerName: string;
+    dimId: string;
+    x: number;
+    y: number;
+    z: number;
+    blockTypeId: string;
+    mainhandTypeId: string;
+    sneaking: boolean;
+    firstPress: boolean;
+  }): boolean;
 }
 
 /** 死亡回调上下文标志（同步回调期间为 true——respawner 原子调用窗口门） */
@@ -191,12 +207,42 @@ export function installBridges(handlers: BridgeHandlers): () => void {
     }
   };
 
-  const onInteractBlock = (event: { cancel: boolean; player: Player; block: Block }): void => {
+  const onInteractBlock = (event: { cancel: boolean; player: Player; block: Block; isFirstEvent: boolean }): void => {
     try {
-      if (!isBotEntity(event.player)) return; // 真人点击零影响
-      if (handlers.onBotBlockClick?.(event.player.name, event.block.typeId) === true) event.cancel = true;
+      if (isBotEntity(event.player)) {
+        if (handlers.onBotBlockClick?.(event.player.name, event.block.typeId) === true) event.cancel = true;
+        return;
+      }
+      // 真人通道：主手物品与潜行态在回调内同步读（before 事件字段无 itemStack 的
+      // 版本兼容口径——container 0 格为主手）；无消费者不读装备（省开销）
+      if (!handlers.onRealPlayerBlockClick) return;
+      let mainhandTypeId = "";
+      let sneaking = false;
+      try {
+        mainhandTypeId = event.player.getComponent("minecraft:inventory")?.container?.getItem(0)?.typeId ?? "";
+        sneaking = event.player.isSneaking;
+      } catch {
+        /* 实体瞬态：按空手非潜行上报，消费方判不命中即放行 */
+      }
+      const dimId = event.block.dimension.id;
+      const at = event.block.location;
+      if (
+        handlers.onRealPlayerBlockClick({
+          playerName: event.player.name,
+          dimId,
+          x: Math.floor(at.x),
+          y: Math.floor(at.y),
+          z: Math.floor(at.z),
+          blockTypeId: event.block.typeId,
+          mainhandTypeId,
+          sneaking,
+          firstPress: event.isFirstEvent,
+        }) === true
+      ) {
+        event.cancel = true;
+      }
     } catch (e: any) {
-      console.error(`[mockplayer3] 假人点击判定异常: ${e?.message ?? e}`);
+      console.error(`[mockplayer3] 方块点击判定异常: ${e?.message ?? e}`);
     }
   };
 

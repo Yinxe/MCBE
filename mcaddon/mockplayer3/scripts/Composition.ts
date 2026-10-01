@@ -25,6 +25,7 @@ import { Runtime } from "./application/Runtime";
 import { Modes } from "./application/Modes";
 import { Lifecycle } from "./application/Lifecycle";
 import { Scheduler } from "./application/Scheduler";
+import { WorkTransfer } from "./application/WorkTransfer";
 import type { CapabilityHost } from "./application/Capabilities/Common";
 import { MineCap } from "./application/Capabilities/Mine";
 import { PlaceCap } from "./application/Capabilities/Place";
@@ -47,8 +48,9 @@ const spawner = new Spawner();
 const events = new BotEventBus();
 const mailbox = new Mailbox();
 const modes = new Modes(runtime, saveGate, events);
-const lifecycle = new Lifecycle(runtime, saveGate, vault, ops, spawner, modes, events, mailbox);
-const scheduler = new Scheduler(runtime, saveGate, modes, ops);
+const transfer = new WorkTransfer(runtime, ops);
+const lifecycle = new Lifecycle(runtime, saveGate, vault, ops, spawner, modes, events, mailbox, transfer);
+const scheduler = new Scheduler(runtime, saveGate, modes, ops, transfer);
 
 export const services = {
   recordStore,
@@ -64,6 +66,7 @@ export const services = {
   modes,
   lifecycle,
   scheduler,
+  transfer,
 } as const;
 
 // ─── 在线实时落盘 ──
@@ -109,7 +112,7 @@ export function decideBotBlockClick(botName: string, blockTypeId: string): boole
 const capHost: CapabilityHost = {
   autoStop: (botId, reason) => {
     const record = runtime.record(botId);
-    if (record?.ownerKey) ops.notifyPlayer(record.ownerKey, `假人 ${record.name}：${reason}，已自动回到空闲`);
+    if (record?.ownerKey) ops.notifyPlayer(record.ownerKey, `假人 ${record.name}：${reason}，已自动回到空闲`, "warn");
     modes.change(botId, "none", clock.now());
   },
   releaseFollow: (botId) => {
@@ -120,7 +123,7 @@ const capHost: CapabilityHost = {
     }
   },
 };
-modes.register(new MineCap());
+modes.register(new MineCap(runtime));
 modes.register(new PlaceCap(capHost));
 modes.register(new AttackCap());
 modes.register(new FollowCap(runtime, ops, capHost));
@@ -154,7 +157,7 @@ setAtomicHooks({
     if (!record) return;
     const text = `定点挖掘遇到需要${toolLabel}的方块，背包无合适工具，已徒手继续`;
     console.warn(`[mockplayer3] no-tool bot=${record.name}: ${toolLabel}`);
-    if (record.ownerKey) ops.notifyPlayer(record.ownerKey, `假人 ${record.name}：${text}`);
+    if (record.ownerKey) ops.notifyPlayer(record.ownerKey, `假人 ${record.name}：${text}`, "warn");
   },
 });
 
@@ -194,10 +197,12 @@ events.on("botOffline", ({ botId, name }) => {
   ops.forgetEquipBaselines(botId);
   gaze.forget(botId); // 注视任务不留存亡会话
   botClickGuard.forget(botId); // 误点许可窗不留存亡会话（botId 会被复用，不得继承旧窗）
+  transfer.forget(botId); // 工作箱巡检/告警态同上
 });
 events.on("botDeleted", ({ botId }) => {
   entityGateway.forget(botId);
   runtime.forgetRaidState(botId); // 劫掠状态只随删假人清，防同名重建继承
   runtime.forgetVaultState(botId); // 宝库流程状态同上
   runtime.harvestGrounds.forgetBot(botId); // 采集地点池与扫描标记同上
+  runtime.forgetMined(botId); // 挖掘产物台账同上（工作箱搬运判据依赖它）
 });

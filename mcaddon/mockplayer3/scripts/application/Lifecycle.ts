@@ -10,8 +10,10 @@
 
 import type { BotRecord, BotSwitches, HomePoint, WorkMode } from "../domain/Record";
 import { createRecord } from "../domain/Record";
+import type { Vec3 } from "../domain/Coords";
 import type { Viewer } from "../domain/Permissions";
 import { canCreate, canGoOnline, canManage, onlineQuotaFor } from "../domain/Permissions";
+import { normalizeChestName } from "../domain/WorkChest";
 import { UNLIMITED_QUOTA } from "../domain/Config";
 import { reconcileStartup, stateFlags } from "../domain/State";
 import { normalizeBotName, validateBotName, playerKey } from "../domain/Identity";
@@ -22,6 +24,7 @@ import { entityGateway } from "../engine/EntityGateway";
 import { projectileTracker } from "../engine/ProjectileTracker";
 import { singleChunkAreaName, tickingAreas, KEEPALIVE_FORCE_RELEASE_TICKS } from "../engine/TickingAreas";
 import { enqueueAux } from "../engine/AuxQueue";
+import { probeWorkChest, workChests } from "../engine/WorkChests";
 import type { EntityOps, ReclaimSelection } from "../engine/EntityOps";
 import type { ItemVault } from "../engine/ItemVault";
 import type { SaveGate } from "../engine/SaveGate";
@@ -32,6 +35,7 @@ import type { BotEventBus, OfflineCause } from "./Events";
 import type { Mailbox } from "./Mailbox";
 import type { Modes } from "./Modes";
 import type { Runtime } from "./Runtime";
+import type { WorkTransfer } from "./WorkTransfer";
 
 /** disconnect 后名字异步释放的等待（1s），过早重建会撞名 */
 const RECONNECT_DELAY_TICKS = 20;
@@ -50,7 +54,8 @@ export class Lifecycle {
     private readonly spawner: Spawner,
     private readonly modes: Modes,
     private readonly events: BotEventBus,
-    private readonly mailbox: Mailbox
+    private readonly mailbox: Mailbox,
+    private readonly transfer: WorkTransfer
   ) {}
 
   // ─── 创建 / 删除 ──
@@ -122,7 +127,8 @@ export class Lifecycle {
     } catch (e) {
       this.ops.notifyPlayer(
         viewer.key,
-        `§c回收 ${record.name} 物品时出错: ${e instanceof Error ? e.message : String(e)}`
+        `§c回收 ${record.name} 物品时出错: ${e instanceof Error ? e.message : String(e)}`,
+        "error"
       );
     }
     this.saveGate.deleteRecord(botId);
@@ -233,7 +239,11 @@ export class Lifecycle {
     gaze.startSettle(botId);
     this.events.emit("botOnline", { botId, name: record.name, ownerKey: record.ownerKey });
     if (!attach.ok)
-      this.ops.notifyPlayer(viewer.key, `假人 ${record.name} 已上线，但模式恢复失败（${attach.reason}），已回到空闲`);
+      this.ops.notifyPlayer(
+        viewer.key,
+        `假人 ${record.name} 已上线，但模式恢复失败（${attach.reason}），已回到空闲`,
+        "warn"
+      );
     // 10. 共享辅助常加载入队（非阻塞、用完即释、宝库模式豁免；半径取配置 auxTickingRadius，
     // 0=关闭；位置取实体现点——读不到即跳过）
     const auxRadius = this.runtime.config.auxTickingRadius;
@@ -298,8 +308,10 @@ export class Lifecycle {
     }
     this.offlineInFlight.add(botId);
     const now = clock.now();
-    // 1. 冻结撤能力（租约必撤，能力 stop 幂等）
+    // 1. 冻结撤能力（租约必撤，能力 stop 幂等）；工作箱搬运同步冻结——
+    // 必须先于物品导出，否则"导出后又搬进箱"会造成仓与箱各一份
     this.modes.stopCurrent(session, now);
+    this.transfer.suspend(botId);
     // 2. 导出"有什么存什么"（姿态→home、物品→仓、经验/效果→记录字段）
     const pose = this.ops.readPose(botId);
     if (pose) {
@@ -462,7 +474,8 @@ export class Lifecycle {
     if (!attach.ok && record.ownerKey)
       this.ops.notifyPlayer(
         record.ownerKey,
-        `假人 ${record.name} 已重生，但模式恢复失败（${attach.reason}），已回到空闲`
+        `假人 ${record.name} 已重生，但模式恢复失败（${attach.reason}），已回到空闲`,
+        "warn"
       );
   }
 
@@ -674,6 +687,72 @@ export class Lifecycle {
     if (!canManage(viewer, record, this.runtime.config)) return { ok: false, reason: "只有主人或管理员可修改该假人" };
     record.followTarget = targetKey;
     return this.saveGate.saveRecord(record) ? { ok: true } : { ok: false, reason: "保存失败" };
+  }
+
+  // ─── 工作箱（面板经此三法读写注册表与绑定；持久化在 engine WorkChests） ──
+
+  /** 开面板前置探查：点击格为普通箱子时返回箱 id/归一原点与已登记名称，否则 null */
+  workChestPeek(dimId: string, loc: Vec3): { chestId: string; origin: Vec3; name: string } | null {
+    const probe = probeWorkChest(dimId, loc);
+    if (probe.status !== "ok") return null;
+    return { chestId: probe.chestId, origin: probe.origin, name: workChests.get(probe.chestId)?.name ?? "" };
+  }
+
+  /** 绑定箱显示名（面板渲染绑定状态用）；未绑定或注册表无条目返回空串 */
+  workChestName(chestId: string | null): string {
+    return chestId ? (workChests.get(chestId)?.name ?? "") : "";
+  }
+
+  /**
+   * 工作箱表单提交（信物+潜行+点击只开面板，写在此收口）：探查箱格 → 登记/改名 → 逐假人施加。
+   * 勾选=绑到该箱（覆写旧绑定；同一箱允许多假人勾选共用）；取消勾选且现绑为该箱=解绑；名称留空保持原名。
+   */
+  applyWorkChestForm(
+    viewer: Viewer,
+    dimId: string,
+    clicked: Vec3,
+    rawName: string,
+    choices: readonly { botId: number; on: boolean }[]
+  ): { ok: boolean; reason?: string; bound: string[]; unbound: string[]; denied: string[] } {
+    const out = {
+      ok: false,
+      reason: "" as string | undefined,
+      bound: [] as string[],
+      unbound: [] as string[],
+      denied: [] as string[],
+    };
+    const probe = probeWorkChest(dimId, clicked);
+    if (probe.status === "not-chest") {
+      out.reason = "点击的方块不是普通木头箱子（木桶/陷阱箱不可作工作箱）";
+      return out;
+    }
+    if (probe.status === "unreadable") {
+      out.reason = "箱子区块读不到，请稍后再试";
+      return out;
+    }
+    const name = normalizeChestName(rawName);
+    const prev = workChests.get(probe.chestId);
+    workChests.upsert({ id: probe.chestId, dimId, origin: probe.origin, name: name || prev?.name || "" });
+    for (const c of choices) {
+      const record = this.runtime.record(c.botId);
+      if (!record) continue;
+      if (!canManage(viewer, record, this.runtime.config)) {
+        out.denied.push(record.name);
+        continue;
+      }
+      const next = c.on ? probe.chestId : record.workChestId === probe.chestId ? null : record.workChestId;
+      if (next === record.workChestId) continue;
+      const before = record.workChestId;
+      record.workChestId = next;
+      if (!this.saveGate.saveRecord(record)) {
+        record.workChestId = before;
+        out.denied.push(`${record.name}（保存失败）`);
+        continue;
+      }
+      (next ? out.bound : out.unbound).push(record.name);
+    }
+    out.ok = true;
+    return out;
   }
 
   /** 重生点设为操作者位置：只更新位置、保留原朝向；实体侧 setSpawnPoint best-effort，失败不打扰玩家 */

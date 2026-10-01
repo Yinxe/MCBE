@@ -12,6 +12,7 @@ import type { EntityOps } from "../engine/EntityOps";
 import type { SaveGate } from "../engine/SaveGate";
 import type { Modes } from "./Modes";
 import type { Runtime } from "./Runtime";
+import type { WorkTransfer } from "./WorkTransfer";
 
 /** 经验回写周期：挖掘经验挂在实体上，不回写则面板显示上线前快照 */
 const XP_SYNC_TICKS = 100;
@@ -25,7 +26,8 @@ export class Scheduler {
     private readonly runtime: Runtime,
     private readonly saveGate: SaveGate,
     private readonly modes: Modes,
-    private readonly ops: EntityOps
+    private readonly ops: EntityOps,
+    private readonly transfer: WorkTransfer
   ) {}
 
   /** 启动主循环（幂等；main.ts 装配末尾 clock.start() 之后调用） */
@@ -81,6 +83,7 @@ export class Scheduler {
       // 经验周期回写：RESTORING 冻结窗由 SaveGate mark/epoch 双挡，不会用新生成体的 0 级覆盖存档值；
       // 仅变化时报脏
       if (now % XP_SYNC_TICKS === 0) this.syncExperience(session, record);
+      this.transfer.tick(session, record, now);
       this.saveGate.flushDue(session, record);
     }
   }

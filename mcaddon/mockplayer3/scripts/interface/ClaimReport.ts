@@ -210,13 +210,9 @@ function typeUnit(typeId: string): string {
   return "件投掷物";
 }
 
-/** 向在线玩家发送消息；找不到或不可达静默跳过，离线消息不缓存 */
+/** 向在线玩家发送归属汇总；走私信闸门（个人设置过滤+离线静默），离线消息不缓存 */
 function sendToPlayer(name: string, msg: string): void {
-  try {
-    entityGateway.findRealPlayer(name)?.sendMessage(msg);
-  } catch {
-    /* 玩家不可达时忽略 */
-  }
+  services.ops.notifyPlayer(name, msg);
 }
 
 /**

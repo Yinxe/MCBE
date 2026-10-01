@@ -111,6 +111,7 @@ function baseRecordFixture(): BotRecord {
     experience: { level: 0, progress: 0, totalXp: 0 },
     effects: [],
     followTarget: null,
+    workChestId: null,
     raidVictories: 0,
     declaredOnline: false,
     deathMark: false,

@@ -51,6 +51,11 @@ export interface BoreOptions {
   swingTicks?: number;
   /** 每格开挥前一次的工具策略钩子（换镐等，按命中格 typeId 选主手工具）；异常不影响掘进 */
   ensureTool?: (botId: number, blockTypeId: string) => void;
+  /**
+   * 确认破坏成功一格的回调（挖掘产物账本数据源）：目标格从"在挖"换成新格时
+   * 若旧格观测已消失，带旧格开挥时观测到的方块 typeId 回调一次；异常不影响掘进。
+   */
+  onBroken?: (blockTypeId: string) => void;
   /** 取消令牌（能力 stop 即断；必填——常驻协程唯一退出口） */
   token: CancelToken;
 }
@@ -207,10 +212,20 @@ export class Breaker {
     }
     this.active.add(botId);
     let lastLoc: Vec3 | null = null;
+    let lastHitId = "";
     let held = false;
     let aimed = false;
     let toolEnsured = false;
     let lastEid: string | null = null;
+    // 结算"在挖格已消失=破坏成立"：换格/丢靶/实体替换/退出四条清格路径共用同一判定
+    const settleBroken = (b: SimulatedPlayer | null | undefined): void => {
+      if (!b || lastLoc === null || lastHitId === "" || !isGone(readBlockId(b, lastLoc))) return;
+      try {
+        opts.onBroken?.(lastHitId);
+      } catch {
+        /* 回调异常不影响掘进 */
+      }
+    };
     try {
       while (!opts.token.cancelled) {
         const bot = botOf(botId);
@@ -227,13 +242,17 @@ export class Breaker {
         if (bot.id !== lastEid) {
           lastEid = bot.id;
           aimed = false;
-          if (lastLoc !== null) opts.onTarget(null);
+          if (lastLoc !== null) {
+            settleBroken(bot);
+            opts.onTarget(null);
+          }
           lastLoc = null;
           held = false;
         }
         const hit = rayHit(bot, opts.maxDistance);
         if (!hit || !opts.isCandidate(hit.id)) {
           if (lastLoc !== null) {
+            settleBroken(bot); // 破穿到空洞/水面前的最后一块也要结算（常是矿格）
             opts.onTarget(null);
             lastLoc = null;
             held = false;
@@ -246,6 +265,9 @@ export class Breaker {
         if (moved || !held) {
           held = opts.onTarget(loc); // 换格先归还旧格再申领新格（占用归属由调用方判定）
           if (moved) {
+            // 块碎后射线下一拍自然落到后方格：旧格此刻已消失=破坏成立，
+            // 用旧格在挖时记下的 typeId 回调产物账（转头离开≠破坏——旧格还在就不报）
+            settleBroken(bot);
             lastLoc = loc;
             toolEnsured = false; // 新格重选工具（含旧工具已坏、需从背包换候选的情形）
             if (!aimed) {
@@ -260,6 +282,7 @@ export class Breaker {
             }
           }
         }
+        lastHitId = hit.id; // 本格仍在挖/刚破完——换格判定用当下观测（须在 continue 之后路径上）
         if (!held) {
           await sleepTicks(1, opts.token); // 同格租约暂被他人持有（偶发）——1t 快速重试，不打断掘进节奏
           continue;
@@ -282,6 +305,7 @@ export class Breaker {
       }
     } finally {
       this.active.delete(botId);
+      settleBroken(botOf(botId)); // 令牌取消时末格可能刚破未观测——退出前补一次判定
       if (lastLoc !== null || held) opts.onTarget(null); // 经回调归还末格占用，避免租约残留
       try {
         botOf(botId)?.stopBreakingBlock(); // 仅退出时收尾（掘进全程不 stop）

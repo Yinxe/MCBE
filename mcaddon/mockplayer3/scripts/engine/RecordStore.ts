@@ -53,6 +53,7 @@ export class RecordStore {
     }
     if ("harvestKind" in parsed) delete raw.harvestKind;
     if (!Number.isInteger(parsed.raidVictories) || parsed.raidVictories < 0) parsed.raidVictories = 0;
+    if (typeof parsed.workChestId !== "string" || parsed.workChestId.length === 0) parsed.workChestId = null;
     return parsed;
   }
 

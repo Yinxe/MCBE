@@ -13,6 +13,7 @@ import { ACTION_HOLD_TTL_TICKS, GAZE_HOLD_TTL_TICKS } from "../../domain/Leases"
 import { CancelToken } from "../../domain/Cancellation";
 import { computeTargetYaw } from "../../domain/Angle";
 import { diffLootCounts, lootFingerprint } from "../../domain/Fingerprint";
+import { FISHING_LOOT_IDS } from "../../domain/WorkChest";
 import type { FishSpot, FishFailReason } from "../../domain/FishingSpot";
 import {
   MAINHAND_SLOT,
@@ -121,32 +122,15 @@ interface FishCtx {
 const WATER_ID_SET = new Set<string>(WATER_BLOCK_IDS);
 
 /**
- * 渔获掉落类型白名单（钓鱼池的鱼/宝藏/垃圾三档，含旧版本别名 id）。
+ * 渔获掉落类型白名单：真源在 domain/WorkChest（吸取过滤与工作箱搬运共用一份）。
  * 引擎的物品实体不携带来源归属信息，只能按类型过滤：
  * 吸取只收渔获相关掉落，避免把邻位作业假人的采集掉落吸进本假人背包。
  */
-const FISHING_LOOT_IDS = new Set<string>([
-  "minecraft:cod",
-  "minecraft:salmon",
-  "minecraft:pufferfish",
-  "minecraft:tropical_fish",
-  "minecraft:clownfish",
-  "minecraft:fish",
-  "minecraft:enchanted_book",
-  "minecraft:bow",
-  "minecraft:fishing_rod",
-  "minecraft:name_tag",
-  "minecraft:nautilus_shell",
-  "minecraft:lily_pad",
-  "minecraft:string",
-  "minecraft:bowl",
-  "minecraft:leather",
-  "minecraft:leather_boots",
-]);
+const FISHING_LOOT_ID_SET = new Set<string>(FISHING_LOOT_IDS);
 
 /** 掉落物是否属渔获候选类型 */
 function isFishingLoot(typeId: string): boolean {
-  return FISHING_LOOT_IDS.has(typeId);
+  return FISHING_LOOT_ID_SET.has(typeId);
 }
 
 /** 判断某格是否为水面：与扫描、复核共用同一读块逻辑，用于重算瞄准点 */

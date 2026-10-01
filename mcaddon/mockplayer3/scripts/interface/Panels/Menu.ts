@@ -6,6 +6,7 @@ import { system } from "@minecraft/server";
 import type { Player } from "@minecraft/server";
 import { ActionFormBuilder, color, style, trySendMessage } from "@yinxe/toolkit";
 import { isAdmin } from "../../domain/Permissions";
+import { isPlainChestType } from "../../domain/WorkChest";
 import { uiViewer } from "../Kit";
 import { services } from "../../Composition";
 import { entityGateway } from "../../engine/EntityGateway";
@@ -13,9 +14,11 @@ import { showBotList } from "./BotList";
 import { showCreateForm } from "./Create";
 import { showOnlineManagement } from "./Online";
 import { showHelpGuide } from "./HelpGuide";
+import { showNotifySettingsForm } from "./NotifySettings";
 import { showAdminMenu } from "./Admin";
 import { showBotPanel } from "./BotPanel";
 import { showBehaviorPanel } from "./Behavior";
+import { showWorkChestForm } from "./WorkChest";
 
 /** 主菜单面板：创建/列表/在线管理/帮助/管理员入口 */
 export function showMainMenu(player: Player): void {
@@ -31,6 +34,7 @@ export function showMainMenu(player: Player): void {
       showOnlineManagement(player)
     );
     f.buttonWithIcon(style("帮助", color.darkBlue), "textures/ui/mockplayer/help", () => showHelpGuide(player));
+    f.button(style("通知设置", color.darkBlue), () => showNotifySettingsForm(player));
     if (isAdmin(viewer, services.runtime.config)) {
       f.buttonWithIcon(style("⚙ 管理员菜单", color.gold), "textures/ui/mockplayer/admin_settings", () =>
         showAdminMenu(player)
@@ -63,4 +67,32 @@ export function onBotInteract(viewerName: string, botName: string): void {
     if (player.isSneaking) showBehaviorPanel(player, botName);
     else showBotPanel(player, botName);
   });
+}
+
+/**
+ * 信物+潜行+点击普通箱子 → 工作箱绑定面板（桥后同步判定，返回 true=取消这次点击防开箱 GUI）。
+ * 长按重复事件一并取消但面板只首发开一次；开表单经 system.run（F-11）。
+ * @param info - 桥上报的点击事实（整数格+主手物品+潜行态）
+ */
+export function onRealPlayerBlockClick(info: {
+  playerName: string;
+  dimId: string;
+  x: number;
+  y: number;
+  z: number;
+  blockTypeId: string;
+  mainhandTypeId: string;
+  sneaking: boolean;
+  firstPress: boolean;
+}): boolean {
+  const token = services.runtime.config.tokenItem;
+  if (!token.enabled || !info.sneaking || info.mainhandTypeId !== token.typeId) return false;
+  if (!isPlainChestType(info.blockTypeId)) return false;
+  if (info.firstPress) {
+    system.run(() => {
+      const player = entityGateway.findRealPlayer(info.playerName);
+      if (player) showWorkChestForm(player, { dimId: info.dimId, x: info.x, y: info.y, z: info.z });
+    });
+  }
+  return true;
 }

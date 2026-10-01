@@ -144,6 +144,8 @@ export interface BotRecord {
   effects: SerializedEffect[];
   /** 跟随目标玩家键（workMode=follow 时的关系持久化） */
   followTarget: string | null;
+  /** 工作箱绑定（mp:wchest 注册表条目 id；null=未绑定。每假人最多绑一箱，多假人可共用同一箱；换绑即覆写） */
+  workChestId: string | null;
   /** 劫掠累计胜场（跨会话/重启持久累计；非劫掠假人恒 0） */
   raidVictories: number;
   /** 在线声明（启动对账归一依据）；唯一写者=上线/下线管线，运行时权威在状态机 */
@@ -192,6 +194,7 @@ export function createRecord(params: NewRecordParams): { record: BotRecord; name
     experience: { level: 0, progress: 0, totalXp: 0 },
     effects: [],
     followTarget: null,
+    workChestId: null,
     raidVictories: 0,
     declaredOnline: false,
     deathMark: false,

@@ -54,8 +54,7 @@ export function installNotify(): () => void {
   );
   offs.push(
     services.events.on("botRespawn", ({ name }) => {
-      announce(`${PREFIX}${color.accent}${name} 重生了`);
-      announce(`${PREFIX}${color.accent}${name} 已自动复活`);
+      announce(`${PREFIX}${color.accent}${name} 死亡后已自动复活`);
     })
   );
   offs.push(
@@ -71,15 +70,14 @@ export function installNotify(): () => void {
   offs.push(
     services.events.on("auxCompleted", (e) => {
       if (!e.ownerKey) return;
+      if (!e.success) {
+        console.warn(`[mockplayer3] 辅助失败 ${e.name}: ${e.reason ?? "未知"} @ ${e.dimId}`);
+      }
       const text = e.success
         ? `${color.accent}【${e.name}】辅助已刷新\n${auxAscii(e.name, e.dimId, e.location, e.radius)}`
         : `${color.warn}【${e.name}】常加载辅助失败: ${e.reason ?? "未知"} @ ${dimensionLabel(e.dimId)} ${Math.floor(e.location.x)},${Math.floor(e.location.z)}（不影响在线）`;
-      try {
-        const owner = world.getAllPlayers().find((p) => p.name === e.ownerKey);
-        owner?.sendMessage(text);
-      } catch (err: any) {
-        console.warn(`[mockplayer3] 辅助通知失败 ${e.name}: ${err?.message ?? err}`);
-      }
+      // 成功一路是覆盖图详情（debug 档，默认不推送）；失败属故障（warn 档）
+      services.ops.notifyPlayer(e.ownerKey, text, e.success ? "debug" : "warn");
     })
   );
   return () => {

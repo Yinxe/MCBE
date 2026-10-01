@@ -11,6 +11,8 @@ import { LEGACY_TAG_PREFIX } from "../domain/Migrate";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE, BOT_MARKER_TAG } from "../domain/Record";
 import type { EquipSlotName, ExperienceRecord, SerializedEffect } from "../domain/Record";
 import type { SlotDigest } from "../domain/Fingerprint";
+import type { InventorySlotProbe } from "../domain/WorkChest";
+import type { NotifyLevel, NotifySetting } from "../domain/NotifyRules";
 import { lootFingerprint, mismatchedSlots } from "../domain/Fingerprint";
 import { permitVaultRead, permitVaultTrust } from "../domain/SavePolicy";
 import { totalXpForLevel } from "../domain/XpMath";
@@ -19,6 +21,8 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { entityGateway } from "./EntityGateway";
 import { itemEnchantments } from "./Atomic";
 import { ItemVault } from "./ItemVault";
+import { getNotifySetting, sendNotify, setNotifySetting as persistNotifySetting } from "./NotifyStore";
+import type { NotifyDelivery } from "./NotifyStore";
 import { EQUIP_SLOT_MAP } from "./EquipSlots";
 
 /** 流程性效果不持久化：恢复时干扰劫掠检测链 */
@@ -843,6 +847,57 @@ export class EntityOps {
   /**
    * 背包战利品指纹快照（含附魔，指纹→总件数）。引擎实测：收竿后立即快照会漏收，须等 3t 沉淀。
    */
+  /**
+   * 工作箱搬运的背包格观测（非空格 slot/typeId/amount；不可读=空表）。
+   * 只观测不决策——入选与否由 domain/WorkChest.planWorkTransfer 判定。
+   */
+  inventoryProbes(botId: number): InventorySlotProbe[] {
+    const out: InventorySlotProbe[] = [];
+    const bot = this.entity(botId);
+    if (!bot) return out;
+    try {
+      const container = bot.getComponent("minecraft:inventory")?.container;
+      if (!container) return out;
+      for (let i = 0; i < container.size; i++) {
+        const item = container.getItem(i);
+        if (!item) continue;
+        out.push({ slot: i, typeId: item.typeId, amount: item.amount });
+      }
+    } catch {
+      return [];
+    }
+    return out;
+  }
+
+  /**
+   * 永不搬运的物品类型集：主手（快捷栏 0 格）+ 副手 + 五件穿戴的当前 typeId。
+   * 同 type 的背包副本一并保护（在用的工具不会只有一份还正好想留背包）；
+   * 信物保护由调用方从配置补入。
+   */
+  protectedItemTypeIds(botId: number): Set<string> {
+    const out = new Set<string>();
+    const bot = this.entity(botId);
+    if (!bot) return out;
+    try {
+      const main = bot.getComponent("minecraft:inventory")?.container?.getItem(0);
+      if (main) out.add(main.typeId);
+    } catch {
+      /* 背包不可读：主手保护缺席，planWorkTransfer 仍强制跳过 0 格 */
+    }
+    try {
+      const equipComp = bot.getComponent("minecraft:equippable");
+      if (equipComp) {
+        for (const name of EQUIP_SLOT_NAMES) {
+          const item = equipComp.getEquipment(EQUIP_SLOT_MAP[name]);
+          if (item) out.add(item.typeId);
+        }
+      }
+    } catch {
+      /* 装备不可读：按无穿戴保护 */
+    }
+    return out;
+  }
+
   lootSnapshot(botId: number): Record<string, number> {
     const out: Record<string, number> = {};
     const bot = this.entity(botId);
@@ -898,15 +953,25 @@ export class EntityOps {
     return { ...given, xp: totalXp };
   }
 
-  /** 定向提示（管线结果只告知发起者；离线则静默丢弃） */
-  notifyPlayer(playerName: string, text: string): void {
-    const player = entityGateway.findRealPlayer(playerName);
-    if (!player) return;
-    try {
-      player.sendMessage(text);
-    } catch {
-      /* 瞬态失效 */
-    }
+  /**
+   * 定向私信唯一入口（管线结果只告知发起者）：总开关/档位按玩家个人设置过滤。
+   * @param playerName - 目标真人玩家名
+   * @param text - 正文（可自带 § 色码）
+   * @param level - 通知档位（缺省 info）
+   * @returns 投递回执（sent/suppressed/unreachable）——关键告警方据此决定重试
+   */
+  notifyPlayer(playerName: string, text: string, level: NotifyLevel = "info"): NotifyDelivery {
+    return sendNotify(playerName, text, level);
+  }
+
+  /** 个人通知设置读取（面板/命令用） */
+  notifySetting(playerName: string): NotifySetting {
+    return getNotifySetting(playerName);
+  }
+
+  /** 个人通知设置写入（世界事件回调用外须 system.run） */
+  setNotifySetting(playerName: string, setting: NotifySetting): void {
+    persistNotifySetting(playerName, setting);
   }
 
   /** 名字占用判读（无副作用）：ghosts=未认领的假人标签实体；real=同名真人 */
