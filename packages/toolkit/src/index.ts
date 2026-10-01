@@ -19,4 +19,13 @@ export {
   type ModalFormDataToggleOptions,
 } from "./ui";
 export { HudManager, HUD_SLOTS, pickWinner, isStale, isWithinRange } from "./display";
-export type { HudSlot, HudSource, SidebarView, HudManagerOptions, BusClaim, Vec3, RangeProbe, RangeCenter } from "./display";
+export type {
+  HudSlot,
+  HudSource,
+  SidebarView,
+  HudManagerOptions,
+  BusClaim,
+  Vec3,
+  RangeProbe,
+  RangeCenter,
+} from "./display";

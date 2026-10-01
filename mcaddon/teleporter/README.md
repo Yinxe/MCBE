@@ -2,14 +2,14 @@
 
 Minecraft Bedrock 传送管理模组（行为包，无资源包）。提供传送点（warp）、玩家间传送请求（TPA / TPHERE）、死亡传送（back）、公共传送点、传送信物、群系自动检测等完整传送功能。
 
-| 项目 | 信息 |
-|------|------|
-| 包名 | teleporter |
-| 版本 | 0.0.6 |
-| 显示名 | 传送 |
-| 产物 | teleporter-v0.0.6.mcpack（仅 BP） |
-| 最低引擎版本 | 1.21.120 |
-| 依赖 | @minecraft/server 2.6.0、@minecraft/server-ui 2.0.0 |
+| 项目         | 信息                                                |
+| ------------ | --------------------------------------------------- |
+| 包名         | teleporter                                          |
+| 版本         | 0.0.6                                               |
+| 显示名       | 传送                                                |
+| 产物         | teleporter-v0.0.6.mcpack（仅 BP）                   |
+| 最低引擎版本 | 1.21.120                                            |
+| 依赖         | @minecraft/server 2.6.0、@minecraft/server-ui 2.0.0 |
 
 ## 特性
 
@@ -25,24 +25,24 @@ Minecraft Bedrock 传送管理模组（行为包，无资源包）。提供传�
 
 所有命令前缀为 `tpa:`，共 16 条，全部无需作弊权限。
 
-| 命令 | 参数 | 描述 |
-|------|------|------|
-| `/tpa:menu` | 无 | 打开传送管理菜单 |
-| `/tpa:warp` | `[name]` | 传送到指定传送点；不带名称打开选择界面 |
-| `/tpa:setwarp` | `<name>` | 在当前位创建传送点（自动检测群系） |
-| `/tpa:delwarp` | `<name>` | 删除指定传送点 |
-| `/tpa:warps` | 无 | 打开传送点选择界面 |
-| `/tpa:back` | 无 | 传送到最近的死亡点 |
-| `/tpa:deathpoints` | 无 | 查看并传送至死亡点 |
-| `/tpa:tpa` | `<player>` | 请求传送到指定玩家身边 |
-| `/tpa:tphere` | `<player>` | 请求指定玩家传送到自己身边 |
-| `/tpa:tpaccept` | 无 | 接受传送请求 |
-| `/tpa:tpadeny` | 无 | 拒绝传送请求 |
-| `/tpa:public` | `<name>` | 切换传送点是否公开（受配置开关限制） |
-| `/tpa:publiclist` | 无 | 查看所有公共传送点 |
-| `/tpa:token` | 无 | 获得传送信物（右键打开传送菜单） |
-| `/tpa:admin` | 无 | 管理配置界面（需 OP 或 tag=op） |
-| `/tpa:config` | 无 | 查看当前模组配置（需 OP 或 tag=op） |
+| 命令               | 参数       | 描述                                   |
+| ------------------ | ---------- | -------------------------------------- |
+| `/tpa:menu`        | 无         | 打开传送管理菜单                       |
+| `/tpa:warp`        | `[name]`   | 传送到指定传送点；不带名称打开选择界面 |
+| `/tpa:setwarp`     | `<name>`   | 在当前位创建传送点（自动检测群系）     |
+| `/tpa:delwarp`     | `<name>`   | 删除指定传送点                         |
+| `/tpa:warps`       | 无         | 打开传送点选择界面                     |
+| `/tpa:back`        | 无         | 传送到最近的死亡点                     |
+| `/tpa:deathpoints` | 无         | 查看并传送至死亡点                     |
+| `/tpa:tpa`         | `<player>` | 请求传送到指定玩家身边                 |
+| `/tpa:tphere`      | `<player>` | 请求指定玩家传送到自己身边             |
+| `/tpa:tpaccept`    | 无         | 接受传送请求                           |
+| `/tpa:tpadeny`     | 无         | 拒绝传送请求                           |
+| `/tpa:public`      | `<name>`   | 切换传送点是否公开（受配置开关限制）   |
+| `/tpa:publiclist`  | 无         | 查看所有公共传送点                     |
+| `/tpa:token`       | 无         | 获得传送信物（右键打开传送菜单）       |
+| `/tpa:admin`       | 无         | 管理配置界面（需 OP 或 tag=op）        |
+| `/tpa:config`      | 无         | 查看当前模组配置（需 OP 或 tag=op）    |
 
 ## 核心机制
 
@@ -92,11 +92,11 @@ Minecraft Bedrock 传送管理模组（行为包，无资源包）。提供传�
 
 使用世界 DynamicProperty 存储，键格式如下：
 
-| Key | 内容 |
-|-----|------|
-| `teleporter:player:<playerId>` | PlayerData JSON：`{ waypoints, deathPoints }` |
-| `teleporter:players` | 有数据玩家的 ID 索引数组 |
-| `teleporter:config` | ModConfig JSON：`{ maxWaypointsPerPlayer=30, publicWaypointEnabled=true }` |
+| Key                            | 内容                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| `teleporter:player:<playerId>` | PlayerData JSON：`{ waypoints, deathPoints }`                              |
+| `teleporter:players`           | 有数据玩家的 ID 索引数组                                                   |
+| `teleporter:config`            | ModConfig JSON：`{ maxWaypointsPerPlayer=30, publicWaypointEnabled=true }` |
 
 ## UI 菜单
 
@@ -120,9 +120,9 @@ pnpm run pack:teleporter    # 打包（BP → .mcpack）
 
 ## 版本历史
 
-| 版本 | 说明 |
-|------|------|
-| v0.0.3 | 初始版本 |
+| 版本   | 说明                                                         |
+| ------ | ------------------------------------------------------------ |
+| v0.0.3 | 初始版本                                                     |
 | v0.0.4 | 修复 beforeEvents 上下文中 ActionForm.show() 包 system.run() |
-| v0.0.5 | 修复公共传送点开关未隐藏已有公开点；优化信息展示格式 |
-| v0.0.6 | 新增 TPA 请求 UI；防止信物被合成/交易 |
+| v0.0.5 | 修复公共传送点开关未隐藏已有公开点；优化信息展示格式         |
+| v0.0.6 | 新增 TPA 请求 UI；防止信物被合成/交易                        |

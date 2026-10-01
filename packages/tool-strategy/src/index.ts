@@ -146,12 +146,7 @@ function strategyOf(node: ToolTreeNode): ToolStrategy | undefined {
  *   by-strategy   → 背包无该策略候选 → 无决策（继续下一个节点）；
  *                   有 → 排序后决策：主手最优 → 保持；否则换入池首
  */
-function evalNode(
-  node: ToolTreeNode,
-  typeId: string,
-  pool: readonly ToolCandidate[],
-  reselect: boolean
-): EvalResult {
+function evalNode(node: ToolTreeNode, typeId: string, pool: readonly ToolCandidate[], reselect: boolean): EvalResult {
   switch (node.type) {
     case "keep":
       return { action: "keep", reason: "决策树显式保持" };

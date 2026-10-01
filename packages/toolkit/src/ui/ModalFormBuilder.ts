@@ -22,7 +22,13 @@
 //   if (vals) console.log(vals.enabled, vals.name, vals.mode);
 
 import { type Player, type RawMessage } from "@minecraft/server";
-import { ModalFormData, type ModalFormDataDropdownOptions, type ModalFormDataSliderOptions, type ModalFormDataTextFieldOptions, type ModalFormDataToggleOptions } from "@minecraft/server-ui";
+import {
+  ModalFormData,
+  type ModalFormDataDropdownOptions,
+  type ModalFormDataSliderOptions,
+  type ModalFormDataTextFieldOptions,
+  type ModalFormDataToggleOptions,
+} from "@minecraft/server-ui";
 
 // ─── 字段类型 ───────────────────────────────────────────────────
 
@@ -37,7 +43,12 @@ export type ModalFormValues = Record<string, string | number | boolean | undefin
 
 // ─── 选项类型（直接透传原生接口） ─────────────────────────────
 
-export { type ModalFormDataDropdownOptions, type ModalFormDataSliderOptions, type ModalFormDataTextFieldOptions, type ModalFormDataToggleOptions };
+export {
+  type ModalFormDataDropdownOptions,
+  type ModalFormDataSliderOptions,
+  type ModalFormDataTextFieldOptions,
+  type ModalFormDataToggleOptions,
+};
 
 // ─── 构建器 ─────────────────────────────────────────────────────
 
@@ -81,14 +92,24 @@ export class ModalFormBuilder {
   }
 
   /** 添加带占位符的文本输入框 */
-  textFieldWithPlaceholder(name: string, label: RawMessage | string, placeholder: RawMessage | string, opts?: Omit<ModalFormDataTextFieldOptions, "placeholder">): this {
+  textFieldWithPlaceholder(
+    name: string,
+    label: RawMessage | string,
+    placeholder: RawMessage | string,
+    opts?: Omit<ModalFormDataTextFieldOptions, "placeholder">
+  ): this {
     this.form.textField(label, placeholder, opts ?? {});
     this.fields.push({ type: "textField", name });
     return this;
   }
 
   /** 添加下拉选择框 */
-  dropdown(name: string, label: RawMessage | string, items: (RawMessage | string)[], opts?: ModalFormDataDropdownOptions): this {
+  dropdown(
+    name: string,
+    label: RawMessage | string,
+    items: (RawMessage | string)[],
+    opts?: ModalFormDataDropdownOptions
+  ): this {
     this.form.dropdown(label, items, opts ?? {});
     this.fields.push({ type: "dropdown", name });
     return this;

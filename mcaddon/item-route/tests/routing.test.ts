@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SingleItemStrategy, MultiItemStrategy, FamilyStrategy, MiscStrategy, admission } from "../scripts/core/routing/RouteStrategy";
+import {
+  SingleItemStrategy,
+  MultiItemStrategy,
+  FamilyStrategy,
+  MiscStrategy,
+  admission,
+} from "../scripts/core/routing/RouteStrategy";
 import type { RouteContext, CandidateContainer } from "../scripts/core/routing/RouteStrategy";
 import { DefaultCandidateSorter } from "../scripts/core/routing/CandidateSorter";
 import { transfer, MoveJournal } from "../scripts/core/routing/Move";
@@ -433,7 +439,11 @@ test("Router: 失联候选容器 → 路由层统一跳过 + containerLost（非
   const recoveredEvts: string[] = [];
   bus.containerLost.subscribe((e) => lostEvts.push(e.containerId));
   bus.containerRecovered.subscribe((e) => recoveredEvts.push(e.containerId));
-  const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    bus
+  );
   const result = router.routeFrom(input, 0, wh, index);
   assert.equal(result, undefined); // 失联容器被路由层跳过 → 不路由
   assert.deepEqual(lostEvts, ["s1"]); // 已发 containerLost（一次）
@@ -459,7 +469,11 @@ test("Router: 兜底 misc 候选失联 → 转移前统一门跳过 + 发 contai
   const bus = new EventBus();
   const lostEvts: string[] = [];
   bus.containerLost.subscribe((e) => lostEvts.push(e.containerId));
-  const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    bus
+  );
   const result = router.routeFrom(input, 0, wh, index);
   assert.equal(result, undefined); // 失联 misc 被跳过 → 不路由
   assert.deepEqual(lostEvts, ["x1"]); // 已发 containerLost（attempt 统一门覆盖全仓扫描候选）
@@ -560,7 +574,11 @@ test("失联容器 + 白名单声明 → 也不参与候选（白名单排除，
   const bus = new EventBus();
   const lostEvts: string[] = [];
   bus.containerLost.subscribe((e) => lostEvts.push(e.containerId));
-  const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    bus
+  );
   const r = router.routeFrom(input, 0, wh, index);
   assert.equal(r, undefined); // 失联白名单容器不作为候选 → 不路由
   assert.deepEqual(lostEvts, ["s1"]); // 前置门已发 containerLost
@@ -582,7 +600,11 @@ test("失联过渡事件：持续路由只发一次 containerLost；恢复发 re
   const recoveredEvts: string[] = [];
   bus.containerLost.subscribe((e) => lostEvts.push(e.containerId));
   bus.containerRecovered.subscribe((e) => recoveredEvts.push(e.containerId));
-  const router = new Router([new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()], new DefaultCandidateSorter(), bus);
+  const router = new Router(
+    [new SingleItemStrategy(), new MultiItemStrategy(), new MiscStrategy()],
+    new DefaultCandidateSorter(),
+    bus
+  );
   router.routeFrom(input, 0, wh, index);
   router.routeFrom(input, 0, wh, index);
   assert.deepEqual(lostEvts, ["s1"]); // 持续失联多次路由只发一次

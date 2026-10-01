@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/border_block"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "ABA",
-      "ABA",
-      "ABA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["ABA", "ABA", "ABA"],
     "key": {
       "A": {
         "item": "bedrock"

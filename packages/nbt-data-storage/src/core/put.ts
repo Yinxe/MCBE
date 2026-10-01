@@ -18,7 +18,14 @@
 //     由调用方下个周期重试（不烧计数、不丢槽）；
 //   - 真正 setBlockType 建了新桶 → meta.barrelCount +1。
 import type { RegionLayout } from "./layout";
-import { BARREL_SLOTS, BARRELS_PER_LEVEL, SLOTS_PER_LEVEL, levelOf, slotIdToPosition, usableSlotsPerBarrel } from "./layout";
+import {
+  BARREL_SLOTS,
+  BARRELS_PER_LEVEL,
+  SLOTS_PER_LEVEL,
+  levelOf,
+  slotIdToPosition,
+  usableSlotsPerBarrel,
+} from "./layout";
 import { createRegionRecord, type PersistedRegion } from "./record";
 import type { StoredRef } from "./keys";
 
@@ -184,13 +191,7 @@ function allocateCandidate(
 }
 
 /** 回退实现：逐格探测找第一个空格子（未提供 findEmptySlotInBarrel 时用，逻辑一致） */
-function scanEmptySlot(
-  port: PutPort,
-  x: number,
-  y: number,
-  z: number,
-  usable: number
-): number | null {
+function scanEmptySlot(port: PutPort, x: number, y: number, z: number, usable: number): number | null {
   for (let j = 0; j < usable; j++) {
     if (!port.isSlotOccupied(x, y, z, j)) return j;
   }

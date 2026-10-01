@@ -21,26 +21,26 @@ demo/
 
 ## 命令（/nds-demo:*）
 
-| 命令 | 说明 |
-|------|------|
-| `/nds-demo:ui` | 打开管理菜单（单件/批量存取、统计、配置） |
-| `/nds-demo:config` | 打开完整配置 UI（启用开关/维度/锚点X,Z/底层Y/每桶槽数/层数） |
-| `/nds-demo:store` | 存入手持物品（成功后清空手持槽；带扩容见证） |
-| `/nds-demo:store-all` | 打开批量存入 UI（背包非空物品分页勾选 → 批量存入） |
-| `/nds-demo:take <slotId>` | 按格子 ID 取出到背包（凭据取物 O(1)，跨模组可取；背包满自动放回） |
+| 命令                           | 说明                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `/nds-demo:ui`                 | 打开管理菜单（单件/批量存取、统计、配置）                                                                                |
+| `/nds-demo:config`             | 打开完整配置 UI（启用开关/维度/锚点X,Z/底层Y/每桶槽数/层数）                                                             |
+| `/nds-demo:store`              | 存入手持物品（成功后清空手持槽；带扩容见证）                                                                             |
+| `/nds-demo:store-all`          | 打开批量存入 UI（背包非空物品分页勾选 → 批量存入）                                                                       |
+| `/nds-demo:take <slotId>`      | 按格子 ID 取出到背包（凭据取物 O(1)，跨模组可取；背包满自动放回）                                                        |
 | `/nds-demo:overwrite <slotId>` | 手持物品**原位覆写**到指定格子（ItemStack → 格子，slotId 不变；空槽也允许——实时数据保存；旧物进背包/存回；异常位置拒绝） |
-| `/nds-demo:take-all` | 打开批量取出 UI（当前区域凭据分页勾选 → 批量取出） |
-| `/nds-demo:check` | **阵列自检 + 修复**：损坏木桶重建、丢失槽回收、洞池对齐（自检维护） |
-| `/nds-demo:list` | 列出当前区域已存物品凭据 |
-| `/nds-demo:stats` | 区域统计（含每桶槽数/层数/扩容进度）+ 世界全库汇总 |
+| `/nds-demo:take-all`           | 打开批量取出 UI（当前区域凭据分页勾选 → 批量取出）                                                                       |
+| `/nds-demo:check`              | **阵列自检 + 修复**：损坏木桶重建、丢失槽回收、洞池对齐（自检维护）                                                      |
+| `/nds-demo:list`               | 列出当前区域已存物品凭据                                                                                                 |
+| `/nds-demo:stats`              | 区域统计（含每桶槽数/层数/扩容进度）+ 世界全库汇总                                                                       |
 
 命令注册走 startup + `customCommandRegistry`（toolkit `defineCommand` 封装：自动玩家校验、system.run 包装、参数按名解构）。`installNdsCommands()` 同时安装库自带的 `nds:regions` / `nds:stats` 管理命令（幂等）。
 
 ## 持久化键约定
 
-| 键 | 内容 |
-|------|------|
-| `ndsdemo:cfg` | 演示配置 `{ enabled, dimension, anchorX, anchorZ, baseY, slotPerBarrel, maxLevels }`（默认末地 0,120,-1024 + 27 槽/64 层） |
+| 键                    | 内容                                                                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ndsdemo:cfg`         | 演示配置 `{ enabled, dimension, anchorX, anchorZ, baseY, slotPerBarrel, maxLevels }`（默认末地 0,120,-1024 + 27 槽/64 层）                                                  |
 | `ndsdemo:refs:p:{片}` | 本地凭据索引分片 `[{ regionId?, slotId, typeId, amount, storedAt }]`（每片 150 条，事件驱动同步，软状态；**带 regionId 并按当前区域过滤**；旧单键 `ndsdemo:refs` 兼容读取） |
 
 存储本身（桶阵列 + 分配水印）用库的 `nds:item:{区域ID}` / `nds:item:{区域ID}:pool:{层}` / `nds:regions` 键，见 `../` 的键约定。

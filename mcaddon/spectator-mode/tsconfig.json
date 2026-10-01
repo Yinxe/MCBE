@@ -19,7 +19,6 @@
     "noImplicitUseStrict": false,
     "outDir": "lib",
     "rootDir": ".",
-    "baseUrl": "BP/",
     "listFiles": false,
     "noEmit": true,
     "noEmitHelpers": true,

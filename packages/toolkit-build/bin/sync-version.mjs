@@ -49,7 +49,12 @@ function buildAuthorBlock(fromDir) {
   const root = findRootPkg(fromDir);
   if (!root || !root.author || typeof root.author !== "object") return undefined;
   const lines = [];
-  for (const [key, label] of [["name", "作者"], ["email", "邮箱"], ["url", "主页"], ["group", "QQ群"]]) {
+  for (const [key, label] of [
+    ["name", "作者"],
+    ["email", "邮箱"],
+    ["url", "主页"],
+    ["group", "QQ群"],
+  ]) {
     const v = root.author[key];
     if (v !== undefined && v !== null && String(v) !== "") lines.push(`${label}：${v}`);
   }
@@ -109,9 +114,7 @@ for (const manifestPath of manifestPaths) {
   }
 
   if (manifest.modules) {
-    manifest.modules = manifest.modules.map((m) =>
-      Array.isArray(m.version) ? { ...m, version: versionArr } : m
-    );
+    manifest.modules = manifest.modules.map((m) => (Array.isArray(m.version) ? { ...m, version: versionArr } : m));
   }
   if (manifest.dependencies) {
     manifest.dependencies = manifest.dependencies.map((d) =>
@@ -122,4 +125,4 @@ for (const manifestPath of manifestPaths) {
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 }
 
-console.log(`✓ Synced ${versionArr.join(".")} → ${manifestPaths.map(p => p.replace(projectDir, ".")).join(", ")}`);
+console.log(`✓ Synced ${versionArr.join(".")} → ${manifestPaths.map((p) => p.replace(projectDir, ".")).join(", ")}`);

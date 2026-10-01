@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/chainmail_chestplate"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "A A",
-      "AAA",
-      "AAA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["A A", "AAA", "AAA"],
     "key": {
       "A": {
         "item": "chain"

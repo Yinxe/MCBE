@@ -6,10 +6,7 @@
         "category_name": "equipment",
         "groups": [
           {
-            "items": [
-              "minecraft:camera",
-              "minecraft:item.camera"
-            ]
+            "items": ["minecraft:camera", "minecraft:item.camera"]
           },
           {
             "group_identifier": {
@@ -393,28 +390,21 @@
               "icon": "minecraft:creeper_banner_pattern",
               "name": "minecraft:itemGroup.name.banner_pattern"
             },
-            "items": [
-              "minecraft:wall_banner"
-            ]
+            "items": ["minecraft:wall_banner"]
           },
           {
             "group_identifier": {
               "icon": "minecraft:book",
               "name": "minecraft:itemGroup.name.book"
             },
-            "items": [
-              "minecraft:written_book",
-              "minecraft:enchanted_book"
-            ]
+            "items": ["minecraft:written_book", "minecraft:enchanted_book"]
           },
           {
             "group_identifier": {
               "icon": "minecraft:bed",
               "name": "minecraft:itemGroup.name.bed"
             },
-            "items": [
-              "minecraft:bed:16"
-            ]
+            "items": ["minecraft:bed:16"]
           }
         ]
       }

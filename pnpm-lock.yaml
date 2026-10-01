@@ -208,7 +208,11 @@ overrides:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.6
 
   mcaddon/auto-refill:
     dependencies:
@@ -335,6 +339,12 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.66.0
+        version: 8.66.0(@typescript-eslint/parser@8.66.0(eslint@9.39.4)(typescript@5.0.2))(eslint@9.39.4)(typescript@5.0.2)
+      '@typescript-eslint/parser':
+        specifier: ^8.66.0
+        version: 8.66.0(eslint@9.39.4)(typescript@5.0.2)
       '@yinxe/toolkit-build':
         specifier: workspace:*
         version: link:../../packages/toolkit-build
@@ -354,7 +364,7 @@ importers:
         specifier: 5.0.2
         version: 5.0.2
 
-  mcaddon/mock-player:
+  mcaddon/mockplayer3:
     dependencies:
       '@minecraft/math':
         specifier: 2.2.7
@@ -366,7 +376,7 @@ importers:
         specifier: 1.0.0-beta.1.26.0-stable
         version: 1.0.0-beta.1.26.0-stable(@minecraft/common@1.3.0)(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
       '@minecraft/server-ui':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0(@minecraft/vanilla-data@1.26.20)
       '@minecraft/vanilla-data':
         specifier: 1.26.20
@@ -378,6 +388,12 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.66.0
+        version: 8.66.0(@typescript-eslint/parser@8.66.0(eslint@9.39.4)(typescript@5.0.2))(eslint@9.39.4)(typescript@5.0.2)
+      '@typescript-eslint/parser':
+        specifier: ^8.66.0
+        version: 8.66.0(eslint@9.39.4)(typescript@5.0.2)
       '@yinxe/nbt-data-storage':
         specifier: workspace:*
         version: link:../../packages/nbt-data-storage
@@ -396,46 +412,9 @@ importers:
       just-scripts:
         specifier: ^2.6.2
         version: 2.6.2
-      source-map:
-        specifier: 0.7.4
-        version: 0.7.4
-      ts-node:
-        specifier: 10.9.1
-        version: 10.9.1(@types/node@26.1.1)(typescript@5.0.2)
-      typescript:
-        specifier: 5.0.2
-        version: 5.0.2
-
-  mcaddon/smartwarehouse:
-    dependencies:
-      '@minecraft/math':
-        specifier: 2.2.7
-        version: 2.2.7(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
-      '@minecraft/server':
-        specifier: 2.8.0
-        version: 2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20)
-      '@minecraft/server-ui':
-        specifier: ^2.0.0
-        version: 2.1.0(@minecraft/common@1.3.0)(@minecraft/server@2.8.0(@minecraft/common@1.3.0)(@minecraft/vanilla-data@1.26.20))
-    devDependencies:
-      '@minecraft/core-build-tasks':
-        specifier: 5.5.0
-        version: 5.5.0(@types/node@26.1.1)
-      '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
-      '@yinxe/toolkit':
-        specifier: workspace:*
-        version: link:../../packages/toolkit
-      '@yinxe/toolkit-build':
-        specifier: workspace:*
-        version: link:../../packages/toolkit-build
-      eslint-plugin-minecraft-linting:
-        specifier: 2.0.2
-        version: 2.0.2(typescript@5.0.2)
-      just-scripts:
-        specifier: ^2.6.2
-        version: 2.6.2
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.6
       source-map:
         specifier: 0.7.4
         version: 0.7.4
@@ -507,6 +486,12 @@ importers:
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.66.0
+        version: 8.66.0(@typescript-eslint/parser@8.66.0(eslint@9.39.4)(typescript@5.0.2))(eslint@9.39.4)(typescript@5.0.2)
+      '@typescript-eslint/parser':
+        specifier: ^8.66.0
+        version: 8.66.0(eslint@9.39.4)(typescript@5.0.2)
       '@yinxe/toolkit':
         specifier: workspace:*
         version: link:../../packages/toolkit
@@ -1507,6 +1492,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'

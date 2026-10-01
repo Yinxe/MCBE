@@ -69,17 +69,11 @@ function showDeathTeleportDialog(
   const loc = formatLocation(deathPoint.location, deathPoint.dimensionId);
   const timeAgo = formatTimeAgo(deathPoint.deathTime);
   const sameDim = deathPoint.dimensionId === player.dimension.id;
-  const distText = sameDim
-    ? ` §6（相距 §f${Math.round(distance(player.location, deathPoint.location))}§6 格）`
-    : "";
+  const distText = sameDim ? ` §6（相距 §f${Math.round(distance(player.location, deathPoint.location))}§6 格）` : "";
 
   new MessageFormBuilder()
     .title("§c☠ 你死了！")
-    .body(
-      `§f死亡位置: ${loc}${distText}\n` +
-      `§f死亡时间: §b${timeAgo}\n\n` +
-      `§b是否立即传送到死亡点？`,
-    )
+    .body(`§f死亡位置: ${loc}${distText}\n` + `§f死亡时间: §b${timeAgo}\n\n` + `§b是否立即传送到死亡点？`)
     .confirmButton("§a传送回去", () => {
       const ok = teleportPlayerTo(player, deathPoint.location, deathPoint.dimensionId);
       if (ok) {

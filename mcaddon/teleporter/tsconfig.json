@@ -12,13 +12,10 @@
     "noImplicitReturns": false,
     "outDir": "lib",
     "rootDir": ".",
-    "baseUrl": "BP/",
     "noEmitHelpers": true,
     "skipLibCheck": true
   },
-  "include": [
-    "scripts/**/*"
-  ],
+  "include": ["scripts/**/*"],
   "exclude": ["lib", "dist", "node_modules"],
   "compileOnSave": false
 }

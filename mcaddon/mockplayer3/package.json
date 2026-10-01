@@ -1,0 +1,41 @@
+{
+  "name": "mockplayer3",
+  "version": "3.0.2",
+  "description": "模拟玩家v3",
+  "private": true,
+  "devDependencies": {
+    "@minecraft/core-build-tasks": "5.5.0",
+    "@types/node": "^26.1.1",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@typescript-eslint/parser": "^8.66.0",
+    "@yinxe/nbt-data-storage": "workspace:*",
+    "@yinxe/tool-strategy": "workspace:*",
+    "@yinxe/toolkit": "workspace:*",
+    "@yinxe/toolkit-build": "workspace:*",
+    "eslint-plugin-minecraft-linting": "2.0.2",
+    "just-scripts": "^2.6.2",
+    "prettier": "^3.9.6",
+    "source-map": "0.7.4",
+    "ts-node": "10.9.1",
+    "typescript": "5.0.2"
+  },
+  "scripts": {
+    "lint": "just-scripts lint",
+    "build": "just-scripts build",
+    "clean": "just-scripts clean",
+    "test:core": "tsc -p tsconfig.test.json && node --test \".test-build/tests/**/*.test.js\"",
+    "local-deploy": "just-scripts local-deploy",
+    "pack": "just-scripts mcaddon"
+  },
+  "dependencies": {
+    "@minecraft/math": "2.2.7",
+    "@minecraft/server": "2.8.0",
+    "@minecraft/server-gametest": "1.0.0-beta.1.26.0-stable",
+    "@minecraft/server-ui": "^2.0.0",
+    "@minecraft/vanilla-data": "1.26.20"
+  },
+  "mcbe": {
+    "packName": "模拟玩家III",
+    "bp": "BP/MockPlayer3"
+  }
+}

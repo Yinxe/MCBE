@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/ancient_debris"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "ABA",
-      "CDC",
-      "ABA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["ABA", "CDC", "ABA"],
     "key": {
       "A": {
         "item": "obsidian"

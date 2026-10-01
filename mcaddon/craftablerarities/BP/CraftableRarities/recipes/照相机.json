@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/camera"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      " A",
-      " B ",
-      "B B"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": [" A", " B ", "B B"],
     "key": {
       "A": {
         "item": "barrier"

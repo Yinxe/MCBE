@@ -33,9 +33,9 @@
 
 ## 覆盖的收纳袋（17 种）
 
-| 类型 | 物品 ID |
-|------|---------|
-| 普通收纳袋 | `minecraft:bundle` |
+| 类型        | 物品 ID                                                                                                                                                                                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 普通收纳袋  | `minecraft:bundle`                                                                                                                                                                                                                                                                              |
 | 16 色收纳袋 | `minecraft:black_bundle` / `blue_bundle` / `brown_bundle` / `cyan_bundle` / `gray_bundle` / `green_bundle` / `light_blue_bundle` / `light_gray_bundle` / `lime_bundle` / `magenta_bundle` / `orange_bundle` / `pink_bundle` / `purple_bundle` / `red_bundle` / `white_bundle` / `yellow_bundle` |
 
 ---
@@ -57,11 +57,11 @@
 "minecraft:use_animation": "eat"
 ```
 
-| 组件 | 作用 |
-|------|------|
-| `minecraft:food` | 使物品可食用，MCBE 不允许食物携带容器内容，封堵刷物 |
-| `minecraft:use_animation: "eat"` | 吃动画，视觉反馈 |
-| `can_always_eat: true` | 饱腹也可吃，保持手感 |
+| 组件                             | 作用                                                |
+| -------------------------------- | --------------------------------------------------- |
+| `minecraft:food`                 | 使物品可食用，MCBE 不允许食物携带容器内容，封堵刷物 |
+| `minecraft:use_animation: "eat"` | 吃动画，视觉反馈                                    |
+| `can_always_eat: true`           | 饱腹也可吃，保持手感                                |
 
 ---
 
@@ -111,10 +111,10 @@ git push origin antibundledup@<version>
 
 ## 依赖
 
-| 包 | 版本 |
-|---|------|
+| 包             | 版本      |
+| -------------- | --------- |
 | @yinxe/toolkit | workspace |
-| pnpm | 11.1.3 |
+| pnpm           | 11.1.3    |
 
 ## 版本要求
 

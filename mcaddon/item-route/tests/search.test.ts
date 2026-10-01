@@ -54,10 +54,7 @@ test("buildSearchLookup: 倒排索引 O(1)（typeId → 容器）且跳过 input
 });
 
 test("searchContainers: 多容器数量汇总 + 验证（索引 miss 跳过空容器）", () => {
-  const containers = [
-    box("m1", "multi", [["minecraft:stone", 10]]),
-    box("m2", "multi", [["minecraft:stone", 5]]),
-  ];
+  const containers = [box("m1", "multi", [["minecraft:stone", 10]]), box("m2", "multi", [["minecraft:stone", 5]])];
   // 注入一个"撒谎"的 lookup（声称还有个空容器 m3）→ 真实读取 0 被跳过（验证）
   const hits = searchContainers(containers, "stone", () => ["m1", "m2", "m3"]);
   const s = hits.find((h) => h.typeId === "minecraft:stone");
@@ -73,10 +70,7 @@ test("searchContainers: 无命中返回空", () => {
 // ── 索引注入兼容：ItemIndex.lookupSearch 实例方法绑定（P0 回归） ──
 import { ItemIndex } from "../scripts/core/index/ItemIndex";
 test("searchContainers: 注入 ItemIndex 实例 lookupSearch（含 misc）不炸且 O(1) 命中", () => {
-  const containers = [
-    box("m1", "multi", [["minecraft:diamond", 3]]),
-    box("x1", "misc", [["minecraft:diamond", 7]]),
-  ];
+  const containers = [box("m1", "multi", [["minecraft:diamond", 3]]), box("x1", "misc", [["minecraft:diamond", 7]])];
   const idx = new ItemIndex();
   for (const c of containers) idx.onContainerAdded(c);
   // 用"实例方法裸引用"的形式模拟 SearchUI 传法——searchContainers 内经 fallback 兜底 & 索引优先

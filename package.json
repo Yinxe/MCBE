@@ -4,12 +4,17 @@
   "private": true,
   "description": "MCBE Addon — Monorepo",
   "packageManager": "pnpm@11.1.3",
-  "keywords": ["MCBE","addon","模组","扩展"],
+  "keywords": [
+    "MCBE",
+    "addon",
+    "模组",
+    "扩展"
+  ],
   "author": {
     "name": "Yinx",
     "email": "1423716216@qq.com",
     "url": "https://github.com/Yinxe/",
-    "group":"632178498"
+    "group": "632178498"
   },
   "repository": {
     "url": "https://github.com/Yinxe/MCBE"
@@ -23,24 +28,25 @@
     }
   },
   "type": "module",
+  "devDependencies": {
+    "prettier": "^3.9.6"
+  },
   "scripts": {
     "clean": "pnpm -r run clean",
     "lint": "pnpm -r run lint",
     "format": "prettier --write .",
     "build": "pnpm -r run build",
-    "build:mock-player": "pnpm --filter mock-player run build",
     "build:keepinventory": "pnpm --filter keepinventory run build",
-    "build:smartwarehouse": "pnpm --filter smartwarehouse run build",
+    "build:mockplayer3": "pnpm --filter mockplayer3 run build",
     "build:antibundledup": "pnpm --filter antibundledup run build",
     "build:auto-refill": "pnpm --filter auto-refill run build",
     "build:teleporter": "pnpm --filter teleporter run build",
     "build:spectator-mode": "pnpm --filter spectator-mode run build",
     "build:nds-demo": "pnpm --filter nds-demo run build",
-    "pack:mock-player": "pnpm --filter mock-player run pack",
     "pack:auto-refill": "pnpm --filter auto-refill run pack",
+    "pack:mockplayer3": "pnpm --filter mockplayer3 run pack",
     "pack:keepinventory": "pnpm --filter keepinventory run pack",
     "pack:craftablerarities": "pnpm --filter craftablerarities run pack",
-    "pack:smartwarehouse": "pnpm --filter smartwarehouse run pack",
     "pack:antibundledup": "pnpm --filter antibundledup run pack",
     "pack:teleporter": "pnpm --filter teleporter run pack",
     "pack:spectator-mode": "pnpm --filter spectator-mode run pack",
@@ -49,7 +55,6 @@
     "sync-version": "node packages/toolkit-build/bin/sync-version.mjs",
     "pack:stackable": "pnpm --filter stackable run pack",
     "test:auto-refill": "pnpm --filter auto-refill run test:core",
-    "test:mock-player": "pnpm --filter mock-player run test:core",
     "test:nbt-data-storage": "pnpm --filter nbt-data-storage run test",
     "test:tool-strategy": "pnpm --filter @yinxe/tool-strategy run test"
   }

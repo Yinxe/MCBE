@@ -22,9 +22,9 @@ pnpm --filter spectator-mode run clean      # 清理
 
 ## 命令
 
-| 命令 | 权限 | 说明 |
-|------|------|------|
-| `/sp:soul` | 任意 | 切换旁观/回归本体（进入记录锚点，回归还原维度/位置/游戏模式） |
+| 命令            | 权限         | 说明                                                                                       |
+| --------------- | ------------ | ------------------------------------------------------------------------------------------ |
+| `/sp:soul`      | 任意         | 切换旁观/回归本体（进入记录锚点，回归还原维度/位置/游戏模式）                              |
 | `/sp:soul menu` | 管理员（OP） | 管理表单：启用/禁用功能 · 最大移动距离滑动条（5~400m，步进 1）· **连线粒子开关**（默认关） |
 
 > 只注册一条命令 `/sp:soul`，`menu` 为其可选子命令（`/sp:soul menu`）。
@@ -72,9 +72,9 @@ scripts/
 
 ## 依赖
 
-| 包 | 版本 |
-|---|------|
-| @minecraft/server | workspace 收敛 2.8.0（pnpm overrides） |
-| @minecraft/server-ui | workspace 收敛（表单依赖） |
-| @yinxe/toolkit | workspace 同步（defineCommand / canManage / ModalFormBuilder） |
-| @minecraft/core-build-tasks | 5.5.0 |
+| 包                          | 版本                                                           |
+| --------------------------- | -------------------------------------------------------------- |
+| @minecraft/server           | workspace 收敛 2.8.0（pnpm overrides）                         |
+| @minecraft/server-ui        | workspace 收敛（表单依赖）                                     |
+| @yinxe/toolkit              | workspace 同步（defineCommand / canManage / ModalFormBuilder） |
+| @minecraft/core-build-tasks | 5.5.0                                                          |

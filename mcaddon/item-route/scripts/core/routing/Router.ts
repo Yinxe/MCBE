@@ -152,7 +152,11 @@ export class Router {
     // ⚠️ 记录"初始是否已有候选"：只有初始**非空**（存在 stale 候选可能被拒）才在下方走 mid 自愈——
     //   初始为空的 item，顶部 ① 已做全仓自愈且 round0 已见愈合后候选，无需 mid 再扫（避免逐 misc-item 全扫）。
     const hadCandidates = candidates.single.length > 0 || candidates.multi.length > 0;
-    if (candidates.single.length === 0 && candidates.multi.length === 0 && this.shouldScanSelfHeal(warehouse.id, itemId)) {
+    if (
+      candidates.single.length === 0 &&
+      candidates.multi.length === 0 &&
+      this.shouldScanSelfHeal(warehouse.id, itemId)
+    ) {
       index.selfHeal(stack, warehouse.containers.values());
       candidates = index.lookup(itemId);
     }
@@ -205,7 +209,14 @@ export class Router {
             amount: moved,
             strategy: strategy.key,
           });
-          return { routed: true, from: input.id, to: target.id, itemId: stack.itemId, amount: moved, strategy: strategy.key };
+          return {
+            routed: true,
+            from: input.id,
+            to: target.id,
+            itemId: stack.itemId,
+            amount: moved,
+            strategy: strategy.key,
+          };
         }
       }
       return undefined;

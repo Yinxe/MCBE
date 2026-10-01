@@ -6,16 +6,7 @@
 
 /** 工具/武器角色 */
 export type ToolRole =
-  | "pickaxe"
-  | "axe"
-  | "shovel"
-  | "hoe"
-  | "shears"
-  | "sword"
-  | "trident"
-  | "bow"
-  | "crossbow"
-  | "mace";
+  "pickaxe" | "axe" | "shovel" | "hoe" | "shears" | "sword" | "trident" | "bow" | "crossbow" | "mace";
 
 /** 附魔键（候选特征与偏好共用；含耐久附魔 unbreaking / 经验修补 mending） */
 export type EnchantKey = "silk" | "fortune" | "efficiency" | "smite" | "sharpness" | "unbreaking" | "mending";
@@ -83,9 +74,7 @@ export interface ToolStrategy {
 }
 
 /** 决策结果：保持 / 换入最优工具 */
-export type ToolDecision =
-  | { action: "keep"; reason: string }
-  | { action: "swap"; tool: ToolCandidate; reason: string };
+export type ToolDecision = { action: "keep"; reason: string } | { action: "swap"; tool: ToolCandidate; reason: string };
 
 /**
  * 决策树节点（Selector 语义：顺序求值，首个出决策者生效；全部无决策 → 保持）。

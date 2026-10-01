@@ -37,12 +37,14 @@ const DEFAULT_ROLE_OPTIONS: ContainerRole[] = ["single", "multi", "misc"];
 function formatWarehouseSummary(deps: CommandDeps, warehouse: Warehouse): string {
   const info = deps.config.menuInfo;
   const lines: string[] = [];
-  if (isMenuInfoOn(info, "warehouseName")) lines.push(`${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}`);
+  if (isMenuInfoOn(info, "warehouseName"))
+    lines.push(`${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}`);
   if (isMenuInfoOn(info, "warehouseId")) lines.push(`${uiColor.form.muted}仓库ID ${uiColor.form.body}${warehouse.id}`);
 
   // 位置信息（维度 + 归一化区域 + 占地规格），对齐 v1 formatWarehouseStats
   const a = warehouse.area;
-  if (isMenuInfoOn(info, "warehouseDimension")) lines.push(`${uiColor.form.muted}维度 ${uiColor.form.body}${dimensionName(a.dimension)}`);
+  if (isMenuInfoOn(info, "warehouseDimension"))
+    lines.push(`${uiColor.form.muted}维度 ${uiColor.form.body}${dimensionName(a.dimension)}`);
   if (isMenuInfoOn(info, "warehouseCoords")) {
     const minX = Math.min(a.corner1.x, a.corner2.x);
     const maxX = Math.max(a.corner1.x, a.corner2.x);

@@ -131,10 +131,7 @@ async function main() {
   }
 
   // ── 3. 更新 .env ─────────────────────────────────────────────
-  const newEnv = envContent.replace(
-    /PROJECT_NAME="(.+)"/,
-    `PROJECT_NAME="${newName}"`
-  );
+  const newEnv = envContent.replace(/PROJECT_NAME="(.+)"/, `PROJECT_NAME="${newName}"`);
   writeFileSync(envPath, newEnv);
   console.log(`  ✓ .env updated PROJECT_NAME="${newName}"`);
 
@@ -190,10 +187,7 @@ async function main() {
       const filePath = resolve(workflowDir, file);
       let content = readFileSync(filePath, "utf8");
       if (content.includes("PROJECT_NAME")) {
-        content = content.replace(
-          /PROJECT_NAME:.*?['"][^'"]*['"]/,
-          `PROJECT_NAME: '${newName}'`
-        );
+        content = content.replace(/PROJECT_NAME:.*?['"][^'"]*['"]/, `PROJECT_NAME: '${newName}'`);
         writeFileSync(filePath, content);
         console.log(`  ✓ .github/workflows/${file} 已更新`);
       }

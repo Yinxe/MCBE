@@ -43,9 +43,12 @@ function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container:
   const scan = needScan ? scanContainer(container) : undefined;
 
   const lines: string[] = [];
-  if (isMenuInfoOn(info, "containerWhName")) lines.push(`${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}`);
+  if (isMenuInfoOn(info, "containerWhName"))
+    lines.push(`${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}`);
   if (isMenuInfoOn(info, "containerType"))
-    lines.push(`${uiColor.form.muted}类型 ${uiColor.form.body}${getChineseName(blockType)}${isHopperType(blockType) ? "（漏斗→输入容器）" : ""}`);
+    lines.push(
+      `${uiColor.form.muted}类型 ${uiColor.form.body}${getChineseName(blockType)}${isHopperType(blockType) ? "（漏斗→输入容器）" : ""}`
+    );
 
   if (scan !== undefined && isMenuInfoOn(info, "containerCapacity")) {
     // 容量行对齐 v1 formatContainerCapacityLine：usage% 按档着色 + ⚠ 告急（≥ warningThreshold）
@@ -70,11 +73,19 @@ function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container:
   }
   if (isMenuInfoOn(info, "containerId")) lines.push(`${uiColor.form.muted}容器ID ${uiColor.form.body}${container.id}`);
   if (isMenuInfoOn(info, "containerStatus"))
-    lines.push(`${uiColor.form.muted}状态 ${container.enabled ? uiColor.form.success + "已启用" : uiColor.form.error + "已禁用"}`);
+    lines.push(
+      `${uiColor.form.muted}状态 ${container.enabled ? uiColor.form.success + "已启用" : uiColor.form.error + "已禁用"}`
+    );
   if (isMenuInfoOn(info, "containerRole")) lines.push(`${uiColor.form.muted}角色 ${uiColor.form.accent}${roleLabel}`);
-  if (isMenuInfoOn(info, "containerPriority")) lines.push(`${uiColor.form.muted}优先级 ${uiColor.form.body}${container.priority}`);
+  if (isMenuInfoOn(info, "containerPriority"))
+    lines.push(`${uiColor.form.muted}优先级 ${uiColor.form.body}${container.priority}`);
   // 族榜：多物容器启用同族收纳 + 开关开 → 信息区显示容器内族排行榜（族类型数降序，全排）
-  if (scan !== undefined && isMenuInfoOn(info, "containerFamilyRank") && container.role === "multi" && container.familyEnabled) {
+  if (
+    scan !== undefined &&
+    isMenuInfoOn(info, "containerFamilyRank") &&
+    container.role === "multi" &&
+    container.familyEnabled
+  ) {
     const ranks = containerFamilyRanks(scan);
     if (ranks.length > 0) {
       lines.push(`${uiColor.form.muted}族榜:`);

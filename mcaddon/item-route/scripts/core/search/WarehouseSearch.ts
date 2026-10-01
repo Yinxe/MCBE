@@ -51,18 +51,13 @@ export function buildSearchLookup(containers: Iterable<Container>): SearchLookup
  * @param lookup     - 搜索索引提供者（缺省用本地一次性倒排）
  * @param query      - 搜索关键词
  */
-export function searchContainers(
-  containers: Iterable<Container>,
-  query: string,
-  lookup?: SearchLookup
-): SearchHit[] {
+export function searchContainers(containers: Iterable<Container>, query: string, lookup?: SearchLookup): SearchHit[] {
   const byId = new Map<string, Container>();
   for (const c of containers) byId.set(c.id, c);
   // 实时倒排恒构建：与索引结果**并集**兜底——索引是纯运行时缓存，玩家手动改箱可能 stale
   //（漏登记部分容器），并集保证不漏报；SearchUI 对命中容器 reconcile 会自愈索引。
   const fallback = buildSearchLookup(byId.values());
-  const resolve: SearchLookup = (typeId) =>
-    [...new Set([...(lookup?.(typeId) ?? []), ...fallback(typeId)])];
+  const resolve: SearchLookup = (typeId) => [...new Set([...(lookup?.(typeId) ?? []), ...fallback(typeId)])];
   const typeIds = searchItems(query);
   const hits: SearchHit[] = [];
   for (const typeId of typeIds) {

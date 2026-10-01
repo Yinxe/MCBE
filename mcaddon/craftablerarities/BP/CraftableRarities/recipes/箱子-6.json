@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/chest_6"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "A A",
-      "AAA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "A A", "AAA"],
     "key": {
       "A": {
         "item": "warped_stem"

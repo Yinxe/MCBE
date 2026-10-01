@@ -922,11 +922,7 @@ const weapons: ItemFamily = {
 const archery: ItemFamily = {
   id: "archery",
   displayName: "弓箭",
-  items: [
-    "minecraft:arrow",
-    "minecraft:bow",
-    "minecraft:crossbow",
-  ],
+  items: ["minecraft:arrow", "minecraft:bow", "minecraft:crossbow"],
 };
 
 /** 挖掘工具：斧/镐/铲全材质（从通用工具拆出，便于按挖掘类收纳） */
@@ -1385,9 +1381,7 @@ const accessories: ItemFamily = {
 const enchanted: ItemFamily = {
   id: "enchanted",
   displayName: "附魔",
-  items: [
-    "minecraft:enchanted_book",
-  ],
+  items: ["minecraft:enchanted_book"],
 };
 
 const books_maps: ItemFamily = {
@@ -1405,11 +1399,7 @@ const books_maps: ItemFamily = {
 const potions: ItemFamily = {
   id: "potions",
   displayName: "药水",
-  items: [
-    "minecraft:lingering_potion",
-    "minecraft:potion",
-    "minecraft:splash_potion",
-  ],
+  items: ["minecraft:lingering_potion", "minecraft:potion", "minecraft:splash_potion"],
 };
 
 const music_disc: ItemFamily = {

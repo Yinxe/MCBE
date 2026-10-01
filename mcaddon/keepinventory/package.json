@@ -6,6 +6,8 @@
   "devDependencies": {
     "@minecraft/core-build-tasks": "5.5.0",
     "@types/node": "^26.1.1",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@typescript-eslint/parser": "^8.66.0",
     "@yinxe/toolkit-build": "workspace:*",
     "eslint-plugin-minecraft-linting": "2.0.2",
     "just-scripts": "^2.6.2",

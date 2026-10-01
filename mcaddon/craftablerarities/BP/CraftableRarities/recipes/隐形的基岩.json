@@ -4,12 +4,8 @@
     "description": {
       "identifier": "craftablerarities/invisible_bedrock"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AB"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AB"],
     "key": {
       "A": {
         "item": "bedrock"

@@ -7,7 +7,6 @@ import { select } from "../src/index";
 import { swapSlot, tool } from "./helpers";
 import type { ToolCandidate, ToolSelectorConfig, ToolStrategy, ToolTree } from "../src/index";
 
-
 /** 单策略树（测试档位逻辑用） */
 function cfg(strategy: ToolStrategy, reselectIfCurrent = false): ToolSelectorConfig {
   return {
@@ -15,7 +14,6 @@ function cfg(strategy: ToolStrategy, reselectIfCurrent = false): ToolSelectorCon
     reselectIfCurrent,
   };
 }
-
 
 // ─── 档位下标优先级 ────────────────────────────────────
 
@@ -75,7 +73,13 @@ test("require 多条 = AND：时运5 且 效率5 的斧缺一不入池（用户�
     name: "s2",
     want: [
       { role: "axe", require: [{ type: "silk", minLevel: 4 }] },
-      { role: "axe", require: [{ type: "fortune", minLevel: 5 }, { type: "efficiency", minLevel: 5 }] },
+      {
+        role: "axe",
+        require: [
+          { type: "fortune", minLevel: 5 },
+          { type: "efficiency", minLevel: 5 },
+        ],
+      },
       { role: "hoe", require: [{ type: "silk" }] },
     ],
     sortBy: [{ dim: "enchant", type: "silk" }, { dim: "tier" }],
@@ -249,12 +253,7 @@ const WOODCUT_TREE: ToolTree = {
         type: "by-strategy",
         strategy: {
           name: "woodcut-leaf",
-          want: [
-            { role: "hoe", require: [{ type: "silk" }] },
-            { role: "shears" },
-            { require: [{ type: "silk" }] },
-            {},
-          ],
+          want: [{ role: "hoe", require: [{ type: "silk" }] }, { role: "shears" }, { require: [{ type: "silk" }] }, {}],
           sortBy: [{ dim: "enchant", type: "silk" }, { dim: "tier" }],
         },
       },

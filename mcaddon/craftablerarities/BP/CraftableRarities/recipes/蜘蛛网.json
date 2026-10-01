@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/web"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "AAA",
-      "AAA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "AAA", "AAA"],
     "key": {
       "A": {
         "item": "string"

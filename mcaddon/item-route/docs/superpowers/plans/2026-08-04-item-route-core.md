@@ -67,6 +67,7 @@ mcaddon/item-route/
 ```
 
 **测试约定（全计划通用）：**
+
 - 运行：`pnpm test:core` = `tsc -p tsconfig.test.json && node --test .test-build/tests/`
 - 每个测试文件顶部：`import { test } from "node:test"; import assert from "node:assert/strict";`
 - 断言用 assert 而非手动判断；每个 `test()` 块独立、自包含
@@ -77,6 +78,7 @@ mcaddon/item-route/
 ### Task 1: 项目脚手架 + 测试运行器
 
 **Files:**
+
 - Create: `mcaddon/item-route/package.json`
 - Create: `mcaddon/item-route/tsconfig.test.json`
 - Create: `mcaddon/item-route/tests/smoke.test.ts`
@@ -85,6 +87,7 @@ mcaddon/item-route/
 - [ ] **Step 1: 创建脚手架文件**
 
 `package.json`:
+
 ```json
 {
   "name": "item-route",
@@ -98,6 +101,7 @@ mcaddon/item-route/
 ```
 
 `tsconfig.test.json`:
+
 ```json
 {
   "compilerOptions": {
@@ -117,6 +121,7 @@ mcaddon/item-route/
 ```
 
 `tests/smoke.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -127,6 +132,7 @@ test("smoke: test runner works", () => {
 ```
 
 `tests/helpers/InMemoryContainer.ts`（骨架，Task 11 填充完整实现）:
+
 ```ts
 // 测试用概念容器实现（产品代码中由 mc 适配层提供真实实现）
 export class InMemoryContainer {
@@ -151,12 +157,14 @@ git commit -m "item-route: 项目脚手架 + node:test 测试运行器（core �
 ### Task 2: scripts/core/model/types.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/model/types.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（本任务只加 Location 测试，后续任务追加）
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/model.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -176,6 +184,7 @@ Expected: FAIL（`locationKey` 不存在，模块加载错误）。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/model/types.ts`:
+
 ```ts
 // ─── 核心 ID 类型与概念坐标 ──────────────────────────────
 export type ItemId = string;
@@ -213,6 +222,7 @@ git commit -m "item-route: scripts/core/model 基础类型（ID/坐标/locationK
 ### Task 3: scripts/core/model/ItemStack.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/model/ItemStack.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（追加）
 
@@ -255,6 +265,7 @@ Expected: FAIL（SimpleItemStack 不存在）。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/model/ItemStack.ts`:
+
 ```ts
 // ─── 概念级物品堆 ────────────────────────────────────────
 import type { ItemId } from "./types";
@@ -314,6 +325,7 @@ git commit -m "item-route: scripts/core/model ItemStack 概念模型（可堆叠
 ### Task 4: scripts/core/model/Container.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/model/Container.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（追加；实现由 Task 11 的 InMemoryContainer 提供）
 
@@ -357,6 +369,7 @@ Expected: FAIL（InMemoryContainer 未实现 addItem 等）。
 - [ ] **Step 3: 实现接口与测试容器**
 
 `scripts/core/model/Container.ts`:
+
 ```ts
 // ─── 概念级容器 ──────────────────────────────────────────
 import type { ItemStack } from "./ItemStack";
@@ -388,6 +401,7 @@ export interface Container {
 ```
 
 `tests/helpers/InMemoryContainer.ts`（完整实现）:
+
 ```ts
 // 测试用概念容器实现（产品代码中由 mc 适配层提供真实实现）
 import type { Container, ContainerRole } from "../../scripts/core/model/Container";
@@ -477,6 +491,7 @@ git commit -m "item-route: scripts/core/model Container 接口 + 测试容器实
 ### Task 5: scripts/core/model/Warehouse.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/model/Warehouse.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（追加：仅验证默认值工厂函数）
 
@@ -502,6 +517,7 @@ Expected: FAIL（createDefaultSettings 不存在）。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/model/Warehouse.ts`:
+
 ```ts
 // ─── 概念级仓库与成员 ────────────────────────────────────
 import type { Container } from "./Container";
@@ -571,6 +587,7 @@ git commit -m "item-route: scripts/core/model Warehouse/成员/区域/设置模�
 ### Task 6: scripts/core/model/DeriveBinding.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/model/DeriveBinding.ts`
 - Test: `mcaddon/item-route/tests/model.test.ts`（追加）
 
@@ -601,6 +618,7 @@ Expected: FAIL（deriveBinding 不存在）。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/model/DeriveBinding.ts`:
+
 ```ts
 // ─── 单物绑定推导（core 纯函数，可单测） ──────────────────
 import type { Container } from "./Container";
@@ -633,12 +651,14 @@ git commit -m "item-route: scripts/core/model deriveBinding 单物绑定推导�
 ### Task 7: scripts/core/events/EventSignal.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/events/EventSignal.ts`
 - Test: `mcaddon/item-route/tests/events.test.ts`
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/events.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -685,6 +705,7 @@ Expected: FAIL（模块加载错误）。
 - [ ] **Step 3: 最小实现（与 toolkit EventSignal 同语义，core 自包含）**
 
 `scripts/core/events/EventSignal.ts`:
+
 ```ts
 // ─── 事件订阅触发机制（core 自实现，与 @yinxe/toolkit 同语义） ──
 // 保持 core 零依赖：mc 适配层可自由选择复用 toolkit 版本。
@@ -735,6 +756,7 @@ git commit -m "item-route: scripts/core/events EventSignal（零依赖自实现�
 ### Task 8: scripts/core/events/DomainEvents.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/events/DomainEvents.ts`
 - Test: `mcaddon/item-route/tests/events.test.ts`（追加）
 
@@ -747,7 +769,14 @@ test("EventBus: 各领域事件独立派发", () => {
   const bus = new EventBus();
   const routed: string[] = [];
   bus.itemRouted.subscribe((e) => routed.push(`${e.from}->${e.to}:${e.amount}`));
-  bus.itemRouted.trigger({ type: "item-routed", warehouseId: "w1", from: "c1", to: "c2", itemId: "minecraft:stone", amount: 5 });
+  bus.itemRouted.trigger({
+    type: "item-routed",
+    warehouseId: "w1",
+    from: "c1",
+    to: "c2",
+    itemId: "minecraft:stone",
+    amount: 5,
+  });
   bus.warning.trigger({ type: "warning", warehouseId: "w1", level: "yellow", containerId: "c1" });
   assert.deepEqual(routed, ["c1->c2:5"]);
 });
@@ -761,6 +790,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/events/DomainEvents.ts`:
+
 ```ts
 // ─── 领域事件类型与事件总线 ──────────────────────────────
 import { EventSignal } from "./EventSignal";
@@ -839,12 +869,14 @@ git commit -m "item-route: scripts/core/events 领域事件类型 + EventBus"
 ### Task 9: scripts/core/storage/KeyValueStore.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/storage/KeyValueStore.ts`
 - Test: `mcaddon/item-route/tests/storage.test.ts`
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/storage.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -875,6 +907,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/storage/KeyValueStore.ts`:
+
 ```ts
 // ─── 键值仓储接口（core 只定义接口，DP 分片实现在 mc 层） ──
 export interface KeyValueStore {
@@ -918,6 +951,7 @@ git commit -m "item-route: scripts/core/storage KeyValueStore 接口 + 内存实
 ### Task 10: scripts/core/storage/Stores.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/storage/Stores.ts`
 - Test: `mcaddon/item-route/tests/storage.test.ts`（追加）
 
@@ -954,6 +988,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/storage/Stores.ts`:
+
 ```ts
 // ─── 仓库/索引/统计仓储接口（core 定义，mc 层实现 DP 分片） ──
 import { InMemoryKeyValueStore, type KeyValueStore } from "./KeyValueStore";
@@ -1082,12 +1117,14 @@ git commit -m "item-route: scripts/core/storage 三仓储接口 + 内存实现�
 ### Task 11: scripts/core/routing/RouteStrategy.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/routing/RouteStrategy.ts`
 - Test: `mcaddon/item-route/tests/routing.test.ts`
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/routing.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -1096,7 +1133,10 @@ import type { RouteContext } from "../scripts/core/routing/RouteStrategy";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
 import { SimpleItemStack } from "../scripts/core/model/ItemStack";
 
-function makeCtx(containers: InMemoryContainer[], lookup: (typeId: string) => { single: string[]; multi: string[] }): RouteContext {
+function makeCtx(
+  containers: InMemoryContainer[],
+  lookup: (typeId: string) => { single: string[]; multi: string[] }
+): RouteContext {
   const warehouse = {
     id: "w1",
     displayName: "w",
@@ -1135,7 +1175,10 @@ test("MultiItemStrategy / MiscStrategy: 按索引返回", () => {
   const multi = new InMemoryContainer("m1", "multi", 3);
   const misc = new InMemoryContainer("x1", "misc", 3);
   const ctx = makeCtx([multi, misc], () => ({ single: [], multi: ["m1"] }));
-  assert.deepEqual(new MultiItemStrategy().findCandidates(ctx).map((c) => c.container.id), ["m1"]);
+  assert.deepEqual(
+    new MultiItemStrategy().findCandidates(ctx).map((c) => c.container.id),
+    ["m1"]
+  );
   assert.equal(new MiscStrategy().findCandidates(ctx).length, 0); // 索引不含 misc
 });
 ```
@@ -1148,6 +1191,7 @@ Expected: FAIL（模块不存在）。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/routing/RouteStrategy.ts`:
+
 ```ts
 // ─── 路由策略（可插拔，数字优先级越小越快） ────────────────
 import type { Container } from "../model/Container";
@@ -1263,6 +1307,7 @@ git commit -m "item-route: scripts/core/routing 路由策略抽象 + 单物/多�
 ### Task 12: scripts/core/routing/CandidateSorter.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/routing/CandidateSorter.ts`
 - Test: `mcaddon/item-route/tests/routing.test.ts`（追加）
 
@@ -1283,14 +1328,12 @@ function cand(id: string, priority: number, usage: number, full = false): Candid
 
 test("DefaultCandidateSorter: 满箱跳过 → 优先级升序 → 使用率降序", () => {
   const sorter = new DefaultCandidateSorter();
-  const input = [
-    cand("a", 10, 0.3),
-    cand("full", 10, 1.0, true),
-    cand("b", 5, 0.2),
-    cand("c", 10, 0.9),
-  ];
+  const input = [cand("a", 10, 0.3), cand("full", 10, 1.0, true), cand("b", 5, 0.2), cand("c", 10, 0.9)];
   const sorted = sorter.sort(input);
-  assert.deepEqual(sorted.map((c) => c.container.id), ["b", "c", "a"]);
+  assert.deepEqual(
+    sorted.map((c) => c.container.id),
+    ["b", "c", "a"]
+  );
 });
 ```
 
@@ -1302,6 +1345,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/routing/CandidateSorter.ts`:
+
 ```ts
 // ─── 候选排序器（可插拔，默认实现） ──────────────────────
 import type { CandidateContainer } from "./RouteStrategy";
@@ -1340,6 +1384,7 @@ git commit -m "item-route: scripts/core/routing 候选排序器（满箱跳过/�
 ### Task 13: scripts/core/routing/Move.ts（原子移动事务）
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/routing/Move.ts`
 - Test: `mcaddon/item-route/tests/routing.test.ts`（追加）
 
@@ -1402,6 +1447,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/routing/Move.ts`:
+
 ```ts
 // ─── 原子移动与事务日志（核心安全机制：不吞物/不复制/可回滚） ──
 import type { Container } from "../model/Container";
@@ -1479,6 +1525,7 @@ git commit -m "item-route: scripts/core/routing 原子移动 transfer + MoveJour
 ### Task 14: scripts/core/routing/Router.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/routing/Router.ts`
 - Test: `mcaddon/item-route/tests/routing.test.ts`（追加）
 
@@ -1623,6 +1670,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/routing/Router.ts`:
+
 ```ts
 // ─── 路由编排：单槽路由，策略升序 + 候选排序 + 原子移动 ──
 import { transfer } from "./Move";
@@ -1715,12 +1763,14 @@ git commit -m "item-route: scripts/core/routing Router 路由编排（策略升�
 ### Task 15: scripts/core/index/ItemIndex.ts（O(1) 索引）
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/index/ItemIndex.ts`
 - Test: `mcaddon/item-route/tests/index.test.ts`
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/index.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -1816,7 +1866,10 @@ test("ItemIndex: serialize/restore 往返一致", () => {
 
 test("ItemIndex: restore 版本不匹配返回 false", () => {
   const index = new ItemIndex();
-  assert.equal(index.restore({ version: INDEX_VERSION + 1, byItem: {}, containerItems: {}, singleBindings: {} }), false);
+  assert.equal(
+    index.restore({ version: INDEX_VERSION + 1, byItem: {}, containerItems: {}, singleBindings: {} }),
+    false
+  );
 });
 ```
 
@@ -1828,6 +1881,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/index/ItemIndex.ts`:
+
 ```ts
 // ─── O(1) 物品索引：查询/增量维护/惰性校验/持久化快照 ──
 import type { Container } from "../model/Container";
@@ -2044,12 +2098,14 @@ git commit -m "item-route: scripts/core/index ItemIndex O(1) 索引（增量维�
 ### Task 16: scripts/core/scheduling/IntervalScheduler.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/scheduling/IntervalScheduler.ts`
 - Test: `mcaddon/item-route/tests/scheduling.test.ts`
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/scheduling.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -2088,6 +2144,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/scheduling/IntervalScheduler.ts`:
+
 ```ts
 // ─── 间隔调度抽象（mc 层用 system.runInterval，测试用内存版） ──
 export interface IntervalHandle {
@@ -2101,10 +2158,7 @@ export interface IntervalScheduler {
 /** 内存实现：advance(ticks) 手动推进，供单测与调试 */
 export class MemoryIntervalScheduler implements IntervalScheduler {
   private nextId = 1;
-  private intervals = new Map<
-    number,
-    { fn: () => void; tickInterval: number; counter: number; stopped: boolean }
-  >();
+  private intervals = new Map<number, { fn: () => void; tickInterval: number; counter: number; stopped: boolean }>();
 
   createInterval(fn: () => void, tickInterval: number): IntervalHandle {
     const id = this.nextId++;
@@ -2149,6 +2203,7 @@ git commit -m "item-route: scripts/core/scheduling 间隔调度抽象 + 内存�
 ### Task 17: scripts/core/scheduling/Scheduler.ts（生命周期状态机）
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/scheduling/Scheduler.ts`
 - Test: `mcaddon/item-route/tests/scheduling.test.ts`（追加）
 
@@ -2277,6 +2332,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/scheduling/Scheduler.ts`:
+
 ```ts
 // ─── 调度器：5 tick 全局主任务 + 仓库级独立 interval ──
 import type { Router } from "../routing/Router";
@@ -2403,7 +2459,10 @@ export class Scheduler {
   }
 
   private createInterval(rt: Runtime): IntervalHandle {
-    return this.intervals.createInterval(() => this.processOnce(rt), this.clampSpeed(rt.warehouse.settings.processingSpeed));
+    return this.intervals.createInterval(
+      () => this.processOnce(rt),
+      this.clampSpeed(rt.warehouse.settings.processingSpeed)
+    );
   }
 
   /** 每轮：处理一个输入容器的非空 slot */
@@ -2448,12 +2507,14 @@ git commit -m "item-route: scripts/core/scheduling Scheduler 生命周期状态�
 ### Task 18: scripts/core/stats/StatsService.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/stats/StatsService.ts`
 - Test: `mcaddon/item-route/tests/stats.test.ts`
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/stats.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -2561,6 +2622,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/stats/StatsService.ts`:
+
 ```ts
 // ─── 统计系统：容器/仓库统计 + 三级预警（冷却） ────────────
 import type { Container } from "../model/Container";
@@ -2754,12 +2816,14 @@ git commit -m "item-route: scripts/core/stats 统计服务（容器/仓库统计
 ### Task 19: scripts/core/organizing/Organizer.ts（概念化整理器）
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/organizing/Organizer.ts`
 - Test: `mcaddon/item-route/tests/organizing.test.ts`
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/organizing.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -2883,6 +2947,7 @@ Expected: FAIL（模块不存在；`transfer` 导入未用会有 lint 提示但 
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/organizing/Organizer.ts`:
+
 ```ts
 // ─── 概念化整理器：混乱度评分 + analyze/apply/回滚 + 自动阈值 ──
 import type { Container } from "../model/Container";
@@ -2963,7 +3028,9 @@ export class Organizer {
             target = pickMultiTarget(item.itemId) ?? this.firstMisc(warehouse, container.id);
           }
         } else if (container.role === "misc") {
-          target = pickMultiTarget(item.itemId) ?? (singlesByItem.get(item.itemId)?.emptySlotsCount ?? 0 > 0 ? singlesByItem.get(item.itemId) : undefined);
+          target =
+            pickMultiTarget(item.itemId) ??
+            ((singlesByItem.get(item.itemId)?.emptySlotsCount ?? 0 > 0) ? singlesByItem.get(item.itemId) : undefined);
         } else if (container.role === "multi") {
           target = pickMultiTarget(item.itemId, container);
         }
@@ -3029,12 +3096,14 @@ git commit -m "item-route: scripts/core/organizing 概念化整理器（评分/�
 ### Task 20: scripts/core/services/MemberService.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/services/MemberService.ts`
 - Test: `mcaddon/item-route/tests/services.test.ts`
 
 - [ ] **Step 1: 写失败测试**
 
 `tests/services.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -3087,6 +3156,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/services/MemberService.ts`:
+
 ```ts
 // ─── 成员权限服务：owner > member > visitor ────────────────
 import type { Warehouse } from "../model/Warehouse";
@@ -3128,6 +3198,7 @@ git commit -m "item-route: scripts/core/services 成员权限服务（owner/memb
 ### Task 21: scripts/core/services/WarehouseService.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/services/WarehouseService.ts`
 - Test: `mcaddon/item-route/tests/services.test.ts`（追加）
 
@@ -3139,8 +3210,16 @@ import { InMemoryWarehouseStore } from "../scripts/core/storage/Stores";
 import { EventBus } from "../scripts/core/events/DomainEvents";
 import type { WarehouseArea } from "../scripts/core/model/Warehouse";
 
-const area1: WarehouseArea = { dimension: "overworld", corner1: { x: 0, y: 0, z: 0 }, corner2: { x: 10, y: 10, z: 10 } };
-const area2: WarehouseArea = { dimension: "overworld", corner1: { x: 20, y: 0, z: 0 }, corner2: { x: 30, y: 10, z: 10 } };
+const area1: WarehouseArea = {
+  dimension: "overworld",
+  corner1: { x: 0, y: 0, z: 0 },
+  corner2: { x: 10, y: 10, z: 10 },
+};
+const area2: WarehouseArea = {
+  dimension: "overworld",
+  corner1: { x: 20, y: 0, z: 0 },
+  corner2: { x: 30, y: 10, z: 10 },
+};
 
 test("WarehouseService: 创建/重载/重名拒绝", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
@@ -3160,7 +3239,11 @@ test("WarehouseService: 区域重叠拒绝", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
   const r1 = svc.createWarehouse("仓A", "p1", area1);
   assert.equal(r1.ok, true);
-  const overlap: WarehouseArea = { dimension: "overworld", corner1: { x: 5, y: 0, z: 5 }, corner2: { x: 15, y: 10, z: 15 } };
+  const overlap: WarehouseArea = {
+    dimension: "overworld",
+    corner1: { x: 5, y: 0, z: 5 },
+    corner2: { x: 15, y: 10, z: 15 },
+  };
   const r2 = svc.createWarehouse("仓B", "p1", overlap);
   assert.equal(r2.ok, false);
   assert.match((r2 as { error: string }).error, /重叠/);
@@ -3172,7 +3255,13 @@ test("WarehouseService: 删除/重命名/成员管理", () => {
   const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
   const r = svc.createWarehouse("主仓库", "p1", area1);
   assert.equal(r.ok, true);
-  const wh = (r as { warehouse: NonNullable<ReturnType<WarehouseService["createWarehouse"]> extends { ok: true; warehouse: infer W } ? W : never> }).warehouse;
+  const wh = (
+    r as {
+      warehouse: NonNullable<
+        ReturnType<WarehouseService["createWarehouse"]> extends { ok: true; warehouse: infer W } ? W : never
+      >;
+    }
+  ).warehouse;
   svc.rename(wh, "新名字");
   assert.equal(wh.displayName, "新名字");
   const dup = svc.rename(wh, "主仓库"); // 重名 → 报错（rename 内部先用临时？这里直接校验自身之外的列表）
@@ -3199,6 +3288,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/services/WarehouseService.ts`:
+
 ```ts
 // ─── 仓库服务：CRUD/成员/设置（经 store 持久化） ──────────
 import type { Warehouse, WarehouseArea, WarehouseSettings, MemberRole } from "../model/Warehouse";
@@ -3352,6 +3442,7 @@ git commit -m "item-route: scripts/core/services 仓库服务（CRUD/重名/区�
 ### Task 22: scripts/core/services/RouteService.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/services/RouteService.ts`
 - Test: `mcaddon/item-route/tests/services.test.ts`（追加）
 
@@ -3438,6 +3529,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/services/RouteService.ts`:
+
 ```ts
 // ─── 路由服务：全局开关/单仓速度/容器开关 ─────────────────
 import type { Scheduler } from "../scheduling/Scheduler";
@@ -3480,6 +3572,7 @@ git commit -m "item-route: scripts/core/services 路由服务（全局开关/速
 ### Task 23: scripts/core/services/OrganizeService.ts
 
 **Files:**
+
 - Create: `mcaddon/item-route/scripts/core/services/OrganizeService.ts`
 - Test: `mcaddon/item-route/tests/services.test.ts`（追加）
 
@@ -3505,7 +3598,10 @@ test("OrganizeService: organize 合并后索引更新", () => {
   multi.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
   index.onContainerAdded(misc);
   index.onContainerAdded(multi);
-  const containers = new Map([[misc.id, misc], [multi.id, multi]]);
+  const containers = new Map([
+    [misc.id, misc],
+    [multi.id, multi],
+  ]);
   const warehouse = {
     id: "w1",
     displayName: "w",
@@ -3533,6 +3629,7 @@ Expected: FAIL。
 - [ ] **Step 3: 最小实现**
 
 `scripts/core/services/OrganizeService.ts`:
+
 ```ts
 // ─── 整理服务：分析/执行/索引联动 ─────────────────────────
 import type { Organizer } from "../organizing/Organizer";
@@ -3585,11 +3682,13 @@ git commit -m "item-route: scripts/core/services 整理服务（分析/应用/�
 ### Task 24: 集成测试——内存装配完整路由闭环
 
 **Files:**
+
 - Test: `mcaddon/item-route/tests/integration.test.ts`
 
 - [ ] **Step 1: 写失败测试（此时核心模块均已就绪，测试应先通过；若失败说明集成断点）**
 
 `tests/integration.test.ts`:
+
 ```ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -3668,7 +3767,11 @@ test("集成: 单物优先路由 + 事件 + 索引更新", () => {
   const input = add(new InMemoryContainer("in", "input", 3));
   input.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
   add(new InMemoryContainer("s1", "single", 3));
-  add(new InMemoryContainer("s1").constructor === undefined ? new InMemoryContainer("s1", "single", 3) : new InMemoryContainer("s1", "single", 3));
+  add(
+    new InMemoryContainer("s1").constructor === undefined
+      ? new InMemoryContainer("s1", "single", 3)
+      : new InMemoryContainer("s1", "single", 3)
+  );
   // 上面一行是误导性代码——实际只需注册单物容器：
   const single = new InMemoryContainer("single1", "single", 3);
   single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
@@ -3736,11 +3839,13 @@ test("集成: 成员权限贯穿", () => {
 ```
 
 注意集成测试第一例中的冗余行（`add(new InMemoryContainer("s1", "single", 3));` + 误导性三元）在执行前应清理为：
+
 ```ts
 const single = new InMemoryContainer("single1", "single", 3);
 single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
 add(single);
 ```
+
 即删除 `add(new InMemoryContainer("s1", "single", 3));` 与三元行。堆叠语义：single 槽 0 已有 5/64，转移 10 → 槽 0 变 15；`single.getItem(1)` 应为 undefined。修正断言：`assert.equal(single.getItem(0)?.amount, 15);`。
 
 - [ ] **Step 2: 运行测试**
@@ -3751,6 +3856,7 @@ Expected: PASS（若失败，按错误修正——集成断点通常在类型不
 - [ ] **Step 3: 修正集成测试中的冗余代码**
 
 将集成测试第一例替换为：
+
 ```ts
 test("集成: 单物优先路由 + 事件 + 索引更新", () => {
   const { app, warehouse, add } = makeWorld();
@@ -3788,6 +3894,7 @@ git commit -m "item-route: 集成测试——内存装配完整路由/整理/统
 ### Task 25: 全量验证与收尾
 
 **Files:**
+
 - Modify: `mcaddon/item-route/package.json`（如需补充 scripts）
 - Test: 全部 `tests/*.test.ts`
 
@@ -3816,6 +3923,7 @@ git commit -m "item-route: core 引擎完成（model/events/storage/routing/inde
 ```
 
 **验收标准（本计划完成 = 以下全部满足）：**
+
 1. `pnpm test:core` 全绿（11 个测试文件）
 2. `rg "@minecraft" scripts/core/` 零命中
 3. 不吞物不复制、单物优先、杂项兜底、事务回滚、索引惰性自愈、生命周期状态机均有测试锁定
@@ -3825,11 +3933,10 @@ git commit -m "item-route: core 引擎完成（model/events/storage/routing/inde
 ## 自审记录（writing-plans 要求）
 
 **1. Spec 覆盖：**
+
 - 设计 §3 概念模型 → Task 2-6 ✓；§4 路由 → Task 11-14 ✓；§4.1 Move/MoveJournal → Task 13 ✓；§5 索引 + 三层兜底 → Task 15 ✓（verifyCandidate 覆盖代理信号后的惰性校验与单物绑定修复）；§6 调度 → Task 16-17 ✓（含删除清理/全局开关/速度 clamp/位置轮询由 mc 层驱动 tick）；§7 统计 → Task 18 ✓（三级预警 + 冷却 + 失效刷新）；§8 存储接口 → Task 9-10 ✓（DP 分片实现留待 mc 计划）；§9 事件 → Task 7-8 ✓；§11 服务 → Task 20-23 ✓；§13 测试清单 11 项 → 全部有对应 test 文件 ✓；集成闭环 → Task 24 ✓
 - **缺口记录**：① 索引批量落盘（脏标记）属持久化策略，由 mc 层 IndexStore 实现 + 本计划 Task 15 的 serialize/restore 支持，落盘时机逻辑放 mc 计划；② 空箱重绑触发链（代理信号 → onContainerChanged）由 mc 计划 McEventBridge 实现，core 已具备 onContainerChanged/verifyCandidate 能力；③ Scheduler.tick 调用 StatsService.tick（预警冷却递减）——mc 计划装配时接线。
 
 **2. 占位符扫描：** 无 TBD/TODO 占位；Task 21 测试类型推导的说明以编译通过为准；Task 24 中两处冗余代码已在 Step 3 显式修正。
 
 **3. 类型一致性：** CandidateContainer/RouteContext/IndexLookupResult 在 Task 11 定义、Task 12/14 消费 ✓；transfer/MoveJournal 签名 Task 13 定义、Task 14/19/23 消费 ✓；ItemIndex 的 lookup/verifyCandidate/onItemMoved 与 Router 的 IndexGateway 结构类型匹配 ✓；StatsService 的 WarningLevel 与 DomainEvents 一致 ✓；Storage 快照结构与 ItemIndex.serialize 输出兼容 ✓。
-
-

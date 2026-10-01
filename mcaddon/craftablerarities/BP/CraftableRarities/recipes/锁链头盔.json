@@ -4,13 +4,8 @@
     "description": {
       "identifier": "craftablerarities/chainmail_helmet"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "A A"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "A A"],
     "key": {
       "A": {
         "item": "chain"

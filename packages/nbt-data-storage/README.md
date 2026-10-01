@@ -77,33 +77,34 @@ const stats = region.stats();
 
 ### `ItemStorage`
 
-| 成员                                      | 说明                                                      |
-| ----------------------------------------- | --------------------------------------------------------- |
-| `register({ dimension, anchor, baseY? })` | 注册/获取一个存储区域（幂等；同区块 → 共享）              |
+| 成员                                                 | 说明                                                                                                                           |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `register({ dimension, anchor, baseY? })`            | 注册/获取一个存储区域（幂等；同区块 → 共享）                                                                                   |
 | `registerTest({ ... , slotPerBarrel?, maxLevels? })` | ⚠️ 仅测试/演示：额外接受每桶可用格数 1..27、层数 1..64（解码恒按 27 格/桶，ID 不漂移；同区块布局参数不一致抛错拒绝，请换锚点） |
-| `listRegions()`                           | 本模组上下文已注册的区域列表                              |
-| `getRegion(regionId)`                     | 按区域 ID 取/采纳区域（跨模组凭据取物）                   |
-| `queryWorld()`                            | 只读世界上的**全部**区域统计（无需本上下文注册）          |
-| `totalStats()`                            | 全库汇总 `{ regionCount, totalCapacity, totalUsed }`      |
-| `read(ref)` / `take(ref)`                 | 凭 `{ regionId, slotId }` 只读取物 / 取走（O(1)，跨模组可用） |
-| `events`                                  | 存储事件总线（stored / taken / removed，可订阅）          |
+| `listRegions()`                                      | 本模组上下文已注册的区域列表                                                                                                   |
+| `getRegion(regionId)`                                | 按区域 ID 取/采纳区域（跨模组凭据取物）                                                                                        |
+| `queryWorld()`                                       | 只读世界上的**全部**区域统计（无需本上下文注册）                                                                               |
+| `totalStats()`                                       | 全库汇总 `{ regionCount, totalCapacity, totalUsed }`                                                                           |
+| `read(ref)` / `take(ref)`                            | 凭 `{ regionId, slotId }` 只读取物 / 取走（O(1)，跨模组可用）                                                                  |
+| `events`                                             | 存储事件总线（stored / taken / removed，可订阅）                                                                               |
+
 ### `StoredRegion`
 
-| 成员                                       | 说明                                                   |
-| ------------------------------------------ | ------------------------------------------------------ |
-| `put(item)`                                | 存入物品 → `{ regionId, slotId } \| null`（O(1) 分配） |
-| `read(slotId)`                             | 只读取物（O(1)，不回收槽位、不影响存储阵列）           |
-| `readBatch(slotIds)`                       | 批量只读（同桶一次容器读取，输出与输入顺序对齐）       |
-| `take(slotId)`                             | 取走（读出 + 清空）                                    |
-| `remove(slotId)`                           | 清空                                                   |
-| `write(slotId, item)`                      | 指定槽覆写（read 的写对；旧物读出返回调用方处置；空槽也允许，实时数据保存用） |
-| `probe(slotId)`                            | 槽位只读状态探测（occupied/empty/damaged/unknown）     |
-| `listOccupied()`                           | 枚举区域内全部已占用槽（巡检/迁移/调试）               |
+| 成员                                       | 说明                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------- |
+| `put(item)`                                | 存入物品 → `{ regionId, slotId } \| null`（O(1) 分配）                          |
+| `read(slotId)`                             | 只读取物（O(1)，不回收槽位、不影响存储阵列）                                    |
+| `readBatch(slotIds)`                       | 批量只读（同桶一次容器读取，输出与输入顺序对齐）                                |
+| `take(slotId)`                             | 取走（读出 + 清空）                                                             |
+| `remove(slotId)`                           | 清空                                                                            |
+| `write(slotId, item)`                      | 指定槽覆写（read 的写对；旧物读出返回调用方处置；空槽也允许，实时数据保存用）   |
+| `probe(slotId)`                            | 槽位只读状态探测（occupied/empty/damaged/unknown）                              |
+| `listOccupied()`                           | 枚举区域内全部已占用槽（巡检/迁移/调试）                                        |
 | `swap(slotId, container, destSlot)`        | 安全交换（区域格 ↔ 外部容器格，引擎级原子，双方都保留；触发 taken+stored 事件） |
-| `transferIn(container, sourceSlot)`        | 原子存入（源容器格 → 区域，防丢物：失败回滚/重存/dropped 兜底） |
-| `transferOut(slotId, container, destSlot)` | 原子取出（区域格 → 目标格，防丢物：失败重存/dropped 兜底） |
-| `stats()`                                  | 区域统计快照（barrels 为真值：各层账本长度之和）       |
-| `checkAndRepair(onDone?)`                  | 盘点 + 修复（**分批**：每 tick 盘一层，完成回调报告；进行中返回 false） |
+| `transferIn(container, sourceSlot)`        | 原子存入（源容器格 → 区域，防丢物：失败回滚/重存/dropped 兜底）                 |
+| `transferOut(slotId, container, destSlot)` | 原子取出（区域格 → 目标格，防丢物：失败重存/dropped 兜底）                      |
+| `stats()`                                  | 区域统计快照（barrels 为真值：各层账本长度之和）                                |
+| `checkAndRepair(onDone?)`                  | 盘点 + 修复（**分批**：每 tick 盘一层，完成回调报告；进行中返回 false）         |
 
 ## 存储设计（用"仓库"来理解）
 
@@ -176,11 +177,11 @@ y = baseY + 层号
 
 **只有主世界能到 320**——各维度 y 轴合法范围不同（`worldHeightRangeOf`，注册与调整布局时按维度校验）：
 
-| 维度 | 最低 Y | 最高 Y |
-| ---- | ------ | ------ |
-| 主世界 `minecraft:overworld` | -64 | 320 |
-| 下界 `minecraft:nether` | 0 | 128 |
-| 末地 `minecraft:the_end` | 0 | 256 |
+| 维度                         | 最低 Y | 最高 Y |
+| ---------------------------- | ------ | ------ |
+| 主世界 `minecraft:overworld` | -64    | 320    |
+| 下界 `minecraft:nether`      | 0      | 128    |
+| 末地 `minecraft:the_end`     | 0      | 256    |
 
 `baseY + 层数 - 1` 不得超过所选维度的最高 Y（如末地 64 层阵列的 baseY 最高 193）；未知维度（自定义）不做高度限制。
 
@@ -195,11 +196,11 @@ y = baseY + 层号
 
 ## 持久化键约定（DynamicProperty）
 
-| 键                              | 内容                                                                                 |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| `nds:regions`                   | 全局区域索引（`string[]`，供其他模组只读盘点）                                       |
-| `nds:item:{区域ID}`             | 区域主记录：`{ v:2, dimensionId, layout, meta }`（meta v3 = 仅"已建桶数"，很小）     |
-| `nds:item:{区域ID}:usage:{层}`  | 该层"每桶已用格数"账本（JSON 数字数组，每桶 0..27；满层 ≈ 640B）                     |
+| 键                             | 内容                                                                             |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| `nds:regions`                  | 全局区域索引（`string[]`，供其他模组只读盘点）                                   |
+| `nds:item:{区域ID}`            | 区域主记录：`{ v:2, dimensionId, layout, meta }`（meta v3 = 仅"已建桶数"，很小） |
+| `nds:item:{区域ID}:usage:{层}` | 该层"每桶已用格数"账本（JSON 数字数组，每桶 0..27；满层 ≈ 640B）                 |
 
 旧版 v2 的 `...:pool:{层}`（空格子编号表）键残留无害（软状态，不再读写）；v2 主记录兼容读取（自动迁移）。
 

@@ -93,7 +93,10 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
     // 容器**最多显示 1 个**，多余的略写（"+N"）；容器 id 用于粒子标记仍取全部
     const shown = line.containerIds.slice(0, 1);
     const extra = line.containerIds.length - 1;
-    const containerText = extra > 0 ? `${shown.map(shortId).join(", ")} ${uiColor.chat.muted}+${extra} 容器` : shown.map(shortId).join(", ");
+    const containerText =
+      extra > 0
+        ? `${shown.map(shortId).join(", ")} ${uiColor.chat.muted}+${extra} 容器`
+        : shown.map(shortId).join(", ");
     player.sendMessage(`${uiColor.chat.info}${line.name}${uiColor.chat.muted} ×${line.count} [${containerText}]`);
     for (const id of line.containerIds) {
       const c = warehouse.containers.get(id);

@@ -53,8 +53,7 @@ test("regionStats：统计快照计算正确（used 来自桶水位遍历）", (
   const rec = createRegionRecord("minecraft:the_end", { chunkX: 0, chunkZ: -64, baseY: 120, maxLevels: 2 });
   rec.meta.barrelCount = 3; // 已物化 3 桶
   // 层 0：桶 0 占 5、桶 1 占 2；层 1：桶 0 占 0（空桶）
-  const usageOf = (level: number) =>
-    level === 0 ? [5, 2] : level === 1 ? [0] : [];
+  const usageOf = (level: number) => (level === 0 ? [5, 2] : level === 1 ? [0] : []);
   const stats = regionStats("2:0:-64", rec.dimensionId, rec.layout, rec.meta, usageOf);
   assert.equal(stats.capacity, 2 * 256 * 27);
   assert.equal(stats.totalBarrels, 2 * 256);

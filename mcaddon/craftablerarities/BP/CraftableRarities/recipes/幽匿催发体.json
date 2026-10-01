@@ -5,11 +5,7 @@
       "identifier": "craftablerarities/sculk_catalyst"
     },
     "tags": ["crafting_table"],
-    "pattern": [
-      "ABA",
-      "BCB",
-      "ABA"
-    ],
+    "pattern": ["ABA", "BCB", "ABA"],
     "key": {
       "A": {
         "item": "sculk"
