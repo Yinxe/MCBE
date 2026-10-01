@@ -19,6 +19,7 @@ just-scripts clean       # 清理
 配方文件位于 `BP/合成配方扩展&隐藏物品/recipes/`，每个配方一个 `.json` 文件。
 
 格式示例（format_version 1.12）：
+
 ```json
 {
   "format_version": "1.12",
@@ -50,7 +51,7 @@ node tools/sync-version.mjs
 
 ## 依赖
 
-| 包 | 版本 |
-|---|------|
-| @minecraft/core-build-tasks | 5.5.0 |
-| just-scripts | ^2.1.5 |
+| 包                          | 版本   |
+| --------------------------- | ------ |
+| @minecraft/core-build-tasks | 5.5.0  |
+| just-scripts                | ^2.1.5 |

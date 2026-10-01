@@ -9,11 +9,7 @@ function c(modId: string, priority: number, lastSeenTick: number): BusClaim {
 }
 
 test("pickWinner：优先级最高者胜", () => {
-  const winner = pickWinner(
-    [c("a", 10, 100), c("b", 200, 100), c("c", 50, 100)],
-    110,
-    EXPIRY
-  );
+  const winner = pickWinner([c("a", 10, 100), c("b", 200, 100), c("c", 50, 100)], 110, EXPIRY);
   assert.equal(winner?.modId, "b");
 });
 
@@ -23,11 +19,7 @@ test("pickWinner：同优先级取 modId 字典序小者（确定性决胜）", 
 });
 
 test("pickWinner：priority <= 0 视为放弃，不参与", () => {
-  const winner = pickWinner(
-    [c("a", 0, 100), c("b", 500, 100), c("c", 0, 100)],
-    110,
-    EXPIRY
-  );
+  const winner = pickWinner([c("a", 0, 100), c("b", 500, 100), c("c", 0, 100)], 110, EXPIRY);
   assert.equal(winner?.modId, "b");
 });
 
@@ -49,10 +41,6 @@ test("isStale：超时即过期、边界内不过期", () => {
 });
 
 test("pickWinner：把过期的高优先级声明排除（心跳机制）", () => {
-  const winner = pickWinner(
-    [c("dead", 999, 1), c("live", 50, 110), c("live2", 30, 110)],
-    110,
-    EXPIRY
-  );
+  const winner = pickWinner([c("dead", 999, 1), c("live", 50, 110), c("live2", 30, 110)], 110, EXPIRY);
   assert.equal(winner?.modId, "live");
 });

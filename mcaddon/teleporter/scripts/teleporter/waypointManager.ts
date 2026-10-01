@@ -1,12 +1,7 @@
 import { Player, Vector3 } from "@minecraft/server";
 import { loadPlayerData, savePlayerData, getAllPlayerIds } from "./persistence";
 import { loadConfig } from "./config";
-import {
-  WaypointRecord,
-  WaypointCategory,
-  WAYPOINT_CATEGORIES,
-  generateId,
-} from "./types";
+import { WaypointRecord, WaypointCategory, WAYPOINT_CATEGORIES, generateId } from "./types";
 
 // ─── CRUD ───────────────────────────────────────────────────────────
 

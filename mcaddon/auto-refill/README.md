@@ -20,16 +20,16 @@ Minecraft Bedrock「自动替换」Add-On，行为包（TypeScript + Script API�
 
 命令 `/ar:menu`（`CommandPermissionLevel.GameDirectors`，仅操作员）打开 **ModalForm**：每个开关一个 toggle（显示当前状态，**每个开关/滑条带 tooltip**，悬停感叹号显示说明），耐久保护阈值两个滑条（占比 / 绝对下限点数），提交时一次性应用并保存：
 
-| 项 | 控制 |
-|---|---|
-| 全局启用 | 总开关，关闭则所有功能不执行 |
-| 物品补充 | 消耗品补货（使用后主手 `undefined` / 副作用残留 → 换同类 + 堆叠回收） |
-| 武器替换 | 攻击实体时非武器主手换武器（附魔 1 级：亡灵亡灵杀手>锋利 / 其它锋利；工具 2 级：剑>斧>其它） |
-| 工具替换 | 挖掘工具核对换入 + 工具破碎换同类 |
-| 挖掘防误触 | 首次错误工具/空手挖方块不切换（防误拆）；2.5 秒内同信号二次才启用 |
-| 耐久保护 | 工具低耐久未碎也提前收起换同类（影响替代阈值） |
-| 保护阈值 | 剩余耐久占比低于该值即替换（滑条 1%~20%，默认 **5%**） |
-| 绝对下限 | 剩余耐久点数低于该值即替换（滑条 1~64，默认 16；与占比阈值取较大的生效） |
+| 项         | 控制                                                                                         |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| 全局启用   | 总开关，关闭则所有功能不执行                                                                 |
+| 物品补充   | 消耗品补货（使用后主手 `undefined` / 副作用残留 → 换同类 + 堆叠回收）                        |
+| 武器替换   | 攻击实体时非武器主手换武器（附魔 1 级：亡灵亡灵杀手>锋利 / 其它锋利；工具 2 级：剑>斧>其它） |
+| 工具替换   | 挖掘工具核对换入 + 工具破碎换同类                                                            |
+| 挖掘防误触 | 首次错误工具/空手挖方块不切换（防误拆）；2.5 秒内同信号二次才启用                            |
+| 耐久保护   | 工具低耐久未碎也提前收起换同类（影响替代阈值）                                               |
+| 保护阈值   | 剩余耐久占比低于该值即替换（滑条 1%~20%，默认 **5%**）                                       |
+| 绝对下限   | 剩余耐久点数低于该值即替换（滑条 1~64，默认 16；与占比阈值取较大的生效）                     |
 
 开关与两个阈值存世界动态属性（键 `autorefill:global/refill/weapon/tool/antiTouch/durability/durabilityThreshold/durabilityFloor`），重启世界保持。
 
@@ -38,6 +38,7 @@ Minecraft Bedrock「自动替换」Add-On，行为包（TypeScript + Script API�
 ## 架构
 
 按「**评分选择引擎（纯逻辑）+ 两个核心功能域 + 主手状态判定**」构建：
+
 - **工具/武器选择引擎**（`ToolScorer` + `MinePreference` + `WeaponPreference`）：把"这块/这刀用什么、或要不要换"建模为**候选特征向量 → 策略打分排序 → Keep/Swap 决策**。命名策略可注册，更可**按方块/实体种类绑定两级偏好（`PreferenceSpec`：附魔 1 级 + 工具 2 级，越靠前越优先）**，统一由 `preferenceScorer` 排序，带双层 fallback
 - **工具切换/耐久保护**（`ToolManager`）：`entityHitBlock` / `entityHitEntity` / `playerBreakBlock` 触发
 - **自动填充**（`RefillManager`）：使用/交互事件触发，按**使用后主手状态**决定是否补货
@@ -69,6 +70,7 @@ scripts/
 ```
 
 **冲突设计（按主手状态化解）**：早前版本存在冲突——工具切换（`entityHitBlock` / 武器 `entityHitEntity` / 耐久保护）把正确物品换上后，连带触发的"使用"事件又触发补货把旧物品换回。现在 `RefillManager` 不再按 typeId 拦，而是**检查使用后的主手**三段分派：
+
 1. 主手 `undefined` → 被完全消耗 → 安全补同类（仅消耗品域）
 2. 主手是**已枚举的副作用残留**（空瓶/空桶/碗，`SIDE_EFFECT_ITEMS`）→ 交换补同类 + 残留堆叠回收
 3. 主手是其他物品（工具/武器切换已换入的主手 / 主手仍同类仅数量减少）→ **与消耗无关，忽略**
@@ -96,21 +98,21 @@ scripts/
 
 - **方块偏好表**（`MinePreference.PREFERENCE_TABLE`，已是多行数据表）：
 
-| 规则 | 命中 | 两级偏好（附魔 1 级 → 工具 2 级） |
-|---|---|---|
-| `crop-fortune` | 小麦 / 胡萝卜 / 马铃薯 / 甜菜根 | 时运（锄>其它，**排除锹**；无时运 → 回落默认） |
-| `grass-silk` | 草方块 / 灰化土 / 菌丝 | 精准（锹>其它） |
-| `leaves-silk` | `*_leaves` 树叶 | 精准（锄>剪>任意精准工具，跨类别） |
-| `glass-silk` | 玻璃 / 冰 / 萤石 / 海晶灯 | 精准（镐>其它） |
-| *(注释示例)* `ore-quality` | `_ore` / 下界合金块 | 无附魔偏好；只收镐、同镐内品质优先 |
-| *(注释示例)* `durability-first` | 石头 / 深板岩 | 无附魔偏好；只收镐/锹、打平按耐久占比 |
+| 规则                            | 命中                            | 两级偏好（附魔 1 级 → 工具 2 级）              |
+| ------------------------------- | ------------------------------- | ---------------------------------------------- |
+| `crop-fortune`                  | 小麦 / 胡萝卜 / 马铃薯 / 甜菜根 | 时运（锄>其它，**排除锹**；无时运 → 回落默认） |
+| `grass-silk`                    | 草方块 / 灰化土 / 菌丝          | 精准（锹>其它）                                |
+| `leaves-silk`                   | `*_leaves` 树叶                 | 精准（锄>剪>任意精准工具，跨类别）             |
+| `glass-silk`                    | 玻璃 / 冰 / 萤石 / 海晶灯       | 精准（镐>其它）                                |
+| _(注释示例)_ `ore-quality`      | `_ore` / 下界合金块             | 无附魔偏好；只收镐、同镐内品质优先             |
+| _(注释示例)_ `durability-first` | 石头 / 深板岩                   | 无附魔偏好；只收镐/锹、打平按耐久占比          |
 
 - **实体种类偏好表**（`WeaponPreference.ENTITY_WEAPON_TABLE`）：
 
-| 规则 | 命中 | 两级偏好（附魔 1 级 → 工具 2 级） |
-|---|---|---|
-| `undead-smite` | 亡灵（僵尸/骷髅/凋零/幻翼/猪人变异者…） | 亡灵杀手>锋利；剑>斧>其它 |
-| `sharpness-general` | 其它所有实体 | 锋利；剑>斧>其它 |
+| 规则                | 命中                                    | 两级偏好（附魔 1 级 → 工具 2 级） |
+| ------------------- | --------------------------------------- | --------------------------------- |
+| `undead-smite`      | 亡灵（僵尸/骷髅/凋零/幻翼/猪人变异者…） | 亡灵杀手>锋利；剑>斧>其它         |
+| `sharpness-general` | 其它所有实体                            | 锋利；剑>斧>其它                  |
 
 ### 挖掘工具切换（`ToolManager.onPlayerHitBlock`）
 
@@ -146,12 +148,12 @@ scripts/
 
 ## 领域职责与事件路由
 
-| 事件 | 分派 | 所属领域 |
-|---|---|---|
-| `entityHitBlock` | `ToolManager.onPlayerHitBlock`（挖掘开始、破坏前核对换入；防误触：首次错工具命中不换） | tool |
-| `entityHitEntity` | `ToolManager.onAttackEntity`（攻击实体，按实体偏好换武器）＋ `checkDurability` | tool |
-| `playerBreakBlock` | 工具**破碎** → `onToolBroke` 换同类；**未碎** → `checkDurability` 低耐久提前收 | tool |
-| `itemCompleteUse` / `itemReleaseUse` / `itemUse` / `playerInteractWithBlock` | `RefillManager.onConsumed`（按使用后主手状态判断） | 消耗 / 工具切换由主手状态判别 |
+| 事件                                                                         | 分派                                                                                   | 所属领域                      |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------- |
+| `entityHitBlock`                                                             | `ToolManager.onPlayerHitBlock`（挖掘开始、破坏前核对换入；防误触：首次错工具命中不换） | tool                          |
+| `entityHitEntity`                                                            | `ToolManager.onAttackEntity`（攻击实体，按实体偏好换武器）＋ `checkDurability`         | tool                          |
+| `playerBreakBlock`                                                           | 工具**破碎** → `onToolBroke` 换同类；**未碎** → `checkDurability` 低耐久提前收         | tool                          |
+| `itemCompleteUse` / `itemReleaseUse` / `itemUse` / `playerInteractWithBlock` | `RefillManager.onConsumed`（按使用后主手状态判断）                                     | 消耗 / 工具切换由主手状态判别 |
 
 ### 守卫 `PlayerPolicy`（`scripts/PlayerPolicy.ts`）
 
@@ -199,13 +201,13 @@ pnpm run clean         # 清理构建产物
 
 ### 依赖版本
 
-| 包 | 版本 |
-|---|---|
-| `@minecraft/server` | 2.0.0 |
-| `@minecraft/server-ui` | 2.0.0 |
-| `@minecraft/core-build-tasks`（构建） | 5.5.0 |
-| `just-scripts`（构建） | ^2.6.2 |
-| `@yinxe/toolkit-build`（构建，workspace） | — |
+| 包                                        | 版本   |
+| ----------------------------------------- | ------ |
+| `@minecraft/server`                       | 2.0.0  |
+| `@minecraft/server-ui`                    | 2.0.0  |
+| `@minecraft/core-build-tasks`（构建）     | 5.5.0  |
+| `just-scripts`（构建）                    | ^2.6.2 |
+| `@yinxe/toolkit-build`（构建，workspace） | —      |
 
 ## 许可证
 

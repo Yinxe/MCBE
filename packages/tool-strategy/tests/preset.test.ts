@@ -8,7 +8,6 @@ import { swapSlot, tool } from "./helpers";
 import { registerStrategy, STRATEGY_PRESETS } from "../src/index";
 import type { ToolCandidate, ToolSelectorConfig, ToolStrategy, ToolTree } from "../src/index";
 
-
 /** 单策略树（引用预定义名） */
 function cfgOf(presetName: string, reselectIfCurrent = false): ToolSelectorConfig {
   return {
@@ -16,7 +15,6 @@ function cfgOf(presetName: string, reselectIfCurrent = false): ToolSelectorConfi
     reselectIfCurrent,
   };
 }
-
 
 test("注册表：内置预定义齐全（tier/durability/efficiency/silk/fortune/axe/pickaxe/hoe/shears）", () => {
   for (const name of ["tier", "durability", "efficiency", "silk", "fortune", "axe", "pickaxe", "hoe", "shears"]) {

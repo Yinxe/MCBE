@@ -4,13 +4,8 @@
     "description": {
       "identifier": "craftablerarities/cobbled_deepslate_1"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AA",
-      "AA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AA", "AA"],
     "key": {
       "A": {
         "item": "cobblestone"

@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/wither_spawn_egg"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "BBB",
-      " B "
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "BBB", " B "],
     "key": {
       "A": {
         "item": "skull",

@@ -30,16 +30,18 @@ task("clean", () => {
   }
 });
 
-task("mcaddon", series("clean", "build", () => {
-  const outDir = path.resolve(__dirname, "dist/packages");
-  mkdirSync(outDir, { recursive: true });
+task(
+  "mcaddon",
+  series("clean", "build", () => {
+    const outDir = path.resolve(__dirname, "dist/packages");
+    mkdirSync(outDir, { recursive: true });
 
-  const outFile = `${PACKAGE_NAME}-v${pkgVersion}.mcpack`;
-  const bpDir = path.resolve(__dirname, `BP/${PROJECT_NAME}`);
-  // 参数数组 + cwd 不经 shell 解析（无命令注入面；路径含特殊字符也安全）
-  execFileSync("zip", ["-X", "-r", path.resolve(outDir, outFile), "."], { cwd: bpDir, stdio: "inherit" });
+    const outFile = `${PACKAGE_NAME}-v${pkgVersion}.mcpack`;
+    const bpDir = path.resolve(__dirname, `BP/${PROJECT_NAME}`);
+    // 参数数组 + cwd 不经 shell 解析（无命令注入面；路径含特殊字符也安全）
+    execFileSync("zip", ["-X", "-r", path.resolve(outDir, outFile), "."], { cwd: bpDir, stdio: "inherit" });
 
-  const size = existsSync(path.resolve(outDir, outFile))
-    ? readFileSync(path.resolve(outDir, outFile)).length : 0;
-  console.log(`\n  ✓ ${outFile} 创建成功 (${(size / 1024).toFixed(1)} KB)`);
-}));
+    const size = existsSync(path.resolve(outDir, outFile)) ? readFileSync(path.resolve(outDir, outFile)).length : 0;
+    console.log(`\n  ✓ ${outFile} 创建成功 (${(size / 1024).toFixed(1)} KB)`);
+  })
+);

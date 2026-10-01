@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/structure_void"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "ACA",
-      "CBC",
-      "ACA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["ACA", "CBC", "ACA"],
     "key": {
       "A": {
         "item": "redstone"

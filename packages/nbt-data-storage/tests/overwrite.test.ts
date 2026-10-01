@@ -13,7 +13,11 @@ import { createRegionRecord, type PersistedRegion } from "../src/core/record";
 const LAYOUT = { chunkX: 0, chunkZ: 0, baseY: 120, maxLevels: 4 };
 
 /** 内存覆写世界：slotId → 状态 + 物品 + 按层桶水位 */
-function makeOverwriteWorld(slots: Map<number, SlotStatus>, items: Map<number, string>, usageOf: (level: number) => number[]) {
+function makeOverwriteWorld(
+  slots: Map<number, SlotStatus>,
+  items: Map<number, string>,
+  usageOf: (level: number) => number[]
+) {
   const record = createRegionRecord("minecraft:the_end", LAYOUT);
   const usage = new Map<number, number[]>();
   usage.set(0, usageOf(0));

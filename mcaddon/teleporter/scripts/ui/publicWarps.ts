@@ -1,9 +1,6 @@
 import { Player } from "@minecraft/server";
 import { ActionFormBuilder, notifySuccess, notifyError } from "@yinxe/toolkit";
-import {
-  getPublicWaypoints,
-  incrementTeleportCount,
-} from "../teleporter/waypointManager";
+import { getPublicWaypoints, incrementTeleportCount } from "../teleporter/waypointManager";
 import { teleportPlayerTo, formatLocation } from "../teleporter/teleportManager";
 import { showMainMenu } from "./menu";
 
@@ -12,20 +9,13 @@ const PAGE_SIZE = 8;
 /**
  * 公共传送点列表。
  */
-export function showPublicWarpsList(
-  player: Player,
-  page: number = 0,
-): void {
+export function showPublicWarpsList(player: Player, page: number = 0): void {
   const waypoints = getPublicWaypoints();
   const totalPages = Math.max(1, Math.ceil(waypoints.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
-  const pageWaypoints = waypoints.slice(
-    currentPage * PAGE_SIZE,
-    (currentPage + 1) * PAGE_SIZE,
-  );
+  const pageWaypoints = waypoints.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
-  const form = new ActionFormBuilder()
-    .title(`§l公共传送点 (${waypoints.length})`);
+  const form = new ActionFormBuilder().title(`§l公共传送点 (${waypoints.length})`);
 
   if (waypoints.length === 0) {
     form.body("§6暂无公共传送点");
@@ -37,8 +27,7 @@ export function showPublicWarpsList(
     const dim = shortDimension(wp.dimensionId);
     const loc = `${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}`;
     const biome = wp.biomeInfo ? ` ${wp.biomeInfo}` : "";
-    const label =
-      `§e${wp.name}§r${biome}\n§f${dim} ${loc} §6${wp.teleportCount}次 §e@${wp.ownerName}`;
+    const label = `§e${wp.name}§r${biome}\n§f${dim} ${loc} §6${wp.teleportCount}次 §e@${wp.ownerName}`;
 
     form.button(label, () => {
       incrementTeleportCount(player.id, wp.id);
@@ -68,9 +57,13 @@ export function showPublicWarpsList(
 
 function shortDimension(dimId: string): string {
   switch (dimId) {
-    case "minecraft:overworld": return "主世界";
-    case "minecraft:nether": return "下界";
-    case "minecraft:the_end": return "末地";
-    default: return dimId.split(":")[1] || dimId;
+    case "minecraft:overworld":
+      return "主世界";
+    case "minecraft:nether":
+      return "下界";
+    case "minecraft:the_end":
+      return "末地";
+    default:
+      return dimId.split(":")[1] || dimId;
   }
 }

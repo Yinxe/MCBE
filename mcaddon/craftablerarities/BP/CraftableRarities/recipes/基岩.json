@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/bedrock"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "ABA",
-      "AAA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "ABA", "AAA"],
     "key": {
       "A": {
         "item": "obsidian"

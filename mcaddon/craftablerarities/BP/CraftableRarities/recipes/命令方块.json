@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/command_block"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "ABA",
-      "BCB",
-      "ABA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["ABA", "BCB", "ABA"],
     "key": {
       "A": {
         "item": "stained_hardened_clay",

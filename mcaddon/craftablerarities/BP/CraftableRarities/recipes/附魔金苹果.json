@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/enchanted_golden_Apple"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "ABA",
-      "AAA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "ABA", "AAA"],
     "key": {
       "A": {
         "item": "gold_block"

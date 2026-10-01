@@ -4,11 +4,11 @@
 
 ## 基本信息
 
-| 项 | 值 |
-|----|----|
-| 版本 | 0.1.0（`private: true`，不发布到 npm） |
-| main / types | `src/index.ts` |
-| dependencies | `@types/node`（`*`） |
+| 项           | 值                                     |
+| ------------ | -------------------------------------- |
+| 版本         | 0.1.0（`private: true`，不发布到 npm） |
+| main / types | `src/index.ts`                         |
+| dependencies | `@types/node`（`*`）                   |
 
 ## 公共 API
 

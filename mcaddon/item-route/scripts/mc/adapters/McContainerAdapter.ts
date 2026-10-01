@@ -18,11 +18,7 @@
 // 失联容器（活塞移动/摧毁）：**不主动探测**（不给每候选每路由加位置读取）——读取全 try-catch，
 // 失效即标记 `lost` 并返回空/undefined → 路由层统一失联门(gateLost)跳过；恢复由 `isLost()` 复查同位置
 // （受支持容器 → 清 lost 重新可选）；持续丢失由仓库卸载→重载补注册机制清扫。
-import {
-  world,
-  ItemStack as McItemStack,
-  type Container as McContainer,
-} from "@minecraft/server";
+import { world, ItemStack as McItemStack, type Container as McContainer } from "@minecraft/server";
 import type { Container, ContainerRole } from "../../core/model/Container";
 import type { ItemStack } from "../../core/model/ItemStack";
 import type { ContainerId, Location, WarehouseId } from "../../core/model/types";
@@ -139,9 +135,7 @@ export class McContainerAdapter implements Container {
     try {
       const loc = this.occupiedLocations[0];
       const block: import("@minecraft/server").Block | undefined =
-        this.dimension === "" || loc === undefined
-          ? undefined
-          : world.getDimension(this.dimension).getBlock(loc);
+        this.dimension === "" || loc === undefined ? undefined : world.getDimension(this.dimension).getBlock(loc);
       if (block !== undefined && !block.isAir && isSupportedContainerType(block.typeId)) {
         this.lost = false; // 已恢复（新容器回到原位）→ 重新可选
         return false;

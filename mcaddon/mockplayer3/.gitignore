@@ -1,0 +1,7 @@
+node_modules/
+dist/
+lib/
+.test-build/
+.env
+*.log
+*.js.map

@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/heart_of_the_sea"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "ABA",
-      "BCB",
-      "ABA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["ABA", "BCB", "ABA"],
     "key": {
       "A": {
         "item": "prismarine_shard"

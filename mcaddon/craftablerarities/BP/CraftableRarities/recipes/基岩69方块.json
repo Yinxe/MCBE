@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/client_request_placeholder_block"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "ABB",
-      "ACB",
-      "AAB"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["ABB", "ACB", "AAB"],
     "key": {
       "A": {
         "item": "bedrock"

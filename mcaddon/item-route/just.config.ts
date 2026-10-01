@@ -22,9 +22,7 @@ const PROJECT_NAME = path.basename(pkg.mcbe.bp);
 const pkgVersion = pkg.version;
 
 // ── Bundle ──────────────────────────────────────────────────────
-const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
-  "@minecraft/server", "@minecraft/server-ui",
-]);
+const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", ["@minecraft/server", "@minecraft/server-ui"]);
 const copyTaskOptions = copyOptions(__dirname, PROJECT_NAME);
 const mcaddonTaskOptions = {
   ...copyTaskOptions,

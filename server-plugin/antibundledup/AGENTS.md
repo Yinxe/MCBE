@@ -95,17 +95,17 @@ git push origin antibundledup@<version>
 "minecraft:use_animation": "eat"
 ```
 
-| 组件 | 作用 |
-|------|------|
-| `minecraft:food` | 使物品可食用，禁止容器行为 |
-| `minecraft:use_animation: "eat"` | 吃动画，视觉反馈 |
-| `can_always_eat: true` | 饱腹也可吃，保持手感 |
+| 组件                             | 作用                       |
+| -------------------------------- | -------------------------- |
+| `minecraft:food`                 | 使物品可食用，禁止容器行为 |
+| `minecraft:use_animation: "eat"` | 吃动画，视觉反馈           |
+| `can_always_eat: true`           | 饱腹也可吃，保持手感       |
 
 ---
 
 ## 依赖
 
-| 包 | 版本 |
-|---|------|
+| 包             | 版本      |
+| -------------- | --------- |
 | @yinxe/toolkit | workspace |
-| pnpm | 11.1.3 |
+| pnpm           | 11.1.3    |

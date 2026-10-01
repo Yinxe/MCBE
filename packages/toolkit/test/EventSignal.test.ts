@@ -51,14 +51,17 @@ test("订阅后 trigger 收到事件", () => {
 
 test("无订阅者时 trigger 安全空操作", () => {
   const signal = new EventSignal<PlayerJoinEvent>();
-  assert((() => {
-    try {
-      signal.trigger({ playerId: "x", playerName: "A" });
-      return true;
-    } catch {
-      return false;
-    }
-  })(), "无订阅者 trigger 不应抛错");
+  assert(
+    (() => {
+      try {
+        signal.trigger({ playerId: "x", playerName: "A" });
+        return true;
+      } catch {
+        return false;
+      }
+    })(),
+    "无订阅者 trigger 不应抛错"
+  );
 });
 
 test("unsubscribe 后不再收到", () => {

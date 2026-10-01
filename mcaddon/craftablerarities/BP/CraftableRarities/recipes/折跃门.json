@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/end_gateway"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      " A ",
-      "ABA",
-      " A "
-    ],
+    "tags": ["crafting_table"],
+    "pattern": [" A ", "ABA", " A "],
     "key": {
       "A": {
         "item": "bedrock"

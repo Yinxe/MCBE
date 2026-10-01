@@ -28,13 +28,13 @@ mc/
 
 ## 包含的模组
 
-| 模组 | 目录 | 最新 tag |
-|------|------|---------|
-| MockPlayer | `mcaddon/mock-player/` | `mock-player@1.0.9` |
-| CraftableRarities | `mcaddon/craftablerarities/` | `craftablerarities@1.0.1` |
-| KeepINventory | `mcaddon/keepinventory/` | `keepinventory@2.0.0` |
-| SmartWarehouse | `mcaddon/smartwarehouse/` | `smartwarehouse@0.0.59` |
-| 反收纳袋刷物 | `server-plugin/antibundledup/` | `antibundledup@1.0.0` |
+| 模组                                   | 目录                           | 最新 tag                  |
+| -------------------------------------- | ------------------------------ | ------------------------- |
+| CraftableRarities                      | `mcaddon/craftablerarities/`   | `craftablerarities@1.0.1` |
+| KeepINventory                          | `mcaddon/keepinventory/`       | `keepinventory@2.0.0`     |
+| 反收纳袋刷物                           | `server-plugin/antibundledup/` | `antibundledup@1.0.0`     |
+| ~~MockPlayer~~（已归档，不再维护）     | `archive/mock-player/`         | `mock-player@1.0.9`       |
+| ~~SmartWarehouse~~（已归档，不再维护） | `archive/smartwarehouse/`      | `smartwarehouse@0.0.59`   |
 
 ## 要求
 
@@ -49,16 +49,12 @@ pnpm install
 
 # 构建（TypeScript 编译 + esbuild 打包，仅 mcaddon 项目需要）
 pnpm run build                   # 全部
-pnpm run build:mock-player
 pnpm run build:keepinventory
-pnpm run build:smartwarehouse
 
 # 同步版本并打包
 pnpm run pack                    # 全部打包
-pnpm run pack:mock-player
 pnpm run pack:keepinventory
 pnpm run pack:craftablerarities
-pnpm run pack:smartwarehouse
 pnpm run pack:antibundledup      # server-plugin 打包（无需 build 阶段）
 
 # 清理

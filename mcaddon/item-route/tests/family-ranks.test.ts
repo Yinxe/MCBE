@@ -69,9 +69,18 @@ test("containerFamilyRanks: 无族物品（合成物）不参与排行", () => {
 });
 
 test("familyRank 格式: → 分隔类型|数量（避免竖线误读为 1）", () => {
-  assert.equal(formatFamilyRankBody({ familyId: "wool", displayName: "羊毛", typeCount: 5, totalCount: 1430 }), "羊毛(5→1.43k)");
-  assert.equal(formatFamilyRankBody({ familyId: "plants", displayName: "植物", typeCount: 3, totalCount: 22 }), "植物(3→22)");
-  assert.equal(formatFamilyRankLine({ familyId: "wool", displayName: "羊毛", typeCount: 5, totalCount: 1430 }, 1), "#1. 羊毛(5→1.43k)");
+  assert.equal(
+    formatFamilyRankBody({ familyId: "wool", displayName: "羊毛", typeCount: 5, totalCount: 1430 }),
+    "羊毛(5→1.43k)"
+  );
+  assert.equal(
+    formatFamilyRankBody({ familyId: "plants", displayName: "植物", typeCount: 3, totalCount: 22 }),
+    "植物(3→22)"
+  );
+  assert.equal(
+    formatFamilyRankLine({ familyId: "wool", displayName: "羊毛", typeCount: 5, totalCount: 1430 }, 1),
+    "#1. 羊毛(5→1.43k)"
+  );
 });
 
 test("containerFamilyRanks: 空容器 → 空榜", () => {

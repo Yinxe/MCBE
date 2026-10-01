@@ -1,11 +1,5 @@
-import {
-  Player,
-} from "@minecraft/server";
-import {
-  ActionFormBuilder,
-  ModalFormBuilder,
-  notifySuccess,
-} from "@yinxe/toolkit";
+import { Player } from "@minecraft/server";
+import { ActionFormBuilder, ModalFormBuilder, notifySuccess } from "@yinxe/toolkit";
 import {
   getSortedWaypoints,
   createWaypoint,
@@ -78,8 +72,7 @@ export function showWarpManagement(player: Player): void {
     return;
   }
 
-  const form = new ActionFormBuilder()
-    .title(`§l传送点管理 (${waypoints.length})`);
+  const form = new ActionFormBuilder().title(`§l传送点管理 (${waypoints.length})`);
 
   for (const wp of waypoints) {
     const pinIcon = wp.isPinned ? "★ " : "";
@@ -87,8 +80,7 @@ export function showWarpManagement(player: Player): void {
     const dim = shortDimension(wp.dimensionId);
     const loc = `${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}`;
     const biome = wp.biomeInfo ? ` ${wp.biomeInfo}` : "";
-    const label =
-      `${pinIcon}§e${wp.name}§r${biome}${pubIcon}\n§f${dim} ${loc} §6${wp.teleportCount}次`;
+    const label = `${pinIcon}§e${wp.name}§r${biome}${pubIcon}\n§f${dim} ${loc} §6${wp.teleportCount}次`;
 
     form.button(label, () => showWaypointActions(player, wp));
   }
@@ -101,19 +93,17 @@ export function showWarpManagement(player: Player): void {
 
 // ─── 单个传送点的管理表单（ModalForm） ──────────────────────────────
 
-function showWaypointActions(
-  player: Player,
-  wp: WaypointRecord,
-): void {
+function showWaypointActions(player: Player, wp: WaypointRecord): void {
   const catIndex = WAYPOINT_CATEGORIES.indexOf(wp.category as WaypointCategory);
 
   new ModalFormBuilder()
     .title(`§l${wp.isPinned ? "★ " : ""}${wp.name}`)
-    .label("info",
+    .label(
+      "info",
       `§7${wp.category}   §7${wp.biomeInfo || "未知"}\n` +
-      `§b坐标 §f${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}\n` +
-      `§b维度 §f${fullDimension(wp.dimensionId)}\n` +
-      `§b传送 §f${wp.teleportCount}次   §b公共 ${wp.isPublic ? "§a是" : "§c否"}`,
+        `§b坐标 §f${Math.floor(wp.location.x)} ${Math.floor(wp.location.y)} ${Math.floor(wp.location.z)}\n` +
+        `§b维度 §f${fullDimension(wp.dimensionId)}\n` +
+        `§b传送 §f${wp.teleportCount}次   §b公共 ${wp.isPublic ? "§a是" : "§c否"}`,
     )
     .divider()
     .textField("name", "名称", { defaultValue: wp.name })
@@ -123,12 +113,12 @@ function showWaypointActions(
     .textField("note", "备注", { defaultValue: wp.note })
     .toggle("pinned", "§b置顶", { defaultValue: wp.isPinned })
     .toggle("isPublic", "§a设为公共传送点", { defaultValue: wp.isPublic })
-    .toggle("updateLocation", "§e更新坐标到当前位置", { defaultValue: false,
-      tooltip: "将传送点坐标更新到你当前所在位置" })
-    .toggle("doTeleport", "§a传送到此传送点", { defaultValue: false,
-      tooltip: "保存后立即传送到此传送点" })
-    .toggle("deleteWarp", "§c删除此传送点", { defaultValue: false,
-      tooltip: "永久删除此传送点" })
+    .toggle("updateLocation", "§e更新坐标到当前位置", {
+      defaultValue: false,
+      tooltip: "将传送点坐标更新到你当前所在位置",
+    })
+    .toggle("doTeleport", "§a传送到此传送点", { defaultValue: false, tooltip: "保存后立即传送到此传送点" })
+    .toggle("deleteWarp", "§c删除此传送点", { defaultValue: false, tooltip: "永久删除此传送点" })
     .submitButton("§a保存")
     .show(player)
     .then((vals) => {
@@ -182,11 +172,7 @@ function showWaypointActions(
 
       // 更新坐标到当前位置
       if (shouldUpdateLocation) {
-        updateWaypointLocation(
-          player.id, wp.id,
-          player.location,
-          player.dimension.id,
-        );
+        updateWaypointLocation(player.id, wp.id, player.location, player.dimension.id);
         player.sendMessage(`§a已更新 §e${newName} §a的坐标到当前位置`);
       }
 
@@ -255,10 +241,7 @@ export function showCreateWarpForm(player: Player): void {
       const cat = WAYPOINT_CATEGORIES[vals.category as number] as WaypointCategory;
       const note = (vals.note as string).trim();
 
-      const err = createWaypoint(
-        player, name, cat, note, loc, dim,
-        detectedBiome ?? undefined,
-      );
+      const err = createWaypoint(player, name, cat, note, loc, dim, detectedBiome ?? undefined);
       if (err) {
         player.sendMessage(err);
         return;
@@ -272,18 +255,26 @@ export function showCreateWarpForm(player: Player): void {
 
 function shortDimension(dimId: string): string {
   switch (dimId) {
-    case "minecraft:overworld": return "主世界";
-    case "minecraft:nether": return "下界";
-    case "minecraft:the_end": return "末地";
-    default: return dimId.split(":")[1] || dimId;
+    case "minecraft:overworld":
+      return "主世界";
+    case "minecraft:nether":
+      return "下界";
+    case "minecraft:the_end":
+      return "末地";
+    default:
+      return dimId.split(":")[1] || dimId;
   }
 }
 
 function fullDimension(dimId: string): string {
   switch (dimId) {
-    case "minecraft:overworld": return "主世界";
-    case "minecraft:nether": return "下界 (Nether)";
-    case "minecraft:the_end": return "末地 (The End)";
-    default: return dimId;
+    case "minecraft:overworld":
+      return "主世界";
+    case "minecraft:nether":
+      return "下界 (Nether)";
+    case "minecraft:the_end":
+      return "末地 (The End)";
+    default:
+      return dimId;
   }
 }

@@ -60,10 +60,7 @@ export const CONTAINER_INFO_ITEMS: readonly MenuInfoItem[] = [
 ];
 
 /** 全部信息元素（仓库 + 容器，供 OPInfoConfigUI 枚举） */
-export const ALL_MENU_INFO_ITEMS: readonly MenuInfoItem[] = [
-  ...WAREHOUSE_INFO_ITEMS,
-  ...CONTAINER_INFO_ITEMS,
-];
+export const ALL_MENU_INFO_ITEMS: readonly MenuInfoItem[] = [...WAREHOUSE_INFO_ITEMS, ...CONTAINER_INFO_ITEMS];
 
 /** 默认开关态：全部元素默认开 */
 export function defaultMenuInfo(): Record<string, boolean> {
@@ -73,6 +70,9 @@ export function defaultMenuInfo(): Record<string, boolean> {
 }
 
 /** 某信息元素是否显示（缺省 → 默认开，兼容旧档无此字段） */
-export function isMenuInfoOn(menuInfo: Record<string, boolean> | undefined, key: MenuInfoKey | ContainerInfoKey): boolean {
+export function isMenuInfoOn(
+  menuInfo: Record<string, boolean> | undefined,
+  key: MenuInfoKey | ContainerInfoKey
+): boolean {
   return menuInfo?.[key] ?? true;
 }

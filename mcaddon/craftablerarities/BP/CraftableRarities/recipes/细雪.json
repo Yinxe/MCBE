@@ -5,11 +5,7 @@
       "identifier": "craftablerarities/powder_snow"
     },
     "tags": ["crafting_table"],
-    "pattern": [
-      "PSP",
-      "SSS",
-      "PSP"
-    ],
+    "pattern": ["PSP", "SSS", "PSP"],
     "key": {
       "P": {
         "item": "packed_ice"

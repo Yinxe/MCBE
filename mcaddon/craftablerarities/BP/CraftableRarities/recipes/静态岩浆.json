@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/lava"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "AAA",
-      "AAA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "AAA", "AAA"],
     "key": {
       "A": {
         "item": "magma"

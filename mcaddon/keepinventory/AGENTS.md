@@ -30,7 +30,7 @@ scripts/
 
 ## 依赖
 
-| 包 | 版本 |
-|---|------|
-| @minecraft/server | 2.0.0 |
+| 包                          | 版本  |
+| --------------------------- | ----- |
+| @minecraft/server           | 2.0.0 |
 | @minecraft/core-build-tasks | 5.5.0 |

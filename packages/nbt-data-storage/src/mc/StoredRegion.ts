@@ -9,11 +9,27 @@
 import type { Container, ItemStack } from "@minecraft/server";
 import { system } from "@minecraft/server";
 import { groupSlotIdsByBarrel } from "../core/batch";
-import { BARREL_SLOTS, BARRELS_PER_LEVEL, SLOTS_PER_LEVEL, capacityOf, slotIdToPosition, usableSlotsPerBarrel, type RegionLayout, type SlotPosition } from "../core/layout";
+import {
+  BARREL_SLOTS,
+  BARRELS_PER_LEVEL,
+  SLOTS_PER_LEVEL,
+  capacityOf,
+  slotIdToPosition,
+  usableSlotsPerBarrel,
+  type RegionLayout,
+  type SlotPosition,
+} from "../core/layout";
 import { createRegionMeta, type RegionMeta } from "../core/meta";
 import { putItem, decrementUsage, type PutPort } from "../core/put";
 import { createRegionRecord, type PersistedRegion } from "../core/record";
-import { checkAndRepairLevel, createRepairReport, type RepairEvent, type RepairPort, type RepairReport, type SlotStatus } from "../core/repair";
+import {
+  checkAndRepairLevel,
+  createRepairReport,
+  type RepairEvent,
+  type RepairPort,
+  type RepairReport,
+  type SlotStatus,
+} from "../core/repair";
 import { overwriteSlot, type OverwritePort, type OverwriteResult } from "../core/overwrite";
 import { rebuildUsage, resizeLayout, type ResizePatch, type ResizePort } from "../core/region";
 import { regionStats, type RegionStats } from "../core/stats";
@@ -119,7 +135,10 @@ export class StoredRegion {
     const groups = groupSlotIdsByBarrel(slotIds, this.layout);
     for (const entries of groups.values()) {
       const pos = entries[0]!.pos;
-      const values = this.runtime.readBatch(pos, entries.map((e) => e.slotInBarrel));
+      const values = this.runtime.readBatch(
+        pos,
+        entries.map((e) => e.slotInBarrel)
+      );
       for (let i = 0; i < entries.length; i++) {
         result[entries[i]!.inputIndex] = values[i];
       }
@@ -148,7 +167,12 @@ export class StoredRegion {
       const usage = readLevelUsage(this.regionId, level);
       for (let b = 0; b < usage.length && b < BARRELS_PER_LEVEL; b++) {
         if (usage[b] === 0) continue; // 未物化/空桶：跳过
-        const pos: SlotPosition = { x: x0 + (b % 16), y: layout.baseY + level, z: z0 + Math.floor(b / 16), slotInBarrel: 0 };
+        const pos: SlotPosition = {
+          x: x0 + (b % 16),
+          y: layout.baseY + level,
+          z: z0 + Math.floor(b / 16),
+          slotInBarrel: 0,
+        };
         const statuses = this.runtime.probeBarrelSlots(pos, usable);
         const occupied: number[] = [];
         for (let j = 0; j < statuses.length; j++) {
@@ -240,7 +264,11 @@ export class StoredRegion {
    * 成功后触发 `taken`（旧物离开区域）+ `stored`（新物进入区域）事件。
    * @returns { ok, oldTypeId?, newTypeId?, error? }；ok=false 时双方未动
    */
-  swap(slotId: number, container: Container, destSlot: number): { ok: boolean; oldTypeId?: string; newTypeId?: string; error?: string } {
+  swap(
+    slotId: number,
+    container: Container,
+    destSlot: number
+  ): { ok: boolean; oldTypeId?: string; newTypeId?: string; error?: string } {
     const pos = slotIdToPosition(slotId, this.layout);
     if (!pos) return { ok: false, error: "格子号超出范围" };
     const oldItem = this.runtime.readItem(pos);
@@ -323,12 +351,8 @@ export class StoredRegion {
   stats(): RegionStats {
     const record = this.readRecord();
     const meta: RegionMeta = record?.meta ?? createRegionMeta();
-    return regionStats(
-      this.regionId,
-      this.dimensionId,
-      this.layout,
-      meta,
-      (level) => readLevelUsage(this.regionId, level)
+    return regionStats(this.regionId, this.dimensionId, this.layout, meta, (level) =>
+      readLevelUsage(this.regionId, level)
     );
   }
 

@@ -9,20 +9,13 @@ const PAGE_SIZE = 8;
 /**
  * 死亡点列表。
  */
-export function showDeathPointsList(
-  player: Player,
-  page: number = 0,
-): void {
+export function showDeathPointsList(player: Player, page: number = 0): void {
   const points = getDeathPoints(player.id);
   const totalPages = Math.max(1, Math.ceil(points.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
-  const pagePoints = points.slice(
-    currentPage * PAGE_SIZE,
-    (currentPage + 1) * PAGE_SIZE,
-  );
+  const pagePoints = points.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
-  const form = new ActionFormBuilder()
-    .title(`§l死亡传送点 (${points.length})`);
+  const form = new ActionFormBuilder().title(`§l死亡传送点 (${points.length})`);
 
   if (points.length === 0) {
     form.body("§6暂无死亡记录");

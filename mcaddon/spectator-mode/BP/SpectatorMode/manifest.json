@@ -4,25 +4,13 @@
     "name": "灵魂出窍 v1.0.10",
     "description": "灵魂出窍 · 旁观模式\n作者：Yinx\n邮箱：1423716216@qq.com\n主页：https://github.com/Yinxe/\nQQ群：632178498\n仓库：https://github.com/Yinxe/MCBE",
     "uuid": "67c0e536-82f7-459d-a15f-d4cd9b229bf8",
-    "version": [
-      1,
-      0,
-      10
-    ],
-    "min_engine_version": [
-      1,
-      21,
-      0
-    ]
+    "version": [1, 0, 10],
+    "min_engine_version": [1, 21, 0]
   },
   "modules": [
     {
       "description": "Behavior",
-      "version": [
-        1,
-        0,
-        10
-      ],
+      "version": [1, 0, 10],
       "uuid": "bd2e3fa2-017d-4af4-91d2-cca0fff38cf0",
       "type": "data"
     },
@@ -31,30 +19,18 @@
       "language": "javascript",
       "type": "script",
       "uuid": "ed36bbd0-5245-4c7d-871d-3f2437fdee07",
-      "version": [
-        1,
-        0,
-        10
-      ],
+      "version": [1, 0, 10],
       "entry": "scripts/main.js"
     }
   ],
   "dependencies": [
     {
       "module_name": "@minecraft/server",
-      "version": [
-        2,
-        5,
-        0
-      ]
+      "version": [2, 5, 0]
     },
     {
       "module_name": "@minecraft/server-ui",
-      "version": [
-        2,
-        0,
-        0
-      ]
+      "version": [2, 0, 0]
     }
   ],
   "metadata": {

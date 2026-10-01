@@ -4,13 +4,8 @@
     "description": {
       "identifier": "craftablerarities/chainmail_boots"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "A A",
-      "A A"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["A A", "A A"],
     "key": {
       "A": {
         "item": "chain"

@@ -15,6 +15,7 @@
 ### Task 1: 行为测试（先红）
 
 **Files:**
+
 - Create: `packages/toolkit/test/EventSignal.test.ts`
 
 - [ ] **Step 1: 写行为测试**
@@ -75,14 +76,17 @@ test("订阅后 trigger 收到事件", () => {
 
 test("无订阅者时 trigger 安全空操作", () => {
   const signal = new EventSignal<PlayerJoinEvent>();
-  assert((() => {
-    try {
-      signal.trigger({ playerId: "x", playerName: "A" });
-      return true;
-    } catch {
-      return false;
-    }
-  })(), "无订阅者 trigger 不应抛错");
+  assert(
+    (() => {
+      try {
+        signal.trigger({ playerId: "x", playerName: "A" });
+        return true;
+      } catch {
+        return false;
+      }
+    })(),
+    "无订阅者 trigger 不应抛错"
+  );
 });
 
 test("unsubscribe 后不再收到", () => {
@@ -221,6 +225,7 @@ Expected: tsc 报错 `Cannot find module '../src/events/EventSignal'`（源码�
 ### Task 2: 实现 EventSignal（转绿）
 
 **Files:**
+
 - Create: `packages/toolkit/src/events/EventSignal.ts`
 
 - [ ] **Step 1: 写实现**
@@ -321,6 +326,7 @@ Expected: 11 行 `✓ ...` 输出 + 最后一行 `[events] 全部用例通过`�
 ### Task 3: 导出接线 + 类型检查
 
 **Files:**
+
 - Create: `packages/toolkit/src/events/index.ts`
 - Modify: `packages/toolkit/src/index.ts:5`（command 导出行之后追加一行）
 
@@ -328,11 +334,7 @@ Expected: 11 行 `✓ ...` 输出 + 最后一行 `[events] 全部用例通过`�
 
 ```typescript
 // ─── 自定义事件订阅触发机制 ──────────────────────────────
-export {
-  EventSignal,
-  CancelableEventSignal,
-  type CancelableEvent,
-} from "./EventSignal";
+export { EventSignal, CancelableEventSignal, type CancelableEvent } from "./EventSignal";
 ```
 
 - [ ] **Step 2: 修改 `packages/toolkit/src/index.ts`**
@@ -358,13 +360,14 @@ Expected: 无输出，exit 0。
 ### Task 4: README 文档
 
 **Files:**
+
 - Modify: `packages/toolkit/README.md`（`### src/command/...` 一节之前插入新小节）
 
 - [ ] **Step 1: 在 README.md 的「公共 API」部分插入 events 小节**
 
 在 `### src/command/index.ts — 自定义命令封装` 小节之前插入：
 
-```markdown
+````markdown
 ### `src/events/` — 自定义事件订阅触发机制
 
 参考 MCBE 原生事件机制（`world.afterEvents.xxx.subscribe / unsubscribe`），为 addon 内部模块间解耦通信提供纯自定义事件。
@@ -403,7 +406,9 @@ itemUse.subscribe((e) => {
 });
 const ok = itemUse.trigger({ playerId: "x", itemTypeId: "minecraft:bedrock" }); // false
 ```
-```
+````
+
+````
 
 - [ ] **Step 2: 确认 README 无嵌套代码块错乱**
 
@@ -421,7 +426,7 @@ Run：
 ```bash
 rm -rf /tmp/events-test
 mcaddon/mock-player/node_modules/.bin/tsc --strict --target es6 --lib es2017,dom --module commonjs --outDir /tmp/events-test packages/toolkit/src/events/EventSignal.ts packages/toolkit/test/EventSignal.test.ts && node /tmp/events-test/test/EventSignal.test.js
-```
+````
 
 Expected: 全部用例通过，exit 0。
 

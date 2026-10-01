@@ -4,13 +4,8 @@
     "description": {
       "identifier": "craftablerarities/coral_block-1"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AA",
-      "AA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AA", "AA"],
     "key": {
       "A": {
         "item": "coral",

@@ -4,13 +4,8 @@
     "description": {
       "identifier": "craftablerarities/calcite"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AB",
-      "BA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AB", "BA"],
     "key": {
       "A": {
         "item": "quartz_block"

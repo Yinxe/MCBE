@@ -12,6 +12,7 @@ packages:
   - "mcaddon/*"
   # server plugins
   - "server-plugin/*"
+  # 注意：archive/ 为归档模组（不再维护，如 mock-player、smartwarehouse），故意不纳入 workspace
   # exclude test directories
   - "!**/test/**"
 # 全仓统一 Script API 版本：强制 @minecraft/server 收敛到一份 2.8.0，

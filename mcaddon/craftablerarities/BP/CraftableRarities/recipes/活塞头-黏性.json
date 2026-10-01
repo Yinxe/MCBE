@@ -4,12 +4,8 @@
     "description": {
       "identifier": "craftablerarities/sticky_piston_arm_collision"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AB"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AB"],
     "key": {
       "A": {
         "item": "sticky_piston"

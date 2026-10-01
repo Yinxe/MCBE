@@ -156,12 +156,12 @@ export const actionFormFg: readonly {
   contrast: string;
   level: "AAA" | "AA" | "AA-large";
 }[] = [
-  { label: "black",      color: `${S}0`, contrast: "13.6:1", level: "AAA" },
-  { label: "darkBlue",   color: `${S}1`, contrast: "8.6:1",  level: "AAA" },
-  { label: "darkRed",    color: `${S}4`, contrast: "5.0:1",  level: "AA"  },
-  { label: "darkGray",   color: `${S}8`, contrast: "4.8:1",  level: "AA"  },
-  { label: "darkPurple", color: `${S}5`, contrast: "4.2:1",  level: "AA"  },
-  { label: "blue",       color: `${S}9`, contrast: "3.3:1",  level: "AA-large" },
+  { label: "black", color: `${S}0`, contrast: "13.6:1", level: "AAA" },
+  { label: "darkBlue", color: `${S}1`, contrast: "8.6:1", level: "AAA" },
+  { label: "darkRed", color: `${S}4`, contrast: "5.0:1", level: "AA" },
+  { label: "darkGray", color: `${S}8`, contrast: "4.8:1", level: "AA" },
+  { label: "darkPurple", color: `${S}5`, contrast: "4.2:1", level: "AA" },
+  { label: "blue", color: `${S}9`, contrast: "3.3:1", level: "AA-large" },
 ] as const;
 
 // ─── 辅助函数 ───────────────────────────────────────────

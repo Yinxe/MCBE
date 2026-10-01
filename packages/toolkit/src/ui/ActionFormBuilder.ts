@@ -95,11 +95,7 @@ export class ActionFormBuilder {
   }
 
   /** 快速显示：一行完成构建 + 展示 */
-  static async showQuick(
-    player: Player,
-    title: string,
-    build: (f: ActionFormBuilder) => void
-  ): Promise<boolean> {
+  static async showQuick(player: Player, title: string, build: (f: ActionFormBuilder) => void): Promise<boolean> {
     const builder = new ActionFormBuilder();
     builder.title(title);
     build(builder);

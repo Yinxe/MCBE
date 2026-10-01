@@ -167,13 +167,7 @@ export function queryWorld(): RegionWorldInfo[] {
     .map((id) => {
       const record = readRegionRecord(id);
       if (!record) return undefined;
-      return regionStats(
-        id,
-        record.dimensionId,
-        record.layout,
-        record.meta,
-        (level) => readLevelUsage(id, level)
-      );
+      return regionStats(id, record.dimensionId, record.layout, record.meta, (level) => readLevelUsage(id, level));
     })
     .filter((s): s is RegionWorldInfo => s !== undefined);
 }

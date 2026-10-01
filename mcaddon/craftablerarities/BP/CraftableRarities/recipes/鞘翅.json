@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/elytra"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "DBD",
-      "ACA",
-      "A A"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["DBD", "ACA", "A A"],
     "key": {
       "A": {
         "item": "Feather"
