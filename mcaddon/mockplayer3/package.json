@@ -36,6 +36,7 @@
   },
   "mcbe": {
     "packName": "模拟玩家III",
-    "bp": "BP/MockPlayer3"
+    "bp": "BP/MockPlayer3",
+    "rp": "RP/MockPlayer3"
   }
 }
