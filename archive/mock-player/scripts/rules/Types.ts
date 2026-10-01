@@ -235,6 +235,10 @@ export interface BotRecord {
   controllerId?: string;
   /** 潜行状态 */
   isSneaking: boolean;
+  /** 钓鱼模式「自动存入容器」开关（仅 workMode === "fishing" 时生效） */
+  autoStore?: boolean;
+  /** 「自动存入容器」目标方块坐标（整数；null/缺省 = 未设置） */
+  autoStorePoint?: { x: number; y: number; z: number } | null;
   /** 最后已知位置（死亡时清空，由 respawnPoint 或在线刷新填充） */
   lastPoint: PositionState | null;
   /** 重生点（创建时由当前位置设定，可用 /mp:setRespawn 修改） */
