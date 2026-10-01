@@ -18,6 +18,7 @@ import { BotUiEvent } from "../../../events/UiEvents";
 import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
 import { setTags } from "../../../features/state/setTags";
+import { parseCoordinateInput } from "../../../rules/coords/Coordinate";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
 
@@ -113,6 +114,23 @@ export function showTagManagement(player: Player, botName: string): void {
       tooltip: "只输入正整数；留空恢复默认 4 GT。数值越小越快。",
     });
   }
+  // ── 钓鱼模式：自动存入容器（用户规格 2.3.4：开关 + 容器坐标） ──
+  if (record.workMode === "fishing") {
+    const storePoint = record.autoStorePoint;
+    const storeCoordText = storePoint
+      ? `${Math.floor(storePoint.x)} ${Math.floor(storePoint.y)} ${Math.floor(storePoint.z)}`
+      : "";
+    builder
+      .label("sepAutoStore", style("━━ 钓鱼自动存入容器 ────", color.accent))
+      .toggle("autoStore", style("自动存入容器", color.playerName), {
+        defaultValue: record.autoStore === true,
+        tooltip: "开启后，钓到的战利品会自动放进下方坐标的容器（超出 5 格不生效）",
+      })
+      .textField("autoStoreCoord", style("容器坐标（x y z）", color.accent), {
+        defaultValue: storeCoordText,
+        tooltip: "填写容器方块坐标，支持 ~ 相对坐标",
+      });
+  }
 
   builder.show(player).then((vals) => {
     if (!vals) return;
@@ -135,6 +153,25 @@ export function showTagManagement(player: Player, botName: string): void {
     const speedText = typeof vals.actionIntervalTicks === "string" ? vals.actionIntervalTicks.trim() : "";
     const parsedSpeed = speedText === "" ? 4 : (/^[1-9]\d*$/.test(speedText) ? Number(speedText) : 4);
     const actionIntervalTicks = Number.isSafeInteger(parsedSpeed) && parsedSpeed > 0 ? parsedSpeed : 4;
+    // ── 自动存入容器（仅钓鱼模式表单带这两个字段；坐标非法则整次不保存） ──
+    let wantAutoStore = false;
+    let autoStorePoint: { x: number; y: number; z: number } | null = null;
+    if (typeof vals.autoStore === "boolean") {
+      wantAutoStore = vals.autoStore;
+      if (wantAutoStore) {
+        const coordText = typeof vals.autoStoreCoord === "string" ? vals.autoStoreCoord.trim() : "";
+        const parsedCoord = parseCoordinateInput(coordText, player.location);
+        if (!parsedCoord.ok) {
+          player.sendMessage(`${color.error}容器坐标无效：${parsedCoord.message}，本次未保存`);
+          return;
+        }
+        autoStorePoint = {
+          x: Math.floor(parsedCoord.pos.x),
+          y: Math.floor(parsedCoord.pos.y),
+          z: Math.floor(parsedCoord.pos.z),
+        };
+      }
+    }
 
     system.run(() => {
       // ── ① 标签先落库（record.tags 最新 + 实体同步 + 持久化） ──
@@ -149,6 +186,11 @@ export function showTagManagement(player: Player, botName: string): void {
       // 速度必须先写入记录，再调用 setWorkMode。setWorkMode 会立即保存记录；
       // 若顺序反过来，速度值会在这次提交中漏保存，导致攻击/放置/挖掘继续使用旧间隔。
       if (speedModes.has(pickedWorkMode)) currentRecord.actionIntervalTicks = actionIntervalTicks;
+      // 自动存入容器：字段先写入记录，再交给 setWorkMode 统一保存（顺序不能反）
+      if (typeof vals.autoStore === "boolean") {
+        currentRecord.autoStore = wantAutoStore;
+        currentRecord.autoStorePoint = autoStorePoint;
+      }
       setWorkMode(currentRecord, pickedWorkMode);
       // ── ③ 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
       BotUiEvent.behaviorSubmitted.trigger({

@@ -225,6 +225,8 @@ export class BotLifecycle {
           workMode: "none",
           isSneaking: options.isSneaking,
           spawnMode: options.spawnMode,
+          autoStore: false,
+          autoStorePoint: null,
           lastPoint: {
             location: options.location,
             dimension: options.dimension.id,
