@@ -10,9 +10,10 @@ import type { ToolStrategy } from "./HarvestRules";
 /** 视线没有目标/实体为瞬态时的低频重探间隔（tick） */
 export const IDLE_RECHECK_TICKS = 10;
 
-/** 逐动作节拍（tick，写死不入配置）：挖掘/放置 2、攻击 8，各假人独立相位机互不干扰 */
+/** 逐动作节拍（tick，写死不入配置）：挖掘 2、放置 3、攻击 8，各假人独立相位机互不干扰；
+ *  放置一个方块占发起+收口两拍（收口固定 +1t），发起间隔 3 时整周期 4 tick/块 */
 export const MINE_SWING_TICKS = 2;
-export const PLACE_INTERVAL_TICKS = 2;
+export const PLACE_INTERVAL_TICKS = 3;
 export const ATTACK_INTERVAL_TICKS = 8;
 
 /** 非候选方块精确 id（技术方块/传送门/植被类——breakBlock 不产出或引擎拒破） */

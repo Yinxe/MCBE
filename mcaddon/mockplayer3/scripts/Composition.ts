@@ -124,7 +124,7 @@ const capHost: CapabilityHost = {
   },
 };
 modes.register(new MineCap(runtime));
-modes.register(new PlaceCap(capHost));
+modes.register(new PlaceCap());
 modes.register(new AttackCap());
 modes.register(new FollowCap(runtime, ops, capHost));
 modes.register(new FishingCap(runtime, ops, events));

@@ -36,7 +36,7 @@ export const WORK_MODES: readonly WorkModeSpec[] = [
   {
     id: "place",
     label: "定点放置",
-    help: "持续把主手方块放置到正前方（主手非方块拒绝启动）",
+    help: "持续把主手方块放置到正前方（空手/无目标低息重探，补货即恢复，永不自动停机）",
     requiresLeases: ["hands"],
     tier: "base",
   },

@@ -56,9 +56,9 @@ test("挖掘候选：可摧毁方块全收——含植被（归档无候选过�
   }
 });
 
-test("机械节拍常量逐动作写死：挖掘/放置 2 GT、攻击 8 GT（用户规格 2026-09-28 逐动作速度；旧统一 4 作废）", () => {
+test("机械节拍常量逐动作写死：挖掘 2 GT、放置发起间隔 3 GT（整周期 4 tick/块）、攻击 8 GT", () => {
   assert.equal(MINE_SWING_TICKS, 2);
-  assert.equal(PLACE_INTERVAL_TICKS, 2);
+  assert.equal(PLACE_INTERVAL_TICKS, 3);
   assert.equal(ATTACK_INTERVAL_TICKS, 8);
 });
 
