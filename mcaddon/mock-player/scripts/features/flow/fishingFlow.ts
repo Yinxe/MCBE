@@ -18,7 +18,7 @@
 // （McFishingPorts idle，主人通知 + 节流）
 
 import { system, world } from "@minecraft/server";
-import type { Entity, ItemStack } from "@minecraft/server";
+import type { Container, Entity, EntityInventoryComponent, ItemStack } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 
 import { diffLoot, initialBiteTracker, isWaterBlock, judgeHookPlacement, makeLootFingerprint, updateBiteTracker, type BackpackInfo, type BiteTracker, type FishingFailureReason, type FishingOutcome, type HookPlacement, type LootItem } from "../../rules/FishingRules";
@@ -28,7 +28,9 @@ import { castFishingRod, findOwnHooks, reelFishingRod } from "../basic/fishing";
 import { enchantableOf } from "../basic/items/ItemComponentRead";
 import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { botRegistry } from "../../bootstrap/context";
-import { waitTicks } from "../utils";
+import { distance3d, waitTicks } from "../utils";
+import { lookAt } from "../basic/PoseGateway";
+import type { Vec3 } from "../../rules/Types";
 
 // ── 领域类型 re-export（类型已归位 core/tasks/FishingRules，此处保持导入方兼容） ──
 export type { FishingOutcome, FishingFailureReason, BackpackInfo, LootItem } from "../../rules/FishingRules";
@@ -105,6 +107,154 @@ function takePendingLoot(botName: string): Record<string, number> {
   const loot = pendingLoot.get(botName) ?? {};
   pendingLoot.delete(botName);
   return loot;
+}
+// ─── 战利品回收 + 自动存入容器（用户规格 2.3.3 / 2.3.4） ──
+/** 战利品拾取半径（格，=3：战利品生成在鱼钩位置附近的水面） */
+const LOOT_PICK_RADIUS = 3;
+/** 拾取扫描次数（战利品生成有引擎延迟，两次扫描兜底） */
+const LOOT_PICK_TRIES = 2;
+/** 两次拾取扫描的间隔（tick） */
+const LOOT_PICK_GAP_TICKS = 6;
+/** 自动存入容器的最大触达距离（格，=5：模拟玩家伸手可及范围） */
+const STORE_REACH = 5;
+
+/**
+ * 把落在鱼钩附近的掉落物收进假人背包。
+ * 返回本次实际收取的物品栈（供自动存入容器按指纹搬运）。
+ */
+function pickLootAt(botName: string, pos: Vec3): ItemStack[] {
+  const bot = resolveBotPlayer(botName);
+  const picked: ItemStack[] = [];
+  if (!bot) return picked;
+  try {
+    const container = (bot.getComponent("minecraft:inventory") as EntityInventoryComponent | undefined)?.container;
+    if (!container) return picked;
+    const drops = bot.dimension.getEntities({
+      type: "minecraft:item",
+      location: { x: pos.x, y: pos.y, z: pos.z },
+      maxDistance: LOOT_PICK_RADIUS,
+    });
+    for (const drop of drops) {
+      try {
+        const stack = drop.getComponent("minecraft:item")?.itemStack;
+        if (!stack) continue;
+        if (container.addItem(stack)) continue;
+        drop.remove();
+        picked.push(stack.clone());
+      } catch {
+        /* 单个掉落物失败不影响其它 */
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[MockPlayer] pickLootAt ${botName} error: ${e}`);
+  }
+  if (picked.length > 0) console.warn(`[MockPlayer] pickLootAt ${botName} picked ${picked.length} drop(s) near hook`);
+  return picked;
+}
+
+/** 收竿后把鱼钩附近的战利品收进背包（两次扫描：战利品生成有延迟） */
+async function collectLootNearHook(botName: string, pos: Vec3): Promise<ItemStack[]> {
+  for (let i = 0; i < LOOT_PICK_TRIES; i++) {
+    await waitTicks(LOOT_PICK_GAP_TICKS);
+    const got = pickLootAt(botName, pos);
+    if (got.length > 0) return got;
+  }
+  return [];
+}
+
+/**
+ * 把本竿战利品存入记录里配置的容器（钓鱼模式「自动存入容器」）。
+ * 超出触达距离 / 目标不是容器 / 容器已满 → 战利品留在背包并提示附近玩家。
+ */
+async function storeLootToChest(botName: string, loot: LootItem[], stacks: ItemStack[]): Promise<string> {
+  const record = botRegistry.get(botName);
+  if (!record || record.autoStore !== true || !record.autoStorePoint) return "off";
+  const bot = resolveBotPlayer(botName);
+  if (!bot) return "offline";
+  const p = record.autoStorePoint;
+  const center = { x: p.x + 0.5, y: p.y + 0.5, z: p.z + 0.5 };
+  if (distance3d(bot.location, center) > STORE_REACH) {
+    notifyOwner(botName, `${color.warn}目标容器超出触达距离（>${STORE_REACH} 格），战利品留在背包`);
+    return "too-far";
+  }
+  let container: Container | undefined;
+  try {
+    const block = bot.dimension.getBlock({ x: p.x, y: p.y, z: p.z });
+    container = block?.getComponent("minecraft:inventory")?.container;
+  } catch {
+    container = undefined;
+  }
+  if (!container) {
+    notifyOwner(botName, `${color.warn}目标不是容器方块，战利品留在背包`);
+    return "not-container";
+  }
+  // 转头看向容器（同时更新记录朝向，避免姿态系统立刻拉回）
+  try {
+    lookAt(bot, center);
+    if (record.lastPoint) record.lastPoint.lookTarget = center;
+  } catch {
+    /* 朝向失败不影响搬运 */
+  }
+  let opened = false;
+  try {
+    opened = bot.interactWithBlock({ x: p.x, y: p.y, z: p.z });
+  } catch {
+    opened = false;
+  }
+  await waitTicks(2);
+  let stored = 0;
+  try {
+    const inv = (bot.getComponent("minecraft:inventory") as EntityInventoryComponent | undefined)?.container;
+    if (inv) {
+      // 目标指纹 → 需要搬运的数量（本竿战利品；无统计时回退用实际收取的物品栈）
+      const wanted = new Map<string, number>();
+      for (const l of loot) {
+        const fp = makeLootFingerprint(l.typeId, l.enchantments);
+        wanted.set(fp, (wanted.get(fp) ?? 0) + l.count);
+      }
+      if (wanted.size === 0) {
+        for (const stack of stacks) {
+          const fp = makeLootFingerprint(stack.typeId, itemEnchantments(stack));
+          wanted.set(fp, (wanted.get(fp) ?? 0) + stack.amount);
+        }
+      }
+      for (const [fp, count] of wanted) {
+        let need = count;
+        for (let i = 0; i < inv.size && need > 0; i++) {
+          const item = inv.getItem(i);
+          if (!item) continue;
+          if (makeLootFingerprint(item.typeId, itemEnchantments(item)) !== fp) continue;
+          const move = Math.min(need, item.amount);
+          const toStore = item.clone();
+          toStore.amount = move;
+          const rest = container.addItem(toStore);
+          const moved = move - (rest?.amount ?? 0);
+          if (moved <= 0) break;
+          if (item.amount === moved) inv.setItem(i, undefined);
+          else {
+            const left = item.clone();
+            left.amount = item.amount - moved;
+            inv.setItem(i, left);
+          }
+          need -= moved;
+          stored += moved;
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[MockPlayer] storeLootToChest ${botName} transfer error: ${e}`);
+  }
+  // 收尾交互状态：模拟玩家没有客户端界面，interactWithBlock 通常不会真正打开容器；
+  // 若引擎进入了交互状态，用 SimulatedPlayer.stopInteracting() 关闭（存在才调用）。
+  try {
+    if (typeof bot.stopInteracting === "function") bot.stopInteracting();
+  } catch {
+    /* 关闭失败不影响结果 */
+  }
+  console.warn(`[MockPlayer] storeLootToChest ${botName} stored=${stored} opened=${opened} target=(${p.x},${p.y},${p.z})`);
+  if (stored > 0) notifyOwner(botName, `${color.success}已存入容器 ${stored} 件战利品（${p.x}, ${p.y}, ${p.z}）`);
+  else notifyOwner(botName, `${color.warn}战利品未能存入容器（背包里没找到对应物品或容器已满）`);
+  return stored > 0 ? "ok" : "full";
 }
 
 // ─── 工具 ────────────────────────────────────────────────
@@ -286,18 +436,22 @@ async function watchForBite(botName: string, hookId: string): Promise<FishingOut
     tracker = next;
     if (bite) {
       // ── 咬钩：触发收杆信号（通知主人 + 自动收竿） ──
+      const hookPos = { x: hook.location.x, y: hook.location.y, z: hook.location.z };
       console.warn(`[MockPlayer] fishOnce ${botName} bite detected (drop ${(tracker.maxY - y).toFixed(2)} from max ${tracker.maxY.toFixed(2)})`);
       notifyOwner(botName, `${color.success}鱼上钩了，正在收竿！`);
       const before = snapshotInventory(botName); // 收竿前背包快照（战利品 diff 基准）
       const reel = await reelFishingRod(botName);
       if (reel === "reeled") {
         // ── 成功：等待战利品入包（事件驱动收集优先，diff 回退） + 背包状态报告 ──
-        await waitTicks(3); // ⚠️ 战利品入包有引擎延迟——立即快照会漏（"无战利品"根因）
+        // 先把落在鱼钩附近的战利品收进背包（引擎自动拾取在假人身上不可靠，用户规格 2.3.3）
+        const lootStacks = await collectLootNearHook(botName, hookPos);
         const collected = takePendingLoot(botName);
         const loot =
           Object.keys(collected).length > 0
             ? diffLoot({}, collected) // 事件收集（指纹 → LootItem）
             : diffLoot(before, snapshotInventory(botName)); // 回退：延迟后快照 diff
+        // 自动存入容器（用户规格 2.3.4）：本竿有战利品才搬运
+        if (loot.length > 0 || lootStacks.length > 0) await storeLootToChest(botName, loot, lootStacks);
         const backpack = backpackInfo(botName);
         console.warn(`[MockPlayer] fishOnce ${botName} caught: ${loot.map((l) => `${l.typeId}x${l.count}`).join(",") || "none"} backpack=${backpack.usedSlots}/${backpack.totalSlots}`);
         notifyOwner(botName, `${color.success}钓到 ${lootLabel(loot)}；${backpackLabel(backpack)}`);

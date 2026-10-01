@@ -25,6 +25,8 @@ export function normalizeRecord(record: BotRecord, defaultRespawn: PositionState
   if (record.death === undefined) { record.death = false; changed = true; }
   if (!Array.isArray(record.tags)) { record.tags = []; changed = true; }
   if (record.isSneaking === undefined) { record.isSneaking = false; changed = true; }
+  if (record.autoStore === undefined) { record.autoStore = false; changed = true; }
+  if (record.autoStorePoint === undefined) { record.autoStorePoint = null; changed = true; }
   if (record.lastPoint === undefined) { record.lastPoint = null; changed = true; }
   if (!record.respawnPoint || typeof record.respawnPoint !== "object") {
     record.respawnPoint = { ...defaultRespawn };

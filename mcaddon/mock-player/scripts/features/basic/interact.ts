@@ -17,6 +17,18 @@ const autoNames = new Set<string>();
 function interactOnce(record: BotRecord): boolean {
   const bot = resolveBotPlayer(record.name) as SimulatedPlayer | undefined;
   if (!bot || !bot.isValid) return false;
+  // 潜行时不打开容器（用户规格 2.3.4）：准星正前方是容器方块则跳过本次交互，
+  // 其余交互（实体 / 非容器方块）不受影响。
+  if (record.isSneaking) {
+    let containerAhead = false;
+    try {
+      const hit = bot.getBlockFromViewDirection({ maxDistance: 8 });
+      containerAhead = hit !== undefined && hit.block.getComponent("minecraft:inventory") !== undefined;
+    } catch {
+      containerAhead = false;
+    }
+    if (containerAhead) return false;
+  }
   try {
     // SimulatedPlayer.interact() 使用官方头部射线，并交互射线上的第一个方块或实体。
     // 这样实体挡在方块前面时不会误交互后方方块，也不会进行周围搜索。
