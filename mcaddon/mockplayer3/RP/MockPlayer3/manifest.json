@@ -4,27 +4,15 @@
     "name": "模拟玩家III v3.0.6",
     "description": "模拟玩家（假人）v3 UI 图标资源\n作者：Yinx\n邮箱：1423716216@qq.com\n主页：https://github.com/Yinxe/\nQQ群：632178498\n仓库：https://github.com/Yinxe/MCBE",
     "uuid": "4497ec44-a22f-4f7f-a723-1f18d14c4e04",
-    "version": [
-      3,
-      0,
-      6
-    ],
-    "min_engine_version": [
-      1,
-      21,
-      120
-    ]
+    "version": [3, 0, 6],
+    "min_engine_version": [1, 21, 120]
   },
   "modules": [
     {
       "description": "模拟玩家 UI 图标资源",
       "type": "resources",
       "uuid": "79f9a3e5-d73b-4741-a6f9-b499f5bcde65",
-      "version": [
-        3,
-        0,
-        6
-      ]
+      "version": [3, 0, 6]
     }
   ],
   "metadata": {
