@@ -19,6 +19,9 @@ import { canManageBot, autoClaim } from "../../commands/auth";
 import { resolveUiBotRecord } from "../helpers";
 import { setTags } from "../../../features/state/setTags";
 import { parseCoordinateInput } from "../../../rules/coords/Coordinate";
+import { normalizeScriptProgram } from "../../../rules/script/ScriptRules";
+import { spotAtStand } from "../../../features/basic/fishing";
+import { showScriptPanel } from "./script";
 
 // ─── UI 事件订阅（BOT 主菜单 → 感知行为标签动作） ──────
 
@@ -98,6 +101,8 @@ export function showTagManagement(player: Player, botName: string): void {
           fishing: style("自动钓鱼模式", color.accent),
           follow: style("自动跟随", color.playerName),
           autoInteract: style("定点交互模式", color.gold),
+          script: style("编程模式", color.accent),
+          vault: style("宝库模式", color.gold),
         };
         return labelMap[m] ?? style(m, color.muted);
       }),
@@ -129,6 +134,37 @@ export function showTagManagement(player: Player, botName: string): void {
       .textField("autoStoreCoord", style("容器坐标（x y z）", color.accent), {
         defaultValue: storeCoordText,
         tooltip: "填写容器方块坐标，支持 ~ 相对坐标",
+      });
+    // ── 固定钓点（用户规格 3.1.6：开关 + 坐标，与容器坐标同格式） ──
+    const fsSpot = record.fishingSpot;
+    const fsCoordText = fsSpot
+      ? `${Math.floor(fsSpot.stand.x)} ${Math.floor(fsSpot.stand.y)} ${Math.floor(fsSpot.stand.z)}`
+      : "";
+    builder
+      .label("sepFishSpot", style("━━ 固定钓点 ────", color.accent))
+      .toggle("fishSpotFixed", style("固定钓点", color.playerName), {
+        defaultValue: fsSpot != null,
+        tooltip: "开启后假人固定在你填写的钓点钓鱼（不再自己换点）；关闭 = 恢复自动选点",
+      })
+      .textField("fishSpotCoord", style("钓点坐标（x y z）", color.accent), {
+        defaultValue: fsCoordText,
+        tooltip: "填写钓点（假人站立位置）坐标，格式与编程模式一致：支持 100 64 200 / (100,64,200) / ~相对；小数向下取整",
+      });
+  }
+  // ── 编程模式：指令入口（用户方案 v0.3：占原「动作速度（GT）」位置） ──
+  if (record.workMode === "script") {
+    const scriptProgram = normalizeScriptProgram(record.script);
+    builder
+      .label(
+        "scriptCount",
+        style(
+          `指令：${scriptProgram.steps.length > 0 ? `${scriptProgram.steps.length} 条` : "无"}`,
+          color.accent,
+        ),
+      )
+      .toggle("openScriptEditor", style("写指令", color.darkGreen), {
+        defaultValue: false,
+        tooltip: "勾选并提交 → 打开指令编辑器（添加模块 / 调顺序 / 循环设置）",
       });
   }
 
@@ -172,7 +208,48 @@ export function showTagManagement(player: Player, botName: string): void {
         };
       }
     }
-
+    // ── 固定钓点（仅钓鱼模式表单带这两个字段；坐标非法/无效钓点则整次不保存） ──
+    let wantFishSpotFixed = false;
+    let fishSpotAnchor: import("../../../rules/FishingPool").StoredFishingSpot | null = null;
+    if (typeof vals.fishSpotFixed === "boolean") {
+      wantFishSpotFixed = vals.fishSpotFixed;
+      if (wantFishSpotFixed) {
+        const fText = typeof vals.fishSpotCoord === "string" ? vals.fishSpotCoord.trim() : "";
+        if (fText.length === 0) {
+          player.sendMessage(`${color.error}请填写钓点坐标（x y z），本次未保存`);
+          return;
+        }
+        const parsedFs = parseCoordinateInput(fText, player.location);
+        if (!parsedFs.ok) {
+          player.sendMessage(`${color.error}钓点坐标无效：${parsedFs.message}，本次未保存`);
+          return;
+        }
+        const stand = {
+          x: Math.floor(parsedFs.pos.x),
+          y: Math.floor(parsedFs.pos.y),
+          z: Math.floor(parsedFs.pos.z),
+        };
+        // 从站立格重建完整钓点信息（要求：能站人的有效水边）
+        try {
+          const fs = spotAtStand(player.dimension, stand);
+          if (fs) {
+            fishSpotAnchor = {
+              dimension: player.dimension.id,
+              stand: fs.stand,
+              support: fs.support,
+              waters: fs.waters,
+              aim: fs.aim,
+            };
+          }
+        } catch {
+          fishSpotAnchor = null;
+        }
+        if (!fishSpotAnchor) {
+          player.sendMessage(`${color.warn}该坐标不是有效钓点（需要是能站人的水边位置），本次未保存`);
+          return;
+        }
+      }
+    }
     system.run(() => {
       // ── ① 标签先落库（record.tags 最新 + 实体同步 + 持久化） ──
       // 校验失败（正常表单不会触发，防御脏数据）则不落库、不发布事件
@@ -191,7 +268,41 @@ export function showTagManagement(player: Player, botName: string): void {
         currentRecord.autoStore = wantAutoStore;
         currentRecord.autoStorePoint = autoStorePoint;
       }
+      // 固定钓点：写入锚（用户规格 3.1.6：开关 + 坐标；关闭 = 清除锚，恢复自动选点）
+      const prevFs = currentRecord.fishingSpot;
+      const fsChanged =
+        typeof vals.fishSpotFixed === "boolean" &&
+        (wantFishSpotFixed !== (prevFs != null) ||
+          (wantFishSpotFixed &&
+            prevFs != null &&
+            fishSpotAnchor != null &&
+            (prevFs.stand.x !== fishSpotAnchor.stand.x ||
+              prevFs.stand.y !== fishSpotAnchor.stand.y ||
+              prevFs.stand.z !== fishSpotAnchor.stand.z)));
+      if (typeof vals.fishSpotFixed === "boolean") {
+        currentRecord.fishingSpot = wantFishSpotFixed ? fishSpotAnchor : null;
+      }
       setWorkMode(currentRecord, pickedWorkMode);
+      // 固定钓点变更 → 立即生效：重启钓鱼行为（先切无、再切回；仅在线且当前为钓鱼模式）
+      if (fsChanged) {
+        player.sendMessage(
+          wantFishSpotFixed && fishSpotAnchor
+            ? `${color.success}已设置固定钓点：(${fishSpotAnchor.stand.x}, ${fishSpotAnchor.stand.y}, ${fishSpotAnchor.stand.z})`
+            : `${color.success}已清除固定钓点（恢复自动选点）`,
+        );
+        if (currentRecord.online && pickedWorkMode === "fishing") {
+          setWorkMode(currentRecord, "none");
+          system.runTimeout(() => {
+            try {
+              setWorkMode(currentRecord, "fishing");
+            } catch {
+              /* 重启失败不影响已保存的设置 */
+            }
+          }, 10);
+        }
+      }
+      // ── 编程模式：勾选「写指令」→ 提交后直接打开指令编辑器 ──
+      if (vals.openScriptEditor === true) showScriptPanel(player, botName);
       // ── ③ 发布行为菜单提交领域事件（负载带表单参数 + tags） ──
       BotUiEvent.behaviorSubmitted.trigger({
         playerId: player.id,

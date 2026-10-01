@@ -28,6 +28,11 @@ import { registerTestCommand } from "./system/test";
 import { registerScanlogsCommand, registerScanleavesCommand, registerScantreeCommand } from "./system/blockscan";
 import { registerFishingCommands } from "./activity/fishing";
 import { registerBreakBlockCommand } from "./activity/blockbreak";
+import { registerScriptCommand } from "./script/script";
+import { registerWorkCommand } from "./behavior/work";
+import { registerCmdListCommand } from "./system/cmdlist";
+import { registerReconnectCommand } from "./lifecycle/reconnect";
+import { registerNotifyCommand } from "./system/notify";
 import { registerSafeOnlineCommand, registerSafeOfflineCommand, registerTickingAreaCommand } from "./lifecycle/safeOnline";
 // import { registerWoodcutCommands } from "./activity/woodcut"; // 已禁用
 
@@ -67,5 +72,10 @@ export function registerAllCommands(event: StartupEvent): void {
   registerScantreeCommand(registry);
   registerFishingCommands(registry);
   registerBreakBlockCommand(registry);
+  registerScriptCommand(registry);
+  registerWorkCommand(registry);
+  registerCmdListCommand(registry);
+  registerReconnectCommand(registry);
+  registerNotifyCommand(registry);
   // registerWoodcutCommands(registry); // 已禁用
 }

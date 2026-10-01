@@ -28,14 +28,18 @@ import { color } from "@yinxe/toolkit";
 import type { Behavior } from "../../../ai";
 import type { AiBehaviorContext } from "../brainEngine";
 import { longNavigateBot, navigateBot, NavigateResult } from "../../basic/move";
-import { findFishingSpots, hasFishingRod, isSpotUsable } from "../../basic/fishing";
+import { findFishingSpots, hasFishingRod, isSpotUsable, spotAtStand } from "../../basic/fishing";
 import { fishOnce, type FishingOutcome } from "../../flow/fishingFlow";
 import { computeTargetYaw } from "../../../rules/FishingRules";
 import { lookAt } from "../../basic/PoseGateway";
+import { botRegistry, saveCoordinator } from "../../../bootstrap/context";
 import {
   claimSpot,
   countUsable,
   FISH_POOL_KEY,
+  fromStoredSpot,
+  isSpotUsableFor,
+  mergePoolOne,
   mergeScanned,
   markFailSpot,
   pickBestSpot,
@@ -43,7 +47,9 @@ import {
   POOL_TTL_TICKS,
   releaseSpot,
   resetFailSpot,
+  spotKey,
   SPOT_MAX_DISTANCE,
+  toStoredSpot,
   type PoolSpot,
   type SpotPickOptions,
 } from "../../../rules/FishingPool";
@@ -126,6 +132,12 @@ export function makeFishingBehavior(config: FishingBehaviorConfig = DEFAULT_FISH
   let fishRun: Promise<unknown> | undefined;
   let fishResult: FishingOutcome | undefined;
   let scanCooldown = 0; // 扫描冷却（周期）
+  /** 固定钓点：本会话粘性降级（连续导航失败 → 暂不粘；reset 恢复） */
+  let stickyOff = false;
+  /** 固定钓点：连续导航失败计数 */
+  let stickyNavFails = 0;
+  /** 当前导航是否为固定钓点目标（失败计数用） */
+  let navStickyTarget = false;
   // ⚠️ reset 无参——闭包内捕获共享池引用与实体，用于释放占点/中断移动
   let lastShared: (import("../../../ai").SharedMemory) | undefined;
   let lastBot: SimulatedPlayer | undefined;
@@ -166,7 +178,8 @@ export function makeFishingBehavior(config: FishingBehaviorConfig = DEFAULT_FISH
   };
 
   /** 发起导航到站立格中心（longNavigateBot 段切，支持共享远点） */
-  const startNav = (botName: string, spot: PoolSpot): void => {
+  const startNav = (botName: string, spot: PoolSpot, sticky = false): void => {
+    navStickyTarget = sticky;
     navResult = undefined;
     navRun = longNavigateBot(botName, standCenter(spot), config.speed)
       .then((r) => {
@@ -219,6 +232,9 @@ export function makeFishingBehavior(config: FishingBehaviorConfig = DEFAULT_FISH
     alignRun = alignResult = undefined;
     fishRun = fishResult = undefined;
     scanCooldown = 0;
+    stickyOff = false;
+    stickyNavFails = 0;
+    navStickyTarget = false;
     lastShared = undefined;
     lastBot = undefined;
   };
@@ -243,6 +259,39 @@ export function makeFishingBehavior(config: FishingBehaviorConfig = DEFAULT_FISH
       return;
     }
     let pool = ai.shared.get<PoolSpot[]>(FISH_POOL_KEY) ?? [];
+    // ── 固定钓点（用户规格：选定后不换；跨上线沿用）──
+    // 挂在池上的持久锚：可用就一直用；被临时占用不换锚（本次临时选点）；
+    // 真失效（水没了/连续失败标记）才允许换新锚。
+    const stickyRec = botRegistry.get(botName);
+    let keepAnchor = false;
+    if (stickyRec?.fishingSpot && !stickyOff && stickyRec.fishingSpot.dimension === dim) {
+      const stored = stickyRec.fishingSpot;
+      const liveKey = spotKey(dim, stored.stand);
+      const existing = pool.find((s) => s.key === liveKey);
+      const live = existing ?? fromStoredSpot(stored);
+      if (!existing) {
+        pool = mergePoolOne(pool, live);
+        writePool(ai, pool);
+      }
+      const stateOk = isSpotUsableFor(live, botName, dim);
+      const sceneOk = stateOk && isSpotUsable(bot.dimension, live.stand, bot.id);
+      if (stateOk && sceneOk) {
+        // 固定点可用 → 直接用（不重新选点）
+        stickyNavFails = 0;
+        currentKey = live.key;
+        currentSpot = live;
+        pool = claimSpot(pool, currentKey, botName);
+        writePool(ai, pool);
+        notify(botName, "沿用固定钓点，前往");
+        startNav(botName, live, true);
+        phase = "navigate";
+        return;
+      }
+      // 不可用判定：临时 → 不换锚；真失效 → 允许换新锚
+      const occupiedByOther = live.status === "occupied" && live.claimant !== botName;
+      const structureGone = spotAtStand(bot.dimension, live.stand) === undefined;
+      keepAnchor = occupiedByOther || (!structureGone && live.status !== "unavailable");
+    }
     // 选点约束（用户规格）：只选**自身 maxDistance(16) 内** + **点位半径 1 内
     // 无其他实体**（isSpotUsable = 现场实体占用 + 点位仍构成钓鱼点）的有效点。
     const botLocation = bot.location;
@@ -276,6 +325,11 @@ export function makeFishingBehavior(config: FishingBehaviorConfig = DEFAULT_FISH
     currentSpot = pickGap;
     pool = claimSpot(pool, currentKey, botName);
     writePool(ai, pool);
+    // 固定钓点：记录本次选定（被临时占用时不更新锚，保留原点）
+    if (stickyRec && !keepAnchor) {
+      stickyRec.fishingSpot = toStoredSpot(pickGap);
+      saveCoordinator.saveRecord(stickyRec);
+    }
     notify(botName, `找到钓鱼点，前往（${pickGap.aim.level} 星）`);
     startNav(botName, pickGap);
     phase = "navigate";
@@ -287,11 +341,22 @@ export function makeFishingBehavior(config: FishingBehaviorConfig = DEFAULT_FISH
     const r = navResult;
     navRun = navResult = undefined;
     if (r !== NavigateResult.Arrived) {
+      // 固定钓点连续到不了：本会话降级（改常规选点；锚不删，下次会话重试）
+      if (navStickyTarget) {
+        stickyNavFails++;
+        if (stickyNavFails >= 2 && !stickyOff) {
+          stickyOff = true;
+          notify(ai.botName, "固定钓点暂时到不了，先就近找点");
+        }
+      }
+      navStickyTarget = false;
       releaseCurrent(ai);
       phase = "wait";
       wait = config.recheckCycles;
       return;
     }
+    if (navStickyTarget) stickyNavFails = 0;
+    navStickyTarget = false;
     phase = "align"; // 到达站位 → 对齐 + 看向水域
   };
 

@@ -23,6 +23,7 @@ import { registerUiSubscriptions as registerTagUi } from "../interaction/ui/pane
 import { registerUiSubscriptions as registerTridentUi } from "../interaction/ui/panels/trident";
 import { registerUiSubscriptions as registerTridentClaimUi } from "../interaction/ui/panels/tridentClaim";
 import { registerUiSubscriptions as registerMoveUi } from "../interaction/ui/panels/move";
+import { registerUiSubscriptions as registerScriptUi } from "../interaction/ui/panels/script";
 import { registerUiSubscriptions as registerDataUi } from "../interaction/commands/inspect/data";
 
 let registered = false;
@@ -51,5 +52,6 @@ export function registerUiDrivers(): void {
   registerTridentUi();
   registerTridentClaimUi();
   registerMoveUi();
+  registerScriptUi();
   registerDataUi();
 }

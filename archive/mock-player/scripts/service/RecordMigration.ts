@@ -39,5 +39,6 @@ export function normalizeRecord(record: BotRecord, defaultRespawn: PositionState
   }
   if (record.spawnMode === undefined) { record.spawnMode = "normal"; changed = true; }
   if (record.workMode === undefined) { record.workMode = "none"; changed = true; }
+  if (record.script === undefined) { record.script = { steps: [], loopCount: 1 }; changed = true; }
   return changed;
 }

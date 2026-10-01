@@ -14,6 +14,7 @@ import { showCreateForm } from "./panels/create";
 import { showOnlineManagement } from "./panels/online";
 import { showHelpGuide } from "./HelpGuide";
 import { showAdminMenu } from "./panels/adminMenu";
+import { showNotifyPanel } from "./panels/notify";
 import { isAdmin } from "../commands/auth";
 
 // ─── 主菜单 ──────────────────────────────────────────
@@ -24,6 +25,7 @@ export function showMainMenu(player: Player): void {
     .buttonWithIcon(style("创建模拟玩家", color.darkGreen), "textures/ui/mockplayer/create_bot", () => showCreateForm(player))
     .buttonWithIcon(style("模拟玩家列表", color.darkBlue), "textures/ui/mockplayer/bot_list", () => showBotList(player, () => showMainMenu(player)))
     .buttonWithIcon(style("在线管理", color.darkBlue), "textures/ui/mockplayer/online_management", () => showOnlineManagement(player))
+    .buttonWithIcon(style("通知设置", color.darkBlue), "textures/ui/mockplayer/notify", () => showNotifyPanel(player, () => showMainMenu(player)))
     .buttonWithIcon(style("帮助", color.darkBlue), "textures/ui/mockplayer/help", () => showHelpGuide(player));
 
   // 管理员菜单（仅管理员可见）

@@ -239,6 +239,12 @@ export interface BotRecord {
   autoStore?: boolean;
   /** 「自动存入容器」目标方块坐标（整数；null/缺省 = 未设置） */
   autoStorePoint?: { x: number; y: number; z: number } | null;
+  /** 编程模式脚本（仅 workMode === "script" 时生效；缺省 = 空脚本，只跑一遍） */
+  script?: ScriptProgram;
+  /** 编程模式「运行中」标记（用户规格：设置工作模式 ≠ 启动脚本；仅显式启动置 true） */
+  scriptRunning?: boolean;
+  /** 固定钓点锚（用户规格：选定后不换；跨上线沿用；结构见 FishingPool.StoredFishingSpot） */
+  fishingSpot?: import("./FishingPool").StoredFishingSpot | null;
   /** 最后已知位置（死亡时清空，由 respawnPoint 或在线刷新填充） */
   lastPoint: PositionState | null;
   /** 重生点（创建时由当前位置设定，可用 /mp:setRespawn 修改） */
@@ -325,6 +331,50 @@ export const SIM4_TICKING_RADIUS_CHUNKS = 4;
 export const AUX_TICKING_RADIUS_OPTIONS = [0, 4, 6, 8] as const;
 export const DEFAULT_AUX_TICKING_RADIUS = 4;
 
+// ─── 编程模式（script）：指令序列 ────────────────────────
+/** 编程模式用坐标（整数方块坐标；输入时向下取整） */
+export interface ScriptCoord {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * 编程模式单条指令（12 种模块；参数即类型）。
+ * 「对准某个方块」类模块（挖掘前方/使用物品/潜行/跳一下）带可选 look 坐标：
+ * 填了就先把头转向该坐标再动作，留空则按原行为执行。
+ */
+export type ScriptStep = (
+  | { type: "moveTo"; x: number; y: number; z: number }
+  | { type: "mine"; x: number; y: number; z: number }
+  | { type: "place"; x: number; y: number; z: number }
+  | { type: "look"; x: number; y: number; z: number }
+  | { type: "wait"; ticks: number }
+  | { type: "mineLook"; look?: ScriptCoord }
+  | { type: "useItem"; look?: ScriptCoord }
+  | { type: "hop"; look?: ScriptCoord }
+  | { type: "attack"; count: number }
+  | { type: "say"; text: string }
+  | { type: "sneak"; on: boolean; look?: ScriptCoord }
+  | { type: "jump"; target: number }
+) & { note?: string }; // 注释（用户规格 3.1.6：添加模块时填，列表里显示在最前）
+
+/** 编程模式脚本：指令序列 + 整段循环设置 */
+export interface ScriptProgram {
+  /** 指令序列（执行顺序即数组顺序） */
+  steps: ScriptStep[];
+  /** 整段循环次数：-1 = 一直循环；1 = 只跑一遍；N = 循环 N 次 */
+  loopCount: number;
+}
+
+/** 单脚本指令条数上限（先行保险；超限禁止继续添加） */
+export const MAX_SCRIPT_STEPS = 256;
+
+/** 编程模式脚本默认值（空脚本 + 只跑一遍） */
+export function createDefaultScriptProgram(): ScriptProgram {
+  return { steps: [], loopCount: 1 };
+}
+
 /** 模组菜单触发信物默认值（木棍） */
 export const DEFAULT_MENU_TRIGGER_ITEM = "minecraft:stick";
 
@@ -386,6 +436,10 @@ export function createDefaultConfig(): ModConfig {
       mine: true,
       place: true,
       attack: true,
+      // 编程模式为后加功能：默认启用（否则升级后的老配置里没有该键，脚本不会跑）
+      script: true,
+      // 宝库模式（合并自 v3）：默认启用（老配置缺键时由 ModConfigRules 自补）
+      vault: true,
     },
     menuTriggerItemId: DEFAULT_MENU_TRIGGER_ITEM,
     safeCooldownSeconds: 1,

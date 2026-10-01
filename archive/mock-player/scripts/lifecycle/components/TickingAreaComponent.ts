@@ -37,7 +37,8 @@ export class TickingAreaComponent implements LifecycleComponent {
   }
 
   private isVaultMode(record: BotRecord): boolean {
-    return record.tags.includes(TAG_VAULT_MODE.value);
+    // 宝库模式：旧标签或工作模式字段（vault）
+    return record.tags.includes(TAG_VAULT_MODE.value) || record.workMode === "vault";
   }
 
   // ── 上线后：仅入队共享队列，不阻塞上线（半径0则关闭） ──

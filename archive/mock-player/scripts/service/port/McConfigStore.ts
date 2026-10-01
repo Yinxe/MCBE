@@ -103,7 +103,8 @@ export class McConfigStore {
     if (enabled) {
       this.config.enabledWorkModes[mode] = true;
     } else {
-      delete this.config.enabledWorkModes[mode];
+      // 显式存 false（而非删键）：与「从未配置」区分，供后加模式（如编程模式）的默认值兜底判断
+      this.config.enabledWorkModes[mode] = false;
     }
     // 清理空对象保持 JSON 简洁
     if (this.config.enabledWorkModes && Object.keys(this.config.enabledWorkModes).length === 0) {

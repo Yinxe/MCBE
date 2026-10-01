@@ -85,6 +85,8 @@ export function sendData(player: Player, record: BotRecord): void {
     raid: "劫掠",
     fishing: "钓鱼",
     follow: "跟随",
+    autoInteract: "交互",
+    script: "编程",
   };
   const status = record.death
     ? `${color.error}死亡`

@@ -4,7 +4,8 @@
 // 兼容：旧 isVaultMode 仍被外部引用，保留本地实现（与 TickingAreaComponent 逻辑一致）
 import { TAG_VAULT_MODE as _TAG_VAULT_MODE } from "../../rules/tags/BotTags";
 export function isVaultMode(record: import("../../rules/Types").BotRecord): boolean {
-  return record.tags.includes(_TAG_VAULT_MODE.value);
+  // 宝库模式：旧标签或工作模式字段（vault）
+  return record.tags.includes(_TAG_VAULT_MODE.value) || record.workMode === "vault";
 }
 // checkOnlineQuota 已由 lifecycle/QuotaComponent 接管，此处转发以兼容旧 import
 export function checkOnlineQuota(record: import("../../rules/Types").BotRecord): string | undefined {
