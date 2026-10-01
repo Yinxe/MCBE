@@ -2,7 +2,7 @@
 
 This file provides guidance to the AI agent when working with code in this repository.
 
-> 模拟玩家（假人）Addon，OOP 全新重写。设计权威：`../../docs/mockplayer/`（01 功能 / 02 需求 / 03 详细设计 / 04 知识底座 / 11 归档差异审查）。旧版 `archive/mock-player` 仅作事实来源，不继承其目录与类名。
+> 模拟玩家（假人）Addon，OOP 全新重写。
 
 ## 分层与依赖纪律（机检级）
 
