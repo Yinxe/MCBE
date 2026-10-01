@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/moving_block"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "ABA",
-      "ACA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "ABA", "ACA"],
     "key": {
       "A": {
         "item": "redstone"

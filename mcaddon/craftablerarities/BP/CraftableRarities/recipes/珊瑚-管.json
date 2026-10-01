@@ -4,9 +4,7 @@
     "description": {
       "identifier": "craftablerarities/coral-0"
     },
-    "tags": [
-      "crafting_table"
-    ],
+    "tags": ["crafting_table"],
     "ingredients": [
       {
         "item": "coral_block",

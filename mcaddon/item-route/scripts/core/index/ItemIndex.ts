@@ -20,15 +20,12 @@ import { familyOf } from "../data/item-families";
 import type { ItemStack } from "../model/ItemStack";
 import type { ContainerId, ItemId } from "../model/types";
 
-
-
 /** 单条目：各角色容器桶 */
 export interface ItemBuckets {
   single: Set<ContainerId>;
   multi: Set<ContainerId>;
   misc: Set<ContainerId>;
 }
-
 
 function emptyBuckets(): ItemBuckets {
   return { single: new Set(), multi: new Set(), misc: new Set() };

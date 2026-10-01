@@ -58,54 +58,60 @@ scripts/
 
 ## 命令列表
 
-| 命令 | 描述 | 参数 |
-|------|------|------|
-| `/tpa:menu` | 打开传送管理菜单 | 无 |
-| `/tpa:warp <名称>` | 传送到指定传送点 | name |
-| `/tpa:setwarp <名称>` | 在当前位创建传送点 | name |
-| `/tpa:delwarp <名称>` | 删除传送点 | name |
-| `/tpa:warps` | 列表所有传送点 | 无 |
-| `/tpa:back` | 传送到最近死亡点 | 无 |
-| `/tpa:deathpoints` | 查看死亡点列表 | 无 |
-| `/tpa:tpa <玩家>` | 请求传送到玩家身边 | player |
-| `/tpa:tphere <玩家>` | 请求玩家传送到自己 | player |
-| `/tpa:tpaccept` | 接受传送请求 | 无 |
-| `/tpa:tpadeny` | 拒绝传送请求 | 无 |
-| `/tpa:public <名称>` | 切换公共传送点 | name |
-| `/tpa:publiclist` | 查看公共传送点 | 无 |
-| `/tpa:admin` | 管理设置（OP） | 无 |
-| `/tpa:config` | 查看配置（OP） | 无 |
+| 命令                  | 描述               | 参数   |
+| --------------------- | ------------------ | ------ |
+| `/tpa:menu`           | 打开传送管理菜单   | 无     |
+| `/tpa:warp <名称>`    | 传送到指定传送点   | name   |
+| `/tpa:setwarp <名称>` | 在当前位创建传送点 | name   |
+| `/tpa:delwarp <名称>` | 删除传送点         | name   |
+| `/tpa:warps`          | 列表所有传送点     | 无     |
+| `/tpa:back`           | 传送到最近死亡点   | 无     |
+| `/tpa:deathpoints`    | 查看死亡点列表     | 无     |
+| `/tpa:tpa <玩家>`     | 请求传送到玩家身边 | player |
+| `/tpa:tphere <玩家>`  | 请求玩家传送到自己 | player |
+| `/tpa:tpaccept`       | 接受传送请求       | 无     |
+| `/tpa:tpadeny`        | 拒绝传送请求       | 无     |
+| `/tpa:public <名称>`  | 切换公共传送点     | name   |
+| `/tpa:publiclist`     | 查看公共传送点     | 无     |
+| `/tpa:admin`          | 管理设置（OP）     | 无     |
+| `/tpa:config`         | 查看配置（OP）     | 无     |
 
 ---
 
 ## 关键约定
 
 ### 消息着色
+
 ```
 §a = 绿色（成功）   §c = 红色（错误）     §e = 黄色（玩家名/传送点名）
 §7 = 灰色（辅助）   §b = 青色（标题）      §f = 白色（坐标/数值）
 ```
 
 ### 命令
+
 - 前缀 `tpa:`（如 `/tpa:warp`, `/tpa:back`）
 - 所有命令 `cheatsRequired: false` + `permissionLevel: Any`（保持成就可用）
 - 在 `system.beforeEvents.startup` 注册
 
 ### 持久化
+
 - `world.setDynamicProperty` 存储玩家数据
 - Key 格式: `teleporter:player:<playerId>` → PlayerData JSON
 - Key 格式: `teleporter:config` → ModConfig JSON
 - Key 格式: `teleporter:players` → 玩家 ID 索引数组
 
 ### 管理员
+
 - 同时支持原生 OP 和 `tag=op` 标签两种方式
 - 见 `adminManager.ts`
 
 ### 传送点排序
+
 - 置顶 → 传送次数（降序）
 - 公共传送点同样按次数排序
 
 ### 智能检测
+
 - 新建传送点时自动使用 `Dimension.getBiome()` 检测群系名称
 - 同时通过方块检测识别附近结构（村庄/古城/下界堡垒/堡垒残骸/末地城/沙漠神殿/海底神殿/林地府邸/要塞）
 - 检测结果自动填入名称/分类/备注，详见 `detection.ts`
@@ -115,19 +121,21 @@ scripts/
 
 ## 依赖版本
 
-| 包 | 版本 |
-|---|------|
-| @minecraft/server | 2.6.0 |
-| @minecraft/server-ui | 2.0.0 |
-| @yinxe/toolkit | workspace:* |
-| @minecraft/core-build-tasks | 5.5.0 |
+| 包                          | 版本        |
+| --------------------------- | ----------- |
+| @minecraft/server           | 2.6.0       |
+| @minecraft/server-ui        | 2.0.0       |
+| @yinxe/toolkit              | workspace:* |
+| @minecraft/core-build-tasks | 5.5.0       |
 
 ### 成就兼容
+
 - 所有命令 `cheatsRequired: false` + `permissionLevel: Any`
 - 使用 Script API `player.teleport()` 而非 `/teleport` 命令
 - 模组本身 **不会禁用成就**
 
 ### 消息格式
+
 - 传送成功: `§a已传送到 §e{名称} §7（§7{维度} §f{坐标}§7）`
 - 传送失败: `§c传送失败，{原因}`
 - 空状态: `§7{提示信息}`

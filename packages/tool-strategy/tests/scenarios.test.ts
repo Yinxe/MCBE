@@ -10,7 +10,6 @@ import { registerStrategy, select, STRATEGY_PRESETS } from "../src/index";
 import type { ToolCandidate, ToolSelectorConfig, ToolStrategy, ToolTree } from "../src/index";
 import { swapSlot, tool } from "./helpers";
 
-
 /** 单策略树（测试档位逻辑用） */
 function cfg(strategy: ToolStrategy, reselectIfCurrent = false): ToolSelectorConfig {
   return {
@@ -23,7 +22,6 @@ function cfg(strategy: ToolStrategy, reselectIfCurrent = false): ToolSelectorCon
 function treeCfg(tree: ToolTree, reselectIfCurrent = false): ToolSelectorConfig {
   return { tree, reselectIfCurrent };
 }
-
 
 // ─── 多档位深度回落（真实挖掘场景） ────────────────────
 
@@ -107,10 +105,7 @@ test("三维交叉：同角色档位按品阶区间细分——铁质效率5斧 
 test("三维交叉：角色不同一票否决——镐档绝不收斧", () => {
   const s: ToolStrategy = {
     name: "role-strict",
-    want: [
-      { role: "pickaxe", require: [{ type: "fortune", minLevel: 3 }] },
-      { role: "pickaxe" },
-    ],
+    want: [{ role: "pickaxe", require: [{ type: "fortune", minLevel: 3 }] }, { role: "pickaxe" }],
   };
   const f3Axe = tool({ slot: 1, enchants: { fortune: 3 } }); // 时运3 斧——不是镐
   const plainPick = tool({ slot: 2, role: "pickaxe" });
@@ -186,10 +181,7 @@ const MINING_TREE: ToolTree = {
         type: "by-strategy",
         strategy: {
           name: "ore",
-          want: [
-            { role: "pickaxe", require: [{ type: "fortune", minLevel: 3 }] },
-            { role: "pickaxe" },
-          ],
+          want: [{ role: "pickaxe", require: [{ type: "fortune", minLevel: 3 }] }, { role: "pickaxe" }],
           sortBy: [{ dim: "enchant", type: "fortune" }, { dim: "tier" }],
         },
       },
@@ -343,7 +335,10 @@ test("决策树：branch 深层嵌套——外层 branch 内再嵌套 by-block+b
             node: {
               type: "branch",
               nodes: [
-                { type: "by-strategy", strategy: { name: "ore", want: [{ role: "pickaxe", require: [{ type: "fortune" }] }] } },
+                {
+                  type: "by-strategy",
+                  strategy: { name: "ore", want: [{ role: "pickaxe", require: [{ type: "fortune" }] }] },
+                },
                 { type: "by-strategy", strategy: { name: "fallback", want: [{ role: "pickaxe" }] } },
               ],
             },
@@ -427,11 +422,7 @@ test("ban 组合：banRoles + banEnchants 同时生效且一票否决", () => {
 test("特殊角色：shears(tier0)/trident/bow 角色精确匹配", () => {
   const s: ToolStrategy = {
     name: "special",
-    want: [
-      { role: "shears" },
-      { role: "trident" },
-      { role: "bow" },
-    ],
+    want: [{ role: "shears" }, { role: "trident" }, { role: "bow" }],
   };
   const shears = tool({ slot: 1, role: "shears", tier: 0 });
   const trident = tool({ slot: 2, role: "trident", tier: 6 });
@@ -574,12 +565,7 @@ const WOODCUT_TREE: ToolTree = {
         type: "by-strategy",
         strategy: {
           name: "woodcut-leaf",
-          want: [
-            { role: "hoe", require: [{ type: "silk" }] },
-            { role: "shears" },
-            { require: [{ type: "silk" }] },
-            {},
-          ],
+          want: [{ role: "hoe", require: [{ type: "silk" }] }, { role: "shears" }, { require: [{ type: "silk" }] }, {}],
           sortBy: [{ dim: "enchant", type: "silk" }, { dim: "tier" }],
         },
       },

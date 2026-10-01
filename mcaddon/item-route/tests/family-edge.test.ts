@@ -17,11 +17,7 @@ import { ItemIndex } from "../scripts/core/index/ItemIndex";
 import { EventBus } from "../scripts/core/events/DomainEvents";
 import { InMemoryContainer } from "./helpers/InMemoryContainer";
 import { SimpleItemStack } from "../scripts/core/model/ItemStack";
-import {
-  createDefaultSettings,
-  isFamilyEnabled,
-  type Warehouse,
-} from "../scripts/core/model/Warehouse";
+import { createDefaultSettings, isFamilyEnabled, type Warehouse } from "../scripts/core/model/Warehouse";
 import { ITEM_FAMILIES, familyOf, DEFAULT_ENABLED_FAMILIES } from "../scripts/core/data/item-families";
 
 function makeWorld() {

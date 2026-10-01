@@ -3,14 +3,7 @@ import { Vector3 } from "@minecraft/server";
 // ─── 枚举 ──────────────────────────────────────────────────────────
 
 /** 传送点分类 */
-export const WAYPOINT_CATEGORIES = [
-  "家",
-  "资源点",
-  "生电",
-  "遗迹",
-  "群系",
-  "其他",
-] as const;
+export const WAYPOINT_CATEGORIES = ["家", "资源点", "生电", "遗迹", "群系", "其他"] as const;
 
 export type WaypointCategory = (typeof WAYPOINT_CATEGORIES)[number];
 

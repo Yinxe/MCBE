@@ -26,11 +26,7 @@ export interface CopyOptions {
 // ─── Functions ──────────────────────────────────────────────────
 
 /** Create bundle task options for @minecraft/core-build-tasks. */
-export function bundleOptions(
-  projectDir: string,
-  entryPoint: string,
-  externals: string[] = []
-): BundleParams {
+export function bundleOptions(projectDir: string, entryPoint: string, externals: string[] = []): BundleParams {
   return {
     entryPoint: path.join(projectDir, entryPoint),
     external: externals,
@@ -42,11 +38,7 @@ export function bundleOptions(
 }
 
 /** Create copy task options for @minecraft/core-build-tasks. */
-export function copyOptions(
-  projectDir: string,
-  projectName: string,
-  opts: CopyOptions = {}
-): CopyParams {
+export function copyOptions(projectDir: string, projectName: string, opts: CopyOptions = {}): CopyParams {
   const { bpDir = "BP", hasRp = true } = opts;
   const result: CopyParams = {
     copyToBehaviorPacks: [`./${bpDir}/${projectName}`],

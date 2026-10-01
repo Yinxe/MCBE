@@ -4,9 +4,7 @@
     {
       "label": "build",
       "dependsOrder": "sequence",
-      "dependsOn": [
-        "minecraft: deploy"
-      ]
+      "dependsOn": ["minecraft: deploy"]
     }
   ]
 }

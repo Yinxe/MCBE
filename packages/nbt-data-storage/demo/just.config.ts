@@ -35,10 +35,7 @@ task("sync-version", () => {
   });
 });
 
-const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", [
-  "@minecraft/server",
-  "@minecraft/server-ui",
-]);
+const bundleTaskOptions = bundleOptions(__dirname, "./scripts/main.ts", ["@minecraft/server", "@minecraft/server-ui"]);
 const copyTaskOptions = copyOptions(__dirname, PROJECT_NAME, { hasRp: false });
 const mcaddonTaskOptions = {
   ...copyTaskOptions,
@@ -54,10 +51,7 @@ task("copyArtifacts", copyTask(copyTaskOptions));
 task("package", series("clean-collateral", "copyArtifacts"));
 task(
   "local-deploy",
-  watchTask(
-    ["scripts/**/*.ts", "BP/**/*.{json,lang,tga,ogg,png}"],
-    series("clean-local", "build", "package")
-  )
+  watchTask(["scripts/**/*.ts", "BP/**/*.{json,lang,tga,ogg,png}"], series("clean-local", "build", "package"))
 );
 task("createMcaddonFile", mcaddonTask(mcaddonTaskOptions));
 

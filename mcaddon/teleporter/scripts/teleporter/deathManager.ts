@@ -8,11 +8,7 @@ import { DeathPointRecord, MAX_DEATH_POINTS, generateId } from "./types";
  * 记录玩家的死亡位置。
  * 保留最近 MAX_DEATH_POINTS (10) 次死亡点。
  */
-export function recordDeath(
-  player: Player,
-  location: Vector3,
-  dimensionId: string,
-): void {
+export function recordDeath(player: Player, location: Vector3, dimensionId: string): void {
   const data = loadPlayerData(player.id);
 
   const record: DeathPointRecord = {

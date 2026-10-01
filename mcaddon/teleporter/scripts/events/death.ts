@@ -21,7 +21,9 @@ export function subscribeDeathEvent(): void {
     system.run(() => {
       try {
         recordDeath(player, loc, dim);
-        console.warn(`[Teleporter] 记录玩家 ${player.name} 的死亡点 [${dim}] ${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)}`);
+        console.warn(
+          `[Teleporter] 记录玩家 ${player.name} 的死亡点 [${dim}] ${Math.floor(loc.x)}, ${Math.floor(loc.y)}, ${Math.floor(loc.z)}`,
+        );
       } catch (e: any) {
         console.warn(`[Teleporter] 记录死亡失败: ${e.message}`);
       }

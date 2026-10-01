@@ -52,9 +52,6 @@ test("BoundaryGeometry: 棱线框落到外表面（max+1）——4 条竖棱在�
   // 竖棱固定坐标随区域外扩：存在 x=5,z=5 的一整条竖棱（y 走满 min..max+1）
   for (const c of ["5,5", "0,5", "5,0", "0,0"]) {
     const [cx, cz] = c.split(",").map(Number);
-    assert.ok(
-      keys.has(`${cx},0,${cz}`) && keys.has(`${cx},5,${cz}`),
-      `竖棱 ${c} 应从底面到顶面`
-    );
+    assert.ok(keys.has(`${cx},0,${cz}`) && keys.has(`${cx},5,${cz}`), `竖棱 ${c} 应从底面到顶面`);
   }
 });

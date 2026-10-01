@@ -5,11 +5,7 @@
       "identifier": "craftablerarities/ender_dragon_spawn_egg"
     },
     "tags": ["crafting_table"],
-    "pattern": [
-      "EBE",
-      "BCB",
-      "EBE"
-    ],
+    "pattern": ["EBE", "BCB", "EBE"],
     "key": {
       "E": {
         "item": "end_crystal"

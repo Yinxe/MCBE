@@ -5,10 +5,7 @@
       "identifier": "craftablerarities/water_ice"
     },
     "tags": ["crafting_table"],
-    "pattern": [
-      "AA",
-      "AA"
-    ],
+    "pattern": ["AA", "AA"],
     "key": {
       "A": {
         "item": "ice"

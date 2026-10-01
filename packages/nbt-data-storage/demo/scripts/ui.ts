@@ -186,7 +186,10 @@ export async function showTakeBySlot(player: Player): Promise<void> {
 export async function showOverwriteBySlot(player: Player): Promise<void> {
   const vals = await new ModalFormBuilder()
     .title("§l覆写 · 手持物品 → 格子")
-    .label("_hint", "§7把手中物品单向覆写到指定格子（slotId 不变）\n§7⚠️ 旧物品随覆盖丢弃不可找回；想保留旧物请用「安全交换」")
+    .label(
+      "_hint",
+      "§7把手中物品单向覆写到指定格子（slotId 不变）\n§7⚠️ 旧物品随覆盖丢弃不可找回；想保留旧物请用「安全交换」"
+    )
     .textFieldWithPlaceholder("slotId", "格子号（slotId）", "已有物品的格号，如 3")
     .divider()
     .submitButton("覆写")

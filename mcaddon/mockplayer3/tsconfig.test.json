@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "outDir": ".test-build",
+    "rootDir": "."
+  },
+  "include": ["scripts/domain/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", ".test-build", "lib", "dist"]
+}

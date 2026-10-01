@@ -29,8 +29,8 @@ A lightweight Minecraft Bedrock behavior pack that enables keepInventory on worl
 
 ### 依赖
 
-| 模块 | 版本 |
-|------|-------|
+| 模块                | 版本                                                |
+| ------------------- | --------------------------------------------------- |
 | `@minecraft/server` | package.json: `2.0.0`；manifest.json 声明 `[2,5,0]` |
 
 ---

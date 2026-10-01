@@ -39,14 +39,17 @@ const playerJoin = new EventSignal<PlayerJoinEvent>();
 
 // ─── 3. 订阅（注册后，后续 trigger 才会派发到它）→ 取消订阅 → 触发 ───
 playerJoin.subscribe((e) => console.warn(`[demo] ${e.playerName} 加入`));
-playerJoin.unsubscribe(cb);                             // 用同一回调引用取消
-playerJoin.trigger({ playerId: "x", playerName: "Alice" });  // 同步派发给所有订阅者
+playerJoin.unsubscribe(cb); // 用同一回调引用取消
+playerJoin.trigger({ playerId: "x", playerName: "Alice" }); // 同步派发给所有订阅者
 ```
 
 ### 可取消事件
 
 ```typescript
-interface ItemUseEvent { playerId: string; itemTypeId: string }
+interface ItemUseEvent {
+  playerId: string;
+  itemTypeId: string;
+}
 
 const itemUse = new CancelableEventSignal<ItemUseEvent>();
 itemUse.subscribe((e) => {
@@ -70,20 +73,20 @@ export type CancelableEvent<T> = T & { cancel: boolean };
 export class CancelableEventSignal<T> {
   subscribe(callback: (event: CancelableEvent<T>) => void): void;
   unsubscribe(callback: (event: CancelableEvent<T>) => void): void;
-  trigger(event: T): boolean;   // 被取消返回 false，否则 true
+  trigger(event: T): boolean; // 被取消返回 false，否则 true
 }
 ```
 
 ## 行为语义
 
-| 场景 | 行为 |
-|------|------|
-| trigger 时无订阅者 | 安全空操作，不报错 |
-| 订阅者回调抛异常 | try-catch 包裹，`console.warn("[events] 订阅者回调异常:", e)` 记录，不影响其他订阅者 |
-| 回调中 subscribe / unsubscribe | 快照遍历，安全 |
-| 同一回调重复 subscribe | 只注册一次（去重） |
-| unsubscribe 未注册的回调 | 静默忽略 |
-| 可取消事件 trigger | 内部构造 `{ ...event, cancel: false }` 浅拷贝派发；任一订阅者置 `cancel = true` 即取消，其余订阅者仍会收到（忠实 MCBE：所有 before 订阅者都收到事件），trigger 返回 `false` |
+| 场景                           | 行为                                                                                                                                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| trigger 时无订阅者             | 安全空操作，不报错                                                                                                                                                          |
+| 订阅者回调抛异常               | try-catch 包裹，`console.warn("[events] 订阅者回调异常:", e)` 记录，不影响其他订阅者                                                                                        |
+| 回调中 subscribe / unsubscribe | 快照遍历，安全                                                                                                                                                              |
+| 同一回调重复 subscribe         | 只注册一次（去重）                                                                                                                                                          |
+| unsubscribe 未注册的回调       | 静默忽略                                                                                                                                                                    |
+| 可取消事件 trigger             | 内部构造 `{ ...event, cancel: false }` 浅拷贝派发；任一订阅者置 `cancel = true` 即取消，其余订阅者仍会收到（忠实 MCBE：所有 before 订阅者都收到事件），trigger 返回 `false` |
 
 ## 错误处理与日志
 

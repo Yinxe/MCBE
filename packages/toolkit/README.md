@@ -12,12 +12,12 @@ MCBE addon monorepo 的**共享运行时库**，提供 color（着色）、ui（
 
 ## 安装与依赖
 
-| 项 | 值 |
-|---|---|
-| 版本 | 0.1.0（`private: true`） |
-| 入口 | `src/index.ts`（`main` / `types` 均指向源码） |
-| peerDependencies | `@minecraft/server` >= 2.0.0 |
-| | `@minecraft/server-ui` >= 2.0.0 |
+| 项               | 值                                            |
+| ---------------- | --------------------------------------------- |
+| 版本             | 0.1.0（`private: true`）                      |
+| 入口             | `src/index.ts`（`main` / `types` 均指向源码） |
+| peerDependencies | `@minecraft/server` >= 2.0.0                  |
+|                  | `@minecraft/server-ui` >= 2.0.0               |
 
 ## 公共 API
 

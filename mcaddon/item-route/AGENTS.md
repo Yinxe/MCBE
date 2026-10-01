@@ -37,17 +37,17 @@ scripts/
 
 ## 命令（`ir:` 前缀）
 
-| 命令 | 权限 | 说明 |
-|------|------|------|
-| `/ir:menu` | any | 主菜单（搜索/管理/建仓/帮助；管理员额外：模组配置） |
-| `/ir:create <名称> <pos1> <pos2>` | any | 按两对角坐标创建仓库区域（校验体积/间距/同名/每玩家上限） |
-| `/ir:resize <名称> <pos1> <pos2>` | owner | 调整仓库区域（区域变化 → ID 迁移 + 容器失效重扫） |
-| `/ir:rescan <名称>` | member+ | 重扫区域补注册容器 |
-| `/ir:rescan_preview <名称>` | member+ | 只读预览区域内容器清单 |
-| `/ir:delete <名称>` | owner | 删除仓库（副作用经领域事件联动清内存/持久化键） |
-| `/ir:organize` | any | 整理**玩家所在仓库**全部容器（就地类型排序 + 合并堆叠） |
-| `/ir:search <关键词>` | member+ | 就近仓库搜物品 + 紫色粒子标记 |
-| `/ir:help` | any | 帮助手册 |
+| 命令                              | 权限    | 说明                                                      |
+| --------------------------------- | ------- | --------------------------------------------------------- |
+| `/ir:menu`                        | any     | 主菜单（搜索/管理/建仓/帮助；管理员额外：模组配置）       |
+| `/ir:create <名称> <pos1> <pos2>` | any     | 按两对角坐标创建仓库区域（校验体积/间距/同名/每玩家上限） |
+| `/ir:resize <名称> <pos1> <pos2>` | owner   | 调整仓库区域（区域变化 → ID 迁移 + 容器失效重扫）         |
+| `/ir:rescan <名称>`               | member+ | 重扫区域补注册容器                                        |
+| `/ir:rescan_preview <名称>`       | member+ | 只读预览区域内容器清单                                    |
+| `/ir:delete <名称>`               | owner   | 删除仓库（副作用经领域事件联动清内存/持久化键）           |
+| `/ir:organize`                    | any     | 整理**玩家所在仓库**全部容器（就地类型排序 + 合并堆叠）   |
+| `/ir:search <关键词>`             | member+ | 就近仓库搜物品 + 紫色粒子标记                             |
+| `/ir:help`                        | any     | 帮助手册                                                  |
 
 权限矩阵：`owner > member > visitor`，由 `auth.ts COMMAND_MIN_ROLE` 声明 + `MemberService.can` 判定。
 ⚠️ 审查保留项：`ir:organize`/`ir:create` 当前为 any（非成员可整理他人仓容器/建仓，不丢物但有骚扰面）——如需收紧（member+）可改 COMMAND_MIN_ROLE。

@@ -272,22 +272,19 @@ export class Scheduler {
   }
 
   private createInterval(rt: Runtime): IntervalHandle {
-    return this.intervals.createInterval(
-      () => {
-        this.processOnce(rt);
-        // 待补容器 pump：随该仓**自己的路由节奏**（interval 仅 active 存在）每轮重试跳过注册的
-        // 容器——区块慢加载的等区块好了注册、空气/非容器确认移除（见 pumpPendingReloads）。
-        // 与路由同频 = 激活后第一个 interval 周期（默认 ~1s）即覆盖"延迟初始化"；失败隔离不影响路由。
-        if (this.options.indexLifecycle?.refresh !== undefined && rt.index !== undefined) {
-          try {
-            this.options.indexLifecycle.refresh(rt.warehouse, rt.index);
-          } catch {
-            // 补注册失败（区块个别未加载）→ 下轮再试，不影响路由
-          }
+    return this.intervals.createInterval(() => {
+      this.processOnce(rt);
+      // 待补容器 pump：随该仓**自己的路由节奏**（interval 仅 active 存在）每轮重试跳过注册的
+      // 容器——区块慢加载的等区块好了注册、空气/非容器确认移除（见 pumpPendingReloads）。
+      // 与路由同频 = 激活后第一个 interval 周期（默认 ~1s）即覆盖"延迟初始化"；失败隔离不影响路由。
+      if (this.options.indexLifecycle?.refresh !== undefined && rt.index !== undefined) {
+        try {
+          this.options.indexLifecycle.refresh(rt.warehouse, rt.index);
+        } catch {
+          // 补注册失败（区块个别未加载）→ 下轮再试，不影响路由
         }
-      },
-      this.clampSpeed(rt.warehouse.settings.processingSpeed)
-    );
+      }
+    }, this.clampSpeed(rt.warehouse.settings.processingSpeed));
   }
 
   /**

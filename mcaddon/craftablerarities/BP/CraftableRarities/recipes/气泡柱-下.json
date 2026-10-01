@@ -4,13 +4,8 @@
     "description": {
       "identifier": "craftablerarities/bubble_column_1"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "A",
-      "B"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["A", "B"],
     "key": {
       "A": {
         "item": "water"

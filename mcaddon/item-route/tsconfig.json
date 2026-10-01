@@ -19,7 +19,6 @@
     "noImplicitUseStrict": false,
     "outDir": "lib",
     "rootDir": ".",
-    "baseUrl": "BP/",
     "listFiles": false,
     "noEmitHelpers": true,
     "resolveJsonModule": true,

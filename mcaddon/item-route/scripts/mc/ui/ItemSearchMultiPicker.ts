@@ -34,7 +34,10 @@ export async function showItemSearchMultiPicker(
   // ── 表单 1：搜索框 + 已添加项开关 ──
   const form1 = new ModalFormBuilder()
     .title(`${uiColor.form.title}${opts.title}`)
-    .label("info", `${uiColor.form.muted}${opts.hint}\n${uiColor.form.muted}已添加 ${uiColor.form.body}${currentItems.length} 项`)
+    .label(
+      "info",
+      `${uiColor.form.muted}${opts.hint}\n${uiColor.form.muted}已添加 ${uiColor.form.body}${currentItems.length} 项`
+    )
     .textField("search", `${uiColor.form.body}搜索（中文 / id）`, {
       tooltip: "输入后提交会弹出搜索结果供勾选添加；留空则直接提交下方开关状态",
     });
@@ -51,7 +54,7 @@ export async function showItemSearchMultiPicker(
   // 保留项 = 勾选的已添加项（未勾选 = 移除）
   const kept: string[] = currentItems.filter((_, i) => v1[`cur_${i}`] === true);
 
-  const q = (v1.search as string ?? "").trim();
+  const q = ((v1.search as string) ?? "").trim();
   // 无搜索词：直接提交当前开关状态
   if (!q) {
     opts.setItems(kept);

@@ -13,11 +13,7 @@ import { getChineseName } from "../../core/data/ItemNameMap";
 import * as uiColor from "./uiColor";
 
 /** 打开同族配置（owner+）：单个模态，一族一个开关（成员中文名在 tooltip） */
-export async function showFamilyConfigMenu(
-  player: Player,
-  deps: CommandDeps,
-  warehouse: Warehouse
-): Promise<void> {
+export async function showFamilyConfigMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
   if (!requireRole(deps.members, warehouse, player.name, "owner", canManage(player))) {
     player.sendMessage(`${uiColor.chat.error}需要管理员权限`);
     return;
@@ -46,7 +42,5 @@ export async function showFamilyConfigMenu(
     if (values[`fam_${f.id}`] === true) enabled.push(f.id);
   }
   deps.warehouses.updateSettings(warehouse, { enabledFamilies: enabled });
-  player.sendMessage(
-    `${uiColor.chat.success}同族配置已保存（启用 ${enabled.length}/${ITEM_FAMILIES.length} 族）`
-  );
+  player.sendMessage(`${uiColor.chat.success}同族配置已保存（启用 ${enabled.length}/${ITEM_FAMILIES.length} 族）`);
 }

@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/reinforced_deepslate"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "ABA",
-      "BBB",
-      "ABA"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["ABA", "BBB", "ABA"],
     "key": {
       "A": {
         "item": "sculk_catalyst"

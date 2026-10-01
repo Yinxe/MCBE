@@ -46,11 +46,7 @@ test("采纳路径：测试区域记录 + 测试标记 → 正常采纳（getReg
     slotPerBarrel: 5,
     test: true,
   });
-  const r = resolveRegistration(
-    persisted,
-    { dimensionId: "minecraft:the_end", test: true },
-    { cx: 1, cz: 1 }
-  );
+  const r = resolveRegistration(persisted, { dimensionId: "minecraft:the_end", test: true }, { cx: 1, cz: 1 });
   assert.equal(r.layout.maxLevels, 8); // 采纳记录布局（含测试参数）
   assert.equal(r.layout.slotPerBarrel, 5);
   assert.equal(r.layout.test, true);

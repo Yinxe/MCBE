@@ -107,7 +107,9 @@ export function pumpPendingReloads(
     }
     const block = readBlock(warehouse, entry.locations[0] ?? { x: 0, y: 0, z: 0 });
     const action =
-      block === undefined ? decidePendingAction(undefined) : decidePendingAction({ isAir: block.isAir, typeId: block.typeId });
+      block === undefined
+        ? decidePendingAction(undefined)
+        : decidePendingAction({ isAir: block.isAir, typeId: block.typeId });
     if (action === "skip") continue; // 区块仍未加载 → 下轮
     pending.delete(cid); // 本轮必有结论（remove / register）
     if (action === "remove") {
@@ -157,7 +159,10 @@ function createFromEntry(
 }
 
 /** 安全读取仓库维度下坐标方块（区块未加载/访问失败 → undefined，绝不让调用方崩） */
-function readBlock(warehouse: Warehouse, loc: { x: number; y: number; z: number }): import("@minecraft/server").Block | undefined {
+function readBlock(
+  warehouse: Warehouse,
+  loc: { x: number; y: number; z: number }
+): import("@minecraft/server").Block | undefined {
   try {
     return world.getDimension(warehouse.area.dimension).getBlock(loc) ?? undefined;
   } catch {

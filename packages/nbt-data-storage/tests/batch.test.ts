@@ -55,15 +55,24 @@ test("输入乱序：组内保留输入下标（输出对齐）", () => {
   // 桶0 组：0（input 1）、5（input 2）；桶1 组：27（input 0）
   const barrel0 = groups.get("0,0,0")!;
   const barrel1 = groups.get("1,0,0")!;
-  assert.deepEqual(barrel0.map((e) => e.inputIndex), [1, 2]);
-  assert.deepEqual(barrel1.map((e) => e.inputIndex), [0]);
+  assert.deepEqual(
+    barrel0.map((e) => e.inputIndex),
+    [1, 2]
+  );
+  assert.deepEqual(
+    barrel1.map((e) => e.inputIndex),
+    [0]
+  );
 });
 
 test("重复 slotId 各自保留（重复读，不合并去重）", () => {
   const groups = groupSlotIdsByBarrel([3, 3], LAYOUT);
   const entries = [...groups.values()][0]!;
   assert.equal(entries.length, 2);
-  assert.deepEqual(entries.map((e) => e.slotInBarrel), [3, 3]);
+  assert.deepEqual(
+    entries.map((e) => e.slotInBarrel),
+    [3, 3]
+  );
 });
 
 test("跨层：第二层桶 y 上移（baseY + level）", () => {
@@ -79,8 +88,5 @@ test("跨层：第二层桶 y 上移（baseY + level）", () => {
 test("barrelKey 唯一标识木桶", () => {
   assert.equal(barrelKey({ x: 1, y: 2, z: 3, slotInBarrel: 0 }), "1,2,3");
   // 不同格同桶 → 相同 key
-  assert.equal(
-    barrelKey({ x: 5, y: 0, z: 7, slotInBarrel: 0 }),
-    barrelKey({ x: 5, y: 0, z: 7, slotInBarrel: 26 })
-  );
+  assert.equal(barrelKey({ x: 5, y: 0, z: 7, slotInBarrel: 0 }), barrelKey({ x: 5, y: 0, z: 7, slotInBarrel: 26 }));
 });

@@ -21,14 +21,7 @@
 // ⚠️ 已知限制：scriptevent best-effort（~1 tick 递送延迟，极端负载可能丢事件）；仲裁收敛
 // 延迟约一个声明周期，转换瞬间可能短暂双写后自愈。任意行为包可伪造总线（自家套件内可接受）。
 // sidebar 槽框架就绪、暂无消费模组，建议冒烟后再启用。
-import {
-  world,
-  system,
-  DisplaySlotId,
-  ObjectiveSortOrder,
-  ScoreboardIdentityType,
-  Player,
-} from "@minecraft/server";
+import { world, system, DisplaySlotId, ObjectiveSortOrder, ScoreboardIdentityType, Player } from "@minecraft/server";
 import type { Dimension, ScriptEventCommandMessageAfterEvent } from "@minecraft/server";
 import { pickWinner, type BusClaim } from "./arbiter";
 
@@ -152,10 +145,7 @@ export class HudManager {
   private readonly expiryTicks: number;
   private readonly sources: HudSource[] = [];
   /** 其他包声明：modId → (各槽位声明 + 收到时 tick) */
-  private readonly others = new Map<
-    string,
-    { slots: Partial<Record<HudSlot, SlotClaim>>; lastSeenTick: number }
-  >();
+  private readonly others = new Map<string, { slots: Partial<Record<HudSlot, SlotClaim>>; lastSeenTick: number }>();
   private intervalId?: number;
   private unlisten?: () => void;
   /** 是否启用显示（setEnabled 暂停/恢复；停用时释放全部声明并清残留） */
@@ -385,9 +375,7 @@ export class HudManager {
     for (const slot of HUD_SLOTS) {
       const s = c[slot];
       if (s && typeof s === "object" && typeof s.p === "number" && s.p > 0) {
-        const names = Array.isArray(s.n)
-          ? s.n.filter((x: unknown): x is string => typeof x === "string")
-          : [];
+        const names = Array.isArray(s.n) ? s.n.filter((x: unknown): x is string => typeof x === "string") : [];
         slots[slot] = { priority: s.p, names: names.includes("*") ? "*" : names };
       }
     }

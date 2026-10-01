@@ -1,0 +1,21 @@
+# 归档模组不再维护，不重排
+archive/
+# 本地 API d.ts 镜像，照抄上游
+docs/mc-api/
+# 构建产物与缓存
+node_modules/
+dist/
+lib/
+out/
+.test-build/
+.codegraph/
+.mimosa/
+# Minecraft 二进制资产
+**/*.mcstructure
+**/*.png
+**/*.tga
+**/*.ogg
+# 版本字段由构建脚本同步，手工格式化会产生无关 diff
+BP/**/manifest.json
+RP/**/manifest.json
+pnpm-lock.yaml

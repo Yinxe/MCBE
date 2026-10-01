@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/dispenser_1"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      " AB",
-      "ACB",
-      " AB"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": [" AB", "ACB", " AB"],
     "key": {
       "A": {
         "item": "stick"

@@ -32,11 +32,7 @@
 //   });
 
 import { system, Player } from "@minecraft/server";
-import type {
-  CustomCommand,
-  CustomCommandOrigin,
-  CustomCommandResult,
-} from "@minecraft/server";
+import type { CustomCommand, CustomCommandOrigin, CustomCommandResult } from "@minecraft/server";
 import { runSafeAsync } from "../ui/runSafe";
 
 export interface CommandContext<T extends Record<string, unknown>> {
@@ -48,9 +44,7 @@ export interface CommandContext<T extends Record<string, unknown>> {
   params: T;
 }
 
-type CommandHandler<T extends Record<string, unknown>> = (
-  ctx: CommandContext<T>
-) => void;
+type CommandHandler<T extends Record<string, unknown>> = (ctx: CommandContext<T>) => void;
 
 /**
  * 注册自定义命令。
@@ -72,10 +66,7 @@ export function defineCommand<T extends Record<string, unknown> = Record<string,
   config: CustomCommand,
   handler: CommandHandler<T>
 ): void {
-  const allParams = [
-    ...(config.mandatoryParameters ?? []),
-    ...(config.optionalParameters ?? []),
-  ];
+  const allParams = [...(config.mandatoryParameters ?? []), ...(config.optionalParameters ?? [])];
 
   registry.registerCommand(config, (origin: CustomCommandOrigin, ...args: unknown[]) => {
     const entity = origin.sourceEntity ?? origin.initiator;

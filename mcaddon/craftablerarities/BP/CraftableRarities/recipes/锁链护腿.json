@@ -4,14 +4,8 @@
     "description": {
       "identifier": "craftablerarities/chainmail_leggings"
     },
-    "tags": [
-      "crafting_table"
-    ],
-    "pattern": [
-      "AAA",
-      "A A",
-      "A A"
-    ],
+    "tags": ["crafting_table"],
+    "pattern": ["AAA", "A A", "A A"],
     "key": {
       "A": {
         "item": "chain"
