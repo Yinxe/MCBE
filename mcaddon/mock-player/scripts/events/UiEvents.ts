@@ -28,6 +28,7 @@ export type BotPanelAction =
   | "throwTrident"
   | "claimTrident"
   | "viewData"
+  | "openScript"
   | "kill"
   | "delete";
 

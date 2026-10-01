@@ -32,6 +32,8 @@ function getWorkModeLabel(mode: string): string {
     raid: "劫掠",
     fishing: "钓鱼",
     follow: "跟随",
+    autoInteract: "交互",
+    script: "编程",
   };
   return map[mode] ?? mode;
 }
@@ -323,6 +325,7 @@ export function showBotPanel(player: Player, botName: string, onBack?: () => voi
       .buttonWithIcon(style("击杀假人", color.darkRed), "textures/ui/mockplayer/kill_bot", () => trigger("kill"))
       .buttonWithIcon(style("删除假人", color.darkRed), "textures/ui/mockplayer/delete_bot", () => trigger("delete"))
       // ── UI 内部导航（不事件化） ──
+      .button(style("编程", color.darkGreen), () => trigger("openScript"))
       .buttonWithIcon(style("返回列表", color.darkBlue), "textures/ui/mockplayer/back", () => { if (onBack) onBack(); })
       .show(player);
 }

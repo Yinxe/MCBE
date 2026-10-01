@@ -45,6 +45,8 @@ function buildListMessage(
     raid: "劫掠",
     fishing: "钓鱼",
     follow: "跟随",
+    autoInteract: "交互",
+    script: "编程",
   };
   const lines = filtered.map((r) => {
     const icon = r.death ? `${color.error}💀` : r.online ? `${color.success}✔` : `${color.muted}❌`;

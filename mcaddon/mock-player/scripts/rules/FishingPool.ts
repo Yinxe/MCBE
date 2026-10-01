@@ -211,6 +211,47 @@ export function resetFailSpot(spots: readonly PoolSpot[], key: string): PoolSpot
   return spots.map((s) => (s.key === key ? { ...s, failCount: 0 } : s));
 }
 
+// ── 固定钓点持久锚（用户规格：选定后不换；跨上线沿用） ──
+/** 持久锚形态（存 record，可序列化；不含占用/失败状态） */
+export interface StoredFishingSpot {
+  dimension: string;
+  stand: Vec3;
+  support: Vec3;
+  waters: Vec3[];
+  aim: CastAim;
+}
+
+/** 持久锚 → 池条目（重建：free、无失败计数） */
+export function fromStoredSpot(s: StoredFishingSpot): PoolSpot {
+  return {
+    key: spotKey(s.dimension, s.stand),
+    dimension: s.dimension,
+    stand: s.stand,
+    support: s.support,
+    waters: s.waters,
+    aim: s.aim,
+    status: "free",
+    failCount: 0,
+  };
+}
+
+/** 池条目 → 持久锚 */
+export function toStoredSpot(s: PoolSpot): StoredFishingSpot {
+  return {
+    dimension: s.dimension,
+    stand: s.stand,
+    support: s.support,
+    waters: s.waters,
+    aim: s.aim,
+  };
+}
+
+/** 单个条目并入池（去重：同 key 保留已有） */
+export function mergePoolOne(spots: readonly PoolSpot[], one: PoolSpot): PoolSpot[] {
+  if (spots.some((s) => s.key === one.key)) return [...spots];
+  return [...spots, one];
+}
+
 /** 水平距离平方（选点排序用） */
 function distSq(a: Vec3, b: Vec3): number {
   const dx = a.x - b.x;

@@ -162,7 +162,9 @@ export function startBrainEngine(): void {
     const fishingBots: string[] = [];
     for (const player of players) {
       try {
-        if (player.hasTag(TAG_VAULT_MODE.value)) {
+        // 宝库模式：旧标签或工作模式字段（vault）均可驱动（合并自 v3 的正式模式身份）
+        const rec = botRegistry.get(player.name);
+        if (player.hasTag(TAG_VAULT_MODE.value) || rec?.workMode === "vault") {
           vaultBots.push(player.name);
           tickVaultBrain(player.name);
         }

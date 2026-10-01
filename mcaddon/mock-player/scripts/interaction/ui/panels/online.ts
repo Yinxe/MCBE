@@ -18,6 +18,7 @@ function getWorkModeLabel(mode: string): string {
   const map: Record<string, string> = {
     none: "空闲", wander: "闲逛", mine: "挖掘", place: "放置",
     attack: "攻击", raid: "劫掠", fishing: "钓鱼", follow: "跟随",
+    autoInteract: "交互", script: "编程",
   };
   return map[mode] ?? mode;
 }

@@ -116,6 +116,16 @@ export async function showGlobalConfig(player: Player): Promise<void> {
       label: `${color.gold}⚙ 定点交互模式`,
       tooltip: "只交互准星正对的方块或实体，并按最短调度间隔重复尝试。默认§7关闭§r",
     },
+    script: {
+      label: `${color.success}▶ 编程模式`,
+      tooltip:
+        "按自定义工序表逐条执行（走到/挖掘/放置/等待/说话/跳转等），支持整段循环。默认§a开启§r；开销取决于脚本内容与步数",
+    },
+    vault: {
+      label: `${color.success}🏛 宝库模式`,
+      tooltip:
+        "扫描并自动寻路开启试炼宝库（消耗背包中的钥匙）。默认§a开启§r；需要附近有宝库与对应钥匙",
+    },
   };
 
   for (const mode of workModes) {

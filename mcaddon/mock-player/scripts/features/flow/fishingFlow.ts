@@ -30,6 +30,7 @@ import { resolveBotPlayer } from "../../bot/PlayerGateway";
 import { botRegistry } from "../../bootstrap/context";
 import { distance3d, waitTicks } from "../utils";
 import { lookAt } from "../basic/PoseGateway";
+import { playChestFlash, playTransferBeam } from "../fx/workChestFx";
 import type { Vec3 } from "../../rules/Types";
 
 // ── 领域类型 re-export（类型已归位 core/tasks/FishingRules，此处保持导入方兼容） ──
@@ -252,8 +253,16 @@ async function storeLootToChest(botName: string, loot: LootItem[], stacks: ItemS
     /* 关闭失败不影响结果 */
   }
   console.warn(`[MockPlayer] storeLootToChest ${botName} stored=${stored} opened=${opened} target=(${p.x},${p.y},${p.z})`);
-  if (stored > 0) notifyOwner(botName, `${color.success}已存入容器 ${stored} 件战利品（${p.x}, ${p.y}, ${p.z}）`);
-  else notifyOwner(botName, `${color.warn}战利品未能存入容器（背包里没找到对应物品或容器已满）`);
+  if (stored > 0) {
+    // 搬运特效：假人 → 容器的光束 + 容器金色闪光（合并自 v3 WorkChestFx）
+    playTransferBeam(
+      bot.dimension.id,
+      { x: bot.location.x, y: bot.location.y + 1.2, z: bot.location.z },
+      { x: p.x + 0.5, y: p.y + 0.55, z: p.z + 0.5 },
+    );
+    playChestFlash(bot.dimension.id, { x: p.x, y: p.y, z: p.z });
+    notifyOwner(botName, `${color.success}已存入容器 ${stored} 件战利品（${p.x}, ${p.y}, ${p.z}）`);
+  } else notifyOwner(botName, `${color.warn}战利品未能存入容器（背包里没找到对应物品或容器已满）`);
   return stored > 0 ? "ok" : "full";
 }
 

@@ -12,6 +12,13 @@ import { system, Player, PlayerInteractWithEntityBeforeEvent } from "@minecraft/
 import { TAG_BOT } from "../rules/tags/BotTags";
 import { showBotPanel } from "../interaction/ui/bot";
 import { showTagManagement } from "../interaction/ui/panels/tags";
+import { showScriptPanel } from "../interaction/ui/panels/script";
+
+/**
+ * 最近一次「对着假人交互」的时间（玩家 ID → 毫秒时间戳）。
+ * 供羽毛 itemUse 区分「对着假人」与「对着空气」，避免两个入口同时弹界面。
+ */
+export const recentBotInteractAt = new Map<string, number>();
 
 export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBeforeEvent): void {
   const { player, target, itemStack } = event;
@@ -22,11 +29,19 @@ export function onPlayerInteractWithEntity(event: PlayerInteractWithEntityBefore
   }
   console.info(`[MockPlayer] 交互 ${(target as Player).name}（手持 ${itemStack?.typeId ?? "空"} 潜行=${player.isSneaking}）`);
   event.cancel = true;
+  recentBotInteractAt.set(player.id, Date.now());
+  const botName = (target as Player).name;
+  // 手持羽毛 → 直达该假人的编程界面（用户规格：羽毛对着哪个假人，就开哪个的编程页）
+  const holdingFeather = itemStack?.typeId === "minecraft:feather";
   system.run(() => {
+    if (holdingFeather) {
+      showScriptPanel(player, botName);
+      return;
+    }
     if (player.isSneaking) {
-      showTagManagement(player, (target as Player).name);
+      showTagManagement(player, botName);
     } else {
-      showBotPanel(player, (target as Player).name);
+      showBotPanel(player, botName);
     }
   });
 }

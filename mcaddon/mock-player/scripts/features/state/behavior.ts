@@ -94,12 +94,14 @@ export function startTagBehaviors(): void {
 // ⚠️ 自动砍树（woodcut）已在代码层禁用（workMode="woodcut" 保留兼容但不再调度）。
 
 /** 工作模式可选值（UI 下拉与各引擎对账共用；woodcut 已禁用，follow 已收编进互斥） */
-export const WORK_MODES = ["none", "wander", "mine", "place", "attack", "autoInteract", "raid", "fishing", "follow"] as const;
+export const WORK_MODES = ["none", "wander", "mine", "place", "attack", "autoInteract", "raid", "fishing", "follow", "script", "vault"] as const;
 export type WorkMode = (typeof WORK_MODES)[number];
 
 /** 设置假人工作模式（持久化 + 发布 botWorkModeChanged——驱动模块按值启动/停止） */
 export function setWorkMode(record: import("../../rules/Types").BotRecord, mode: WorkMode): void {
   record.workMode = mode;
+  // 编程模式：切走时清除「运行中」标记（用户规格：设置模式 ≠ 启动脚本；切回不自动跑）
+  if (mode !== "script") record.scriptRunning = false;
   saveCoordinator.saveRecord(record);
   BotEvents.botWorkModeChanged.trigger({ botName: record.name, workMode: mode });
 }

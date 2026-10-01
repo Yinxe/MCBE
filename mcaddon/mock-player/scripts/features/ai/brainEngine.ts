@@ -32,6 +32,7 @@ import { makeMineBehavior } from "./capabilities/mine";
 import { makePlaceBehavior } from "./capabilities/place";
 import { makeAttackBehavior } from "./capabilities/attack";
 import { makeFishingBehavior } from "./capabilities/fishing";
+import { makeScriptBehavior } from "./capabilities/script";
 // import { makeWoodcutBehavior } from "./capabilities/woodcut"; // 已禁用
 import type { BotRecord } from "../../rules/Types";
 
@@ -106,6 +107,7 @@ const BEHAVIOR_BY_NAME: Record<string, (config?: any) => Behavior> = {
   place: makePlaceBehavior,
   attack: makeAttackBehavior,
   fishing: makeFishingBehavior,
+  script: makeScriptBehavior,
   // woodcut: makeWoodcutBehavior, // 已在代码层禁用
 };
 
@@ -115,6 +117,8 @@ function enabledBehaviorName(record: BotRecord): string | undefined {
   if (!name || !BEHAVIOR_BY_NAME[name]) return undefined;
   // 已被管理员禁用的工作模式视为未启用
   if (name !== "none" && !configStore.isWorkModeEnabled(name)) return undefined;
+  // 编程模式：设置工作模式 ≠ 启动脚本——必须显式「启动脚本」（scriptRunning=true）才挂载
+  if (name === "script" && record.scriptRunning !== true) return undefined;
   return name;
 }
 

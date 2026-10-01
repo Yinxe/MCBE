@@ -36,9 +36,11 @@ export function mergeStoredConfig(raw: string | undefined): ModConfig {
       : [],
     autoOnlineOnRestart: typeof s.autoOnlineOnRestart === "boolean" ? s.autoOnlineOnRestart : base.autoOnlineOnRestart,
     ownerOfflineAutoOffline: typeof s.ownerOfflineAutoOffline === "boolean" ? s.ownerOfflineAutoOffline : base.ownerOfflineAutoOffline,
-    enabledWorkModes: s.enabledWorkModes !== null && typeof s.enabledWorkModes === "object" && !Array.isArray(s.enabledWorkModes)
-      ? sanitizeEnabledWorkModes(s.enabledWorkModes as Record<string, unknown>)
-      : {},
+    enabledWorkModes: withScriptDefault(
+      s.enabledWorkModes !== null && typeof s.enabledWorkModes === "object" && !Array.isArray(s.enabledWorkModes)
+        ? sanitizeEnabledWorkModes(s.enabledWorkModes as Record<string, unknown>)
+        : {},
+    ),
     menuTriggerItemId: sanitizeMenuTrigger(s.menuTriggerItemId, base.menuTriggerItemId!),
     safeCooldownSeconds: sanitizeCooldown(s.safeCooldownSeconds, base.safeCooldownSeconds!),
     defaultOnlineQuota: typeof s.defaultOnlineQuota === "number" && Number.isFinite(s.defaultOnlineQuota)
@@ -60,6 +62,18 @@ function sanitizeQuotas(quotas: Record<string, unknown>): Record<string, number>
     }
   }
   return result;
+}
+
+/**
+ * 编程模式（script）为后加功能：旧存档配置里没有该键。
+ * 缺键 = 从未配置过 → 默认启用（否则升级后脚本不会跑）；
+ * 显式存 false = 用户主动关闭 → 保持关闭。
+ */
+function withScriptDefault(modes: Record<string, boolean>): Record<string, boolean> {
+  if (modes.script === undefined) modes.script = true;
+  // 宝库模式（合并自 v3）：老配置缺键时默认启用
+  if (modes.vault === undefined) modes.vault = true;
+  return modes;
 }
 
 /** 过滤非法工作模式开关：只保留 string → boolean */

@@ -6,6 +6,8 @@ import { system, world, type Player, type ItemUseAfterEvent } from "@minecraft/s
 import { BOT_TAG } from "../../rules/tags/BotTags";
 import { configStore } from "../../bootstrap/context";
 import { showMainMenu } from "./menu";
+import { showScriptPicker } from "./panels/script";
+import { recentBotInteractAt } from "../../events/playerInteractWithEntity";
 
 let registered = false;
 
@@ -22,9 +24,22 @@ export function registerMenuTrigger(): void {
 
 function onItemUse(event: ItemUseAfterEvent): void {
   if (event.source.hasTag(BOT_TAG)) return;
+  const item = event.itemStack;
+  // 羽毛 = 编程入口：对着空气右键 → 编程选人列表
+  // （对着假人长按走 playerInteractWithEntity，直达该假人的编程页）
+  if (item?.typeId === "minecraft:feather") {
+    const player = event.source as Player;
+    // 延迟 2 tick 再判断：itemUse / playerInteractWithEntity 两个事件触发顺序不稳定，
+    // 若刚刚是对着假人交互，就交给实体交互那条路处理，避免先弹出选人列表。
+    system.runTimeout(() => {
+      const at = recentBotInteractAt.get(player.id) ?? 0;
+      if (Date.now() - at < 300) return;
+      showScriptPicker(player);
+    }, 2);
+    return;
+  }
   const trigger = configStore.getMenuTriggerItemId();
   if (trigger === null) return;
-  const item = event.itemStack;
   if (!item || item.typeId !== trigger) return;
   system.run(() => showMainMenu(event.source as Player));
 }
