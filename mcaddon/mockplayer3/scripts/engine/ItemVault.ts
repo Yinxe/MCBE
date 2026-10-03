@@ -34,6 +34,8 @@ export interface EquipSlotWrite {
 
 export class ItemVault {
   private region: StoredRegion | undefined;
+  /** 最近一次注册异常原文（成功注册后清空）；供上层生成玩家可见原因 */
+  private registerError: string | null = null;
   /** 绑定表内存缓存（写穿独立 DP 键） */
   private readonly bindings = new Map<number, StorageBinding>();
 
@@ -42,6 +44,11 @@ export class ItemVault {
   /** 默认区域 id（新建记录 inventoryRef 用；区域未就绪时返回 null） */
   ensureRegionId(): string | null {
     return this.ensureRegion()?.regionId ?? null;
+  }
+
+  /** 最近一次木桶阵列注册异常原文（未失败为 null） */
+  lastRegisterError(): string | null {
+    return this.registerError;
   }
 
   /**
@@ -226,13 +233,15 @@ export class ItemVault {
 
   // ─── 私有 ──
 
-  /** 区域懒注册（register 幂等；失败告警下轮重试，不抛穿） */
+  /** 区域懒注册（register 幂等；失败留原文下轮重试，不抛穿） */
   private ensureRegion(): StoredRegion | undefined {
     if (this.region) return this.region;
     try {
       this.region = ItemStorage.register(STORAGE_REGION);
+      this.registerError = null;
     } catch (e: any) {
-      console.error(`[mockplayer3] NBT 物品存储注册失败: ${e?.message ?? e}`);
+      this.registerError = String(e?.message ?? e);
+      console.error(`[mockplayer3] NBT 物品存储注册失败: ${this.registerError}`);
     }
     return this.region;
   }

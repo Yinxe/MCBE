@@ -1,16 +1,28 @@
 {
   "format_version": 2,
   "header": {
-    "name": "模拟玩家III v3.0.6",
-    "description": "模拟玩家（假人）v3 重写 - 单会话模型、资源租约、显式生命周期管线 v3.0.6",
+    "name": "模拟玩家III v3.0.7",
+    "description": "模拟玩家（假人）v3 重写 - 单会话模型、资源租约、显式生命周期管线 v3.0.7",
     "uuid": "49df180b-e16a-4740-9edd-c655127fcd22",
-    "version": [3, 0, 6],
-    "min_engine_version": [1, 21, 120]
+    "version": [
+      3,
+      0,
+      7
+    ],
+    "min_engine_version": [
+      1,
+      26,
+      20
+    ]
   },
   "modules": [
     {
       "description": "Behavior",
-      "version": [3, 0, 6],
+      "version": [
+        3,
+        0,
+        7
+      ],
       "uuid": "256118ca-af02-43d2-a0f1-da5b460474d6",
       "type": "data"
     },
@@ -20,26 +32,34 @@
       "type": "script",
       "uuid": "cda1f72a-5834-4494-af4c-871df2e22e0a",
       "module_name": "MockPlayer",
-      "version": [3, 0, 6],
+      "version": [
+        3,
+        0,
+        7
+      ],
       "entry": "scripts/main.js"
     }
   ],
   "dependencies": [
     {
       "uuid": "4497ec44-a22f-4f7f-a723-1f18d14c4e04",
-      "version": [3, 0, 6]
+      "version": [
+        3,
+        0,
+        7
+      ]
     },
     {
       "module_name": "@minecraft/server",
-      "version": "3.0.0-alpha"
+      "version": "beta"
     },
     {
       "module_name": "@minecraft/server-ui",
-      "version": "3.0.0-alpha"
+      "version": "2.0.0"
     },
     {
       "module_name": "@minecraft/server-gametest",
-      "version": "2.0.0-alpha"
+      "version": "beta"
     }
   ],
   "metadata": {

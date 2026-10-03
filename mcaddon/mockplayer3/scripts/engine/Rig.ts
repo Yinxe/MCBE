@@ -2,7 +2,8 @@
 // 几何为实测结论，勿凭直觉改：结构方块必须正好在 0,0,0（强加载假人扭头正常的前提）；
 // 物化规律＝执行位置 x/z + (0,3)、y = 地面 + 1，故执行位置 (0,-1,-3) + y=-1 草坪恰好命中。
 // 两步初始化（registerCustomDimension 只能在 startup 事件内调用，事件外必抛）：
-// 1. startup 事件 registerTestDimension 注册自定义测试维度（结果不可靠，不据此判定）；
+// 1. startup 事件 registerTestDimension 注册自定义测试维度（低版本无该 API，失败成因留存
+//    供兼容提示；装置存在与否仍由 initTestField 探测判定）；
 // 2. worldLoad 后 initTestField：校验测试结构（createEmpty 当前引擎必抛，勿删 BP structures/）
 //    → 校验维度（无效回退 normal）→ ticking area 常加载装置区块 → getBlock 探 0,0,0：
 //    在→命令方块位 gametest runthis 复用（失败则清空 0,0,0±8 范围后重建）；不在→y=-1 建 5x5 草坪后 run 物化。
@@ -10,6 +11,7 @@
 
 import { BlockPermutation, system, world, type Dimension, type StartupEvent } from "@minecraft/server";
 import { register, Test } from "@minecraft/server-gametest";
+import { dimensionFailureNotice, type DimensionFailureInfo } from "../domain/Compat";
 
 /**
  * 测试维度：自定义 void 维度（registerCustomDimension 注册；管理员可经 /mp:enter 进入调试）。
@@ -52,18 +54,48 @@ export function isTestFieldReady(): boolean {
   return globalTest !== null;
 }
 
+/** startup 注册结果：null=无失败记录；否则为维度不可用成因，供 customDimensionFailure 分辨 */
+let dimensionFailure: DimensionFailureInfo | null = null;
+
 /**
  * 注册自定义测试维度（引擎约束：只能在 startup 事件中调用，事件外必抛）。
- * 注册结果不可靠，装置存在与否由 initTestField 探测结构方块判定。
+ * 注册结果不可靠，装置存在与否由 initTestField 探测结构方块判定；
+ * 失败成因留在模块内，供 customDimensionFailure 区分"版本不支持"与"注册抛错"。
  */
 export function registerTestDimension(event: StartupEvent): void {
+  // 低版本客户端的脚本面没有该字段（是 undefined，不是抛错）
+  if (!event.dimensionRegistry) {
+    dimensionFailure = { kind: "api-missing", detail: null };
+    const notice = dimensionFailureNotice("api-missing", null);
+    console.error(`[mockplayer3] 自定义维度 API 缺失（${TEST_DIMENSION} 无法创建）：${notice}`);
+    return;
+  }
   try {
     event.dimensionRegistry.registerCustomDimension(TEST_DIMENSION);
+    dimensionFailure = null;
     console.info(`[mockplayer3] 自定义测试维度注册成功：${TEST_DIMENSION}`);
   } catch (e: any) {
-    // 防单错误阻断 startup（维度已存在等）
-    console.info(`[mockplayer3] 自定义测试维度注册返回：${e?.message ?? e}`);
+    // 防单错误阻断 startup（维度已存在也走这里）；是否真的不可用由探测判定
+    dimensionFailure = { kind: "register-failed", detail: String(e?.message ?? e) };
+    console.info(`[mockplayer3] 自定义测试维度注册返回：${dimensionFailure.detail}`);
   }
+}
+
+/**
+ * 维度当前是否可用；不可用时返回成因（可用返回 null）。
+ * 注册阶段记下的失败优先——它区分"版本不支持"与"注册抛错"；无失败记录再探测
+ * getDimension，覆盖注册成功但当次载入不可见（如 /reload 后进入）。
+ * 须在世界上下文（system.run / 事件回调）中调用。
+ * @returns 不可用成因；可用为 null
+ */
+export function customDimensionFailure(): DimensionFailureInfo | null {
+  try {
+    world.getDimension(TEST_DIMENSION);
+  } catch (e: any) {
+    if (dimensionFailure) return dimensionFailure;
+    return { kind: "not-loaded", detail: String(e?.message ?? e) };
+  }
+  return null;
 }
 
 /**

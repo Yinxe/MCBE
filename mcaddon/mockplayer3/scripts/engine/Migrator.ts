@@ -22,9 +22,11 @@ import {
 import type { LegacySerializedItem } from "../domain/Migrate";
 import { LEGACY_CONFIG_KEY } from "../domain/Migrate";
 import { normalizeBotName } from "../domain/Identity";
+import { storageUnavailableReason } from "../domain/Compat";
 import type { EquipSlotName } from "../domain/Record";
 import type { BotRecord } from "../domain/Record";
 import type { EquipSlotWrite, ItemVault, SlotWrite } from "./ItemVault";
+import { customDimensionFailure } from "./Rig";
 import { CONFIG_KEY } from "./RecordStore";
 import { readJson, removeKey, writeJson } from "./Dp";
 import type { SaveGate } from "./SaveGate";
@@ -113,7 +115,9 @@ export class Migrator {
 
     const regionId = this.vault.ensureRegionId();
     if (!regionId) {
-      report.aborted = "物品存储未就绪（木桶阵列注册失败），旧键全部保留，稍后重试";
+      // 中止原因照抄注册结论，玩家与管理员的提示同源
+      const cause = storageUnavailableReason(customDimensionFailure(), this.vault.lastRegisterError());
+      report.aborted = `${cause}（旧键全部保留，稍后重试）`;
       return report;
     }
     this.migrateConfig(report);
