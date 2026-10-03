@@ -15,6 +15,7 @@ import type { Viewer } from "../domain/Permissions";
 import { canCreate, canGoOnline, canManage, onlineQuotaFor } from "../domain/Permissions";
 import { normalizeChestName } from "../domain/WorkChest";
 import { UNLIMITED_QUOTA } from "../domain/Config";
+import { storageUnavailableReason } from "../domain/Compat";
 import { reconcileStartup, stateFlags } from "../domain/State";
 import { normalizeBotName, validateBotName, playerKey } from "../domain/Identity";
 import { levelFromTotalXp } from "../domain/XpMath";
@@ -22,6 +23,7 @@ import { clock } from "../engine/Clock";
 import { gaze } from "../engine/Gaze";
 import { entityGateway } from "../engine/EntityGateway";
 import { projectileTracker } from "../engine/ProjectileTracker";
+import { customDimensionFailure } from "../engine/Rig";
 import { singleChunkAreaName, tickingAreas, KEEPALIVE_FORCE_RELEASE_TICKS } from "../engine/TickingAreas";
 import { enqueueAux } from "../engine/AuxQueue";
 import { probeWorkChest, workChests } from "../engine/WorkChests";
@@ -71,7 +73,9 @@ export class Lifecycle {
     const cc = canCreate(viewer, this.runtime.createdCount(viewer.key), cfg);
     if (!cc.ok) return { ok: false, reason: cc.reason };
     const regionId = this.vault.ensureRegionId();
-    if (!regionId) return { ok: false, reason: "物品存储未就绪，稍后再试" };
+    // 失败原因必须能照做：版本门禁结论优先，其次注册异常原文
+    if (!regionId)
+      return { ok: false, reason: storageUnavailableReason(customDimensionFailure(), this.vault.lastRegisterError()) };
     const botId = this.saveGate.allocateBotId();
     const { record, nameError } = createRecord({
       botId,

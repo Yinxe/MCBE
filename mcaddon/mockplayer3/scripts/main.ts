@@ -7,6 +7,7 @@ import { registerCommands } from "./interface/CmdKit";
 import { ALL_COMMANDS } from "./interface/Commands";
 import { installBridges } from "./engine/Bridges";
 import { installNotify } from "./interface/Notify";
+import { installCompatWarning } from "./interface/CompatWarning";
 import { installClaimReport } from "./interface/ClaimReport";
 import { onBotInteract, onRealPlayerBlockClick, onTokenItemUse } from "./interface/Panels/Menu";
 import { clock } from "./engine/Clock";
@@ -94,6 +95,7 @@ async function boot(): Promise<void> {
   });
   clock.start();
   installNotify();
+  installCompatWarning();
   installClaimReport();
   services.scheduler.start();
   if (services.runtime.config.debugLog) {

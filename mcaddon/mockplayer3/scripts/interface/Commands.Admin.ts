@@ -7,7 +7,7 @@ import { color } from "@yinxe/toolkit";
 import { ItemStorage } from "@yinxe/nbt-data-storage";
 import { services } from "../Composition";
 import { Param, type CommandSpec } from "./CmdKit";
-import { TEST_DIMENSION } from "../engine/Rig";
+import { TEST_DIMENSION, customDimensionFailure } from "../engine/Rig";
 import { tickingAreas } from "../engine/TickingAreas";
 import { breaker } from "../engine/Breaker";
 import { botOf, rayHit } from "../engine/Atomic";
@@ -17,6 +17,7 @@ import { RegionScanner, spotScanner } from "../engine/Scanner";
 import { dimensionOf, readBlockIn } from "../engine/Atomic";
 import { FISH_DIAG_MAX_STANDS, FISH_SCAN_Y_RADIUS, WATER_BLOCK_IDS, fishFailureLabel } from "../domain/FishingSpot";
 import { modeSpec } from "../domain/Catalog";
+import { dimensionFailureNotice } from "../domain/Compat";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../domain/Record";
 import type { Vec3 } from "../domain/Coords";
 import type { BreakResult } from "../engine/Breaker";
@@ -61,7 +62,12 @@ export const ADMIN_COMMANDS: CommandSpec[] = [
       try {
         dimensionId = world.getDimension(TEST_DIMENSION).id;
       } catch {
-        ctx.say(`${color.error}测试维度不可用（未注册或加载失败）`);
+        // 刚探测即失败，取成因文案让管理员看到该升到哪个版本
+        const failure = customDimensionFailure();
+        const notice = failure
+          ? dimensionFailureNotice(failure.kind, failure.detail)
+          : "测试维度不可用（未注册或加载失败）";
+        ctx.say(`${color.error}${notice}`);
         return;
       }
       const loc = ctx.coord(a.location, { x: 0, y: 3, z: 0 });

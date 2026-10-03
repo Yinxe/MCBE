@@ -16,9 +16,11 @@ import type { NotifyLevel, NotifySetting } from "../domain/NotifyRules";
 import { lootFingerprint, mismatchedSlots } from "../domain/Fingerprint";
 import { permitVaultRead, permitVaultTrust } from "../domain/SavePolicy";
 import { totalXpForLevel } from "../domain/XpMath";
+import { dimensionFailureNotice } from "../domain/Compat";
 import { asSimulated } from "./Compat";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { entityGateway } from "./EntityGateway";
+import { customDimensionFailure } from "./Rig";
 import { itemEnchantments } from "./Atomic";
 import { ItemVault } from "./ItemVault";
 import { getNotifySetting, sendNotify, setNotifySetting as persistNotifySetting } from "./NotifyStore";
@@ -405,7 +407,14 @@ export class EntityOps {
       this.vault.hasStoredSlots(botId),
       this.vault.regionReady(this.vault.getBinding(botId)?.regionId)
     );
-    if (!verdict.allow) return { ok: false, reason: "物品仓区块未加载（世界尚未就绪），请稍后再上线" };
+    if (!verdict.allow) {
+      // 维度缺失是安装级原因（升级才可解）；维度正常则只是阵列区块未加载，稍后再试即可
+      const dim = customDimensionFailure();
+      const reason = dim
+        ? dimensionFailureNotice(dim.kind, dim.detail)
+        : "物品仓区块未加载（世界尚未就绪），请稍后再上线";
+      return { ok: false, reason };
+    }
     const savedInv = this.vault.readInventory(botId);
     const savedEquip = this.vault.readEquipment(botId);
     if (!savedInv && !savedEquip) return { ok: true }; // 无仓数据（新假人）
