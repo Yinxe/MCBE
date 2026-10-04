@@ -5,6 +5,7 @@
 import { color, style } from "@yinxe/toolkit";
 import { modeSpec } from "../domain/Catalog";
 import {
+  actionsToSpecLines,
   describeFailPolicy,
   describeLoopCount,
   describeAction,
@@ -29,6 +30,9 @@ const ACTION_VERBS: readonly string[] = [
   "loop",
   "fail",
   "clear",
+  "dup",
+  "move",
+  "export",
   "run",
   "stop",
   "status",
@@ -50,6 +54,9 @@ const ACTION_ALIASES: Record<string, string> = {
   循环: "loop",
   失败: "fail",
   清空: "clear",
+  复制: "dup",
+  移动: "move",
+  导出: "export",
   运行: "run",
   启动: "run",
   start: "run",
@@ -151,6 +158,41 @@ function handleAction(ctx: CommandCtx, action: string, botId: number, name: stri
       say(r.ok ? `${color.success}已删除第 ${Math.trunc(index)} 条` : `${color.error}${r.reason}`);
       return;
     }
+    case "dup": {
+      const index = Math.trunc(Number(text));
+      const step = lib.programOf(botId).steps[index - 1];
+      if (!step) {
+        say(`${color.error}序号需在 1-${lib.programOf(botId).steps.length} 之间`);
+        return;
+      }
+      const r = lib.insertStep(botId, index, step);
+      say(r.ok ? `${color.success}已复制第 ${index} 个动作（副本在第 ${index + 1} 位）` : `${color.error}${r.reason}`);
+      return;
+    }
+    case "move": {
+      const parts = text.split(/\s+/).filter((t) => t.length > 0);
+      const index = Math.trunc(Number(parts[0]));
+      const dir = parts[1] ?? "";
+      if (dir !== "上" && dir !== "下" && dir !== "up" && dir !== "down") {
+        say(`${color.error}用法：/mp:action ${name} move <序号> <上|下>`);
+        return;
+      }
+      const up = dir === "上" || dir === "up";
+      const r = lib.moveStep(botId, index, up ? -1 : 1);
+      say(r.ok ? `${color.success}第 ${index} 个动作已${up ? "上移" : "下移"}一位` : `${color.error}${r.reason}`);
+      return;
+    }
+    case "export": {
+      const program = lib.programOf(botId);
+      for (const line of overview(botId, name)) say(line);
+      if (program.steps.length === 0) {
+        say(`${color.muted}（空表，无内容可导出）`);
+        return;
+      }
+      say(`${color.muted}—— 下面每行一个动作，可直接整段粘贴回 set ——`);
+      for (const line of actionsToSpecLines(program).split("\n")) say(`${color.muted}${line}`);
+      return;
+    }
     case "loop": {
       const loop = parseLoopCountInput(text);
       if (loop === undefined) {
@@ -220,7 +262,7 @@ export const ACTION_COMMANDS: readonly CommandSpec[] = [
   {
     name: "mp:action",
     description: `自定义动作：${modeSpec("custom").help}`,
-    usage: "mp:action <假人> [list|add|set|del|loop|fail|clear|run|stop|status] [参数…]",
+    usage: "mp:action <假人> [list|add|set|del|dup|move|loop|fail|clear|export|run|stop|status] [参数…]",
     args: [
       { name: "name", type: Param.String },
       { name: "action", type: Param.Enum, optional: true, enum: ACTION_VERBS },

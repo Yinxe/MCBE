@@ -22,12 +22,16 @@ import {
   actionsToSpecLines,
   stepToSpecText,
   actionFromType,
+  actionArgsOf,
+  typeOfAction,
 } from "../../domain/ActionRules";
-import type { ActionProgram } from "../../domain/ActionRules";
+import type { ActionProgram, ActionStep } from "../../domain/ActionRules";
 import { ActionStatusBoard } from "../../domain/ActionStatus";
 import { services } from "../../Composition";
 import { resolveUiBotRecord, guardUiManage, uiViewer } from "../Kit";
 
+/** 整理表单里最多列出的动作数（再多请用整段文本编辑） */
+const ORGANIZE_MAX = 40;
 /** 整段编辑表单里最多预览的动作行数（再多只报条数，免得表单过长） */
 const EDIT_PREVIEW_LINES = 20;
 
@@ -67,7 +71,7 @@ export function showActionPanel(player: Player, rawName: string): void {
   const body = [
     `${style("状态", color.accent)} ${ActionStatusBoard.describe(lib.status.get(botId))}`,
     `${style("动作表", color.accent)} ${program.steps.length} 条 · ${describeLoopCount(program.loopCount)} · ${describeFailPolicy(program.onFail)}`,
-    ...program.steps.slice(0, PREVIEW_STEPS).map((step, i) => `${color.muted}${describeAction(step, i + 1)}`),
+    ...program.steps.slice(0, PREVIEW_STEPS).map((step, i) => `${color.muted}${i + 1}. ${stepToSpecText(step)}`),
     program.steps.length > PREVIEW_STEPS
       ? `${color.muted}…还有 ${program.steps.length - PREVIEW_STEPS} 条（用 /mp:action ${name} list 看全）`
       : "",
@@ -82,7 +86,7 @@ export function showActionPanel(player: Player, rawName: string): void {
     });
     f.button(style("✎ 编辑动作表（整段文本）", color.darkBlue), () => editProgram(player, name));
     f.button(style("＋ 追加一个动作", color.darkBlue), () => appendStep(player, name));
-    f.button(style("✗ 删除一个动作", color.darkBlue), () => removeStep(player, name));
+    f.button(style("⇅ 整理某个动作", color.darkBlue), () => organizeAction(player, name));
     f.button(style("🗑 清空动作", color.warn), () => confirmClear(player, name));
   });
 }
@@ -214,34 +218,102 @@ function appendStep(player: Player, name: string): void {
   });
 }
 
-// ─── 私有：删除一条 ──────────────────────────────────────────────
+// ─── 私有：整理某个动作（改参数 / 复制 / 上移 / 下移 / 删除） ────
 
-function removeStep(player: Player, name: string): void {
+function organizeAction(player: Player, name: string): void {
   const say = (t: string): void => trySendMessage(player, t);
   const botId = services.runtime.findBotIdByName(name);
   if (botId === undefined) return;
   const program = services.actions.programOf(botId);
   if (program.steps.length === 0) {
-    say(`${color.error}还没有自定义动作`);
+    say(`${color.error}还没有动作：先追加一个或用整段文本写一段`);
+    showActionPanel(player, name);
     return;
   }
-  void ModalFormBuilder.showQuick(player, `${color.bold}删除一个动作 · ${name}`, (f) => {
-    f.textField("index", `要删除的序号（1-${program.steps.length}）`, {
-      defaultValue: "1",
-      tooltip: "完整列表见 /mp:action " + name + " list",
+  const choices = program.steps.slice(0, ORGANIZE_MAX).map((a, i) => `${i + 1}. ${stepToSpecText(a)}`);
+  void ModalFormBuilder.showQuick(player, `${color.bold}整理某个动作 · ${name}`, (f) => {
+    f.dropdown("index", "选一个动作", choices, {
+      defaultValueIndex: 0,
+      tooltip: program.steps.length > ORGANIZE_MAX ? `只列出前 ${ORGANIZE_MAX} 个；更多请用整段文本编辑` : "按序号选",
+    });
+    f.dropdown("op", "要做什么", ["改参数（也可换类型）", "复制一份（插在它后面）", "上移一位", "下移一位", "删除"], {
+      defaultValueIndex: 0,
     });
   }).then((vals) => {
     if (!vals) return;
     system.run(() => {
-      const index = Math.trunc(Number(String(vals.index ?? "")));
-      const before = services.actions.programOf(botId);
-      const step = before.steps[index - 1];
-      const r = services.actions.removeStep(botId, index);
-      say(
-        r.ok
-          ? `${color.success}已删除第 ${index} 条${step ? `：${describeAction(step)}` : ""}`
-          : `${color.error}${r.reason}`
-      );
+      const index1 = Number(vals.index) + 1;
+      const step = services.actions.programOf(botId).steps[index1 - 1];
+      if (!step) {
+        say(`${color.error}该动作已不存在，请重开面板`);
+        showActionPanel(player, name);
+        return;
+      }
+      const op = Number(vals.op);
+      if (op === 0) {
+        editOneAction(player, name, index1, step);
+        return;
+      }
+      if (op === 1) {
+        const r = services.actions.insertStep(botId, index1, step);
+        say(
+          r.ok ? `${color.success}已复制第 ${index1} 个动作（副本在第 ${index1 + 1} 位）` : `${color.error}${r.reason}`
+        );
+      } else if (op === 2 || op === 3) {
+        const delta = op === 2 ? -1 : 1;
+        const r = services.actions.moveStep(botId, index1, delta);
+        say(
+          r.ok ? `${color.success}第 ${index1} 个动作已${op === 2 ? "上移" : "下移"}一位` : `${color.error}${r.reason}`
+        );
+      } else {
+        const r = services.actions.removeStep(botId, index1);
+        say(r.ok ? `${color.success}已删除第 ${index1} 个动作：${describeAction(step)}` : `${color.error}${r.reason}`);
+      }
+      showActionPanel(player, name);
+    });
+  });
+}
+
+/** 改一条：类型可换，参数按新类型解释；备注留空即清掉 */
+function editOneAction(player: Player, name: string, index1: number, step: ActionStep): void {
+  const say = (t: string): void => trySendMessage(player, t);
+  const botId = services.runtime.findBotIdByName(name);
+  if (botId === undefined) return;
+  const def = typeOfAction(step);
+  void ModalFormBuilder.showQuick(player, `${color.bold}改第 ${index1} 个动作 · ${name}`, (f) => {
+    f.label("current", `当前：${stepToSpecText(step)}`);
+    f.dropdown(
+      "kind",
+      "动作类型",
+      ACTION_TYPES.map((m) => `${m.cat} · ${m.label}`),
+      { defaultValueIndex: def ? ACTION_TYPES.indexOf(def) : 0, tooltip: "可顺手换类型；参数按新类型解释" }
+    );
+    f.textField("args", "参数", {
+      defaultValue: actionArgsOf(step),
+      tooltip: "坐标 x y z（留空＝你当前站的位置）/ 秒数 / 次数 / 文本；无参数动作留空",
+    });
+    f.textField("note", "备注（可选）", { defaultValue: step.note ?? "", tooltip: "留空即清掉备注" });
+  }).then((vals) => {
+    if (!vals) return;
+    system.run(() => {
+      const picked = ACTION_TYPES[Number(vals.kind)] ?? def;
+      if (!picked) {
+        say(`${color.error}动作类型无法识别`);
+        return;
+      }
+      const parsed = actionFromType(picked, String(vals.args ?? ""), { coord: playerCoord(player) });
+      if ("error" in parsed) {
+        say(`${color.error}${parsed.error}`);
+        return;
+      }
+      const note = String(vals.note ?? "").trim();
+      if (note.length > 0) parsed.step.note = note;
+      const r = services.actions.replaceStep(botId, index1, parsed.step);
+      if (!r.ok) {
+        say(`${color.error}${r.reason}`);
+        return;
+      }
+      say(`${color.success}第 ${index1} 个动作已改为：${describeAction(parsed.step)}`);
       showActionPanel(player, name);
     });
   });

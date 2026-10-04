@@ -28,6 +28,12 @@ import {
   actionFromType,
   actionsToSpecLines,
   coordTextOf,
+  typeOfAction,
+  insertActionAfter,
+  replaceActionAt,
+  moveActionBy,
+  cloneAction,
+  type ActionsArrayResult,
 } from "../scripts/domain/ActionRules";
 import type { ActionProgram, ActionStep } from "../scripts/domain/ActionRules";
 
@@ -258,4 +264,37 @@ test("动作·一条一行写回：actionsToSpecLines 与 parseActionsSpec 互�
   assert.deepEqual(actionFromType(def, "1 2 3", { coord: { x: 7, y: 8, z: 9 } }), {
     step: { type: "mine", x: 1, y: 2, z: 3 },
   });
+});
+
+test("动作·整理：类型反查、复制、改一条、上移下移（含边界与序号校验）", () => {
+  const say = (t: string): ActionStep => ({ type: "say", text: t });
+  const texts = (r: ActionsArrayResult): string[] | string =>
+    r.ok ? r.steps.map((s) => (s.type === "say" ? s.text : "?")) : r.reason;
+  const steps = [say("一"), say("二"), say("三")];
+
+  assert.equal(typeOfAction({ type: "mine", x: 1, y: 2, z: 3 })?.id, "mine");
+  assert.equal(typeOfAction({ type: "sneak", on: true })?.id, "sneakOn");
+  assert.equal(typeOfAction({ type: "sneak", on: false })?.id, "sneakOff");
+  assert.equal(typeOfAction({ type: "hop", look: { x: 1, y: 2, z: 3 } })?.id, "hop");
+
+  assert.deepEqual(
+    texts(insertActionAfter(steps, 1, cloneAction(steps[0]!))),
+    ["一", "一", "二", "三"],
+    "副本插在原动作后面"
+  );
+  assert.deepEqual(texts(insertActionAfter(steps, 0, say("新"))), ["新", "一", "二", "三"], "序号 0＝插到最前");
+  assert.match(String(texts(insertActionAfter(steps, 9, say("x")))), /序号需在 1-3/);
+
+  assert.deepEqual(texts(replaceActionAt(steps, 2, say("改"))), ["一", "改", "三"]);
+  assert.match(String(texts(replaceActionAt(steps, 0, say("x")))), /序号/);
+
+  assert.deepEqual(texts(moveActionBy(steps, 2, -1)), ["二", "一", "三"], "上移");
+  assert.deepEqual(texts(moveActionBy(steps, 1, 1)), ["二", "一", "三"], "下移");
+  assert.deepEqual(texts(moveActionBy(steps, 1, -1)), ["一", "二", "三"], "已在顶部则原样返回");
+  assert.deepEqual(texts(moveActionBy(steps, 3, 1)), ["一", "二", "三"], "已在底部则原样返回");
+
+  const src: ActionStep = { type: "hop", look: { x: 1, y: 2, z: 3 } };
+  const copy = cloneAction(src);
+  if (copy.type === "hop" && copy.look) copy.look.x = 99;
+  assert.equal(src.type === "hop" ? src.look?.x : undefined, 1, "复制是深拷贝");
 });

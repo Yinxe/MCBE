@@ -4,7 +4,15 @@
 // 写得下就落盘、写不下回中文原因；版本号只增不减，写成功即 +1（重跑＝再 +1）。
 
 import type { ActionFailPolicy, ActionProgram, ActionStep } from "../domain/ActionRules";
-import { MAX_ACTIONS, normalizeActions } from "../domain/ActionRules";
+import {
+  cloneAction,
+  insertActionAfter,
+  MAX_ACTIONS,
+  moveActionBy,
+  normalizeActions,
+  replaceActionAt,
+  type ActionsArrayResult,
+} from "../domain/ActionRules";
 import { ActionStatusBoard } from "../domain/ActionStatus";
 import type { ActionStore } from "../engine/ActionStore";
 
@@ -70,6 +78,37 @@ export class ActionLibrary {
   }
 
   /**
+   * 在第 N 个动作之后插入一个（index1=0 插到最前；复制用）。
+   * @param botId - 假人身份
+   * @param index1 - 参照序号
+   * @param step - 待插入动作（自动深拷贝）
+   * @param now - 当前 tick（写回执用，可选）
+   */
+  insertStep(botId: number, index1: number, step: ActionStep): ActionWriteResult {
+    return this.applyArray(botId, insertActionAfter(this.programOf(botId).steps, index1, cloneAction(step)));
+  }
+
+  /**
+   * 替换第 N 个动作（改参数用）。
+   * @param botId - 假人身份
+   * @param index1 - 人读序号
+   * @param step - 新动作
+   */
+  replaceStep(botId: number, index1: number, step: ActionStep): ActionWriteResult {
+    return this.applyArray(botId, replaceActionAt(this.programOf(botId).steps, index1, cloneAction(step)));
+  }
+
+  /**
+   * 上移/下移第 N 个动作。
+   * @param botId - 假人身份
+   * @param index1 - 人读序号
+   * @param delta - -1=上移；1=下移
+   */
+  moveStep(botId: number, index1: number, delta: number): ActionWriteResult {
+    return this.applyArray(botId, moveActionBy(this.programOf(botId).steps, index1, delta));
+  }
+
+  /**
    * 删除第 N 条（1 起）。
    * @param botId - 假人身份
    * @param index1 - 人读序号
@@ -129,6 +168,12 @@ export class ActionLibrary {
     this.versions.delete(botId);
     this.status.forget(botId);
     this.store.forget(botId);
+  }
+
+  /** 数组操作 → 落盘（失败原因原样带出） */
+  private applyArray(botId: number, result: ActionsArrayResult): ActionWriteResult {
+    if (!result.ok) return { ok: false, reason: result.reason };
+    return this.setProgram(botId, { ...this.programOf(botId), steps: result.steps });
   }
 
   private bump(botId: number): void {

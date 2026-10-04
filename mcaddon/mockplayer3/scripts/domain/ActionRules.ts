@@ -709,6 +709,80 @@ export function stepToSpecText(s: ActionStep): string {
 }
 
 /**
+ * 动作反查动作类型（面板「改参数」预填要用；潜行按 on 区分开/关两条）。
+ * @param step - 动作
+ * @returns 对应定义；没有匹配 undefined
+ */
+export function typeOfAction(step: ActionStep): ActionTypeDef | undefined {
+  return ACTION_TYPES.find(
+    (d) => d.stepType === step.type && (d.fixed === undefined || (step.type === "sneak" && d.fixed.on === step.on))
+  );
+}
+
+/** 动作表数组操作结果 */
+export type ActionsArrayResult = { ok: true; steps: ActionStep[] } | { ok: false; reason: string };
+
+function checkIndex(steps: ActionStep[], index1: number): string | undefined {
+  if (!Number.isInteger(index1) || index1 < 1 || index1 > steps.length) {
+    return `序号需在 1-${steps.length} 之间`;
+  }
+  return undefined;
+}
+
+/**
+ * 在第 N 个动作之后插入一个（复制一份用；N=0 插到最前）。
+ * @param steps - 原序列
+ * @param index1 - 参照序号（0=插到最前）
+ * @param step - 待插入动作
+ */
+export function insertActionAfter(steps: readonly ActionStep[], index1: number, step: ActionStep): ActionsArrayResult {
+  if (index1 !== 0) {
+    const bad = checkIndex(steps as ActionStep[], index1);
+    if (bad) return { ok: false, reason: bad };
+  }
+  if (steps.length >= MAX_ACTIONS) return { ok: false, reason: `已达单动作表上限 ${MAX_ACTIONS} 条` };
+  const next = [...steps];
+  next.splice(index1, 0, step);
+  return { ok: true, steps: next };
+}
+
+/**
+ * 替换第 N 个动作（改参数用）。
+ * @param steps - 原序列
+ * @param index1 - 人读序号
+ * @param step - 新动作
+ */
+export function replaceActionAt(steps: readonly ActionStep[], index1: number, step: ActionStep): ActionsArrayResult {
+  const bad = checkIndex(steps as ActionStep[], index1);
+  if (bad) return { ok: false, reason: bad };
+  const next = [...steps];
+  next[index1 - 1] = step;
+  return { ok: true, steps: next };
+}
+
+/**
+ * 上移/下移第 N 个动作（已到边界则原样返回）。
+ * @param steps - 原序列
+ * @param index1 - 人读序号
+ * @param delta - -1=上移；1=下移
+ */
+export function moveActionBy(steps: readonly ActionStep[], index1: number, delta: number): ActionsArrayResult {
+  const bad = checkIndex(steps as ActionStep[], index1);
+  if (bad) return { ok: false, reason: bad };
+  const to = index1 - 1 + (delta < 0 ? -1 : 1);
+  if (to < 0 || to >= steps.length) return { ok: true, steps: [...steps] };
+  const next = [...steps];
+  const [item] = next.splice(index1 - 1, 1);
+  next.splice(to, 0, item!);
+  return { ok: true, steps: next };
+}
+
+/** 深拷贝一个动作（复制一份用；动作全是纯数据） */
+export function cloneAction(step: ActionStep): ActionStep {
+  return JSON.parse(JSON.stringify(step)) as ActionStep;
+}
+
+/**
  * 单动作类型面板参数文本 → 动作（面板「选动作类型 + 填参数」入口）。
  * @param def - 动作类型定义
  * @param args - 参数文本（按 def.hint 的形态；可空动作类型留空即无坐标）
