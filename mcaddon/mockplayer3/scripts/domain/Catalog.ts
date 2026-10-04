@@ -71,9 +71,9 @@ export const WORK_MODES: readonly WorkModeSpec[] = [
     tier: "heavy",
   },
   {
-    id: "script",
-    label: "编程模式",
-    help: "按玩家写好的步骤脚本执行（走到/等待/挖掘/放置/使用物品/攻击/说话/看向/潜行/跳/跳转），可整段循环",
+    id: "custom",
+    label: "自定义动作",
+    help: "按玩家写好的动作表执行（走到/等待/挖掘/放置/使用物品/攻击/说话/看向/潜行/跳/跳转），可整段循环",
     requiresLeases: ["hands", "motion"],
     tier: "heavy",
     // 归"实现性功能"总闸管辖（未完成实机验收，关则玩家侧不可选）

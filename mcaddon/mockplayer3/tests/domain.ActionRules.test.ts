@@ -1,5 +1,5 @@
-// ─── 编程模式·脚本模型与文本规格单测 ────────────────────────────────
-// 锁三件事：模块目录与解析同源、文本规格与脚本互为逆运算、存档归一化不因坏条目炸整段。
+// ─── 自定义动作·动作表模型与文本规格单测 ────────────────────────────────
+// 锁三件事：动作类型目录与解析同源、文本规格与动作表互为逆运算、存档归一化不因坏条目炸整段。
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -7,43 +7,43 @@ import {
   MAX_ATTACK_COUNT,
   MAX_LOOP_COUNT,
   MAX_SAY_LENGTH,
-  MAX_SCRIPT_STEPS,
+  MAX_ACTIONS,
   MAX_WAIT_TICKS,
-  SCRIPT_CATEGORIES,
-  SCRIPT_MODULES,
-  createEmptyProgram,
+  ACTION_CATEGORIES,
+  ACTION_TYPES,
+  createEmptyActions,
   describeFailPolicy,
   describeLoopCount,
-  describeStep,
-  moduleArgsOf,
-  moduleById,
+  describeAction,
+  actionArgsOf,
+  actionTypeById,
   normalizeLoopCount,
-  normalizeProgram,
-  normalizeStep,
+  normalizeActions,
+  normalizeAction,
   parseFailPolicyInput,
   parseLoopCountInput,
-  parseProgramSpec,
-  parseStepSpec,
-  programToSpecText,
-  stepFromModule,
-} from "../scripts/domain/ScriptRules";
-import type { ScriptStep } from "../scripts/domain/ScriptRules";
+  parseActionsSpec,
+  parseActionSpec,
+  actionsToSpecText,
+  actionFromType,
+} from "../scripts/domain/ActionRules";
+import type { ActionStep } from "../scripts/domain/ActionRules";
 
-test("编程·模块目录自洽：13 项、id 唯一、分类齐、关键词非空且与解析器对得上", () => {
-  assert.equal(SCRIPT_MODULES.length, 13);
-  assert.equal(new Set(SCRIPT_MODULES.map((m) => m.id)).size, 13, "id 唯一");
-  for (const m of SCRIPT_MODULES) {
-    assert.ok(SCRIPT_CATEGORIES.includes(m.cat), `${m.id} 分类在目录里`);
+test("动作·动作类型目录自洽：13 项、id 唯一、分类齐、关键词非空且与解析器对得上", () => {
+  assert.equal(ACTION_TYPES.length, 13);
+  assert.equal(new Set(ACTION_TYPES.map((m) => m.id)).size, 13, "id 唯一");
+  for (const m of ACTION_TYPES) {
+    assert.ok(ACTION_CATEGORIES.includes(m.cat), `${m.id} 分类在目录里`);
     assert.ok(m.kw.length > 0, `${m.id} 有关键词`);
-    assert.equal(moduleById(m.id), m, "按 id 取回同一条");
+    assert.equal(actionTypeById(m.id), m, "按 id 取回同一条");
   }
-  assert.equal(moduleById("nope"), undefined);
-  assert.deepEqual(SCRIPT_CATEGORIES, ["移动", "等待", "方块", "交互", "战斗", "姿态", "通信", "流程"]);
+  assert.equal(actionTypeById("nope"), undefined);
+  assert.deepEqual(ACTION_CATEGORIES, ["移动", "等待", "方块", "交互", "战斗", "姿态", "通信", "流程"]);
 });
 
-test("编程·文本解析：12 种步骤都能从文本规格解析出来（含连写与逗号坐标）", () => {
-  const ok = (spec: string): ScriptStep => {
-    const r = parseStepSpec(spec);
+test("动作·文本解析：12 种动作都能从文本规格解析出来（含连写与逗号坐标）", () => {
+  const ok = (spec: string): ActionStep => {
+    const r = parseActionSpec(spec);
     assert.ok("step" in r, `${spec} 应解析成功：${"error" in r ? r.error : ""}`);
     return r.step;
   };
@@ -68,14 +68,14 @@ test("编程·文本解析：12 种步骤都能从文本规格解析出来（含
   assert.deepEqual(ok("minelook"), { type: "mineLook" }, "英文关键词等价");
 });
 
-test("编程·文本解析拒绝表：未知模块与越界参数都回中文原因", () => {
+test("动作·文本解析拒绝表：未知动作类型与越界参数都回中文原因", () => {
   const err = (spec: string): string => {
-    const r = parseStepSpec(spec);
+    const r = parseActionSpec(spec);
     assert.ok("error" in r, `${spec} 应报错`);
     return r.error;
   };
-  assert.match(err("飞起来"), /未知模块/);
-  assert.match(err(""), /缺少模块关键词/);
+  assert.match(err("飞起来"), /未知动作类型/);
+  assert.match(err(""), /缺少动作类型关键词/);
   assert.match(err("走到 1 2"), /需要 3 个数字参数/);
   assert.match(err("走到 1 2 99999999"), /坐标超出世界范围/);
   assert.match(err("等待 0"), /需要秒数/);
@@ -86,21 +86,21 @@ test("编程·文本解析拒绝表：未知模块与越界参数都回中文原
   assert.match(err(`说话 ${"字".repeat(MAX_SAY_LENGTH + 1)}`), /最长 200 字/);
   assert.match(err("潜行 也许"), /需要参数 开\/关/);
   assert.match(err("跳转 0"), /需要目标序号/);
-  assert.match(err(`跳转 ${MAX_SCRIPT_STEPS + 1}`), /1-256/);
+  assert.match(err(`跳转 ${MAX_ACTIONS + 1}`), /1-256/);
 });
 
-test("编程·整段文本规格：分隔符/换行都支持，一条错只丢那条并给出序号", () => {
-  const r = parseProgramSpec("走到 1 2 3 | 等待 2 | 飞起来 | 挖前方");
+test("动作·整段文本规格：分隔符/换行都支持，一条错只丢那条并给出序号", () => {
+  const r = parseActionsSpec("走到 1 2 3 | 等待 2 | 飞起来 | 挖前方");
   assert.equal(r.steps.length, 3);
   assert.equal(r.errors.length, 1);
-  assert.match(r.errors[0]!, /第 3 条：未知模块/);
-  const multi = parseProgramSpec("走到 1 2 3\n等待 1\n\n跳转 1");
+  assert.match(r.errors[0]!, /第 3 条：未知动作类型/);
+  const multi = parseActionsSpec("走到 1 2 3\n等待 1\n\n跳转 1");
   assert.equal(multi.steps.length, 3);
   assert.equal(multi.errors.length, 0);
 });
 
-test("编程·文本与脚本互为逆运算：写回再解析得到同一串步骤（含可空坐标）", () => {
-  const steps: ScriptStep[] = [
+test("动作·文本与动作表互为逆运算：写回再解析得到同一串动作（含可空坐标）", () => {
+  const steps: ActionStep[] = [
     { type: "moveTo", x: 1, y: 64, z: -2 },
     { type: "wait", ticks: 20 },
     { type: "mine", x: 3, y: 4, z: 5 },
@@ -115,14 +115,14 @@ test("编程·文本与脚本互为逆运算：写回再解析得到同一串步
     { type: "jump", target: 2 },
   ];
   const program = { steps, loopCount: 3, onFail: "stop" as const };
-  const text = programToSpecText(program);
-  const back = parseProgramSpec(text);
+  const text = actionsToSpecText(program);
+  const back = parseActionsSpec(text);
   assert.deepEqual(back.errors, [], "写回的文本必须能原样解析");
   assert.deepEqual(back.steps, steps);
 });
 
-test("编程·存档归一化：坏条目丢弃、超上限截断、循环与失败策略归一", () => {
-  const bad = normalizeProgram({
+test("动作·存档归一化：坏条目丢弃、超上限截断、循环与失败策略归一", () => {
+  const bad = normalizeActions({
     steps: [
       { type: "moveTo", x: 1, y: 2, z: 3 },
       { type: "moveTo", x: 1 }, // 缺坐标 → 丢
@@ -140,14 +140,14 @@ test("编程·存档归一化：坏条目丢弃、超上限截断、循环与失
   assert.equal(bad.loopCount, MAX_LOOP_COUNT, "循环次数封顶");
   assert.equal(bad.onFail, "skip");
 
-  assert.deepEqual(normalizeProgram(undefined), createEmptyProgram());
+  assert.deepEqual(normalizeActions(undefined), createEmptyActions());
   assert.deepEqual(
-    normalizeStep({ type: "hop", look: { x: 1, y: 2 } }),
+    normalizeAction({ type: "hop", look: { x: 1, y: 2 } }),
     { type: "hop" },
-    "可空坐标缺轴＝按无坐标处理（不丢整条）"
+    "可空坐标缺轴＝按无坐标处理（不丢整个）"
   );
   assert.deepEqual(
-    normalizeStep({ type: "hop", look: { x: 1.9, y: 2.1, z: 3.5 } }),
+    normalizeAction({ type: "hop", look: { x: 1.9, y: 2.1, z: 3.5 } }),
     {
       type: "hop",
       look: { x: 1, y: 2, z: 3 },
@@ -156,7 +156,7 @@ test("编程·存档归一化：坏条目丢弃、超上限截断、循环与失
   );
 });
 
-test("编程·循环与失败策略的文本出入口一致", () => {
+test("动作·循环与失败策略的文本出入口一致", () => {
   assert.equal(parseLoopCountInput("一直"), -1);
   assert.equal(parseLoopCountInput("forever"), -1);
   assert.equal(parseLoopCountInput("一次"), 1);
@@ -178,21 +178,21 @@ test("编程·循环与失败策略的文本出入口一致", () => {
   assert.equal(describeFailPolicy("stop"), "单条失败就停下");
 });
 
-test("编程·中文描述：每种步骤都有人读文案，备注附在后面", () => {
-  assert.equal(describeStep({ type: "moveTo", x: 1, y: 2, z: 3 }), "走到 (1,2,3)");
-  assert.equal(describeStep({ type: "wait", ticks: 40 }), "等待 2 秒");
-  assert.equal(describeStep({ type: "mineLook" }), "挖掘前方方块");
-  assert.equal(describeStep({ type: "mineLook", look: { x: 1, y: 2, z: 3 } }), "挖掘·对准 (1,2,3)");
-  assert.equal(describeStep({ type: "say", text: "你好" }), "说话「你好」");
-  assert.equal(describeStep({ type: "jump", target: 2 }), "跳转到第 2 条");
-  assert.equal(describeStep({ type: "hop", look: { x: 1, y: 2, z: 3 } }), "跳一下 · 对准 (1,2,3)");
-  assert.equal(describeStep({ type: "attack", count: 2 }, 3), "3. 攻击 2 次");
-  assert.equal(describeStep({ type: "sneak", on: false }), "潜行关");
-  assert.match(describeStep({ type: "say", text: "x", note: "给主人看的" }), /\(给主人看的\)$/);
+test("动作·中文描述：每种动作都有人读文案，备注附在后面", () => {
+  assert.equal(describeAction({ type: "moveTo", x: 1, y: 2, z: 3 }), "走到 (1,2,3)");
+  assert.equal(describeAction({ type: "wait", ticks: 40 }), "等待 2 秒");
+  assert.equal(describeAction({ type: "mineLook" }), "挖掘前方方块");
+  assert.equal(describeAction({ type: "mineLook", look: { x: 1, y: 2, z: 3 } }), "挖掘·对准 (1,2,3)");
+  assert.equal(describeAction({ type: "say", text: "你好" }), "说话「你好」");
+  assert.equal(describeAction({ type: "jump", target: 2 }), "跳转到第 2 条");
+  assert.equal(describeAction({ type: "hop", look: { x: 1, y: 2, z: 3 } }), "跳一下 · 对准 (1,2,3)");
+  assert.equal(describeAction({ type: "attack", count: 2 }, 3), "3. 攻击 2 次");
+  assert.equal(describeAction({ type: "sneak", on: false }), "潜行关");
+  assert.match(describeAction({ type: "say", text: "x", note: "给主人看的" }), /\(给主人看的\)$/);
 });
 
-test("编程·面板参数与步骤互转：选模块 + 填参数 → 步骤 → 回填参数", () => {
-  const cases: { id: string; args: string; step: ScriptStep }[] = [
+test("动作·面板参数与动作互转：选动作类型 + 填参数 → 动作 → 回填参数", () => {
+  const cases: { id: string; args: string; step: ActionStep }[] = [
     { id: "moveTo", args: "1 2 3", step: { type: "moveTo", x: 1, y: 2, z: 3 } },
     { id: "wait", args: "1.5", step: { type: "wait", ticks: 30 } },
     { id: "mineLook", args: "", step: { type: "mineLook" } },
@@ -203,14 +203,14 @@ test("编程·面板参数与步骤互转：选模块 + 填参数 → 步骤 →
     { id: "jump", args: "2", step: { type: "jump", target: 2 } },
   ];
   for (const c of cases) {
-    const def = moduleById(c.id)!;
-    const r = stepFromModule(def, c.args);
+    const def = actionTypeById(c.id)!;
+    const r = actionFromType(def, c.args);
     assert.ok("step" in r, `${c.id} 应成功：${"error" in r ? r.error : ""}`);
-    assert.deepEqual(r.step, c.step, `${c.id} 步骤`);
-    const back = moduleArgsOf(r.step);
-    const again = stepFromModule(def, back);
-    assert.deepEqual(again, r, `${c.id} 参数回填后仍得到同一步骤`);
+    assert.deepEqual(r.step, c.step, `${c.id} 动作`);
+    const back = actionArgsOf(r.step);
+    const again = actionFromType(def, back);
+    assert.deepEqual(again, r, `${c.id} 参数回填后仍得到同一动作`);
   }
-  const bad = stepFromModule(moduleById("mine")!, "1 2");
+  const bad = actionFromType(actionTypeById("mine")!, "1 2");
   assert.ok("error" in bad);
 });

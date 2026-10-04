@@ -14,7 +14,7 @@ export type HarvestMode = `harvest_${HarvestKindId}`;
 
 /** WorkMode 枚举唯一真源（目录元数据见 Catalog.ts） */
 export type WorkMode =
-  "none" | "wander" | "mine" | "place" | "attack" | "fishing" | "raid" | "follow" | "vault" | "script" | HarvestMode;
+  "none" | "wander" | "mine" | "place" | "attack" | "fishing" | "raid" | "follow" | "vault" | "custom" | HarvestMode;
 
 /** 与 workMode 正交的独立开关 */
 export interface BotSwitches {

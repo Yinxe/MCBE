@@ -4,20 +4,20 @@
 
 > mockplayer3 全部面板式交互（ActionForm / ModalForm / 确认框）的功能、入口、导航关系与守卫口径。文中「文件相对路径 + 函数/类/常量名」对应 `scripts/interface/` 下当前实现（基线：分支 `feat/mock-player-rewrite`，2026-09-29）。回收管线的完整流程另见同目录《资源回收.md》，本文只述其面板侧交互。
 
-## 1. 触发入口（四条）
+## 1. 触发入口（四个）
 
 引擎输入模型（判定歧义一律以本节为准）：**长按 = 使用物品**（`afterEvents.itemUse`）、
 **点击方块 = 与方块交互**（`beforeEvents.playerInteractWithBlock`）、**点击实体 = 与实体交互**
 （`beforeEvents.playerInteractWithEntity`）。触屏上就是"长按"与"点击"两个动作，电脑端对应右键/左键；
 长按与点击互斥触发，故各入口不需要"同拍抑制"；**蹲下 = "只与方块交互"的修饰键**（不蹲下时点击会先去用手里物品）。
 
-| 入口                                     | 条件                                                                                                                                                                                                                  | 落点                                                                                                                           |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 命令 `/mp:menu`                          | 任何玩家                                                                                                                                                                                                              | `showMainMenu`（`interface/Commands.Ui.ts` 的 `UI_COMMANDS` 中 `mp:menu` 项 → `interface/Panels/Menu.ts` 的 `showMainMenu()`） |
-| 手持信物长按                             | `config.tokenItem.enabled` 且手持物品 typeId 匹配（`Menu.ts` 的 `onTokenItemUse()`；判据 `domain/InteractionRules.ts` 的 `isTokenMenuGesture()`）；**不要求蹲下**；信物在 `TOKEN_ITEM_OPTIONS` 中选"无"时仅剩命令入口 | `showMainMenu`                                                                                                                 |
-| 蹲下+手持信物点击箱子                    | 手持信物 **且蹲下** 且被点击方块为 `minecraft:chest`（普通木头箱子；判据 `isChestBindGesture()`）；命中即取消这次方块交互并开绑定面板，长按重复事件只首发开一次                                                       | `showWorkChestForm`（`Panels/WorkChest.ts`）                                                                                   |
-| 点击假人实体                             | 桥接层 `engine/Bridges.ts` 的 `onInteractEntity` 捕获实体交互，`Menu.ts` 的 `onBotInteract()` 在 `system.run` 内重读潜行态（**不判手持物**）                                                                          | **站立→BotPanel（操作面板）；蹲下→BehaviorPanel（行为菜单）**                                                                  |
-| 命令 `/mp:script` / 假人面板「编程模式」 | 主人或管理员（命令走 `ctx.bot` 守卫，面板走 `resolveUiBotRecord → guardUiManage`）                                                                                                                                    | 编程面板（状态 / 运行 / 停止 / 整段文本编辑 / 追加 / 删除 / 清空；详见《编程模式.md》）                                        |
+| 入口                                       | 条件                                                                                                                                                                                                                  | 落点                                                                                                                           |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 命令 `/mp:menu`                            | 任何玩家                                                                                                                                                                                                              | `showMainMenu`（`interface/Commands.Ui.ts` 的 `UI_COMMANDS` 中 `mp:menu` 项 → `interface/Panels/Menu.ts` 的 `showMainMenu()`） |
+| 手持信物长按                               | `config.tokenItem.enabled` 且手持物品 typeId 匹配（`Menu.ts` 的 `onTokenItemUse()`；判据 `domain/InteractionRules.ts` 的 `isTokenMenuGesture()`）；**不要求蹲下**；信物在 `TOKEN_ITEM_OPTIONS` 中选"无"时仅剩命令入口 | `showMainMenu`                                                                                                                 |
+| 蹲下+手持信物点击箱子                      | 手持信物 **且蹲下** 且被点击方块为 `minecraft:chest`（普通木头箱子；判据 `isChestBindGesture()`）；命中即取消这次方块交互并开绑定面板，长按重复事件只首发开一次                                                       | `showWorkChestForm`（`Panels/WorkChest.ts`）                                                                                   |
+| 点击假人实体                               | 桥接层 `engine/Bridges.ts` 的 `onInteractEntity` 捕获实体交互，`Menu.ts` 的 `onBotInteract()` 在 `system.run` 内重读潜行态（**不判手持物**）                                                                          | **站立→BotPanel（操作面板）；蹲下→BehaviorPanel（行为菜单）**                                                                  |
+| 命令 `/mp:action` / 假人面板「自定义动作」 | 主人或管理员（命令走 `ctx.bot` 守卫，面板走 `resolveUiBotRecord → guardUiManage`）                                                                                                                                    | 自定义动作面板（状态 / 运行 / 停止 / 整段文本编辑 / 追加 / 删除 / 清空；详见《自定义动作.md》）                                |
 
 - 长按入口先做存在性预判（`findBotIdByName` + `record`），假人已不存在时回发红字早退；面板入口自身仍带完整解析与守卫（双保险）。
 - 判定在桥后同步做、开表单必须 `system.run`——这是 Menu.ts 文件头的纪律注释。

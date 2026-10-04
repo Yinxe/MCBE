@@ -1,18 +1,18 @@
-// ─── 编程模式：运行状态板（domain 纯逻辑） ──────────────────────────
+// ─── 自定义动作：运行状态板（domain 纯逻辑） ──────────────────────────
 // 面板与命令要显示"此刻跑到哪条/第几轮/为什么停"，这些信息由能力层在推进与收场时写入，
-// 与脚本内容分开：脚本落盘（DP），运行状态只活在进程内存里（重启即失，重跑重新计时）。
+// 与动作表内容分开：动作表落盘（DP），运行状态只活在进程内存里（重启即失，重跑重新计时）。
 // 逐假人一份，删假人时清。
 
 /** 运行阶段 */
-export type ScriptPhase = "idle" | "running" | "completed" | "failed" | "empty";
+export type ActionPhase = "idle" | "running" | "completed" | "failed" | "empty";
 
-/** 单假人的编程模式运行快照 */
-export interface ScriptStatus {
+/** 单假人的自定义动作运行快照 */
+export interface ActionStatus {
   /** 阶段 */
-  phase: ScriptPhase;
-  /** 当前/最后停靠的步骤序号（1 起；无意义时为 0） */
+  phase: ActionPhase;
+  /** 当前/最后停靠的动作序号（1 起；无意义时为 0） */
   stepIndex: number;
-  /** 步骤总数 */
+  /** 动作总数 */
   total: number;
   /** 第几轮（1 起） */
   cycle: number;
@@ -23,26 +23,26 @@ export interface ScriptStatus {
 }
 
 /** 初始快照 */
-export function idleStatus(now: number): ScriptStatus {
+export function idleStatus(now: number): ActionStatus {
   return { phase: "idle", stepIndex: 0, total: 0, cycle: 0, message: "", updatedAt: now };
 }
 
 /** 状态板：逐假人快照（进程内存活） */
-export class ScriptStatusBoard {
-  private readonly board = new Map<number, ScriptStatus>();
+export class ActionStatusBoard {
+  private readonly board = new Map<number, ActionStatus>();
 
   /**
    * 局部更新（未给字段保持原值）。
    * @param botId - 假人身份
    * @param patch - 变更字段
    */
-  patch(botId: number, patch: Partial<ScriptStatus>): void {
+  patch(botId: number, patch: Partial<ActionStatus>): void {
     const prev = this.board.get(botId) ?? idleStatus(0);
     this.board.set(botId, { ...prev, ...patch });
   }
 
   /** 取快照（从未跑过 → undefined） */
-  get(botId: number): ScriptStatus | undefined {
+  get(botId: number): ActionStatus | undefined {
     return this.board.get(botId);
   }
 
@@ -55,13 +55,13 @@ export class ScriptStatusBoard {
    * 状态中文摘要（命令/面板共用）。
    * @param status - 快照
    */
-  static describe(status: ScriptStatus | undefined): string {
+  static describe(status: ActionStatus | undefined): string {
     if (!status) return "未运行";
     switch (status.phase) {
       case "idle":
         return status.message ? `已停止（${status.message}）` : "未运行";
       case "empty":
-        return "脚本为空";
+        return "还没有自定义动作";
       case "running":
         return `运行中：第 ${status.stepIndex}/${status.total} 条 · 第 ${status.cycle} 轮`;
       case "completed":

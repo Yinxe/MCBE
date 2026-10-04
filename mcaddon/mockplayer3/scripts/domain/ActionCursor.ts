@@ -1,28 +1,28 @@
-// ─── 编程模式：执行游标（domain 纯逻辑） ────────────────────────────
+// ─── 自定义动作：执行游标（domain 纯逻辑） ────────────────────────────
 // 把"下一条执行哪条 / 本轮是否结束 / 整段是否跑完 / 是否踩到跳转死循环"从异步执行器里
-// 拆出来，做成可离线单测的纯状态机；执行器只负责把步骤落到引擎原子。
+// 拆出来，做成可离线单测的纯状态机；执行器只负责把动作落到引擎原子。
 // 调用约定：peek 停在待执行条上 → 执行 → commit（成功）或 skip（失败且策略=跳过）。
 
-import type { ScriptProgram, ScriptStep } from "./ScriptRules";
-import { JUMP_STREAK_LIMIT } from "./ScriptRules";
+import type { ActionProgram, ActionStep } from "./ActionRules";
+import { JUMP_STREAK_LIMIT } from "./ActionRules";
 
 /** 游标停靠点 */
-export type ScriptCursorStop =
-  | { kind: "step"; index: number; step: ScriptStep; cycle: number }
+export type ActionCursorStop =
+  | { kind: "step"; index: number; step: ActionStep; cycle: number }
   | { kind: "cycle-end"; cycle: number; done: boolean }
   | { kind: "error"; message: string };
 
 /**
- * 脚本执行游标。
+ * 动作表执行游标。
  * @remarks peek 会就地消化 jump 与整段循环；同一停靠点只调用一次后再 commit/skip。
  */
-export class ScriptCursor {
+export class ActionCursor {
   private cursor = 0;
   private cycles = 0;
   private jumpStreak = 0;
   private finished = false;
 
-  constructor(private readonly program: ScriptProgram) {}
+  constructor(private readonly program: ActionProgram) {}
 
   /** 当前待执行条序号（0 起；未停靠时无意义） */
   get index(): number {
@@ -34,7 +34,7 @@ export class ScriptCursor {
     return this.cycles;
   }
 
-  /** 步骤总数 */
+  /** 动作总数 */
   get total(): number {
     return this.program.steps.length;
   }
@@ -46,9 +46,9 @@ export class ScriptCursor {
 
   /**
    * 取下一个停靠点（消化 jump 与整段循环）。
-   * @returns 待执行步骤 / 本轮结束 / 整段完成 / 死循环等错误
+   * @returns 待执行动作 / 本轮结束 / 整段完成 / 死循环等错误
    */
-  peek(): ScriptCursorStop {
+  peek(): ActionCursorStop {
     if (this.finished) return { kind: "cycle-end", cycle: this.cycles, done: true };
     const total = this.program.steps.length;
     if (total === 0) {

@@ -1,16 +1,16 @@
-// ─── 编程模式能力（按脚本顺序执行；常驻异步协程 + 看门狗续租） ──────
-// 分工：脚本模型与文本规格在 domain/ScriptRules，执行游标（循环/跳转/死循环护栏）在
-// domain/ScriptCursor，读写与版本在 application/ScriptLibrary；本类只把步骤落到引擎原子。
-// tick 不做业务裁决（脚本节拍全在协程的 await 里），只续 hands/motion 租约并做存活检查。
-// 失败语义：按脚本的 onFail 停下（状态记 failed + 告知主人）或跳过该条继续；模式不自动切换。
-// 脚本被编辑或请求重跑 → 版本号变 → 协程在下一个步骤边界换用新脚本重开一轮。
+// ─── 自定义动作能力（按动作表顺序执行；常驻异步协程 + 看门狗续租） ──────
+// 分工：动作表模型与文本规格在 domain/ActionRules，执行游标（循环/跳转/死循环护栏）在
+// domain/ActionCursor，读写与版本在 application/ActionLibrary；本类只把动作落到引擎原子。
+// tick 不做业务裁决（动作表节拍全在协程的 await 里），只续 hands/motion 租约并做存活检查。
+// 失败语义：按动作表的 onFail 停下（状态记 failed + 告知主人）或跳过该条继续；模式不自动切换。
+// 动作表被编辑或请求重跑 → 版本号变 → 协程在下一个动作边界换用新动作表重开一轮。
 
 import { CancelToken } from "../../domain/Cancellation";
 import type { Capability, LeaseRequest } from "../../domain/Capability";
 import { ACTION_HOLD_TTL_TICKS } from "../../domain/Leases";
 import { toolStrategyForBlock } from "../../domain/MineRules";
-import type { ScriptProgram, ScriptStep } from "../../domain/ScriptRules";
-import { ScriptCursor } from "../../domain/ScriptCursor";
+import type { ActionProgram, ActionStep } from "../../domain/ActionRules";
+import { ActionCursor } from "../../domain/ActionCursor";
 import type { Session } from "../../domain/Session";
 import { sleepTicks } from "../../engine/Atomic";
 import { attacker } from "../../engine/Attacker";
@@ -24,12 +24,12 @@ import { makeEnsureToolForBlock } from "../../engine/ToolKit";
 import type { NavOutcome } from "../../domain/NavRules";
 import type { EntityOps } from "../../engine/EntityOps";
 import type { PanelOps } from "../../engine/PanelOps";
-import type { ScriptLibrary } from "../ScriptLibrary";
+import type { ActionLibrary } from "../ActionLibrary";
 import type { Runtime } from "../Runtime";
 
 /** 每条之间的最小间隔（tick，防刷） */
 const STEP_PACE_TICKS = 1;
-/** 空脚本/待命时的重查间隔（tick） */
+/** 空动作表/待命时的重查间隔（tick） */
 const IDLE_RECHECK_TICKS = 20;
 /** 看门狗节拍（tick）：续租 + 存活检查 */
 const WATCHDOG_TICKS = 20;
@@ -44,32 +44,32 @@ const MINE_POLL_TICKS = 5;
 const ACTION_MAX_DISTANCE = 6;
 
 /** 能力私有上下文（挂 session.capability.data） */
-interface ScriptCtx {
+interface ActionCtx {
   token: CancelToken;
-  /** 本轮已执行到的脚本版本（外层据此判断"跑过且没新指令"） */
+  /** 本轮已执行到的动作表版本（外层据此判断"跑过且没新指令"） */
   version: number;
   /** 日志前缀（含假人名） */
   prefix: string;
 }
 
 /** 单步结果 */
-type StepOutcome = { status: "ok" } | { status: "fail"; message: string } | { status: "cancelled" };
+type ActionStepOutcome = { status: "ok" } | { status: "fail"; message: string } | { status: "cancelled" };
 
 /** 整段结果 */
-type ProgramOutcome = "done" | "failed" | "cancelled" | "restart";
+type ActionsOutcome = "done" | "failed" | "cancelled" | "restart";
 
-export class ScriptCap implements Capability {
-  readonly id = "script" as const;
+export class CustomActionCap implements Capability {
+  readonly id = "custom" as const;
   private readonly ensureTool = makeEnsureToolForBlock(toolStrategyForBlock);
 
   constructor(
     private readonly runtime: Runtime,
-    private readonly library: ScriptLibrary,
+    private readonly library: ActionLibrary,
     private readonly ops: EntityOps,
     private readonly panelOps: PanelOps
   ) {}
 
-  /** 脚本会走路也用手：预取 hands/motion（破坏逐格另领，与定点挖掘同口径） */
+  /** 动作表会走路也用手：预取 hands/motion（破坏逐格另领，与定点挖掘同口径） */
   requires(): LeaseRequest[] {
     return [{ kind: "hands" }, { kind: "motion" }];
   }
@@ -79,10 +79,10 @@ export class ScriptCap implements Capability {
     if (!record) return "记录缺失";
     const cap = session.capability;
     if (!cap) return "能力上下文缺失";
-    const ctx: ScriptCtx = {
+    const ctx: ActionCtx = {
       token: new CancelToken(),
       version: -1,
-      prefix: `[mockplayer3] 编程模式 ${record.name}`,
+      prefix: `[mockplayer3] 自定义动作 ${record.name}`,
     };
     cap.data[this.id] = ctx;
     cap.phase = { name: "RUN", nextWakeAt: now + WATCHDOG_TICKS };
@@ -98,7 +98,7 @@ export class ScriptCap implements Capability {
     return undefined;
   }
 
-  /** 看门狗：续租 + 存活检查（脚本节拍不在这里） */
+  /** 看门狗：续租 + 存活检查（动作表节拍不在这里） */
   tick(session: Session, now: number): void {
     const ctx = this.ctxOf(session);
     if (!ctx) return;
@@ -120,11 +120,11 @@ export class ScriptCap implements Capability {
 
   // ─── 私有：常驻协程 ───
 
-  private ctxOf(session: Session): ScriptCtx | undefined {
-    return session.capability?.data[this.id] as ScriptCtx | undefined;
+  private ctxOf(session: Session): ActionCtx | undefined {
+    return session.capability?.data[this.id] as ActionCtx | undefined;
   }
 
-  private async runLoop(session: Session, ctx: ScriptCtx): Promise<void> {
+  private async runLoop(session: Session, ctx: ActionCtx): Promise<void> {
     const botId = session.botId;
     while (!ctx.token.cancelled) {
       const program = this.library.programOf(botId);
@@ -135,7 +135,7 @@ export class ScriptCap implements Capability {
           stepIndex: 0,
           total: 0,
           cycle: 0,
-          message: "脚本为空",
+          message: "还没有自定义动作",
           updatedAt: clock.now(),
         });
         await sleepTicks(IDLE_RECHECK_TICKS, ctx.token);
@@ -156,16 +156,16 @@ export class ScriptCap implements Capability {
 
   private async executeProgram(
     session: Session,
-    ctx: ScriptCtx,
-    program: ScriptProgram,
+    ctx: ActionCtx,
+    program: ActionProgram,
     startedVersion: number
-  ): Promise<ProgramOutcome> {
+  ): Promise<ActionsOutcome> {
     const botId = session.botId;
-    const cursor = new ScriptCursor(program);
+    const cursor = new ActionCursor(program);
     let lastCycle = 0;
     for (;;) {
       if (ctx.token.cancelled) return "cancelled";
-      // 脚本被编辑或请求重跑：立刻回外层用新脚本重开（不必等整轮跑完）
+      // 动作表被编辑或请求重跑：立刻回外层用新动作表重开（不必等整轮跑完）
       if (this.library.versionOf(botId) !== startedVersion) return "restart";
       const stop = cursor.peek();
       if (stop.kind === "error") {
@@ -182,7 +182,7 @@ export class ScriptCap implements Capability {
           updatedAt: clock.now(),
         });
         console.warn(`${ctx.prefix} 完成：${cursor.total} 条 × ${stop.cycle} 轮`);
-        this.notifyOwner(session, `脚本已完成（${cursor.total} 条 × ${stop.cycle} 轮）`, "info");
+        this.notifyOwner(session, `动作表已完成（${cursor.total} 条 × ${stop.cycle} 轮）`, "info");
         return "done";
       }
       if (stop.cycle !== lastCycle) {
@@ -217,7 +217,7 @@ export class ScriptCap implements Capability {
 
   // ─── 私有：单步落地 ───
 
-  private async executeStep(session: Session, ctx: ScriptCtx, step: ScriptStep): Promise<StepOutcome> {
+  private async executeStep(session: Session, ctx: ActionCtx, step: ActionStep): Promise<ActionStepOutcome> {
     const botId = session.botId;
     /** 转向可选坐标（带就转，等一拍让引擎生效） */
     const aimIfAny = async (look: { x: number; y: number; z: number } | undefined): Promise<void> => {
@@ -306,7 +306,7 @@ export class ScriptCap implements Capability {
       }
       case "sneak": {
         await aimIfAny(step.look);
-        // 运行期姿态：只改实体，不写记录开关（重连由记录开关恢复，避免脚本改写玩家设置）
+        // 运行期姿态：只改实体，不写记录开关（重连由记录开关恢复，避免动作表改写玩家设置）
         this.ops.setSneaking(botId, step.on);
         return { status: "ok" };
       }
@@ -316,7 +316,7 @@ export class ScriptCap implements Capability {
         return this.ops.jump(botId) ? { status: "ok" } : { status: "fail", message: "假人不在场，跳不起来" };
       }
       case "jump":
-        // 跳转由游标消化，不会作为待执行步骤出现
+        // 跳转由游标消化，不会作为待执行动作出现
         return { status: "ok" };
     }
   }
@@ -334,7 +334,7 @@ export class ScriptCap implements Capability {
       message: reason,
       updatedAt: clock.now(),
     });
-    this.notifyOwner(session, `脚本第 ${stepNo}/${total} 条失败：${reason}（已停下，改好后再运行）`, "warn");
+    this.notifyOwner(session, `动作表第 ${stepNo}/${total} 条失败：${reason}（已停下，改好后再运行）`, "warn");
   }
 
   private notifyOwner(session: Session, text: string, level: "info" | "warn" | "error"): void {
@@ -344,7 +344,7 @@ export class ScriptCap implements Capability {
   }
 
   private ctxPrefix(session: Session): string {
-    return this.ctxOf(session)?.prefix ?? "[mockplayer3] 编程模式";
+    return this.ctxOf(session)?.prefix ?? "[mockplayer3] 自定义动作";
   }
 }
 

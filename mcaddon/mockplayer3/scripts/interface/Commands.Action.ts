@@ -1,26 +1,26 @@
-// ─── 编程模式命令（/mp:script） ────────────────────────────────────
+// ─── 自定义动作命令（/mp:action） ────────────────────────────────────
 // 一个 CommandSpec 带动作枚举（本仓无子命令概念）：编辑/查看/启停全在一个动词表里。
-// 长步骤（说话/备注）建议在编程面板里改（命令参数只有单 token 类型，这里最多拼 6 段）。
+// 长动作（说话/备注）建议在自定义动作面板里改（命令参数只有单 token 类型，这里最多拼 6 段）。
 
 import { color, style } from "@yinxe/toolkit";
 import { modeSpec } from "../domain/Catalog";
 import {
   describeFailPolicy,
   describeLoopCount,
-  describeStep,
+  describeAction,
   parseFailPolicyInput,
   parseLoopCountInput,
-  parseProgramSpec,
-  parseStepSpec,
-} from "../domain/ScriptRules";
-import { ScriptStatusBoard } from "../domain/ScriptStatus";
+  parseActionsSpec,
+  parseActionSpec,
+} from "../domain/ActionRules";
+import { ActionStatusBoard } from "../domain/ActionStatus";
 import { services } from "../Composition";
 import type { CommandCtx, CommandSpec } from "./CmdKit";
 import { Param } from "./CmdKit";
-import { showScriptPanel } from "./Panels/Script";
+import { showActionPanel } from "./Panels/Action";
 
 /** 动作枚举（含别名解析在 handleAction 内做，这里只给规范值） */
-const SCRIPT_ACTIONS: readonly string[] = [
+const ACTION_VERBS: readonly string[] = [
   "panel",
   "list",
   "add",
@@ -62,7 +62,7 @@ function resolveAction(raw: unknown): string {
   const text = String(raw ?? "").trim();
   if (text.length === 0) return "panel";
   const lower = text.toLowerCase();
-  if (SCRIPT_ACTIONS.includes(lower)) return lower;
+  if (ACTION_VERBS.includes(lower)) return lower;
   return ACTION_ALIASES[text] ?? ACTION_ALIASES[lower] ?? "unknown";
 }
 
@@ -76,43 +76,43 @@ function joinText(a: Record<string, unknown>): string {
   return parts.join(" ").trim();
 }
 
-/** 脚本概览（状态 + 条数 + 循环 + 失败策略） */
+/** 动作表概览（状态 + 条数 + 循环 + 失败策略） */
 function overview(botId: number, name: string): string[] {
-  const lib = services.script;
+  const lib = services.actions;
   const program = lib.programOf(botId);
-  const status = ScriptStatusBoard.describe(lib.status.get(botId));
+  const status = ActionStatusBoard.describe(lib.status.get(botId));
   return [
-    `${style(`${name} 的脚本`, color.playerName)} ${color.muted}${program.steps.length} 条 · ${describeLoopCount(program.loopCount)} · ${describeFailPolicy(program.onFail)}`,
+    `${style(`${name} 的动作表`, color.playerName)} ${color.muted}${program.steps.length} 条 · ${describeLoopCount(program.loopCount)} · ${describeFailPolicy(program.onFail)}`,
     `${color.muted}状态：${color.info}${status}`,
   ];
 }
 
 function handleAction(ctx: CommandCtx, action: string, botId: number, name: string, text: string): void {
-  const lib = services.script;
+  const lib = services.actions;
   const say = (t: string): void => ctx.say(t);
   switch (action) {
     case "panel":
       for (const line of overview(botId, name)) say(line);
-      showScriptPanel(ctx.player, name);
+      showActionPanel(ctx.player, name);
       return;
     case "list": {
       const program = lib.programOf(botId);
       for (const line of overview(botId, name)) say(line);
       if (program.steps.length === 0) {
         say(
-          `${color.muted}脚本为空：用 ${color.info}/mp:script ${name} add 走到 100 64 100 ${color.muted}加一条，或在面板里整段编辑`
+          `${color.muted}还没有自定义动作：用 ${color.info}/mp:action ${name} add 走到 100 64 100 ${color.muted}加一条，或在面板里整段编辑`
         );
         return;
       }
-      program.steps.forEach((step, i) => say(`${color.muted}${describeStep(step, i + 1)}`));
+      program.steps.forEach((step, i) => say(`${color.muted}${describeAction(step, i + 1)}`));
       return;
     }
     case "add": {
       if (text.length === 0) {
-        say(`${color.error}用法：/mp:script ${name} add <规格>（如 走到 100 64 100 / 等待 2 / 挖前方）`);
+        say(`${color.error}用法：/mp:action ${name} add <规格>（如 走到 100 64 100 / 等待 2 / 挖前方）`);
         return;
       }
-      const parsed = parseStepSpec(text);
+      const parsed = parseActionSpec(text);
       if ("error" in parsed) {
         say(`${color.error}${parsed.error}`);
         return;
@@ -122,16 +122,16 @@ function handleAction(ctx: CommandCtx, action: string, botId: number, name: stri
         say(`${color.error}${r.reason}`);
         return;
       }
-      say(`${color.success}已添加第 ${r.index} 条：${describeStep(parsed.step)}（共 ${r.count} 条）`);
-      if (r.count === 1) say(`${color.muted}用 ${color.info}/mp:script ${name} run ${color.muted}启动`);
+      say(`${color.success}已添加第 ${r.index} 条：${describeAction(parsed.step)}（共 ${r.count} 个）`);
+      if (r.count === 1) say(`${color.muted}用 ${color.info}/mp:action ${name} run ${color.muted}启动`);
       return;
     }
     case "set": {
       if (text.length === 0) {
-        say(`${color.error}用法：/mp:script ${name} set <整段规格>（多条用 ${color.info}|${color.error} 分隔）`);
+        say(`${color.error}用法：/mp:action ${name} set <整段规格>（多条用 ${color.info}|${color.error} 分隔）`);
         return;
       }
-      const parsed = parseProgramSpec(text);
+      const parsed = parseActionsSpec(text);
       if (parsed.errors.length > 0) {
         say(`${color.error}有 ${parsed.errors.length} 条无法解析，本次未保存：`);
         for (const e of parsed.errors.slice(0, 5)) say(`${color.error}${e}`);
@@ -154,7 +154,7 @@ function handleAction(ctx: CommandCtx, action: string, botId: number, name: stri
     case "loop": {
       const loop = parseLoopCountInput(text);
       if (loop === undefined) {
-        say(`${color.error}用法：/mp:script ${name} loop <一直|一次|次数>`);
+        say(`${color.error}用法：/mp:action ${name} loop <一直|一次|次数>`);
         return;
       }
       const r = lib.setLoopCount(botId, loop);
@@ -164,7 +164,7 @@ function handleAction(ctx: CommandCtx, action: string, botId: number, name: stri
     case "fail": {
       const policy = parseFailPolicyInput(text);
       if (!policy) {
-        say(`${color.error}用法：/mp:script ${name} fail <停|跳过>`);
+        say(`${color.error}用法：/mp:action ${name} fail <停|跳过>`);
         return;
       }
       const r = lib.setFailPolicy(botId, policy);
@@ -179,7 +179,7 @@ function handleAction(ctx: CommandCtx, action: string, botId: number, name: stri
     case "run": {
       const program = lib.programOf(botId);
       if (program.steps.length === 0) {
-        say(`${color.error}脚本为空：先 add 或到面板里写一段`);
+        say(`${color.error}还没有自定义动作：先 add 或到面板里写一段`);
         return;
       }
       const record = services.runtime.record(botId);
@@ -190,7 +190,7 @@ function handleAction(ctx: CommandCtx, action: string, botId: number, name: stri
       if (!services.runtime.session(botId)) {
         say(`${color.error}假人不在线：上线后会自动接着跑（模式已记住）`);
       }
-      const changed = services.lifecycle.changeWorkMode(ctx.viewer, botId, "script");
+      const changed = services.lifecycle.changeWorkMode(ctx.viewer, botId, "custom");
       if (!changed.ok) {
         say(`${color.error}${changed.reason}`);
         return;
@@ -211,19 +211,19 @@ function handleAction(ctx: CommandCtx, action: string, botId: number, name: stri
       return;
     }
     default:
-      say(`${color.error}未知动作；可用：${SCRIPT_ACTIONS.join(" / ")}`);
-      say(`${color.muted}例如 ${color.info}/mp:script ${name} add 走到 100 64 100`);
+      say(`${color.error}未知动作；可用：${ACTION_VERBS.join(" / ")}`);
+      say(`${color.muted}例如 ${color.info}/mp:action ${name} add 走到 100 64 100`);
   }
 }
 
-export const SCRIPT_COMMANDS: readonly CommandSpec[] = [
+export const ACTION_COMMANDS: readonly CommandSpec[] = [
   {
-    name: "mp:script",
-    description: `编程模式：${modeSpec("script").help}`,
-    usage: "mp:script <假人> [list|add|set|del|loop|fail|clear|run|stop|status] [参数…]",
+    name: "mp:action",
+    description: `自定义动作：${modeSpec("custom").help}`,
+    usage: "mp:action <假人> [list|add|set|del|loop|fail|clear|run|stop|status] [参数…]",
     args: [
       { name: "name", type: Param.String },
-      { name: "action", type: Param.Enum, optional: true, enum: SCRIPT_ACTIONS },
+      { name: "action", type: Param.Enum, optional: true, enum: ACTION_VERBS },
       { name: "t1", type: Param.String, optional: true },
       { name: "t2", type: Param.String, optional: true },
       { name: "t3", type: Param.String, optional: true },
@@ -236,11 +236,11 @@ export const SCRIPT_COMMANDS: readonly CommandSpec[] = [
       if (!target) return;
       const action = resolveAction(a.action);
       if (action === "unknown") {
-        ctx.say(`${color.error}未知动作；可用：${SCRIPT_ACTIONS.join(" / ")}`);
+        ctx.say(`${color.error}未知动作；可用：${ACTION_VERBS.join(" / ")}`);
         return;
       }
       if (action === "help") {
-        ctx.say(`${color.muted}${SCRIPT_ACTIONS.join(" / ")}`);
+        ctx.say(`${color.muted}${ACTION_VERBS.join(" / ")}`);
         return;
       }
       handleAction(ctx, action, target.botId, target.record.name, joinText(a));
