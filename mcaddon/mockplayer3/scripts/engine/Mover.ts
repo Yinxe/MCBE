@@ -29,6 +29,11 @@ import { clock } from "./Clock";
 import { botOf, botValid, readBlockIn, sleepTicks } from "./Atomic";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 
+/** 远距离走位的单段长度（格）：留出 16 格上限的余量 */
+const FAR_LEG_DISTANCE = 12;
+/** 远距离走位段数上限（约 768 格；再多按够不着收场，避免脚本把假人拖去跑长途） */
+const FAR_LEG_LIMIT = 64;
+
 /** 导航选项（回调只传纯数据——可上达 application） */
 export interface NavigateOptions {
   nearby?: boolean;
@@ -114,6 +119,32 @@ export class Mover {
       return "error";
     } finally {
       if (this.walkTokens.get(botId) === mine) this.walkTokens.delete(botId);
+    }
+  }
+
+  /**
+   * 远距离走位：把长距离拆成若干段，逐段沿用 navigate 的位置观测结论。
+   * 中间点取当下层（脚位层交引擎按列投影），终段才用目标 y；任一段未到达即原样返回。
+   * @param botId - 假人句柄
+   * @param target - 最终目标（脚本给定坐标）
+   * @param opts - 同 navigate
+   * @returns 走位结论（永不 reject）；段数用尽仍未到按 too_far 收场
+   */
+  async navigateFar(botId: number, target: Vec3, opts: NavigateOptions = {}): Promise<NavOutcome> {
+    try {
+      for (let leg = 0; leg < FAR_LEG_LIMIT; leg++) {
+        const at = this.locationOf(botId);
+        if (!at) return "unavailable";
+        const remain = horizontalDistance(at, target);
+        if (remain <= FAR_LEG_DISTANCE) return await this.navigate(botId, target, opts);
+        const k = FAR_LEG_DISTANCE / remain;
+        const mid = { x: at.x + (target.x - at.x) * k, y: at.y, z: at.z + (target.z - at.z) * k };
+        const leg1 = await this.navigate(botId, mid, opts);
+        if (leg1 !== "arrived") return leg1;
+      }
+      return "too_far";
+    } catch {
+      return "error";
     }
   }
 

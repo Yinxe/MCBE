@@ -15,8 +15,9 @@ import type { Vec3 } from "../domain/Coords";
 import { MinecraftBlockTypes } from "@minecraft/vanilla-data";
 import type { Block, BlockRaycastHit, ItemStack } from "@minecraft/server";
 import { Direction, EquipmentSlot } from "@minecraft/server";
+import { LookDuration } from "@minecraft/server-gametest";
 import { isClickGuardBlockedBlock } from "../domain/ClickGuard";
-import { blockFloor, botOf, botValid, inventoryContainer, rayHit } from "./Atomic";
+import { blockFloor, botOf, botValid, inventoryContainer, rayHit, readBlock } from "./Atomic";
 
 /** 发起拍结果（switch 完备可查）：started=常规通道已进建造态，待 endPlace 次拍收口；
  *  special-placed=可交互支撑直写成立；其余见各态注释 */
@@ -89,6 +90,19 @@ function isNonPlaceableSpecial(typeId: string): boolean {
   return NON_PLACEABLE_EXACT.has(typeId) || NON_PLACEABLE_SUFFIXES.some((s) => typeId.endsWith(s));
 }
 
+/** 按坐标放置结果（脚本「放置 x y z」用；比常规通道多两类可归因失败） */
+export type PlaceAtResult = "placed" | "unchanged" | "not-block" | "no-target" | "far" | "offline";
+
+/** 按坐标放置的支撑检索顺序：先垫地、再水平、最后顶面（先试最自然的落点） */
+const SUPPORT_FACES: readonly Direction[] = [
+  Direction.Down,
+  Direction.North,
+  Direction.South,
+  Direction.East,
+  Direction.West,
+  Direction.Up,
+];
+
 export class Placer {
   /** 主手手持物的放置学分类（能力启动前置读；组件暂不可读按 offline 瞬态重试） */
   mainhandKind(botId: number): MainhandKind {
@@ -99,6 +113,54 @@ export class Placer {
     if (!held) return "empty";
     if (isNonPlaceableSpecial(held.typeId)) return "not-block";
     return BLOCK_TYPE_IDS.has(held.typeId) ? "block" : "not-block";
+  }
+
+  /**
+   * 往指定格放一个主手方块（脚本步骤用；不看准星，直接按支撑面落块）。
+   * 判定：目标格非空→unchanged；主手不是方块→not-block；六邻无实心支撑→no-target；
+   * 超出直写自限距离→far。落块用引擎原生 useItemInSlotOnBlock（引擎自己的放置规则裁决），
+   * 成功后回读目标格确认；引擎拒放一律 unchanged（不会凭空产块）。
+   * @param botId - 目标假人
+   * @param target - 目标格（整数方块坐标；内部 floor）
+   * @param maxDistance - 直写自限距离（格，眼到块心；引擎侧无距离校验，必须自限）
+   */
+  placeAt(botId: number, target: Vec3, maxDistance: number = DIRECT_WRITE_REACH): PlaceAtResult {
+    const bot = botOf(botId);
+    if (!bot || !botValid(bot)) return "offline";
+    const cell = blockFloor(target);
+    let dimId: string;
+    let at: Vec3;
+    try {
+      dimId = bot.dimension.id;
+      const l = bot.location;
+      at = { x: l.x, y: l.y, z: l.z };
+    } catch {
+      return "offline";
+    }
+    if (Math.hypot(cell.x - at.x, cell.y - at.y, cell.z - at.z) > maxDistance) return "far";
+    const before = readBlock(dimId, cell);
+    if (!before) return "offline";
+    if (!before.air) return "unchanged";
+    if (this.mainhandKind(botId) !== "block") return "not-block";
+    for (const face of SUPPORT_FACES) {
+      const normal = FACE_NORMALS[face];
+      if (!normal) continue;
+      // 支撑格＝目标格沿该面法线的反向邻格；点击它的 face 面即落到目标格
+      const support = { x: cell.x - normal.x, y: cell.y - normal.y, z: cell.z - normal.z };
+      const info = readBlock(dimId, support);
+      if (!info || info.air || info.liquid) continue;
+      try {
+        const center = { x: support.x + 0.5, y: support.y + 0.5, z: support.z + 0.5 };
+        bot.lookAtLocation(center, LookDuration.Continuous);
+        bot.useItemInSlotOnBlock(bot.selectedSlotIndex, support, face);
+      } catch {
+        return "offline";
+      }
+      const after = readBlock(dimId, cell);
+      if (after && !after.air) return "placed";
+      return "unchanged";
+    }
+    return "no-target";
   }
 
   /**

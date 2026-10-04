@@ -1,6 +1,6 @@
 {
   "name": "mockplayer3",
-  "version": "3.0.7",
+  "version": "3.0.9",
   "description": "模拟玩家v3",
   "private": true,
   "devDependencies": {

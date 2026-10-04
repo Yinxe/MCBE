@@ -29,6 +29,7 @@ import { showDiscardForm } from "./Discard";
 import { showSwapForm } from "./Swap";
 import { showMainhandSelector } from "./Mainhand";
 import { showTridentSelector, showTridentClaimUI } from "./Trident";
+import { showActionPanel } from "./Action";
 import { sendData } from "./Data";
 import { confirmDelete } from "./Delete";
 import type { ItemSummary } from "../../engine/PanelOps";
@@ -235,6 +236,9 @@ export function showBotPanel(player: Player, rawName: string, onBack?: () => voi
     );
     f.buttonWithIcon(style("行为菜单", color.darkGreen), "textures/ui/mockplayer/inventory", () =>
       showBehaviorPanel(player, rawName)
+    );
+    f.buttonWithIcon(style("自定义动作", color.darkGreen), "textures/ui/mockplayer/inventory", () =>
+      showActionPanel(player, rawName)
     );
     f.buttonWithIcon(style("使用物品", color.darkGreen), "textures/ui/mockplayer/use_item", () => void useItem());
     f.buttonWithIcon(style("交互", color.darkGreen), "textures/ui/mockplayer/use_item", interact);

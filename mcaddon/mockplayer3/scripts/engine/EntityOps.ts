@@ -253,6 +253,38 @@ export class EntityOps {
     }
   }
 
+  /**
+   * 让假人跳一下（脚本「跳一下」步；引擎原生 jump 无其他封装）。
+   * @param botId - 假人身份
+   * @returns true=引擎受理；假人不在场 false
+   */
+  jump(botId: number): boolean {
+    const bot = this.entity(botId);
+    if (!bot) return false;
+    try {
+      return bot.jump();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 让假人在全服聊天里说一句（脚本「说话」步；引擎原生 chat 无其他封装）。
+   * @param botId - 假人身份
+   * @param text - 已归一化的文本
+   * @returns true=已发出；假人不在场 false
+   */
+  say(botId: number, text: string): boolean {
+    const bot = this.entity(botId);
+    if (!bot) return false;
+    try {
+      bot.chat(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** 重生点双写（F-08：记录 + 实体 setSpawnPoint，死亡原地复活语义） */
   setSpawnPoint(botId: number, position: Vector3, dimensionId: string): void {
     const bot = this.entity(botId);
