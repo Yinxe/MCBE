@@ -70,6 +70,15 @@ export const WORK_MODES: readonly WorkModeSpec[] = [
     requiresLeases: ["gaze", "hands", "motion"],
     tier: "heavy",
   },
+  {
+    id: "script",
+    label: "编程模式",
+    help: "按玩家写好的步骤脚本执行（走到/等待/挖掘/放置/使用物品/攻击/说话/看向/潜行/跳/跳转），可整段循环",
+    requiresLeases: ["hands", "motion"],
+    tier: "heavy",
+    // 归"实现性功能"总闸管辖（未完成实机验收，关则玩家侧不可选）
+    experimental: true,
+  },
   // 采集模式族：对象即模式——每 CollectorSpec 一个独立工作模式；表序=目录派生 UI 顺序
   // 当前仅原木一种，且归"实现性功能"总闸管辖（未完成验收，关则玩家侧不可选）
   ...HARVEST_KINDS.map((k): WorkModeSpec => ({

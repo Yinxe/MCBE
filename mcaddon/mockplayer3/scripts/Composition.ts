@@ -36,6 +36,9 @@ import { WanderCap } from "./application/Capabilities/Wander";
 import { RaidCap } from "./application/Capabilities/Raid";
 import { VaultCap } from "./application/Capabilities/Vault";
 import { HarvestCap } from "./application/Capabilities/Harvest";
+import { ScriptCap } from "./application/Capabilities/Script";
+import { ScriptLibrary } from "./application/ScriptLibrary";
+import { ScriptStore } from "./engine/ScriptStore";
 
 const recordStore = new RecordStore();
 const runtime = new Runtime();
@@ -49,6 +52,9 @@ const events = new BotEventBus();
 const mailbox = new Mailbox();
 const modes = new Modes(runtime, saveGate, events);
 const transfer = new WorkTransfer(runtime, ops);
+// 编程模式：脚本走独立 DP 键（mp:script:<id>）——档案每次对账整条读写，脚本只在编辑/运行时才需要
+const scriptStore = new ScriptStore();
+const script = new ScriptLibrary(scriptStore);
 const lifecycle = new Lifecycle(runtime, saveGate, vault, ops, spawner, modes, events, mailbox, transfer);
 const scheduler = new Scheduler(runtime, saveGate, modes, ops, transfer);
 
@@ -67,6 +73,7 @@ export const services = {
   lifecycle,
   scheduler,
   transfer,
+  script,
 } as const;
 
 // ─── 在线实时落盘 ──
@@ -133,6 +140,7 @@ modes.register(new RaidCap(runtime, events, capHost, saveGate));
 modes.register(new VaultCap(runtime, ops, (botId) => lifecycle.systemReconnect(botId)));
 // 采集按 CollectorSpec 一对象一模式单例；id 沿用 harvest_<kind>，命令/面板/存档零改动
 modes.register(new HarvestCap(runtime, capHost, "wood"));
+modes.register(new ScriptCap(runtime, script, ops, panelOps));
 
 // ─── 原子钩子装配（背包变更走 SaveGate 增量、领域事件走总线） ──
 
@@ -204,5 +212,6 @@ events.on("botDeleted", ({ botId }) => {
   runtime.forgetRaidState(botId); // 劫掠状态只随删假人清，防同名重建继承
   runtime.forgetVaultState(botId); // 宝库流程状态同上
   runtime.harvestGrounds.forgetBot(botId); // 采集地点池与扫描标记同上
+  script.forget(botId); // 编程模式：脚本、版本号与运行状态一并清（旧版漏了这步）
   runtime.forgetMined(botId); // 挖掘产物台账同上（工作箱搬运判据依赖它）
 });

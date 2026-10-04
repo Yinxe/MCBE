@@ -46,6 +46,28 @@ This file provides guidance to the AI agent when working with code in this repos
 - register 篡改游戏规则 → 回调内立即写回（F-21）；世界结构 `mockplayer:void` 由 BP structures 提供，勿删；GameTest 注册标识与测试维度名（`mockplayer:test`）沿用 v2 基线——存档装置命令方块写死旧标识，改名 runthis 复用必败。
 - tick 回调同步、短、无 await、无自旋（F-18）；长流程 = 相位机 + nextWakeAt 单一时钟（D-05）。
 
+## 编程模式（script；参考旧版 archive/mock-player 3.1.6 重写）
+
+落位与分工：
+
+- `domain/ScriptRules.ts`：脚本模型（12 种步骤）/ 模块目录 / 文本规格解析 / 存档归一化 / 中文描述 / 上限常量。命令与面板共用同一份解析，不得各自解释。
+- `domain/ScriptCursor.ts`：执行游标（顺序 / 整段循环 / 跳转 / 连续跳转死循环护栏）——纯状态机，可离线单测。
+- `domain/ScriptStatus.ts`：运行状态板（阶段/当前条/轮次/原因；进程内存活，删假人清）。
+- `engine/ScriptStore.ts`：脚本落盘（独立 DP 键 `mp:script:<botId>`；读回归一化、空脚本删键、写入带 24KB 体积护栏）。
+- `engine/`：新增原子只有三个——`Mover.navigateFar`（长距离自动分段）、`Placer.placeAt`（按坐标放置）、`EntityOps.say/jump`（说话/跳）。其余全部复用既有原子（`breaker.breakAt`、`panelOps.useItemOnce`、`attacker.swing`、`gaze.forceLook`、`ops.setSneaking`）。
+- `application/ScriptLibrary.ts`：脚本库——命令与面板的**唯一读写口**（读缓存 / 归一化写入 / 版本号 / 重跑请求 / 状态板）。
+- `application/Capabilities/Script.ts`：常驻协程执行脚本；`tick` 只做看门狗（续 hands/motion 租约 + 存活检查），业务节拍全在协程的 await 里。
+- `interface/Commands.Script.ts`（`/mp:script`，动作枚举）与 `interface/Panels/Script.ts`（面板：整段文本编辑为主路径）。
+
+纪律：
+
+1. 运行态只有 `workMode === "script"` 一个真源，不引入 `scriptRunning` 之类的第二标记。
+2. 重跑靠版本号（写入即 +1），执行器在**步骤边界**换用新脚本重开；不要用轮询计数或内容指纹。
+3. 失败按脚本的 `onFail` 处理（停下并私信主人 / 跳过该条），**模式不自动切换**。
+4. 脚本落盘不许塞进 `BotRecord`（档案每次对账整条读写）；坏档一律过 `normalizeProgram`。
+
+测试面：`tests/domain.ScriptRules.test.ts`（解析/归一化/往返/描述）、`tests/domain.ScriptCursor.test.ts`（顺序/循环/跳转/护栏）。
+
 ## 注释纪律（按正常项目写：只写事实，不写设计史）
 
 - 注释只陈述**事实与约束本身**——几何口径、时序、不变量、失败语义。不写复盘叙事、验收日期、「用户规格/实测 2026-…」、归档对位；引擎常量注明「实测值、改动需附证据」这类事实来源可以写。
