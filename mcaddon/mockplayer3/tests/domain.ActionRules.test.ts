@@ -26,8 +26,10 @@ import {
   parseActionSpec,
   actionsToSpecText,
   actionFromType,
+  actionsToSpecLines,
+  coordTextOf,
 } from "../scripts/domain/ActionRules";
-import type { ActionStep } from "../scripts/domain/ActionRules";
+import type { ActionProgram, ActionStep } from "../scripts/domain/ActionRules";
 
 test("动作·动作类型目录自洽：13 项、id 唯一、分类齐、关键词非空且与解析器对得上", () => {
   assert.equal(ACTION_TYPES.length, 13);
@@ -213,4 +215,47 @@ test("动作·面板参数与动作互转：选动作类型 + 填参数 → 动�
   }
   const bad = actionFromType(actionTypeById("mine")!, "1 2");
   assert.ok("error" in bad);
+});
+
+test("动作·坐标缺省：坐标类动作不写坐标＝用给定站位补齐，可空坐标不受影响", () => {
+  const at = { x: 10, y: 64, z: -20 };
+  const ok = (spec: string): ActionStep => {
+    const r = parseActionSpec(spec, { coord: at });
+    assert.ok("step" in r, `${spec} 应解析成功：${"error" in r ? r.error : ""}`);
+    return r.step;
+  };
+  assert.deepEqual(ok("走到"), { type: "moveTo", x: 10, y: 64, z: -20 });
+  assert.deepEqual(ok("挖掘"), { type: "mine", x: 10, y: 64, z: -20 });
+  assert.deepEqual(ok("放置"), { type: "place", x: 10, y: 64, z: -20 });
+  assert.deepEqual(ok("看"), { type: "look", x: 10, y: 64, z: -20 });
+  assert.deepEqual(ok("走到 1 2 3"), { type: "moveTo", x: 1, y: 2, z: 3 }, "给了坐标就用给的");
+  assert.deepEqual(ok("挖前方"), { type: "mineLook" }, "可空坐标动作不受兜底影响");
+  assert.deepEqual(ok("跳一下"), { type: "hop" });
+  assert.ok("error" in parseActionSpec("走到"), "不给兜底时仍按老口径报错");
+  assert.ok("error" in parseActionSpec("走到 1 2", { coord: at }), "坐标残缺不被兜底掩盖");
+});
+
+test("动作·一条一行写回：actionsToSpecLines 与 parseActionsSpec 互逆，coordTextOf 取整数格", () => {
+  const program: ActionProgram = {
+    steps: [
+      { type: "moveTo", x: 1, y: 64, z: -2 },
+      { type: "say", text: "集合" },
+      { type: "sneak", on: true },
+    ],
+    loopCount: 1,
+    onFail: "stop",
+  };
+  const lines = actionsToSpecLines(program);
+  assert.equal(lines.split("\n").length, 3, "一条动作一行");
+  const back = parseActionsSpec(lines);
+  assert.deepEqual(back.errors, []);
+  assert.deepEqual(back.steps, program.steps);
+  assert.equal(coordTextOf({ x: 1.9, y: 64.2, z: -0.5 }), "1 64 -1");
+  const def = actionTypeById("mine")!;
+  assert.deepEqual(actionFromType(def, "", { coord: { x: 7, y: 8, z: 9 } }), {
+    step: { type: "mine", x: 7, y: 8, z: 9 },
+  });
+  assert.deepEqual(actionFromType(def, "1 2 3", { coord: { x: 7, y: 8, z: 9 } }), {
+    step: { type: "mine", x: 1, y: 2, z: 3 },
+  });
 });

@@ -436,9 +436,14 @@ function extractKeyword(raw: string): { kw: string; rest: string } {
 /**
  * 单条文本规格 → 动作。
  * @param spec - 形如「走到 10 64 20」「等待 2」「跳转 3」
+ * @param defaults - 坐标类动作没写坐标时的兜底站位（面板/命令传"操作者当前所在格"）；
+ *   可空坐标的动作不受它影响（留空仍然是无坐标语义）
  * @returns 动作或中文错误
  */
-export function parseActionSpec(spec: string): { step: ActionStep } | { error: string } {
+export function parseActionSpec(
+  spec: string,
+  defaults?: { coord: ActionCoord }
+): { step: ActionStep } | { error: string } {
   const tokens = spec
     .trim()
     .split(/\s+/)
@@ -473,6 +478,10 @@ export function parseActionSpec(spec: string): { step: ActionStep } | { error: s
   };
 
   if (kw === "走到" || kwLower === "move" || kwLower === "moveto" || kwLower === "go") {
+    if (args.length === 0 && defaults) {
+      const c = defaults.coord;
+      return { step: { type: "moveTo", x: c.x, y: c.y, z: c.z } };
+    }
     const c = coord3();
     return typeof c === "string" ? { error: `走到：${c}` } : { step: { type: "moveTo", x: c.x, y: c.y, z: c.z } };
   }
@@ -485,6 +494,10 @@ export function parseActionSpec(spec: string): { step: ActionStep } | { error: s
     return { step: { type: "wait", ticks } };
   }
   if (kw === "挖掘" || kwLower === "mine") {
+    if (args.length === 0 && defaults) {
+      const c = defaults.coord;
+      return { step: { type: "mine", x: c.x, y: c.y, z: c.z } };
+    }
     const c = coord3();
     return typeof c === "string" ? { error: `挖掘：${c}` } : { step: { type: "mine", x: c.x, y: c.y, z: c.z } };
   }
@@ -500,6 +513,10 @@ export function parseActionSpec(spec: string): { step: ActionStep } | { error: s
     return look ? { step: { type: "mineLook", look } } : { step: { type: "mineLook" } };
   }
   if (kw === "放置" || kwLower === "place") {
+    if (args.length === 0 && defaults) {
+      const c = defaults.coord;
+      return { step: { type: "place", x: c.x, y: c.y, z: c.z } };
+    }
     const c = coord3();
     return typeof c === "string" ? { error: `放置：${c}` } : { step: { type: "place", x: c.x, y: c.y, z: c.z } };
   }
@@ -522,6 +539,10 @@ export function parseActionSpec(spec: string): { step: ActionStep } | { error: s
     return { step: { type: "say", text } };
   }
   if (kw === "看" || kw === "看向" || kwLower === "look") {
+    if (args.length === 0 && defaults) {
+      const c = defaults.coord;
+      return { step: { type: "look", x: c.x, y: c.y, z: c.z } };
+    }
     const c = coord3();
     return typeof c === "string" ? { error: `看：${c}` } : { step: { type: "look", x: c.x, y: c.y, z: c.z } };
   }
@@ -564,7 +585,7 @@ export interface ActionsSpecResult {
  * @param text - 整段文本
  * @returns 成功动作 + 失败明细（不因一条错就丢整段）
  */
-export function parseActionsSpec(text: string): ActionsSpecResult {
+export function parseActionsSpec(text: string, defaults?: { coord: ActionCoord }): ActionsSpecResult {
   // 换行与分隔符都算条目边界（面板一行写完、命令一次粘贴都支持）
   const parts = text
     .split(/[\n\r|]+/)
@@ -577,7 +598,7 @@ export function parseActionsSpec(text: string): ActionsSpecResult {
       errors.push(`第 ${i + 1} 条：超过 ${MAX_ACTIONS} 条上限`);
       return;
     }
-    const r = parseActionSpec(part);
+    const r = parseActionSpec(part, defaults);
     if ("error" in r) errors.push(`第 ${i + 1} 条：${r.error}`);
     else steps.push(r.step);
   });
@@ -636,51 +657,71 @@ export function describeAction(step: ActionStep, index?: number): string {
   return step.note ? `${head}${body} §7(${step.note})` : `${head}${body}`;
 }
 
-/** 把动作表压成一行文本规格（面板文本编辑预填用；与 parseActionSpec 互为逆运算） */
+/** 坐标文本（面板参数提示与日志用） */
+export function coordTextOf(at: ActionCoord): string {
+  return `${Math.floor(at.x)} ${Math.floor(at.y)} ${Math.floor(at.z)}`;
+}
+
+/**
+ * 动作表 → 多条文本规格（一条一行；面板预览与整段编辑共用），与 parseActionsSpec 互为逆运算。
+ * @param program - 动作表
+ * @returns 每行一条的文本（行尾无空行）
+ */
+export function actionsToSpecLines(program: ActionProgram): string {
+  return program.steps.map(stepToSpecText).join("\n");
+}
+
+/** 把动作表压成一行文本规格（日志/命令回执用；与 parseActionSpec 互为逆运算） */
 export function actionsToSpecText(program: ActionProgram): string {
-  return program.steps
-    .map((s) => {
-      switch (s.type) {
-        case "moveTo":
-          return `走到 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
-        case "wait":
-          return `等待 ${fmtSeconds(s.ticks)}`;
-        case "mine":
-          return `挖掘 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
-        case "mineLook":
-          return s.look ? `挖前方 ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : "挖前方";
-        case "place":
-          return `放置 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
-        case "useItem":
-          return s.look ? `使用物品 ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : "使用物品";
-        case "attack":
-          return `攻击 ${s.count}`;
-        case "say":
-          return `说话 ${s.text}`;
-        case "look":
-          return `看 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
-        case "sneak": {
-          const base = s.on ? "潜行开" : "潜行关";
-          return s.look ? `${base} ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : base;
-        }
-        case "hop":
-          return s.look ? `跳一下 ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : "跳一下";
-        case "jump":
-          return `跳转 ${s.target}`;
-      }
-    })
-    .join(` ${ACTION_SPEC_SEPARATOR} `);
+  return program.steps.map(stepToSpecText).join(` ${ACTION_SPEC_SEPARATOR} `);
+}
+
+/** 单条动作 → 文本规格 */
+export function stepToSpecText(s: ActionStep): string {
+  switch (s.type) {
+    case "moveTo":
+      return `走到 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
+    case "wait":
+      return `等待 ${fmtSeconds(s.ticks)}`;
+    case "mine":
+      return `挖掘 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
+    case "mineLook":
+      return s.look ? `挖前方 ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : "挖前方";
+    case "place":
+      return `放置 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
+    case "useItem":
+      return s.look ? `使用物品 ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : "使用物品";
+    case "attack":
+      return `攻击 ${s.count}`;
+    case "say":
+      return `说话 ${s.text}`;
+    case "look":
+      return `看 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
+    case "sneak": {
+      const base = s.on ? "潜行开" : "潜行关";
+      return s.look ? `${base} ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : base;
+    }
+    case "hop":
+      return s.look ? `跳一下 ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : "跳一下";
+    case "jump":
+      return `跳转 ${s.target}`;
+  }
 }
 
 /**
  * 单动作类型面板参数文本 → 动作（面板「选动作类型 + 填参数」入口）。
  * @param def - 动作类型定义
  * @param args - 参数文本（按 def.hint 的形态；可空动作类型留空即无坐标）
+ * @param defaults - 坐标类动作没写坐标时的兜底站位（面板/命令传"操作者当前所在格"）
  * @returns 动作或中文错误
  */
-export function actionFromType(def: ActionTypeDef, args: string): { step: ActionStep } | { error: string } {
+export function actionFromType(
+  def: ActionTypeDef,
+  args: string,
+  defaults?: { coord: ActionCoord }
+): { step: ActionStep } | { error: string } {
   const trimmed = args.trim();
-  return parseActionSpec(trimmed.length === 0 ? def.kw : `${def.kw} ${trimmed}`);
+  return parseActionSpec(trimmed.length === 0 ? def.kw : `${def.kw} ${trimmed}`, defaults);
 }
 
 /** 动作 → 该动作类型的面板参数回填文本（编辑既有条目时预填） */

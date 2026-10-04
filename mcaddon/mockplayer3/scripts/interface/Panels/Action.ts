@@ -19,11 +19,36 @@ import {
   parseLoopCountInput,
   parseActionsSpec,
   actionsToSpecText,
+  actionsToSpecLines,
+  stepToSpecText,
   actionFromType,
 } from "../../domain/ActionRules";
+import type { ActionProgram } from "../../domain/ActionRules";
 import { ActionStatusBoard } from "../../domain/ActionStatus";
 import { services } from "../../Composition";
 import { resolveUiBotRecord, guardUiManage, uiViewer } from "../Kit";
+
+/** 整段编辑表单里最多预览的动作行数（再多只报条数，免得表单过长） */
+const EDIT_PREVIEW_LINES = 20;
+
+/** 操作者当前所在格（坐标类动作留空时的默认落点） */
+function playerCoord(player: Player): { x: number; y: number; z: number } {
+  const l = player.location;
+  return { x: Math.floor(l.x), y: Math.floor(l.y), z: Math.floor(l.z) };
+}
+
+/** 整段编辑表单的只读预览：一条动作一行（含备注），超长只报条数 */
+function editPreviewText(program: ActionProgram): string {
+  if (program.steps.length === 0) return `${color.muted}（还没有动作）`;
+  const lines = program.steps
+    .slice(0, EDIT_PREVIEW_LINES)
+    .map((a, i) => `${i + 1}. ${stepToSpecText(a)}${a.note ? ` §7(${a.note})` : ""}`);
+  lines.push(`${color.muted}${describeLoopCount(program.loopCount)} · ${describeFailPolicy(program.onFail)}`);
+  const rest = program.steps.length - EDIT_PREVIEW_LINES;
+  if (rest > 0) lines.push(`${color.muted}…还有 ${rest} 个动作未在此预览`);
+  if (program.steps.some((a) => a.note)) lines.push(`${color.muted}注意：文本保存会丢掉备注`);
+  return lines.join("\n");
+}
 
 /** 面板 body 里最多列出的动作数（更长走 /mp:action <名> list） */
 const PREVIEW_STEPS = 8;
@@ -107,9 +132,10 @@ function editProgram(player: Player, name: string): void {
   const lib = services.actions;
   const program = lib.programOf(botId);
   void ModalFormBuilder.showQuick(player, `${color.bold}编辑动作表 · ${name}`, (f) => {
-    f.textField("spec", "动作（每条一行，或用 | 分隔；文本编辑不保留备注）", {
-      defaultValue: actionsToSpecText(program),
-      tooltip: `可用动作类型：${ACTION_KEYWORD_HELP}`,
+    f.label("preview", editPreviewText(program));
+    f.textField("spec", "整段编辑（一条动作一行，清空即删光）", {
+      defaultValue: actionsToSpecLines(program),
+      tooltip: `坐标留空＝用你当前站的位置｜可用动作：${ACTION_KEYWORD_HELP}`,
     });
     f.textField("loop", "循环（一直 / 一次 / 次数；留空＝不变）", {
       defaultValue: "",
@@ -122,7 +148,7 @@ function editProgram(player: Player, name: string): void {
   }).then((vals) => {
     if (!vals) return;
     system.run(() => {
-      const parsed = parseActionsSpec(String(vals.spec ?? ""));
+      const parsed = parseActionsSpec(String(vals.spec ?? ""), { coord: playerCoord(player) });
       if (parsed.errors.length > 0) {
         say(`${color.error}有 ${parsed.errors.length} 条无法解析，本次未保存：`);
         for (const e of parsed.errors.slice(0, 5)) say(`${color.error}${e}`);
@@ -163,14 +189,14 @@ function appendStep(player: Player, name: string): void {
     );
     f.textField("args", "参数", {
       defaultValue: "",
-      tooltip: "坐标 x y z / 秒数 / 次数 / 文本；无参动作类型留空。可留空坐标的动作类型填 x y z 就先转向",
+      tooltip: `坐标 x y z（留空＝你当前站的位置）/ 秒数 / 次数 / 文本；可留空坐标的动作类型填了就先转向`,
     });
     f.textField("note", "备注（可选，列表里显示）", { defaultValue: "", tooltip: "给自己看的说明，不参与执行" });
   }).then((vals) => {
     if (!vals) return;
     system.run(() => {
       const def = ACTION_TYPES[Number(vals.module)] ?? ACTION_TYPES[0]!;
-      const parsed = actionFromType(def, String(vals.args ?? ""));
+      const parsed = actionFromType(def, String(vals.args ?? ""), { coord: playerCoord(player) });
       if ("error" in parsed) {
         say(`${color.error}${parsed.error}`);
         return;

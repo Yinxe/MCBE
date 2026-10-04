@@ -24,7 +24,7 @@ This file provides guidance to the AI agent when working with code in this repos
 ## 包标识与数据命名空间
 
 - BP/RP 的 header 与全部 module uuid 沿用 mockplayer v2 基线值：同 uuid 安装即替换旧包，旧包不会与新包共存（同世界如需回退验证，先导出旧包数据）。
-- script module 显式 `"module_name": "MockPlayer"`：世界动态属性(DP)按动作类型命名空间隔离，v2 数据键（`mockplayer:players:*`、`nds:item:*` 等）实际存储为 `MockPlayer:<键>`，命名空间不一致时新包 `getDynamicPropertyIds()` 枚举不到旧键，迁移检测恒假。缺省值取 BP 文件夹名，勿依赖缺省。
+- script module 显式 `"module_name": "MockPlayer"`：世界动态属性(DP)按模块命名空间隔离，v2 数据键（`mockplayer:players:*`、`nds:item:*` 等）实际存储为 `MockPlayer:<键>`，命名空间不一致时新包 `getDynamicPropertyIds()` 枚举不到旧键，迁移检测恒假。缺省值取 BP 文件夹名，勿依赖缺省。
 - 迁移完成前不得改动以上任何标识；改 UUID 不解决数据读取，改 module_name 才解决。
 
 ## 命令
@@ -65,6 +65,8 @@ This file provides guidance to the AI agent when working with code in this repos
 2. 重跑靠版本号（写入即 +1），执行器在**动作边界**换用新动作表重开；不要用轮询计数或内容指纹。
 3. 失败按动作表的 `onFail` 处理（停下并私信主人 / 跳过这个动作），**模式不自动切换**。
 4. 动作表落盘不许塞进 `BotRecord`（档案每次对账整条读写）；坏档一律过 `normalizeActions`。
+5. 坐标类动作不写坐标＝操作者当前所在格（面板与命令都传 `parseActionSpec` 的 `defaults`）；
+   可空坐标的动作留空仍是无坐标语义，不要顺手兜底。
 
 测试面：`tests/domain.ActionRules.test.ts`（解析/归一化/往返/描述）、`tests/domain.ActionCursor.test.ts`（顺序/循环/跳转/护栏）。
 
