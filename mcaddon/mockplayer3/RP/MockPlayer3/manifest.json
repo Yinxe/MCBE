@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "模拟玩家III v3.0.7",
+    "name": "模拟玩家III v3.0.8",
     "description": "模拟玩家（假人）v3 UI 图标资源\n作者：Yinx\n邮箱：1423716216@qq.com\n主页：https://github.com/Yinxe/\nQQ群：632178498\n仓库：https://github.com/Yinxe/MCBE",
     "uuid": "4497ec44-a22f-4f7f-a723-1f18d14c4e04",
     "version": [
       3,
       0,
-      7
+      8
     ],
     "min_engine_version": [
       1,
@@ -23,7 +23,7 @@
       "version": [
         3,
         0,
-        7
+        8
       ]
     }
   ],
