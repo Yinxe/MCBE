@@ -136,7 +136,7 @@ function showGlobalConfig(player: Player): void {
       TOKEN_ITEM_OPTIONS.map((o) => o.label),
       {
         defaultValueIndex: config.tokenItem.enabled ? tokenIdx : 0,
-        tooltip: "使用该物品右键可打开主菜单，选'无'则仅能通过命令 /mp:menu 打开",
+        tooltip: "手持该物品长按（电脑端右键）可打开主菜单；选'无'则仅能通过命令 /mp:menu 打开",
       }
     );
     f.label("expHeader", `${color.accent}— 实现性功能 —`);

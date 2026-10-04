@@ -63,8 +63,8 @@ export interface BridgeHandlers {
    */
   onBotBlockClick?(botName: string, blockTypeId: string): boolean;
   /**
-   * 真人点击方块 before（假人一律不转发）：上达纯数据（格坐标/方块 id/主手
-   * 物品 id/潜行态/点击首拍标志），供工作箱绑定等信物入口判定。返回 true =
+   * 真人点击方块 before（假人一律不转发）：上达纯数据（格坐标/方块 id/本次
+   * 交互实际手持物品 id/潜行态/点击首拍标志），供工作箱绑定等信物入口判定。返回 true =
    * 取消这次点击（如拦截开箱界面改开面板）；开表单须由消费方 system.run
    * （F-11：before 回调内不能开表单）。
    */
@@ -75,7 +75,8 @@ export interface BridgeHandlers {
     y: number;
     z: number;
     blockTypeId: string;
-    mainhandTypeId: string;
+    /** 本次交互实际手持的物品 id（空手＝空串） */
+    heldTypeId: string;
     sneaking: boolean;
     firstPress: boolean;
   }): boolean;
@@ -207,19 +208,25 @@ export function installBridges(handlers: BridgeHandlers): () => void {
     }
   };
 
-  const onInteractBlock = (event: { cancel: boolean; player: Player; block: Block; isFirstEvent: boolean }): void => {
+  const onInteractBlock = (event: {
+    cancel: boolean;
+    player: Player;
+    block: Block;
+    isFirstEvent: boolean;
+    itemStack?: ItemStack;
+  }): void => {
     try {
       if (isBotEntity(event.player)) {
         if (handlers.onBotBlockClick?.(event.player.name, event.block.typeId) === true) event.cancel = true;
         return;
       }
-      // 真人通道：主手物品与潜行态在回调内同步读（before 事件字段无 itemStack 的
-      // 版本兼容口径——container 0 格为主手）；无消费者不读装备（省开销）
+      // 真人通道：本次交互实际使用的物品与潜行态在回调内同步读——before 事件自带
+      // itemStack（空手为 undefined），不拿快捷栏某一格冒充主手；无消费者不读（省开销）
       if (!handlers.onRealPlayerBlockClick) return;
-      let mainhandTypeId = "";
+      let heldTypeId = "";
       let sneaking = false;
       try {
-        mainhandTypeId = event.player.getComponent("minecraft:inventory")?.container?.getItem(0)?.typeId ?? "";
+        heldTypeId = event.itemStack?.typeId ?? "";
         sneaking = event.player.isSneaking;
       } catch {
         /* 实体瞬态：按空手非潜行上报，消费方判不命中即放行 */
@@ -234,7 +241,7 @@ export function installBridges(handlers: BridgeHandlers): () => void {
           y: Math.floor(at.y),
           z: Math.floor(at.z),
           blockTypeId: event.block.typeId,
-          mainhandTypeId,
+          heldTypeId,
           sneaking,
           firstPress: event.isFirstEvent,
         }) === true
