@@ -56,7 +56,7 @@ const SECTIONS: string[][] = [
   [
     `${color.bold}${color.accent}≡≡≡ MockPlayer · 快速上手 ≡≡≡`,
     `${color.accent}▶ 创建假人`,
-    `${color.muted}  1. 使用 ${color.info}/mp:menu ${color.muted}打开主菜单（或手持信物右键）`,
+    `${color.muted}  1. 使用 ${color.info}/mp:menu ${color.muted}打开主菜单（或手持信物长按 / 电脑端右键）`,
     `${color.muted}  2. 点击 ${color.success}创建模拟玩家${color.muted}，填写名称和坐标`,
     `${color.muted}  3. 创建后假人自动上线加入世界`,
     "",
