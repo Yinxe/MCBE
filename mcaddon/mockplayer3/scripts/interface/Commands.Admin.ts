@@ -427,7 +427,7 @@ export const ADMIN_COMMANDS: CommandSpec[] = [
         ctx.say(`${color.error}[迁移] ${rep.aborted}`);
         return;
       }
-      if (rep.found === 0 && !rep.configMigrated && rep.sweptItemKeys === 0) {
+      if (rep.found === 0 && !rep.configMigrated && rep.sweptItemKeys === 0 && rep.itemSlots.pending === 0) {
         ctx.say(`${color.muted}[迁移] 未检出旧版数据（记录/配置/物品），无需迁移`);
         return;
       }
@@ -440,6 +440,9 @@ export const ADMIN_COMMANDS: CommandSpec[] = [
           (rep.failures.length > 0 ? `${color.error} 失败 ${rep.failures.length}` : "") +
           (rep.itemSlots.migrated > 0 || rep.itemSlots.dropped > 0 || rep.sweptItemKeys > 0
             ? `${color.muted}｜旧物品迁入 ${rep.itemSlots.migrated} 格（坏数据弃 ${rep.itemSlots.dropped}、残留清扫 ${rep.sweptItemKeys}）`
+            : "") +
+          (rep.itemSlots.pending > 0
+            ? `${color.warn}｜旧物品 ${rep.itemSlots.pending} 格原样保留（当前版本读不到测试维度仓，升级后重启再迁）`
             : "") +
           (rep.configMigrated ? `${color.muted}｜全局配置已迁入 mp:config` : "")
       );

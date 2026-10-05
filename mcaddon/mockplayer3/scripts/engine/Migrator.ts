@@ -4,8 +4,10 @@
 // 逐条事务：采纳绑定→写记录→占名票据→删旧键；任一步抛错回滚三张新键、
 // 旧键原样保留（人工修 JSON 后可再迁移，物品永不被动）。
 // 旧全局配置 mockplayer:config 逐字段搬（无 v2 配置才写、有则只清旧键）；
-// 旧 DP JSON 物品键 decode 入仓：读到即删键、坏格跳过不中断，
-// 跑完全量清扫 :inv:/:equip: 残留（跳过/失败/孤儿名同批清除）。
+// 旧 DP JSON 物品键 decode 入仓：逐格"写成功才删键"，坏格直接弃。
+// 物品阶段独立于记录迁移，且只处理"本轮刚迁入记录"与"挂着 mp:legacy:pending: 标记"的名字：
+// 写不进仓（区域未就绪/仓满）的格不删键并落标记，就绪或升级后重启再导入；清扫跳过这些名字。
+// 其余物品键是上一轮成功迁移后的遗留，按旧行为清扫（不把旧物品复活进新仓）。
 
 import { EnchantmentType, ItemLockMode, ItemStack, Potions, world } from "@minecraft/server";
 import {
@@ -25,9 +27,9 @@ import { normalizeBotName } from "../domain/Identity";
 import { storageUnavailableReason } from "../domain/Compat";
 import type { EquipSlotName } from "../domain/Record";
 import type { BotRecord } from "../domain/Record";
-import type { EquipSlotWrite, ItemVault, SlotWrite } from "./ItemVault";
+import type { ItemVault } from "./ItemVault";
 import { customDimensionFailure } from "./Rig";
-import { CONFIG_KEY } from "./RecordStore";
+import { CONFIG_KEY, LEGACY_PENDING_PREFIX } from "./RecordStore";
 import { readJson, removeKey, writeJson } from "./Dp";
 import type { SaveGate } from "./SaveGate";
 
@@ -59,8 +61,8 @@ export interface MigrateReport {
   configMigrated: boolean;
   /** 配置迁移报备（未识别字段丢弃等） */
   configNotices: string[];
-  /** 旧 JSON 物品迁入仓格数 / 坏数据丢弃格数（跳过不中断） */
-  itemSlots: { migrated: number; dropped: number };
+  /** 旧 JSON 物品迁入仓格数 / 坏数据丢弃格数（跳过不中断）/ 兼容模式下保留待迁格数 */
+  itemSlots: { migrated: number; dropped: number; pending: number };
   /** 清扫的 :inv:/:equip: 残留键数（跳过/失败/孤儿名同批） */
   sweptItemKeys: number;
 }
@@ -109,7 +111,7 @@ export class Migrator {
       failures: [],
       configMigrated: false,
       configNotices: [],
-      itemSlots: { migrated: 0, dropped: 0 },
+      itemSlots: { migrated: 0, dropped: 0, pending: 0 },
       sweptItemKeys: 0,
     };
 
@@ -121,13 +123,9 @@ export class Migrator {
       return report;
     }
     this.migrateConfig(report);
-    if (keys.length === 0) {
-      this.sweepItemResidue(report);
-      return report;
-    }
-
     const nameIndex = this.gate.loadNameIndex();
     const now = Date.now();
+    const migratedKeys = new Set<string>(); // 本轮迁入记录的旧名：它们的物品键必然是未迁的
     for (const key of keys) {
       const legacyName = legacyNameOfRecordKey(key);
       const displayName = normalizeBotName(legacyName);
@@ -160,15 +158,7 @@ export class Migrator {
         removeKey(key);
         removeKey(bindKey);
         nameIndex.set(record.name, botId); // 同批撞名防护（"$foo"/"sim-foo" 两键归一同名）
-        const items = itemKeys.get(legacyName);
-        if (items) {
-          // 物品导入独立吞错：键已读即删，失败只报备不回滚记录
-          try {
-            this.importLegacyItems(botId, items, report);
-          } catch (e: any) {
-            notices.push(`旧物品导入失败（记录已迁入）: ${e?.message ?? e}`);
-          }
-        }
+        migratedKeys.add(legacyName);
         report.migrated.push({ name: record.name, botId, record, notices });
       } catch (e: any) {
         this.gate.releaseName(record.name);
@@ -177,7 +167,10 @@ export class Migrator {
         report.failures.push({ legacyName: displayName, error: `写入被拒已回滚（旧键保留）：${e?.message ?? e}` });
       }
     }
-    this.sweepItemResidue(report);
+    // 物品阶段独立于记录迁移：记录可能上一次就迁走了，物品键还挂着待迁标记等这次导入
+    const pendingNames = this.importPendingItems(itemKeys, nameIndex, migratedKeys, report);
+    this.sweepItemResidue(report, pendingNames);
+    this.prunePendingMarks(itemKeys);
     return report;
   }
 
@@ -197,44 +190,128 @@ export class Migrator {
     removeKey(LEGACY_CONFIG_KEY);
   }
 
-  /** 旧 DP JSON 物品 → NBT 仓：读到即删键、坏格跳过不中断 */
-  private importLegacyItems(botId: number, keys: LegacyItemKeys, report: MigrateReport): void {
-    const invWrites: SlotWrite[] = [];
-    const equipWrites: EquipSlotWrite[] = [];
-    const take = (key: string): ItemStack | undefined => {
+  /**
+   * 旧 DP JSON 物品 → NBT 仓：逐格"读 → 解码 → 写 → 写成功才删键"。
+   * @returns 仍有键留在世界（写入失败）的格数
+   */
+  private importLegacyItems(botId: number, keys: LegacyItemKeys, report: MigrateReport): number {
+    let left = 0;
+    const importOne = (key: string, write: (item: ItemStack) => boolean): void => {
       const raw = world.getDynamicProperty(key);
-      removeKey(key);
-      if (typeof raw !== "string") return undefined;
+      if (typeof raw !== "string") {
+        // 键无值：没有物品可丢
+        removeKey(key);
+        report.itemSlots.dropped++;
+        return;
+      }
       let data: unknown;
       try {
         data = JSON.parse(raw);
       } catch {
-        return undefined;
+        removeKey(key); // 坏 JSON：解不出物品，判定丢弃
+        report.itemSlots.dropped++;
+        return;
       }
-      return isSerializedItemShape(data) ? decodeLegacyItem(data) : undefined;
+      const item = isSerializedItemShape(data) ? decodeLegacyItem(data) : undefined;
+      if (!item) {
+        removeKey(key);
+        report.itemSlots.dropped++;
+        return;
+      }
+      // 写成功才删键：写不进去（区域不可用/仓满）时键留在世界，下次启动再迁
+      if (write(item)) {
+        removeKey(key);
+        report.itemSlots.migrated++;
+      } else {
+        report.itemSlots.pending++;
+        left++;
+      }
     };
-    for (const [slot, key] of keys.inv) {
-      const item = take(key);
-      if (item) invWrites.push({ slot, item });
-      else report.itemSlots.dropped++;
-    }
-    for (const [slot, key] of keys.equip) {
-      const item = take(key);
-      if (item) equipWrites.push({ slot, item });
-      else report.itemSlots.dropped++;
-    }
-    if (invWrites.length > 0) this.vault.saveSlots(botId, invWrites);
-    if (equipWrites.length > 0) this.vault.saveEquipSlots(botId, equipWrites);
-    report.itemSlots.migrated += invWrites.length + equipWrites.length;
+    for (const [slot, key] of keys.inv) importOne(key, (item) => this.vault.saveSlot(botId, slot, item));
+    for (const [slot, key] of keys.equip) importOne(key, (item) => this.vault.saveEquipSlot(botId, slot, item));
+    return left;
   }
 
-  /** 全量清扫残留旧物品键（含越界槽/孤儿名/跳过条） */
-  private sweepItemResidue(report: MigrateReport): void {
-    for (const id of world.getDynamicPropertyIds()) {
-      if (isLegacyItemResidueKey(id)) {
-        removeKey(id);
-        report.sweptItemKeys++;
+  /**
+   * 物品阶段：把"本轮刚迁入记录"或"挂着待迁标记"的旧物品键导入对应假人仓。
+   * 两者之外的物品键是上一轮已成功迁移后的残留（旧行为就是清扫），不导入也不保留。
+   * 与记录迁移解耦：记录可能上一次会话就迁走了，物品键还挂着标记等这次导入。
+   * @param itemKeys - 旧名 → 物品子键分组
+   * @param nameIndex - 现名索引（规范化名 → botId）
+   * @param migratedKeys - 本轮迁入记录的旧名集合
+   * @param report - 迁移清单（就地累计）
+   * @returns 仍有待迁物品的旧名集合（残留清扫必须跳过这些名字的键）
+   */
+  private importPendingItems(
+    itemKeys: Map<string, LegacyItemKeys>,
+    nameIndex: Map<string, number>,
+    migratedKeys: ReadonlySet<string>,
+    report: MigrateReport
+  ): Set<string> {
+    const pending = new Set<string>();
+    for (const [legacyName, groups] of itemKeys) {
+      const count = groups.inv.size + groups.equip.size;
+      if (count === 0) continue;
+      const displayName = normalizeBotName(legacyName);
+      const markerKey = this.pendingKey(legacyName);
+      const marked = world.getDynamicProperty(markerKey) !== undefined;
+      if (!marked && !migratedKeys.has(legacyName)) continue;
+      const botId = nameIndex.get(displayName);
+      if (botId === undefined) {
+        // 没有对应假人记录（迁移失败/记录缺失）：标记载明这些键未迁，清扫跳过
+        this.markPending(markerKey, count);
+        report.itemSlots.pending += count;
+        pending.add(legacyName);
+        continue;
       }
+      let left = count;
+      try {
+        left = this.importLegacyItems(botId, groups, report);
+      } catch (e: any) {
+        report.failures.push({ legacyName: displayName, error: `旧物品导入异常（键保留）: ${e?.message ?? e}` });
+      }
+      if (left > 0) {
+        this.markPending(markerKey, left);
+        pending.add(legacyName);
+        const entry = report.migrated.find((m) => m.name === displayName);
+        if (entry) entry.notices.push(`旧物品 ${left} 格待迁（写入未完成，键与标记保留，就绪后再迁）`);
+      } else {
+        removeKey(markerKey);
+      }
+    }
+    return pending;
+  }
+
+  /** 待迁标记键 */
+  private pendingKey(legacyName: string): string {
+    return `${LEGACY_PENDING_PREFIX}${legacyName}`;
+  }
+
+  /** 记下"这些旧物品键还没迁走"（值=格数，供诊断与清扫跳过） */
+  private markPending(markerKey: string, count: number): void {
+    writeJson(markerKey, count);
+  }
+
+  /** 清掉已无物品键的待迁标记（导入完成或人工清理后） */
+  private prunePendingMarks(itemKeys: ReadonlyMap<string, LegacyItemKeys>): void {
+    for (const id of world.getDynamicPropertyIds()) {
+      if (!id.startsWith(LEGACY_PENDING_PREFIX)) continue;
+      if (!itemKeys.has(id.slice(LEGACY_PENDING_PREFIX.length))) removeKey(id);
+    }
+  }
+
+  /**
+   * 全量清扫残留旧物品键（含越界槽/孤儿名/跳过条）。
+   * @param report - 迁移清单（就地累计）
+   * @param keepNames - 仍有待迁物品的旧名：这些键一律保留，清扫不得吞掉未导入的物品
+   */
+  private sweepItemResidue(report: MigrateReport, keepNames: ReadonlySet<string>): void {
+    for (const id of world.getDynamicPropertyIds()) {
+      if (!isLegacyItemResidueKey(id)) continue;
+      const parsed = parseLegacyItemKey(id);
+      if (parsed && keepNames.has(parsed.name)) continue;
+      removeKey(id);
+      report.sweptItemKeys++;
     }
   }
 }

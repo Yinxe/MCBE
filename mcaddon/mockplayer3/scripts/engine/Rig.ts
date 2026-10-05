@@ -8,17 +8,28 @@
 //    → 校验维度（无效回退 normal）→ ticking area 常加载装置区块 → getBlock 探 0,0,0：
 //    在→命令方块位 gametest runthis 复用（失败则清空 0,0,0±8 范围后重建）；不在→y=-1 建 5x5 草坪后 run 物化。
 // 探测必须用 getBlock（世界初期命令不可用）；初始化结束即移除，之后由运行中的 GameTest 常驻。
+// 维度不可用（低版本无该 API / 注册失败）时直接返回：不注册 GameTest、不碰测试结构与 0,0,0，
+// 假人由模块级 spawnSimulatedPlayer 生成，物品仓走末地兼容锚点（见 domain/Compat）。
 
 import { BlockPermutation, system, world, type Dimension, type StartupEvent } from "@minecraft/server";
 import { register, Test } from "@minecraft/server-gametest";
-import { dimensionFailureNotice, type DimensionFailureInfo } from "../domain/Compat";
+import { dimensionFailureNotice, TEST_DIMENSION_ID, type DimensionFailureInfo } from "../domain/Compat";
 
 /**
- * 测试维度：自定义 void 维度（registerCustomDimension 注册；管理员可经 /mp:enter 进入调试）。
+ * 测试维度：自定义 void 维度（registerCustomDimension 注册；管理员可经 /mp:test 进入调试）。
  * 维度名沿用 mockplayer 基线名——世界存档中已有同名维度时直接复用，不再另建；
- * 木桶仓区 regionId 含维度名，与本常量必须保持一致（见 ItemVault STORAGE_REGION）。
+ * 木桶仓区首选锚点同取该名（domain/Compat.PRIMARY_STORAGE_ANCHOR），改名会寻不到既有阵列。
  */
-export const TEST_DIMENSION = "mockplayer:test";
+export const TEST_DIMENSION = TEST_DIMENSION_ID;
+
+/**
+ * startup 事件上的维度注册表：低版本脚本面没有该字段（API 自 1.26.20 起提供），
+ * 故按可选字段声明后探测——类型面（含 1.21.130 地板）没有该成员，直接用 `event.dimensionRegistry`
+ * 无法通过编译。
+ */
+type DimensionRegistrySurface = StartupEvent & {
+  dimensionRegistry?: { registerCustomDimension(typeId: string): void };
+};
 
 /** 装置几何（实测：结构方块必须位于 0,0,0，假人扭头才完全正常） */
 const RIG_STRUCT_POS = { x: 0, y: 0, z: 0 }; // 结构方块（监测点）
@@ -56,6 +67,10 @@ export function isTestFieldReady(): boolean {
 
 /** startup 注册结果：null=无失败记录；否则为维度不可用成因，供 customDimensionFailure 分辨 */
 let dimensionFailure: DimensionFailureInfo | null = null;
+/** 脚本面是否具备自定义维度 API；undefined=未观测到 startup（脚本在已运行的世界里加载） */
+let dimensionApiPresent: boolean | undefined = undefined;
+/** 本次 startup 的 registerCustomDimension 是否成功 */
+let dimensionRegistered = false;
 
 /**
  * 注册自定义测试维度（引擎约束：只能在 startup 事件中调用，事件外必抛）。
@@ -63,15 +78,19 @@ let dimensionFailure: DimensionFailureInfo | null = null;
  * 失败成因留在模块内，供 customDimensionFailure 区分"版本不支持"与"注册抛错"。
  */
 export function registerTestDimension(event: StartupEvent): void {
+  const registry = (event as DimensionRegistrySurface).dimensionRegistry;
   // 低版本客户端的脚本面没有该字段（是 undefined，不是抛错）
-  if (!event.dimensionRegistry) {
+  if (!registry) {
+    dimensionApiPresent = false;
     dimensionFailure = { kind: "api-missing", detail: null };
     const notice = dimensionFailureNotice("api-missing", null);
     console.error(`[mockplayer3] 自定义维度 API 缺失（${TEST_DIMENSION} 无法创建）：${notice}`);
     return;
   }
+  dimensionApiPresent = true;
   try {
-    event.dimensionRegistry.registerCustomDimension(TEST_DIMENSION);
+    registry.registerCustomDimension(TEST_DIMENSION);
+    dimensionRegistered = true;
     dimensionFailure = null;
     console.info(`[mockplayer3] 自定义测试维度注册成功：${TEST_DIMENSION}`);
   } catch (e: any) {
@@ -79,6 +98,20 @@ export function registerTestDimension(event: StartupEvent): void {
     dimensionFailure = { kind: "register-failed", detail: String(e?.message ?? e) };
     console.info(`[mockplayer3] 自定义测试维度注册返回：${dimensionFailure.detail}`);
   }
+}
+
+/**
+ * 测试维度当前是否可用（装置初始化与物品仓锚点选择共用同一判据）。
+ * 判据：脚本面确认没有该 API（低版本）即不可用；本次注册成功即可用；其余以 getDimension
+ * 能否取到为准——注册抛错（维度已存在、他包注册）与未观测到 startup 都走这条探测，
+ * 注册成功则不再探测，避免世界初期 getDimension 尚未可见时误判为不可用。
+ * 须在世界上下文（system.run / 事件回调）中调用。
+ * @returns 可用返回 true
+ */
+export function customDimensionAvailable(): boolean {
+  if (dimensionApiPresent === false) return false;
+  if (dimensionRegistered) return true;
+  return customDimensionFailure() === null;
 }
 
 /**
@@ -107,6 +140,14 @@ export function initTestField(): Promise<boolean> {
   return new Promise((resolve) => {
     system.run(async () => {
       try {
+        // 维度不可用：不注册 GameTest、不物化装置——低版本下这些步骤全无意义
+        if (!customDimensionAvailable()) {
+          const failure = customDimensionFailure();
+          console.info(`[mockplayer3] 测试维度不可用（${failure?.kind ?? "unknown"}），跳过测试装置与测试结构`);
+          resolve(false);
+          return;
+        }
+
         // 测试结构随 BP structures/ 注册进世界存储；缺失说明包体损坏，直接返回不再注册。
         // createEmpty 当前引擎必抛 EngineError，不作兜底。
         if (!world.structureManager.get(STRUCTURE_ID)) {

@@ -1,6 +1,6 @@
-// ─── 兼容门禁提示（interface：装配期写日志 + 玩家入服私信一次） ──────
-// 维度不可用属安装级问题：假人建档与物品仓必然失败，必须让玩家当场看到
-// "当前游戏版本不支持…至少需要哪个版本"。维度可用时不订阅、不打扰。
+// ─── 兼容模式提示（interface：装配期写日志 + 玩家入服私信一次） ──────
+// 测试维度不可用时进入兼容模式：物品仓改存末地、假人改由模块级函数生成，
+// 能力与数据格式不变但存放位置不同，须让玩家当场知道。维度可用时不订阅、不打扰。
 
 import { system, world } from "@minecraft/server";
 import { customDimensionFailure } from "../engine/Rig";
@@ -11,15 +11,15 @@ import { services } from "../Composition";
 const WARN_DELAY_TICKS = 40;
 
 /**
- * 安装兼容门禁提示（装配末尾调用一次；维度可用则直接返回）。
- * 不可用时写一条 error 日志，并对每个进入世界的玩家私信一次（会话内不重复）。
- * 订阅不持有退订句柄：本会话内维度不会自愈，提示要一直有效。
+ * 安装兼容模式提示（装配末尾调用一次；测试维度可用则直接返回）。
+ * 不可用时写一条 warn 日志，并对每个进入世界的玩家私信一次（会话内不重复）。
+ * 订阅不持有退订句柄：本会话内锚点不会切换（升级要重启世界），提示要一直有效。
  */
 export function installCompatWarning(): void {
   const failure = customDimensionFailure();
   if (!failure) return;
   const notice = dimensionFailureNotice(failure.kind, failure.detail);
-  console.error(`[mockplayer3] 兼容门禁：${notice}`);
+  console.warn(`[mockplayer3] 兼容模式：${notice}`);
   const warned = new Set<string>();
   world.afterEvents.playerJoin.subscribe(({ playerName }) => {
     if (warned.has(playerName)) return;
