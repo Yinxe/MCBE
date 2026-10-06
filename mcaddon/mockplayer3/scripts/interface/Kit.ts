@@ -19,6 +19,17 @@ import { services } from "../Composition";
 
 // ─── 守卫缝 ──
 
+/** 传送功能统一提示（命令与面板共用同一句；改文案只改这里） */
+export const TELEPORT_DISABLED_NOTICE = "传送功能已被管理员关闭";
+
+/**
+ * 传送功能是否开放（全局配置的管理员开关）。
+ * @returns 开放返回 true
+ */
+export function teleportEnabled(): boolean {
+  return services.runtime.config.teleportEnabled;
+}
+
 /** 面板侧 Viewer（与命令侧同构） */
 export function uiViewer(player: Player): Viewer {
   return { key: playerKey(player.name), isOp: player.playerPermissionLevel >= 2 };
