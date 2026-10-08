@@ -1,20 +1,29 @@
 // ─── 事件播报渲染器（领域事件 → 中文广播，零逻辑） ──────────────────
 // 重连抑制"离开了游戏"，"加入了游戏"不抑制；命令下线/主人离开下线无全服播报。
 
-import { world } from "@minecraft/server";
 import { color } from "@yinxe/toolkit";
 import { auxChunkCovered } from "../domain/Config";
 import { dimensionLabel } from "../domain/Format";
+import type { NotifyLevel } from "../domain/NotifyRules";
 import { services } from "../Composition";
+import { entityGateway } from "../engine/EntityGateway";
+import { sendNotify } from "../engine/NotifyStore";
 
 const PREFIX = `${color.muted}[${color.success}假人${color.muted}] `;
-
-/** 全服播报；sendMessage 可能抛，吞异常保证事件链不断 */
-function announce(text: string): void {
-  try {
-    world.sendMessage(text);
-  } catch {
-    /* 广播失败不影响业务 */
+/**
+ * 全服播报：**逐个真人玩家**按各自的通知设置投递，不再用 world.sendMessage 一刀切。
+ * 单人世界里"全服"就是自己，关掉「接收假人通知」后必须能安静下来——这正是之前的漏洞：
+ * 上下线 / 死亡 / 复活这些播报绕过了个人设置，怎么关都还在刷屏。
+ * @param text - 正文（自带色码）
+ * @param level - 播报档位（默认 info）
+ */
+function announce(text: string, level: NotifyLevel = "info"): void {
+  for (const name of entityGateway.realPlayerNames()) {
+    try {
+      sendNotify(name, text, level);
+    } catch {
+      /* 单个投递失败不影响其它玩家与业务链 */
+    }
   }
 }
 
@@ -33,7 +42,7 @@ export function installNotify(): () => void {
     services.events.on("botOffline", ({ name, cause }) => {
       if (cause === "reconnect") return; // 重连中间态对外不可见
       if (cause === "death") {
-        announce(`${PREFIX}${color.playerName}${name} 已死亡下线`);
+        announce(`${PREFIX}${color.playerName}${name} 已死亡下线`, "warn");
         return;
       }
       if (cause === "abnormal") {
@@ -49,7 +58,7 @@ export function installNotify(): () => void {
       const where = pos
         ? ` ${color.muted}@ ${color.muted}[${color.info}${Math.floor(pos.position.x)} ${color.info}${Math.floor(pos.position.y)} ${color.info}${Math.floor(pos.position.z)}${color.muted}] ${color.darkGray}${dimensionLabel(record!.dimensionId)}`
         : "";
-      announce(`${PREFIX}${color.error}${name} 死亡了${where}`);
+      announce(`${PREFIX}${color.error}${name} 死亡了${where}`, "warn");
     })
   );
   offs.push(
@@ -59,12 +68,12 @@ export function installNotify(): () => void {
   );
   offs.push(
     services.events.on("botRespawnFailed", ({ name, stage, reason }) => {
-      announce(`${PREFIX}${color.error}${name} ${stage === "tail" ? "自动复活失败" : "自动重生失败"}: ${reason}`);
+      announce(`${PREFIX}${color.error}${name} ${stage === "tail" ? "自动复活失败" : "自动重生失败"}: ${reason}`, "error");
     })
   );
   offs.push(
     services.events.on("botToolGuardFired", ({ name, message }) => {
-      announce(`${color.playerName}[${name}] ${message}`);
+      announce(`${color.playerName}[${name}] ${message}`, "warn");
     })
   );
   offs.push(

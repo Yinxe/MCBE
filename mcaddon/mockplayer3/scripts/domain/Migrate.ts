@@ -159,7 +159,11 @@ function legacyTagShortName(value: string): string | undefined {
  */
 export function normalizeLegacyWorkMode(raw: unknown): WorkMode | undefined {
   if (typeof raw !== "string") return undefined;
-  const hit = modeAliasMap()[raw.trim()];
+  const key = raw.trim();
+  // 上游的「自定义动作」（custom）已由「长流程模式」（script）取代：
+  // 老存档里的 custom / 自定义动作 一律迁到 script，免得记录被判成非法模式。
+  if (key === "custom" || key === "自定义动作") return "script";
+  const hit = modeAliasMap()[key];
   return hit;
 }
 
@@ -364,9 +368,13 @@ export function migrateRecord(raw: unknown, ctx: MigrateContext): MigrateOutcome
     effects: migrateEffects(raw.effects, notices),
     followTarget: null,
     workChestId: null,
+    fixedFishingSpot: null,
+    lockFishingSpot: false,
     raidVictories: 0, // 旧格式没有胜场字段，迁移后从 0 起算
     // 在线声明与死亡标注原样搬运——重启归一在启动对账（残留在线声明一律落离线）
     declaredOnline: raw.online === true,
+    // 老档没有 resumeOnRestart 字段：按当时是否在线推断（在线过→重启后恢复）
+    resumeOnRestart: raw.online === true,
     deathMark: raw.death === true,
     createdAt: ctx.now,
     updatedAt: ctx.now,

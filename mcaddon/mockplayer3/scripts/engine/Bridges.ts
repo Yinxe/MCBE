@@ -55,7 +55,7 @@ export interface BridgeHandlers {
    * 交互不截获不转发）：只报数据，站立/潜行分流与表单由 interface 在
    * system.run 内重读判定（F-11：before 回调内不能开表单）。
    */
-  onBotInteract?(viewerName: string, botName: string): void;
+  onBotInteract?(viewerName: string, botName: string, heldTypeId?: string): void;
   /**
    * 假人点击方块 before（假人限定桥内降噪，真人点击一律不参与本判定）：
    * 返回 true = 取消这次点击（误点拦截）。须同步给结论——消费方只读配置与
@@ -253,14 +253,23 @@ export function installBridges(handlers: BridgeHandlers): () => void {
     }
   };
 
-  const onInteractEntity = (event: { cancel: boolean; player: Player; target: Entity }): void => {
+  const onInteractEntity = (event: {
+    cancel: boolean;
+    player: Player;
+    target: Entity;
+    /** before 事件自带本次交互实际使用的物品（空手为 undefined）——与方块交互同口径 */
+    itemStack?: ItemStack;
+  }): void => {
     try {
       // 2.8.0 Entity 面无 name——instanceof Player 收窄后读（同死亡桥）
       const target = event.target;
       if (!(target instanceof Player) || !isBotEntity(target)) return;
       if (isBotEntity(event.player)) return; // 假人自身交互（攻击/作业）不截获不转发
       event.cancel = true;
-      handlers.onBotInteract?.(event.player.name, target.name);
+      // ⚠️ 手持物一律取 before 事件自带的 itemStack（v2 线就是这么判羽毛的，实测可靠）。
+      // 不要在这里读背包组件：本回调处于 restricted-execution mode，读组件会抛错并被
+      // 降级成空串——那正是"拿羽毛点假人却开了假人面板"的成因。
+      handlers.onBotInteract?.(event.player.name, target.name, event.itemStack?.typeId ?? "");
     } catch (e: any) {
       console.error(`[mockplayer3] 假人交互对账异常: ${e?.message ?? e}`);
     }

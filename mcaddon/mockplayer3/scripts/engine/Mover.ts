@@ -19,7 +19,6 @@ import {
   isStuck,
   NAV_ARRIVE_XZ,
   NAV_CHECK_INTERVAL,
-  NAV_MAX_DISTANCE,
   NAV_STILL_LIMIT,
   NAV_TOTAL_TIMEOUT_TICKS,
 } from "../domain/NavRules";
@@ -33,6 +32,13 @@ import type { SimulatedPlayer } from "@minecraft/server-gametest";
 const FAR_LEG_DISTANCE = 12;
 /** 远距离走位段数上限（约 768 格；再多按够不着收场，避免脚本把假人拖去跑长途） */
 const FAR_LEG_LIMIT = 64;
+/** 停滞救援上限（次数，合并自 mock-player 3.1.7）：寻路中途停下时先尝试救援
+ *  （前方 1 格台阶 → 补一次跳跃；其他落差 → 重发导航重新寻路），仍不动才判卡死 */
+const NAV_RESCUE_LIMIT = 3;
+/** 前方落差探测水平距离（格）：沿假人朝向取前方 1 格位置 */
+const FRONT_PROBE_DISTANCE = 1;
+/** 台阶救援起跳后的等待（tick）：给引擎一点时间，避免空中发起导航被拒 */
+const RESCUE_JUMP_WAIT_TICKS = 4;
 
 /** 导航选项（回调只传纯数据——可上达 application） */
 export interface NavigateOptions {
@@ -266,6 +272,8 @@ export class Mover {
     let last: Vec3 | null = null;
     let stillCount = 0;
     let nearFired = false;
+    /** 已用救援次数（合并自 mock-player 3.1.7：停滞时补跳 / 重发导航的次数上限） */
+    let rescueCount = 0;
     for (;;) {
       await sleepTicks(NAV_CHECK_INTERVAL, opts.token);
       if (opts.token?.cancelled) return "error";
@@ -307,6 +315,14 @@ export class Mover {
       )
         return "arrived";
       if (isStuck(xz, dy, stillCount, opts.nearby ?? false)) {
+        // 停滞救援（合并自 mock-player 3.1.7）：未到位才救援（前方 1 格台阶补跳、
+        // 其他落差重发导航），试满次数仍不动才判卡死。到达判定在本分支之前，
+        // 所以不会出现"已经到位了还乱补跳"的情况。
+        if (rescueCount < NAV_RESCUE_LIMIT && (await this.rescueStuck(botId, target, opts))) {
+          rescueCount++;
+          stillCount = 0;
+          continue;
+        }
         this.reportStuck(botId, now, stillCount, opts);
         return "still_timeout";
       }
@@ -314,6 +330,55 @@ export class Mover {
     }
   }
 
+  /**
+   * 探测假人正前方 1 格的地面落差（合并自 mock-player 3.1.7）。
+   * 沿当前朝向水平取前方 1 格位置，自上而下找第一个实心方块，算它顶面相对
+   * 脚下层的高度差 dy：1 = 前方 1 格台阶（需跳跃跨过）；≤0 = 齐平或更低
+   * （向下不用跳）；≥2 = 更高（跨不过去，需重新寻路）。
+   * 读不到方块 / 查询异常 → undefined。
+   */
+  private probeFrontStep(bot: SimulatedPlayer): { dy: number } | undefined {
+    try {
+      const rad = (bot.getRotation().y * Math.PI) / 180;
+      const loc = bot.location;
+      const baseY = Math.floor(loc.y);
+      const x = Math.floor(loc.x + -Math.sin(rad) * FRONT_PROBE_DISTANCE);
+      const z = Math.floor(loc.z + Math.cos(rad) * FRONT_PROBE_DISTANCE);
+      const dim = bot.dimension;
+      for (let y = baseY + 2; y >= baseY - 3; y--) {
+        const b = readBlockIn(dim, { x, y, z });
+        if (!b) return undefined;
+        if (!b.air && !b.liquid) return { dy: y + 1 - baseY };
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  /**
+   * 停滞救援（合并自 mock-player 3.1.7）：前方 1 格台阶先补一次跳跃再重发导航；
+   * 其他落差（更高 / 更低 / 探测失败）直接重发导航，让引擎重新规划路线。
+   * @returns true = 已执行救援动作（调用方重置静止计数）
+   */
+  private async rescueStuck(botId: number, target: Vec3, opts: NavigateOptions): Promise<boolean> {
+    const bot = botOf(botId);
+    if (!bot || !botValid(bot)) return false;
+    try {
+      const step = this.probeFrontStep(bot);
+      if (step && step.dy === 1) {
+        try {
+          bot.jump();
+        } catch {
+          /* 跳不动就只重发导航 */
+        }
+        await sleepTicks(RESCUE_JUMP_WAIT_TICKS, opts.token);
+      }
+      bot.navigateToLocation(target, opts.speed ?? 1);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   private reportStuck(botId: number, now: Vec3, stillCount: number, opts: NavigateOptions): void {
     try {
       opts.onStuck?.(botId, now, stillCount);

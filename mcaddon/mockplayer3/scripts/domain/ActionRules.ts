@@ -1,4 +1,4 @@
-// ─── 自定义动作：动作表模型与文本规格（domain 纯逻辑） ──────────────────
+// ─── 长流程模式：动作表模型与文本规格（domain 纯逻辑） ──────────────────
 // 一段动作表 = 有序动作 + 整段循环设置 + 失败策略；动作共 12 种动作。
 // 三种输入源共用同一份归一化：命令文本规格、面板文本编辑、存档读回——
 // 解析与校验只写在这里，界面与命令不得各自解释（防两处漂移）。
@@ -42,6 +42,9 @@ export type ActionFailPolicy = "stop" | "skip";
  */
 export type ActionStep = (
   | { type: "moveTo"; x: number; y: number; z: number }
+  // moveHere（合并自 mock-player 3.1.7 的编程模式「移动到此处」）：坐标在"添加指令时"
+  // 就固化成玩家当时的站位，执行路径与 moveTo 完全相同，只是语义上标明"这是我站的位置"。
+  | { type: "moveHere"; x: number; y: number; z: number }
   | { type: "mine"; x: number; y: number; z: number }
   | { type: "place"; x: number; y: number; z: number }
   | { type: "look"; x: number; y: number; z: number }
@@ -53,6 +56,8 @@ export type ActionStep = (
   | { type: "say"; text: string }
   | { type: "sneak"; on: boolean; look?: ActionCoord }
   | { type: "jump"; target: number }
+  | { type: "face"; pitch: number; yaw: number }
+  | { type: "interact" }
 ) & { note?: string };
 
 /** 一段动作表 */
@@ -105,6 +110,15 @@ export const ACTION_TYPES: readonly ActionTypeDef[] = [
     param: "coord",
     stepType: "moveTo",
     hint: "x y z（超过 16 格会自动分段走）",
+  },
+  {
+    id: "moveHere",
+    cat: "移动",
+    label: "移动到此处",
+    kw: "移动到此",
+    param: "none",
+    stepType: "moveHere",
+    hint: "添加时记录你当前站的位置（静态快照，之后不跟着你走；超过 16 格会自动分段走）",
   },
   { id: "wait", cat: "等待", label: "等待 N 秒", kw: "等待", param: "num", stepType: "wait", hint: "秒数，最大 3600" },
   {
@@ -183,6 +197,24 @@ export const ACTION_TYPES: readonly ActionTypeDef[] = [
     hint: "可留空；填 x y z 就先转向再跳",
   },
   {
+    id: "interact",
+    cat: "交互",
+    label: "交互（准星前方）",
+    kw: "交互",
+    param: "none",
+    stepType: "interact",
+    hint: "与准星射线命中的方块/实体交互（6 格内）：开箱、按按钮、点门、点生物",
+  },
+  {
+    id: "face",
+    cat: "姿态",
+    label: "面向（操作者朝向）",
+    kw: "面向",
+    param: "none",
+    stepType: "face",
+    hint: "添加时记录你的镜头朝向，假人执行时照做（俯仰 + 朝向）",
+  },
+  {
     id: "say",
     cat: "通信",
     label: "说话",
@@ -205,6 +237,10 @@ export const ACTION_TYPES: readonly ActionTypeDef[] = [
 /** 分类名（保持目录顺序） */
 export const ACTION_CATEGORIES: readonly string[] = [...new Set(ACTION_TYPES.map((m) => m.cat))];
 
+/** 按分类取动作类型（面板「选分类 → 选类型」用；保持目录顺序） */
+export function actionTypesOfCategory(cat: string): readonly ActionTypeDef[] {
+  return ACTION_TYPES.filter((m) => m.cat === cat);
+}
 /** 按 id 取动作类型定义 */
 export function actionTypeById(id: string): ActionTypeDef | undefined {
   return ACTION_TYPES.find((m) => m.id === id);
@@ -231,6 +267,21 @@ function toNum(value: unknown): number | undefined {
 
 function validCoordValue(v: number): boolean {
   return v >= -MAX_COORD && v <= MAX_COORD;
+}
+/**
+ * 拆「一个输入框里填的坐标串」（面板与命令共用，避免两处各写一份解析规则）。
+ * 实测从游戏聊天栏复制坐标会带零宽字符 / 不换行空格，这里先剥掉；括号与中西逗号
+ * 一律当分隔符。支持 "6.48 63.00 -16.56"、"6.48,63,-16.56"、"(6.48 63 -16)"、多空格。
+ * @param raw - 原始输入
+ * @returns 切分后的片段（可能多于 3 段，调用方取前 3 段自行校验数字）
+ */
+export function splitCoordInput(raw: string): string[] {
+  return raw
+    .replace(/[\u200b-\u200f\ufeff\u00a0]/g, "")
+    .replace(/[（）()]/g, " ")
+    .replace(/[，,]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
 }
 
 function parseCoord(raw: unknown): ActionCoord | undefined {
@@ -302,16 +353,18 @@ function normalizeActionCore(raw: unknown): ActionStep | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const o = raw as Record<string, unknown>;
   const t = o.type;
-  if (t === "moveTo" || t === "mine" || t === "place" || t === "look") {
+  if (t === "moveTo" || t === "moveHere" || t === "mine" || t === "place" || t === "look") {
     const c = parseCoord(o);
     if (!c) return undefined;
     return t === "moveTo"
       ? { type: "moveTo", ...c }
-      : t === "mine"
-        ? { type: "mine", ...c }
-        : t === "place"
-          ? { type: "place", ...c }
-          : { type: "look", ...c };
+      : t === "moveHere"
+        ? { type: "moveHere", ...c }
+        : t === "mine"
+          ? { type: "mine", ...c }
+          : t === "place"
+            ? { type: "place", ...c }
+            : { type: "look", ...c };
   }
   if (t === "wait") {
     const ticks = toNum(o.ticks);
@@ -343,6 +396,14 @@ function normalizeActionCore(raw: unknown): ActionStep | undefined {
     if (target === undefined || target < 1) return undefined;
     return { type: "jump", target: Math.min(Math.round(target), MAX_ACTIONS) };
   }
+  if (t === "face") {
+    // 面向（合并自 mock-player 3.1.7）：俯仰 -90~90 夹紧，朝向取整
+    const pitch = toNum(o.pitch);
+    const yaw = toNum(o.yaw);
+    if (pitch === undefined || yaw === undefined) return undefined;
+    return { type: "face", pitch: Math.max(-90, Math.min(90, pitch)), yaw: Math.round(yaw) };
+  }
+  if (t === "interact") return { type: "interact" };
   return undefined;
 }
 
@@ -388,6 +449,8 @@ const MODULE_KEYWORDS: readonly string[] = [
   "跳一下",
   "潜行开",
   "潜行关",
+  "面向",
+  "交互",
   "走到",
   "等待",
   "挖掘",
@@ -405,6 +468,8 @@ const MODULE_KEYWORDS: readonly string[] = [
   "useitem",
   "sneakon",
   "sneakoff",
+  "interact",
+  "face",
   "moveto",
   "move",
   "wait",
@@ -442,7 +507,7 @@ function extractKeyword(raw: string): { kw: string; rest: string } {
  */
 export function parseActionSpec(
   spec: string,
-  defaults?: { coord: ActionCoord }
+  defaults?: { coord: ActionCoord; facing?: { pitch: number; yaw: number } }
 ): { step: ActionStep } | { error: string } {
   const tokens = spec
     .trim()
@@ -459,12 +524,10 @@ export function parseActionSpec(
     let a0 = args[0];
     let a1 = args[1];
     let a2 = args[2];
-    if (a0 !== undefined && a1 === undefined && a2 === undefined && /[，,]/.test(a0)) {
-      const parts = a0
-        .replace(/[()（）]/g, "")
-        .split(/[，,]/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
+    // 单参数写法：把 "6.48 63.00 -16.56" / "6.48,63,-16.56" / "(6.48 63 -16)" 拆成三段
+    //（命令行参数可能被引号包成一整串；也兼容从聊天栏复制带不可见字符的情况）
+    if (a0 !== undefined && a1 === undefined && a2 === undefined && /[，,（）()\s]/.test(a0)) {
+      const parts = splitCoordInput(a0);
       a0 = parts[0];
       a1 = parts[1];
       a2 = parts[2];
@@ -524,6 +587,19 @@ export function parseActionSpec(
     const look = optionalLook();
     if (typeof look === "string") return { error: `使用物品：${look}` };
     return look ? { step: { type: "useItem", look } } : { step: { type: "useItem" } };
+  }
+  if (kw === "交互" || kwLower === "interact") return { step: { type: "interact" } };
+  if (kw === "面向" || kwLower === "face") {
+    // 面向（合并自 mock-player 3.1.7）：pitch yaw；都缺省时用操作者镜头朝向
+    const p = toNum(args[0]);
+    const y = toNum(args[1]);
+    if (p === undefined || y === undefined) {
+      if (defaults?.facing) {
+        return { step: { type: "face", pitch: defaults.facing.pitch, yaw: defaults.facing.yaw } };
+      }
+      return { error: "面向：需要俯仰角与朝向角（两个数字，如「面向 0 90」）" };
+    }
+    return { step: { type: "face", pitch: Math.max(-90, Math.min(90, p)), yaw: Math.round(y) } };
   }
   if (kw === "攻击" || kwLower === "attack") {
     const n = toNum(args[0]);
@@ -585,7 +661,7 @@ export interface ActionsSpecResult {
  * @param text - 整段文本
  * @returns 成功动作 + 失败明细（不因一条错就丢整段）
  */
-export function parseActionsSpec(text: string, defaults?: { coord: ActionCoord }): ActionsSpecResult {
+export function parseActionsSpec(text: string, defaults?: { coord: ActionCoord; facing?: { pitch: number; yaw: number } }): ActionsSpecResult {
   // 换行与分隔符都算条目边界（面板一行写完、命令一次粘贴都支持）
   const parts = text
     .split(/[\n\r|]+/)
@@ -629,6 +705,8 @@ export function describeAction(step: ActionStep, index?: number): string {
     switch (step.type) {
       case "moveTo":
         return `走到 ${fmtCoord(step)}`;
+      case "moveHere":
+        return `移动到此处 ${fmtCoord(step)}`;
       case "wait":
         return `等待 ${fmtSeconds(step.ticks)} 秒`;
       case "mine":
@@ -651,6 +729,10 @@ export function describeAction(step: ActionStep, index?: number): string {
         return step.look ? `跳一下 · 对准 ${fmtCoord(step.look)}` : "跳一下";
       case "jump":
         return `跳转到第 ${step.target} 条`;
+      case "face":
+        return `面向（俯仰 ${Math.round(step.pitch)}° · 朝向 ${Math.round(step.yaw)}°）`;
+      case "interact":
+        return "交互（准星前方）";
     }
   })();
   const head = index === undefined ? "" : `${index}. `;
@@ -681,6 +763,8 @@ export function stepToSpecText(s: ActionStep): string {
   switch (s.type) {
     case "moveTo":
       return `走到 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
+    case "moveHere":
+      return `移动到此 ${fmtNum(s.x)} ${fmtNum(s.y)} ${fmtNum(s.z)}`;
     case "wait":
       return `等待 ${fmtSeconds(s.ticks)}`;
     case "mine":
@@ -705,6 +789,10 @@ export function stepToSpecText(s: ActionStep): string {
       return s.look ? `跳一下 ${fmtNum(s.look.x)} ${fmtNum(s.look.y)} ${fmtNum(s.look.z)}` : "跳一下";
     case "jump":
       return `跳转 ${s.target}`;
+    case "face":
+      return `面向 ${Math.round(s.pitch)} ${Math.round(s.yaw)}`;
+    case "interact":
+      return "交互";
   }
 }
 
@@ -792,7 +880,7 @@ export function cloneAction(step: ActionStep): ActionStep {
 export function actionFromType(
   def: ActionTypeDef,
   args: string,
-  defaults?: { coord: ActionCoord }
+  defaults?: { coord: ActionCoord; facing?: { pitch: number; yaw: number } }
 ): { step: ActionStep } | { error: string } {
   const trimmed = args.trim();
   return parseActionSpec(trimmed.length === 0 ? def.kw : `${def.kw} ${trimmed}`, defaults);
@@ -802,6 +890,7 @@ export function actionFromType(
 export function actionArgsOf(step: ActionStep): string {
   switch (step.type) {
     case "moveTo":
+    case "moveHere":
     case "mine":
     case "place":
     case "look":
@@ -820,5 +909,9 @@ export function actionArgsOf(step: ActionStep): string {
       return step.look ? `${fmtNum(step.look.x)} ${fmtNum(step.look.y)} ${fmtNum(step.look.z)}` : "";
     case "jump":
       return String(step.target);
+    case "face":
+      return `${Math.round(step.pitch)} ${Math.round(step.yaw)}`;
+    case "interact":
+      return "";
   }
 }

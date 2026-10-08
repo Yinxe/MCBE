@@ -4,6 +4,7 @@
 // 注视是租约不持久化；home 只存身体朝向 yaw/pitch。
 
 import type { Vec3 } from "./Coords";
+import type { AimResult } from "./FishingSpot";
 import type { HarvestKindId } from "./HarvestRules";
 import { normalizeBotName, validateBotName } from "./Identity";
 
@@ -14,7 +15,7 @@ export type HarvestMode = `harvest_${HarvestKindId}`;
 
 /** WorkMode 枚举唯一真源（目录元数据见 Catalog.ts） */
 export type WorkMode =
-  "none" | "wander" | "mine" | "place" | "attack" | "fishing" | "raid" | "follow" | "vault" | "custom" | HarvestMode;
+  "none" | "wander" | "mine" | "place" | "attack" | "fishing" | "raid" | "follow" | "vault" | "script" | HarvestMode;
 
 /** 与 workMode 正交的独立开关 */
 export interface BotSwitches {
@@ -116,6 +117,20 @@ function isSlotMapShape(value: unknown, keyOk: (key: string) => boolean): value 
 
 // ─── 记录本体 ──
 
+/** 固定钓点锚（合并自 mock-player 3.1.7）：存下完整钓点数据，重上线可直接复用 */
+export interface FixedFishingSpot {
+  /** 所在维度 id（换维度后固定点失效，退回自动选点） */
+  dimensionId: string;
+  /** 钓点池键（fishingSpotKey(dimId, stand)） */
+  key: string;
+  /** 站位（假人落脚点） */
+  stand: Vec3;
+  /** 水域瞄准结果（星级 + 命中点，钓鱼原样复用） */
+  aim: AimResult;
+  /** 成功率（%）：沿用固定时的数值，之后的钓获回升/失败降档照常作用 */
+  rate: number;
+}
+
 /** 假人持久档案（DP 键 mp:bot:<botId>，schema v2） */
 export interface BotRecord {
   /** 全局唯一、不复用的整数身份 */
@@ -146,10 +161,21 @@ export interface BotRecord {
   followTarget: string | null;
   /** 工作箱绑定（mp:wchest 注册表条目 id；null=未绑定。每假人最多绑一箱，多假人可共用同一箱；换绑即覆写） */
   workChestId: string | null;
+  /** 固定钓点（合并自 mock-player 3.1.7）：设定后自动钓鱼只用该点、不再自动换点，
+   *  跨上线沿用；null/缺省 = 照常自动选点 */
+  fixedFishingSpot: FixedFishingSpot | null;
+  /** 一次性请求：下一次选到钓点时把它记为固定钓点（由命令置位，能力消费后清空） */
+  lockFishingSpot: boolean;
   /** 劫掠累计胜场（跨会话/重启持久累计；非劫掠假人恒 0） */
   raidVictories: number;
   /** 在线声明（启动对账归一依据）；唯一写者=上线/下线管线，运行时权威在状态机 */
   declaredOnline: boolean;
+  /**
+   * 重启后是否要把这个假人恢复上线。
+   * true=因重启/玩家离开/死亡等非人为原因掉线，下次进游戏自动拉回；
+   * false=玩家主动下线（/mp:offline、面板下线按钮），尊重玩家意愿，重启后保持离线。
+   */
+  resumeOnRestart: boolean;
   /** 离线死亡标注（autoRespawn=false 死亡转离线时置真，仅展示/上线提示用，不参与状态机） */
   deathMark: boolean;
   /** 创建/更新时间戳（ms） */
@@ -195,8 +221,11 @@ export function createRecord(params: NewRecordParams): { record: BotRecord; name
     effects: [],
     followTarget: null,
     workChestId: null,
+    fixedFishingSpot: null,
+    lockFishingSpot: false,
     raidVictories: 0,
     declaredOnline: false,
+    resumeOnRestart: false,
     deathMark: false,
     createdAt: params.now,
     updatedAt: params.now,

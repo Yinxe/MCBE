@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "模拟玩家III v3.0.9",
-    "description": "模拟玩家（假人）v3 重写 - 单会话模型、资源租约、显式生命周期管线 v3.0.9",
+    "name": "模拟玩家III v3.0.29",
+    "description": "模拟玩家（假人）v3 重写 - 单会话模型、资源租约、显式生命周期管线 v3.0.29",
     "uuid": "49df180b-e16a-4740-9edd-c655127fcd22",
     "version": [
       3,
       0,
-      9
+      29
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         3,
         0,
-        9
+        29
       ],
       "uuid": "256118ca-af02-43d2-a0f1-da5b460474d6",
       "type": "data"
@@ -35,7 +35,7 @@
       "version": [
         3,
         0,
-        9
+        29
       ],
       "entry": "scripts/main.js"
     }
@@ -46,7 +46,7 @@
       "version": [
         3,
         0,
-        9
+        29
       ]
     },
     {

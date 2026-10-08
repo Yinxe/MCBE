@@ -62,6 +62,7 @@ import { ZONE_REUSE_MAX_DIST } from "../../domain/FishingZone";
 import { angler } from "../../engine/Angler";
 import type { CastResult } from "../../engine/Angler";
 import { blockCenter, readBlock } from "../../engine/Atomic";
+import type { SaveGate } from "../../engine/SaveGate";
 import { gaze } from "../../engine/Gaze";
 import { suction } from "../../engine/DropSuction";
 import { mover } from "../../engine/Mover";
@@ -151,7 +152,9 @@ export class FishingCap implements Capability {
   constructor(
     private readonly runtime: Runtime,
     private readonly ops: EntityOps,
-    events: BotEventBus
+    events: BotEventBus,
+    /** 保存网关（合并自 mock-player 3.1.7：固定钓点写入后立即落库） */
+    private readonly saveGate: SaveGate
   ) {
     // 渔获事件收集：只统计 lootWindow 开启期间的槽位变化，窗口外（抛竿/换竿/卸载）一律忽略
     events.on("botSlotChanged", (ev) => this.collectLoot(ev.botId, ev.slot, ev.item));
@@ -266,6 +269,28 @@ export class FishingCap implements Capability {
     // 维度取实体当前实际值：record.dimensionId 是下线/死亡/设家点时的快照，
     // 用它找钓区、扫描、复核可能走错维度
     const dimId = self.dimensionId;
+    // 固定钓点（合并自 mock-player 3.1.7）：玩家指定后自动钓鱼只用它、不再换点；
+    // 维度不符或站位已失效才退回自动选点（失效的锚顺手清掉）
+    const fixedSpot = record.fixedFishingSpot ?? null;
+    if (fixedSpot && fixedSpot.dimensionId === dimId) {
+      if (spotScanner.checkStand(dimId, fixedSpot.stand, selfId).verdict !== "invalid") {
+        ctx.spot = {
+          key: fixedSpot.key,
+          stand: fixedSpot.stand,
+          aim: fixedSpot.aim,
+          rate: fixedSpot.rate,
+          distSqCenter: 0,
+        };
+        ctx.staleRounds = 0;
+        ctx.lostStreak = 0;
+        this.dbg(session, `使用固定钓点 (${fixedSpot.stand.x}, ${fixedSpot.stand.y}, ${fixedSpot.stand.z})`);
+        setPhase(session, 0, isAtStandSpot(self.location, fixedSpot.stand) ? "ALIGN" : "NAV", now);
+        return;
+      }
+      record.fixedFishingSpot = null;
+      this.saveGate.saveRecord(record);
+      this.say(session, ctx, now, "固定钓点已失效（站位不成立），已退回自动选点", true);
+    }
     const owner = session.sessionId;
     const zones = this.runtime.fishingZones;
     zones.sweep(now); // 先清掉空区和指向已消散区的记录，再复用，避免命中已消散的区
@@ -323,6 +348,25 @@ export class FishingCap implements Capability {
       this.dbg(session, `钓鱼区 #${zone.id} 结构失效点除名 ${removed} 个`);
     }
     if (spot) {
+      // 固定钓点请求（合并自 mock-player 3.1.7）：把这次选到的点记为固定钓点
+      if (record.lockFishingSpot) {
+        record.lockFishingSpot = false;
+        record.fixedFishingSpot = {
+          dimensionId: dimId,
+          key: spot.key,
+          stand: spot.stand,
+          aim: spot.aim,
+          rate: spot.rate,
+        };
+        this.saveGate.saveRecord(record);
+        this.say(
+          session,
+          ctx,
+          now,
+          `已固定钓点 (${spot.stand.x}, ${spot.stand.y}, ${spot.stand.z})，之后不再自动换点`,
+          true
+        );
+      }
       ctx.staleRounds = 0;
       ctx.lostStreak = 0; // 新点位：连续"找不到鱼钩"计数从 0 起算
       ctx.spot = spot;

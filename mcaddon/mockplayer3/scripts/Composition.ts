@@ -36,9 +36,9 @@ import { WanderCap } from "./application/Capabilities/Wander";
 import { RaidCap } from "./application/Capabilities/Raid";
 import { VaultCap } from "./application/Capabilities/Vault";
 import { HarvestCap } from "./application/Capabilities/Harvest";
-import { CustomActionCap } from "./application/Capabilities/CustomAction";
-import { ActionLibrary } from "./application/ActionLibrary";
-import { ActionStore } from "./engine/ActionStore";
+import { ScriptCap } from "./application/Capabilities/Script";
+import { ScriptLibrary } from "./application/ScriptLibrary";
+import { ScriptStore } from "./engine/ScriptStore";
 
 const recordStore = new RecordStore();
 const runtime = new Runtime();
@@ -52,9 +52,10 @@ const events = new BotEventBus();
 const mailbox = new Mailbox();
 const modes = new Modes(runtime, saveGate, events);
 const transfer = new WorkTransfer(runtime, ops);
-// 自定义动作：动作表走独立 DP 键（mp:action:<id>）——档案每次对账整条读写，动作表只在编辑/运行时才需要
-const actionStore = new ActionStore();
-const actions = new ActionLibrary(actionStore);
+// 长流程模式：指令表走独立 DP 键（mp:script:<id>）——档案每次对账整条读写，
+// 指令表只在编辑/运行时才需要，且可达 256 条，混进档案会把每次落盘的体积都撑大
+const scriptStore = new ScriptStore();
+const scripts = new ScriptLibrary(scriptStore);
 const lifecycle = new Lifecycle(runtime, saveGate, vault, ops, spawner, modes, events, mailbox, transfer);
 const scheduler = new Scheduler(runtime, saveGate, modes, ops, transfer);
 
@@ -73,7 +74,7 @@ export const services = {
   lifecycle,
   scheduler,
   transfer,
-  actions,
+  scripts,
 } as const;
 
 // ─── 在线实时落盘 ──
@@ -134,13 +135,14 @@ modes.register(new MineCap(runtime));
 modes.register(new PlaceCap());
 modes.register(new AttackCap());
 modes.register(new FollowCap(runtime, ops, capHost));
-modes.register(new FishingCap(runtime, ops, events));
+modes.register(new FishingCap(runtime, ops, events, saveGate));
 modes.register(new WanderCap(runtime, ops));
 modes.register(new RaidCap(runtime, events, capHost, saveGate));
 modes.register(new VaultCap(runtime, ops, (botId) => lifecycle.systemReconnect(botId)));
 // 采集按 CollectorSpec 一对象一模式单例；id 沿用 harvest_<kind>，命令/面板/存档零改动
 modes.register(new HarvestCap(runtime, capHost, "wood"));
-modes.register(new CustomActionCap(runtime, actions, ops, panelOps));
+// 长流程模式（v2 线原版界面，取代上游的「自定义动作」）：指令表 + 常驻协程执行
+modes.register(new ScriptCap(runtime, scripts, ops, panelOps));
 
 // ─── 原子钩子装配（背包变更走 SaveGate 增量、领域事件走总线） ──
 
@@ -212,6 +214,6 @@ events.on("botDeleted", ({ botId }) => {
   runtime.forgetRaidState(botId); // 劫掠状态只随删假人清，防同名重建继承
   runtime.forgetVaultState(botId); // 宝库流程状态同上
   runtime.harvestGrounds.forgetBot(botId); // 采集地点池与扫描标记同上
-  actions.forget(botId); // 自定义动作：动作表、版本号与运行状态一并清（旧版漏了这步）
+  scripts.forget(botId); // 长流程模式：指令表、版本号与运行状态一并清（旧版漏了这步）
   runtime.forgetMined(botId); // 挖掘产物台账同上（工作箱搬运判据依赖它）
 });

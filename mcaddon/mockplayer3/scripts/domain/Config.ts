@@ -13,6 +13,13 @@ export const DEFAULT_CREATE_QUOTA = 5;
 export const DEFAULT_ONLINE_QUOTA = 3;
 /** 默认菜单信物（木棍） */
 export const DEFAULT_TOKEN_ITEM = "minecraft:stick";
+/**
+ * 长流程模式专用物品默认值（羽毛）。手持它时：
+ *   点假人 → 直接开该假人的长流程面板（优先于假人操作面板）；
+ *   使用（长按 / 右键）→ 开「长流程 · 选假人」列表。
+ * 与「菜单信物」（默认木棍：管主菜单 + 潜行点箱子绑定工作箱）互不干扰。
+ */
+export const DEFAULT_FLOW_ITEM = "minecraft:feather";
 /** 上线辅助常加载默认半径（区块，v2 口径"模拟4"） */
 export const DEFAULT_AUX_TICKING_RADIUS = 4;
 
@@ -91,6 +98,14 @@ export interface GlobalConfig {
   adminKeys: string[];
   /** 菜单信物（enabled=false 仅命令入口） */
   tokenItem: { enabled: boolean; typeId: string };
+  /** 长流程模式专用物品（默认羽毛；enabled=false 则只能用命令 / 面板进入） */
+  flowItem: { enabled: boolean; typeId: string };
+  /**
+   * 重启（重新进游戏）后是否自动把假人拉回线上。
+   * 上游 v3 明确移除了该功能（重启后一律保持离线，见 Migrate 的提示）；按维护者要求加回，默认开。
+   * 关掉即回到上游行为：重启后全部离线，需要手动上线。
+   */
+  autoOnlineOnRestart: boolean;
   /** 上线辅助常加载半径（区块；0=关闭，4/6/8=模拟4/6/8，v2 auxTickingRadius 对位） */
   auxTickingRadius: number;
   /** 调试日志开关（默认零日志） */
@@ -107,6 +122,8 @@ export function defaultConfig(): GlobalConfig {
     ownerDownOfflineDefault: false,
     adminKeys: [],
     tokenItem: { enabled: true, typeId: DEFAULT_TOKEN_ITEM },
+    flowItem: { enabled: true, typeId: DEFAULT_FLOW_ITEM },
+    autoOnlineOnRestart: true,
     auxTickingRadius: DEFAULT_AUX_TICKING_RADIUS,
     debugLog: false,
   };
@@ -148,6 +165,7 @@ export function mergeConfig(raw: unknown): GlobalConfig {
   }
 
   const token = (r.tokenItem ?? {}) as Record<string, unknown>;
+  const flow = (r.flowItem ?? {}) as Record<string, unknown>;
   return {
     quotas: {
       create: Math.max(0, num(q.create, d.quotas.create)),
@@ -164,6 +182,11 @@ export function mergeConfig(raw: unknown): GlobalConfig {
       enabled: bool(token.enabled, d.tokenItem.enabled),
       typeId: typeof token.typeId === "string" ? token.typeId : d.tokenItem.typeId,
     },
+    flowItem: {
+      enabled: bool(flow.enabled, d.flowItem.enabled),
+      typeId: typeof flow.typeId === "string" ? flow.typeId : d.flowItem.typeId,
+    },
+    autoOnlineOnRestart: bool(r.autoOnlineOnRestart, d.autoOnlineOnRestart),
     auxTickingRadius: normalizeAuxTickingRadius(r.auxTickingRadius, d.auxTickingRadius),
     debugLog: bool(r.debugLog, d.debugLog),
   };

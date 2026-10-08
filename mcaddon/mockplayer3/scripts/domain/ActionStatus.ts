@@ -1,4 +1,4 @@
-// ─── 自定义动作：运行状态板（domain 纯逻辑） ──────────────────────────
+// ─── 长流程模式：运行状态板（domain 纯逻辑） ──────────────────────────
 // 面板与命令要显示"此刻跑到哪条/第几轮/为什么停"，这些信息由能力层在推进与收场时写入，
 // 与动作表内容分开：动作表落盘（DP），运行状态只活在进程内存里（重启即失，重跑重新计时）。
 // 逐假人一份，删假人时清。
@@ -6,7 +6,7 @@
 /** 运行阶段 */
 export type ActionPhase = "idle" | "running" | "completed" | "failed" | "empty";
 
-/** 单假人的自定义动作运行快照 */
+/** 单假人的长流程模式运行快照 */
 export interface ActionStatus {
   /** 阶段 */
   phase: ActionPhase;
@@ -61,7 +61,7 @@ export class ActionStatusBoard {
       case "idle":
         return status.message ? `已停止（${status.message}）` : "未运行";
       case "empty":
-        return "还没有自定义动作";
+        return "还没有长流程模式";
       case "running":
         return `运行中：第 ${status.stepIndex}/${status.total} 条 · 第 ${status.cycle} 轮`;
       case "completed":
