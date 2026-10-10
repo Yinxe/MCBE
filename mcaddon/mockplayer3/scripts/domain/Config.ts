@@ -95,6 +95,8 @@ export interface GlobalConfig {
   auxTickingRadius: number;
   /** 调试日志开关（默认零日志） */
   debugLog: boolean;
+  /** 传送功能开关（管理员控制；关=命令与面板入口都不可用，默认开） */
+  teleportEnabled: boolean;
 }
 
 /** 默认配置（启动早建；worldLoad 后读 DP 合并覆盖） */
@@ -109,6 +111,7 @@ export function defaultConfig(): GlobalConfig {
     tokenItem: { enabled: true, typeId: DEFAULT_TOKEN_ITEM },
     auxTickingRadius: DEFAULT_AUX_TICKING_RADIUS,
     debugLog: false,
+    teleportEnabled: true,
   };
 }
 
@@ -166,5 +169,6 @@ export function mergeConfig(raw: unknown): GlobalConfig {
     },
     auxTickingRadius: normalizeAuxTickingRadius(r.auxTickingRadius, d.auxTickingRadius),
     debugLog: bool(r.debugLog, d.debugLog),
+    teleportEnabled: bool(r.teleportEnabled, d.teleportEnabled),
   };
 }

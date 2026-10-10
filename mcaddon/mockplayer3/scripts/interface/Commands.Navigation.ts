@@ -8,6 +8,7 @@ import { mover } from "../engine/Mover";
 import { services } from "../Composition";
 import type { CommandSpec } from "./CmdKit";
 import { Param } from "./CmdKit";
+import { TELEPORT_DISABLED_NOTICE, teleportEnabled } from "./Kit";
 
 /** 寻路结果 → 播报文案；pos=目标坐标取整 */
 function navigateMessage(targetName: string, loc: Vec3, outcome: NavOutcome, nearby = false): string {
@@ -41,6 +42,10 @@ export const NAVIGATION_COMMANDS: CommandSpec[] = [
     usage: "mp:teleportbot <假人>",
     args: [{ name: "name", type: Param.String }],
     execute(ctx, a) {
+      if (!teleportEnabled()) {
+        ctx.say(`${color.error}${TELEPORT_DISABLED_NOTICE}`);
+        return;
+      }
       const t = ctx.bot(String(a.name));
       if (!t) return;
       const pose = services.ops.readPose(t.botId);
@@ -62,6 +67,10 @@ export const NAVIGATION_COMMANDS: CommandSpec[] = [
     usage: "mp:tphere <假人>",
     args: [{ name: "name", type: Param.String }],
     execute(ctx, a) {
+      if (!teleportEnabled()) {
+        ctx.say(`${color.error}${TELEPORT_DISABLED_NOTICE}`);
+        return;
+      }
       const t = ctx.bot(String(a.name));
       if (!t) return;
       const pose = services.ops.readPose(t.botId);
