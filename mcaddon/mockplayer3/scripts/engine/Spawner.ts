@@ -118,7 +118,11 @@ export class Spawner {
 
   // ─── 私有 ──
 
-  /** 单只生成：装置就绪走 test 中转（传送校正交给 finalize），未就绪直生（F-02） */
+  /**
+   * 单只生成：装置就绪走 test 中转（传送校正交给 finalize），未就绪直生（F-02）。
+   * 低版本没有测试维度、装置恒不就绪，走的正是这条直生路：模块级 spawnSimulatedPlayer
+   * 直接落在目标维度与坐标，随后的 finalize 传送只做朝向校正。
+   */
   private spawnOnce(req: SpawnRequest): SimulatedPlayer | null {
     try {
       const test = globalTest;

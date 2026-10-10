@@ -9,6 +9,7 @@ import { installBridges } from "./engine/Bridges";
 import { installNotify } from "./interface/Notify";
 import { installCompatWarning } from "./interface/CompatWarning";
 import { installClaimReport } from "./interface/ClaimReport";
+import { installVaultRelocation } from "./application/VaultRelocation";
 import { onBotInteract, onRealPlayerBlockClick, onTokenItemUse } from "./interface/Panels/Menu";
 import { clock } from "./engine/Clock";
 import { entityGateway } from "./engine/EntityGateway";
@@ -98,6 +99,8 @@ async function boot(): Promise<void> {
   installCompatWarning();
   installClaimReport();
   services.scheduler.start();
+  // 低版本期间存在末地兼容锚点的物品仓：升级后迁回测试维度（首选不可用时内部直接返回）
+  installVaultRelocation(services.vault, services.saveGate, (botId) => services.runtime.session(botId) !== undefined);
   if (services.runtime.config.debugLog) {
     console.info(`[mockplayer3] 装配完成：装置=${rigReady} 记录=${services.runtime.records.size}`);
   }

@@ -16,11 +16,11 @@ import type { NotifyLevel, NotifySetting } from "../domain/NotifyRules";
 import { lootFingerprint, mismatchedSlots } from "../domain/Fingerprint";
 import { permitVaultRead, permitVaultTrust } from "../domain/SavePolicy";
 import { totalXpForLevel } from "../domain/XpMath";
-import { dimensionFailureNotice } from "../domain/Compat";
+import { isTestDimensionRegion, storageUnavailableReason } from "../domain/Compat";
 import { asSimulated } from "./Compat";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { entityGateway } from "./EntityGateway";
-import { customDimensionFailure } from "./Rig";
+import { customDimensionAvailable, customDimensionFailure } from "./Rig";
 import { itemEnchantments } from "./Atomic";
 import { ItemVault } from "./ItemVault";
 import { getNotifySetting, sendNotify, setNotifySetting as persistNotifySetting } from "./NotifyStore";
@@ -440,10 +440,17 @@ export class EntityOps {
       this.vault.regionReady(this.vault.getBinding(botId)?.regionId)
     );
     if (!verdict.allow) {
-      // 维度缺失是安装级原因（升级才可解）；维度正常则只是阵列区块未加载，稍后再试即可
-      const dim = customDimensionFailure();
-      const reason = dim
-        ? dimensionFailureNotice(dim.kind, dim.detail)
+      // 仓在测试维度的假人在低版本下读不到（升级才能解），与"这次区块没加载"要给不同说法
+      const boundRegion = this.vault.getBinding(botId)?.regionId;
+      if (boundRegion && isTestDimensionRegion(boundRegion) && !customDimensionAvailable())
+        return {
+          ok: false,
+          reason: "该假人的物品仓在测试维度，当前游戏版本读不到（需 1.26.20+ 且世界开启 Beta APIs）；升级后即可上线",
+        };
+      // 注册失败（首选与兼容锚点都没建起来）是安装级原因；区域已注册则只是区块未加载，稍后再试
+      const registerError = this.vault.lastRegisterError();
+      const reason = registerError
+        ? storageUnavailableReason(customDimensionFailure(), registerError)
         : "物品仓区块未加载（世界尚未就绪），请稍后再上线";
       return { ok: false, reason };
     }
