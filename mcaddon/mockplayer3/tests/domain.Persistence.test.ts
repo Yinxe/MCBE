@@ -137,6 +137,12 @@ test("mergeConfig：逐字段合并——合法覆盖、非法回退、未知键
   assert.equal(c.debugLog, false, "非布尔回退");
 });
 
+test("mergeConfig：传送开关缺字段/非布尔回退默认开，显式 false 生效", () => {
+  assert.equal(mergeConfig({}).teleportEnabled, true);
+  assert.equal(mergeConfig({ teleportEnabled: false }).teleportEnabled, false);
+  assert.equal(mergeConfig({ teleportEnabled: "yes" }).teleportEnabled, true);
+});
+
 test("启用表策略版本戳（缺59）：旧档整表重置一次，带戳档逐字保留", () => {
   const all = Object.keys(defaultEnabledModes()) as WorkMode[];
   // 旧策略档（无戳=heavy 默认关时代）：表里一片 false 分不清"默认关"还是"管理员关"，

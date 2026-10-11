@@ -18,6 +18,8 @@ import {
   itemDisplayName,
   performSyncPose,
   resolveUiBotRecord,
+  TELEPORT_DISABLED_NOTICE,
+  teleportEnabled,
   uiViewer,
 } from "../Kit";
 import { services } from "../../Composition";
@@ -151,8 +153,12 @@ export function showBotPanel(player: Player, rawName: string, onBack?: () => voi
     );
   };
 
-  /** 传送过去：离线/死亡先安全上线 */
+  /** 传送过去：先过管理员开关，再看离线/死亡是否先安全上线 */
   const tpToBot = async (): Promise<void> => {
+    if (!teleportEnabled()) {
+      say(`${color.error}${TELEPORT_DISABLED_NOTICE}`);
+      return;
+    }
     const now = botStatus(record);
     if (!now.online || now.death) {
       const on = await lifecycle.online(viewer, botId);
@@ -220,7 +226,9 @@ export function showBotPanel(player: Player, rawName: string, onBack?: () => voi
       "textures/ui/mockplayer/toggle_online",
       () => void toggleOnline()
     );
-    f.buttonWithIcon(style("传送过去", color.darkBlue), "textures/ui/mockplayer/teleport", () => void tpToBot());
+    // 管理员关掉传送功能时入口不显示（动作侧也守一次，防旧面板表单误触发）
+    if (teleportEnabled())
+      f.buttonWithIcon(style("传送过去", color.darkBlue), "textures/ui/mockplayer/teleport", () => void tpToBot());
     f.buttonWithIcon(style("同步姿态", color.darkBlue), "textures/ui/mockplayer/sync_pose", syncPose);
     f.buttonWithIcon(style("选择主手", color.darkBlue), "textures/ui/mockplayer/select_mainhand", () =>
       showMainhandSelector(player, record)

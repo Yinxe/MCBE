@@ -46,6 +46,16 @@ This file provides guidance to the AI agent when working with code in this repos
 - register 篡改游戏规则 → 回调内立即写回（F-21）；世界结构 `mockplayer:void` 由 BP structures 提供，勿删；GameTest 注册标识与测试维度名（`mockplayer:test`）沿用 v2 基线——存档装置命令方块写死旧标识，改名 runthis 复用必败。
 - tick 回调同步、短、无 await、无自旋（F-18）；长流程 = 相位机 + nextWakeAt 单一时钟（D-05）。
 
+## 低版本兼容模式（无自定义维度 API，游戏 < 1.26.20）
+
+- 判据 `engine/Rig.customDimensionAvailable()`：startup 时 `event.dimensionRegistry` 不存在即不可用（低版本该字段是 undefined，不抛错；类型面用 `DimensionRegistrySurface` 可选字段声明探测）；注册成功即可用，注册抛错或未观测到 startup 再探 `getDimension`。
+- 不可用时：`initTestField` 直接返回——不注册 GameTest、不动 0,0,0 测试结构；假人走 `engine/Spawner` 的模块级 `spawnSimulatedPlayer` 直生目标坐标（装置恒不就绪即这条直生路）。
+- 物品仓锚点二选一（`domain/Compat.storageAnchorFor`）：可用=测试维度 `TEST_DIMENSION_ID` (16,0,16)；不可用=末地 `minecraft:the_end` (300000,0,300000)。区域 id 含维度名；`ItemVault.storageOf` 按绑定表 regionId **严格寻址**——寻不到区域记录即判区域不可用，绝不回落当次锚点（旧 slotId 写进别的区域会错槽）。
+- 引擎地板 = **1.21.130**（`world.tickingAreaManager` 与 `TickingAreaOptions` 自该版本类型面才有，nbt-data-storage 与 `TickingAreas`/`Rig`/`Commands.Admin` 都靠它做常加载）。BP/RP `min_engine_version` 取 `[1,21,130]`；1.21.120–1.21.129 想支持必须先给存储层加不依赖 Manager 的加载路径。
+- v2 旧物品键：逐格"写成功才删键"。写不进仓（区域未就绪/仓满）的格保留键并落标记 `mp:legacy:pending:<旧名>`（值=格数），记录照迁；物品阶段与记录迁移解耦，只处理"本轮刚迁入记录"或"挂着标记"的名字，清扫跳过待迁名字——上一个成功迁移周期留下的陈旧残留仍按旧行为清扫（不复活旧物品）。
+- 升级回正轨：`application/VaultRelocation`（走 `clock`，不另开定时器）启动后 40t 起每 2t 搬一个不在线假人，未就绪/在线的回队重试 ≤15 轮（常加载挂载是异步的，首轮必然未就绪），耗尽则下次启动再试。迁移单格语义：读源仓→写目标仓→全成功才改绑定表并清源槽，失败回滚目标仓副本、源数据一步不动；回滚/清源槽残留只记日志（占容量，不丢数据）。同时同步记录 `inventoryRef`。
+- 提示：`interface/CompatWarning` 装配期写 warn 日志 + 玩家入服私信一次，文案在 `domain/Compat.dimensionFailureNotice`；`EntityOps.importItems` 对"仓在测试维度、当前版本读不到"给专门说明（升级才可解，不是稍后重试）。
+
 ## 自定义动作（custom；参考旧版 archive/mock-player 3.1.6 重写）
 
 落位与分工：

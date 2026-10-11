@@ -139,6 +139,10 @@ function showGlobalConfig(player: Player): void {
         tooltip: "手持该物品长按（电脑端右键）可打开主菜单；选'无'则仅能通过命令 /mp:menu 打开",
       }
     );
+    f.toggle("teleport", "传送功能（玩家 ↔ 假人）", {
+      defaultValue: config.teleportEnabled,
+      tooltip: "关=玩家不能用 /mp:teleportbot、/mp:tphere，假人面板也不显示「传送过去」（同步姿态不受影响）；默认开",
+    });
     f.label("expHeader", `${color.accent}— 实现性功能 —`);
     f.toggle("experimental", `${color.warn}⚠ ${color.gold}实现性功能总闸`, {
       defaultValue: config.experimentalEnabled,
@@ -182,6 +186,12 @@ function showGlobalConfig(player: Player): void {
         if (experimentalChanged) {
           config.experimentalEnabled = experimental;
           changed = true;
+        }
+        const teleport = Boolean(vals.teleport);
+        if (teleport !== config.teleportEnabled) {
+          config.teleportEnabled = teleport;
+          changed = true;
+          say(`${color.success}传送功能已${teleport ? "开启" : "关闭"}`);
         }
         const quota = sliderToQuota(Number(vals.quota) || 1, false);
         if (quota !== config.quotas.create) {

@@ -1,5 +1,6 @@
 // ─── schema v2 存储：DP 寻址唯一实现 ────────────────────────────────
-// 键空间：mp:nextBotId / mp:bot:<id> / mp:name:<名> / mp:config / mp:store:bind:<id>。
+// 键空间：mp:nextBotId / mp:bot:<id> / mp:name:<名> / mp:config / mp:store:bind:<id>
+//         / mp:legacy:pending:<旧名>（待迁物品标记，值=格数）。
 // 键名一律含 botId 不含显示名（改名零迁移，"(2)" 幽灵无从污染键空间）。
 // writeRecord/writeConfig 唯一合法调用方=SaveGate（唯一写入口纪律）；
 // 绑定表与记录覆写解耦——绑定混进记录 JSON 会被整体覆写丢失。
@@ -22,6 +23,8 @@ export const NAME_PREFIX = "mp:name:";
 export const CONFIG_KEY = "mp:config";
 /** 物品仓绑定表键前缀（独立键，写穿与记录覆写解耦） */
 export const BIND_PREFIX = "mp:store:bind:";
+/** 旧物品待迁标记键前缀（值=待迁格数）：写不进仓的 v2 物品键，升级/就绪后再导入 */
+export const LEGACY_PENDING_PREFIX = "mp:legacy:pending:";
 
 export class RecordStore {
   // ─── 身份 ──
