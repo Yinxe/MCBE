@@ -25,6 +25,7 @@ import {
 } from "../domain/VaultRules";
 import { botOf, botValid, inventoryContainer, rayHit, sleepTicks } from "./Atomic";
 import { botClickGuard } from "./ClickGuard";
+import { wielder } from "./Wielder";
 
 /** 宝库方块 ID（普通/不详共用，block state "ominous" 区分） */
 const VAULT_BLOCK = "minecraft:vault";
@@ -40,6 +41,8 @@ const NAVIGATE_TIMEOUT_TICKS = 600;
 const ARRIVE_DISTANCE = 2;
 /** 视线命中判定最大距离（格） */
 const VIEW_MAX_DIST = 8;
+/** 主手固定位（换持、选中与 useItemInSlotOnBlock 同口径） */
+const MAINHAND_SLOT = 0;
 
 /** 开箱交互回传（结果枚举 + 消耗后钥匙总量——成功播报数据源） */
 export interface VaultInteractOutcome {
@@ -209,9 +212,9 @@ export function vaultInteract(botId: number, target: Vec3, keyType: string): Vau
   }
   if (!kind) return { result: "target-gone", remaining: 0 };
 
-  // 主手（slot 0）换持选定钥匙（swapItems → 手动双写降级；钥匙在背包即可，
+  // 主手（slot 0）换持选定钥匙（与 slot 0 互换走 Wielder 双写回读；钥匙在背包即可，
   // 主手自动换）
-  if (!ensureMainhand(bot, keyType)) return { result: "no-key", remaining: 0 };
+  if (!ensureMainhand(botId, bot, keyType)) return { result: "no-key", remaining: 0 };
 
   // 交互前记录两种钥匙总量基准（交互后读到的已是消耗后的值）
   const baseline = countKeyTotal(bot);
@@ -329,71 +332,41 @@ function countKeyTotal(bot: SimulatedPlayer): number {
   }
 }
 
-/** 容器写侧结构化替身（2.8.0 的 setItem/swapItems 返回值按布尔成功语义用） */
-interface WriteableContainer {
-  getItem(slot: number): { typeId: string; amount: number } | undefined;
-  setItem(slot: number, item?: unknown): boolean;
-  swapItems(a: number, b: number): boolean;
-  size: number;
-}
-
 /**
- * 确保主手（slot 0）为选定钥匙，三级降级：已是 → true；swapItems(i,0)；
- * 失败 → 手动双写（读两槽 → setItem 互写，防丢物品；第二步失败回滚 slot0，
- * 回滚也失败即返回 false，绝不留下两格各一份钥匙）。全失败 false。
+ * 确保主手（slot 0）握选定钥匙：slot 0 已是 → 选中主手即成功；否则把第一个
+ * 选定钥匙格与 slot 0 经 wielder.swapSlots 互换（双 setItem + 写后回读指纹）。
+ * 交换成功与否以写后回读判定：Container.setItem/swapItems 官方返回 void
+ * （swapItems 还需第三参 otherContainer），把返回值当成功判据会把已写入的
+ * 钥匙拷贝误判为失败，留下 slot 0 与源格各一份钥匙（复制）。
+ * 未确认交换即返回 false，不再试下一格——避免在同一个不可靠容器上叠加写入。
+ * @param botId - 假人 id（wielder 寻址用）
+ * @param bot - 假人实体
+ * @param keyType - 选定钥匙 typeId
+ * @returns 主手已握选定钥匙（slot 0 回读为 keyType）
  */
-function ensureMainhand(bot: SimulatedPlayer, keyType: string): boolean {
-  const container = inventoryContainer(bot) as unknown as WriteableContainer | undefined;
+function ensureMainhand(botId: number, bot: SimulatedPlayer, keyType: string): boolean {
+  const container = inventoryContainer(bot);
   if (!container) return false;
   try {
-    const held = container.getItem(0);
-    if (held?.typeId === keyType) {
+    if (container.getItem(MAINHAND_SLOT)?.typeId === keyType) {
       selectMainhand(bot);
       return true;
     }
     for (let i = 0; i < container.size; i++) {
-      const item = container.getItem(i);
-      if (!item || item.typeId !== keyType) continue;
+      if (i === MAINHAND_SLOT) continue;
+      if (container.getItem(i)?.typeId !== keyType) continue;
+      let swapped = false;
       try {
-        if (container.swapItems(i, 0)) {
-          selectMainhand(bot);
-          return container.getItem(0)?.typeId === keyType;
-        }
+        swapped = wielder.swapSlots(botId, i, MAINHAND_SLOT) === "ok";
       } catch {
-        /* 落到手动双写 */
+        swapped = false;
       }
-      // 双写顺序：先钥匙入 slot0、成功再原 slot0 内容回 i。
-      // setItem(0,钥匙) 成功而 setItem(i,原物) 失败时 i 仍是钥匙、0 也是钥匙——
-      // 必须回滚 slot0（置回原物/清空）才能试下一槽；回滚也失败则不换持、返回 false。
-      const slot0 = container.getItem(0);
-      let movedIn = false;
-      try {
-        movedIn = container.setItem(0, item);
-      } catch {
-        movedIn = false;
-      }
-      if (!movedIn) continue;
-      let returned = false;
-      try {
-        returned = container.setItem(i, slot0);
-      } catch {
-        returned = false;
-      }
-      if (!returned) {
-        let restored = false;
-        try {
-          restored = container.setItem(0, slot0);
-        } catch {
-          restored = false;
-        }
-        if (!restored) {
-          console.warn(`[mockplayer3] 宝库换持回滚失败 bot=${bot.name}，钥匙留原位不换持`);
-          return false;
-        }
-        continue;
+      if (!swapped) {
+        console.warn(`[mockplayer3] 宝库换持未确认 bot=${bot.name} slot=${i}`);
+        return false;
       }
       selectMainhand(bot);
-      return container.getItem(0)?.typeId === keyType;
+      return container.getItem(MAINHAND_SLOT)?.typeId === keyType;
     }
     return false;
   } catch {
@@ -404,13 +377,13 @@ function ensureMainhand(bot: SimulatedPlayer, keyType: string): boolean {
 /** 选中主手位（slot 0，主手固定口径） */
 function selectMainhand(bot: SimulatedPlayer): void {
   try {
-    bot.selectedSlotIndex = 0;
+    bot.selectedSlotIndex = MAINHAND_SLOT;
   } catch {
     /* 瞬态失效——交互发起后自有回读验证兜底 */
   }
 }
 
-/** 手持钥匙右键使用于宝库（useItemInSlotOnBlock slot 0；视线命中面优先） */
+/** 手持钥匙右键使用于宝库（useItemInSlotOnBlock 主手固定位；视线命中面优先） */
 function useKeyOnVault(bot: SimulatedPlayer, target: Vec3): boolean {
   let face: Direction = Direction.Down;
   try {
@@ -420,7 +393,7 @@ function useKeyOnVault(bot: SimulatedPlayer, target: Vec3): boolean {
     /* 视线读取失败用兜底面 */
   }
   try {
-    return bot.useItemInSlotOnBlock(0, { x: target.x, y: target.y, z: target.z }, face);
+    return bot.useItemInSlotOnBlock(MAINHAND_SLOT, { x: target.x, y: target.y, z: target.z }, face);
   } catch {
     return false;
   }
