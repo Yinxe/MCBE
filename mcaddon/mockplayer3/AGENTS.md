@@ -43,7 +43,7 @@ This file provides guidance to the AI agent when working with code in this repos
 - 注视一律租约化（HOLD 带 TTL / AIM_ONCE 执行即中性化）（F-06）。
 - 容器不走右键，`minecraft:inventory` 组件直读直写 + 写后 2t 回读；interact 节流 ≥4t（F-12/F-13）。
 - tickingarea circle r=4 实占 49 列；早期禁 getBlock 探路（F-20）。
-- register 篡改游戏规则 → 回调内立即写回（F-21）；世界结构 `mockplayer:void` 由 BP structures 提供，勿删；GameTest 注册标识与测试维度名（`mockplayer:test`）沿用 v2 基线——存档装置命令方块写死旧标识，改名 runthis 复用必败。
+- register 篡改游戏规则 → 回调内即时写回 + 装置流程 `finally` **无条件**写回（F-21）；写的是**固定原版默认**（1/true/true，`engine/Rig` 的 `RIG_DEFAULT_RULES`），不读当前值也不回读——存档里的当前值可能已是上轮篡改值（读它等于继承锁死态），且多包并存时各包读到的当前值互相抢改。世界结构 `mockplayer:void` 由 BP structures 提供，勿删；GameTest 注册标识与测试维度名（`mockplayer:test`）沿用 v2 基线——存档装置命令方块写死旧标识，改名 runthis 复用必败。
 - tick 回调同步、短、无 await、无自旋（F-18）；长流程 = 相位机 + nextWakeAt 单一时钟（D-05）。
 
 ## 低版本兼容模式（无自定义维度 API，游戏 < 1.26.20）
