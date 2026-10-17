@@ -8,7 +8,11 @@
 //    → 校验维度（无效回退 normal）→ ticking area 常加载装置区块 → getBlock 探 0,0,0：
 //    在→命令方块位 gametest runthis 复用（失败则清空 0,0,0±8 范围后重建）；不在→y=-1 建 5x5 草坪后 run 物化。
 // 探测必须用 getBlock（世界初期命令不可用）；初始化结束即移除，之后由运行中的 GameTest 常驻。
-// 维度不可用（低版本无该 API / 注册失败）时直接返回：不注册 GameTest、不碰测试结构与 0,0,0，
+// 规则恢复不挂在成功路径上：GameTest 启动会篡改三条游戏规则，篡改值随存档落盘，启动成功、失败、
+// 抛错、回调未触发都可能留下脏值，故流程收尾（finally）无条件把三条规则写成固定默认值
+// （RIG_DEFAULT_RULES，见其注释为何取常量而不读当前值）；启动回调内的即时写回保留，
+// 把篡改窗口压在一个 tick 内。
+// 维度不可用（低版本无该 API / 注册失败）时直接返回：不注册 GameTest、不物化装置与测试结构，
 // 假人由模块级 spawnSimulatedPlayer 生成，物品仓走末地兼容锚点（见 domain/Compat）。
 
 import { BlockPermutation, system, world, type Dimension, type StartupEvent } from "@minecraft/server";
@@ -54,6 +58,13 @@ const GAMETEST_READY_DELAY_TICKS = 40;
 /** 装置物化失败重试次数 / 重试间隔（tick） */
 const MATERIALIZE_RETRY = 3;
 const MATERIALIZE_RETRY_DELAY_TICKS = 20;
+
+/**
+ * 游戏规则写回目标：基岩版原版默认（实测出厂值，改动需附证据）。
+ * 写成固定值而非读回存档当前值：GameTest 篡改值会随存档落盘，读当前值等于把上一轮的锁死态
+ * 当玩家设置继承；多版本共存时各包读到的"当前值"互相覆盖，只有统一常量才不互相抢改。
+ */
+const RIG_DEFAULT_RULES = { randomTickSpeed: 1, doDayLightCycle: true, doMobSpawning: true };
 
 // ─── 公开入口 ──
 
@@ -134,17 +145,19 @@ export function customDimensionFailure(): DimensionFailureInfo | null {
 /**
  * 初始化 GameTest 上下文：注册永续测试并启动。
  * 需在 registerTestDimension（startup）之后调用。
+ * 收尾（finally）无条件把三条游戏规则写成固定默认值——启动成功、启动失败、中途抛错、
+ * 回调根本没触发，四条路径都不把篡改值留在存档里。
  * @returns GameTest 是否就绪（true=可用，false=回退 normal）
  */
 export function initTestField(): Promise<boolean> {
   return new Promise((resolve) => {
     system.run(async () => {
+      let ready = false;
       try {
         // 维度不可用：不注册 GameTest、不物化装置——低版本下这些步骤全无意义
         if (!customDimensionAvailable()) {
           const failure = customDimensionFailure();
           console.info(`[mockplayer3] 测试维度不可用（${failure?.kind ?? "unknown"}），跳过测试装置与测试结构`);
-          resolve(false);
           return;
         }
 
@@ -154,22 +167,14 @@ export function initTestField(): Promise<boolean> {
           console.error(
             `[mockplayer3] 世界结构 ${STRUCTURE_ID} 缺失（BP structures/mockplayer3/void.mcstructure 未随包加载？），装置初始化中止`
           );
-          resolve(false);
           return;
         }
 
-        // 2. 保存当前游戏规则（GameTest 启动时会篡改它们）
-        const savedTick = world.gameRules.randomTickSpeed;
-        const savedDay = world.gameRules.doDayLightCycle;
-        const savedMob = world.gameRules.doMobSpawning;
-
-        // 3. 注册永续 GameTest（回调在测试启动时触发）
+        // 注册永续 GameTest（回调在测试启动时触发）
         register(CLASS, NAME, (test: Test) => {
           globalTest = test;
-          // 立即恢复游戏规则
-          world.gameRules.randomTickSpeed = savedTick;
-          world.gameRules.doDayLightCycle = savedDay;
-          world.gameRules.doMobSpawning = savedMob;
+          // 立即写回默认，把篡改窗口压在一个 tick 内（收尾再兜一次）
+          enforceDefaultRules("GameTest 启动回调");
           console.info("[mockplayer3] GameTest 上下文就绪");
         })
           .maxTicks(2_000_000_000)
@@ -178,25 +183,41 @@ export function initTestField(): Promise<boolean> {
         // 等待 GameTest 系统就绪（注册后立即 run 装置不生成）
         await delayTicks(GAMETEST_READY_DELAY_TICKS);
 
-        // 5. 启动测试（常加载装置区块 → 监测结构方块 → 复用/物化）
-        const started = await startGameTest();
-        if (!started) {
+        // 启动测试（常加载装置区块 → 监测结构方块 → 复用/物化）
+        ready = await startGameTest();
+        if (!ready) {
           globalTest = null;
           console.error("[mockplayer3] GameTest 启动失败，GameTest 不可用（chunkload 回退 normal）");
-          resolve(false);
-        } else {
-          resolve(true);
         }
       } catch (e: any) {
         globalTest = null;
+        ready = false;
         console.error(`[mockplayer3] GameTest 初始化失败: ${e?.message ?? e}`);
-        resolve(false);
+      } finally {
+        enforceDefaultRules("装置流程收尾");
+        resolve(ready);
       }
     });
   });
 }
 
 // ─── 私有方法 ──────────────────────────────────────────────
+
+/**
+ * 三条游戏规则写成固定默认值（F-21）：不读当前值、不回读校验——读与写都是多包并存时互相抢改的窗口。
+ * 整体 try-catch：世界初期 gameRules 不可用即整条跳过，另一处触发点（回调/收尾）仍会再写一次。
+ * @param why - 触发点，进日志区分即时恢复与收尾兜底
+ */
+function enforceDefaultRules(why: string): void {
+  try {
+    const rules = world.gameRules;
+    rules.randomTickSpeed = RIG_DEFAULT_RULES.randomTickSpeed;
+    rules.doDayLightCycle = RIG_DEFAULT_RULES.doDayLightCycle;
+    rules.doMobSpawning = RIG_DEFAULT_RULES.doMobSpawning;
+  } catch (e: any) {
+    console.warn(`[mockplayer3] 游戏规则写回失败（${why}）：${e?.message ?? e}`);
+  }
+}
 
 /** 延迟 N tick（promise 风格） */
 function delayTicks(ticks: number): Promise<void> {
