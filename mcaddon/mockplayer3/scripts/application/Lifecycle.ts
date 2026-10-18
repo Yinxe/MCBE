@@ -8,6 +8,7 @@
 // - 持久化经 SaveGate，实体触碰经 EntityOps/Spawner 原子（botId 寻址，跨层零句柄）；
 // - 每一步失败自清现场（断开/区域释放/状态回退），绝不留半吊子会话。
 
+import { system } from "@minecraft/server";
 import type { BotRecord, BotSwitches, HomePoint, WorkMode } from "../domain/Record";
 import { createRecord } from "../domain/Record";
 import type { Vec3 } from "../domain/Coords";
@@ -43,7 +44,8 @@ import type { WorkTransfer } from "./WorkTransfer";
 const RECONNECT_DELAY_TICKS = 20;
 /** respawn() 后实体就位的等待 */
 const RESPAWN_TAIL_TICKS = 20;
-
+/** 重启自动上线的延后（tick）：等世界与装置装配完再拉人 */
+const AUTO_ONLINE_DELAY_TICKS = 40;
 export class Lifecycle {
   /** 下线执行中标记（自己 disconnect 触发的 playerLeave 要忽略，避免重复下线） */
   private readonly offlineInFlight = new Set<number>();
@@ -235,6 +237,7 @@ export class Lifecycle {
     session.epoch = 1;
     this.runtime.transitTo(botId, "restored"); // ACTIVE
     record.declaredOnline = true;
+    record.resumeOnRestart = true; // 已上线：默认下次启动也恢复
     record.deathMark = false;
     this.saveGate.saveRecord(record);
     // 9. 模式重新挂载 + 回执（成功播报归调用方；此处只在模式恢复失败时提醒发起者，防静默降级）
@@ -344,6 +347,9 @@ export class Lifecycle {
     // 6. disconnect（名字异步释放，归还在下次仲裁）
     this.ops.disconnect(botId);
     record.declaredOnline = false;
+    // 只有玩家主动下线（命令/面板，cause=command）才取消"重启后恢复"；
+    // 玩家退出游戏、异常掉线、重连等非人为原因，下次进游戏照常拉回。
+    record.resumeOnRestart = cause !== "command";
     if (wasDying) record.deathMark = true;
     this.saveGate.saveRecord(record);
     // 7. 唯一 botOffline 通知
@@ -430,6 +436,7 @@ export class Lifecycle {
   private finalizeDeathOffline(botId: number, session: Session, record: BotRecord): void {
     record.deathMark = true;
     record.declaredOnline = false;
+    record.resumeOnRestart = true; // 死亡不是玩家意愿：重启后照常恢复
     this.runtime.transitTo(botId, "offline");
     this.runtime.destroySession(botId);
     this.saveGate.forgetSession(botId);
@@ -538,6 +545,7 @@ export class Lifecycle {
       this.mailbox.forget(botId);
       if (record) {
         record.declaredOnline = false;
+        record.resumeOnRestart = true; // 玩家退出游戏≠主动下线：重进照常恢复
         this.saveGate.saveRecord(record);
       }
       this.events.emit("botOffline", { botId, name: record?.name ?? playerName, cause: "abnormal" });
@@ -617,6 +625,10 @@ export class Lifecycle {
       declaredOnline: r.declaredOnline,
       deathMark: r.deathMark,
     }));
+    // 谁该在重启后自动回到线上：只有 resumeOnRestart=true 的假人——
+    // 即"因重启 / 玩家退出游戏 / 死亡"等非人为原因掉线的。
+    // 玩家自己主动下线的（resumeOnRestart=false）必须保持离线，不能替他拉回来。
+    const resumeIds = records.filter((r) => r.resumeOnRestart).map((r) => r.botId);
     for (const v of reconcileStartup(claims)) {
       const r = this.runtime.record(v.botId);
       if (!r) continue;
@@ -630,6 +642,27 @@ export class Lifecycle {
     console.warn(
       `[mockplayer3] 启动对账：记录 ${claims.length}，残留在线声明 ${declared}（死亡标注 ${claims.filter((c) => c.deathMark).length}）全部归一为离线`
     );
+    // 重启后自动上线（上游 v3 移除了该功能，按维护者要求加回）：延后一拍等世界/装置就绪，
+    // 逐个走系统流程（跳过权限校验，配额照旧生效），失败只留日志、不阻塞别的假人。
+    if (this.runtime.config.autoOnlineOnRestart) {
+      system.runTimeout(() => this.autoOnlineAll(resumeIds), AUTO_ONLINE_DELAY_TICKS);
+    }
+  }
+  /**
+   * 把「上次退出时还在线」的假人拉回线上（重启自动上线用；逐个独立，互不影响）。
+   * @param resumeIds - 允许自动上线的假人 id 名单；玩家手动下线的假人不在名单里
+   */
+  private autoOnlineAll(resumeIds: readonly number[]): void {
+    const viewer: Viewer = { key: "system", isOp: true };
+    for (const botId of resumeIds) {
+      const r = this.runtime.record(botId);
+      if (!r || this.runtime.session(botId)) continue;
+      void this.online(viewer, botId, true).then((res) => {
+        if (res.ok) console.warn(`[mockplayer3] 重启自动上线：${r.name}`);
+        else if (res.reason !== "上线/死亡处理进行中")
+          console.warn(`[mockplayer3] 重启自动上线跳过 ${r.name}：${res.reason}`);
+      });
+    }
   }
 
   // ─── 认领 / 改名 / 回收 / 恢复 ──

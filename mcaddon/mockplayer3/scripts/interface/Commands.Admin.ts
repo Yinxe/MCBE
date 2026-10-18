@@ -14,6 +14,7 @@ import { botOf, rayHit } from "../engine/Atomic";
 import { angler } from "../engine/Angler";
 import { containerOps } from "../engine/ContainerOps";
 import { RegionScanner, spotScanner } from "../engine/Scanner";
+import { probeWorkChest, workChests } from "../engine/WorkChests";
 import { dimensionOf, readBlockIn } from "../engine/Atomic";
 import { FISH_DIAG_MAX_STANDS, FISH_SCAN_Y_RADIUS, WATER_BLOCK_IDS, fishFailureLabel } from "../domain/FishingSpot";
 import { modeSpec } from "../domain/Catalog";
@@ -264,6 +265,99 @@ export const ADMIN_COMMANDS: CommandSpec[] = [
       }
       lines.push(`${color.gold}============================`);
       for (const l of lines) ctx.say(l);
+    },
+  },
+  {
+    name: "mp:fishstore",
+    description: "自动存入容器：把箱子登记并绑定给假人（之后渔获自动搬入，含搬运特效）；clear 解除",
+    usage: "mp:fishstore <假人> [坐标] | mp:fishstore <假人> clear",
+    permission: "admin",
+    args: [
+      { name: "bot", type: Param.String },
+      { name: "location", type: Param.Location, optional: true },
+      { name: "action", type: Param.String, optional: true },
+    ],
+    execute: (ctx, a) => {
+      const raw = String(a.bot ?? "").trim();
+      const botId = services.runtime.findBotIdByName(raw);
+      const record = botId === undefined ? undefined : services.runtime.record(botId);
+      if (!record) {
+        ctx.say(`${color.error}未找到假人「${raw}」的记录`);
+        return;
+      }
+      const act = String(a.action ?? "")
+        .trim()
+        .toLowerCase();
+      if (act === "clear") {
+        record.workChestId = null;
+        const ok = services.saveGate.saveRecord(record);
+        ctx.say(
+          ok
+            ? `${color.success}已解除自动存入：${color.playerName}${record.name}${color.success}（不再自动搬渔获）`
+            : `${color.error}保存失败，未解除`
+        );
+        return;
+      }
+      const at = ctx.coord(a.location, ctx.player.location);
+      const dimId = ctx.player.dimension.id;
+      const probe = probeWorkChest(dimId, at);
+      if (probe.status !== "ok") {
+        ctx.say(
+          probe.status === "not-chest"
+            ? `${color.error}这个位置不是普通木头箱子（木桶 / 陷阱箱不能当工作箱）`
+            : `${color.error}箱子所在区块读不到，请靠近箱子后再试`
+        );
+        return;
+      }
+      const prev = workChests.get(probe.chestId);
+      workChests.upsert({ id: probe.chestId, dimId, origin: probe.origin, name: prev?.name ?? "" });
+      record.workChestId = probe.chestId;
+      const ok = services.saveGate.saveRecord(record);
+      ctx.say(
+        ok
+          ? `${color.success}已设置自动存入：${color.playerName}${record.name}${color.success} → 箱子 ${color.info}${probe.origin.x},${probe.origin.y},${probe.origin.z}${color.success}（渔获会自动搬入）`
+          : `${color.error}保存失败，未设置`
+      );
+    },
+  },
+  {
+    name: "mp:fishlock",
+    description: "固定钓点：锁定假人下次选中的钓点（之后不再自动换点）；clear 解除固定",
+    usage: "mp:fishlock <假人> [clear]",
+    permission: "admin",
+    args: [
+      { name: "bot", type: Param.String },
+      { name: "action", type: Param.String, optional: true },
+    ],
+    execute: (ctx, a) => {
+      const raw = String(a.bot ?? "").trim();
+      const botId = services.runtime.findBotIdByName(raw);
+      const record = botId === undefined ? undefined : services.runtime.record(botId);
+      if (!record) {
+        ctx.say(`${color.error}未找到假人「${raw}」的记录`);
+        return;
+      }
+      const act = String(a.action ?? "")
+        .trim()
+        .toLowerCase();
+      if (act === "clear") {
+        record.fixedFishingSpot = null;
+        record.lockFishingSpot = false;
+        const ok = services.saveGate.saveRecord(record);
+        ctx.say(
+          ok
+            ? `${color.success}已解除固定钓点：${color.playerName}${record.name}${color.success}（恢复自动选点）`
+            : `${color.error}保存失败，固定钓点未解除`
+        );
+        return;
+      }
+      record.lockFishingSpot = true;
+      const ok = services.saveGate.saveRecord(record);
+      ctx.say(
+        ok
+          ? `${color.success}已请求固定钓点：${color.playerName}${record.name}${color.success} —— 假人下次选到钓点时会自动固定（解除：${color.info}/mp:fishlock ${record.name} clear${color.success}）`
+          : `${color.error}保存失败，请求未写入`
+      );
     },
   },
   {
