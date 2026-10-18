@@ -100,7 +100,7 @@ export interface ActionTypeDef {
   hint: string;
 }
 
-/** 动作类型目录（13 项 → 12 种动作类型） */
+/** 动作类型目录（16 项，对应 15 种 `ActionStep["type"]`：sneakOn/sneakOff 共用 sneak） */
 export const ACTION_TYPES: readonly ActionTypeDef[] = [
   {
     id: "moveTo",

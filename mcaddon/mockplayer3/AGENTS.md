@@ -56,29 +56,32 @@ This file provides guidance to the AI agent when working with code in this repos
 - 升级回正轨：`application/VaultRelocation`（走 `clock`，不另开定时器）启动后 40t 起每 2t 搬一个不在线假人，未就绪/在线的回队重试 ≤15 轮（常加载挂载是异步的，首轮必然未就绪），耗尽则下次启动再试。迁移单格语义：读源仓→写目标仓→全成功才改绑定表并清源槽，失败回滚目标仓副本、源数据一步不动；回滚/清源槽残留只记日志（占容量，不丢数据）。同时同步记录 `inventoryRef`。
 - 提示：`interface/CompatWarning` 装配期写 warn 日志 + 玩家入服私信一次，文案在 `domain/Compat.dimensionFailureNotice`；`EntityOps.importItems` 对"仓在测试维度、当前版本读不到"给专门说明（升级才可解，不是稍后重试）。
 
-## 自定义动作（custom；参考旧版 archive/mock-player 3.1.6 重写）
+## 长流程模式（script；取代自定义动作 custom）
 
 落位与分工：
 
-- `domain/ActionRules.ts`：动作表模型（12 种动作）/ 动作类型目录 / 文本规格解析 / 存档归一化 / 中文描述 / 上限常量。命令与面板共用同一份解析，不得各自解释。
+- `domain/ActionRules.ts`：指令模型 `ActionStep`（15 种 `type`）/ 动作类型目录 `ACTION_TYPES`（16 项，按 `cat` 分移动·等待·方块·交互·战斗·姿态·通信·流程）/ 文本规格解析 / 存档归一化 / 中文描述 / 上限常量（`MAX_ACTIONS=256`、`MAX_LOOP_COUNT=9999`）。命令与面板共用同一份解析，不得各自解释。
 - `domain/ActionCursor.ts`：执行游标（顺序 / 整段循环 / 跳转 / 连续跳转死循环护栏）——纯状态机，可离线单测。
 - `domain/ActionStatus.ts`：运行状态板（阶段/当前条/轮次/原因；进程内存活，删假人清）。
-- `engine/ActionStore.ts`：动作表落盘（独立 DP 键 `mp:action:<botId>`；读回归一化、空动作表删键、写入带 24KB 体积护栏）。
-- `engine/`：新增原子只有三个——`Mover.navigateFar`（长距离自动分段）、`Placer.placeAt`（按坐标放置）、`EntityOps.say/jump`（说话/跳）。其余全部复用既有原子（`breaker.breakAt`、`panelOps.useItemOnce`、`attacker.swing`、`gaze.forceLook`、`ops.setSneaking`）。
-- `application/ActionLibrary.ts`：动作表库——命令与面板的**唯一读写口**（读缓存 / 归一化写入 / 版本号 / 重跑请求 / 状态板）。
-- `application/Capabilities/CustomAction.ts`：常驻协程执行动作表；`tick` 只做看门狗（续 hands/motion 租约 + 存活检查），业务节拍全在协程的 await 里。
-- `interface/Commands.Action.ts`（`/mp:action`，动作枚举）与 `interface/Panels/Action.ts`（面板：整段文本编辑为主路径）。
+- `engine/ScriptStore.ts`：指令表落盘（独立 DP 键 `mp:script:<botId>`；读回归一化、空指令表删键、写入带 24KB 体积护栏）。
+- `engine/`：新增原子只有三个——`Mover.navigateFar`（长距离自动分段）、`Placer.placeAt`（按坐标放置）、`EntityOps.say/jump`（说话/跳）。其余全部复用既有原子（`breaker.breakAt/viewBlock`、`panelOps.useItemOnce`、`attacker.swing`、`gaze.forceLook/setBodyPose/stopHold`、`handler.interactSight`、`mover.stop`、`ops.setSneaking`）。
+- `application/ScriptLibrary.ts`：指令表库——命令与面板的**唯一读写口**（读缓存 / 归一化写入 / 版本号 / 停止请求 / 状态板）。
+- `application/Capabilities/Script.ts`（`id = "script"`）：常驻协程执行指令表；`tick` 只做看门狗（20t 续 hands/motion 租约 + 存活检查），业务节拍全在协程的 await 里（步进 1t、说话前 10t、挥击 4t）。
+- `interface/Commands.Script.ts`（`/mp:flow <假人> add|list|clear|loop|run|stop|status|dump|help`）与 `interface/Panels/Script.ts`（面板：分页每页 6 条，记住页码；坐标一个框填「X Y Z」，支持逗号与 `~` 相对，一律向下取整）。
 
 纪律：
 
-1. 运行态只有 `workMode === "custom"` 一个真源，不引入 `scriptRunning` 之类的第二标记。
-2. 重跑靠版本号（写入即 +1），执行器在**动作边界**换用新动作表重开；不要用轮询计数或内容指纹。
-3. 失败按动作表的 `onFail` 处理（停下并私信主人 / 跳过这个动作），**模式不自动切换**。
-4. 动作表落盘不许塞进 `BotRecord`（档案每次对账整条读写）；坏档一律过 `normalizeActions`。
-5. 坐标类动作不写坐标＝操作者当前所在格（面板与命令都传 `parseActionSpec` 的 `defaults`）；
-   可空坐标的动作留空仍是无坐标语义，不要顺手兜底。
+1. 运行态只有 `workMode === "script"` 一个真源，不引入 `scriptRunning` 之类的第二标记。
+2. 重跑靠版本号（写入即 +1），执行器在**指令边界**换用新表重开；不要用轮询计数或内容指纹。
+3. 失败按指令表的 `onFail` 处理（停下并私信主人 / 跳过这条），**模式不自动切换**。
+4. 指令表落盘不许塞进 `BotRecord`（档案每次对账整条读写）；坏档一律过 `normalizeActions`。
+5. 坐标类指令不写坐标＝操作者当前所在格（面板与命令都传 `parseActionSpec` 的 `defaults`）；
+   可空坐标的指令留空仍是无坐标语义，不要顺手兜底。
+6. 指令模型与规则复用 `domain/ActionRules`，不另立平行实现——两份规则是漂移之源。新表与旧 `mp:action:` 的唯一差别是存档键与界面。
 
-测试面：`tests/domain.ActionRules.test.ts`（解析/归一化/往返/描述）、`tests/domain.ActionCursor.test.ts`（顺序/循环/跳转/护栏）。
+存档兼容：旧 `custom` 模式经 `domain/Migrate.ts` 的 `normalizeLegacyWorkMode` 归一到 `script`（`"custom"`/`"自定义动作"` 两个旧写法都认）；读盘边界的 `Catalog.normalizeStoredWorkMode` 只负责目录外 id 回落 `none`，不管这件事。
+
+测试面：`tests/domain.ActionRules.test.ts`（解析/归一化/往返/描述/16 项目录）、`tests/domain.ActionCursor.test.ts`（顺序/循环/跳转/护栏）。
 
 ## 注释纪律（按正常项目写：只写事实，不写设计史）
 

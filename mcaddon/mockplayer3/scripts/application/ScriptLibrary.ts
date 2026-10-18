@@ -55,7 +55,7 @@ export class ScriptLibrary {
     this.bump(botId);
     return { ok: true };
   }
-  /** 追加一条指令（超上限拒收） */
+  /** 追加一条指令：达 MAX_ACTIONS 上限时返回失败原因，不写入 */
   appendStep(botId: number, step: ActionStep): ScriptWriteResult {
     const program = this.programOf(botId);
     if (program.steps.length >= MAX_ACTIONS) {
