@@ -119,6 +119,9 @@ export class Lifecycle {
   private doDelete(viewer: Viewer, botId: number): ActionResult {
     const record = this.runtime.record(botId);
     if (!record) return { ok: false, reason: "假人不存在" };
+    // 仓读不到时 takeAll 会读空仍销绑定 = 丢物；改期重试（区域记录已失的空引用不拦）
+    if (!this.ops.deleteVaultSafe(botId))
+      return { ok: false, reason: "物品仓区块未加载，删除会丢失仓内物品，请稍后再试" };
     // 仓内物品+经验交付操作者（takeAll 同时删绑定表——唯一槽位释放路径）；
     // 成功私信"回收自"明细，失败仅私信不阻断删除
     try {
@@ -137,6 +140,7 @@ export class Lifecycle {
     }
     this.saveGate.deleteRecord(botId);
     this.saveGate.releaseName(record.name);
+    this.ops.setVaultBlocked(botId, false); // 记录已删：清除本会话封锁残留
     // 区域立即释放（删除是确定意图，不留宽限；共享辅助名由队列自管不在此列）
     tickingAreas.release(singleChunkAreaName(botId), record.dimensionId);
     this.runtime.records.delete(botId);
@@ -184,6 +188,17 @@ export class Lifecycle {
       return { ok: false, reason: arb.reason };
     }
     // 3. 常加载不参与上线：共享辅助队列改在上线完成后步骤 10 异步入队
+    if (!this.pipelined(session)) {
+      this.abortOnline(botId, session, "上线被更高优先级事件接管");
+      return { ok: false, reason: "上线被更高优先级事件接管" };
+    }
+    // 3.5 物品仓预热：常加载是异步挂载，有绑定槽位的假人先等阵列区块就绪再生成，
+    //     避免"生成成功→导入失败→拆实体"的假上线；零槽位新假人零等待
+    const vaultGate = await this.ops.prepareVault(botId);
+    if (!vaultGate.ok) {
+      this.abortOnline(botId, session, vaultGate.reason);
+      return { ok: false, reason: vaultGate.reason };
+    }
     if (!this.pipelined(session)) {
       this.abortOnline(botId, session, "上线被更高优先级事件接管");
       return { ok: false, reason: "上线被更高优先级事件接管" };
@@ -285,6 +300,7 @@ export class Lifecycle {
     this.runtime.transitTo(botId, "abortSpawn");
     this.runtime.destroySession(botId);
     this.saveGate.forgetSession(botId);
+    this.ops.setVaultBlocked(botId, false); // 会话已拆：封锁随会话结束
     if (record) {
       record.declaredOnline = false;
       this.saveGate.saveRecord(record);
@@ -341,6 +357,7 @@ export class Lifecycle {
     this.runtime.transitTo(botId, "offline");
     this.runtime.destroySession(botId);
     this.saveGate.forgetSession(botId);
+    this.ops.setVaultBlocked(botId, false); // 会话已拆：封锁随会话结束
     // 6. disconnect（名字异步释放，归还在下次仲裁）
     this.ops.disconnect(botId);
     record.declaredOnline = false;
@@ -433,6 +450,7 @@ export class Lifecycle {
     this.runtime.transitTo(botId, "offline");
     this.runtime.destroySession(botId);
     this.saveGate.forgetSession(botId);
+    this.ops.setVaultBlocked(botId, false); // 会话已拆：封锁随会话结束
     this.mailbox.forget(botId);
     this.ops.disconnect(botId, session.entityId ?? undefined);
     tickingAreas.scheduleRelease(singleChunkAreaName(botId), record.dimensionId);
@@ -553,12 +571,12 @@ export class Lifecycle {
     // 真人进场的对账不在这里——playerJoin 时客户端还在加载屏（F-05），就绪拍另有其口。
     entityGateway.invalidate(botId); // 重加入实体已换新，缓存必废（F-05）
     // 引擎自发重连不经上线管线=空背包在线——对账职责在此收口，新躯体恢复物品/标签/经验/效果
-    void this.mailbox.post(botId, "restore", () => Promise.resolve(this.restoreRejoined(botId)));
+    void this.mailbox.post(botId, "restore", () => this.restoreRejoined(botId));
     // 无加入消息抑制 API——假人重连广播为已知差异（不改行为）
   }
 
   /** 重加入恢复（邮箱任务体；一切"非我方管线发起"的实体替换的唯一收敛点） */
-  private restoreRejoined(botId: number): ActionResult {
+  private async restoreRejoined(botId: number): Promise<ActionResult> {
     const session = this.runtime.session(botId);
     const record = this.runtime.record(botId);
     if (!session || !record) return { ok: true }; // 已离线/删除：启动对账兜底
@@ -569,9 +587,24 @@ export class Lifecycle {
     if (session.entityId && session.entityId !== bot.id) projectileTracker.trackOffline(session.entityId);
     session.entityId = bot.id; // 旧 id 不清——leave 回声过滤会挡新实体的离开事件
     projectileTracker.trackOnline(bot.id, record.name);
-    const imp = this.ops.importItems(botId);
+    // 新躯体的背包状态未知：先封仓写回，导入成功前任何导出都可能把空背包盖进旧仓
+    this.ops.setVaultBlocked(botId, true);
+    const gate = await this.ops.prepareVault(botId);
+    // 等待期间被死亡/下线/删除接管：让位（封锁随会话销毁解除）
+    if (this.runtime.session(botId) !== session || (session.state !== "ACTIVE" && session.state !== "WORKING"))
+      return { ok: true };
+    if (!entityGateway.resolveBot(botId)) return { ok: true };
+    const imp = gate.ok ? this.ops.importItems(botId) : gate;
     if (!imp.ok) {
-      console.warn(`[mockplayer3] 重连恢复物品失败 ${record.name}: ${imp.reason}`);
+      // fail-closed：不留在线的空壳（否则后续下线/死亡导出会覆盖仓）——直接下线待重试
+      console.warn(`[mockplayer3] 重连恢复物品失败 ${record.name}: ${imp.reason}（已保护性下线）`);
+      if (record.ownerKey)
+        this.ops.notifyPlayer(
+          record.ownerKey,
+          `假人 ${record.name} 重连后物品仓恢复失败：${imp.reason}；已保护性下线，请稍后重新上线`,
+          "warn"
+        );
+      await this.doOffline(botId, "abnormal");
       return { ok: false, reason: imp.reason };
     }
     this.ops.applyTags(botId, record.tags);
