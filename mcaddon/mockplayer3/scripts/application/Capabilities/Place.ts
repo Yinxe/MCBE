@@ -3,6 +3,8 @@
 // 视角绝不变化，每拍不发注视。
 // 能力常驻永不落空闲：启用后无限循环放置，主手空手/非方块、准星无目标、实体瞬态
 // 一律低频重探、补货即恢复；只有显式切模式/下线/死亡才卸载（与挖掘同口径）。
+// 主手槽耗尽时按最近一次主手方块 typeId 从背包补同种整叠（仅本模式），换好次拍恢复；
+// 从未握过方块的空手启动不猜物品，仍按空手低息重探。
 // 放置双拍发起—收口：一拍 beginPlace 进建造态，次拍 endPlace 停建造态并回读
 // （引擎需至少一拍建造态才落块，见 Placer 头注）；回读只决定节拍快慢，
 // 扣料与不覆盖既有方块的保证在放置原子内实现。
@@ -16,6 +18,7 @@ import type { Vec3 } from "../../domain/Coords";
 import { ACTION_HOLD_TTL_TICKS } from "../../domain/Leases";
 import { IDLE_RECHECK_TICKS, PLACE_INTERVAL_TICKS } from "../../domain/MineRules";
 import { placer } from "../../engine/Placer";
+import { wielder } from "../../engine/Wielder";
 import { ctxOf } from "./Common";
 
 /** 启动后首拍醒距（tick）：生成窗引擎逐 tick 锁回旋转，先缓冲再按视角放置（F-01） */
@@ -34,6 +37,8 @@ type PlacePhase = "LAY" | "STOP";
 interface PlaceCtx {
   /** 常规通道在途支撑格（null=无在途收口） */
   building: Vec3 | null;
+  /** 最近一次主手为可放置方块时的 typeId（主手耗尽后按它从背包补同种） */
+  blockTypeId?: string;
   /** 连续未落块次数（落一块即清零） */
   stall: number;
   /** 最近一次未落块原因标记（诊断日志用） */
@@ -76,6 +81,16 @@ export class PlaceCap implements Capability {
     }
     // LAY 发起拍：视角零改动；非方块主手不发起（无可写目标，直写会把非方块 typeId 当方块）
     const kind = placer.mainhandKind(botId);
+    if (kind === "block") {
+      const held = placer.mainhandTypeId(botId);
+      if (held !== undefined) ctx.blockTypeId = held;
+    } else if (kind === "empty" && ctx.blockTypeId !== undefined) {
+      // 主手耗尽：从背包补同种整叠，换好次拍恢复放置（补货不算停滞）
+      if (wielder.refillMainhand(botId, ctx.blockTypeId) === "ok") {
+        setPhase(session, 1, "LAY", now);
+        return;
+      }
+    }
     if (kind !== "block") {
       track(ctx, false, `mainhand=${kind}`, botId, now);
       setPhase(session, IDLE_RECHECK_TICKS, "LAY", now);

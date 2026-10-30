@@ -1,96 +1,55 @@
 # mockplayer3
 
-This file provides guidance to the AI agent when working with code in this repository.
+> 模拟玩家（假人）Addon。当前 `3.0.32`，显示名「模拟玩家III」，`module_name = "MockPlayer"`，`min_engine_version [1,21,130]`。
+> 架构、读码顺序、排障路径、新增能力步骤见仓库根 `.agents/skills/mcbe-addon-dev/SKILL.md` 和 `references/mockplayer3.md`；本文件只写模块身份与不可违反的事实。
 
-> 模拟玩家（假人）Addon，OOP 全新重写。
+## 模块红线
 
-## 分层与依赖纪律（机检级）
+- **版本**：只在用户明说“打包/发版”时改 `package.json#version`，且每次只 `+patch`；未经用户实机验收不得 `+0.1.0/+1.0.0`。
+- **日常验证**：`npx tsc --noEmit -p tsconfig.json` + `pnpm run test:core`。不要跑 `build`/`pack`，二者会通过 `update-version` 改写 manifest。`pnpm run local-deploy` 可增量部署；lint 排除 `lib/**`。
+- **包标识**：BP/RP 的 UUID、`module_name = "MockPlayer"`、structures `mockplayer:void`、测试维度 `mockplayer:test` 与 GameTest 注册标识均沿用 v2。DP 键实际存为 `MockPlayer:<键>`，改 `module_name` 会让迁移检测恒假；改 UUID 不解决数据读取。迁移完成前不得改。
+- **层级**：`domain` 零 `@minecraft`/`@yinxe`；`engine` 是唯一直接触碰 ScriptAPI 的层；`application` 不直接 import `@minecraft`，也不 import `interface`；`interface` 只翻译意图，不持有持久化写逻辑。
+- **入口**：`main.ts` 只装配；`Composition.ts` 是唯一跨层依赖图。新增单例走 `services`，不要在各处 `new`。
+- **局部约束**：`world.getPlayers`/`world.getEntity` 只允许出现在 `engine/EntityGateway.ts`；`@minecraft/server-gametest` 只允许出现在 `engine/`；`as any` 当前为零，确需绕行只能进 `engine/Compat.ts` 并注明原因。
 
-`scripts/` 四层：`domain/`（纯逻辑）→ `engine/`（唯一触碰 `@minecraft` 世界行为）→ `application/`（唯一有权改变世界状态的编排：生命周期/模式/调度/能力相位机）→ `interface/`（命令/面板/通知，只翻译意图）。`main.ts` 为 4-Phase 组合根。
+## 引擎事实（勿凭直觉改）
 
-- `domain/` 禁止 `@minecraft/*`、`@yinxe/*` import 与任何 IO——全部 `node:test` 可测。
-- `@minecraft/server-gametest` 仅 engine（Rig/Compat）。
-- `world.getPlayers/getEntity` 仅 `engine/EntityGateway.ts`。
-- `as any` 仅 `engine/Compat.ts`（每条注 F 编号台账）。
-- interface 不 import engine/domain 持久化；application 不反向依赖 interface。
+- GameTest 生成体旋转逐 tick 锁回 (0,-135)：装置只做中转出生 (0,8,0) → 立即 teleport 离开；装置几何/时序为实测结论。
+- `disconnect` 名字释放 ≥20t；撞名引擎会加 `(2)`，生成后必须验名。
+- `respawn()` 只能在 `entityDie` 的 before 回调内调用。
+- 假人生成自带空背包：恢复完成（`epoch ≥ 1`）前 SaveGate 拒绝一切物品/状态写。
+- 注视一律租约化；`gaze` HOLD 到期必须中性化，忘续租不能把视角焊死。
+- 容器不走右键：`minecraft:inventory` 组件直读直写 + 写后 2t 回读；interact 节流 ≥4t。
+- tickingarea circle r=4 实占 49 列；启动早期不要用 `getBlock` 探路。
+- register 篡改游戏规则 → 回调内即时写回 + 装置流程 `finally` 无条件写回固定原版默认（`RIG_DEFAULT_RULES`，1/true/true），不读当前值也不回读。
+- tick 回调同步、短、无 `await`、无自旋；长流程 = 相位机 + 单一时钟。
 
-## 版本与发版纪律（用户规格 2026-09-29，覆盖根 §5 在本模块的适用）
+## 低版本兼容（游戏 < 1.26.20，无自定义维度 API）
 
-- **版本号只在用户明说"打包/发版"时动**；日常修 bug、写功能、跑验证一律不改 `package.json#version`，也不改 `BP/RP manifest` 版本字段。
-- 动的时候**每次只 +patch（+0.0.1）npm version patch**；**未经用户实机验收通过，不得 +0.1.0/+1.0.0**——未验收的功能不占版本号。
-- 功能是否"验收通过"由用户判定，不由 agent 推断：agent 不得把"代码写完 + 离线测试绿"当作验收。
-- **禁用 `pnpm run build` 做日常验证**：它的 `update-version` 钩子会把 package.json 版本灌进 BP/RP manifest（release-only 副作用，实测污染过工作副本）。类型检查用 `npx tsc --noEmit -p tsconfig.json`，离线测试用 `pnpm run test:core`，两者都不碰版本字段。
+- 判据 `engine/Rig.customDimensionAvailable()`：startup 时 `event.dimensionRegistry` 不存在即不可用。
+- 不可用：`initTestField` 直接返回，不注册 GameTest；假人由 `engine/Spawner` 直生目标坐标。
+- 物品仓锚点：可用 = 测试维度 (16,0,16)；不可用 = 末地 (300000,0,300000)。`ItemVault.storageOf` 按绑定表严格寻址，找不到就判区域不可用，绝不回落。
+- 引擎地板 1.21.130（`world.tickingAreaManager`）；更低版本需先给存储层加不依赖 Manager 的加载路径。
+- v2 物品迁移逐格“写成功才删键”；写不进仓的格保留旧键并落 `mp:legacy:pending:<旧名>`，记录照迁。
+- 物品仓迁回：`application/VaultRelocation` 走 `clock`，40t 起每 2t 一个，≤15 轮；单格读源 → 写目标 → 全成功才改绑定表并清源槽。
+- 兼容提示：装配期 warn + 玩家入服私信一次，文案在 `domain/Compat.dimensionFailureNotice`。
 
-## 包标识与数据命名空间
+## 长流程模式（script，取代 custom）
 
-- BP/RP 的 header 与全部 module uuid 沿用 mockplayer v2 基线值：同 uuid 安装即替换旧包，旧包不会与新包共存（同世界如需回退验证，先导出旧包数据）。
-- script module 显式 `"module_name": "MockPlayer"`：世界动态属性(DP)按模块命名空间隔离，v2 数据键（`mockplayer:players:*`、`nds:item:*` 等）实际存储为 `MockPlayer:<键>`，命名空间不一致时新包 `getDynamicPropertyIds()` 枚举不到旧键，迁移检测恒假。缺省值取 BP 文件夹名，勿依赖缺省。
-- 迁移完成前不得改动以上任何标识；改 UUID 不解决数据读取，改 module_name 才解决。
+- 运行态只有 `workMode === "script"` 一个真源；旧 `custom` 由 `domain/Migrate.ts` 归一，不另设运行标志。
+- 指令模型、解析、归一化、中文描述都在 `domain/ActionRules.ts`；执行游标在 `domain/ActionCursor.ts`；状态板在 `domain/ActionStatus.ts`。
+- 读写口只有 `application/ScriptLibrary.ts`；落盘 `engine/ScriptStore.ts`（独立键 `mp:script:<botId>`，不塞进 `BotRecord`）。
+- 执行器 `application/Capabilities/Script.ts`（`id="script"`，租约 hands+motion）：`tick` 只看门狗，业务节拍在协程 `await` 内；重跑靠版本号在指令边界换表。
+- 入口：`/mp:flow <假人> add|list|clear|loop|run|stop|status|dump|help` 与 `Panels/Script.ts`。
+- 失败按 `onFail` 停下或跳过，不自动换模式；坐标留空＝操作者当前格，可空坐标留空仍是无坐标。
 
-## 命令
+## 注释纪律
 
-- `pnpm run build` / `pnpm run pack`（产出 `.mcaddon` 双包；BP→RP 依赖由 just.config `update-version` 在 release 时注入，工作副本 manifest 不带）。**二者均属发版动作，须用户明示**，见上节。
-- `pnpm run test:core`（`tsconfig.test.json` 编译 + `node --test`）。
-- `pnpm run local-deploy`（watch 增量部署）。
-- lint 面排除 `lib/**`（tsc 产物，注释指令会报 rule not found）。
+- 注释只写事实与约束（几何、时序、不变量、失败语义），不写设计史；台账只留 F-NN，缺NN 只进提交信息。
+- 一行一个事实，≤110 显示列；平实中文，细则与自检命令见 `SKILL.md`。
 
-## 关键引擎事实速查（详见 04-知识底座，勿凭直觉改）
+## 文档与测试
 
-- GameTest 生成体旋转逐 tick 锁回 (0,-135)：装置只做中转出生 (0,8,0) → 立即 teleport 离开（F-01/F-02）；装置几何/时序实测结论勿改（结构方块 (0,0,0)、注册→40t→tickingarea→runthis）。
-- disconnect 名字释放 ≥20t；撞名引擎加 `(2)` → 名字仲裁 + 生成后验名（F-03）。
-- `respawn()` 仅 entityDie before 回调内可调（F-04）。
-- 假人生成自带空背包：恢复（epoch 提交）前一切保存被 SaveGate 挡下（F-26/ADR-5）。
-- 注视一律租约化（HOLD 带 TTL / AIM_ONCE 执行即中性化）（F-06）。
-- 容器不走右键，`minecraft:inventory` 组件直读直写 + 写后 2t 回读；interact 节流 ≥4t（F-12/F-13）。
-- tickingarea circle r=4 实占 49 列；早期禁 getBlock 探路（F-20）。
-- register 篡改游戏规则 → 回调内即时写回 + 装置流程 `finally` **无条件**写回（F-21）；写的是**固定原版默认**（1/true/true，`engine/Rig` 的 `RIG_DEFAULT_RULES`），不读当前值也不回读——存档里的当前值可能已是上轮篡改值（读它等于继承锁死态），且多包并存时各包读到的当前值互相抢改。世界结构 `mockplayer:void` 由 BP structures 提供，勿删；GameTest 注册标识与测试维度名（`mockplayer:test`）沿用 v2 基线——存档装置命令方块写死旧标识，改名 runthis 复用必败。
-- tick 回调同步、短、无 await、无自旋（F-18）；长流程 = 相位机 + nextWakeAt 单一时钟（D-05）。
-
-## 低版本兼容模式（无自定义维度 API，游戏 < 1.26.20）
-
-- 判据 `engine/Rig.customDimensionAvailable()`：startup 时 `event.dimensionRegistry` 不存在即不可用（低版本该字段是 undefined，不抛错；类型面用 `DimensionRegistrySurface` 可选字段声明探测）；注册成功即可用，注册抛错或未观测到 startup 再探 `getDimension`。
-- 不可用时：`initTestField` 直接返回——不注册 GameTest、不动 0,0,0 测试结构；假人走 `engine/Spawner` 的模块级 `spawnSimulatedPlayer` 直生目标坐标（装置恒不就绪即这条直生路）。
-- 物品仓锚点二选一（`domain/Compat.storageAnchorFor`）：可用=测试维度 `TEST_DIMENSION_ID` (16,0,16)；不可用=末地 `minecraft:the_end` (300000,0,300000)。区域 id 含维度名；`ItemVault.storageOf` 按绑定表 regionId **严格寻址**——寻不到区域记录即判区域不可用，绝不回落当次锚点（旧 slotId 写进别的区域会错槽）。
-- 引擎地板 = **1.21.130**（`world.tickingAreaManager` 与 `TickingAreaOptions` 自该版本类型面才有，nbt-data-storage 与 `TickingAreas`/`Rig`/`Commands.Admin` 都靠它做常加载）。BP/RP `min_engine_version` 取 `[1,21,130]`；1.21.120–1.21.129 想支持必须先给存储层加不依赖 Manager 的加载路径。
-- v2 旧物品键：逐格"写成功才删键"。写不进仓（区域未就绪/仓满）的格保留键并落标记 `mp:legacy:pending:<旧名>`（值=格数），记录照迁；物品阶段与记录迁移解耦，只处理"本轮刚迁入记录"或"挂着标记"的名字，清扫跳过待迁名字——上一个成功迁移周期留下的陈旧残留仍按旧行为清扫（不复活旧物品）。
-- 升级回正轨：`application/VaultRelocation`（走 `clock`，不另开定时器）启动后 40t 起每 2t 搬一个不在线假人，未就绪/在线的回队重试 ≤15 轮（常加载挂载是异步的，首轮必然未就绪），耗尽则下次启动再试。迁移单格语义：读源仓→写目标仓→全成功才改绑定表并清源槽，失败回滚目标仓副本、源数据一步不动；回滚/清源槽残留只记日志（占容量，不丢数据）。同时同步记录 `inventoryRef`。
-- 提示：`interface/CompatWarning` 装配期写 warn 日志 + 玩家入服私信一次，文案在 `domain/Compat.dimensionFailureNotice`；`EntityOps.importItems` 对"仓在测试维度、当前版本读不到"给专门说明（升级才可解，不是稍后重试）。
-
-## 自定义动作（custom；参考旧版 archive/mock-player 3.1.6 重写）
-
-落位与分工：
-
-- `domain/ActionRules.ts`：动作表模型（12 种动作）/ 动作类型目录 / 文本规格解析 / 存档归一化 / 中文描述 / 上限常量。命令与面板共用同一份解析，不得各自解释。
-- `domain/ActionCursor.ts`：执行游标（顺序 / 整段循环 / 跳转 / 连续跳转死循环护栏）——纯状态机，可离线单测。
-- `domain/ActionStatus.ts`：运行状态板（阶段/当前条/轮次/原因；进程内存活，删假人清）。
-- `engine/ActionStore.ts`：动作表落盘（独立 DP 键 `mp:action:<botId>`；读回归一化、空动作表删键、写入带 24KB 体积护栏）。
-- `engine/`：新增原子只有三个——`Mover.navigateFar`（长距离自动分段）、`Placer.placeAt`（按坐标放置）、`EntityOps.say/jump`（说话/跳）。其余全部复用既有原子（`breaker.breakAt`、`panelOps.useItemOnce`、`attacker.swing`、`gaze.forceLook`、`ops.setSneaking`）。
-- `application/ActionLibrary.ts`：动作表库——命令与面板的**唯一读写口**（读缓存 / 归一化写入 / 版本号 / 重跑请求 / 状态板）。
-- `application/Capabilities/CustomAction.ts`：常驻协程执行动作表；`tick` 只做看门狗（续 hands/motion 租约 + 存活检查），业务节拍全在协程的 await 里。
-- `interface/Commands.Action.ts`（`/mp:action`，动作枚举）与 `interface/Panels/Action.ts`（面板：整段文本编辑为主路径）。
-
-纪律：
-
-1. 运行态只有 `workMode === "custom"` 一个真源，不引入 `scriptRunning` 之类的第二标记。
-2. 重跑靠版本号（写入即 +1），执行器在**动作边界**换用新动作表重开；不要用轮询计数或内容指纹。
-3. 失败按动作表的 `onFail` 处理（停下并私信主人 / 跳过这个动作），**模式不自动切换**。
-4. 动作表落盘不许塞进 `BotRecord`（档案每次对账整条读写）；坏档一律过 `normalizeActions`。
-5. 坐标类动作不写坐标＝操作者当前所在格（面板与命令都传 `parseActionSpec` 的 `defaults`）；
-   可空坐标的动作留空仍是无坐标语义，不要顺手兜底。
-
-测试面：`tests/domain.ActionRules.test.ts`（解析/归一化/往返/描述）、`tests/domain.ActionCursor.test.ts`（顺序/循环/跳转/护栏）。
-
-## 注释纪律（按正常项目写：只写事实，不写设计史）
-
-- 注释只陈述**事实与约束本身**——几何口径、时序、不变量、失败语义。不写复盘叙事、验收日期、「用户规格/实测 2026-…」、归档对位；引擎常量注明「实测值、改动需附证据」这类事实来源可以写。
-- 进注释的台账只有 **F-NN**（`04-知识底座` 引擎事实，可查）。`ADR-N`/`D-0N`/`FR-xxx`/`NFR-xxx`/`章§` 对就地阅读无信息量，一律不写；**缺NN 只进 `docs/mockplayer/11-…` 与提交信息，不进代码注释**。
-- 一行一个事实，每行 ≤110 显示列（汉字计 2 列）；不用 `**加粗**`、`⚠️`、圈号这类 markdown 装饰。
-- **平实中文优先**：不写只有作者本人懂的自造比喻（如"吃额度/翻篇/收摊/吞界面/挡门/串账"）；把状态压成单字账目 likewise 不算清楚（"贴靠账/失败账/在途账/出账"要写成"贴靠次数/失败次数/在途状态/移除"），缩写黑话（"黑标/只认/不认/拒收/前嫌/大赦"）要写成完整说法（"进黑名单/只看主手/引擎不认识/池不收/一并清除"）。唯一标准是没读过设计文档的新同事能否只看这一行就看懂；已可读的句子不要为了压指标重写。
-- 导出符号的 JSDoc 保留 `@param`/`@returns`/`@throws`（根 §10 规范），散文压到最短可读长度。
-- `// eslint-disable*`、`// @ts-*` 等指令注释是功能性的，逐字保留，不得改写或折行。
-- 自检：`git grep -nE '(ADR-[0-9]|D-0[0-9]|FR-[A-Z][0-9]+|缺[0-9]{2}|用户(规格|实测) ?20[0-9]|吃额度|翻篇|收摊|吞界面|挡门|串账|黑标|前嫌|大赦|(贴靠|失败|在途|节流|许可)账|出账|入账|只认主手|不认就|拒收)' -- scripts tests`，命中应全在字符串字面量里（管理员可见提示与测试名，另议）；注释内命中数为 0 才算干净。
-
-## 其他
-
-- 游戏内冒烟只做验收级（用户单次测试成本 5 分钟）；先离线核对 d.ts/知识底座再出包。
-- 功能增删须在 `docs/mockplayer/11-归档源码对齐差异审查.md` 记缺编号（缺NN），提交信息引用。
+- 功能语义变化同步 `docs/features/<功能>.md`（现有 13 篇）；功能增删在提交信息记「缺NN」。
+- 测试入口：`pnpm run test:core`；纯逻辑测试在 `tests/domain.*.test.ts`，模拟在 `tests/engine.*Sim.test.ts` / `tests/sim.*Sim.test.ts`。
+- 离线测试不代表实机验收；世界行为以游戏内冒烟为准，冒烟只做验收级。

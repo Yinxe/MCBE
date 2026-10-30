@@ -13,6 +13,9 @@ import { inventoryChanged } from "./Hooks";
 export type WieldResult =
   "ok" | "empty-hand" | "no-space" | "same-slot" | "bad-slot" | "offline" | "no-container" | "verify-failed";
 
+/** 同种补货结果：WieldResult 之外区分"手上已有物"（不动）与"背包无同种" */
+export type RefillResult = WieldResult | "hand-occupied" | "no-match";
+
 function digest(item: ItemStack | undefined): SlotDigest | null {
   return item ? { typeId: item.typeId, amount: item.amount } : null;
 }
@@ -74,6 +77,38 @@ export class Wielder {
     if (!ok) return "verify-failed";
     inventoryChanged(botId);
     return "ok";
+  }
+
+  /**
+   * 同种补货：主手为空时，从背包（含其它快捷栏槽位）找首个 typeId 相同的整叠换进主手。
+   * 主手已有物一律不动（绝不顶掉手上物品）；找不到同种返回 no-match。
+   * @param botId - 目标假人
+   * @param typeId - 要补进主手的物品类型
+   */
+  refillMainhand(botId: number, typeId: string): RefillResult {
+    const bot = botOf(botId);
+    if (!bot || !botValid(bot)) return "offline";
+    const container = inventoryContainer(bot);
+    if (!container) return "no-container";
+    const handSlot = this.safeSelectedSlot(bot);
+    let handItem: ItemStack | undefined;
+    try {
+      handItem = container.getItem(handSlot);
+    } catch {
+      return "offline";
+    }
+    if (handItem) return "hand-occupied";
+    for (let i = 0; i < Math.min(container.size, INVENTORY_SIZE); i++) {
+      if (i === handSlot) continue;
+      let item: ItemStack | undefined;
+      try {
+        item = container.getItem(i);
+      } catch {
+        continue;
+      }
+      if (item?.typeId === typeId) return this.setMainhand(botId, i);
+    }
+    return "no-match";
   }
 
   /**

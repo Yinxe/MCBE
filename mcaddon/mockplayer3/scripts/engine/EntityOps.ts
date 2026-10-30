@@ -20,6 +20,7 @@ import { isTestDimensionRegion, storageUnavailableReason } from "../domain/Compa
 import { asSimulated } from "./Compat";
 import type { SimulatedPlayer } from "@minecraft/server-gametest";
 import { entityGateway } from "./EntityGateway";
+import { clock } from "./Clock";
 import { customDimensionAvailable, customDimensionFailure } from "./Rig";
 import { itemEnchantments } from "./Atomic";
 import { ItemVault } from "./ItemVault";
@@ -114,6 +115,10 @@ export const FULL_RECLAIM: ReclaimSelection = {
 /** 热栏格数（0-8；主手选中格从热栏开关中摘出） */
 const HOTBAR_SIZE = 9;
 
+/** 上线前等待物品仓区块就绪：轮询间隔与上限（5s） */
+const VAULT_READY_POLL_TICKS = 5;
+const VAULT_READY_WAIT_TICKS = 100;
+
 /** 36 格归属判定：选中格=主手，其余 0-8=热栏，9-35=背包（三开关互不重叠） */
 function slotWanted(sel: ReclaimSelection, slot: number, handSlot: number): boolean {
   if (slot === handSlot) return sel.mainhand;
@@ -137,8 +142,19 @@ export class EntityOps {
   private readonly equipBaselines = new Map<string, string>();
   /** 仓不可写时的滞留导出（内存保物，仓可读后由 Scheduler 补写） */
   private readonly pendingExports = new Map<number, PendingExport>();
+  /**
+   * 恢复未完成的会话：禁止一切仓写回。
+   * 重连换躯体后先封写、导入成功才解封——否则空背包的任何导出都会反向覆盖旧仓。
+   */
+  private readonly vaultBlocked = new Set<number>();
 
   constructor(private readonly vault: ItemVault) {}
+
+  /** 设置/撤销某会话的仓写回封锁（重连恢复失败置位；恢复成功或会话销毁撤销） */
+  setVaultBlocked(botId: number, blocked: boolean): void {
+    if (blocked) this.vaultBlocked.add(botId);
+    else this.vaultBlocked.delete(botId);
+  }
 
   // ─── 解析与存在性 ──
 
@@ -360,6 +376,8 @@ export class EntityOps {
    * 仓区块未加载时不丢物：实体态快照滞留内存，由 Scheduler 补写。
    */
   exportItems(botId: number, knownEntityId?: string): OpResult {
+    // 恢复未完成：实体态可能是空壳，绝不落仓，也不建滞留快照（快照会在解封后覆盖旧仓）
+    if (this.vaultBlocked.has(botId)) return { ok: false, reason: "物品仓恢复未完成，本会话暂不写回" };
     const bot = this.entity(botId, knownEntityId);
     if (!bot) return { ok: false, reason: "实体不可达，无法导出物品" };
     const inv: (ItemStack | null)[] = [];
@@ -412,6 +430,43 @@ export class EntityOps {
   }
 
   /**
+   * 上线前置：等待物品仓区块就绪（有界）。
+   * ItemStorage.register/getRegion 只发起常加载，createTickingArea 异步（区块加载完才 resolve）；
+   * 注册后立刻探针必然 unknown。先在**生成实体之前**等区块落地，避免"生成成功→导入失败→拆实体"
+   * 的假上线；新假人零绑定槽位（且无滞留导出）不需要仓，零等待。
+   * @param botId - 假人 id
+   * @returns ok=仓可读或无需仓；false=超时，reason 可直接展示给玩家
+   */
+  async prepareVault(botId: number): Promise<OpResult> {
+    if (!this.vault.hasStoredSlots(botId) && !this.pendingExports.has(botId)) return { ok: true };
+    const bound = this.vault.getBinding(botId)?.regionId;
+    // 已知永久不可读（版本门禁/区域记录缺失）不空等，直接给可照做的原因
+    if (bound && ((isTestDimensionRegion(bound) && !customDimensionAvailable()) || !this.vault.hasRegion(bound)))
+      return { ok: false, reason: this.vaultUnavailableReason(botId) };
+    if (this.vault.regionReady(bound)) return { ok: true }; // 顺带触发懒注册与常加载挂载
+    for (let waited = 0; waited < VAULT_READY_WAIT_TICKS; waited += VAULT_READY_POLL_TICKS) {
+      await clock.sleep(VAULT_READY_POLL_TICKS);
+      if (this.vault.regionReady(bound)) return { ok: true };
+    }
+    return { ok: false, reason: this.vaultUnavailableReason(botId) };
+  }
+
+  /** 仓不可读的玩家可见原因（版本/记录缺失/注册失败/区块未加载分开说，便于照做） */
+  private vaultUnavailableReason(botId: number): string {
+    const bound = this.vault.getBinding(botId)?.regionId;
+    // 仓在测试维度的假人在低版本下读不到（升级才能解），与"这次区块没加载"要给不同说法
+    if (bound && isTestDimensionRegion(bound) && !customDimensionAvailable())
+      return "该假人的物品仓在测试维度，当前游戏版本读不到（需 1.26.20+ 且世界开启 Beta APIs）；升级后即可上线";
+    // 绑定指向的区域记录已失：永远等不到，重试无用
+    if (bound && !this.vault.hasRegion(bound))
+      return "物品仓区域记录缺失，无法读取物品（仓储记录可能被清理，请联系管理员）";
+    // 注册失败（首选与兼容锚点都没建起来）是安装级原因
+    const registerError = this.vault.lastRegisterError();
+    if (registerError) return storageUnavailableReason(customDimensionFailure(), registerError);
+    return "物品仓区块未加载：常加载未生效或世界尚未就绪（稍后重试；反复出现请检查常加载额度）";
+  }
+
+  /**
    * 冲写某假人的滞留导出（上线/回收/删除前置）。
    * @returns ok=无滞留或已落仓；false=区块仍不可读（调用方须改期，绝不带旧仓态继续）
    */
@@ -439,24 +494,13 @@ export class EntityOps {
       this.vault.hasStoredSlots(botId),
       this.vault.regionReady(this.vault.getBinding(botId)?.regionId)
     );
-    if (!verdict.allow) {
-      // 仓在测试维度的假人在低版本下读不到（升级才能解），与"这次区块没加载"要给不同说法
-      const boundRegion = this.vault.getBinding(botId)?.regionId;
-      if (boundRegion && isTestDimensionRegion(boundRegion) && !customDimensionAvailable())
-        return {
-          ok: false,
-          reason: "该假人的物品仓在测试维度，当前游戏版本读不到（需 1.26.20+ 且世界开启 Beta APIs）；升级后即可上线",
-        };
-      // 注册失败（首选与兼容锚点都没建起来）是安装级原因；区域已注册则只是区块未加载，稍后再试
-      const registerError = this.vault.lastRegisterError();
-      const reason = registerError
-        ? storageUnavailableReason(customDimensionFailure(), registerError)
-        : "物品仓区块未加载（世界尚未就绪），请稍后再上线";
-      return { ok: false, reason };
-    }
+    if (!verdict.allow) return { ok: false, reason: this.vaultUnavailableReason(botId) };
     const savedInv = this.vault.readInventory(botId);
     const savedEquip = this.vault.readEquipment(botId);
-    if (!savedInv && !savedEquip) return { ok: true }; // 无仓数据（新假人）
+    if (!savedInv && !savedEquip) {
+      this.vaultBlocked.delete(botId); // 仓可读且无数据：解除封锁
+      return { ok: true }; // 无仓数据（新假人）
+    }
     const bot = this.entity(botId);
     if (!bot) return { ok: false, reason: "实体不可达，无法导入物品" };
     const container = bot.getComponent("minecraft:inventory")?.container;
@@ -498,6 +542,7 @@ export class EntityOps {
         // 导入完成=实体与仓一致：装备指纹以仓态播种（防首轮复查把存量当变化重播）
         for (const name of EQUIP_SLOT_NAMES)
           this.equipBaselines.set(`${botId}:${name}`, equipFingerprint(savedEquip?.[name] ?? null));
+        this.vaultBlocked.delete(botId); // 导入完成：解除写回封锁
         return { ok: true };
       }
     }
@@ -513,6 +558,7 @@ export class EntityOps {
    */
   saveInventorySlotNow(botId: number, slot: number): void {
     if (slot < 0 || slot >= INVENTORY_SIZE) return;
+    if (this.vaultBlocked.has(botId)) return; // 恢复未完成：实体空壳不可写回
     // 仓区块未就绪：单格直写必然静默失败——转全量导出滞留内存由 Scheduler 补写
     if (!this.vault.regionReady(this.vault.getBinding(botId)?.regionId)) {
       this.exportItems(botId);
@@ -534,6 +580,7 @@ export class EntityOps {
    * entityHurt 触发：掉血未判死也算——护甲吸收同样耗耐久。
    */
   syncEquipmentDedup(botId: number): void {
+    if (this.vaultBlocked.has(botId)) return; // 恢复未完成：装备同理不可写回
     const equipComp = this.entity(botId)?.getComponent("minecraft:equippable");
     if (!equipComp) return;
     // 同 saveInventorySlotNow：区块未就绪时逐槽写必失败，转全量导出滞留补写
@@ -835,6 +882,17 @@ export class EntityOps {
       this.vault.hasStoredSlots(botId),
       this.vault.regionReady(this.vault.getBinding(botId)?.regionId)
     ).allow;
+  }
+
+  /**
+   * 删除前的仓可读判定：有绑定槽位时必须能读到阵列，
+   * 否则 takeAll 读空仍销绑定 = 仓内物品永久失联；空仓/区域记录已失（物品本不可寻）放行。
+   */
+  deleteVaultSafe(botId: number): boolean {
+    if (!this.vault.hasStoredSlots(botId)) return true;
+    const bound = this.vault.getBinding(botId)?.regionId;
+    if (!bound || !this.vault.hasRegion(bound)) return true;
+    return this.vault.regionReady(bound);
   }
 
   /** 滞留导出诊断（巡检/管理面板：哪些假人的物品还压在内存里） */

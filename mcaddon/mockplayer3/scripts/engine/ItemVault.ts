@@ -13,8 +13,12 @@ import { FALLBACK_STORAGE_ANCHOR, storageAnchorFor } from "../domain/Compat";
 import type { EquipSlotName, StorageBinding } from "../domain/Record";
 import { EQUIP_SLOT_NAMES, INVENTORY_SIZE } from "../domain/Record";
 import { planBindingCarry } from "../domain/StorageCarry";
+import { clock } from "./Clock";
 import type { RecordStore } from "./RecordStore";
 import { customDimensionAvailable } from "./Rig";
+
+/** 仓区常加载重挂最小间隔（tick）：容量不足时避免每次探活都刷告警 */
+const TICKING_RETRY_TICKS = 20;
 
 /** 兼容锚点对应的区域 id（与 ItemStorage 内部同一算法；只算 id，不触世界） */
 function fallbackRegionId(): string {
@@ -60,6 +64,8 @@ export class ItemVault {
   private fallbackInUse = false;
   /** 最近一次注册异常原文（成功注册后清空）；供上层生成玩家可见原因 */
   private registerError: string | null = null;
+  /** 上次重挂常加载的 tick（限频用；初值保证首探即挂） */
+  private lastTickingAttempt = -TICKING_RETRY_TICKS;
   /** 绑定表内存缓存（写穿独立 DP 键） */
   private readonly bindings = new Map<number, StorageBinding>();
 
@@ -183,6 +189,11 @@ export class ItemVault {
   /** 公开读绑定表（面板/迁移对账用） */
   getBinding(botId: number): StorageBinding | undefined {
     return this.bindings.get(botId) ?? this.store.loadBinding(botId);
+  }
+
+  /** 绑定区域在世界上是否可寻（区域记录存在；不判断区块是否加载） */
+  hasRegion(id: string): boolean {
+    return this.storageOf(id) !== undefined;
   }
 
   /** 采纳迁移产物绑定表（零复制——旧物品仍在原槽位，写穿独立键） */
@@ -403,15 +414,17 @@ export class ItemVault {
   /**
    * 区域当前可读可写吗（阵列所在区块已加载）。
    * probe 取槽位 0：unknown=未加载；empty/occupied/damaged=已加载（damaged 归巡检，不挡读写）。
-   * 常加载可能因容量不足/异步挂载未生效：重挂一次（幂等、同名去重），使重试可自愈。
+   * 常加载可能因容量不足/异步挂载未生效：限频重挂（幂等、同名去重），使重试可自愈又不刷日志。
    */
   private probeReady(region: StoredRegion): boolean {
     try {
-      if (region.probe(0) === "unknown") {
+      if (region.probe(0) !== "unknown") return true;
+      const now = clock.now();
+      if (now - this.lastTickingAttempt >= TICKING_RETRY_TICKS) {
+        this.lastTickingAttempt = now;
         region.ensureTickingArea();
-        return false;
       }
-      return true;
+      return false;
     } catch {
       return false;
     }

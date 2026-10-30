@@ -8,6 +8,7 @@
 // - 持久化经 SaveGate，实体触碰经 EntityOps/Spawner 原子（botId 寻址，跨层零句柄）；
 // - 每一步失败自清现场（断开/区域释放/状态回退），绝不留半吊子会话。
 
+import { system } from "@minecraft/server";
 import type { BotRecord, BotSwitches, HomePoint, WorkMode } from "../domain/Record";
 import { createRecord } from "../domain/Record";
 import type { Vec3 } from "../domain/Coords";
@@ -43,7 +44,8 @@ import type { WorkTransfer } from "./WorkTransfer";
 const RECONNECT_DELAY_TICKS = 20;
 /** respawn() 后实体就位的等待 */
 const RESPAWN_TAIL_TICKS = 20;
-
+/** 重启自动上线的延后（tick）：等世界与装置装配完再拉人 */
+const AUTO_ONLINE_DELAY_TICKS = 40;
 export class Lifecycle {
   /** 下线执行中标记（自己 disconnect 触发的 playerLeave 要忽略，避免重复下线） */
   private readonly offlineInFlight = new Set<number>();
@@ -119,6 +121,9 @@ export class Lifecycle {
   private doDelete(viewer: Viewer, botId: number): ActionResult {
     const record = this.runtime.record(botId);
     if (!record) return { ok: false, reason: "假人不存在" };
+    // 仓读不到时 takeAll 会读空仍销绑定 = 丢物；改期重试（区域记录已失的空引用不拦）
+    if (!this.ops.deleteVaultSafe(botId))
+      return { ok: false, reason: "物品仓区块未加载，删除会丢失仓内物品，请稍后再试" };
     // 仓内物品+经验交付操作者（takeAll 同时删绑定表——唯一槽位释放路径）；
     // 成功私信"回收自"明细，失败仅私信不阻断删除
     try {
@@ -137,6 +142,7 @@ export class Lifecycle {
     }
     this.saveGate.deleteRecord(botId);
     this.saveGate.releaseName(record.name);
+    this.ops.setVaultBlocked(botId, false); // 记录已删：清除本会话封锁残留
     // 区域立即释放（删除是确定意图，不留宽限；共享辅助名由队列自管不在此列）
     tickingAreas.release(singleChunkAreaName(botId), record.dimensionId);
     this.runtime.records.delete(botId);
@@ -188,6 +194,17 @@ export class Lifecycle {
       this.abortOnline(botId, session, "上线被更高优先级事件接管");
       return { ok: false, reason: "上线被更高优先级事件接管" };
     }
+    // 3.5 物品仓预热：常加载是异步挂载，有绑定槽位的假人先等阵列区块就绪再生成，
+    //     避免"生成成功→导入失败→拆实体"的假上线；零槽位新假人零等待
+    const vaultGate = await this.ops.prepareVault(botId);
+    if (!vaultGate.ok) {
+      this.abortOnline(botId, session, vaultGate.reason);
+      return { ok: false, reason: vaultGate.reason };
+    }
+    if (!this.pipelined(session)) {
+      this.abortOnline(botId, session, "上线被更高优先级事件接管");
+      return { ok: false, reason: "上线被更高优先级事件接管" };
+    }
     // 4/5. 装置生成 + 验名（引擎加 "(N)" 即销毁重试，绝不留幽灵）
     const out = await this.spawner.spawn({
       botId,
@@ -235,6 +252,7 @@ export class Lifecycle {
     session.epoch = 1;
     this.runtime.transitTo(botId, "restored"); // ACTIVE
     record.declaredOnline = true;
+    record.resumeOnRestart = true; // 已上线：默认下次启动也恢复
     record.deathMark = false;
     this.saveGate.saveRecord(record);
     // 9. 模式重新挂载 + 回执（成功播报归调用方；此处只在模式恢复失败时提醒发起者，防静默降级）
@@ -285,6 +303,7 @@ export class Lifecycle {
     this.runtime.transitTo(botId, "abortSpawn");
     this.runtime.destroySession(botId);
     this.saveGate.forgetSession(botId);
+    this.ops.setVaultBlocked(botId, false); // 会话已拆：封锁随会话结束
     if (record) {
       record.declaredOnline = false;
       this.saveGate.saveRecord(record);
@@ -341,9 +360,13 @@ export class Lifecycle {
     this.runtime.transitTo(botId, "offline");
     this.runtime.destroySession(botId);
     this.saveGate.forgetSession(botId);
+    this.ops.setVaultBlocked(botId, false); // 会话已拆：封锁随会话结束
     // 6. disconnect（名字异步释放，归还在下次仲裁）
     this.ops.disconnect(botId);
     record.declaredOnline = false;
+    // 只有玩家主动下线（命令/面板，cause=command）才取消"重启后恢复"；
+    // 玩家退出游戏、异常掉线、重连等非人为原因，下次进游戏照常拉回。
+    record.resumeOnRestart = cause !== "command";
     if (wasDying) record.deathMark = true;
     this.saveGate.saveRecord(record);
     // 7. 唯一 botOffline 通知
@@ -430,9 +453,11 @@ export class Lifecycle {
   private finalizeDeathOffline(botId: number, session: Session, record: BotRecord): void {
     record.deathMark = true;
     record.declaredOnline = false;
+    record.resumeOnRestart = true; // 死亡不是玩家意愿：重启后照常恢复
     this.runtime.transitTo(botId, "offline");
     this.runtime.destroySession(botId);
     this.saveGate.forgetSession(botId);
+    this.ops.setVaultBlocked(botId, false); // 会话已拆：封锁随会话结束
     this.mailbox.forget(botId);
     this.ops.disconnect(botId, session.entityId ?? undefined);
     tickingAreas.scheduleRelease(singleChunkAreaName(botId), record.dimensionId);
@@ -538,6 +563,7 @@ export class Lifecycle {
       this.mailbox.forget(botId);
       if (record) {
         record.declaredOnline = false;
+        record.resumeOnRestart = true; // 玩家退出游戏≠主动下线：重进照常恢复
         this.saveGate.saveRecord(record);
       }
       this.events.emit("botOffline", { botId, name: record?.name ?? playerName, cause: "abnormal" });
@@ -553,12 +579,12 @@ export class Lifecycle {
     // 真人进场的对账不在这里——playerJoin 时客户端还在加载屏（F-05），就绪拍另有其口。
     entityGateway.invalidate(botId); // 重加入实体已换新，缓存必废（F-05）
     // 引擎自发重连不经上线管线=空背包在线——对账职责在此收口，新躯体恢复物品/标签/经验/效果
-    void this.mailbox.post(botId, "restore", () => Promise.resolve(this.restoreRejoined(botId)));
+    void this.mailbox.post(botId, "restore", () => this.restoreRejoined(botId));
     // 无加入消息抑制 API——假人重连广播为已知差异（不改行为）
   }
 
   /** 重加入恢复（邮箱任务体；一切"非我方管线发起"的实体替换的唯一收敛点） */
-  private restoreRejoined(botId: number): ActionResult {
+  private async restoreRejoined(botId: number): Promise<ActionResult> {
     const session = this.runtime.session(botId);
     const record = this.runtime.record(botId);
     if (!session || !record) return { ok: true }; // 已离线/删除：启动对账兜底
@@ -569,9 +595,24 @@ export class Lifecycle {
     if (session.entityId && session.entityId !== bot.id) projectileTracker.trackOffline(session.entityId);
     session.entityId = bot.id; // 旧 id 不清——leave 回声过滤会挡新实体的离开事件
     projectileTracker.trackOnline(bot.id, record.name);
-    const imp = this.ops.importItems(botId);
+    // 新躯体的背包状态未知：先封仓写回，导入成功前任何导出都可能把空背包盖进旧仓
+    this.ops.setVaultBlocked(botId, true);
+    const gate = await this.ops.prepareVault(botId);
+    // 等待期间被死亡/下线/删除接管：让位（封锁随会话销毁解除）
+    if (this.runtime.session(botId) !== session || (session.state !== "ACTIVE" && session.state !== "WORKING"))
+      return { ok: true };
+    if (!entityGateway.resolveBot(botId)) return { ok: true };
+    const imp = gate.ok ? this.ops.importItems(botId) : gate;
     if (!imp.ok) {
-      console.warn(`[mockplayer3] 重连恢复物品失败 ${record.name}: ${imp.reason}`);
+      // fail-closed：不留在线的空壳（否则后续下线/死亡导出会覆盖仓）——直接下线待重试
+      console.warn(`[mockplayer3] 重连恢复物品失败 ${record.name}: ${imp.reason}（已保护性下线）`);
+      if (record.ownerKey)
+        this.ops.notifyPlayer(
+          record.ownerKey,
+          `假人 ${record.name} 重连后物品仓恢复失败：${imp.reason}；已保护性下线，请稍后重新上线`,
+          "warn"
+        );
+      await this.doOffline(botId, "abnormal");
       return { ok: false, reason: imp.reason };
     }
     this.ops.applyTags(botId, record.tags);
@@ -617,6 +658,10 @@ export class Lifecycle {
       declaredOnline: r.declaredOnline,
       deathMark: r.deathMark,
     }));
+    // 谁该在重启后自动回到线上：只有 resumeOnRestart=true 的假人——
+    // 即"因重启 / 玩家退出游戏 / 死亡"等非人为原因掉线的。
+    // 玩家自己主动下线的（resumeOnRestart=false）必须保持离线，不能替他拉回来。
+    const resumeIds = records.filter((r) => r.resumeOnRestart).map((r) => r.botId);
     for (const v of reconcileStartup(claims)) {
       const r = this.runtime.record(v.botId);
       if (!r) continue;
@@ -630,6 +675,27 @@ export class Lifecycle {
     console.warn(
       `[mockplayer3] 启动对账：记录 ${claims.length}，残留在线声明 ${declared}（死亡标注 ${claims.filter((c) => c.deathMark).length}）全部归一为离线`
     );
+    // 重启后自动上线（上游 v3 移除了该功能，按维护者要求加回）：延后一拍等世界/装置就绪，
+    // 逐个走系统流程（跳过权限校验，配额照旧生效），失败只留日志、不阻塞别的假人。
+    if (this.runtime.config.autoOnlineOnRestart) {
+      system.runTimeout(() => this.autoOnlineAll(resumeIds), AUTO_ONLINE_DELAY_TICKS);
+    }
+  }
+  /**
+   * 把「上次退出时还在线」的假人拉回线上（重启自动上线用；逐个独立，互不影响）。
+   * @param resumeIds - 允许自动上线的假人 id 名单；玩家手动下线的假人不在名单里
+   */
+  private autoOnlineAll(resumeIds: readonly number[]): void {
+    const viewer: Viewer = { key: "system", isOp: true };
+    for (const botId of resumeIds) {
+      const r = this.runtime.record(botId);
+      if (!r || this.runtime.session(botId)) continue;
+      void this.online(viewer, botId, true).then((res) => {
+        if (res.ok) console.warn(`[mockplayer3] 重启自动上线：${r.name}`);
+        else if (res.reason !== "上线/死亡处理进行中")
+          console.warn(`[mockplayer3] 重启自动上线跳过 ${r.name}：${res.reason}`);
+      });
+    }
   }
 
   // ─── 认领 / 改名 / 回收 / 恢复 ──

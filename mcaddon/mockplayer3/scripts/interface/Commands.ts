@@ -9,8 +9,7 @@ import { BEHAVIOR_COMMANDS } from "./Commands.Behavior";
 import { INSPECT_COMMANDS } from "./Commands.Inspect";
 import { UI_COMMANDS } from "./Commands.Ui";
 import { ADMIN_COMMANDS } from "./Commands.Admin";
-import { ACTION_COMMANDS } from "./Commands.Action";
-
+import { SCRIPT_COMMANDS } from "./Commands.Script";
 const GROUPS: CommandSpec[] = [
   ...LIFECYCLE_COMMANDS,
   ...NAVIGATION_COMMANDS,
@@ -18,7 +17,7 @@ const GROUPS: CommandSpec[] = [
   ...INSPECT_COMMANDS,
   ...UI_COMMANDS,
   ...ADMIN_COMMANDS,
-  ...ACTION_COMMANDS,
+  ...SCRIPT_COMMANDS,
 ];
 
 const HELP: CommandSpec = {

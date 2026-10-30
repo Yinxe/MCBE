@@ -115,6 +115,14 @@ export class Placer {
     return BLOCK_TYPE_IDS.has(held.typeId) ? "block" : "not-block";
   }
 
+  /** 主手物品 typeId（空手/读取瞬态 undefined；与 mainhandKind 同源读取，补货记忆用） */
+  mainhandTypeId(botId: number): string | undefined {
+    const bot = botOf(botId);
+    if (!bot || !botValid(bot)) return undefined;
+    const held = mainhandItem(bot);
+    return held ? held.typeId : undefined;
+  }
+
   /**
    * 往指定格放一个主手方块（脚本步骤用；不看准星，直接按支撑面落块）。
    * 判定：目标格非空→unchanged；主手不是方块→not-block；六邻无实心支撑→no-target；
