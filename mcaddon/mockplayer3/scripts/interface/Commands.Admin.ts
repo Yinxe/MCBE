@@ -7,7 +7,7 @@ import { color } from "@yinxe/toolkit";
 import { ItemStorage } from "@yinxe/nbt-data-storage";
 import { services } from "../Composition";
 import { Param, type CommandSpec } from "./CmdKit";
-import { TEST_DIMENSION, customDimensionFailure } from "../engine/Rig";
+import { TEST_DIMENSION, customDimensionFailure, restoreDefaultRules } from "../engine/Rig";
 import { tickingAreas } from "../engine/TickingAreas";
 import { breaker } from "../engine/Breaker";
 import { botOf, rayHit } from "../engine/Atomic";
@@ -51,6 +51,20 @@ function coordLine(p: Vec3): string {
 // ─── 目录 ──
 
 export const ADMIN_COMMANDS: CommandSpec[] = [
+  {
+    name: "mp:fixrule",
+    description: "手动写回默认游戏规则（randomTickSpeed=1、昼夜交替开、生物生成开；无需作弊）",
+    usage: "mp:fixrule",
+    permission: "admin",
+    execute: (ctx) => {
+      const ok = restoreDefaultRules();
+      ctx.say(
+        ok
+          ? `${color.success}已写回默认游戏规则：randomTickSpeed=1、昼夜交替开、生物生成开`
+          : `${color.error}游戏规则写回失败（世界尚未就绪？），详见控制台日志`
+      );
+    },
+  },
   {
     name: "mp:test",
     description: "传送到测试维度（默认 0 3 0，可指定坐标）",

@@ -143,6 +143,15 @@ export function customDimensionFailure(): DimensionFailureInfo | null {
 }
 
 /**
+ * 手动把三条游戏规则写回默认值（/mp:fixrule）：与装置流程共用同一份固定默认值。
+ * 不读当前值、不回读校验——读与写都是多包并存时互相抢改的窗口。
+ * @returns 写入未抛错返回 true；世界未就绪等异常返回 false
+ */
+export function restoreDefaultRules(): boolean {
+  return enforceDefaultRules("/mp:fixrule 手动修复");
+}
+
+/**
  * 初始化 GameTest 上下文：注册永续测试并启动。
  * 需在 registerTestDimension（startup）之后调用。
  * 收尾（finally）无条件把三条游戏规则写成固定默认值——启动成功、启动失败、中途抛错、
@@ -207,15 +216,18 @@ export function initTestField(): Promise<boolean> {
  * 三条游戏规则写成固定默认值（F-21）：不读当前值、不回读校验——读与写都是多包并存时互相抢改的窗口。
  * 整体 try-catch：世界初期 gameRules 不可用即整条跳过，另一处触发点（回调/收尾）仍会再写一次。
  * @param why - 触发点，进日志区分即时恢复与收尾兜底
+ * @returns 写入未抛错返回 true
  */
-function enforceDefaultRules(why: string): void {
+function enforceDefaultRules(why: string): boolean {
   try {
     const rules = world.gameRules;
     rules.randomTickSpeed = RIG_DEFAULT_RULES.randomTickSpeed;
     rules.doDayLightCycle = RIG_DEFAULT_RULES.doDayLightCycle;
     rules.doMobSpawning = RIG_DEFAULT_RULES.doMobSpawning;
+    return true;
   } catch (e: any) {
     console.warn(`[mockplayer3] 游戏规则写回失败（${why}）：${e?.message ?? e}`);
+    return false;
   }
 }
 
