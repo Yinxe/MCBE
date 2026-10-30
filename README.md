@@ -6,7 +6,7 @@
 
 | 显示名       | 包名                | 目录                             | 版本   | 说明                                 |
 | ------------ | ------------------- | -------------------------------- | ------ | ------------------------------------ |
-| 模拟玩家III  | `mockplayer3`       | `mcaddon/mockplayer3`            | 3.0.10 | 假人；四层架构、资源租约、能力相位机 |
+| 模拟玩家III  | `mockplayer3`       | `mcaddon/mockplayer3`            | 3.0.32 | 假人；四层架构、资源租约、能力相位机 |
 | 物品路由     | `item-route`        | `mcaddon/item-route`             | 0.1.20 | 仓库整理；六边形 `core/mc` 参考架构  |
 | 自动替换     | `auto-refill`       | `mcaddon/auto-refill`            | 2.2.0  | 消耗品补货 + 工具/武器自动切换       |
 | 合成配方扩展 | `craftablerarities` | `mcaddon/craftablerarities`      | 1.0.1  | 稀有方块/物品合成                    |

@@ -37,9 +37,10 @@ import {
 } from "../scripts/domain/ActionRules";
 import type { ActionProgram, ActionStep } from "../scripts/domain/ActionRules";
 
-test("动作·动作类型目录自洽：13 项、id 唯一、分类齐、关键词非空且与解析器对得上", () => {
-  assert.equal(ACTION_TYPES.length, 13);
-  assert.equal(new Set(ACTION_TYPES.map((m) => m.id)).size, 13, "id 唯一");
+test("动作·动作类型目录自洽：16 项、id 唯一、分类齐、关键词非空且与解析器对得上", () => {
+  // 16 = 上游 13 项 + 本分支整合进来的 moveHere（移动到此处）/ interact（交互）/ face（面向）
+  assert.equal(ACTION_TYPES.length, 16);
+  assert.equal(new Set(ACTION_TYPES.map((m) => m.id)).size, 16, "id 唯一");
   for (const m of ACTION_TYPES) {
     assert.ok(ACTION_CATEGORIES.includes(m.cat), `${m.id} 分类在目录里`);
     assert.ok(m.kw.length > 0, `${m.id} 有关键词`);

@@ -205,7 +205,16 @@ function setPhase(session: Session, delay: number, name: string, now: number): v
 - **持久化**：新键带模块前缀与 botId；读入归一化；跨版本“写成功才删旧键”；不把高频数据塞进整条读写的 `BotRecord`。
 - **装配**：新单例进 `Composition.ts` 的 `services`；不要在模块内各自 `new`，避免双写者。
 
-## 6. 验证与发版
+## 6. 代码与注释风格
+
+- 注释只写事实与约束（几何、时序、不变量、失败语义），不写设计史、复核日期或归档对位。
+- 台账只留可查的 F-NN；`ADR-N`/`D-0N`/`FR-xxx`/`NFR-xxx`/`章§` 不写，缺NN 只进提交信息。
+- 一行一个事实，≤110 显示列（汉字计 2 列）；不用加粗、emoji、圈号等装饰。
+- 平实中文：不自造比喻、不把状态压成单字账目；标准是没读过设计文档的人也能看懂。
+- 导出符号的 JSDoc 保留 `@param`/`@returns`/`@throws`；`// eslint-disable*`、`// @ts-*` 等功能性指令逐字保留。
+- 自检：`git grep -nE '(ADR-[0-9]|D-0[0-9]|FR-[A-Z][0-9]+|缺[0-9]{2}|用户(规格|实测) ?20[0-9]|吃额度|翻篇|收摊|吞界面|挡门|串账|黑标|前嫌|大赦|(贴靠|失败|在途|节流|许可)账|出账|入账|只认主手|不认就|拒收)' -- scripts tests`，命中的注释应为 0（字符串字面量与测试名除外）。
+
+## 7. 验证与发版
 
 ```bash
 npx tsc --noEmit -p mcaddon/<mod>/tsconfig.json

@@ -1,6 +1,6 @@
-// ─── 自定义动作能力（按动作表顺序执行；常驻异步协程 + 看门狗续租） ──────
+// ─── 长流程模式能力（按动作表顺序执行；常驻异步协程 + 看门狗续租） ──────
 // 分工：动作表模型与文本规格在 domain/ActionRules，执行游标（循环/跳转/死循环护栏）在
-// domain/ActionCursor，读写与版本在 application/ActionLibrary；本类只把动作落到引擎原子。
+// domain/ActionCursor，读写与版本在 application/ScriptLibrary；本类只把动作落到引擎原子。
 // tick 不做业务裁决（动作表节拍全在协程的 await 里），只续 hands/motion 租约并做存活检查。
 // 失败语义：按动作表的 onFail 停下（状态记 failed + 告知主人）或跳过该条继续；模式不自动切换。
 // 动作表被编辑或请求重跑 → 版本号变 → 协程在下一个动作边界换用新动作表重开一轮。
@@ -17,6 +17,7 @@ import { attacker } from "../../engine/Attacker";
 import { breaker } from "../../engine/Breaker";
 import { clock } from "../../engine/Clock";
 import { gaze } from "../../engine/Gaze";
+import { handler } from "../../engine/Handler";
 import { stopSwing } from "../../engine/Hands";
 import { mover } from "../../engine/Mover";
 import { placer } from "../../engine/Placer";
@@ -24,7 +25,7 @@ import { makeEnsureToolForBlock } from "../../engine/ToolKit";
 import type { NavOutcome } from "../../domain/NavRules";
 import type { EntityOps } from "../../engine/EntityOps";
 import type { PanelOps } from "../../engine/PanelOps";
-import type { ActionLibrary } from "../ActionLibrary";
+import type { ScriptLibrary } from "../ScriptLibrary";
 import type { Runtime } from "../Runtime";
 
 /** 每条之间的最小间隔（tick，防刷） */
@@ -58,16 +59,21 @@ type ActionStepOutcome = { status: "ok" } | { status: "fail"; message: string } 
 /** 整段结果 */
 type ActionsOutcome = "done" | "failed" | "cancelled" | "restart";
 
-export class CustomActionCap implements Capability {
-  readonly id = "custom" as const;
+export class ScriptCap implements Capability {
+  readonly id = "script" as const;
   private readonly ensureTool = makeEnsureToolForBlock(toolStrategyForBlock);
-
   constructor(
     private readonly runtime: Runtime,
-    private readonly library: ActionLibrary,
+    /** 指令表数据源（长流程模式的指令表库） */
+    private readonly library: ScriptLibrary,
     private readonly ops: EntityOps,
     private readonly panelOps: PanelOps
   ) {}
+
+  /** 模式中文名（日志与播报用） */
+  private get label(): string {
+    return "长流程模式";
+  }
 
   /** 动作表会走路也用手：预取 hands/motion（破坏逐格另领，与定点挖掘同口径） */
   requires(): LeaseRequest[] {
@@ -82,9 +88,13 @@ export class CustomActionCap implements Capability {
     const ctx: ActionCtx = {
       token: new CancelToken(),
       version: -1,
-      prefix: `[mockplayer3] 自定义动作 ${record.name}`,
+      prefix: `[mockplayer3] ${this.label} ${record.name}`,
     };
     cap.data[this.id] = ctx;
+    // ‼️ 每次挂载（含重启后自动上线、死亡复活、重新上线）都请求重跑一轮：
+    // 否则协程会拿"上次已跑过的版本号"判定成"跑过且没有新指令"而停在待命，
+    // 症状就是"上线后模式还在长流程模式、脚本却不继续做"（用户实测）。
+    this.library.requestRerun(session.botId);
     cap.phase = { name: "RUN", nextWakeAt: now + WATCHDOG_TICKS };
     // 常驻协程：永不 reject（内部逐段 catch），停机靠令牌
     void this.runLoop(session, ctx).catch((e: any) => {
@@ -127,6 +137,13 @@ export class CustomActionCap implements Capability {
   private async runLoop(session: Session, ctx: ActionCtx): Promise<void> {
     const botId = session.botId;
     while (!ctx.token.cancelled) {
+      // 停止请求：收工待命。**不动工作模式**——模式是玩家选的，停脚本 != 退出长流程模式
+      //（旧做法切模式回空闲，实测症状就是"跑完/失败后假人变回空闲模式"）。
+      if (this.library.stopRequested(botId)) {
+        ctx.version = this.library.versionOf(botId);
+        await sleepTicks(IDLE_RECHECK_TICKS, ctx.token);
+        continue;
+      }
       const program = this.library.programOf(botId);
       const version = this.library.versionOf(botId);
       if (program.steps.length === 0) {
@@ -135,7 +152,7 @@ export class CustomActionCap implements Capability {
           stepIndex: 0,
           total: 0,
           cycle: 0,
-          message: "还没有自定义动作",
+          message: `还没有${this.label}`,
           updatedAt: clock.now(),
         });
         await sleepTicks(IDLE_RECHECK_TICKS, ctx.token);
@@ -183,6 +200,8 @@ export class CustomActionCap implements Capability {
         });
         console.warn(`${ctx.prefix} 完成：${cursor.total} 条 × ${stop.cycle} 轮`);
         this.notifyOwner(session, `动作表已完成（${cursor.total} 条 × ${stop.cycle} 轮）`, "info");
+        // 跑完即收工：只把状态板置为「已完成」，面板按钮自然会变回「▶ 启动脚本」。
+        // ⚠️ 不要动工作模式——长流程模式是玩家选的，跑完一遍不该被踢回空闲模式。
         return "done";
       }
       if (stop.cycle !== lastCycle) {
@@ -227,7 +246,10 @@ export class CustomActionCap implements Capability {
     };
 
     switch (step.type) {
-      case "moveTo": {
+      // moveHere 与 moveTo 执行路径完全相同——区别只在"坐标从哪来"：moveHere 取的是
+      // 添加指令那一刻玩家的站位（静态快照），moveTo 是手填/解析得到的坐标。
+      case "moveTo":
+      case "moveHere": {
         const result = await mover.navigateFar(botId, { x: step.x, y: step.y, z: step.z }, { token: ctx.token });
         if (ctx.token.cancelled) return { status: "cancelled" };
         return result === "arrived"
@@ -315,6 +337,21 @@ export class CustomActionCap implements Capability {
         if (ctx.token.cancelled) return { status: "cancelled" };
         return this.ops.jump(botId) ? { status: "ok" } : { status: "fail", message: "假人不在场，跳不起来" };
       }
+      case "face": {
+        // 面向（合并自 mock-player 3.1.7）：把记录下来的镜头朝向直接套到假人身上
+        // （身体方向一次到位，朝向由 gaze 保持，不会被其它逻辑随手拉回）
+        gaze.setBodyPose(botId, step.yaw, step.pitch);
+        return { status: "ok" };
+      }
+      case "interact": {
+        // 交互（合并自 mock-player 3.1.7）：与准星射线命中的方块/实体交互一次
+        const r = handler.interactSight(botId);
+        if (r === "interacted" || r === "container") return { status: "ok" };
+        if (r === "busy") return { status: "fail", message: "交互过于频繁（两次间隔需 ≥4 tick）" };
+        if (r === "offline") return { status: "fail", message: "假人不可用（离线/失效）" };
+        if (r === "no-target") return { status: "fail", message: "视线 6 格内没有可交互的方块或实体" };
+        return { status: "fail", message: "交互失败" };
+      }
       case "jump":
         // 跳转由游标消化，不会作为待执行动作出现
         return { status: "ok" };
@@ -334,7 +371,9 @@ export class CustomActionCap implements Capability {
       message: reason,
       updatedAt: clock.now(),
     });
-    this.notifyOwner(session, `动作表第 ${stepNo}/${total} 条失败：${reason}（已停下，改好后再运行）`, "warn");
+    this.notifyOwner(session, `第 ${stepNo}/${total} 条失败：${reason}（已停下，改好后再运行）`, "warn");
+    // 失败也自动收工：状态板已置为 failed，面板按钮自然变回「▶ 启动脚本」。
+    // ⚠️ 同样不动工作模式——失败后玩家常要改指令重跑，把他踢回空闲模式是反效果。
   }
 
   private notifyOwner(session: Session, text: string, level: "info" | "warn" | "error"): void {
@@ -344,7 +383,7 @@ export class CustomActionCap implements Capability {
   }
 
   private ctxPrefix(session: Session): string {
-    return this.ctxOf(session)?.prefix ?? "[mockplayer3] 自定义动作";
+    return this.ctxOf(session)?.prefix ?? `[mockplayer3] ${this.label}`;
   }
 }
 

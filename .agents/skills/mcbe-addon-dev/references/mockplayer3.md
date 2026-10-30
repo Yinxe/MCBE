@@ -14,16 +14,16 @@
 
 ### domain（纯逻辑，零 `@minecraft`）
 
-| 文件                                 | 内容                                                                                          |
-| ------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `Record.ts`                          | `BotRecord`、`WorkMode`、开关、家点、配置形状                                                 |
-| `Catalog.ts`                         | 模式目录唯一真源：label/help/requiresLeases/tier/experimental；命令、面板、启用判定全由此派生 |
-| `Session.ts`                         | 在线会话：sessionId、epoch、entityId、leases、capability、dirty                               |
-| `Leases.ts`                          | 资源租约：gaze/motion/hands/breaking；HOLD/AIM_ONCE；TTL                                      |
-| `Capability.ts`                      | 能力契约：id/requires/start/tick/stop                                                         |
-| `State.ts`                           | 生命周期状态迁移表与冻结窗/可 tick 判定                                                       |
-| `Permissions.ts`                     | 主人/管理员/查看者判定                                                                        |
-| `ActionRules.ts` / `ActionCursor.ts` | 自定义动作的解析、归一化、执行游标                                                            |
+| 文件                                                     | 内容                                                                                          |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `Record.ts`                                              | `BotRecord`、`WorkMode`、开关、家点、配置形状                                                 |
+| `Catalog.ts`                                             | 模式目录唯一真源：label/help/requiresLeases/tier/experimental；命令、面板、启用判定全由此派生 |
+| `Session.ts`                                             | 在线会话：sessionId、epoch、entityId、leases、capability、dirty                               |
+| `Leases.ts`                                              | 资源租约：gaze/motion/hands/breaking；HOLD/AIM_ONCE；TTL                                      |
+| `Capability.ts`                                          | 能力契约：id/requires/start/tick/stop                                                         |
+| `State.ts`                                               | 生命周期状态迁移表与冻结窗/可 tick 判定                                                       |
+| `Permissions.ts`                                         | 主人/管理员/查看者判定                                                                        |
+| `ActionRules.ts` / `ActionCursor.ts` / `ActionStatus.ts` | 长流程指令模型、解析/归一化、执行游标、运行状态板                                             |
 
 ### engine（唯一直接调用 ScriptAPI）
 
@@ -40,7 +40,7 @@
 | `ProjectileTracker.ts`                                                           | 投掷物认主/绑定                                                           |
 | `Hooks.ts`                                                                       | engine → application 的副作用外发缝（报脏/领域事件）                      |
 | `Clock.ts`                                                                       | 单一时钟：`onTick` / `runTimeout`                                         |
-| `ActionStore.ts`                                                                 | 动作表独立落盘                                                            |
+| `ScriptStore.ts`                                                                 | 指令表独立落盘（`mp:script:<botId>`）                                     |
 
 ### application（决策与节拍）
 
@@ -52,7 +52,7 @@
 | `Scheduler.ts`      | 每 tick：租约过期 → WORKING 能力按 nextWakeAt 驱动 → 经验/滞留/存档冲刷  |
 | `Runtime.ts`        | 记录、会话、配置、运行时状态表                                           |
 | `WorkTransfer.ts`   | 作业中的物品/经验转移                                                    |
-| `ActionLibrary.ts`  | 自定义动作表的唯一读写口                                                 |
+| `ScriptLibrary.ts`  | 指令表唯一读写口（读缓存/归一化写入/版本号/停止请求/状态板）             |
 | `Capabilities/*.ts` | 各工作模式的相位机                                                       |
 
 ### interface（只翻译意图）
@@ -61,7 +61,7 @@
 | --------------------------------------------------- | ------------------------------------------------------ |
 | `Commands.ts`                                       | 聚合 `ALL_COMMANDS`                                    |
 | `CmdKit.ts`                                         | `CommandSpec`、参数/枚举注册、admin 权限包装、错误回显 |
-| `Commands.<Group>.ts`                               | 生命周期/行为/导航/检查/管理/动作/UI 命令组            |
+| `Commands.<Group>.ts`                               | 生命周期/行为/导航/检查/管理/长流程/UI 命令组          |
 | `Panels/`                                           | 面板；与命令共用 domain 解析                           |
 | `Notify.ts` / `ClaimReport.ts` / `CompatWarning.ts` | 通知、认主汇报、兼容提示                               |
 
@@ -136,18 +136,18 @@ Scheduler.tick(now)
 
 ## 能力清单
 
-| 模式        | 文件                           | 租约                    | 备注                                          |
-| ----------- | ------------------------------ | ----------------------- | --------------------------------------------- |
-| `mine`      | `Capabilities/Mine.ts`         | hands, breaking         | 定点挖掘，视角不动                            |
-| `place`     | `Capabilities/Place.ts`        | hands                   | LAY/STOP 双拍；主手耗尽按上次方块 typeId 补货 |
-| `attack`    | `Capabilities/Attack.ts`       | hands, motion           | 定点盲挥                                      |
-| `follow`    | `Capabilities/Follow.ts`       | motion                  | 距离带 3~128                                  |
-| `fishing`   | `Capabilities/Fishing.ts`      | gaze, hands, motion     | 共享钓点池                                    |
-| `wander`    | `Capabilities/Wander.ts`       | motion                  | 走停节律；路线协程结果回写槽位                |
-| `raid`      | `Capabilities/Raid.ts`         | hands                   | 施加袭击之兆                                  |
-| `vault`     | `Capabilities/Vault.ts`        | gaze, hands, motion     | 扫描/寻路/开宝库                              |
-| `custom`    | `Capabilities/CustomAction.ts` | hands, motion           | 动作表；tick 只看门狗                         |
-| `harvest_*` | `Capabilities/Harvest.ts`      | hands, breaking, motion | 对象即模式                                    |
+| 模式                            | 文件                      | 租约                    | 备注                                          |
+| ------------------------------- | ------------------------- | ----------------------- | --------------------------------------------- |
+| `mine`                          | `Capabilities/Mine.ts`    | hands, breaking         | 定点挖掘，视角不动                            |
+| `place`                         | `Capabilities/Place.ts`   | hands                   | LAY/STOP 双拍；主手耗尽按上次方块 typeId 补货 |
+| `attack`                        | `Capabilities/Attack.ts`  | hands, motion           | 定点盲挥                                      |
+| `follow`                        | `Capabilities/Follow.ts`  | motion                  | 距离带 3~128                                  |
+| `fishing`                       | `Capabilities/Fishing.ts` | gaze, hands, motion     | 共享钓点池                                    |
+| `wander`                        | `Capabilities/Wander.ts`  | motion                  | 走停节律；路线协程结果回写槽位                |
+| `raid`                          | `Capabilities/Raid.ts`    | hands                   | 施加袭击之兆                                  |
+| `vault`                         | `Capabilities/Vault.ts`   | gaze, hands, motion     | 扫描/寻路/开宝库                              |
+| `custom`（存档归一为 `script`） | `Capabilities/Script.ts`  | hands, motion           | 长流程指令表；tick 只看门狗                   |
+| `harvest_*`                     | `Capabilities/Harvest.ts` | hands, breaking, motion | 对象即模式                                    |
 
 ## 引擎原子契约
 
@@ -155,6 +155,7 @@ Scheduler.tick(now)
 - 返回值是结果联合，不抛异常；常见值：`ok | offline | no-container | no-slot | no-match | verify-failed | no-target | unchanged`。
 - 写后回读：容器/装备写后 1–2t 再校验；interact 节流 ≥4t；原子成功经 `Hooks` 报脏或发事件。
 - `Placer.beginPlace/endPlace` 必须成对；`Wielder.refillMainhand` 只换空主手槽，同 typeId 搜索整包。
+- 长流程专用原子：`Mover.navigateFar`、`Placer.placeAt`、`EntityOps.say/jump`；其余长流程动作复用既有原子。
 - 修改原子时保持“调用方只处理结果、不处理异常”的契约；新增失败分支要同时更新调用方分支与测试。
 
 ## 持久化键
@@ -162,7 +163,7 @@ Scheduler.tick(now)
 | 键                         | 内容                               |
 | -------------------------- | ---------------------------------- |
 | `mp:bot:<botId>`           | 假人档案                           |
-| `mp:action:<botId>`        | 自定义动作表（独立键，坏档归一化） |
+| `mp:script:<botId>`        | 长流程指令表（独立键，坏档归一化） |
 | `mp:item:<...>`            | 物品仓槽位                         |
 | `mp:config`                | 全局配置                           |
 | `mp:legacy:pending:<旧名>` | v2 物品迁移待处理标记              |
