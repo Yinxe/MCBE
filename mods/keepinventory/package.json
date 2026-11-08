@@ -32,7 +32,6 @@
   },
   "packing": {
     "mode": "auto",
-    "minimum_engine_version":[1,21,90],
     "output": "dist/packages"
   }
 }
