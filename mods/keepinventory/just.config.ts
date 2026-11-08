@@ -28,7 +28,7 @@ const bundleTaskOptions: BundleTaskParameters = {
   outputSourcemapPath: path.resolve(__dirname, "./dist/debug"),
 };
 const copyTaskOptions: CopyTaskParameters = {
-  copyToBehaviorPacks: [`./BP/${projectName}`],
+  copyToBehaviorPacks: [`./behavior_packs/${projectName}`],
   copyToScripts: ["./dist/scripts"],
 };
 const mcaddonTaskOptions: ZipTaskParameters = {
@@ -47,7 +47,7 @@ task("package", series("clean-collateral", "copyArtifacts"));
 task(
   "local-deploy",
   watchTask(
-    ["scripts/**/*.ts", "BP/**/*.{json,lang,tga,ogg,png}"],
+    ["scripts/**/*.ts", "behavior_packs/**/*.{json,lang,tga,ogg,png}"],
     series("clean-local", "build", "package")
   )
 );
@@ -62,7 +62,4 @@ task("synchronizePackVersions", () => {
 });
 
 // 唯一打包入口:产物形态由 package.json 的 packing.mode 决定。
-task(
-  "pack",
-  series("clean-build", "build", "synchronizePackVersions", createPackagesByMode(__dirname))
-);
+task("pack", series("clean-build", "build", "synchronizePackVersions", createPackagesByMode(__dirname)));

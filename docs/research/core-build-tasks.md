@@ -39,7 +39,7 @@ zipTask
 两个必须注意的行为:
 
 1. **`contents` 里的路径是「被加入的目录/文件」,不是压缩包内的路径前缀。** 目录内容会落在压缩包**根目录**,需要指定包内子路径时用 `targetPath`。
-   - 例:把 `BP/<name>` 加入 → `manifest.json` 在压缩包根目录(这是 Bedrock 要求的结构)。
+   - 例:把 `behavior_packs/<name>` 加入 → `manifest.json` 在压缩包根目录(这是 Bedrock 要求的结构)。
    - 例:把 `dist/scripts` 加入时用 `{ contents: [...], targetPath: "scripts" }` → 得到 `scripts/main.js`。
 2. **返回的 `TaskFunction` 会忽略传入的回调,直接返回 `Promise`。**
 
@@ -126,7 +126,7 @@ mcaddonTask({ copyToBehaviorPacks, copyToScripts, copyToResourcePacks?, outputFi
 node -e 'console.log(Object.keys(require("@minecraft/core-build-tasks")).join("\n"))'
 
 # 确认 zipTask 忽略回调(观察是否 hang / 报 did not complete)
-# 在 just.config.ts 里写: task("probe", () => zipTask("/tmp/probe.mcpack", [{contents:["./BP/x"]}])())
+# 在 just.config.ts 里写: task("probe", () => zipTask("/tmp/probe.mcpack", [{contents:["./behavior_packs/x"]}])())
 
 # 确认 --production 无消费者
 grep -rn "production" node_modules/@minecraft/core-build-tasks/lib/index.js

@@ -9,10 +9,10 @@ Minecraft Bedrock 行为包:玩家死亡后保留物品栏与经验。
 
 ## 兼容性与成就
 
-| Minecraft 版本 | 死亡不掉落生效 | 成就 |
-| --- | --- | --- |
-| 1.21.90 – 1.26.40 | 是 | 可获得 |
-| 1.26.50 及以上 | 是 | 被平台禁用 |
+| Minecraft 版本    | 死亡不掉落生效 | 成就       |
+| ----------------- | -------------- | ---------- |
+| 1.21.90 – 1.26.40 | 是             | 可获得     |
+| 1.26.50 及以上    | 是             | 被平台禁用 |
 
 > **已知平台限制(MCPE-242529)**
 >
@@ -42,7 +42,7 @@ Minecraft Bedrock 行为包:玩家死亡后保留物品栏与经验。
 
 ```text
 mods/keepinventory/
-├── BP/keepinventory/          # 行为包:manifest.json、pack_icon.png
+├── behavior_packs/keepinventory/  # 行为包:manifest.json、pack_icon.png
 ├── scripts/main.ts            # 脚本入口(编译打包为包内 scripts/main.js)
 ├── tools/packaging.ts         # 自定义打包逻辑(版本与最低游戏版本同步)
 ├── tools/generate-pack-icon.js # 图标生成脚本(像素画 → 128×128 PNG)
@@ -64,7 +64,7 @@ npm run local-deploy -w @mc-toolchain/keepinventory  # 监听改动并同步到�
 
 ### 行为包图标
 
-`BP/keepinventory/pack_icon.png` 是 128×128 RGBA 像素画图标,画面表达「玩家死亡(墓碑)但背包物品仍在(带绿色保护光晕的背包)」。
+`behavior_packs/keepinventory/pack_icon.png` 是 128×128 RGBA 像素画图标,画面表达「玩家死亡(墓碑)但背包物品仍在(带绿色保护光晕的背包)」。
 
 图标是**静态资源**,不在构建期生成,直接随包打包。需要调整构图时改脚本后重新生成:
 
@@ -80,6 +80,105 @@ npm run generate:icon -w @mc-toolchain/keepinventory
 mct validate -i mods/keepinventory
 ```
 
+### 使用 `mct` 工具
+
+本仓库是 monorepo,每个 `mods/<name>` 是独立的 `mct` 项目,各自有自己的 `behavior_packs/`、`resource_packs/`、`.env` 与构建配置。
+
+#### 校验
+
+```bash
+cd mods/keepinventory
+mct validate -i .        # 只校验当前模组
+
+cd ../..
+mct validate -i mods     # 逐个校验 mods/ 下每个模组,各自产出一份报告
+```
+
+**不要在仓库根直接跑不带 `-i` 的 `mct validate`**:它会把整个仓库当作单个项目,只产出一份合并报告。报告写入 `out/`(已 gitignore)。
+
+#### 新增内容
+
+```bash
+cd mods/keepinventory
+mct add basicUnitCubeBlock my_block -i . -o .
+```
+
+`-i` 与 `-o` 必须同时指向**当前模组目录**:
+
+| 调用                          | 结果                                                                                |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `-i . -o .`                   | ✅ 写入 `behavior_packs/keepinventory/`,清单按条目合并,`manifest.json` 的 UUID 不变 |
+| `-i .`(省略 `-o`)             | ❌ 在 `out/` 下新建 `contoso_*_bp` / `contoso_*_rp`,与既有包并存                    |
+| `-i mods -o mods`(指向父目录) | ❌ 内容被写进 `mods/` 下的**所有模组**                                              |
+
+两点需要注意:
+
+- 生成内容的命名空间恒为 `contoso_<输出目录名>`(如 `contoso_keepinve:`),需手工改为项目约定的命名空间。
+- `mct validate` 的 ERROR 计数**不包含未链接纹理**:若清单映射缺失,仍会报 0 ERROR,但 `UNLINK` 项会提示纹理未被引用。校验时需同时看 `UNLINK`。
+
+#### 只有行为包的模组需清理伪资源包
+
+本模组只有行为包(`manifest.json` 的 `modules` 只有 `script`,没有 `resources`)。在这种模组上执行 `mct add` 时,`mct` 找不到已注册的资源包,会新建一个 `resource_packs/contoso_<目录名>/`:
+
+```text
+resource_packs/contoso_keepinve/
+├── manifest.json        # 注意:modules 为空数组
+├── blocks.json
+├── texts/en_US.lang
+└── textures/...
+```
+
+它生成的 `manifest.json` 的 `modules` 是 `[]`,既不含 `data`/`script` 也不含 `resources`,因此 `pack` 会直接失败:
+
+```text
+Error: 无法从清单判定包类型:resource_packs/contoso_keepinve/manifest.json
+       (modules[].type 为 [],既不含 data/script 也不含 resources)
+```
+
+处理方式二选一:
+
+```bash
+# 方式一:丢弃资源(纯脚本模组不需要这些内容)
+rm -rf resource_packs
+
+# 方式二:保留资源,改名为正式资源包并补上 resources 模块
+mv resource_packs/contoso_keepinve resource_packs/keepinventory
+# 然后手工把 manifest.json 的 modules 改为:
+# [{ "description": "Resources", "type": "resources", "uuid": "<新生成>", "version": [1, 0, 0] }]
+```
+
+处理后 `pack` 恢复:方式一产出 `_bp.mcpack`,方式二产出 `.mcaddon`。这是 `mct` 的固有行为(模组有完整资源包时不会发生),不是本项目打包工具的问题。
+
+#### 新建模组
+
+```bash
+mct create <name> tsStarter mc-toolchain -o mods/<name>
+```
+
+`mct` 会把包目录命名为 `PROJECT_NAME` 的派生缩写(形如 `mctoolch_keepinv_bp`),不等于包名。生成后需手工对齐:
+
+```bash
+cd mods/<name>
+mv behavior_packs/mctoolch_* behavior_packs/<name>
+mv resource_packs/mctoolch_* resource_packs/<name>
+sed -i 's/^PROJECT_NAME=.*/PROJECT_NAME="<name>"/' .env
+```
+
+`.env` 的 `PROJECT_NAME` 必须与包目录名一致,否则 `just.config.ts` 中 `./behavior_packs/${projectName}` 会指向不存在的目录,打包取不到包。改名后 `mct` 的各命令仍正常作用于改名后的目录。
+
+#### 先看效果再决定时
+
+若需要先查看生成效果或手工挑选内容,可在 `mods/` **之外**建临时项目生成,再挑选内容移入:
+
+```bash
+mct create scratch tsStarter mc-toolchain -o /tmp/scratch -y
+cd /tmp/scratch && mct add basicUnitCubeBlock probe -i . -o .
+```
+
+移入时只取内容文件(定义文件、纹理、模型、语言文件),清单类文件(`blocks.json`、`terrain_texture.json`)按条目合并,并跳过临时项目的 `manifest.json` 与 `pack_icon.png`。临时目录不得放在 `mods/` 下,否则会被批量校验扫到。
+
+已确定要保留的内容,优先直接在模组目录用 `mct add -i . -o .` 生成,无需绕临时目录。
+
 ## 打包
 
 ```bash
@@ -92,21 +191,21 @@ npm run pack -w @mc-toolchain/keepinventory
 
 `package.json` 中的 `packing` 块整体可选,每个字段都有默认值:
 
-| 字段 | 默认值 | 说明 |
-| --- | --- | --- |
-| `mode` | `"auto"` | 产物形态:`auto` / `mcpack` / `mcaddon` |
-| `behavior_packs` | 自动探测 | 显式指定行为包目录(相对模组根目录) |
-| `resource_packs` | 自动探测 | 显式指定资源包目录(相对模组根目录) |
-| `output` | `"dist/packages"` | 产物输出目录(相对模组根目录) |
-| `minimum_engine_version` | 由 `@minecraft/server` 依赖版本推导 | 最低游戏版本,形如 `[1, 21, 90]` |
+| 字段                     | 默认值                              | 说明                                   |
+| ------------------------ | ----------------------------------- | -------------------------------------- |
+| `mode`                   | `"auto"`                            | 产物形态:`auto` / `mcpack` / `mcaddon` |
+| `output`                 | `"dist/packages"`                   | 产物输出目录(相对模组根目录)           |
+| `minimum_engine_version` | 由 `@minecraft/server` 依赖版本推导 | 最低游戏版本,形如 `[1, 21, 90]`        |
+
+包目录不可配置:行为包固定为 `behavior_packs/<name>`,资源包固定为 `resource_packs/<name>`。
 
 ### `mode` 与产物形态
 
-| `mode` | 探测到 1 个包 | 探测到 2 个包 |
-| --- | --- | --- |
-| `auto`(默认) | `<name>-v<version>_bp.mcpack` | `<name>-v<version>.mcaddon` |
-| `mcpack` | 该包的 `.mcpack` | `_bp.mcpack` 与 `_rp.mcpack` 各一个 |
-| `mcaddon` | 报错(提示改用 `mcpack`) | `<name>-v<version>.mcaddon` |
+| `mode`       | 探测到 1 个包                 | 探测到 2 个包                       |
+| ------------ | ----------------------------- | ----------------------------------- |
+| `auto`(默认) | `<name>-v<version>_bp.mcpack` | `<name>-v<version>.mcaddon`         |
+| `mcpack`     | 该包的 `.mcpack`              | `_bp.mcpack` 与 `_rp.mcpack` 各一个 |
+| `mcaddon`    | 报错(提示改用 `mcpack`)       | `<name>-v<version>.mcaddon`         |
 
 产物文件名统一为 `<name>-v<version>.<ext>`,其中 `<name>` 取自 `package.json#name` 的最后一段(如 `@mc-toolchain/keepinventory` → `keepinventory`),`<version>` 取自 `package.json#version`,所以 `0.0.1` 会产出 `keepinventory-v0.0.1_bp.mcpack`。
 
@@ -114,16 +213,18 @@ npm run pack -w @mc-toolchain/keepinventory
 
 ### 目录约定与包类型判定
 
-包目录可用缩写或全名两种写法,两者完全等价:
+包目录的顶层目录名固定为官方全名,**不提供缩写写法**:
 
-| 缩写 | 全名 |
-| --- | --- |
-| `BP/<name>/` | `behavior_packs/<name>/` |
-| `RP/<name>/` | `resource_packs/<name>/` |
+| 包     | 目录                     |
+| ------ | ------------------------ |
+| 行为包 | `behavior_packs/<name>/` |
+| 资源包 | `resource_packs/<name>/` |
 
-**包的类型以 `manifest.json` 为准**,不依赖目录名:`modules[].type` 含 `data` / `script` 判为行为包,含 `resources` 判为资源包。因此把资源包内容放进 `BP/` 也会被正确识别为资源包。
+这样固定的原因是为了与 `mct`(Minecraft Creator Tools)的布局一致:它的两个官方模板(`addonStarter` / `tsStarter`)都生成 `behavior_packs/` 与 `resource_packs/`,模板的 `tsconfig.json` 用 `"baseUrl":"behavior_packs/"`。使用 `BP/` / `RP/` 会让本项目的布局与 `mct` 的预期分叉,因此打包会在检测到这两个目录时直接报错并提示改名。
 
-未显式配置时,打包会扫描模组目录下含 `manifest.json` 的包目录(忽略 `node_modules`、`dist`、`lib`、`out`、`temp`、`.git`、`.vscode`)并按清单判定类型。同一类型命中多个包时报歧义错误,需用 `packing.behavior_packs` / `packing.resource_packs` 显式指定。
+**包的类型仍以 `manifest.json` 为准**,不依赖目录名:`modules[].type` 含 `data` / `script` 判为行为包,含 `resources` 判为资源包。
+
+打包在 `behavior_packs/` 与 `resource_packs/` 之下探测含 `manifest.json` 的包目录。同一类型命中多个包时报歧义错误,需只保留一个包目录。
 
 ### 版本同步
 
@@ -151,10 +252,10 @@ npm run pack -w @mc-toolchain/keepinventory
 
 模板保留了两个官方脚本,本模组的 `pack` 与它们互不干扰:
 
-| 脚本 | 实际行为 |
-| --- | --- |
-| `npm run mcaddon` | `clean-local` → `build` → `mcaddonTask`,产出 `dist/packages/<name>_bp.mcpack` 与 `<name>.mcaddon`(无资源包时会夹带一个空的 `_rp.mcpack`) |
-| `npm run mcaddon:production` | 与 `mcaddon` **完全相同** |
+| 脚本                         | 实际行为                                                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run mcaddon`            | `clean-local` → `build` → `mcaddonTask`,产出 `dist/packages/<name>_bp.mcpack` 与 `<name>.mcaddon`(无资源包时会夹带一个空的 `_rp.mcpack`) |
+| `npm run mcaddon:production` | 与 `mcaddon` **完全相同**                                                                                                                |
 
 `mcaddon:production` 的 `--production` 在本模板里没有任何实际作用:模板的 `just.config.ts` 从未读取 `argv().production`,`@minecraft/core-build-tasks` 5.5.0 也没有任何代码消费该标志(已实测:两者产物的解压内容逐字节一致,仅 zip 内时间戳不同)。真正控制产物形态的是 `bundleTask` 的 `minifyWhitespace` / `sourcemap` 等显式参数,而模板已把它们写死。
 
@@ -170,7 +271,7 @@ npm run pack -w @mc-toolchain/keepinventory
 
 行为包的下限为 Minecraft 1.21.90(`@minecraft/server` 2.0.0),因为实现依赖该版本首次提供的 `world.afterEvents.worldLoad`:
 
-- `BP/keepinventory/manifest.json` 的 `min_engine_version` 为 `[1, 21, 90]`
+- `behavior_packs/keepinventory/manifest.json` 的 `min_engine_version` 为 `[1, 21, 90]`
 - 脚本模块依赖为 `@minecraft/server` `[2, 0, 0]`
 - 只使用 `@minecraft/server` 2.0.0 起可用的 API
 

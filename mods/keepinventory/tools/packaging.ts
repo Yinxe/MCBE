@@ -19,10 +19,6 @@ export type PackType = "behavior" | "resource";
 export interface PackingConfiguration {
   /** 产物形态;`auto` 依据探测到的包数量自动决定 */
   mode: PackingMode;
-  /** 显式指定的行为包目录(相对模组根目录),缺省时按清单文件探测 */
-  behaviorPacks?: string;
-  /** 显式指定的资源包目录(相对模组根目录),缺省时按清单文件探测 */
-  resourcePacks?: string;
   /** 产物输出目录(相对模组根目录) */
   output: string;
   /**
@@ -45,8 +41,6 @@ interface PackageJson {
   version: string;
   packing?: {
     mode?: PackingMode;
-    behavior_packs?: string;
-    resource_packs?: string;
     output?: string;
     minimum_engine_version?: number[];
   };
@@ -75,14 +69,20 @@ const DEFAULT_PACKING_MODE: PackingMode = "auto";
 const DEFAULT_OUTPUT_DIRECTORY = "dist/packages";
 const SUPPORTED_PACKING_MODES: PackingMode[] = ["auto", "mcpack", "mcaddon"];
 
+/** 行为包的官方顶层目录名;与 `mct` 模板一致,不可配置 */
+const BEHAVIOR_PACKS_DIRECTORY = "behavior_packs";
+
+/** 资源包的官方顶层目录名;与 `mct` 模板一致,不可配置 */
+const RESOURCE_PACKS_DIRECTORY = "resource_packs";
+
+/** 已被废弃的缩写目录名,出现时报错并提示改名 */
+const LEGACY_PACK_DIRECTORY_NAMES: Record<string, string> = {
+  BP: BEHAVIOR_PACKS_DIRECTORY,
+  RP: RESOURCE_PACKS_DIRECTORY,
+};
+
 /** `packing` 块支持的字段名;出现其它字段时报错,避免拼写错误被静默当成「未配置」 */
-const SUPPORTED_PACKING_KEYS = new Set([
-  "mode",
-  "behavior_packs",
-  "resource_packs",
-  "output",
-  "minimum_engine_version",
-]);
+const SUPPORTED_PACKING_KEYS = new Set(["mode", "output", "minimum_engine_version"]);
 
 /** 脚本 API 模块名,最低游戏版本的推导来源 */
 const SCRIPT_API_MODULE_NAME = "@minecraft/server";
@@ -128,9 +128,6 @@ const SCRIPT_API_VERSION_MAPPINGS: ScriptApiVersionMapping[] = [
   { scriptApiVersion: "1.12.0", minimumEngineVersion: [1, 21, 20] },
   { scriptApiVersion: "1.11.0", minimumEngineVersion: [1, 21, 0] },
 ];
-
-/** 探测包目录时跳过的目录名,它们不是附加内容包 */
-const PACK_DIRECTORY_IGNORELIST = new Set(["node_modules", "dist", "lib", "out", "temp", ".git", ".vscode"]);
 
 /** 判定为行为包的模块类型 */
 const BEHAVIOR_PACK_MODULE_TYPES = new Set(["data", "script"]);
@@ -314,8 +311,6 @@ export function resolvePackingConfiguration(projectRoot: string): PackingConfigu
   }
   return {
     mode,
-    behaviorPacks: packing.behavior_packs,
-    resourcePacks: packing.resource_packs,
     output: packing.output ?? DEFAULT_OUTPUT_DIRECTORY,
     minimumEngineVersion: resolveMinimumEngineVersion(packageJson),
   };
@@ -351,59 +346,46 @@ export function detectPackType(manifestPath: string): PackType {
 }
 
 /** 收集模组根目录下可能为包目录的候选(最多向下两层,跳过忽略列表) */
-function collectCandidatePackDirectories(projectRoot: string): string[] {
+function collectCandidatePackDirectories(projectRoot: string, containerName: string): string[] {
+  const containerDirectory = path.join(projectRoot, containerName);
+  if (!fs.existsSync(containerDirectory) || !fs.statSync(containerDirectory).isDirectory()) {
+    return [];
+  }
   const candidates: string[] = [];
-  const considerDirectory = (directory: string): void => {
-    if (fs.existsSync(path.join(directory, "manifest.json"))) {
-      candidates.push(directory);
-    }
-  };
-  const isIgnored = (name: string): boolean => name.startsWith(".") || PACK_DIRECTORY_IGNORELIST.has(name);
-
-  for (const entry of fs.readdirSync(projectRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || isIgnored(entry.name)) {
+  for (const entry of fs.readdirSync(containerDirectory, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) {
       continue;
     }
-    const topLevelDirectory = path.join(projectRoot, entry.name);
-    considerDirectory(topLevelDirectory);
-    // 兼容 BP/<name>/manifest.json 这类「分类目录 + 包目录」两层布局
-    for (const nested of fs.readdirSync(topLevelDirectory, { withFileTypes: true })) {
-      if (nested.isDirectory() && !isIgnored(nested.name)) {
-        considerDirectory(path.join(topLevelDirectory, nested.name));
-      }
+    const directory = path.join(containerDirectory, entry.name);
+    if (fs.existsSync(path.join(directory, "manifest.json"))) {
+      candidates.push(directory);
     }
   }
   return candidates;
 }
 
-/** 按显式配置解析某类包目录,并校验其存在且清单类型相符 */
-function resolveExplicitPackDirectory(
-  projectRoot: string,
-  configuredPath: string,
-  expectedType: PackType,
-  configurationKey: string
-): string {
-  const absolutePath = path.resolve(projectRoot, configuredPath);
-  if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isDirectory()) {
-    throw new Error(`${configurationKey} 指向的目录不存在:${configuredPath}(解析为 ${absolutePath})。`);
+/**
+ * 检测遗留的缩写包目录(`BP` / `RP`)并报错。
+ *
+ * 仅检查模组根目录下的字面目录名:包目录内层可以叫任意名字,
+ * 不参与顶层名校验。
+ */
+function assertNoLegacyPackDirectories(projectRoot: string): void {
+  for (const [legacyName, officialName] of Object.entries(LEGACY_PACK_DIRECTORY_NAMES)) {
+    const legacyDirectory = path.join(projectRoot, legacyName);
+    if (fs.existsSync(legacyDirectory) && fs.statSync(legacyDirectory).isDirectory()) {
+      throw new Error(
+        `仅支持官方全名包目录 ${BEHAVIOR_PACKS_DIRECTORY} / ${RESOURCE_PACKS_DIRECTORY},` +
+          `检测到 ${legacyName}/。请把 ${legacyName}/<name> 改名为 ${officialName}/<name>。`
+      );
+    }
   }
-  const detectedType = detectPackType(path.join(absolutePath, "manifest.json"));
-  if (detectedType !== expectedType) {
-    throw new Error(
-      `${configurationKey} 指向的目录 ${configuredPath} 的清单判定为` +
-        `${detectedType === "behavior" ? "行为包" : "资源包"},与配置的类型不符。`
-    );
-  }
-  return absolutePath;
 }
 
-/** 按清单文件探测某类包目录;同类型命中多个时报歧义错误 */
-function detectPackDirectory(
-  projectRoot: string,
-  expectedType: PackType,
-  configurationKey: string
-): string | undefined {
-  const matchedDirectories = collectCandidatePackDirectories(projectRoot).filter(
+/** 在官方全名目录下按清单文件探测某类包目录;同类型命中多个时报歧义错误 */
+function detectPackDirectory(projectRoot: string, expectedType: PackType): string | undefined {
+  const containerName = expectedType === "behavior" ? BEHAVIOR_PACKS_DIRECTORY : RESOURCE_PACKS_DIRECTORY;
+  const matchedDirectories = collectCandidatePackDirectories(projectRoot, containerName).filter(
     (directory) => detectPackType(path.join(directory, "manifest.json")) === expectedType
   );
   const typeLabel = expectedType === "behavior" ? "行为包" : "资源包";
@@ -411,21 +393,19 @@ function detectPackDirectory(
     const relativePaths = matchedDirectories.map((directory) => path.relative(projectRoot, directory)).join("、");
     throw new Error(
       `探测到多个${typeLabel}目录,无法确定使用哪一个:${relativePaths}。` +
-        `请用 package.json 的 packing.${configurationKey} 显式指定。`
+        `请只保留一个${containerName}/<name> 包目录。`
     );
   }
   return matchedDirectories[0];
 }
 
-/** 解析行为包与资源包目录:显式配置优先,否则按清单文件探测 */
-export function resolvePackDirectories(projectRoot: string, configuration: PackingConfiguration): PackDirectories {
-  const behaviorPackDirectory = configuration.behaviorPacks
-    ? resolveExplicitPackDirectory(projectRoot, configuration.behaviorPacks, "behavior", "packing.behavior_packs")
-    : detectPackDirectory(projectRoot, "behavior", "behavior_packs");
-  const resourcePackDirectory = configuration.resourcePacks
-    ? resolveExplicitPackDirectory(projectRoot, configuration.resourcePacks, "resource", "packing.resource_packs")
-    : detectPackDirectory(projectRoot, "resource", "resource_packs");
-  return { behaviorPackDirectory, resourcePackDirectory };
+/** 解析行为包与资源包目录:只在官方全名目录下探测 */
+export function resolvePackDirectories(projectRoot: string): PackDirectories {
+  assertNoLegacyPackDirectories(projectRoot);
+  return {
+    behaviorPackDirectory: detectPackDirectory(projectRoot, "behavior"),
+    resourcePackDirectory: detectPackDirectory(projectRoot, "resource"),
+  };
 }
 
 /** 读取包清单 */
@@ -463,7 +443,7 @@ export function synchronizePackVersions(projectRoot: string): void {
       ? "显式配置 packing.minimum_engine_version"
       : `由 ${SCRIPT_API_MODULE_NAME} 依赖版本 ${packageJson.dependencies?.[SCRIPT_API_MODULE_NAME]} 推导`;
   console.log(`[packaging] 最低游戏版本 ${minimumEngineVersion.join(".")}(${minimumEngineVersionSource})`);
-  const { behaviorPackDirectory, resourcePackDirectory } = resolvePackDirectories(projectRoot, configuration);
+  const { behaviorPackDirectory, resourcePackDirectory } = resolvePackDirectories(projectRoot);
 
   if (!behaviorPackDirectory && !resourcePackDirectory) {
     throw new Error("模组目录下没有探测到任何行为包或资源包(需要含 manifest.json 的包目录),打包中止。");
@@ -549,7 +529,7 @@ export function createPackagesByMode(projectRoot: string) {
     const moduleName = getModuleName(packageJson);
     const versionText = parseVersion(packageJson.version).join(".");
     const configuration = resolvePackingConfiguration(projectRoot);
-    const { behaviorPackDirectory, resourcePackDirectory } = resolvePackDirectories(projectRoot, configuration);
+    const { behaviorPackDirectory, resourcePackDirectory } = resolvePackDirectories(projectRoot);
 
     const packCount = (behaviorPackDirectory ? 1 : 0) + (resourcePackDirectory ? 1 : 0);
     if (packCount === 0) {

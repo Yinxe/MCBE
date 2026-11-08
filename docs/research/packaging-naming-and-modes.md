@@ -42,16 +42,26 @@
 | `script` | 行为包 |
 | `resources` | 资源包 |
 
-实测:把只有 `type: "resources"` 模块的包放进 `BP/` 目录,打包仍正确产出 `_rp.mcpack`(而不是按目录名当行为包)。这是该设计的核心验证点。
+实测:把只有 `type: "resources"` 模块的包放进 `behavior_packs/` 目录,打包仍正确产出 `_rp.mcpack`(而不是按目录名当行为包)。这是该设计的核心验证点。
 
-目录名(`BP` / `RP`、`behavior_packs` / `resource_packs`)只作为**探测线索**,不参与类型判定。无法判定或有歧义时报错,而不是猜。
+顶层目录名(`behavior_packs` / `resource_packs`)只用于**定位搜索范围**,不参与类型判定。无法判定或有歧义时报错,而不是猜。
 
-## 4. 目录约定 `BP/<name>` / `RP/<name>`
+## 4. 目录约定:只认官方全名
 
-- `mct validate` 不依赖目录名,改名为 `BP/` / `RP/` 后仍通过,并正确统计 `behaviorPackManifestCount` / `resourcePackManifestCount`
-- 因此可以用更短、更直观的 `BP` / `RP` 作为目录名
+顶层目录名固定为 `behavior_packs/` 与 `resource_packs/`,不提供缩写写法:
 
-`packing` 配置里的 `behavior_packs` / `resource_packs` 字段同时接受缩写与全名写法,两者等价。
+| 包 | 目录 |
+| --- | --- |
+| 行为包 | `behavior_packs/<name>/` |
+| 资源包 | `resource_packs/<name>/` |
+
+原因:早期版本曾允许 `BP/` / `RP/`,依据是「`mct validate` 不依赖目录名」。后来发现这个依据只对 `mct validate` 成立,对 `mct` 的其它部分不成立:
+
+- `mct` 的两个官方模板都生成 `behavior_packs/` / `resource_packs/`
+- 模板的 `tsconfig.json` 用 `"baseUrl":"behavior_packs/"`
+- `mct add` 与 `mct setup` 的目录探测以官方全名为准
+
+因此打包在探测前会检查模组根目录下是否存在 `BP/` 或 `RP/`,存在则直接报错并提示改名。`packing` 配置也不再提供 `behavior_packs` / `resource_packs` 字段(写入该字段会报「不支持的字段」)。
 
 ## 5. `mcaddon` 与 `mcaddon:production`:实测无区别
 
@@ -92,13 +102,17 @@ npm run pack
 ls dist/packages/            # keepinventory-v0.0.1_bp.mcpack
 
 # 2) 临时加一个资源包 → 出 mcaddon
-mkdir -p RP/keepinventory     # 放一个 modules[].type = "resources" 的 manifest.json
+mkdir -p resource_packs/keepinventory   # 放一个 modules[].type = "resources" 的 manifest.json
 npm run pack
 ls dist/packages/            # ..._bp.mcpack + keepinventory-v0.0.1.mcaddon
 unzip -Z1 dist/packages/keepinventory-v0.0.1.mcaddon
 
 # 3) 验证类型判定不看目录名
-#    把只有 resources 模块的包放进 BP/ → 应产出 _rp.mcpack
+#    把只有 resources 模块的包放进 behavior_packs/ → 应产出 _rp.mcpack
+
+# 4) 验证缩写目录被拒绝
+mv behavior_packs BP && npm run pack   # 应报错并提示改名
+mv BP behavior_packs                    # 还原
 
 # 4) 验证 --production 无区别
 npm run mcaddon && md5sum dist/packages/*

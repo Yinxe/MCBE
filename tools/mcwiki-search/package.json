@@ -1,0 +1,77 @@
+{
+  "name": "@mc-toolchain/mcwiki-search",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Minecraft Wiki 只读查询：库、CLI 与 pi 工具共用同一核心",
+  "keywords": [
+    "pi-package","mcwiki"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yinxe/mc-toolchain.git",
+    "directory": "tools/mcwiki-search"
+  },
+  "bugs": {
+    "url": "https://github.com/Yinxe/mc-toolchain/issues"
+  },
+  "homepage": "https://github.com/Yinxe/mc-toolchain/tree/main/tools/mcwiki-search#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "mcwiki-search": "./dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./src/pi/extension.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "files": [
+    "dist",
+    "skills",
+    "src/pi",
+    "src/cli",
+    "src/core",
+    "!src/**/*.test.ts",
+    "!src/core/fixtures"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
+    "publish:dry": "npm publish --dry-run",
+    "publish:npm": "npm publish"
+  },
+  "dependencies": {
+    "commander": "^15.1.0",
+    "node-html-markdown": "^2.0.0",
+    "node-html-parser": "^9.0.7"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "1.5.0",
+    "@earendil-works/pi-coding-agent": "1.5.0",
+    "@types/node": "^22.5.0",
+    "typebox": "1.4.6",
+    "typescript": "5.5.4",
+    "vitest": "5.1.0"
+  }
+}

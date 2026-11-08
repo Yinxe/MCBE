@@ -4,9 +4,14 @@
   "private": true,
   "description": "Minecraft Bedrock 模组工具链与模组集合",
   "workspaces": [
-    "mods/*"
+    "mods/*",
+    "tools/*"
   ],
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "publish:mcwiki-search:dry": "npm publish -w @mc-toolchain/mcwiki-search --dry-run",
+    "publish:mcwiki-search": "npm publish -w @mc-toolchain/mcwiki-search"
   }
 }
