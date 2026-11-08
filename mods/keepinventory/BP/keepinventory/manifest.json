@@ -1,0 +1,50 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "死亡不掉落",
+    "description": "死亡不掉落 · 无需作弊 · 保留成就",
+    "uuid": "a5037a73-862b-49bf-9a7c-1a47a4e474c7",
+    "version": [
+      0,
+      0,
+      1
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      90
+    ]
+  },
+  "modules": [
+    {
+      "description": "Script resources",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "b061884a-f749-45a6-9d30-70e4e27332e9",
+      "version": [
+        0,
+        0,
+        1
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": [
+        2,
+        0,
+        0
+      ]
+    }
+  ],
+  "metadata": {
+    "product_type": "addon",
+    "generated_with": {
+      "mctoolscli": [
+        "0.21.0"
+      ]
+    }
+  }
+}

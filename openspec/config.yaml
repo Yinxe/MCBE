@@ -1,13 +1,10 @@
 schema: spec-driven
 
 # Project context (optional)
-# Add only constraints that should guide OpenSpec artifacts and workflows.
-# Include constraints an agent cannot infer by reading the code.
-# Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
+context: |
+  Minecraft Bedrock 模组的打包代码、数据类型与配置字段命名一律使用完整单词,避免缩写歧义
+  (例如用 behavior_packs / resource_packs / output,而非 bp / rp / out);
+  仅在与上游生态约定一致时保留既有缩写,如产物文件名后缀 _bp.mcpack / _rp.mcpack。
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

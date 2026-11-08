@@ -1,0 +1,12 @@
+{
+  "name": "mc-toolchain",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minecraft Bedrock 模组工具链与模组集合",
+  "workspaces": [
+    "mods/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

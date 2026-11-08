@@ -1,0 +1,17 @@
+# 依赖
+node_modules/
+
+# 构建与打包产物
+dist/
+lib/
+
+# mct 校验报告输出
+out/
+
+# 日志与临时文件
+*.log
+npm-debug.log*
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
