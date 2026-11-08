@@ -6,12 +6,20 @@ Minecraft Bedrock 模组工具链与模组集合。
 
 ```text
 mc-toolchain/
-├── mods/                  # Bedrock 模组（游戏内行为包与资源包）
+├── mods/                  # Bedrock 模组（游戏内行为包与资源包），规则见 mods/README.md
 │   └── keepinventory/
 ├── tools/                 # 可独立发布的工具包
 │   └── mcwiki-search/     # Minecraft Wiki 只读查询（库 / CLI / pi 工具）
 └── openspec/              # 需求与变更规格
 ```
+
+## 模组
+
+| 模组 | 说明 | 文档 |
+| --- | --- | --- |
+| `keepinventory` | 死亡不掉落：玩家死亡时保留背包物品 | [mods/keepinventory/README.md](mods/keepinventory/README.md) |
+
+`mods/` 下的目录布局、`mct` 用法、新建模组流程等共同规则见 [mods/README.md](mods/README.md)。
 
 ## 工具
 

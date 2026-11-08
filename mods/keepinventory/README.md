@@ -82,102 +82,19 @@ mct validate -i mods/keepinventory
 
 ### 使用 `mct` 工具
 
-本仓库是 monorepo,每个 `mods/<name>` 是独立的 `mct` 项目,各自有自己的 `behavior_packs/`、`resource_packs/`、`.env` 与构建配置。
+本模组是一个独立的 `mct` 项目。校验、新增内容、新建模组、临时目录等**仓库级规则**统一写在
+[`mods/README.md`](../../mods/README.md),此处不再重复。
 
-#### 校验
-
-```bash
-cd mods/keepinventory
-mct validate -i .        # 只校验当前模组
-
-cd ../..
-mct validate -i mods     # 逐个校验 mods/ 下每个模组,各自产出一份报告
-```
-
-**不要在仓库根直接跑不带 `-i` 的 `mct validate`**:它会把整个仓库当作单个项目,只产出一份合并报告。报告写入 `out/`(已 gitignore)。
-
-#### 新增内容
+本模组相关的两点:
 
 ```bash
 cd mods/keepinventory
+mct validate -i .        # 只校验本模组
 mct add basicUnitCubeBlock my_block -i . -o .
 ```
 
-`-i` 与 `-o` 必须同时指向**当前模组目录**:
-
-| 调用                          | 结果                                                                                |
-| ----------------------------- | ----------------------------------------------------------------------------------- |
-| `-i . -o .`                   | ✅ 写入 `behavior_packs/keepinventory/`,清单按条目合并,`manifest.json` 的 UUID 不变 |
-| `-i .`(省略 `-o`)             | ❌ 在 `out/` 下新建 `contoso_*_bp` / `contoso_*_rp`,与既有包并存                    |
-| `-i mods -o mods`(指向父目录) | ❌ 内容被写进 `mods/` 下的**所有模组**                                              |
-
-两点需要注意:
-
-- 生成内容的命名空间恒为 `contoso_<输出目录名>`(如 `contoso_keepinve:`),需手工改为项目约定的命名空间。
-- `mct validate` 的 ERROR 计数**不包含未链接纹理**:若清单映射缺失,仍会报 0 ERROR,但 `UNLINK` 项会提示纹理未被引用。校验时需同时看 `UNLINK`。
-
-#### 只有行为包的模组需清理伪资源包
-
-本模组只有行为包(`manifest.json` 的 `modules` 只有 `script`,没有 `resources`)。在这种模组上执行 `mct add` 时,`mct` 找不到已注册的资源包,会新建一个 `resource_packs/contoso_<目录名>/`:
-
-```text
-resource_packs/contoso_keepinve/
-├── manifest.json        # 注意:modules 为空数组
-├── blocks.json
-├── texts/en_US.lang
-└── textures/...
-```
-
-它生成的 `manifest.json` 的 `modules` 是 `[]`,既不含 `data`/`script` 也不含 `resources`,因此 `pack` 会直接失败:
-
-```text
-Error: 无法从清单判定包类型:resource_packs/contoso_keepinve/manifest.json
-       (modules[].type 为 [],既不含 data/script 也不含 resources)
-```
-
-处理方式二选一:
-
-```bash
-# 方式一:丢弃资源(纯脚本模组不需要这些内容)
-rm -rf resource_packs
-
-# 方式二:保留资源,改名为正式资源包并补上 resources 模块
-mv resource_packs/contoso_keepinve resource_packs/keepinventory
-# 然后手工把 manifest.json 的 modules 改为:
-# [{ "description": "Resources", "type": "resources", "uuid": "<新生成>", "version": [1, 0, 0] }]
-```
-
-处理后 `pack` 恢复:方式一产出 `_bp.mcpack`,方式二产出 `.mcaddon`。这是 `mct` 的固有行为(模组有完整资源包时不会发生),不是本项目打包工具的问题。
-
-#### 新建模组
-
-```bash
-mct create <name> tsStarter mc-toolchain -o mods/<name>
-```
-
-`mct` 会把包目录命名为 `PROJECT_NAME` 的派生缩写(形如 `mctoolch_keepinv_bp`),不等于包名。生成后需手工对齐:
-
-```bash
-cd mods/<name>
-mv behavior_packs/mctoolch_* behavior_packs/<name>
-mv resource_packs/mctoolch_* resource_packs/<name>
-sed -i 's/^PROJECT_NAME=.*/PROJECT_NAME="<name>"/' .env
-```
-
-`.env` 的 `PROJECT_NAME` 必须与包目录名一致,否则 `just.config.ts` 中 `./behavior_packs/${projectName}` 会指向不存在的目录,打包取不到包。改名后 `mct` 的各命令仍正常作用于改名后的目录。
-
-#### 先看效果再决定时
-
-若需要先查看生成效果或手工挑选内容,可在 `mods/` **之外**建临时项目生成,再挑选内容移入:
-
-```bash
-mct create scratch tsStarter mc-toolchain -o /tmp/scratch -y
-cd /tmp/scratch && mct add basicUnitCubeBlock probe -i . -o .
-```
-
-移入时只取内容文件(定义文件、纹理、模型、语言文件),清单类文件(`blocks.json`、`terrain_texture.json`)按条目合并,并跳过临时项目的 `manifest.json` 与 `pack_icon.png`。临时目录不得放在 `mods/` 下,否则会被批量校验扫到。
-
-已确定要保留的内容,优先直接在模组目录用 `mct add -i . -o .` 生成,无需绕临时目录。
+- 本模组只有行为包(`modules` 只有 `script`),执行 `mct add` 会额外产生空模块伪包 `resource_packs/contoso_*`,需按 `mods/README.md` 的说明清理,否则打包会失败。
+- 校验时除 ERROR 计数外还需检查 `UNLINK`,否则会漏掉孤儿纹理。
 
 ## 打包
 
@@ -213,18 +130,11 @@ npm run pack -w @mc-toolchain/keepinventory
 
 ### 目录约定与包类型判定
 
-包目录的顶层目录名固定为官方全名,**不提供缩写写法**:
+顶层目录固定为 `behavior_packs/` / `resource_packs/`,内层包目录等于 `<name>`,完整约定与理由见 [`mods/README.md`](../../mods/README.md)。
 
-| 包     | 目录                     |
-| ------ | ------------------------ |
-| 行为包 | `behavior_packs/<name>/` |
-| 资源包 | `resource_packs/<name>/` |
+**包的类型以 `manifest.json` 为准**,不依赖目录名:`modules[].type` 含 `data` / `script` 判为行为包,含 `resources` 判为资源包。
 
-这样固定的原因是为了与 `mct`(Minecraft Creator Tools)的布局一致:它的两个官方模板(`addonStarter` / `tsStarter`)都生成 `behavior_packs/` 与 `resource_packs/`,模板的 `tsconfig.json` 用 `"baseUrl":"behavior_packs/"`。使用 `BP/` / `RP/` 会让本项目的布局与 `mct` 的预期分叉,因此打包会在检测到这两个目录时直接报错并提示改名。
-
-**包的类型仍以 `manifest.json` 为准**,不依赖目录名:`modules[].type` 含 `data` / `script` 判为行为包,含 `resources` 判为资源包。
-
-打包在 `behavior_packs/` 与 `resource_packs/` 之下探测含 `manifest.json` 的包目录。同一类型命中多个包时报歧义错误,需只保留一个包目录。
+本模组当前只有行为包 `behavior_packs/keepinventory/`(模块类型仅 `script`),没有资源包。打包在 `behavior_packs/` 与 `resource_packs/` 之下探测含 `manifest.json` 的包目录;同一类型命中多个包时报歧义错误。
 
 ### 版本同步
 
