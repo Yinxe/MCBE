@@ -33,10 +33,10 @@
 ## 6. 首次发布与安装验证
 
 - [x] 6.1 执行 `npm run publish:dry` 复核清单与体积，确认无异常后再发布；验证退出码为 0 且清单条目数与预期一致。
-- [ ] 6.2 执行 `npm run publish:mcwiki-search` 发布 `0.1.0`；验证 `npm view @mc-toolchain/mcwiki-search version` 返回 `0.1.0`。**阻塞**：npm 返回 E403「Two-factor authentication or granular access token with bypass 2fa enabled is required to publish packages」，需用户配置认证后重试。
-- [ ] 6.3 在空目录验证库安装：`npm install @mc-toolchain/mcwiki-search` 后导入包入口并创建客户端，确认无需本地构建即可完成一次查询。
-- [ ] 6.4 在空目录验证 CLI：`npx mcwiki-search --version` 与一次 `page` 查询，确认命令可执行且输出符合统一结果形状。
-- [ ] 6.5 在空目录验证 pi 加载：`pi install npm:@mc-toolchain/mcwiki-search` 后确认 `mcwiki` 工具与 `mcwiki-search` skill 均出现。
+- [x] 6.2 发布 `0.0.1`（`0.1.0` 因误删整包被 npm 永久占用，无法重发）。已通过 `npm stage publish` + 网页批准上线；`npm view` 返回 `0.0.1`，`latest` 指向 `0.0.1`。
+- [x] 6.3 空目录 `npm install @mc-toolchain/mcwiki-search` → 库导入成功，`createMcwikiSearch({language:"zh"})` 可用。
+- [x] 6.4 `npx mcwiki-search --version` → `0.0.1`；`page 苦力怕 -s 掉落物` 返回 markdown / 11111 字符 / 含「火药」。
+- [x] 6.5 pi 加载验证：`discoverAndLoadExtensions` 得到 tools `["mcwiki"]`、skills `["mcwiki-search"]`，0 errors / 0 diagnostics。
 
 ## Workflow follow-up
 

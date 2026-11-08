@@ -114,8 +114,33 @@ unzip -Z1 dist/packages/keepinventory-v0.0.1.mcaddon
 mv behavior_packs BP && npm run pack   # 应报错并提示改名
 mv BP behavior_packs                    # 还原
 
-# 4) 验证 --production 无区别
+# 5) 验证配置字段被拒绝
+#    在 package.json 的 packing 中加 "behavior_packs": "custom" 后
+npm run pack
+# Error: package.json 的 packing 中出现不支持的字段:behavior_packs。
+#        可用字段:mode、output、minimum_engine_version。
+
+# 6) 验证 --production 无区别
 npm run mcaddon && md5sum dist/packages/*
 rm -rf dist/packages && npm run mcaddon:production && md5sum dist/packages/*
 # 解压两份产物后 diff -r,内容应完全一致
+```
+
+### 两个报错路径的实测文案
+
+缩写目录:
+
+```text
+Error: 仅支持官方全名包目录 behavior_packs / resource_packs,检测到 BP/。
+       请把 BP/<name> 改名为 behavior_packs/<name>。
+```
+
+未知配置字段:
+
+```text
+Error: package.json 的 packing 中出现不支持的字段:behavior_packs。
+       可用字段:mode、output、minimum_engine_version。
+```
+
+两者都在 `synchronizePackVersions` 阶段报出,即**先于任何产物写入**,不会留下半成品。
 ```

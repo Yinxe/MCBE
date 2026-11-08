@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/mcwiki-search",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "type": "module",
   "description": "Minecraft Wiki 只读查询：库、CLI 与 pi 工具共用同一核心",
   "keywords": [

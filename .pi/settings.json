@@ -1,5 +1,3 @@
 {
-  "packages": [
-    "npm:@mc-toolchain/mcwiki-search"
-  ]
+  "packages": []
 }
