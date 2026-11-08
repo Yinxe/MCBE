@@ -74,3 +74,33 @@ done
 ```
 
 > `bedrock-samples` 属于外部参考仓库,按项目约定放在 `~/gitRepos` 而不是本项目目录内。
+
+## 5. 该映射已成为打包工具的一部分
+
+上面第 1 节的表格不再只是调研记录:它是 `mods/keepinventory/tools/packaging.ts` 中 `SCRIPT_API_VERSION_MAPPINGS` 常量的数据来源。
+
+`pack` 在未显式配置 `packing.minimum_engine_version` 时,会用 `package.json` 中 `@minecraft/server` 的依赖版本查这张表,推导出 `header.min_engine_version` 并写入各包清单。
+
+### 维护方式
+
+1. `@minecraft/server` 发新版本后,先用 `npm view @minecraft/server time --json` 拿到发布日期
+2. 从 `bedrock-samples/version.json` 找同日发布的游戏版本
+3. 把新档位加到 `SCRIPT_API_VERSION_MAPPINGS` 顶部(表按版本降序排列)
+4. 同步更新本文件第 1 节的表格
+
+查找语义是「取不超过依赖版本的最大脚本 API 版本」对应档位,因此补丁位差异(`2.0.1`)会落到 `2.0.0` 那一档。
+但**高于表中最高档的版本不会被钳到最高档**,而是报「不在版本映射表中」——否则未收录的新版本会静默得到一个偏低的旧值。
+
+### 验证方式
+
+```bash
+cd mods/keepinventory
+
+# 推导路径(当前应为 1.21.90)
+npm run pack 2>&1 | grep '最低游戏版本'
+
+# 报错路径:换成表中未收录的版本应报错(验证后还原 package.json)
+node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("package.json","utf8"));
+p.dependencies["@minecraft/server"]="9.9.9";fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
+npm run pack 2>&1 | grep '不在版本映射表中'
+```

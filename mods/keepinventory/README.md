@@ -44,6 +44,8 @@ Minecraft Bedrock 行为包:玩家死亡后保留物品栏与经验。
 mods/keepinventory/
 ├── BP/keepinventory/          # 行为包:manifest.json、pack_icon.png
 ├── scripts/main.ts            # 脚本入口(编译打包为包内 scripts/main.js)
+├── tools/packaging.ts         # 自定义打包逻辑(版本与最低游戏版本同步)
+├── tools/generate-pack-icon.js # 图标生成脚本(像素画 → 128×128 PNG)
 ├── dist/                      # 构建与打包产物(gitignore)
 ├── just.config.ts             # 构建/打包任务定义
 ├── package.json               # 包名、版本与打包配置(唯一版本来源)
@@ -59,6 +61,18 @@ npm install                                     # 安装工作区依赖
 npm run build -w @mc-toolchain/keepinventory    # 类型检查并产出 dist/scripts/main.js
 npm run local-deploy -w @mc-toolchain/keepinventory  # 监听改动并同步到本地开发包目录
 ```
+
+### 行为包图标
+
+`BP/keepinventory/pack_icon.png` 是 128×128 RGBA 像素画图标,画面表达「玩家死亡(墓碑)但背包物品仍在(带绿色保护光晕的背包)」。
+
+图标是**静态资源**,不在构建期生成,直接随包打包。需要调整构图时改脚本后重新生成:
+
+```bash
+npm run generate:icon -w @mc-toolchain/keepinventory
+```
+
+脚本为 `tools/generate-pack-icon.js`:以 32×32 逻辑像素绘制,再按 4 倍最近邻放大到 128×128(保持硬边像素风),直接写 PNG 字节,不依赖任何图像库。
 
 校验行为包结构:
 
@@ -84,6 +98,7 @@ npm run pack -w @mc-toolchain/keepinventory
 | `behavior_packs` | 自动探测 | 显式指定行为包目录(相对模组根目录) |
 | `resource_packs` | 自动探测 | 显式指定资源包目录(相对模组根目录) |
 | `output` | `"dist/packages"` | 产物输出目录(相对模组根目录) |
+| `minimum_engine_version` | 由 `@minecraft/server` 依赖版本推导 | 最低游戏版本,形如 `[1, 21, 90]` |
 
 ### `mode` 与产物形态
 
@@ -113,6 +128,20 @@ npm run pack -w @mc-toolchain/keepinventory
 ### 版本同步
 
 `pack` 在压缩前把 `package.json#version` 写成 `[major, minor, patch]` 写入包内所有 `manifest.json`(`header.version`、`modules[].version` 与资源包对行为包的依赖 `version`),因此 `package.json` 是版本的唯一来源。版本号无法解析为三段数字时打包中止。
+
+### 最低游戏版本
+
+`pack` 同时把最低游戏版本写入各包 `manifest.json` 的 `header.min_engine_version`,与 `@minecraft/server` 依赖版本保持同源:
+
+1. 若配置了 `packing.minimum_engine_version`(如 `[1, 21, 90]`),直接采用该值。
+2. 否则依据 `package.json` 中 `@minecraft/server` 的依赖版本,查 `tools/packaging.ts` 内的映射表推导,并在日志中说明来源。
+3. 两者都不可用时**报错中止**,不猜测、不回落到固定值。
+
+选「报错」而非「回落到某个默认值」,是因为 `min_engine_version` 写错只会在低版本客户端加载后才暴露,属于用户侧故障;打包期报错能立刻定位。
+
+> **维护提示**:Minecraft 官方不提供「脚本 API 版本 → 游戏版本」的机器可读映射(脚本 API 包、`mct` 数据目录、`bedrock-samples` 的 `version.json` 都不含对方版本),因此映射表是 `tools/packaging.ts` 中手工维护的静态数据。
+> `@minecraft/server` 升级到新版本后,需把对应档位补进 `SCRIPT_API_VERSION_MAPPINGS`,否则打包会报「不在版本映射表中」。
+> 数据来源与逐条验证方式见 `docs/research/minecraft-server-api-versions.md`。
 
 ### 产物内容
 

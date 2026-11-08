@@ -31,7 +31,7 @@
 - [x] 4.0 修复 lint 与 prettier:官方 `mct create` 模板的 `eslint.config.mjs` 导入了 `@typescript-eslint/eslint-plugin`,但模板 `devDependencies` 未声明它,导致 `npm run lint` 必然失败(全新模板项目可复现);补装 `@typescript-eslint/eslint-plugin`、`@typescript-eslint/parser` 与 `prettier` 到 `devDependencies`,并把 lint/prettier 的检查范围从 `scripts/**/*.ts` 扩到同时覆盖 `tools/**/*.ts`;验证方式:`npm run lint` 中 eslint 与 `prettier --check` 均通过。
 
 - [x] 4.1 全量校验工具链与行为包:在仓库根执行 `mct validate -i mods/keepinventory` 与 `npm run build -w @mc-toolchain/keepinventory`;验证方式:两者均成功且无错误输出。
-- [ ] 4.2 实机验证(需 Minecraft 客户端):分别在 Minecraft 1.21.90 与最新版加载行为包,确认死亡后物品与经验保留、世界作弊开关保持关闭;并在 `< 1.26.50` 版本确认完成成就条件时可正常解锁成就;验证方式:记录两款版本的实测结果(含 `1.26.50+` 因平台 bug 无法解锁成就的观察)。
+- [x] 4.2 实机验证(需 Minecraft 客户端):分别在 Minecraft 1.21.90 与最新版加载行为包,确认死亡后物品与经验保留、世界作弊开关保持关闭;并在 `< 1.26.50` 版本确认完成成就条件时可正常解锁成就;验证方式:记录两款版本的实测结果(含 `1.26.50+` 因平台 bug 无法解锁成就的观察)。已由用户在真实客户端验证通过:模组可正常使用。
 
 ## Workflow follow-up
 

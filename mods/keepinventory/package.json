@@ -20,6 +20,7 @@
     "build:production": "just-scripts build --production",
     "clean": "just-scripts clean",
     "pack": "just-scripts pack",
+    "generate:icon": "node tools/generate-pack-icon.js",
     "local-deploy": "just-scripts local-deploy",
     "mcaddon": "just-scripts mcaddon",
     "mcaddon:production": "just-scripts mcaddon --production",
@@ -31,6 +32,7 @@
   },
   "packing": {
     "mode": "auto",
+    "minimum_engine_version":[1,21,90],
     "output": "dist/packages"
   }
 }
