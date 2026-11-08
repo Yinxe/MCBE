@@ -19,7 +19,7 @@ resolvePackDirectories(projectRoot, configuration)
 | `tsconfig.json:21` | `"baseUrl":"BP/"` |
 | `just.config.ts:31` | `copyToBehaviorPacks: [\`./BP/${projectName}\`]` |
 | `just.config.ts:50` | watch glob `"BP/**/*.{json,lang,tga,ogg,png}"` |
-| `README.md` | 目录结构树、图标路径、缩写/全名对照表 |
+| `mods/keepinventory/README.md` | 目录结构树、图标路径、缩写/全名对照表 |
 
 `mct` 一侧的约束来自实测(mct 0.21.0):
 
@@ -93,13 +93,16 @@ resolvePackDirectories(projectRoot, configuration)
 1. `git mv BP/keepinventory behavior_packs/keepinventory`
 2. `tsconfig.json`:`"baseUrl":"BP/"` → `"baseUrl":"behavior_packs/"`
 3. `just.config.ts`:`copyToBehaviorPacks` 与 watch glob 的 `BP/` → `behavior_packs/`
-4. `README.md`:目录树、图标路径、对照表
+4. `mods/keepinventory/README.md`:目录树、图标路径、对照表
+5. 新建 `mods/README.md`:仓库级 `mct` 用法与目录约定(不写进具体模组)
 
 `.env` 的 `PROJECT_NAME` 已经是 `keepinventory`,与新包目录名一致,无需改。
 
 ### D6 `mct` 用法写进规范而非脚本
 
 `mct` 的正确调用方式(`mct add -i . -o .`、脚手架后改名)记录为 `mct-toolchain-usage` 能力的需求,而不是写成 npm 脚本包装。
+
+这些规则是**`mods/` 目录层面**的共性约定,不隶属于任何单个模组,因此落地为 `mods/README.md`;具体模组的 `README.md` 只保留与自身相关的要点并链接过去。单个模组换了(新增、删除、替换)时,仓库级规则无需搬移或复制。
 
 **替代方案**:在 `package.json` 加 `mct:add` 脚本固化 `-o .`。否决原因:`mct add` 的参数包含模板 id 与内容名,包装后仍需透传,脚本收益小;而错误用法(`-o` 缺失)的代价是产生垃圾目录,属于一次就能记住的操作,文档 + spec 足够。
 

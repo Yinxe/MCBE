@@ -18,8 +18,8 @@
 ## 3. 文档同步
 
 - [x] 3.1 更新 `mods/keepinventory/README.md`:目录结构树、图标路径示例、`BP/` 与 `behavior_packs/` 的缩写/全名对照表改为单一全名约定
-- [x] 3.2 在 `mods/keepinventory/README.md` 增加 `mct` 用法说明,至少覆盖:`mct validate -i .` 与 `mct validate -i mods` 的区别、`mct add -i . -o .` 的用法与省略 `-o` 的后果、禁止把 `-i`/`-o` 指向 `mods/` 父目录
-- [x] 3.3 在 `mods/keepinventory/README.md` 说明新建模组时 `mct create` 后的改名步骤(包目录改为 `<name>` 并同步 `.env` 的 `PROJECT_NAME`)
+- [x] 3.2 新建 `mods/README.md` 记录仓库级 `mct` 用法,至少覆盖:`mct validate -i .` 与 `mct validate -i mods` 的区别、`mct add -i . -o .` 的用法与省略 `-o` 的后果、禁止把 `-i`/`-o` 指向 `mods/` 父目录;具体模组的 README 只保留本模组相关要点并链接到 `mods/README.md`
+- [x] 3.3 在 `mods/README.md` 说明新建模组时 `mct create` 后的改名步骤(包目录改为 `<name>` 并同步 `.env` 的 `PROJECT_NAME`)
 - [x] 3.4 在 `docs/research/minecraft-creator-tools.md` 补充本次实测结论并附可复现命令:`getSuggestedShortName` 与 `makeNameFolderSafe` 的派生规则、改名后 `mct add` 复用既有包且 UUID 不变、命名空间恒为 `contoso_<目录名>`、`UNLINK` 警告不被计入 ERROR 计数、`mct add -i mods -o mods` 会写进所有模组
 
 ## 4. 验证

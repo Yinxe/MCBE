@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Minecraft Wiki 只读查询：库、CLI 与 pi 工具共用同一核心",
   "keywords": [
-    "pi-package","mcwiki"
+    "pi-package",
+    "mcwiki"
   ],
   "license": "MIT",
   "repository": {
@@ -20,7 +21,7 @@
     "access": "public"
   },
   "bin": {
-    "mcwiki-search": "./dist/cli/index.js"
+    "mcwiki-search": "dist/cli/index.js"
   },
   "exports": {
     ".": {
