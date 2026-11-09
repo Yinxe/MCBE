@@ -12,7 +12,7 @@
 
 #### Scenario: 图标位于包目录根部
 
-- **WHEN** 检查 `BP/<name>/` 包目录
+- **WHEN** 检查 `behavior_packs/<name>/` 包目录
 - **THEN** 根部存在 `pack_icon.png`,且它与 `manifest.json` 同级
 
 #### Scenario: 图标尺寸与格式符合约定
