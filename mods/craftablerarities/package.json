@@ -5,7 +5,7 @@
   "description": "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块",
   "private": true,
   "devDependencies": {
-    "@mc-toolchain/packaging": "*",
+    "@mc-toolchain/mod-packaging": "*",
     "@minecraft/core-build-tasks": "5.5.0",
     "just-scripts": "^2.1.5"
   },
@@ -16,7 +16,7 @@
   },
   "packing": {
     "mode": "auto",
-    "output": "dist/packages",
+    "output": "../../release/",
     "minimum_engine_version": [1, 21, 0]
   }
 }

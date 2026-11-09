@@ -1,4 +1,4 @@
-// ─── 防误触 HUD 提示（接入公共 actionbar 总线：@mc-toolchain/shared） ──
+// ─── 防误触 HUD 提示（接入公共 actionbar 总线：@mc-toolchain/mod-common） ──
 // 挖掘防误触拦截（首次用错误工具/空手挖方块）时，游戏内没有任何反馈、只有日志。
 // 本模块把拦截/确认信号转成逐玩家的 actionbar 提示，窗口与 AccidentalGuard 一致
 //（ANTI_TOUCH_WINDOW_TICKS = 50 tick = 2.5s）：
@@ -10,7 +10,7 @@
 // 提示窗口到期 render 返回 undefined → 自动释放声明、HudManager 清残留。
 
 import { system, type Player } from "@minecraft/server";
-import { HudManager, color, style } from "@mc-toolchain/shared";
+import { HudManager, color, style } from "@mc-toolchain/mod-common";
 import { ANTI_TOUCH_WINDOW_TICKS } from "./AccidentalGuard";
 
 /** actionbar 优先级：低于 spectator(200) / item-route 会话(100)·仓库(80) → 让位 */

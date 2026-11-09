@@ -73,7 +73,7 @@ npm install              # 在仓库根目录执行一次即可（npm workspace�
 cd mods/auto-refill
 
 npm run build            # 编译 + 打包脚本
-npm run pack             # 产出 dist/packages/auto-refill-v2.2.0_bp.mcpack
+npm run pack             # 产出 <仓库根>/release/auto-refill-v2.2.0_bp.mcpack
 npm test                 # 60 项纯逻辑单测（不加载游戏运行时）
 npm run lint             # eslint + prettier
 npm run generate:icon    # 重新生成 128×128 的 pack_icon.png
@@ -93,7 +93,7 @@ mods/auto-refill/
 
 > 测试用的 `tsconfig.json` 刻意放在 `tests/` 子目录，不放在模组根目录：`mct validate` 会把模组根层的未知 `.json` 当成包内容并报 `UNKJSON101`。详见 `docs/research/minecraft-creator-tools.md`。
 
-打包逻辑来自 `@mc-toolchain/packaging`，运行时共享代码（文本样式、HUD 总线）来自 `@mc-toolchain/shared`，本目录内不含这两部分实现。
+打包逻辑来自 `@mc-toolchain/mod-packaging`，运行时共享代码（文本样式、HUD 总线）来自 `@mc-toolchain/mod-common`，本目录内不含这两部分实现。
 
 ### 版本声明的三处一致性
 

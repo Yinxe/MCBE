@@ -101,7 +101,7 @@ mct add basicUnitCubeBlock my_block -i . -o .
 npm run pack -w @mc-toolchain/keepinventory
 ```
 
-只有一个 `pack` 入口,产物形态由 `package.json` 的 `packing.mode` 决定,产物默认写入 `dist/packages/`。
+只有一个 `pack` 入口,产物形态由 `package.json` 的 `packing.mode` 决定,产物写入仓库根的 `release/`。
 
 ### `packing` 配置
 
@@ -110,7 +110,7 @@ npm run pack -w @mc-toolchain/keepinventory
 | 字段                     | 默认值                              | 说明                                   |
 | ------------------------ | ----------------------------------- | -------------------------------------- |
 | `mode`                   | `"auto"`                            | 产物形态:`auto` / `mcpack` / `mcaddon` |
-| `output`                 | `"dist/packages"`                   | 产物输出目录(相对模组根目录)           |
+| `output`                 | `"../../release/"`                  | 产物输出目录(相对模组根目录)           |
 | `minimum_engine_version` | 由 `@minecraft/server` 依赖版本推导 | 最低游戏版本,形如 `[1, 21, 90]`        |
 
 包目录不可配置:行为包固定为 `behavior_packs/<name>`,资源包固定为 `resource_packs/<name>`。
@@ -144,12 +144,12 @@ npm run pack -w @mc-toolchain/keepinventory
 `pack` 同时把最低游戏版本写入各包 `manifest.json` 的 `header.min_engine_version`,与 `@minecraft/server` 依赖版本保持同源:
 
 1. 若配置了 `packing.minimum_engine_version`(如 `[1, 21, 90]`),直接采用该值。
-2. 否则依据 `package.json` 中 `@minecraft/server` 的依赖版本,查 `@mc-toolchain/packaging` 内的映射表推导,并在日志中说明来源。
+2. 否则依据 `package.json` 中 `@minecraft/server` 的依赖版本,查 `@mc-toolchain/mod-packaging` 内的映射表推导,并在日志中说明来源。
 3. 两者都不可用时**报错中止**,不猜测、不回落到固定值。
 
 选「报错」而非「回落到某个默认值」,是因为 `min_engine_version` 写错只会在低版本客户端加载后才暴露,属于用户侧故障;打包期报错能立刻定位。
 
-> **维护提示**:Minecraft 官方不提供「脚本 API 版本 → 游戏版本」的机器可读映射(脚本 API 包、`mct` 数据目录、`bedrock-samples` 的 `version.json` 都不含对方版本),因此映射表是 `packages/packaging/src/versions.ts` 中手工维护的静态数据。
+> **维护提示**:Minecraft 官方不提供「脚本 API 版本 → 游戏版本」的机器可读映射(脚本 API 包、`mct` 数据目录、`bedrock-samples` 的 `version.json` 都不含对方版本),因此映射表是 `packages/mod-packaging/src/versions.ts` 中手工维护的静态数据。
 > `@minecraft/server` 升级到新版本后,需把对应档位补进 `SCRIPT_API_VERSION_MAPPINGS`,否则打包会报「不在版本映射表中」。
 > 数据来源与逐条验证方式见 `docs/research/minecraft-server-api-versions.md`。
 
@@ -174,7 +174,7 @@ npm run pack -w @mc-toolchain/keepinventory
 >
 > `mct` 把本模组当作「新项目」导入时(`mct create` / 导入流程),会把 `just.config.ts` 重置为模板默认内容,并按白名单裁剪 `package.json`(自定义 `pack` 脚本与 `packing` 顶层键都在白名单外)。
 > 此时需重新加回:①`package.json` 的 `"pack": "just-scripts pack"` 与 `packing` 块;②`just.config.ts` 末尾的自定义打包任务。
-> 打包逻辑已全部移到 `@mc-toolchain/packaging`,模组内不再有需要恢复的打包实现文件;重置模板后只需重新加回上面两处。
+> 打包逻辑已全部移到 `@mc-toolchain/mod-packaging`,模组内不再有需要恢复的打包实现文件;重置模板后只需重新加回上面两处。
 
 ## 兼容性实现说明
 

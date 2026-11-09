@@ -18,7 +18,7 @@
 打包产物是**单个 `.mcpack`**:
 
 ```bash
-npm run pack        # 产物写到 dist/packages/craftablerarities-v<version>_bp.mcpack
+npm run pack        # 产物写到 <仓库根>/release/craftablerarities-v<version>_bp.mcpack
 ```
 
 双击 `.mcpack` 由游戏导入,或在「设置 → 存储 → 行为包」中手动导入。
