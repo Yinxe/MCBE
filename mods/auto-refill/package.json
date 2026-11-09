@@ -3,6 +3,15 @@
   "version": "2.2.0",
   "productName": "自动替换",
   "description": "自动替换主手消耗物品 · 无需作弊 · 保留成就",
+  "author": {
+    "name": "Yinx",
+    "email": "1423716216@qq.com",
+    "url": "https://github.com/Yinxe/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yinxe/MCBE.git"
+  },
   "private": true,
   "dependencies": {
     "@minecraft/server": "2.1.0",
@@ -32,6 +41,7 @@
   "packing": {
     "mode": "auto",
     "output": "../../release/",
-    "minimum_engine_version": [1, 21, 100]
+    "minimum_engine_version": [1, 21, 100],
+    "qq_group": "632178498"
   }
 }

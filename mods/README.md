@@ -46,6 +46,32 @@ task("pack", series("clean-build", "build", "synchronizePackVersions", createPac
 
 包目录探测、版本同步与 `packing` 字段的含义见 `packages/mod-packaging/README.md`。
 
+### 清单显示名与描述由 `package.json` 派生
+
+打包时会用 `package.json` 重写每个包清单的 `header.name` 与 `header.description`。**不要手工编辑清单的这两个字段**，下次打包会覆盖，且手改会造成清单与 `package.json` 不一致。
+
+| 清单内容 | 来源 |
+| --- | --- |
+| `header.name` | `<productName> v<version>`，如 `自动替换 v2.2.0` |
+| 描述首行 | `description` |
+| 描述 `作者：` / `邮箱：` / `主页：` 行 | `author`（字符串或对象的 `name` / `email` / `url`） |
+| 描述 `QQ群：` 行 | `packing.qq_group` |
+| 描述 `仓库：` 行 | `repository`（字符串或对象的 `url`，自动规范化为 https 形式） |
+
+因此每个模组的 `package.json` MUST 声明：
+
+```jsonc
+{
+  "productName": "<中文显示名>",
+  "description": "<一句话简介>",
+  "author": { "name": "Yinx", "email": "1423716216@qq.com", "url": "https://github.com/Yinxe/" },
+  "repository": { "type": "git", "url": "https://github.com/Yinxe/MCBE.git" },
+  "packing": { "qq_group": "632178498" }
+}
+```
+
+`productName` 与 `description` 缺失会直接中止打包（不回落模组名）；作者、邮箱、主页、QQ 群、仓库缺失时对应行整行省略。
+
 ## 模组通用共享代码
 
 跨模组复用的通用能力都在 [`@mc-toolchain/mod-common`](../packages/mod-common/README.md)：

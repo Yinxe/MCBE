@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "header": {
-    "name": "灵魂出窍",
-    "description": "灵魂出窍 · 旁观模式\n飞离真身侦查,超出距离容忍 5 秒后自动回归\n作者:Yinx",
+    "name": "灵魂出窍 v1.0.12",
+    "description": "灵魂出窍 · 旁观模式：飞离真身侦查，超出距离容忍 5 秒后自动回归\n作者：Yinx\n邮箱：1423716216@qq.com\n主页：https://github.com/Yinxe/\nQQ群：632178498\n仓库：https://github.com/Yinxe/MCBE",
     "uuid": "67c0e536-82f7-459d-a15f-d4cd9b229bf8",
     "version": [
       1,

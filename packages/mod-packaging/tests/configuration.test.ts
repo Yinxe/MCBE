@@ -54,8 +54,16 @@ test("未知 packing 字段报错并列出可用字段", () => {
   });
   assert.throws(
     () => resolvePackingConfigurationFrom(packageJson),
-    /出现不支持的字段:minimum_engine_verison.*可用字段:mode、output、minimum_engine_version/
+    /出现不支持的字段:minimum_engine_verison.*可用字段:mode、output、minimum_engine_version、qq_group/
   );
+});
+
+test("packing.qq_group 属于受支持字段", () => {
+  assert.doesNotThrow(() => validatePackingKeys({ mode: "auto", qq_group: "632178498" }));
+  const configuration = resolvePackingConfigurationFrom(
+    makePackageJson({ packing: { qq_group: "632178498" } })
+  );
+  assert.equal(configuration.mode, DEFAULT_PACKING_MODE);
 });
 
 test("validatePackingKeys 对合法字段不报错", () => {

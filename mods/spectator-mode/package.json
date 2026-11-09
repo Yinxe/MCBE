@@ -3,6 +3,15 @@
   "version": "1.0.12",
   "productName": "灵魂出窍",
   "description": "灵魂出窍 · 旁观模式：飞离真身侦查，超出距离容忍 5 秒后自动回归",
+  "author": {
+    "name": "Yinx",
+    "email": "1423716216@qq.com",
+    "url": "https://github.com/Yinxe/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yinxe/MCBE.git"
+  },
   "private": true,
   "dependencies": {
     "@minecraft/server": "2.1.0",
@@ -32,6 +41,7 @@
   },
   "packing": {
     "mode": "auto",
-    "output": "../../release/"
+    "output": "../../release/",
+    "qq_group": "632178498"
   }
 }

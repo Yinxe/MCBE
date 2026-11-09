@@ -5,6 +5,8 @@
 export type {
   PackDirectories,
   PackageJson,
+  PackageJsonAuthor,
+  PackageJsonRepository,
   PackingConfiguration,
   PackingMode,
   PackManifest,
@@ -31,6 +33,7 @@ export {
   readPackManifestFile,
   resolvePackDirectories,
 } from "./discovery";
+export { normalizeRepositoryUrl, resolvePackDescription, resolvePackDisplayName } from "./metadata";
 export { createPackagesByMode, synchronizePackVersions } from "./packs";
 export {
   compareVersions,

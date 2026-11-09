@@ -27,14 +27,36 @@ export interface PackDirectories {
   resourcePackDirectory?: string;
 }
 
+/** `package.json` 中的作者信息;对象形式可分别提供名称、邮箱与主页 */
+export interface PackageJsonAuthor {
+  name?: string;
+  email?: string;
+  url?: string;
+}
+
+/** `package.json` 中的仓库信息;字符串形式直接当作仓库地址 */
+export interface PackageJsonRepository {
+  url?: string;
+}
+
 /** `package.json` 中与打包相关的字段 */
 export interface PackageJson {
   name: string;
   version: string;
+  /** 模组的中文显示名,写入清单 `header.name`;缺失时打包报错 */
+  productName?: string;
+  /** 模组简介,写入清单 `header.description` 首行;缺失时打包报错 */
+  description?: string;
+  /** 作者信息,字符串或对象两种形式均可 */
+  author?: string | PackageJsonAuthor;
+  /** 仓库信息,字符串或对象两种形式均可 */
+  repository?: string | PackageJsonRepository;
   packing?: {
     mode?: PackingMode;
     output?: string;
     minimum_engine_version?: number[];
+    /** 玩家 QQ 群号,写入清单描述;非 npm 标准字段,故放在 packing 块内 */
+    qq_group?: string;
   };
   dependencies?: Record<string, string>;
 }
@@ -42,6 +64,10 @@ export interface PackageJson {
 /** 包清单中与类型判定相关的字段 */
 export interface PackManifest {
   header: {
+    /** 包在游戏内显示的名称,打包时由 `package.json` 派生覆盖 */
+    name?: string;
+    /** 包在游戏内显示的描述,打包时由 `package.json` 派生覆盖 */
+    description?: string;
     uuid: string;
     version: number[];
     min_engine_version?: number[];
@@ -82,7 +108,12 @@ export const LEGACY_PACK_DIRECTORY_NAMES: Readonly<Record<string, string>> = {
 };
 
 /** `packing` 块支持的字段名;出现其它字段时报错,避免拼写错误被静默当成「未配置」 */
-export const SUPPORTED_PACKING_KEYS: readonly string[] = ["mode", "output", "minimum_engine_version"];
+export const SUPPORTED_PACKING_KEYS: readonly string[] = [
+  "mode",
+  "output",
+  "minimum_engine_version",
+  "qq_group",
+];
 
 /** 脚本 API 模块名,最低游戏版本的推导来源 */
 export const SCRIPT_API_MODULE_NAME = "@minecraft/server";

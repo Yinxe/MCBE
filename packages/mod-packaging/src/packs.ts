@@ -7,6 +7,7 @@ import * as path from "path";
 import { zipTask } from "@minecraft/core-build-tasks";
 import { getModuleName, readPackageJson, resolvePackingConfiguration } from "./configuration";
 import { readPackManifestFile, resolvePackDirectories } from "./discovery";
+import { resolvePackDescription, resolvePackDisplayName } from "./metadata";
 import {
   INTERMEDIATE_PACKAGE_DIRECTORY,
   SCRIPT_API_MODULE_NAME,
@@ -23,16 +24,19 @@ function writePackManifest(packDirectory: string, manifest: PackManifest): void 
 /**
  * 把 `package.json` 派生的声明同步进所有包清单。
  *
- * 写入 `header.version`、各 `modules[].version`、`header.min_engine_version`,
- * 并把资源包对行为包的依赖版本同步为行为包版本。
+ * 写入 `header.name`、`header.description`、`header.version`、各 `modules[].version`、
+ * `header.min_engine_version`,并把资源包对行为包的依赖版本同步为行为包版本。
  *
- * `min_engine_version` 与 `header.version` 同属「从 package.json 派生到清单」的
- * 声明字段,因此合并在同一处一次读写,避免两个任务分别对同一批清单读改写。
- * 任一解析失败均报错中止。
+ * 这些字段同属「从 package.json 派生到清单」的声明字段,因此合并在同一处一次读写,
+ * 避免多个任务分别对同一批清单读改写而产生中间态(任一任务失败会留下部分字段已改、
+ * 部分未改的清单)。任一解析失败均报错中止。
  */
 export function synchronizePackVersions(projectRoot: string): void {
   const packageJson = readPackageJson(projectRoot);
   const version = parseVersion(packageJson.version);
+  // 显示名与描述先解析:缺必需字段时在读取清单之前就报错,不留下半写状态
+  const displayName = resolvePackDisplayName(packageJson);
+  const description = resolvePackDescription(packageJson);
   const configuration = resolvePackingConfiguration(projectRoot);
   const minimumEngineVersion = configuration.minimumEngineVersion;
   const minimumEngineVersionSource =
@@ -40,6 +44,7 @@ export function synchronizePackVersions(projectRoot: string): void {
       ? "显式配置 packing.minimum_engine_version"
       : `由 ${SCRIPT_API_MODULE_NAME} 依赖版本 ${packageJson.dependencies?.[SCRIPT_API_MODULE_NAME]} 推导`;
   console.log(`[packaging] 最低游戏版本 ${minimumEngineVersion.join(".")}(${minimumEngineVersionSource})`);
+  console.log(`[packaging] 清单显示名 ${displayName}`);
   const { behaviorPackDirectory, resourcePackDirectory } = resolvePackDirectories(projectRoot);
 
   if (!behaviorPackDirectory && !resourcePackDirectory) {
@@ -50,6 +55,8 @@ export function synchronizePackVersions(projectRoot: string): void {
   if (behaviorPackDirectory) {
     const manifest = readPackManifestFile(path.join(behaviorPackDirectory, "manifest.json"));
     behaviorPackUuid = manifest.header.uuid;
+    manifest.header.name = displayName;
+    manifest.header.description = description;
     manifest.header.version = version;
     manifest.header.min_engine_version = minimumEngineVersion;
     for (const module of manifest.modules) {
@@ -62,13 +69,15 @@ export function synchronizePackVersions(projectRoot: string): void {
     }
     writePackManifest(behaviorPackDirectory, manifest);
     console.log(
-      `[packaging] 已同步行为包版本与最低游戏版本 ${minimumEngineVersion.join(".")}:` +
+      `[packaging] 已同步行为包显示名、描述、版本与最低游戏版本 ${minimumEngineVersion.join(".")}:` +
         `${path.relative(projectRoot, behaviorPackDirectory)}`
     );
   }
 
   if (resourcePackDirectory) {
     const manifest = readPackManifestFile(path.join(resourcePackDirectory, "manifest.json"));
+    manifest.header.name = displayName;
+    manifest.header.description = description;
     manifest.header.version = version;
     manifest.header.min_engine_version = minimumEngineVersion;
     for (const module of manifest.modules) {
@@ -81,7 +90,7 @@ export function synchronizePackVersions(projectRoot: string): void {
     }
     writePackManifest(resourcePackDirectory, manifest);
     console.log(
-      `[packaging] 已同步资源包版本与最低游戏版本 ${minimumEngineVersion.join(".")}:` +
+      `[packaging] 已同步资源包显示名、描述、版本与最低游戏版本 ${minimumEngineVersion.join(".")}:` +
         `${path.relative(projectRoot, resourcePackDirectory)}`
     );
   }

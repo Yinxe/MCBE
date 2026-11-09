@@ -3,6 +3,15 @@
   "version": "0.0.6",
   "productName": "传送",
   "description": "传送管理 · 传送点、死亡点、玩家间传送请求 · 无需作弊 · 保留成就",
+  "author": {
+    "name": "Yinx",
+    "email": "1423716216@qq.com",
+    "url": "https://github.com/Yinxe/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yinxe/MCBE.git"
+  },
   "private": true,
   "dependencies": {
     "@minecraft/server": "2.3.0",
@@ -33,6 +42,7 @@
   "packing": {
     "mode": "auto",
     "output": "../../release/",
-    "minimum_engine_version": [1, 21, 120]
+    "minimum_engine_version": [1, 21, 120],
+    "qq_group": "632178498"
   }
 }
