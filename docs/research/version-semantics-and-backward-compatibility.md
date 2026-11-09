@@ -33,7 +33,7 @@
 
 因此**两处必须手工保持一致**，否则会出现「编译期用的是 2.1.0 的类型，manifest 声明的是 2.0.0」这种错位——类型检查发现不了，运行时才炸。
 
-> `packages/packaging` 的 `synchronizePackVersions` 只同步 `header.version`、`modules[].version`、`header.min_engine_version` 与「资源包对行为包的依赖版本」，**从不改写 `dependencies[]` 里的 `@minecraft/server` 版本**。那一行是手写常量。
+> `packages/mod-packaging` 的 `synchronizePackVersions` 只同步 `header.version`、`modules[].version`、`header.min_engine_version` 与「资源包对行为包的依赖版本」，**从不改写 `dependencies[]` 里的 `@minecraft/server` 版本**。那一行是手写常量。
 
 ## 2. `min_engine_version` 的双重身份：门槛 + 行为开关
 

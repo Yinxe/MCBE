@@ -12,27 +12,52 @@
 | `keepinventory` | 死亡不掉落：玩家死亡时保留背包物品 |
 | `craftablerarities` | 合成配方扩展：79 个工作台配方合成稀有物品与隐藏方块 |
 | `spectator-mode` | 灵魂出窍：飞离真身侦查，超出距离容忍 5 秒后自动回归 |
+| `teleporter` | 传送：传送点、死亡点、玩家间传送请求；无需作弊、保留成就 |
 
 ## 模组不再自带打包实现
 
-打包逻辑全部在 [`@mc-toolchain/packaging`](../packages/packaging/README.md)，模组目录内**不再有** `tools/packaging.ts` 之类的实现文件。模组的 `just.config.ts` 只需导入并组装任务：
+打包逻辑全部在 [`@mc-toolchain/mod-packaging`](../packages/mod-packaging/README.md)，模组目录内**不再有** `tools/packaging.ts` 之类的实现文件。模组的 `just.config.ts` 只需导入并组装任务：
 
 ```ts
-import { createPackagesByMode, synchronizePackVersions } from "@mc-toolchain/packaging";
+import { createPackagesByMode, synchronizePackVersions } from "@mc-toolchain/mod-packaging";
 
 task("synchronizePackVersions", () => synchronizePackVersions(__dirname));
 task("pack", series("clean-build", "build", "synchronizePackVersions", createPackagesByMode(__dirname)));
 ```
 
-需要改打包行为（产物命名、包目录探测、最低版本推导）时，改 `packages/packaging` 一处即可，所有模组同时生效。**不要**在单个模组里重写这些逻辑。
+需要改打包行为（产物命名、包目录探测、最低版本推导）时，改 `packages/mod-packaging` 一处即可，所有模组同时生效。**不要**在单个模组里重写这些逻辑。
 
-包目录探测、版本同步与 `packing` 字段的含义见 `packages/packaging/README.md`。
+### 产物统一写入仓库根 `release/`
 
-## 运行时共享代码
+全部模组的产物集中在仓库根的 [`release/`](../release/) 目录，不在模组目录内留存。每个模组的 `package.json` MUST 显式声明：
 
-跨模组复用的运行时能力（`§` 文本样式码、跨行为包 HUD 总线）在 [`@mc-toolchain/shared`](../packages/shared/README.md)。模组通过 `dependencies` / `devDependencies` 中的 `"@mc-toolchain/shared": "*"` 引用，源码由 esbuild 直接内联进产物，不在游戏内产生额外模块加载。
+```jsonc
+{
+  "packing": {
+    "mode": "auto",
+    "output": "../../release/"
+  }
+}
+```
 
-该包以 TS 源码直出，因此**模组的 `tsconfig.json` 必须使用 `target: es6` 或更高**；降到 `es5` 会导致共享包源码编译失败。
+`output` 是**相对模组根目录**的路径，`mods/<name>/` 到仓库根正好两层，所以写 `../../release/`。打包库 `@mc-toolchain/mod-packaging` 的默认值仍是 `dist/packages`（相对模组根）——它不假设调用方位于本仓的 `mods/` 下，集中输出由各模组的显式配置保证。
+
+`release/` 已在根 `.gitignore` 中忽略，产物不入库。安装包时统一从 `release/` 取，文件名形如 `<name>-v<version>_bp.mcpack`。
+
+包目录探测、版本同步与 `packing` 字段的含义见 `packages/mod-packaging/README.md`。
+
+## 模组通用共享代码
+
+跨模组复用的通用能力都在 [`@mc-toolchain/mod-common`](../packages/mod-common/README.md)：
+
+- 运行时：`§` 文本样式码、跨行为包 HUD 总线（逐玩家优先级仲裁）。
+- 界面：模态/动作/消息表单构建器、受限上下文的安全执行助手、消息提示。
+
+模组通过 `dependencies` / `devDependencies` 中的 `"@mc-toolchain/mod-common": "*"` 引用，源码由 esbuild 直接内联进产物，不在游戏内产生额外模块加载。
+
+命令回调运行在受限上下文，传送、打开界面、写存档都必须推迟到安全 tick —— 这个推迟统一由 `@mc-toolchain/mod-common` 的 `runSafe` / `runSafeDetached` 承担，不要在模组内手写 `system.run`。机制说明见 [`docs/research/read-only-context.md`](../docs/research/read-only-context.md)。
+
+这个包以 TS 源码直出，因此**模组的 `tsconfig.json` 必须使用 `target: es6` 或更高**；降到 `es5` 会导致共享包源码编译失败。
 
 ## 目录布局约定
 

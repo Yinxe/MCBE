@@ -10,10 +10,11 @@ mc-toolchain/
 │   ├── auto-refill/
 │   ├── craftablerarities/
 │   ├── keepinventory/
-│   └── spectator-mode/
+│   ├── spectator-mode/
+│   └── teleporter/
 ├── packages/              # 仓库内共享包（不对外发布，以 TS 源码被模组直接消费）
-│   ├── packaging/         # 打包实现：包目录探测、版本同步、产物归档
-│   └── shared/            # 运行时共享代码：文本样式码、跨包 HUD 总线
+│   ├── mod-common/        # 模组通用代码：文本样式码、HUD 仲裁、表单构建器、安全执行助手
+│   └── mod-packaging/     # 打包实现：包目录探测、版本同步、产物归档
 ├── tools/                 # 可独立发布的工具包
 │   └── mcwiki-search/     # Minecraft Wiki 只读查询（库 / CLI / pi 工具）
 ├── docs/research/         # 调研记录（实测结论与可复现的验证方式）
@@ -28,15 +29,16 @@ mc-toolchain/
 | `keepinventory` | 死亡不掉落：玩家死亡时保留背包物品                           | [mods/keepinventory/README.md](mods/keepinventory/README.md) |
 | `craftablerarities` | 合成配方扩展：79 个工作台配方合成稀有、不可再生物品与隐藏方块（纯内容包，无脚本） | [mods/craftablerarities/README.md](mods/craftablerarities/README.md) |
 | `spectator-mode` | 灵魂出窍：飞离真身侦查，超出距离容忍 5 秒后自动回归 | [mods/spectator-mode/README.md](mods/spectator-mode/README.md) |
+| `teleporter` | 传送：传送点、死亡点、玩家间传送请求；无需作弊、保留成就 | [mods/teleporter/README.md](mods/teleporter/README.md) |
 
 `mods/` 下的目录布局、`mct` 用法、新建模组流程等共同规则见 [mods/README.md](mods/README.md)。
 
 ## 共享包
 
-| 包                       | 说明                                                                                     | 文档                                                     |
-| ------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `@mc-toolchain/packaging` | 打包逻辑的唯一实现：包目录探测与类型判定、版本与最低游戏版本同步、按 `mode` 产出归档 | [packages/packaging/README.md](packages/packaging/README.md) |
-| `@mc-toolchain/shared`    | 运行时共享代码：`§` 文本样式码、跨行为包 HUD 逐玩家优先级仲裁                       | [packages/shared/README.md](packages/shared/README.md)       |
+| 包                          | 说明                                                                                 | 文档                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `@mc-toolchain/mod-packaging` | 打包逻辑的唯一实现：包目录探测与类型判定、版本与最低游戏版本同步、按 `mode` 产出归档 | [packages/mod-packaging/README.md](packages/mod-packaging/README.md) |
+| `@mc-toolchain/mod-common`    | 模组通用代码：`§` 文本样式码、跨行为包 HUD 逐玩家优先级仲裁、模态/动作/消息表单构建器、受限上下文的安全执行助手、消息提示 | [packages/mod-common/README.md](packages/mod-common/README.md) |
 
 `packages/` 下的包均为 `private`，不发布到 npm。它们以 TypeScript 源码直出（`main` / `types` 均指向 `src/index.ts`），由模组通过 npm workspace 直接消费，无构建步骤。
 

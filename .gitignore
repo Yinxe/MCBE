@@ -5,6 +5,9 @@ node_modules/
 dist/
 lib/
 
+# 全部模组的发布产物统一输出到这里(各模组 package.json 的 packing.output 指向 ../../release/)
+release/
+
 # 模组纯逻辑测试的编译产物(tsc -p tests/tsconfig.json)
 .test-build/
 
@@ -18,3 +21,6 @@ npm-debug.log*
 # 编辑器 / 系统
 .DS_Store
 Thumbs.db
+.idea/
+.openidea/
+.vscode/

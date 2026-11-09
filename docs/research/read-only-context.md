@@ -90,7 +90,7 @@ cannot be called in read-only mode
 ## 4. 实践规则
 
 1. 回调体**只做参数解析与鉴权**。任何涉及 §3.2 成员的操作都用 `system.run` 推迟。
-2. **不要双层包裹**。若已用统一的执行助手(如 `@mc-toolchain/ui` 的安全上下文执行助手),回调体内不再手动 `system.run`,否则多一层 tick 延迟。
+2. **不要双层包裹**。若已用统一的执行助手(如 `@mc-toolchain/mod-common` 的安全上下文执行助手),回调体内不再手动 `system.run`,否则多一层 tick 延迟。
 3. 推迟后**重新校验对象有效性**:`system.run` 到下一 tick 之间玩家可能离线,应检查 `player.isValid` 后再操作。
 4. 执行助手**必须捕获回调抛出的错误**。否则 `system.run` 内的异常会成为 unhandled rejection 静默消失,表现为「点了没反应」。
 
@@ -157,8 +157,8 @@ console.log(`\n合计 ${records.length} 个受限成员`);
 
 | 位置 | 承担什么 |
 | --- | --- |
-| `packages/ui` 的安全上下文执行助手 | 唯一的推迟实现;所有模组的回调经它进入安全上下文,并在此捕获异常 |
-| `openspec/specs/shared-ui/spec.md` | 「受限上下文的回调必须推迟执行」一条,含判据与场景 |
+| `packages/mod-common` 的安全上下文执行助手 | 唯一的推迟实现;所有模组的回调经它进入安全上下文,并在此捕获异常 |
+| `openspec/specs/mod-common/spec.md` | 「受限上下文的回调必须推迟执行」一条,含判据与场景 |
 | `openspec/specs/teleporter/spec.md` | 命令回调只做解包与鉴权,写操作必须推迟 |
 
 在本文档之前,这条知识只存在于两处代码注释里(`mods/auto-refill/scripts/AdminMenu.ts`、`mods/spectator-mode/scripts/mc/commands.ts`),任何新模组都可能漏掉。
