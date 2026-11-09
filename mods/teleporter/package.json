@@ -9,8 +9,8 @@
     "@minecraft/server-ui": "2.0.0"
   },
   "devDependencies": {
-    "@mc-toolchain/packaging": "*",
-    "@mc-toolchain/ui": "*",
+    "@mc-toolchain/mod-packaging": "*",
+    "@mc-toolchain/mod-common": "*",
     "@minecraft/core-build-tasks": "5.5.0",
     "@types/node": "^26.6.6",
     "@typescript-eslint/eslint-plugin": "8.72.1",
@@ -32,7 +32,7 @@
   },
   "packing": {
     "mode": "auto",
-    "output": "dist/packages",
+    "output": "../../release/",
     "minimum_engine_version": [1, 21, 120]
   }
 }
