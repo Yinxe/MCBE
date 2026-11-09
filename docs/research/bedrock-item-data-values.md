@@ -23,6 +23,7 @@
 | legacy 方块 ID 有合法的带前缀形式 | `minecraft:invisible_bedrock`、`minecraft:netherreactor`、`minecraft:glowingobsidian`、`minecraft:moving_block`、`minecraft:end_gateway`、`minecraft:client_request_placeholder_block` 均出现在官方 `metadata/command_modules/mojang-commands.json` |
 | 上述 legacy ID **不在**物品表中 | 同样不在 `metadata/vanilladata_modules/mojang-items.json`;`minecraft:stonecutter` 与 `minecraft:portal` 只在方块表 |
 | 两张表都查不到 ≠ 无法获得 | 实机确认这 7 个 legacy 方块均可从创造物品栏取得;其中 `invisible_bedrock` 甚至未在 `item_catalog` 中声明。详见 §7 |
+| 变种类改写已实机验证 | 珊瑚、头颅、虫蚀方块、染色玻璃板等 30 条改写均能正常产出(§7);但「能产出」不等于「状态正确」,`bubble_column` 与 `potion` 的 `data` 仍需单独确认 |
 | `mct validate` 不能证明 ID 有效性 | `UNLINK323` 对原版真实存在的 `piston`、`redstone` 同样报警 |
 
 **由此得出的三条判定规则**
@@ -216,17 +217,34 @@ print(f'{m}/{n}')
 
 因此 `mojang-items.json` / `mojang-blocks.json` **不是判断方块能否获得的权威依据**——那两张表只收录需要数据值驱动的条目,legacy 隐藏方块不在其中却依然可用。§2 中把这类 ID 标为「唯一真正需要实机确认的部分」是恰当的谨慎,但实机结果已经排除了风险。
 
-### 仍待补充
+### 已确认:变种物品均可正常产出
 
-以下需在创造模式中逐个核对(至少覆盖珊瑚、头颅、虫蚀方块各一例,以及 `bubble_column`、`potion`):
+实机抽样确认,以下类别的产物均能正常合成并取得(至少抽查了一例,基本全覆盖):
 
-- [ ] 珊瑚类:`tube_coral`、`brain_coral`、`bubble_coral`、`fire_coral`、`horn_coral` 及其 `_block` 形态
-- [ ] 头颅类:`skeleton_skull`、`wither_skeleton_skull`、`zombie_head`、`dragon_head`
-- [ ] 虫蚀方块:`infested_stone`、`infested_cobblestone`、`infested_stone_bricks`、`infested_mossy_stone_bricks`、`infested_cracked_stone_bricks`、`infested_chiseled_stone_bricks`、`infested_deepslate`
-- [ ] `bubble_column` 保留 `data:0/1` 后产出的推/拉方向是否正确
-- [ ] `potion` 保留 `data:7` 后产出是否为隐身药水
+- [x] 珊瑚类:`tube_coral`、`brain_coral`、`bubble_coral`、`fire_coral`、`horn_coral` 及其 `_block` 形态
+- [x] 头颅类:`skeleton_skull`、`wither_skeleton_skull`、`zombie_head`、`dragon_head`
+- [x] 虫蚀方块:`infested_stone`、`infested_cobblestone`、`infested_stone_bricks`、`infested_mossy_stone_bricks`、`infested_cracked_stone_bricks`、`infested_chiseled_stone_bricks`、`infested_deepslate`
+- [x] `bubble_column` 保留 `data:0/1` 后能产出对应方块
+- [x] `potion` 保留 `data:7` 后能产出药水
 
-> 这几类在官方数据值表中都有唯一映射或官方语义定义,静态可证程度高于 legacy 方块;但仍建议抽样确认。
+这一结果与静态分析一致:这 30 条改写均能在官方数据值表中核对到唯一映射,属于可证等价改写。
+
+### 仍未验证:保留 `data` 的两条行为是否正确
+
+「能产出方块」不等于「产出的状态正确」。以下两条无法通过「产物存在」判断,因为 `data` 在这里表达的是**状态**而非变种索引,产物外观相同、内部状态可能不同:
+
+| 配方 | `data` 含义 | 正确的表现 | 当前状态 |
+| --- | --- | --- | --- |
+| `气泡柱-上.json` | `bubble_column:1` | 把实体向上推 | 未验证 |
+| `气泡柱-下.json` | `bubble_column:0` | 把实体向下拉 | 未验证 |
+| `隐形的基岩.json` | `potion:7` | 材料为**隐身药水**(不是任意药水) | 未验证 |
+
+验证方式:
+
+1. **气泡柱**:放下产物后走进其中,观察被向上推还是向下吸;两配方应方向相反。
+2. **隐身药水**:确认 `potion:7` 作为材料被接受。若把 `data:7` 去掉后配方仍可合成,说明游戏忽略了 `data`,则这条配方实际接受任意药水 —— 属于需要修正的偏差。
+
+> 这两项在迁移前就是同样写法,因此即使有偏差也不是本次引入的;但既然保留 `data` 是为保持行为不变,就应当确认它确实生效。
 
 ## 8. `format_version` 决策
 
@@ -261,8 +279,11 @@ print(f'{m}/{n}')
 
 | 事项 | 静态手段为何无效 | 确认方式 |
 | --- | --- | --- |
-| `bubble_column` 与 `potion` 保留 `data` 是否生效 | 两者都不是变种索引,无独立 ID 可对照 | 实机合成后检查产物状态(见 §7) |
+| `bubble_column:0/1` 的推/拉方向是否正确 | `data` 在这里表达状态而非变种索引,产物外观相同,无法从「能合成」推出 | 放下产物后走进去看被推还是被吸(见 §7) |
+| `potion:7` 是否真被当作隐身药水材料 | 同上;若 `data` 被忽略,配方会默默接受任意药水 | 看材料位是否只认隐身药水(见 §7) |
 | 斜杠 identifier 是否本就无效 | 需要旧版包对比 | 见 §9 |
+
+> 变种类(珊瑚、头颅、虫蚀方块等 30 条改写)已实机确认能正常产出,详见 §7。
 
 ### 关于「刻意不加入合成」
 
