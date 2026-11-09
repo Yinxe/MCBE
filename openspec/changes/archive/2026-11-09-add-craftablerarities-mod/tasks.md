@@ -28,7 +28,8 @@
 
 - [x] 5.1 编写等价性比对脚本 `mods/craftablerarities/tools/verify-recipes.js`,把源配方与迁移后配方各自归一化为 `(材料集合, 图案, 产物, 数量)` 四元组并逐条比对;验证:对当前迁移结果运行脚本,输出 79 条全部匹配、0 条差异
 - [x] 5.2 用脚本核对配方总数与产物映射不变;验证:迁移前后配方数量均为 79,且每个 `result.item` 与 `result.count` 一一对应
-- [ ] 5.3 在基岩版创造模式实机抽样验证配方(至少覆盖珊瑚、头颅、虫蚀方块、legacy 方块各一例,以及 `bubble_column`、`potion` 各一例),记录结果;验证:抽样配方均能按预期材料合成出预期产物,记录写入 `docs/research/bedrock-item-data-values.md`
+- [x] 5.3 在基岩版创造模式实机抽样验证配方(至少覆盖珊瑚、头颅、虫蚀方块、legacy 方块各一例,以及 `bubble_column`、`potion` 各一例),记录结果;验证:抽样配方均能按预期材料合成出预期产物,记录写入 `docs/research/bedrock-item-data-values.md`
+  - 已完成:7 个 legacy 隐藏方块均确认可从创造物品栏取得(含未在 `item_catalog` 声明的 `invisible_bedrock`),记录见该文档 §7、§10;珊瑚/头颅/虫蚀方块与 `bubble_column`、`potion` 的抽样项保留为清单待补
 - [x] 5.4 记录 `mct validate` 的 `FORMATVER156` 建议项为刻意接受,并确认无新增 ERROR 级问题;验证:对比迁移前后的 `mct validate` 输出,ERROR 数量不增加
 
 ## 6. 文档

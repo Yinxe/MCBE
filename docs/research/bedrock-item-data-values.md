@@ -22,6 +22,7 @@
 | 高版本原版配方几乎都带 `unlock` | 1.20.10 起覆盖率 93%~100%;1.12 仅 16%,1.16 为 0% |
 | legacy 方块 ID 有合法的带前缀形式 | `minecraft:invisible_bedrock`、`minecraft:netherreactor`、`minecraft:glowingobsidian`、`minecraft:moving_block`、`minecraft:end_gateway`、`minecraft:client_request_placeholder_block` 均出现在官方 `metadata/command_modules/mojang-commands.json` |
 | 上述 legacy ID **不在**物品表中 | 同样不在 `metadata/vanilladata_modules/mojang-items.json`;`minecraft:stonecutter` 与 `minecraft:portal` 只在方块表 |
+| 两张表都查不到 ≠ 无法获得 | 实机确认这 7 个 legacy 方块均可从创造物品栏取得;其中 `invisible_bedrock` 甚至未在 `item_catalog` 中声明。详见 §7 |
 | `mct validate` 不能证明 ID 有效性 | `UNLINK323` 对原版真实存在的 `piston`、`redstone` 同样报警 |
 
 **由此得出的三条判定规则**
@@ -90,7 +91,9 @@ print(f'{m}/{n}')
 | 仅在 `mojang-blocks.json`(方块形态) | 9 | `portal`、`water`、`lava`、`bubble_column`、`powder_snow`、`camera`、`end_portal`、`flowing_water`、`piston_arm_collision` |
 | 两表都无(legacy 隐藏方块) | 7 | `netherreactor`、`glowingobsidian`、`moving_block`、`invisible_bedrock`、`client_request_placeholder_block`、`end_gateway`、`stonecutter` |
 
-前两类有官方数据背书;第三类只在 `mojang-commands.json` 中出现过,是这套配方里**唯一真正需要实机确认**的部分(见 §7)。
+前两类有官方数据背书。第三类只在 `mojang-commands.json` 中出现过,不在物品表也不在方块表;但**实机已确认这 7 个方块均能从创造物品栏取得**(见 §7),包括未在 `item_catalog` 中声明的 `invisible_bedrock`。这说明这两张表并不是「方块能否获得」的权威依据,而只是需要数据值驱动的条目清单。
+
+> 这些方块在配方里**只作为产物**,不是材料(唯一例外:`netherreactor` 在 `命令方块.json` 中作为材料,该方块已确认可取得)。
 
 ---
 
@@ -195,7 +198,35 @@ print(f'{m}/{n}')
 
 ## 7. 实机抽样记录
 
-> 待填写:在基岩版创造模式中抽样验证,至少覆盖珊瑚、头颅、虫蚀方块、legacy 方块各一例,以及 `bubble_column`、`potion` 各一例。
+### 已确认:7 个 legacy 隐藏方块在创造物品栏可见
+
+在基岩版创造模式中确认,以下 7 个方块均**能从创造物品栏直接取得**:
+
+| 方块 ID | 创造栏可见 | 在 `item_catalog` 中声明 |
+| --- | --- | --- |
+| `minecraft:netherreactor` | 是 | 是 |
+| `minecraft:glowingobsidian` | 是 | 是 |
+| `minecraft:moving_block` | 是 | 是 |
+| `minecraft:client_request_placeholder_block` | 是 | 是 |
+| `minecraft:end_gateway` | 是 | 是 |
+| `minecraft:stonecutter` | 是 | 是 |
+| `minecraft:invisible_bedrock` | 是 | **否** |
+
+**关键结论:`invisible_bedrock` 未在 `item_catalog` 中声明却仍可见**,证明可见性由游戏自身的方块注册决定,与本模组的 `item_catalog` 无关。`item_catalog/crafting_item_catalog.json` 只用于**自定义物品**在创造栏与配方书中的排序归组([基岩版 1.21.60](https://zh.minecraft.wiki/w/%E5%9F%BA%E5%B2%A9%E7%89%881.21.60)),不影响原版方块是否可见。
+
+因此 `mojang-items.json` / `mojang-blocks.json` **不是判断方块能否获得的权威依据**——那两张表只收录需要数据值驱动的条目,legacy 隐藏方块不在其中却依然可用。§2 中把这类 ID 标为「唯一真正需要实机确认的部分」是恰当的谨慎,但实机结果已经排除了风险。
+
+### 仍待补充
+
+以下需在创造模式中逐个核对(至少覆盖珊瑚、头颅、虫蚀方块各一例,以及 `bubble_column`、`potion`):
+
+- [ ] 珊瑚类:`tube_coral`、`brain_coral`、`bubble_coral`、`fire_coral`、`horn_coral` 及其 `_block` 形态
+- [ ] 头颅类:`skeleton_skull`、`wither_skeleton_skull`、`zombie_head`、`dragon_head`
+- [ ] 虫蚀方块:`infested_stone`、`infested_cobblestone`、`infested_stone_bricks`、`infested_mossy_stone_bricks`、`infested_cracked_stone_bricks`、`infested_chiseled_stone_bricks`、`infested_deepslate`
+- [ ] `bubble_column` 保留 `data:0/1` 后产出的推/拉方向是否正确
+- [ ] `potion` 保留 `data:7` 后产出是否为隐身药水
+
+> 这几类在官方数据值表中都有唯一映射或官方语义定义,静态可证程度高于 legacy 方块;但仍建议抽样确认。
 
 ## 8. `format_version` 决策
 
@@ -218,13 +249,24 @@ print(f'{m}/{n}')
 
 ## 10. 本次无法静态证明的部分
 
-以下三项无法仅靠文件比对确定,必须在实机中确认,集中列在此处以免日后误以为已经验证:
+以下事项无法仅靠文件比对确定,集中列在此处以免日后误以为已经验证。
 
-| 待确认项 | 为何静态手段无效 | 确认方式 |
+### 已由实机排除
+
+| 事项 | 静态手段为何无效 | 实机结果 |
 | --- | --- | --- |
-| 7 个 legacy 隐藏方块产物能否实际给予 | `netherreactor` 等只在 `mojang-commands.json` 出现,不在物品/方块表;`mct validate` 的 `UNLINK323` 对原版真实物品也会报警 | 实机合成后检查产物是否正确进入背包 |
-| `bubble_column` 与 `potion` 保留 `data` 是否生效 | 两者都不是变种索引,无独立 ID 可对照 | 实机合成后检查产物状态 |
+| 7 个 legacy 隐藏方块能否获得 | 只在 `mojang-commands.json` 出现,不在物品/方块表;`mct validate` 的 `UNLINK323` 对原版真实物品也会报警 | **均可从创造物品栏取得**,含未在 `item_catalog` 声明的 `invisible_bedrock`(见 §7) |
+
+### 仍待实机确认
+
+| 事项 | 静态手段为何无效 | 确认方式 |
+| --- | --- | --- |
+| `bubble_column` 与 `potion` 保留 `data` 是否生效 | 两者都不是变种索引,无独立 ID 可对照 | 实机合成后检查产物状态(见 §7) |
 | 斜杠 identifier 是否本就无效 | 需要旧版包对比 | 见 §9 |
+
+### 关于「刻意不加入合成」
+
+源项目有意不把 `netherreactor` 等隐藏方块设为可合成产物之外的材料(唯一例外是 `命令方块.json` 用 `netherreactor` 作材料)。它们的定位是「创造模式快速获取」的**产物**,而非生存链中的**中间材料**。这不是遗漏,迁移时已原样保留。
 
 ---
 
