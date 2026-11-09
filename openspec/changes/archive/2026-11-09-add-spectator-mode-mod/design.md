@@ -14,15 +14,16 @@
 
 ### 本仓现状
 
-- `mods/` 已有 `auto-refill`(2.2.0,`@minecraft/server 2.1.0`,`min_engine_version [1,21,100]`)与 `keepinventory`(0.0.1,`2.0.0` / `[1,21,90]`)。两者都只有行为包,`packing.mode: "auto"`,`pack` 走 `@mc-toolchain/packaging`。
-- `@mc-toolchain/shared` 提供 `color` / `style` / `HudManager` / `HUD_SLOTS` / `pickWinner` / `isStale`;`HudManager` 通过 `/scriptevent yinxe:hud` 与同世界其它包交换槽位声明,同优先级按 `modId` 字典序决胜。
-- `@mc-toolchain/packaging` 的 `synchronizePackVersions` 会把 `package.json#version` 与推导出的最低游戏版本写进各包清单;`SCRIPT_API_VERSION_MAPPINGS` 中 `2.1.0 → [1,21,100]`。
+- `mods/` 已有 `auto-refill`(2.2.0,`@minecraft/server 2.1.0`,`min_engine_version [1,21,100]`)与 `keepinventory`(0.0.1,`2.0.0` / `[1,21,90]`)。两者都只有行为包,`packing.mode: "auto"`,`pack` 走 `@mc-toolchain/mod-packaging`。
+- `@mc-toolchain/mod-common` 是仓库唯一的内部共享包(原 `packages/shared` 与 `packages/ui` 已合并):提供 `color` / `style` / `HudManager` / `HUD_SLOTS` / `pickWinner` / `isStale`,三类表单构建器(`ModalFormBuilder` / `ActionFormBuilder` / `MessageFormBuilder`),安全上下文执行助手(`runSafe` / `runSafeDetached` / `createRunSafe`),以及 `notifySuccess` / `notifyError` / `parseModalValues`。`HudManager` 通过 `/scriptevent yinxe:hud` 与同世界其它包交换槽位声明,同优先级按 `modId` 字典序决胜。
+- `@mc-toolchain/mod-packaging` 的 `synchronizePackVersions` 会把 `package.json#version` 与推导出的最低游戏版本写进各包清单;`SCRIPT_API_VERSION_MAPPINGS` 中 `2.1.0 → [1,21,100]`。
+- `mods/README.md` 约定:跨模组复用的能力都从 `@mc-toolchain/mod-common` 取;命令回调运行在受限上下文,推迟统一由该包的 `runSafe` / `runSafeDetached` 承担,**不得在模组内手写 `system.run`**。`teleporter` 是这条约定的既有样板(`ActionFormBuilder` / `ModalFormBuilder` + `runSafeDetached`)。
 - 纯逻辑测试口径:模组侧用 `tsc -p tests/tsconfig.json` 编到 `.test-build` 后 `node --test`(`auto-refill` 是既有样板)。
 - `pack-icon` 规范要求 128×128 RGBA 像素画,`auto-refill` 用 `tools/generate-pack-icon.js` 生成(32×32 逻辑像素 4 倍最近邻放大)。
 
 ### 已核实的 API 可用性
 
-在 `@minecraft/server` 2.1.0 的类型面中逐一确认存在：`world.isHardcore`、`system.beforeEvents.startup` / `StartupEvent.customCommandRegistry`、`CustomCommandRegistry` / `CustomCommand` / `CustomCommandOrigin` / `CommandPermissionLevel` / `CustomCommandParamType`、`world.afterEvents.playerJoin` / `playerLeave`、`Player.getGameMode` / `setGameMode` / `teleport` / `getDynamicProperty` / `setDynamicProperty`、`Dimension.spawnParticle` / `getBlock`、`MolangVariableMap`(`setColorRGBA` / `setVector3` / `setFloat`)、`Player.playerPermissionLevel` 与 `PlayerPermissionLevel`。`@minecraft/server-ui` 2.0.0 的 `ModalFormData.toggle/slider/submitButton` 支持 `tooltip`。
+在 `@minecraft/server` 2.1.0 的类型面中逐一确认存在：`world.isHardcore`、`system.beforeEvents.startup` / `StartupEvent.customCommandRegistry`、`CustomCommandRegistry` / `CustomCommand` / `CustomCommandOrigin` / `CommandPermissionLevel` / `CustomCommandParamType`、`world.afterEvents.playerJoin` / `playerLeave`、`Player.getGameMode` / `setGameMode` / `teleport` / `getDynamicProperty` / `setDynamicProperty`、`Dimension.spawnParticle` / `getBlock`、`MolangVariableMap`(`setColorRGBA` / `setVector3` / `setFloat`)、`Player.playerPermissionLevel` 与 `PlayerPermissionLevel`。`@minecraft/server-ui` 2.0.0 的 `ModalFormData.toggle/slider/submitButton` 支持 `tooltip`(这也是 `@mc-toolchain/mod-common` 的 `ModalFormBuilder` 能直通 `tooltip` 选项的前提)。
 
 ### 已核实的夜视相关事实
 
@@ -30,7 +31,7 @@
 - **`Effect.duration` 是「总时长」而不是「剩余时长」**:本地 `index.d.ts` 与 Microsoft Learn 均明确写着 *"Gets the entire specified duration, in ticks, of this effect"*。因此无法从 API 直接读到「玩家原有夜视还剩多久」,必须在进入灵魂出窍时自行快照。这是本功能最关键的技术约束。
 - `Effect` 暴露 `amplifier` / `duration` / `typeId` / `isValid`,无 `remainingTicks` 一类的属性。
 - `EntityEffectOptions` 只有 `amplifier` 与 `showParticles`,无「是否显示图标」开关;因此灵魂阶段用 `showParticles: false` 减少视觉干扰,但无法隐藏效果图标。
-- `system.currentTick`(`readonly`,行 16127)可作为自计时的单调时钟,精度满足「按已消耗 tick 扣减」的需求。
+- **夜视的闪烁阈值是「剩余 10 秒」**:Minecraft Wiki「夜视」词条写明 *"效果剩余时间不足10秒时,屏幕会每10游戏刻(0.5秒)在夜视强度40%~100%之间不断闪烁"*(<https://zh.minecraft.wiki/w/夜视>)。这是本功能的第二条关键约束:灵魂阶段的效果剩余时长必须**始终高于** 200 tick,否则整个灵魂阶段都会落在闪烁区间内。
 - 夜视的效果标识为 `minecraft:night_vision`(Minecraft Wiki 状态效果 ID)。
 
 ## Goals / Non-Goals
@@ -48,9 +49,9 @@
 - 不重构上游决策逻辑(状态机相位、颜色阈值、粒子常量、HUD 排版都保持数值一致)。
 - 不为「上游包与本模组共存于同一世界」提供兼容层或命令重命名。
 - 不为夜视做「灵魂阶段保留玩家自饮药水」的兼容:灵魂阶段由模组接管夜视,回归时按进入前快照还原。
-- 不把 `ModalFormBuilder` / `defineCommand` / `canManage` 抽进 `@mc-toolchain/shared`(共享包 README 明确排除这三项,且目前只有本模组会用到)。
+- 不把 `defineCommand` / `canManage` 抽进 `@mc-toolchain/mod-common`(`mod-common` README 将这两项列为「刻意不包含」,且目前只有本模组会用到)。表单构建器已由该包提供,本变更只消费其现有导出,不新增共享包 API 面。
 - 不改变 `sp:*` 键名、不提供旧键名到新键名的迁移读写。
-- 不改动 `packages/packaging` 与 `packages/shared` 的源码。
+- 不改动 `packages/mod-packaging` 与 `packages/mod-common` 的源码。
 
 ## Decisions
 
@@ -74,18 +75,20 @@
 
 **备选**:改为 `spectator_mode:*` 全词键名。否决理由:会让旧世界的配置回落到默认值、让离线灵魂锚点失效(玩家重连后变成普通旁观者且无逃逸口),必须额外写一次性迁移逻辑,收益只是命名整齐。
 
-### D3: `@yinxe/toolkit` 三处用法分别替换,不引入新的共享封装
+### D3: 表单与 HUD 走 `@mc-toolchain/mod-common`,命令注册与权限判定留在模组内
 
 | 上游用法 | 本仓替代 |
 | --- | --- |
-| `HudManager` / `color` / `style` | `@mc-toolchain/shared` 的同名导出 |
+| `HudManager` / `color` / `style` | `@mc-toolchain/mod-common` 的同名导出 |
+| `ModalFormBuilder` | `@mc-toolchain/mod-common` 的 `ModalFormBuilder`(`.toggle(name, label, opts)` / `.slider(name, label, min, max, opts)` / `.submitButton(text)` / `async show(player): Promise<FormValues \| null>`) |
 | `defineCommand(registry, config, handler)` | 直接 `registry.registerCommand(config, (origin, ...args) => …)`,在回调内从 `origin.sourceEntity` 取玩家并做 `instanceof Player` 判定 |
 | `canManage(player)` | `player.playerPermissionLevel >= PlayerPermissionLevel.Operator` |
-| `ModalFormBuilder` | `@minecraft/server-ui` 的 `ModalFormData`(`.toggle(label, { defaultValue, tooltip })` / `.slider(label, min, max, { valueStep, defaultValue, tooltip })`) |
 
-**理由**:`auto-refill` 已经用原生 `ModalFormData` 与 `registerCommand` 跑通同一套形态,本模组照抄即可,不新增共享包 API 面。`defineCommand` 的唯一附加价值是「非玩家来源返回失败消息」与「按声明顺序把位置参数映射成对象」——本模组只有 1 个可选参数,直写更清楚。
+**理由**:`mods/README.md` 要求「表单能力用 `@mc-toolchain/mod-common`,回调推迟统一由 `runSafe` / `runSafeDetached` 承担,不得在模组内手写 `system.run`」。共享的 `ModalFormBuilder` 已经内含三项本模组本来得重新实现的契约:取消返回 `null` 而不抛异常、字段按下标解析后以字段名返回(避开装饰行占下标的坑)、回调已在安全上下文。改用原生 `ModalFormData` 等于把这三项自己再写一遍,而且它会绕开仓库统一的推迟入口。
 
-**备选**:把 `defineCommand` / `canManage` 搬进 `@mc-toolchain/shared`。否决理由:共享包 README 已明确把这三项列为「刻意不包含」,且搬进来后仍需为「只有一个消费方」付维护成本。若将来第三个模组也需要,再单独立项抽取。
+`defineCommand` / `canManage` 仍留在模组内:`mod-common` README 把「命令注册封装」与「玩家权限判定」明确列为「刻意不包含」——两者与具体模组的交互设计强耦合(本模组要保留上游的可选 `action` 参数与「命令人人可执行、表单仅 OP」的权限模型)。
+
+**代价**:`ModalFormBuilder.show()` 会把表单异常 `console.warn` 后返回 `null`,与「玩家取消」不可区分。本模组接受这一静默:取消本就不应提示,异常已进日志;因此 `menu.ts` 不再保留「打开表单失败」的玩家可见提示。
 
 ### D4: 依赖 `@minecraft/server 2.1.0`,最低游戏版本 `[1,21,100]`
 
@@ -114,7 +117,7 @@ scripts/
     ├── controller.ts       会话编排:tick、恢复、自愈、强制回归
     ├── playerUtil.ts       无效/假人玩家对象过滤
     ├── commands.ts         /sp:soul 注册与权限分支
-    └── menu.ts             ModalFormData 管理表单
+    └── menu.ts             ModalFormBuilder 管理表单
 ```
 
 **理由**:这套分层让「4 个纯逻辑文件可 node 单测」这条规格成立,也让适配层与游戏强耦合的部分集中在一处。`tests/tsconfig.json` 只需 include `core/*.ts`,与 `auto-refill` 的测试编译配置同构。
@@ -149,31 +152,43 @@ scripts/
 
 **理由**:这四组用例是「行为不变」最直接的证据。迁移过程中若某处数值被无意改动(例如容忍时长从 5000ms 写成 500ms),用例会立即失败。
 
-### D10: 夜视增益用「进入时快照 + 短时长周期刷新 + 按差值还原」
+### D10: 夜视增益用「进入时快照 + 长时长周期刷新 + 原样恢复」
 
-**快照**:进入灵魂出窍时读 `player.getEffect("minecraft:night_vision")`,把 `{ amplifier, durationTicks, enteredTick: system.currentTick }` 存入玩家动态属性 `sp:nvSave`(与锚点同生命周期,回归时一并清除)。
+**快照**:进入灵魂出窍时读 `player.getEffect("minecraft:night_vision")`,把 `{ amplifier, durationTicks }` 存入玩家动态属性 `sp:nvSave`(与锚点同生命周期,回归时一并清除)。**不记录进入时刻**——模组夜视不消耗玩家夜视,无需扣减。
 
-**灵魂阶段**:每 200 tick 施加一次 `addEffect("minecraft:night_vision", 300, { amplifier: 0, showParticles: false })`。效果时长 300 tick 大于刷新间隔 200 tick,留 100 tick 余量,即使某次 tick 被跳过也不会断档。
+**灵魂阶段**:每 400 tick(20 秒)施加一次 `addEffect("minecraft:night_vision", 1200, { amplifier: 0, showParticles: false })`。
 
-**回归还原**:读快照,`elapsed = system.currentTick - enteredTick`;`remaining = snapshot.durationTicks - elapsed`。快照不存在(进入前无夜视)→ `removeEffect`;`snapshot.durationTicks` 为非正数(无限时长)→ 用非正数时长重新施加,保持无限;`remaining > 0` → 按原 `amplifier` 施加 `remaining` tick;`remaining <= 0` → 视为已在灵魂阶段自然过期,不施加(保留自然结束的语义)。
+两个数值都是为了绕开「剩余不足 10 秒(200 tick)即闪烁」这条客户端行为:
 
-**理由**:`Effect.duration` 只给总时长、不给剩余时长(见 Context),所以「还原玩家原有夜视」只能靠自计时。快照放在玩家 DP 而非内存,是为了让「以灵魂状态离线再重连」也能量对时间基准——`system.currentTick` 在重启后会重置,因此快照的 `enteredTick` 在重连场景下不可信,此时按「保留快照时长」处理并在 README 说明该近似。
+- **效果时长 1200 tick(60 秒)** 是闪烁阈值的 6 倍。效果剩余时长在灵魂阶段始终处于 800~1200 tick(40~60 秒)区间,最低点仍是阈值的 4 倍,因此**整个灵魂阶段都不会闪烁**。
+- **刷新间隔 400 tick(20 秒)** 远小于时长,留 800 tick(40 秒)余量,即使某次 tick 被跳过或玩家经历一次长卡顿也不会断档。
+- 若 tick 循环彻底停摆(例如控制器异常退出),最坏情况是夜视残留 60 秒后自然过期,而不是残留数分钟。
 
-**备选一:一次性施加超长时长**(如 999999 tick)。否决理由:会覆盖玩家原有的剩余时长,回归时无法区分「原本就没有」与「原本快到期」,直接违背「恢复他的夜视能力」这一诉求。
+**为什么不用「短时长高频刷新」**:第一版用的是 120 tick 时长 + 80 tick 刷新。这样虽然断档余量够,但**效果时长本身就短于 200 tick 的闪烁阈值**,于是从施加那一刻起客户端就一直在闪(实测表现为 5-0-5 的持续闪烁视野)。短时长刷新只能保证「不断档」,不能保证「不闪烁」——两者需要不同的数值区间,必须同时满足。
+
+**回归恢复**:读快照,按快照**原样**重新施加。快照不存在(进入前无夜视)→ `removeEffect`;`snapshot.durationTicks` 为非正数(无限时长)→ 用非正数时长施加,保持无限;否则按原 `amplifier` 与**原 `durationTicks`** 施加。快照里的时长就是进入那一刻的完整时长,不做任何扣减。
+
+**理由**:需求明确要求「夜视是模组赠送的效果,不得消耗玩家生存模式的夜视效果」。快照 + 原样恢复正好实现这一语义:玩家在灵魂阶段停留多久都不影响他自己的夜视余额。
+
+**为什么仍需快照**:若不快照,回归时只能选择「移除夜视」(把玩家原有的也删了,违背需求)或「不做任何事」(则玩家会白得灵魂阶段的模组夜视,同样违背「不叠加」)。
+
+**为什么不记 `enteredTick`**:本需求下灵魂阶段的时长对结果无影响,记录时间基准只会引入重连场景下 `system.currentTick` 重置的误差源。去掉它后,「以灵魂状态离线再重连」也能原样恢复,不再需要近似处理。
+
+**备选一:一次性施加超长时长**(如 999999 tick)。否决理由:会覆盖玩家原有的剩余时长,回归时无法区分「原本就没有」与「原本快到期」;且几乎无限的时长意味着一旦模组在灵魂阶段被卸载,玩家会永久带着夜视。本设计用的是「有限长时长 + 周期刷新」,停摆残留上限只有 60 秒。
 
 **备选二:把夜视写进 `manifest` 或常驻效果**。否决理由:常驻效果无法做到「管理员可关」与「回归还原」,且会影响非灵魂阶段的玩家。
 
-**备选三:每 tick 读 `getEffect` 判断是否还有效**。否决理由:仍有同样的问题——读不到「玩家原本还剩多久」,只能知道「现在有没有」,无法做差值还原。
+**备选三:回归时不做任何处理**(依赖模组夜视自然过期)。否决理由:玩家会白得灵魂阶段的夜视时长,相当于无限刷夜视;且若灵魂阶段很长,回归后玩家会误以为自己原有的夜视被续上了。
 
-**代价**:灵魂阶段玩家自行饮用夜视药水时,其效果会被模组的周期刷新覆盖(强度归 0、时长归 300);回归时按进入前快照还原,玩家在灵魂阶段获得的额外夜视会丢失。这是有意取舍:灵魂阶段本来就应该由模组接管夜视,在 README 中说明。
+**代价**:灵魂阶段玩家自行饮用夜视药水时,其效果会被模组的周期刷新覆盖(强度归 0、时长归 1200);回归时按进入前快照恢复,玩家在灵魂阶段获得的额外夜视会丢失。这是有意取舍:灵魂阶段本来就应该由模组接管夜视,在 README 中说明。
 
 ## Risks / Trade-offs
 
 - **[与上游包共存] 同一世界同时启用上游包与本模组时,两者都注册 `/sp:soul`、都以 priority 200 争抢 actionbar** → 引擎对同名自定义命令的行为不可靠;README 明确写「只装其一」,并在 `manifest.json` 的 `header.name` 用「灵魂出窍」而非上游的「灵魂出窍 v1.0.10」以在包列表中可区分。不提供代码级兼容层。
 - **[键名与命名规范冲突] `sp:*` 是本仓唯一的缩写持久化键** → 在 `README.md` 与 `core/config.ts` 的键名常量处各写一段注释说明理由与来源,并在 `design.md`(本文 D2)留存决策记录。新增的 `sp:nightVision` / `sp:nvSave` 沿用同一前缀而非另起 `spectator_mode:*`:该前缀已成为本模组的持久化命名空间,混用两套前缀比沿用缩写更难维护。
-- **[夜视快照依赖自计时] `Effect.duration` 只给总时长、不给剩余时长,「还原原有夜视」只能靠 `system.currentTick` 差值** → 快照写入玩家 DP 并在回归时按差值还原;重连场景下 `currentTick` 已重置、差值不可信,按「保留快照时长」处理(近似而非精确),并在 README 说明。
-- **[灵魂阶段覆盖玩家自饮的夜视] 周期刷新会把玩家在灵魂阶段喝的夜视药水覆盖为强度 0、时长 300,回归时又按进入前快照还原,那段额外夜视会丢失** → 有意取舍:灵魂阶段由模组接管夜视;在 README 的玩法说明中写明「灵魂阶段请勿依赖自行饮用的夜视药水」。
-- **[夜视效果意外丢失] 被其它效果或指令清除时下一刷新周期才恢复** → 刷新间隔 200 tick 远小于效果时长 300 tick,且 tick 循环本身 2 tick 一次,实际断档窗口小于 10 秒。
+- **[夜视快照与恢复] `Effect.duration` 只给总时长、不给剩余时长** → 因此必须在进入时快照 `{amplifier, durationTicks}` 并在回归时原样重新施加;若不快照则只能二选一:「删掉玩家原有夜视」或「让玩家白得模组夜视」,两者都违背需求。
+- **[模组夜视可能盖掉玩家自饮的夜视] 周期刷新会把玩家在灵魂阶段喝的夜视药水覆盖为强度 0、时长 1200,回归时又按进入前快照恢复,那段额外夜视会丢失** → 有意取舍:灵魂阶段由模组接管夜视;在 README 的玩法说明中写明「灵魂阶段请勿依赖自行饮用的夜视药水」。
+- **[夜视效果意外丢失] 被其它效果或指令清除时下一刷新周期才恢复** → 刷新间隔 400 tick 远小于效果时长 1200 tick,且 tick 循环本身 2 tick 一次,实际断档窗口小于 20 秒;而效果剩余时长最低点仍有 40 秒,远高于 200 tick 的闪烁阈值,因此断档恢复前也不会闪烁。
 - **[兼容下限下调] 上游声明 2.5.0,本仓声明 2.1.0** → 已在 Context 末节逐一核实所用 API 在 2.1.0 类型面中存在;tasks 中安排一次「用 2.1.0 类型面跑 `tsc` 全绿」作为验证,而不只依赖人工核对。
 - **[自愈逻辑与假人过滤互相干扰] 假人读 `getGameMode()` 抛错,若过滤层漏判会让自愈循环每 tick 抛错** → 自愈与 tick 内所有玩家相关调用都包 `try/catch`,单个玩家失败只跳过该玩家,不中断整个循环。
 - **[区块未加载导致粒子抛错] 真身所在区块卸载后 `spawnParticle` 会抛 `LocationInUnloadedChunkError`** → 真身侧粒子先用 `getBlock` 探测区块是否加载,并对每次粒子调用独立 `try/catch` + 一次性日志(每玩家只记一次),避免刷屏。

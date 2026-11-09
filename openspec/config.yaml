@@ -2,6 +2,7 @@ schema: spec-driven
 
 # Project context (optional)
 context: |
+  language：简体中文
   Minecraft Bedrock 模组的打包代码、数据类型与配置字段命名一律使用完整单词,避免缩写歧义
   (例如用 behavior_packs / resource_packs / output,而非 bp / rp / out);
   仅在与上游生态约定一致时保留既有缩写,如产物文件名后缀 _bp.mcpack / _rp.mcpack。
