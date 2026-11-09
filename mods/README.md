@@ -4,6 +4,34 @@
 
 本文件规定的是**本目录内所有模组共同遵守的规则**;单个模组的打包配置、脚本行为等细节见各自的 `README.md`。
 
+## 模组清单
+
+| 模组 | 说明 |
+| --- | --- |
+| `auto-refill` | 自动替换：主手消耗品用完/挖坏/触发图腾后自动换补同类 |
+| `keepinventory` | 死亡不掉落：玩家死亡时保留背包物品 |
+
+## 模组不再自带打包实现
+
+打包逻辑全部在 [`@mc-toolchain/packaging`](../packages/packaging/README.md)，模组目录内**不再有** `tools/packaging.ts` 之类的实现文件。模组的 `just.config.ts` 只需导入并组装任务：
+
+```ts
+import { createPackagesByMode, synchronizePackVersions } from "@mc-toolchain/packaging";
+
+task("synchronizePackVersions", () => synchronizePackVersions(__dirname));
+task("pack", series("clean-build", "build", "synchronizePackVersions", createPackagesByMode(__dirname)));
+```
+
+需要改打包行为（产物命名、包目录探测、最低版本推导）时，改 `packages/packaging` 一处即可，所有模组同时生效。**不要**在单个模组里重写这些逻辑。
+
+包目录探测、版本同步与 `packing` 字段的含义见 `packages/packaging/README.md`。
+
+## 运行时共享代码
+
+跨模组复用的运行时能力（`§` 文本样式码、跨行为包 HUD 总线）在 [`@mc-toolchain/shared`](../packages/shared/README.md)。模组通过 `dependencies` / `devDependencies` 中的 `"@mc-toolchain/shared": "*"` 引用，源码由 esbuild 直接内联进产物，不在游戏内产生额外模块加载。
+
+该包以 TS 源码直出，因此**模组的 `tsconfig.json` 必须使用 `target: es6` 或更高**；降到 `es5` 会导致共享包源码编译失败。
+
 ## 目录布局约定
 
 每个模组的包目录固定为:

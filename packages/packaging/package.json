@@ -1,0 +1,20 @@
+{
+  "name": "@mc-toolchain/packaging",
+  "version": "0.0.1",
+  "description": "Minecraft Bedrock 行为包/资源包的共享打包逻辑：版本同步、最低游戏版本解析、包目录探测与按模式产出产物",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test \".test-build/tests/**/*.test.js\""
+  },
+  "peerDependencies": {
+    "@minecraft/core-build-tasks": ">=5.0.0"
+  },
+  "devDependencies": {
+    "@minecraft/core-build-tasks": "5.5.0",
+    "@types/node": "^26.6.6",
+    "typescript": "5.5.4"
+  }
+}

@@ -3,7 +3,7 @@ import tsParser from "@typescript-eslint/parser";
 import ts from "@typescript-eslint/eslint-plugin";
 export default [
   {
-    files: ["scripts/**/*.ts", "tools/**/*.ts"],
+    files: ["scripts/**/*.ts"],
     languageOptions: {
       parser: tsParser,
       ecmaVersion: "latest",

@@ -5,10 +5,14 @@
   "description": "Minecraft Bedrock 模组工具链与模组集合",
   "workspaces": [
     "mods/*",
+    "packages/*",
     "tools/*"
   ],
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@minecraft/server-ui": "2.0.0"
   },
   "scripts": {
     "publish:mcwiki-search:dry": "npm publish -w @mc-toolchain/mcwiki-search --dry-run",

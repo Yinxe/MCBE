@@ -16,7 +16,7 @@ import {
   watchTask,
 } from "@minecraft/core-build-tasks";
 import path from "path";
-import { createPackagesByMode, synchronizePackVersions } from "./tools/packaging";
+import { createPackagesByMode, synchronizePackVersions } from "@mc-toolchain/packaging";
 setupEnvironment(path.resolve(__dirname, ".env"));
 const projectName = getOrThrowFromProcess("PROJECT_NAME");
 const bundleTaskOptions: BundleTaskParameters = {
@@ -35,7 +35,7 @@ const mcaddonTaskOptions: ZipTaskParameters = {
   ...copyTaskOptions,
   outputFile: `./dist/packages/${projectName}.mcaddon`,
 };
-task("lint", coreLint(["scripts/**/*.ts", "tools/**/*.ts"], argv().fix));
+task("lint", coreLint(["scripts/**/*.ts"], argv().fix));
 task("typescript", tscTask());
 task("bundle", bundleTask(bundleTaskOptions));
 task("build", series("typescript", "bundle"));

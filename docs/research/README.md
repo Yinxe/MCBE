@@ -11,6 +11,7 @@
 | [minecraft-creator-tools.md](./minecraft-creator-tools.md) | `mct`(Minecraft Creator Tools)0.21.0 的命令面、模板、项目结构、`mct add` 的落点与命名派生规则、`out/` 报告结构,以及它对模板文件的所有权边界 |
 | [core-build-tasks.md](./core-build-tasks.md) | `@minecraft/core-build-tasks` 5.5.0 的导出与各任务实现细节,含 `zipTask` / `mcaddonTask` 的真实行为 |
 | [minecraft-server-api-versions.md](./minecraft-server-api-versions.md) | `@minecraft/server` 模块版本 ↔ Minecraft 游戏版本的对应关系,以及关键 API 的首次可用版本 |
+| [version-semantics-and-backward-compatibility.md](./version-semantics-and-backward-compatibility.md) | 四个版本号(`min_engine_version` / `header.version` / `dependencies[].version` / `package.json`)各自的作用、高版本游戏跑低声明包的语义化版本承诺与实测验证、方向不对称的失败表现、声明与代码自洽的三条要求、优雅降级的写法 |
 | [achievements-and-sideloading.md](./achievements-and-sideloading.md) | 侧载行为包与成就的关系:平台 bug MCPE-242529 的边界与实测观察 |
 | [packaging-naming-and-modes.md](./packaging-naming-and-modes.md) | 打包产物命名、`mode` 语义、包类型判定与只认官方全名目录的约定,以及 `mcaddon` 与 `mcaddon:production` 的实测结论 |
 | [lint-and-prettier.md](./lint-and-prettier.md) | 官方模板 lint 链路的结构与它自带的一个缺陷(缺 `@typescript-eslint/eslint-plugin`) |

@@ -23,7 +23,7 @@
     "noEmitHelpers": true,
     "skipLibCheck": true
   },
-  "include": ["scripts/**/*", "tools/**/*"],
+  "include": ["scripts/**/*"],
   "exclude": ["lib", "dist", "node_modules"],
   "compileOnSave": false
 }

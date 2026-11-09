@@ -7,19 +7,34 @@ Minecraft Bedrock 模组工具链与模组集合。
 ```text
 mc-toolchain/
 ├── mods/                  # Bedrock 模组（游戏内行为包与资源包），规则见 mods/README.md
+│   ├── auto-refill/
 │   └── keepinventory/
+├── packages/              # 仓库内共享包（不对外发布，以 TS 源码被模组直接消费）
+│   ├── packaging/         # 打包实现：包目录探测、版本同步、产物归档
+│   └── shared/            # 运行时共享代码：文本样式码、跨包 HUD 总线
 ├── tools/                 # 可独立发布的工具包
 │   └── mcwiki-search/     # Minecraft Wiki 只读查询（库 / CLI / pi 工具）
+├── docs/research/         # 调研记录（实测结论与可复现的验证方式）
 └── openspec/              # 需求与变更规格
 ```
 
 ## 模组
 
-| 模组            | 说明                               | 文档                                                         |
-| --------------- | ---------------------------------- | ------------------------------------------------------------ |
-| `keepinventory` | 死亡不掉落：玩家死亡时保留背包物品 | [mods/keepinventory/README.md](mods/keepinventory/README.md) |
+| 模组            | 说明                                                         | 文档                                                         |
+| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| `auto-refill`   | 自动替换：主手消耗品用完/挖坏/触发图腾后自动换补同类，不用作弊 | [mods/auto-refill/README.md](mods/auto-refill/README.md) |
+| `keepinventory` | 死亡不掉落：玩家死亡时保留背包物品                           | [mods/keepinventory/README.md](mods/keepinventory/README.md) |
 
 `mods/` 下的目录布局、`mct` 用法、新建模组流程等共同规则见 [mods/README.md](mods/README.md)。
+
+## 共享包
+
+| 包                       | 说明                                                                                     | 文档                                                     |
+| ------------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `@mc-toolchain/packaging` | 打包逻辑的唯一实现：包目录探测与类型判定、版本与最低游戏版本同步、按 `mode` 产出归档 | [packages/packaging/README.md](packages/packaging/README.md) |
+| `@mc-toolchain/shared`    | 运行时共享代码：`§` 文本样式码、跨行为包 HUD 逐玩家优先级仲裁                       | [packages/shared/README.md](packages/shared/README.md)       |
+
+`packages/` 下的包均为 `private`，不发布到 npm。它们以 TypeScript 源码直出（`main` / `types` 均指向 `src/index.ts`），由模组通过 npm workspace 直接消费，无构建步骤。
 
 ## 工具
 

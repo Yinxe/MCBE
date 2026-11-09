@@ -5,6 +5,9 @@ node_modules/
 dist/
 lib/
 
+# 模组纯逻辑测试的编译产物(tsc -p tests/tsconfig.json)
+.test-build/
+
 # mct 校验报告输出
 out/
 

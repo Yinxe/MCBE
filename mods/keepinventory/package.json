@@ -5,6 +5,7 @@
   "description": "死亡不掉落 · 无需作弊 · 保留成就",
   "private": true,
   "devDependencies": {
+    "@mc-toolchain/packaging": "*",
     "@minecraft/core-build-tasks": "5.5.0",
     "@typescript-eslint/eslint-plugin": "8.72.1",
     "@typescript-eslint/parser": "8.72.1",

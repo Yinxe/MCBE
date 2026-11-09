@@ -109,6 +109,38 @@ mct validate -i mods/keepinventory
 - `mct validate -i <folder>` 会在目录下创建 `out/`(副作用,需加进 `.gitignore`)。
 - **`UNLINK` 项不计入 ERROR 计数**。只移入纹理与内容文件、忽略 `blocks.json` 与 `terrain_texture.json` 时,`errorCount` 仍为 `0`,但 `UNLINK` 给出「Texture does not have any items in this pack that are using this」警告。只看 ERROR 数会把「方块显示紫黑格」误判为成功。
 
+### 测试配置不能放在模组根目录
+
+`mct validate` 会把模组根目录下所有 `.json` 文件当作包内容检查,只靠**文件名基名**识别哪些属于工程配置。实测:模组根目录下的 `tsconfig.test.json` 会触发:
+
+```text
+[ERROR] ERROR: [UNKJSON101] (/tsconfig.test.json) Unknown JSON file found
+```
+
+原因是 `mct` 的白名单只认 `package.json` / `tsconfig.json` / `package-lock.json` 与 `*.config.*`,**不认 `tsconfig.test.json`**(基名是 `tsconfig.test` 而非 `tsconfig`)。从 `cli/index.mjs` 可查到它的排除正则:
+
+```js
+REMOVE_EXCLUDED_PATTERNS = [
+  /(?:^|\/)\./,              // dotfiles
+  /(?:^|\/)package\.json$/i,
+  /(?:^|\/)package-lock\.json$/i,
+  /(?:^|\/)tsconfig\.json$/i,
+  /\.config\./i,             // vite.config.ts、jest.config.js
+  /(?:^|\/)\.env/i,
+];
+```
+
+**解决办法:把测试用的 tsconfig 放进子目录**(如 `tests/tsconfig.json`),并用 `-p tests/tsconfig.json` 调用。这样它的路径不再是模组根层的 `.json`,不会被扫成包内容。
+
+验证方式:
+
+```bash
+cd mods/auto-refill
+npx mct validate -i . 2>&1 | grep UNKJSON     # 期望:UNKJSON001 ... completed successfully
+```
+
+另一个可行的绕法是在校验时排除该项(`mct validate main UNKJSON -i .`),但这会掩盖其它真正的未知 JSON,不推荐。
+
 ### monorepo 下的批量校验
 
 | 调用 | 行为 |
