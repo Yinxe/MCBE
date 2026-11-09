@@ -15,6 +15,7 @@
 | [achievements-and-sideloading.md](./achievements-and-sideloading.md) | 侧载行为包与成就的关系:平台 bug MCPE-242529 的边界与实测观察 |
 | [packaging-naming-and-modes.md](./packaging-naming-and-modes.md) | 打包产物命名、`mode` 语义、包类型判定与只认官方全名目录的约定,以及 `mcaddon` 与 `mcaddon:production` 的实测结论 |
 | [lint-and-prettier.md](./lint-and-prettier.md) | 官方模板 lint 链路的结构与它自带的一个缺陷(缺 `@typescript-eslint/eslint-plugin`) |
+| [bedrock-item-data-values.md](./bedrock-item-data-values.md) | 配方的 `identifier` 与 `result.item` 是两套独立 ID 体系(附原版 50.7% 不一致的实测)、`data` 辅助值的可证明等价改写规则、30 条映射表、`format_version` 与 `unlock` 的关系、本次无法静态证明的部分 |
 
 ## 环境基线
 

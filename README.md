@@ -8,7 +8,9 @@ Minecraft Bedrock 模组工具链与模组集合。
 mc-toolchain/
 ├── mods/                  # Bedrock 模组（游戏内行为包与资源包），规则见 mods/README.md
 │   ├── auto-refill/
-│   └── keepinventory/
+│   ├── craftablerarities/
+│   ├── keepinventory/
+│   └── spectator-mode/
 ├── packages/              # 仓库内共享包（不对外发布，以 TS 源码被模组直接消费）
 │   ├── packaging/         # 打包实现：包目录探测、版本同步、产物归档
 │   └── shared/            # 运行时共享代码：文本样式码、跨包 HUD 总线
@@ -24,6 +26,8 @@ mc-toolchain/
 | --------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | `auto-refill`   | 自动替换：主手消耗品用完/挖坏/触发图腾后自动换补同类，不用作弊 | [mods/auto-refill/README.md](mods/auto-refill/README.md) |
 | `keepinventory` | 死亡不掉落：玩家死亡时保留背包物品                           | [mods/keepinventory/README.md](mods/keepinventory/README.md) |
+| `craftablerarities` | 合成配方扩展：79 个工作台配方合成稀有、不可再生物品与隐藏方块（纯内容包，无脚本） | [mods/craftablerarities/README.md](mods/craftablerarities/README.md) |
+| `spectator-mode` | 灵魂出窍：飞离真身侦查，超出距离容忍 5 秒后自动回归 | [mods/spectator-mode/README.md](mods/spectator-mode/README.md) |
 
 `mods/` 下的目录布局、`mct` 用法、新建模组流程等共同规则见 [mods/README.md](mods/README.md)。
 

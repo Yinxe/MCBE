@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities:portal"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "ABA",
+      "AAA"
+    ],
+    "key": {
+      "A": {
+        "item": "minecraft:obsidian"
+      },
+      "B": {
+        "item": "minecraft:purple_stained_glass_pane"
+      }
+    },
+    "result": {
+      "item": "minecraft:portal",
+      "count": 8
+    }
+  }
+}

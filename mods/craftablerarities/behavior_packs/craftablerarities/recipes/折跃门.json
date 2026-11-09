@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities:end_gateway"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      " A ",
+      "ABA",
+      " A "
+    ],
+    "key": {
+      "A": {
+        "item": "minecraft:bedrock"
+      },
+      "B": {
+        "item": "minecraft:ender_eye"
+      }
+    },
+    "result": {
+      "item": "minecraft:end_gateway",
+      "count": 1
+    }
+  }
+}

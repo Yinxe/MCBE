@@ -1,0 +1,22 @@
+{
+  "name": "@mc-toolchain/craftablerarities",
+  "version": "1.0.1",
+  "productName": "合成配方扩展",
+  "description": "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块",
+  "private": true,
+  "devDependencies": {
+    "@mc-toolchain/packaging": "*",
+    "@minecraft/core-build-tasks": "5.5.0",
+    "just-scripts": "^2.1.5"
+  },
+  "scripts": {
+    "clean": "just-scripts clean-build",
+    "pack": "just-scripts pack",
+    "verify:recipes": "node tools/verify-recipes.js"
+  },
+  "packing": {
+    "mode": "auto",
+    "output": "dist/packages",
+    "minimum_engine_version": [1, 21, 0]
+  }
+}

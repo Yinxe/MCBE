@@ -1,0 +1,24 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities:coral_block-2"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AA",
+      "AA"
+    ],
+    "key": {
+      "A": {
+        "item": "minecraft:bubble_coral"
+      }
+    },
+    "result": {
+      "item": "minecraft:bubble_coral_block",
+      "count": 1
+    }
+  }
+}

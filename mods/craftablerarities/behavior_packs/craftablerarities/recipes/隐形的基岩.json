@@ -1,0 +1,27 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities:invisible_bedrock"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AB"
+    ],
+    "key": {
+      "A": {
+        "item": "minecraft:bedrock"
+      },
+      "B": {
+        "item": "minecraft:potion",
+        "data": 7
+      }
+    },
+    "result": {
+      "item": "minecraft:invisible_bedrock",
+      "count": 1
+    }
+  }
+}

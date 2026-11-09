@@ -1,0 +1,31 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities:structure_void"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ACA",
+      "CBC",
+      "ACA"
+    ],
+    "key": {
+      "A": {
+        "item": "minecraft:redstone"
+      },
+      "B": {
+        "item": "minecraft:scaffolding"
+      },
+      "C": {
+        "item": "minecraft:barrier"
+      }
+    },
+    "result": {
+      "item": "minecraft:structure_void",
+      "count": 1
+    }
+  }
+}

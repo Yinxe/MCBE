@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "craftablerarities:monster_egg-4"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "AAA",
+      "ABA",
+      "AAA"
+    ],
+    "key": {
+      "A": {
+        "item": "minecraft:cracked_stone_bricks"
+      },
+      "B": {
+        "item": "minecraft:egg"
+      }
+    },
+    "result": {
+      "item": "minecraft:infested_cracked_stone_bricks",
+      "count": 1
+    }
+  }
+}
