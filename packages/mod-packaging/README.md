@@ -1,4 +1,4 @@
-# @mc-toolchain/packaging
+# @mc-toolchain/mod-packaging
 
 Minecraft Bedrock 行为包 / 资源包的共享打包逻辑：同步清单版本、推导最低游戏版本、探测包目录，并按 `packing.mode` 产出 `.mcpack` / `.mcaddon`。
 
@@ -7,7 +7,7 @@ Minecraft Bedrock 行为包 / 资源包的共享打包逻辑：同步清单版�
 ## 目录结构
 
 ```
-packages/packaging/
+packages/mod-packaging/
 ├── src/
 │   ├── types.ts          # 打包相关类型与常量（无逻辑）
 │   ├── versions.ts       # 版本解析 + 「脚本 API 版本 → 最低游戏版本」映射（纯逻辑）
@@ -25,7 +25,7 @@ packages/packaging/
 `package.json` 加上依赖后，`just.config.ts` 只保留任务编排：
 
 ```ts
-import { createPackagesByMode, synchronizePackVersions } from "@mc-toolchain/packaging";
+import { createPackagesByMode, synchronizePackVersions } from "@mc-toolchain/mod-packaging";
 
 task("sync-versions", () => synchronizePackVersions(__dirname));
 task("pack", series("build", "sync-versions", createPackagesByMode(__dirname)));
@@ -39,20 +39,24 @@ task("pack", series("build", "sync-versions", createPackagesByMode(__dirname)));
   "version": "2.2.0",
   "packing": {
     "mode": "auto",
-    "output": "dist/packages"
+    "output": "../../release/"
   }
 }
 ```
+
+`output` 是相对**模组根目录**解析的（内部用 `path.resolve(projectRoot, output)`）。本仓的模组都位于 `mods/<name>/`，所以 `../../release/` 指向仓库根的 `release/`——这是本仓「全部模组产物集中一处」的约定，详见 [`mods/README.md`](../../mods/README.md)。
 
 ### `packing` 字段
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `mode` | `auto` | `auto` / `mcpack` / `mcaddon`；`auto` 按探测到的包数量决定 |
-| `output` | `dist/packages` | 产物输出目录（相对模组根目录） |
+| `output` | `dist/packages` | 产物输出目录（相对模组根目录）；本仓模组均显式覆盖为 `../../release/` |
 | `minimum_engine_version` | 由 `@minecraft/server` 依赖推导 | 形如 `[1, 21, 90]` 的三段非负整数 |
 
 出现未知字段会直接报错，避免拼写错误被静默当成「未配置」。
+
+默认值 `dist/packages` 是相对模组根目录的通用语义，本库**不**假设调用方位于某个仓库的 `mods/` 下。因此「产物集中到仓库根」不属于库行为，而是各模组在 `packing.output` 中的显式约定。
 
 ### 包目录约定
 

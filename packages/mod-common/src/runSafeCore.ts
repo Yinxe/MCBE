@@ -49,7 +49,7 @@ export function createRunSafe(schedule: Scheduler): {
         onError(error);
         return;
       }
-      console.warn(`[mc-toolchain/ui] 安全上下文回调执行失败: ${String(error)}`);
+      console.warn(`[mc-toolchain/mod-common] 安全上下文回调执行失败: ${String(error)}`);
     });
   }
 

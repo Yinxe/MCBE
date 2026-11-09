@@ -172,7 +172,7 @@ export function resolveMinimumEngineVersion(packageJson: PackageJson): [number, 
     throw new Error(
       `${SCRIPT_API_MODULE_NAME} 依赖版本 ${scriptApiVersion.join(".")} 不在版本映射表中,` +
         `无法推导最低游戏版本。请显式配置 packing.minimum_engine_version,` +
-        `或把该版本补进 @mc-toolchain/packaging 的 src/versions.ts 映射表(当前收录:${knownVersions})。`
+        `或把该版本补进 @mc-toolchain/mod-packaging 的 src/versions.ts 映射表(当前收录:${knownVersions})。`
     );
   }
   return derived;

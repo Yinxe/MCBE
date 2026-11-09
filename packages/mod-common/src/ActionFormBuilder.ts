@@ -1,5 +1,27 @@
 // ─── ActionFormBuilder:按钮式菜单,回调在安全上下文执行 ──────────
 //
+// 版式(从上到下):
+//
+//   ┌──────────────────────────────────────────────┐
+//   │                     菜单                     │  title()
+//   ├──────────────────────────────────────────────┤
+//   │ 请选择操作                                   │  body() / header() / label()
+//   │ ──────────────────────────────────────────── │  divider()
+//   │   传送                                       │  button() → selection 0
+//   │ ──────────────────────────────────────────── │  divider()
+//   │   管理传送点                                 │  button() → selection 1
+//   │ ──────────────────────────────────────────── │  divider()
+//   │   新建传送点                                 │  button() → selection 2
+//   └──────────────────────────────────────────────┘
+//
+// 要点:
+//   · show() 返回 boolean,不是下标 —— 调用方拿不到点了哪个按钮,
+//     点击后的动作应该写在回调里。
+//   · 回调经 runSafe 推迟到安全上下文,可以直接传送 / 开下一个表单。
+//   · 装饰行(header / divider / label)不进入按钮下标映射:本包假定
+//     selection 是「按钮序号」。大量混用装饰行时若出现点击错位,
+//     请直接用 ActionFormData 自行维护映射。
+//
 // 用法:
 //   await new ActionFormBuilder()
 //     .title("菜单")
@@ -44,7 +66,19 @@ export class ActionFormBuilder {
   }
 
   /**
+   * 添加只读文本行。
+   *
+   * 纯装饰,不产生可点击项,也不进入按钮下标映射。
+   */
+  label(text: RawMessage | string): this {
+    this.form.label(text);
+    return this;
+  }
+
+  /**
    * 添加按钮。
+   *
+   * 按钮在表单中的先后顺序决定 selection 下标,与添加顺序一致。
    *
    * @param callback 点击后的回调,经执行助手在安全上下文执行
    */
@@ -68,7 +102,10 @@ export class ActionFormBuilder {
   /**
    * 显示表单,玩家点击后执行对应回调。
    *
-   * @returns true = 点了按钮,false = 取消或关闭
+   * 回调在 show() 返回**之前**执行完毕(内部 await runSafe),因此调用方
+   * await 到 true 时,点击引发的动作已经跑完。
+   *
+   * @returns true = 点了按钮,false = 取消 / 关闭 / 显示失败
    */
   async show(player: Player): Promise<boolean> {
     try {

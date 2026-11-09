@@ -1,5 +1,5 @@
 {
-  "name": "@mc-toolchain/packaging",
+  "name": "@mc-toolchain/mod-packaging",
   "version": "0.0.1",
   "description": "Minecraft Bedrock 行为包/资源包的共享打包逻辑：版本同步、最低游戏版本解析、包目录探测与按模式产出产物",
   "private": true,

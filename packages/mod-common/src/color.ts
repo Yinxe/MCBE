@@ -4,7 +4,7 @@
 // 参考: https://minecraft.wiki/w/Formatting_codes
 //
 // 用法:
-//   import { color, style } from "@mc-toolchain/shared";
+//   import { color, style } from "@mc-toolchain/mod-common";
 //
 //   const msg = style("已上线", color.green);
 //   const warn = style("警告", color.yellow, color.bold);
