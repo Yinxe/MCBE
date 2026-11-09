@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "lib": [
+      "es2017"
+    ],
+    "moduleResolution": "Node",
+    "module": "ES2020",
+    "declaration": false,
+    "noLib": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "sourceMap": true,
+    "pretty": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "allowUnreachableCode": true,
+    "allowUnusedLabels": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": false,
+    "noImplicitUseStrict": false,
+    "outDir": "lib",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "listFiles": false,
+    "noEmitHelpers": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@minecraft/server": [
+        "./node_modules/@minecraft/server"
+      ]
+    }
+  },
+  "include": [
+    "scripts/**/*"
+  ],
+  "exclude": [
+    "lib",
+    "dist",
+    "node_modules",
+    ".test-build"
+  ],
+  "compileOnSave": false
+}
