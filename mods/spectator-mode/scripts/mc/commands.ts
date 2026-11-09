@@ -2,9 +2,10 @@
 // 只注册一条命令,`menu` 作为可选参数在回调内判定,保持上游命令面不变。
 //
 // ⚠ 上下文约束:自定义命令回调运行在受限(只读)上下文,`Player.setGameMode`、
-// `setDynamicProperty`、`spawnParticle` 等写操作在其中会抛错(报错文案形如
+// `Player.teleport`、`Dimension.spawnParticle` 等写操作在其中会抛错(报错文案形如
 // "cannot be called in read-only mode")。因此回调内**只做参数解析与鉴权**,
-// 一切涉及世界/玩家状态的写操作都必须用 `system.run` 推迟到下一个安全 tick。
+// 一切涉及世界/玩家状态的写操作都经 `@mc-toolchain/mod-common` 的
+// `runSafeDetached` 推迟到下一个安全 tick(不在模组内手写 `system.run`)。
 // 若在回调里直接调用切换逻辑,玩家会看到「无法进入旁观模式(游戏模式切换被拒绝)」。
 import {
   CommandPermissionLevel,
@@ -12,11 +13,11 @@ import {
   CustomCommandStatus,
   Player,
   PlayerPermissionLevel,
-  system,
   type CustomCommandRegistry,
   type CustomCommandOrigin,
   type CustomCommandResult,
 } from "@minecraft/server";
+import { runSafeDetached } from "@mc-toolchain/mod-common";
 import { TOGGLE_COMMAND, type SoulController } from "./controller";
 import { openAdminMenu } from "./menu";
 
@@ -55,7 +56,7 @@ export function registerAllCommands(registry: CustomCommandRegistry, controller:
           return { status: CustomCommandStatus.Success };
         }
         // 表单必须在安全上下文打开(命令回调处于受限上下文)
-        system.run(() => openAdminMenu(player, controller));
+        runSafeDetached(() => openAdminMenu(player, controller));
         return { status: CustomCommandStatus.Success };
       }
 
@@ -65,7 +66,7 @@ export function registerAllCommands(registry: CustomCommandRegistry, controller:
       }
 
       // 未传参数 → 切换。必须推迟到安全上下文:切换会改游戏模式、写动态属性、生成粒子
-      system.run(() => {
+      runSafeDetached(() => {
         // 推迟一 tick 后玩家可能已离线,重新校验对象可用性
         if (!player.isValid) return;
         const message = controller.toggle(player);

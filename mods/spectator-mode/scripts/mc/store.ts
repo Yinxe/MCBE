@@ -13,16 +13,37 @@ import type { SpConfig, SoulAnchor } from "../core/types";
  */
 export const SOUL_KEY = "sp:soul";
 
+/**
+ * 玩家动态属性键:进入灵魂出窍前的夜视快照(JSON)。
+ *
+ * 夜视是模组赠送的效果,不得消耗玩家自己的夜视时长,因此必须在进入时
+ * 快照 `{amplifier, durationTicks}`,回归时**原样**恢复。
+ * **不记录进入时刻**:`Effect.duration` 只给总时长、不给剩余时长,而本需求下
+ * 灵魂阶段停留多久对结果无影响,记录时间基准只会引入重连后
+ * `system.currentTick` 重置的误差源。
+ */
+export const NIGHT_VISION_KEY = "sp:nvSave";
+
+/** 进入灵魂出窍前的夜视状态快照 */
+export interface NightVisionSnapshot {
+  /** 效果强度(Jump Boost II → 1) */
+  amplifier: number;
+  /** 进入那一刻的效果总时长(ticks);非正数表示无限时长 */
+  durationTicks: number;
+}
+
 /** 读取全局配置(DP 缺失或损坏时回退默认值) */
 export function readConfig(): SpConfig {
   const enabledRaw = world.getDynamicProperty(CONFIG_KEYS.enabled);
   const distanceRaw = world.getDynamicProperty(CONFIG_KEYS.maxDistance);
   const showLinkRaw = world.getDynamicProperty(CONFIG_KEYS.showLink);
+  const nightVisionRaw = world.getDynamicProperty(CONFIG_KEYS.nightVision);
   const fallback = defaultConfig();
   return {
     enabled: typeof enabledRaw === "boolean" ? enabledRaw : fallback.enabled,
     maxDistance: typeof distanceRaw === "number" ? clampMaxDistance(distanceRaw) : fallback.maxDistance,
     showLink: typeof showLinkRaw === "boolean" ? showLinkRaw : fallback.showLink,
+    nightVision: typeof nightVisionRaw === "boolean" ? nightVisionRaw : fallback.nightVision,
   };
 }
 
@@ -31,6 +52,7 @@ export function writeConfig(config: SpConfig): void {
   world.setDynamicProperty(CONFIG_KEYS.enabled, config.enabled);
   world.setDynamicProperty(CONFIG_KEYS.maxDistance, clampMaxDistance(config.maxDistance));
   world.setDynamicProperty(CONFIG_KEYS.showLink, config.showLink);
+  world.setDynamicProperty(CONFIG_KEYS.nightVision, config.nightVision);
 }
 
 /**
@@ -72,4 +94,33 @@ export function writeSoulAnchor(player: Player, anchor: SoulAnchor): void {
 /** 清除玩家灵魂锚点 */
 export function clearSoulAnchor(player: Player): void {
   player.setDynamicProperty(SOUL_KEY);
+}
+
+/**
+ * 读取玩家进入灵魂出窍前的夜视快照。
+ * @param player - 目标玩家
+ * @returns 快照;无记录或数据损坏时返回 undefined
+ */
+export function readNightVisionSnapshot(player: Player): NightVisionSnapshot | undefined {
+  const raw = player.getDynamicProperty(NIGHT_VISION_KEY);
+  if (typeof raw !== "string") return undefined;
+  try {
+    const s = JSON.parse(raw) as Partial<NightVisionSnapshot>;
+    if (typeof s.amplifier === "number" && Number.isFinite(s.amplifier) && typeof s.durationTicks === "number") {
+      return { amplifier: s.amplifier, durationTicks: s.durationTicks };
+    }
+  } catch {
+    // 数据损坏 → 按无快照处理(回归时移除夜视)
+  }
+  return undefined;
+}
+
+/** 写入玩家夜视快照(仅玩家 DP,不落世界) */
+export function writeNightVisionSnapshot(player: Player, snapshot: NightVisionSnapshot): void {
+  player.setDynamicProperty(NIGHT_VISION_KEY, JSON.stringify(snapshot));
+}
+
+/** 清除玩家夜视快照 */
+export function clearNightVisionSnapshot(player: Player): void {
+  player.setDynamicProperty(NIGHT_VISION_KEY);
 }

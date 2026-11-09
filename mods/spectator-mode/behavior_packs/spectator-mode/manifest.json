@@ -7,7 +7,7 @@
     "version": [
       1,
       0,
-      10
+      12
     ],
     "min_engine_version": [
       1,
@@ -21,7 +21,7 @@
       "version": [
         1,
         0,
-        10
+        12
       ],
       "uuid": "bd2e3fa2-017d-4af4-91d2-cca0fff38cf0",
       "type": "data"
@@ -34,7 +34,7 @@
       "version": [
         1,
         0,
-        10
+        12
       ],
       "entry": "scripts/main.js"
     }

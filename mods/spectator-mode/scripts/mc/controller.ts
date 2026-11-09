@@ -1,11 +1,12 @@
 // ── 旁观控制器:组合 core 状态机与 mc 副作用,驱动活跃灵魂会话 ──
 import { GameMode, system, world, type Player } from "@minecraft/server";
-import { HudManager } from "@mc-toolchain/shared";
+import { HudManager, runSafeDetached } from "@mc-toolchain/mod-common";
 import { clampMaxDistance, DEFAULT_MAX_DISTANCE } from "../core/config";
 import type { SpConfig, SoulAnchor } from "../core/types";
 import { SoulEngine } from "../core/engine";
 import { buildSoulHud, type SoulHudState } from "../core/hud";
 import { readConfig, writeConfig, readSoulAnchor, writeSoulAnchor, clearSoulAnchor } from "./store";
+import { clearNightVisionSnapshot, readNightVisionSnapshot, writeNightVisionSnapshot } from "./store";
 import { spawnBodyGlow, spawnSoulGlow, spawnTetherLine } from "./particles";
 import { allUsablePlayers, findAnyPlayer } from "./playerUtil";
 
@@ -20,6 +21,24 @@ export const IDLE_EVERY = 10;
 /** 超出距离容忍倒计时(毫秒) */
 export const TOLERANCE_MS = 5000;
 
+/** 夜视效果标识 */
+export const NIGHT_VISION_EFFECT = "minecraft:night_vision";
+/**
+ * 夜视刷新间隔(ticks,20s)。
+ *
+ * 远小于效果时长,留 40 秒断档余量:即使某次 tick 被跳过或玩家卡顿也不会断档。
+ */
+export const NIGHT_VISION_REFRESH_TICKS = 400;
+/**
+ * 单次施加的夜视时长(ticks,60s)。
+ *
+ * MUST 显著大于 200 tick(10 秒)——客户端在夜视剩余不足 10 秒时会让屏幕
+ * 在 40%~100% 强度间持续闪烁。若时长本身短于该阈值(第一版用的是 120 tick),
+ * 整个灵魂阶段都会处在闪烁区间。取 60 秒后效果剩余时长始终在 40~60 秒之间,
+ * 最低点仍是阈值的 4 倍,灵魂阶段不会闪烁。
+ */
+export const NIGHT_VISION_DURATION_TICKS = 1200;
+
 /** 单 tick 经过的毫秒数(2 tick 一次驱动 → 100ms) */
 const TICK_DELTA_MS = TICK_INTERVAL_TICKS * 50;
 
@@ -30,6 +49,8 @@ interface SoulSession {
   engine: SoulEngine;
   /** 运行帧计数(驱动扫掠连线相位) */
   run: number;
+  /** 距上次刷新夜视已过的 tick 数 */
+  nvElapsed: number;
 }
 
 /**
@@ -56,7 +77,7 @@ export class SoulController {
 
   constructor() {
     // 世界 DP 须在安全上下文读取,构造期先用默认值
-    this.config = { enabled: true, maxDistance: DEFAULT_MAX_DISTANCE, showLink: false };
+    this.config = { enabled: true, maxDistance: DEFAULT_MAX_DISTANCE, showLink: false, nightVision: true };
   }
 
   /** 延迟启动:读取持久化配置并启动 tick 循环 */
@@ -85,6 +106,11 @@ export class SoulController {
 
   /**
    * 管理员保存配置;若禁用功能则强制所有灵魂回归。
+   *
+   * ⚠ 上下文约束:本方法由表单 `show().then()` 回调调用,该回调运行在受限(只读)
+   * 上下文,`removeEffect` / `setGameMode` / `teleport` 在其中会抛错。
+   * 因此配置立即生效(纯内存),而一切写操作推迟到安全 tick 执行。
+   *
    * @param config - 新配置
    */
   setConfig(config: SpConfig): void {
@@ -92,11 +118,21 @@ export class SoulController {
       enabled: config.enabled,
       maxDistance: clampMaxDistance(config.maxDistance),
       showLink: !!config.showLink,
+      nightVision: !!config.nightVision,
     };
+    // setDynamicProperty 不受限,可直接写盘
     writeConfig(this.config);
-    if (!this.config.enabled) {
-      this.forceReturnAll("旁观功能已被管理员禁用");
-    }
+
+    // 以下均含受限写操作,推迟到安全上下文
+    runSafeDetached(() => {
+      if (!this.config.enabled) {
+        this.forceReturnAll("旁观功能已被管理员禁用");
+        return;
+      }
+      if (!this.config.nightVision) {
+        this.stripNightVisionAll();
+      }
+    });
   }
 
   /** 玩家是否处于灵魂出窍状态 */
@@ -177,6 +213,84 @@ export class SoulController {
     console.warn(`[spectator-mode] tick/particle failed (${id}): ${String(e)}`);
   }
 
+  // ── 夜视增益 ─────────────────────────────────────────────
+
+  /**
+   * 快照玩家进入前的夜视状态,并立即施加模组夜视。
+   *
+   * 快照**必须**在施加之前完成:否则读到的就是模组自己施加的效果,
+   * 回归时会把模组夜视当成玩家原有夜视再恢复一次(玩家白得夜视)。
+   * 进入前无夜视时快照记为 undefined,回归时据此移除。
+   */
+  private applyNightVision(player: Player): void {
+    if (!this.config.nightVision) return;
+    clearNightVisionSnapshot(player);
+    try {
+      const existing = player.getEffect(NIGHT_VISION_EFFECT);
+      if (existing !== undefined) {
+        writeNightVisionSnapshot(player, {
+          amplifier: existing.amplifier,
+          durationTicks: existing.duration,
+        });
+      }
+    } catch (e) {
+      // 读不到原有夜视 → 当作原本没有;回归时移除夜视
+      this.warnOnce(player.id, e);
+    }
+    this.refreshNightVision(player);
+  }
+
+  /** 施加一轮模组夜视(短时长 + 低粒子,由 tick 周期刷新维持不断档) */
+  private refreshNightVision(player: Player): void {
+    if (!this.config.nightVision) return;
+    try {
+      player.addEffect(NIGHT_VISION_EFFECT, NIGHT_VISION_DURATION_TICKS, {
+        amplifier: 0,
+        showParticles: false,
+      });
+    } catch (e) {
+      this.warnOnce(player.id, e);
+    }
+  }
+
+  /**
+   * 回归本体时把夜视**原样**恢复成进入那一刻的状态。
+   *
+   * 关键语义:夜视是模组赠送的效果,MUST NOT 消耗玩家自己的夜视时长。
+   * 因此按快照的 `durationTicks` 原样重新施加,不扣除灵魂阶段停留的时间;
+   * 快照不存在(进入前无夜视)→ 移除夜视;总时长为非正数(无限)→ 保持无限。
+   */
+  private restoreNightVision(player: Player): void {
+    const snapshot = readNightVisionSnapshot(player);
+    clearNightVisionSnapshot(player);
+    try {
+      if (snapshot === undefined) {
+        player.removeEffect(NIGHT_VISION_EFFECT);
+        return;
+      }
+      player.addEffect(NIGHT_VISION_EFFECT, snapshot.durationTicks, {
+        amplifier: snapshot.amplifier,
+        showParticles: true,
+      });
+    } catch (e) {
+      this.warnOnce(player.id, e);
+    }
+  }
+
+  /** 管理员关闭夜视增益:立即移除在场灵魂的夜视(快照保留,回归时仍能恢复玩家原有夜视) */
+  private stripNightVisionAll(): void {
+    const players = allUsablePlayers();
+    for (const id of this.sessions.keys()) {
+      const player = players.get(id);
+      if (!player) continue;
+      try {
+        player.removeEffect(NIGHT_VISION_EFFECT);
+      } catch (e) {
+        this.warnOnce(id, e);
+      }
+    }
+  }
+
   // ── 私有方法 ──────────────────────────────────────────────
 
   /**
@@ -205,7 +319,9 @@ export class SoulController {
       anchor,
       engine: new SoulEngine(TOLERANCE_MS),
       run: 0,
+      nvElapsed: 0,
     });
+    this.applyNightVision(player);
     player.sendMessage(`§a已恢复灵魂出窍状态 · 输入 §f/${TOGGLE_COMMAND}§a 回归本体`);
   }
 
@@ -233,7 +349,10 @@ export class SoulController {
       anchor,
       engine: new SoulEngine(TOLERANCE_MS),
       run: 0,
+      nvElapsed: 0,
     });
+    // 夜视:先快照玩家原有状态再施加模组夜视(顺序不可颠倒)
+    this.applyNightVision(player);
     try {
       spawnBodyGlow(player.dimension, location, 24);
     } catch (e) {
@@ -249,7 +368,7 @@ export class SoulController {
     this.returnToAnchor(player, session.anchor, reason);
   }
 
-  /** 统一回归:清 HUD/锚点 → 传送回真身 → 还原游戏模式 → 标记粒子 → 提示 */
+  /** 统一回归:清 HUD/锚点 → 传送回真身 → 还原游戏模式 → 恢复夜视 → 标记粒子 → 提示 */
   private returnToAnchor(player: Player, anchor: SoulAnchor, reason: string): void {
     clearSoulAnchor(player);
     // HUD 状态移除:公共 HudManager 感知"无灵魂内容"后自动清 actionbar / 让位其它模组
@@ -270,6 +389,9 @@ export class SoulController {
     } catch {
       player.setGameMode(GameMode.Survival); // 兜底
     }
+
+    // 夜视:按进入时的快照原样恢复(不扣除灵魂阶段停留的时长)
+    this.restoreNightVision(player);
 
     player.sendMessage(`§a${reason},已回到本体`);
   }
@@ -346,6 +468,13 @@ export class SoulController {
       maxDistance: this.config.maxDistance,
       remainingMs: result.remainingMs,
     });
+
+    // 夜视:每 N tick 刷新一次,保证灵魂阶段全程不断档
+    session.nvElapsed += TICK_INTERVAL_TICKS;
+    if (session.nvElapsed >= NIGHT_VISION_REFRESH_TICKS) {
+      session.nvElapsed = 0;
+      this.refreshNightVision(player);
+    }
 
     // 视觉:灵魂光环每帧(隔离失败,不影响其他);真身侧低频且真身未加载则跳过
     session.run++;

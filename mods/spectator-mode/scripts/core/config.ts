@@ -22,11 +22,17 @@ export const CONFIG_KEYS = {
   enabled: "sp:enabled",
   maxDistance: "sp:maxDist",
   showLink: "sp:showLink",
+  /**
+   * 夜视增益开关。本仓新增的键,仍沿用同一 `sp:` 前缀而非另起
+   * `spectator_mode:*`:该前缀已是本模组的持久化命名空间,
+   * 混用两套前缀比沿用缩写更难维护。
+   */
+  nightVision: "sp:nightVision",
 } as const;
 
 /** 默认配置 */
 export function defaultConfig(): SpConfig {
-  return { enabled: true, maxDistance: DEFAULT_MAX_DISTANCE, showLink: false };
+  return { enabled: true, maxDistance: DEFAULT_MAX_DISTANCE, showLink: false, nightVision: true };
 }
 
 /**

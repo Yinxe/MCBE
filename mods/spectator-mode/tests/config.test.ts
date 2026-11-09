@@ -15,6 +15,10 @@ test("默认配置:启用 + 默认最大距离 + 连线默认关", () => {
   assert.equal(config.showLink, false);
 });
 
+test("默认配置:夜视增益默认开启", () => {
+  assert.equal(defaultConfig().nightVision, true);
+});
+
 test("clamp:低于下限抬到下限", () => {
   assert.equal(clampMaxDistance(3), MAX_DISTANCE_MIN);
   assert.equal(clampMaxDistance(1), MAX_DISTANCE_MIN);

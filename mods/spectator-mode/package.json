@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/spectator-mode",
-  "version": "1.0.10",
+  "version": "1.0.12",
   "productName": "灵魂出窍",
   "description": "灵魂出窍 · 旁观模式：飞离真身侦查，超出距离容忍 5 秒后自动回归",
   "private": true,
@@ -9,8 +9,8 @@
     "@minecraft/server-ui": "2.0.0"
   },
   "devDependencies": {
-    "@mc-toolchain/packaging": "*",
-    "@mc-toolchain/shared": "*",
+    "@mc-toolchain/mod-packaging": "*",
+    "@mc-toolchain/mod-common": "*",
     "@minecraft/core-build-tasks": "5.5.0",
     "@types/node": "24.10.1",
     "@typescript-eslint/eslint-plugin": "8.72.1",
@@ -32,6 +32,6 @@
   },
   "packing": {
     "mode": "auto",
-    "output": "dist/packages"
+    "output": "../../release/"
   }
 }

@@ -1,5 +1,6 @@
 // ── 组合根:装配服务、路由世界事件、注册命令 ──
 import { system, world } from "@minecraft/server";
+import { runSafeDetached } from "@mc-toolchain/mod-common";
 import { SoulController } from "./mc/controller";
 import { registerAllCommands } from "./mc/commands";
 
@@ -21,6 +22,4 @@ system.beforeEvents.startup.subscribe((event) => {
 });
 
 // 世界就绪后再读世界动态属性并启动 tick 循环
-system.run(() => {
-  controller.start();
-});
+runSafeDetached(() => controller.start());

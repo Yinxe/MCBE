@@ -2,7 +2,7 @@
 
 > 飞离真身侦查:灵魂离真身太远会开始 5 秒容忍倒计时,倒计时结束自动把你拉回本体。
 
-本模组是上游仓库 [`Yinxe/MCBE`](https://github.com/Yinxe/MCBE) 里 `spectator-mode` 的迁移实现,已按本仓 `mc-toolchain` 规范重写(纯行为包、`@mc-toolchain/packaging` 打包、不使用 `@yinxe/toolkit`)。
+本模组是上游仓库 [`Yinxe/MCBE`](https://github.com/Yinxe/MCBE) 里 `spectator-mode` 的迁移实现,已按本仓 `mc-toolchain` 规范重写(纯行为包、`@mc-toolchain/mod-packaging` 打包、不使用 `@yinxe/toolkit`)。
 
 ## 玩法
 
@@ -16,6 +16,23 @@
 
 进入与回归瞬间会有一次真身标记粒子爆发,方便同伴定位你的身体。可选的双向扫掠连线粒子(琥珀:真身→灵魂,灰:灵魂→真身)默认**关闭**,由管理员按需开启。
 
+灵魂阶段默认带**夜视**增益,低亮度环境也能看清;回归时你的夜视会恢复成进入那一刻的状态,详情见下节。
+
+## 夜视增益
+
+灵魂出窍期间模组为灵魂施加夜视,由管理员在表单中开关,默认**开启**。
+
+灵魂阶段的视野**不会闪烁**:夜视在剩余时间不足 10 秒时,客户端会让屏幕在 40%~100% 强度间持续闪烁。模组为此施加 60 秒的夜视并每 20 秒刷新一次,使剩余时长始终在 40~60 秒之间,远离那个闪烁区间。
+
+夜视是**模组赠送**的效果,不会消耗你自己的夜视:
+
+- **进入前已有夜视**:回归后按进入那一刻的快照**原样恢复** —— 剩余时长与进入时相同,灵魂阶段停留多久都不扣减。例如带剩余 3 分钟夜视进入、在灵魂里待 1 分钟再回归,回来后**仍是 3 分钟**。
+- **进入前没有夜视**:回归后夜视消失,恢复到你原来的状态。
+- **无限时长夜视**:回归后仍为无限时长,不会被降级成有限时长。
+- 模组夜视不会与你的夜视叠加,回归后取的是你进入前的值。
+
+已知取舍:灵魂阶段由模组接管夜视,如果你在灵魂阶段自己喝夜视药水,那段额外夜视会在回归时被进入前的快照覆盖。请勿依赖灵魂阶段自饮的夜视药水。
+
 ## 命令与权限
 
 | 命令 | 谁能用 | 作用 |
@@ -27,13 +44,14 @@
 
 ## 管理表单
 
-`/sp:soul menu` 提供三项配置,保存后立即生效并持久化到世界:
+`/sp:soul menu` 提供四项配置,保存后立即生效并持久化到世界:
 
 | 配置项 | 范围 / 默认 | 说明 |
 | --- | --- | --- |
 | 启用旁观模式 | 开 / **开** | 关闭后玩家无法进入旁观;已在旁观中的灵魂会被强制回归本体 |
 | 最大移动距离 | 5 – 400 米,步长 1 / **128** | 灵魂离真身超过该距离后开始 5 秒容忍倒计时 |
 | 显示连线粒子 | 开 / 关 / **关** | 在真身与灵魂之间绘制双向扫掠连线 |
+| 夜视增益 | 开 / **开** | 灵魂阶段为灵魂施加夜视;关闭后在场灵魂的夜视立即移除,回归时仍会恢复玩家原有夜视 |
 
 ## 极限模式
 
@@ -44,8 +62,9 @@
 
 ## 持久化与重连
 
-- 世界级配置(启用开关 / 最大距离 / 连线开关)存世界动态属性,随存档走。
+- 世界级配置(启用开关 / 最大距离 / 连线开关 / 夜视开关)存世界动态属性,随存档走。
 - 玩家的灵魂锚点(进入时的维度、坐标、原游戏模式)存**玩家**动态属性,跟着玩家走。
+- 玩家的夜视快照(进入前的强度与总时长,键 `sp:nvSave`)也存**玩家**动态属性,与锚点同生命周期,回归时一并清除。
 - 因此「以灵魂状态退出游戏」再重连,会自动恢复旁观状态并可随时 `/sp:soul` 回归;若此时功能已被禁用或世界变为极限模式,则直接回归本体。
 - 旁观状态带自愈:若因事件漏触等原因出现「已是旁观者但控制器没接管」的情况,后台扫描会重新接管并恢复 HUD。
 
@@ -59,7 +78,7 @@ npm install
 npm run lint -w @mc-toolchain/spectator-mode
 npm test -w @mc-toolchain/spectator-mode
 
-# 打包(产物:dist/packages/spectator-mode-v1.0.10_bp.mcpack)
+# 打包(产物:<仓库根>/release/spectator-mode-v1.0.11_bp.mcpack)
 npm run pack -w @mc-toolchain/spectator-mode
 
 # 重新生成图标(32×32 逻辑像素 → 4 倍最近邻 → 128×128 RGBA)
@@ -71,17 +90,20 @@ npm run generate:icon -w @mc-toolchain/spectator-mode
 ## 兼容性
 
 - 依赖 `@minecraft/server` **2.1.0** 的自定义命令 API(`customCommandRegistry`),对应最低引擎版本 **1.21.100**。
-- 表单使用原生 `@minecraft/server-ui` `ModalFormData`。
-- HUD 走 `@mc-toolchain/shared` 的 `HudManager`(actionbar 槽,priority 200),会按优先级让位给其它模组。
+- 表单使用 `@mc-toolchain/mod-common` 的 `ModalFormBuilder`(底层仍为 `@minecraft/server-ui` 的 `ModalFormData`,由共享包统一封装)。
+- HUD 走 `@mc-toolchain/mod-common` 的 `HudManager`(actionbar 槽,priority 200),会按优先级让位给其它模组。
+- 命令回调与表单回调里的写操作统一经 `@mc-toolchain/mod-common` 的 `runSafe` / `runSafeDetached` 推迟到安全 tick,不在模组内手写 `system.run`。
 
 ## 命名规范例外:`sp:*` 键名
 
 本仓规范要求配置键名使用完整单词,但本模组的动态属性键名刻意沿用上游的缩写形式:
 
-- 世界级:`sp:enabled`、`sp:maxDist`、`sp:showLink`
-- 玩家级:`sp:soul`
+- 世界级:`sp:enabled`、`sp:maxDist`、`sp:showLink`、`sp:nightVision`
+- 玩家级:`sp:soul`、`sp:nvSave`(夜视快照)
 
-原因:这些键名已经在旧存档里落盘。改成 `spectator_mode:*` 会让老世界的管理员配置静默回落到默认值,并让「以灵魂状态离线」的玩家重连后变成没有逃生出口的普通旁观者。这属于规范中「与上游生态约定一致时保留既有缩写」的例外,详见 `scripts/core/config.ts` 与 `scripts/mc/store.ts` 的注释。
+原因:前六个键名已经在旧存档里落盘。改成 `spectator_mode:*` 会让老世界的管理员配置静默回落到默认值,并让「以灵魂状态离线」的玩家重连后变成没有逃生出口的普通旁观者。这属于规范中「与上游生态约定一致时保留既有缩写」的例外,详见 `scripts/core/config.ts` 与 `scripts/mc/store.ts` 的注释。
+
+本仓新增的 `sp:nightVision` 与 `sp:nvSave` 是主动沿用同一前缀(不是历史包袱):`sp:` 已是本模组的持久化命名空间,另起 `spectator_mode:*` 会让同一模组混用两套前缀,比沿用缩写更难维护。
 
 ## 与上游包共存
 

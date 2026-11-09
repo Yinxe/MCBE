@@ -14,7 +14,7 @@ import {
   watchTask,
 } from "@minecraft/core-build-tasks";
 import path from "path";
-import { createPackagesByMode, synchronizePackVersions } from "@mc-toolchain/packaging";
+import { createPackagesByMode, synchronizePackVersions } from "@mc-toolchain/mod-packaging";
 
 setupEnvironment(path.resolve(__dirname, ".env"));
 const projectName = getOrThrowFromProcess("PROJECT_NAME");
@@ -51,7 +51,7 @@ task(
 );
 
 // ---- 自定义打包 ----
-// 只清理构建中间产物,保留 dist/packages 里已产出的历史版本。
+// 只清理构建中间产物,保留 packing.output 目录里已产出的历史版本。
 task("clean-build", cleanTask(["temp", "lib", "dist/scripts", "dist/debug"]));
 task("synchronizePackVersions", () => {
   synchronizePackVersions(__dirname);
