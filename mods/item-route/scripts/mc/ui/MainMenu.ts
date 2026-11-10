@@ -14,6 +14,8 @@ import { showWarehouseCreateForm } from "./WarehouseCreateFlow";
 import { showOPConfigUI } from "./OPConfigUI";
 import { showHelpGuide } from "./HelpGuide";
 import { nearestWarehouseByPermission } from "../../core/model/Area";
+import { playerGuard } from "../util/playerGuard";
+import { playerNameOf } from "../util/playerName";
 import { btn } from "./uiColor";
 
 /** "管理仓库"就近判定：距仓库中心不超过此格数才算"附近"（v1 WAREHOUSE_NEARBY_MARGIN 同款） */
@@ -55,12 +57,24 @@ export async function showMainMenu(player: Player, deps: CommandDeps): Promise<v
  * v1 同款：管理入口是高频操作，就近直达省一次菜单点击。
  */
 function manageNearest(player: Player, deps: CommandDeps): void {
+  // ⚠️ 玩家名与位置统一走守卫：菜单回调可能拿到瞬态失效句柄（假人/刚下线），
+  // 裸读 `.name` / `.dimension` / `.location` 会 TypeError。取不到就回退列表。
+  const playerName = playerNameOf(player);
+  const snapshot = playerGuard.safePlayerCall(player, (p) => ({
+    dimensionId: p.dimension.id,
+    position: { x: p.location.x, z: p.location.z },
+  }));
+  if (playerName === undefined || snapshot === undefined) {
+    player.sendMessage(`${btn.info}无法读取你的位置，显示全部列表`);
+    void showWarehouseManageMenu(player, deps);
+    return;
+  }
   const warehouses = deps.loadedWarehouses();
   const target = nearestWarehouseByPermission(
     warehouses,
-    player.dimension.id,
-    { x: player.location.x, z: player.location.z },
-    (w) => deps.members.can(w, player.name, "member")
+    snapshot.dimensionId,
+    snapshot.position,
+    (w) => deps.members.can(w, playerName, "member")
   );
   if (target === undefined) {
     player.sendMessage(`${btn.info}附近没有找到你有管理权的仓库，显示全部列表`);
@@ -74,7 +88,7 @@ function manageNearest(player: Player, deps: CommandDeps): void {
   const cz =
     (Math.min(target.area.corner1.z, target.area.corner2.z) + Math.max(target.area.corner1.z, target.area.corner2.z)) /
     2;
-  if (Math.hypot(player.location.x - cx, player.location.z - cz) > NEARBY_MARGIN) {
+  if (Math.hypot(snapshot.position.x - cx, snapshot.position.z - cz) > NEARBY_MARGIN) {
     player.sendMessage(`${btn.info}附近没有找到你有管理权的仓库，显示全部列表`);
     void showWarehouseManageMenu(player, deps);
     return;

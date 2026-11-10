@@ -131,10 +131,14 @@ function onlineMembers(warehouse: Warehouse): Player[] {
 }
 
 /** 附近（中心直线距离 ≤ 外接圆半径 + margin）的在线成员 */
-function nearbyMembers(warehouse: Warehouse): ReturnType<typeof world.getAllPlayers> {
-  return onlineMembers(warehouse).filter((p) => {
-    if (p.dimension.id !== warehouse.area.dimension) return false;
-    const pos: PlayerPosition = { dimension: p.dimension.id, x: p.location.x, z: p.location.z };
-    return isPlayerNearby(warehouse.area, [pos], PROXIMITY_MARGIN);
-  });
+function nearbyMembers(warehouse: Warehouse): Player[] {
+  const out: Player[] = [];
+  for (const { player, dimensionId, position } of namedPlayers(world.getAllPlayers())) {
+    if (position === undefined) continue; // 位置不可读（半初始化）→ 不参与附近判定
+    if (dimensionId !== warehouse.area.dimension) continue;
+    const pos: PlayerPosition = { dimension: dimensionId, x: position.x, z: position.z };
+    if (!isPlayerNearby(warehouse.area, [pos], PROXIMITY_MARGIN)) continue;
+    out.push(player);
+  }
+  return out;
 }

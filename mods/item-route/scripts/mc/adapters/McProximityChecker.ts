@@ -50,10 +50,11 @@ export class McProximityChecker implements ProximityChecker {
     const memberPositions: PlayerPosition[] = [];
     // ⚠️ 安全枚举（真实+模拟玩家）：namedPlayers 丢弃半初始化/字段不全项（自带的 .name 坑），
     // 成员判定按解析名匹配（owner/member 表）
-    for (const { player: p, name } of namedPlayers(this.players())) {
-      if (p.dimension.id !== warehouse.area.dimension) continue;
+    for (const { name, dimensionId, position } of namedPlayers(this.players())) {
+      if (position === undefined) continue; // 位置不可读（半初始化）→ 不计入邻近判定
+      if (dimensionId !== warehouse.area.dimension) continue;
       if (!memberNames.has(name)) continue; // 只统计在线成员（真实+模拟玩家）
-      memberPositions.push({ dimension: warehouse.area.dimension, x: p.location.x, z: p.location.z });
+      memberPositions.push({ dimension: dimensionId, x: position.x, z: position.z });
     }
     return isPlayerNearby(warehouse.area, memberPositions, PROXIMITY_MARGIN);
   }

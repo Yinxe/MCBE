@@ -18,13 +18,13 @@ import { resolveWarehouseByName, requireRole } from "../auth/commands";
  * @param deps     - 命令共享依赖门面（含 WarehouseService）
  */
 export function registerDelete(registry: CustomCommandRegistry, deps: CommandDeps): void {
-  registerPlayerCommand(registry, nameCommand("ir:delete", "删除仓库（owner）"), ({ player, params }) => {
+  registerPlayerCommand(registry, nameCommand("ir:delete", "删除仓库（owner）"), ({ player, playerName, params }) => {
     const warehouse = resolveWarehouseByName(deps.loadedWarehouses(), params.name as string);
     if (warehouse === undefined) {
       player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
-    if (!requireRole(deps.members, warehouse, player.name, "owner", canManage(player))) {
+    if (!requireRole(deps.members, warehouse, playerName, "owner", canManage(player))) {
       player.sendMessage(`${chat.error}需要拥有者权限`);
       return;
     }

@@ -20,13 +20,13 @@ import { scanWarehouseArea } from "./scan";
  * @param deps     - 命令共享依赖门面
  */
 export function registerRescan(registry: CustomCommandRegistry, deps: CommandDeps): void {
-  registerPlayerCommand(registry, nameCommand("ir:rescan", "重新扫描仓库区域容器（member+）"), ({ player, params }) => {
+  registerPlayerCommand(registry, nameCommand("ir:rescan", "重新扫描仓库区域容器（member+）"), ({ player, playerName, params }) => {
     const warehouse = resolveWarehouseByName(deps.loadedWarehouses(), params.name as string);
     if (warehouse === undefined) {
       player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
-    if (!requireRole(deps.members, warehouse, player.name, "member", canManage(player))) {
+    if (!requireRole(deps.members, warehouse, playerName, "member", canManage(player))) {
       player.sendMessage(`${chat.error}需要成员及以上权限`);
       return;
     }

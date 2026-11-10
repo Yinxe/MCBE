@@ -9,6 +9,7 @@
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@mc-toolchain/mod-common";
 import { canManage } from "../auth/admin";
+import { playerNameOf } from "../util/playerName";
 import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../auth/commands";
 import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
@@ -134,7 +135,9 @@ export async function showContainerConfigMenu(
   warehouse: Warehouse,
   container: Container
 ): Promise<void> {
-  if (!requireRole(deps.members, warehouse, player.name, "member", canManage(player))) {
+  const playerName = playerNameOf(player);
+  if (playerName === undefined) return; // 取不到名（假人/半初始化）→ 不处理
+  if (!requireRole(deps.members, warehouse, playerName, "member", canManage(player))) {
     player.sendMessage(`${uiColor.chat.error}需要成员及以上权限`);
     return;
   }

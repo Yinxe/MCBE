@@ -6,6 +6,7 @@
 import { type Player } from "@minecraft/server";
 import { ModalFormBuilder } from "@mc-toolchain/mod-common";
 import { canManage } from "../auth/admin";
+import { playerNameOf } from "../util/playerName";
 import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../auth/commands";
 import { isFamilyEnabled, type Warehouse } from "../../core/model/Warehouse";
@@ -15,7 +16,9 @@ import * as uiColor from "./uiColor";
 
 /** 打开同族配置（owner+）：单个模态，一族一个开关（成员中文名在 tooltip） */
 export async function showFamilyConfigMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
-  if (!requireRole(deps.members, warehouse, player.name, "owner", canManage(player))) {
+  const playerName = playerNameOf(player);
+  if (playerName === undefined) return; // 取不到名（假人/半初始化）→ 不处理
+  if (!requireRole(deps.members, warehouse, playerName, "owner", canManage(player))) {
     player.sendMessage(`${uiColor.chat.error}需要管理员权限`);
     return;
   }

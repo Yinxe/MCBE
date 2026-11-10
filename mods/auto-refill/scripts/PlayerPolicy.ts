@@ -8,6 +8,7 @@ import {
   type CustomCommandOrigin,
   type Entity,
 } from "@minecraft/server";
+import { playerGuard } from "./playerGuard";
 
 /**
  * 从命令来源取玩家；非玩家来源（控制台/命令方块等）返回 undefined。
@@ -30,16 +31,16 @@ export class PlayerPolicy {
     if (entity === undefined) return undefined;
     if (entity.typeId !== "minecraft:player") return undefined;
     const player = entity as Player;
-    // 假人标识 tag（mock-player 模组给所有假人打的标），带 tag 即假人
-    if (player.hasTag("mockplayer:tag:bot")) return undefined;
-    // 模拟玩家的 getGameMode() 会抛异常或返回 undefined
+    // ⚠️ 假人守卫统一走 mod-common：判据为 `getGameMode()` 抛错/返回 undefined，
+    // 不依赖 tag——第三方假人模组不保证打 `mockplayer:tag:bot`，故不用 tag 白名单。
+    if (!playerGuard.isUsablePlayer(player) || playerGuard.isSimulatedPlayer(player)) return undefined;
+    // 仅处理生存/冒险模式（创造/旁观不动）
     let mode: GameMode | undefined;
     try {
       mode = player.getGameMode();
     } catch {
       return undefined;
     }
-    if (mode === undefined) return undefined;
     if (mode === GameMode.Survival || mode === GameMode.Adventure)
       return player;
     return undefined;

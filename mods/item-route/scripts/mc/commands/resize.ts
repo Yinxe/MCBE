@@ -10,6 +10,7 @@ import { chat } from "../ui/uiColor";
 import { regionCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 import { resolveWarehouseByName, requireRole } from "../auth/commands";
+import { playerGuard } from "../util/playerGuard";
 
 /**
  * 注册 `ir:resize <名称> <pos1> <pos2>`：调整仓库区域（仅 owner）。
@@ -19,20 +20,26 @@ import { resolveWarehouseByName, requireRole } from "../auth/commands";
  * @param deps     - 命令共享依赖门面（含 WarehouseService）
  */
 export function registerResize(registry: CustomCommandRegistry, deps: CommandDeps): void {
-  registerPlayerCommand(registry, regionCommand("ir:resize", "调整仓库区域（owner）"), ({ player, params }) => {
+  registerPlayerCommand(registry, regionCommand("ir:resize", "调整仓库区域（owner）"), ({ player, playerName, params }) => {
     const warehouse = resolveWarehouseByName(deps.loadedWarehouses(), params.name as string);
     if (warehouse === undefined) {
       player.sendMessage(`${chat.error}仓库不存在`);
       return;
     }
-    if (!requireRole(deps.members, warehouse, player.name, "owner", canManage(player))) {
+    if (!requireRole(deps.members, warehouse, playerName, "owner", canManage(player))) {
       player.sendMessage(`${chat.error}需要拥有者权限`);
+      return;
+    }
+    // ⚠️ 维度读取走守卫：命令推迟后句柄可能失效，裸读 `.dimension.id` 会 TypeError
+    const dimensionId = playerGuard.safePlayerCall(player, (p) => p.dimension.id);
+    if (dimensionId === undefined) {
+      player.sendMessage(`${chat.error}无法读取你的维度，请稍后重试`);
       return;
     }
     const p1 = params.pos1 as { x: number; y: number; z: number };
     const p2 = params.pos2 as { x: number; y: number; z: number };
     const area = {
-      dimension: player.dimension.id,
+      dimension: dimensionId,
       corner1: { x: Math.floor(p1.x), y: Math.floor(p1.y), z: Math.floor(p1.z) },
       corner2: { x: Math.floor(p2.x), y: Math.floor(p2.y), z: Math.floor(p2.z) },
     };

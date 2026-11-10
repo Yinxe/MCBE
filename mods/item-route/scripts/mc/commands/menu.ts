@@ -14,7 +14,7 @@ import { showMainMenu } from "../ui/MainMenu";
  * @param deps     - 命令共享依赖门面（含 loaded 仓库、config 等）
  */
 export function registerMenu(registry: CustomCommandRegistry, deps: CommandDeps): void {
-  registerPlayerCommand(registry, noParamCommand("ir:menu", "打开主菜单"), ({ player }) => {
+  registerPlayerCommand(registry, noParamCommand("ir:menu", "打开主菜单"), ({ player, playerName }) => {
     void showMainMenu(player, deps);
   });
 }

@@ -31,14 +31,15 @@ export function setupPersistentBoundaryControl({ bus, config, loaded }: Persiste
     (wh: Warehouse): (() => boolean) =>
     () => {
       // ⚠️ 安全枚举（真实+模拟玩家）：namedPlayers 丢弃半初始化/字段不全项；单玩家 try 隔离
-      for (const { player: p } of namedPlayers(world.getAllPlayers())) {
+      for (const { player: p, dimensionId, position } of namedPlayers(world.getAllPlayers())) {
         try {
-          if (p.dimension.id !== wh.area.dimension) continue;
+          if (position === undefined || dimensionId === undefined) continue; // 位置不可读 → 视为不在附近
+          if (dimensionId !== wh.area.dimension) continue;
           const held = p.getComponent("inventory")?.container?.getItem(p.selectedSlotIndex);
           const holdingToken = config.isToken(held?.typeId ?? "");
           if (!holdingToken) continue;
           if (
-            isPlayerNearby(wh.area, [{ dimension: p.dimension.id, x: p.location.x, z: p.location.z }], PROXIMITY_MARGIN)
+            isPlayerNearby(wh.area, [{ dimension: dimensionId, x: position.x, z: position.z }], PROXIMITY_MARGIN)
           ) {
             return true;
           }

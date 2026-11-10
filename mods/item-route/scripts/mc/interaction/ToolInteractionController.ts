@@ -28,6 +28,8 @@ import { showMainMenu } from "../ui/MainMenu";
 import { MoveJournal } from "../../core/routing/Move";
 import { formatOrganizeResult } from "../ui/OrganizeFormatter";
 import { chat } from "../ui/uiColor";
+import { playerGuard } from "../util/playerGuard";
+import { playerNameOf } from "../util/playerName";
 
 /** 防抖窗口：方块点击后短时间内忽略 itemUse（v1 同款 250ms） */
 const DEBOUNCE_MS = 250;
@@ -90,11 +92,15 @@ export function registerToolInteraction(deps: CommandDeps): void {
   world.beforeEvents.playerInteractWithBlock.subscribe((e) => {
     try {
       const player = e.player;
-      if (player === undefined) return;
+      // ⚠️ 假人守卫：模拟玩家也能右键方块，且 `e.player` 可能是半初始化/坏句柄——
+      // 裸读 `.name` / `.location` 即 TypeError。任何一项不可读就直接跳过（不 cancel）。
+      if (!playerGuard.isUsablePlayer(player)) return;
       if (e.itemStack === undefined || !deps.config.isToken(e.itemStack.typeId)) return; // 信物判定
+      const playerName = playerNameOf(player);
+      if (playerName === undefined) return; // 取不到名（半初始化）→ 不处理
       const isLongPress = !e.isFirstEvent; // 长按：按住产生的重复事件
       const now = Date.now();
-      recentBlockUse.set(player.name, now);
+      recentBlockUse.set(playerName, now);
       e.cancel = true; // 取消默认行为：不打开箱子界面、不锄地等
       const loc: Location = { x: e.block.location.x, y: e.block.location.y, z: e.block.location.z };
       const dimensionId = e.block.dimension.id;
@@ -102,20 +108,21 @@ export function registerToolInteraction(deps: CommandDeps): void {
       if (isLongPress) {
         // 长按：仅潜行长按生效一次 → 仓库菜单模式（取玩家位置）；其余忽略
         if (!player.isSneaking) return;
-        const st = pressState.get(player.name);
+        const st = pressState.get(playerName);
         if (st === undefined || st.handled || now - st.start < LONG_PRESS_MS) return;
         st.handled = true;
-        const playerLoc: Location = {
-          x: Math.floor(player.location.x),
-          y: Math.floor(player.location.y),
-          z: Math.floor(player.location.z),
-        };
-        warehouseMenuAt(player, playerLoc, player.dimension.id);
+        // ⚠️ 位置读取走守卫：交互事件里句柄可能瞬态失效（假人/刚下线）
+        const snapshot = playerGuard.safePlayerCall(player, (p) => ({
+          dimensionId: p.dimension.id,
+          position: { x: Math.floor(p.location.x), y: Math.floor(p.location.y), z: Math.floor(p.location.z) },
+        }));
+        if (snapshot === undefined) return; // 位置不可读 → 不打开菜单
+        warehouseMenuAt(player, snapshot.position, snapshot.dimensionId);
         return;
       }
 
       // 点击（isFirstEvent=true）——刷新长按状态起始
-      pressState.set(player.name, { start: now, handled: false });
+      pressState.set(playerName, { start: now, handled: false });
 
       if (player.isSneaking) {
         // 潜行点击：容器 → 单容器整理；非容器 → 背包整理（v1 同款，不再忽略）
@@ -136,10 +143,10 @@ export function registerToolInteraction(deps: CommandDeps): void {
       }
 
       // 点击非容器：选区模式（有会话） / 仓库菜单模式（无会话按点位找仓）
-      const session = deps.session.get(player.name);
+      const session = deps.session.get(playerName);
       if (session !== undefined) {
         system.run(() => {
-          const msg = handleCornerClick(cornerCtx, player.name, loc, dimensionId);
+          const msg = handleCornerClick(cornerCtx, playerName, loc, dimensionId);
           if (msg) player.sendMessage(msg);
         });
         return;
@@ -154,9 +161,12 @@ export function registerToolInteraction(deps: CommandDeps): void {
   world.afterEvents.itemUse.subscribe((e) => {
     try {
       const player = e.source;
-      if (player === undefined) return;
+      // ⚠️ 假人守卫：模拟玩家也能使用物品；裸读 `.name` / `getBlockFromViewDirection` 可能 TypeError
+      if (!playerGuard.isUsablePlayer(player)) return;
       if (e.itemStack === undefined || !deps.config.isToken(e.itemStack.typeId)) return;
-      const lastBlock = recentBlockUse.get(player.name);
+      const playerName = playerNameOf(player);
+      if (playerName === undefined) return; // 取不到名（半初始化）→ 不处理
+      const lastBlock = recentBlockUse.get(playerName);
       if (lastBlock !== undefined && Date.now() - lastBlock < DEBOUNCE_MS) return;
 
       // 视线指向容器（如潜影盒等可能不触发方块交互）→ 直通该容器的配置模态

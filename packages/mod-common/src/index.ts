@@ -36,6 +36,14 @@ export { runSafe, runSafeDetached } from "./runSafe";
 export type { ErrorHandler } from "./runSafe";
 export { createRunSafe } from "./runSafeCore";
 export type { Scheduler } from "./runSafeCore";
+
+// 玩家对象守卫（真人/假人/坏句柄统一判别）
+//
+// ⚠️ 共享库不导出绑定官方 Player 的现成实例（各模组 @minecraft/server 版本不同，
+// `Player` 类型跨包不兼容）。模组侧自行绑定：
+//   const guard = createWorldPlayerGuard(p => p instanceof Player, () => world.getPlayers());
+export { createPlayerGuard, createWorldPlayerGuard } from "./playerGuard";
+export type { GuardedPlayer, InstanceCheck, NamedPlayer, PlayerGuard } from "./playerGuard";
 export { parseModalValues, isValueField } from "./formValues";
 export type { FieldKind, FieldSpec, FormValues } from "./formValues";
 

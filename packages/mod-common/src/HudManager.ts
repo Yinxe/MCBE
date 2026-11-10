@@ -24,6 +24,13 @@
 import { world, system, DisplaySlotId, ObjectiveSortOrder, ScoreboardIdentityType, Player } from "@minecraft/server";
 import type { Dimension, ScriptEventCommandMessageAfterEvent } from "@minecraft/server";
 import { pickWinner, type BusClaim } from "./arbiter";
+import { createWorldPlayerGuard } from "./playerGuard";
+
+/** 本包内的玩家守卫（绑定本包解析到的 Player 类与 world 枚举） */
+const guard = createWorldPlayerGuard<Player>(
+  (p) => p instanceof Player,
+  () => world.getPlayers(),
+);
 
 // ── 槽位 ──────────────────────────────────────────────────────
 export type HudSlot = "actionbar" | "title" | "sidebar";
@@ -76,41 +83,13 @@ export interface HudManagerOptions {
 const BUS_NAMESPACE = "yinxe";
 const BUS_EVENT = "yinxe:hud";
 
-/**
- * 玩家目标可用性判定：模拟玩家（假人，含本仓 mock-player 与第三方假人模组）
- * 在**读取游戏模式 `getGameMode()` 时会抛错**（已知可靠特征，跨任意假人成立），
- * 据此识别并排除；同时防御 undefined / 非 Player / 半初始化（字段缺失或访问抛错）。
- * 不依赖 tag / 白名单。
- */
-function isUsablePlayerTarget(p: unknown): p is Player {
-  if (p === undefined || p === null || !(p instanceof Player)) return false;
-  try {
-    if (typeof p.id !== "string" || p.id.length === 0) return false;
-    if (p.dimension === undefined || p.location === undefined) return false;
-    if (p.getGameMode() === undefined) return false; // 结果异常也视为不可用
-    return true;
-  } catch {
-    return false; // getGameMode 抛错 → 视为假人/不可用对象
-  }
-}
-
-/** 在线玩家安全枚举：跳过假人/坏对象（见 isUsablePlayerTarget）；可选叠加调用方过滤器。 */
+/** 在线玩家安全枚举：只保留真人（HUD 不给假人渲染）；可选叠加调用方过滤器。
+ * 判别与安全遍历统一走 playerGuard（isRealPlayer 内含 getGameMode 探测）。 */
 function usablePlayers(extra: ((p: Player) => boolean) | undefined): Player[] {
-  let all: Player[];
-  try {
-    all = world.getPlayers();
-  } catch {
-    return [];
-  }
   const out: Player[] = [];
-  for (const p of all) {
-    try {
-      if (!isUsablePlayerTarget(p)) continue;
-      if (extra !== undefined && !extra(p)) continue;
-      out.push(p);
-    } catch {
-      /* 半初始化/异常实体跳过 */
-    }
+  for (const { player } of guard.safePlayers(undefined, { realOnly: true })) {
+    if (extra !== undefined && !extra(player)) continue;
+    out.push(player);
   }
   return out;
 }

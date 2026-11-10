@@ -11,7 +11,7 @@ import { showHelpGuide } from "../ui/HelpGuide";
  * @param registry - 自定义命令注册表
  */
 export function registerHelp(registry: CustomCommandRegistry): void {
-  registerPlayerCommand(registry, noParamCommand("ir:help", "查看帮助手册"), ({ player }) => {
+  registerPlayerCommand(registry, noParamCommand("ir:help", "查看帮助手册"), ({ player, playerName }) => {
     void showHelpGuide(player);
   });
 }

@@ -8,6 +8,7 @@
 import { world, type Player } from "@minecraft/server";
 import { ModalFormBuilder, ActionFormBuilder } from "@mc-toolchain/mod-common";
 import { canManage } from "../auth/admin";
+import { playerNameOf } from "../util/playerName";
 import type { CommandDeps } from "../commands/deps";
 import { requireRole } from "../auth/commands";
 import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
@@ -125,7 +126,9 @@ export async function showWarehouseSettingsMenu(
   warehouse: Warehouse
 ): Promise<void> {
   deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载
-  const isOwner = requireRole(deps.members, warehouse, player.name, "owner", canManage(player));
+  const playerName = playerNameOf(player);
+  if (playerName === undefined) return; // 取不到名（假人/半初始化）→ 不处理
+  const isOwner = requireRole(deps.members, warehouse, playerName, "owner", canManage(player));
 
   const settings = warehouse.settings;
   // 只能选 ≥ 全局最快速度限制 的档位（不得快于管理员上限；v1 getAvailableSpeeds 口径）
@@ -299,7 +302,7 @@ export async function showWarehouseSettingsMenu(
     return;
   }
   if (chosen === "resize" && isOwner) {
-    deps.session.set(player.name, { kind: "resizeWarehouse", warehouseId: warehouse.id });
+    deps.session.set(playerName, { kind: "resizeWarehouse", warehouseId: warehouse.id });
     player.sendMessage(`${uiColor.chat.info}请在两个对角位置使用信物点击方块来选择新的仓库区域`);
     return;
   }

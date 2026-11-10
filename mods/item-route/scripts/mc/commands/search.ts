@@ -9,6 +9,7 @@ import { queryCommand } from "./defs";
 import type { CommandDeps } from "./deps";
 import { nearestWarehouseByPermission } from "../../core/model/Area";
 import { runSearchAndDisplay } from "../ui/SearchUI";
+import { playerGuard } from "../util/playerGuard";
 
 /**
  * 注册 `ir:search <查询词>`：就近取有权限的最近仓库，搜索并标记匹配物品所在容器。
@@ -21,13 +22,22 @@ export function registerSearch(registry: CustomCommandRegistry, deps: CommandDep
   registerPlayerCommand(
     registry,
     queryCommand("ir:search", "在你有权限的最近仓库搜索物品（member+）"),
-    ({ player, params }) => {
+    ({ player, playerName, params }) => {
+      // ⚠️ 位置读取包守卫：命令推迟后句柄可能失效，裸读 `.dimension` / `.location` 即 TypeError
+      const snapshot = playerGuard.safePlayerCall(player, (p) => ({
+        dimensionId: p.dimension.id,
+        position: { x: p.location.x, z: p.location.z },
+      }));
+      if (snapshot === undefined) {
+        player.sendMessage(`${chat.error}无法读取你的位置，请稍后重试`);
+        return;
+      }
       // 权限：仅 owner/member 可搜；就近取该玩家有权限的仓库（v1 filterNearbyOwned 同义）
       const warehouse = nearestWarehouseByPermission(
         deps.loadedWarehouses(),
-        player.dimension.id,
-        { x: player.location.x, z: player.location.z },
-        (w) => deps.members.can(w, player.name, "member")
+        snapshot.dimensionId,
+        snapshot.position,
+        (w) => deps.members.can(w, playerName, "member")
       );
       if (warehouse === undefined) {
         player.sendMessage(`${chat.error}附近没有你有权限（成员）的仓库`);

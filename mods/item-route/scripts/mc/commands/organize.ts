@@ -9,6 +9,7 @@ import { findWarehouseAt } from "../../core/model/Area";
 import { containerShortName } from "../../core/model/ContainerId";
 import { MoveJournal } from "../../core/routing/Move";
 import { formatOrganizeResult } from "../ui/OrganizeFormatter";
+import { playerGuard } from "../util/playerGuard";
 
 /** 容器 ID → 可读短名（如 c@(1,2,3)@overworld → (1,2,3)@overworld） */
 function shortName(id: string): string {
@@ -23,12 +24,18 @@ function shortName(id: string): string {
  * @param deps     - 命令共享依赖门面（含 OrganizeService、ensureContainersLoaded）
  */
 export function registerOrganize(registry: CustomCommandRegistry, deps: CommandDeps): void {
-  registerPlayerCommand(registry, noParamCommand("ir:organize", "整理玩家所在仓库的全部容器"), ({ player }) => {
-    const warehouse = findWarehouseAt(deps.loadedWarehouses(), player.dimension.id, {
-      x: Math.floor(player.location.x),
-      y: Math.floor(player.location.y),
-      z: Math.floor(player.location.z),
-    });
+  registerPlayerCommand(registry, noParamCommand("ir:organize", "整理玩家所在仓库的全部容器"), ({ player, playerName }) => {
+    // ⚠️ 位置读取包守卫：命令推迟到安全上下文后，句柄可能已失效（假人下线/断线），
+    // 裸读 `.dimension` / `.location` 即 TypeError。取不到就按“不在仓库区域”处理。
+    const snapshot = playerGuard.safePlayerCall(player, (p) => ({
+      dimensionId: p.dimension.id,
+      position: { x: Math.floor(p.location.x), y: Math.floor(p.location.y), z: Math.floor(p.location.z) },
+    }));
+    if (snapshot === undefined) {
+      player.sendMessage(`${chat.error}无法读取你的位置，请稍后重试`);
+      return;
+    }
+    const warehouse = findWarehouseAt(deps.loadedWarehouses(), snapshot.dimensionId, snapshot.position);
     if (warehouse === undefined) {
       player.sendMessage(`${chat.error}你不在任何仓库区域内`);
       return;

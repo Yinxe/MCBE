@@ -5,6 +5,7 @@
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder } from "@mc-toolchain/mod-common";
 import { canManage } from "../auth/admin";
+import { playerNameOf } from "../util/playerName";
 import type { CommandDeps } from "../commands/deps";
 import { showWarehouseSettingsMenu } from "./WarehouseSettingsMenu";
 import { areaSize } from "../../core/services/WarehouseService";
@@ -22,9 +23,14 @@ import * as uiColor from "./uiColor";
  */
 export async function showWarehouseManageMenu(player: Player, deps: CommandDeps): Promise<void> {
   const all = deps.loadedWarehouses();
-  const ownsAny = all.some((w) => w.ownerName === player.name);
+  const playerName = playerNameOf(player);
+  if (playerName === undefined) {
+    player.sendMessage(`${uiColor.chat.error}无法读取你的玩家名，请稍后重试`);
+    return;
+  }
+  const ownsAny = all.some((w) => w.ownerName === playerName);
   const isAdmin = canManage(player);
-  const visible = isAdmin || ownsAny ? all : all.filter((w) => deps.members.getRole(w, player.name) !== undefined);
+  const visible = isAdmin || ownsAny ? all : all.filter((w) => deps.members.getRole(w, playerName) !== undefined);
 
   if (visible.length === 0) {
     player.sendMessage(`${uiColor.chat.muted}没有可管理的仓库`);
@@ -36,7 +42,7 @@ export async function showWarehouseManageMenu(player: Player, deps: CommandDeps)
   const form = new ActionFormBuilder().title(`${uiColor.form.title}仓库列表`).body(`${uiColor.form.body}选择仓库：`);
   for (const w of [...visible].sort((a, b) => a.displayName.localeCompare(b.displayName))) {
     const parts: string[] = [`${uiColor.btn.nav}${w.displayName}`];
-    if (isAdmin && w.ownerName !== player.name && isMenuInfoOn(info, "warehouseOwner")) {
+    if (isAdmin && w.ownerName !== playerName && isMenuInfoOn(info, "warehouseOwner")) {
       parts.push(`${uiColor.btn.info}(${w.ownerName})`);
     }
     if (isMenuInfoOn(info, "warehouseId")) parts.push(`${uiColor.form.muted}${w.id}`);

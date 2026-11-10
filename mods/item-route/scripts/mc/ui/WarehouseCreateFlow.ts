@@ -3,6 +3,7 @@ import { type Player } from "@minecraft/server";
 import { ModalFormBuilder } from "@mc-toolchain/mod-common";
 import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
 import type { CommandDeps } from "../commands/deps";
+import { playerNameOf } from "../util/playerName";
 import * as uiColor from "./uiColor";
 
 /**
@@ -41,7 +42,9 @@ export async function showWarehouseCreateForm(player: Player, deps: CommandDeps)
     player.sendMessage(`${uiColor.chat.error}仓库名称不能为空`);
     return;
   }
-  deps.session.set(player.name, { kind: "createWarehouse", name, defaultRole, defaultEnabled });
+  const playerName = playerNameOf(player);
+  if (playerName === undefined) return; // 取不到名（假人/半初始化）→ 不建仓
+  deps.session.set(playerName, { kind: "createWarehouse", name, defaultRole, defaultEnabled });
   player.sendMessage(
     `${uiColor.chat.success}已进入建仓选区模式：请手持信物在两个对角普通方块上右键完成区域选择，区域内容器将自动扫描`
   );

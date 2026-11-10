@@ -61,7 +61,14 @@ export function putTokenInInventory(container: Container): boolean {
  * @param announce 是否发送提示消息
  */
 export function giveTeleportToken(player: Player, announce = true): void {
-  const container = player.getComponent("inventory")?.container;
+  // ⚠️ 半初始化实体上 `getComponent` 可能直接抛错（游戏实测 `getComponent of undefined`）。
+  // 发放失败只是少一件信物，绝不能让异常穿到 playerSpawn 回调外层。
+  let container;
+  try {
+    container = player.getComponent("inventory")?.container;
+  } catch {
+    return;
+  }
   if (!container) return;
 
   if (putTokenInInventory(container)) {
@@ -71,7 +78,11 @@ export function giveTeleportToken(player: Player, announce = true): void {
     return;
   }
 
-  player.dimension.spawnItem(createTeleportToken(), player.location);
+  try {
+    player.dimension.spawnItem(createTeleportToken(), player.location);
+  } catch {
+    return; // 维度/位置不可读 → 不溢出，静默放弃
+  }
   if (announce) {
     player.sendMessage("§a背包已满,传送信物已丢在地上");
   }
@@ -83,7 +94,12 @@ export function giveTeleportToken(player: Player, announce = true): void {
  * @returns 是否真的发放了
  */
 export function ensureTeleportToken(player: Player): boolean {
-  const container = player.getComponent("inventory")?.container;
+  let container;
+  try {
+    container = player.getComponent("inventory")?.container;
+  } catch {
+    return false;
+  }
   if (!container) return false;
   if (hasTeleportToken(container)) return false;
   if (!putTokenInInventory(container)) return false;

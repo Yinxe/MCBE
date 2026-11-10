@@ -7,6 +7,8 @@ import { containerShortName } from "../../core/model/ContainerId";
 import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";
 import { searchMarkerMolang } from "../effects/SortEffects";
+import { playerGuard } from "../util/playerGuard";
+import { playerNameOf } from "../util/playerName";
 import * as uiColor from "./uiColor";
 
 const PARTICLE_INTERVAL = 20; // 粒子刷新的 tick 间隔
@@ -23,8 +25,8 @@ export interface SearchResultLine {
   containerIds: string[];
 }
 
-/** 玩家到仓库中心 XZ 直线距离 */
-function warehouseDistance(warehouse: Warehouse, player: Player): number {
+/** 玩家到仓库中心 XZ 直线距离（坐标用快照，不裸读玩家对象） */
+function warehouseDistance(warehouse: Warehouse, position: { x: number; z: number }): number {
   const cx =
     (Math.min(warehouse.area.corner1.x, warehouse.area.corner2.x) +
       Math.max(warehouse.area.corner1.x, warehouse.area.corner2.x)) /
@@ -33,7 +35,7 @@ function warehouseDistance(warehouse: Warehouse, player: Player): number {
     (Math.min(warehouse.area.corner1.z, warehouse.area.corner2.z) +
       Math.max(warehouse.area.corner1.z, warehouse.area.corner2.z)) /
     2;
-  return Math.hypot(player.location.x - cx, player.location.z - cz);
+  return Math.hypot(position.x - cx, position.z - cz);
 }
 
 /** 容器 ID → 可读短名（如 c@(1,2,3)@overworld → (1,2,3)@overworld） */
@@ -49,11 +51,22 @@ function shortId(cid: string): string {
  * @param deps   - 命令共享依赖门面
  */
 export async function showSearchUI(player: Player, deps: CommandDeps): Promise<void> {
+  // ⚠️ 玩家名与位置统一走守卫：菜单回调可能拿到瞬态失效句柄（假人/刚下线），
+  // 裸读 `.name` / `.dimension` / `.location` 会 TypeError。
+  const playerName = playerNameOf(player);
+  const snapshot = playerGuard.safePlayerCall(player, (p) => ({
+    dimensionId: p.dimension.id,
+    position: { x: p.location.x, z: p.location.z },
+  }));
+  if (playerName === undefined || snapshot === undefined) {
+    player.sendMessage(`${uiColor.chat.error}无法读取你的位置，请稍后重试`);
+    return;
+  }
   // 有权（member+）且同维度的仓库，按距玩家距离排序（v1 同款：可选择仓库，但须自己有权限）
   const accessible = deps
     .loadedWarehouses()
-    .filter((w) => w.area.dimension === player.dimension.id && deps.members.can(w, player.name, "member"))
-    .map((w) => ({ warehouse: w, dist: warehouseDistance(w, player) }))
+    .filter((w) => w.area.dimension === snapshot.dimensionId && deps.members.can(w, playerName, "member"))
+    .map((w) => ({ warehouse: w, dist: warehouseDistance(w, snapshot.position) }))
     .sort((a, b) => a.dist - b.dist);
   if (accessible.length === 0) {
     player.sendMessage(`${uiColor.chat.error}当前维度没有你有权限（成员）的仓库`);
@@ -110,7 +123,11 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
       }
     }
   }
-  if (locs.length > 0) startMarkerParticles(player, player.dimension.id, locs, (t) => deps.config.isToken(t));
+  if (locs.length > 0) {
+    // 维度 id 用快照（不裸读 player.dimension）；取不到就不开粒子标记
+    const dimensionId = playerGuard.safePlayerCall(player, (p) => p.dimension.id);
+    if (dimensionId !== undefined) startMarkerParticles(player, dimensionId, locs, (t) => deps.config.isToken(t));
+  }
 }
 
 /** 纯逻辑搜索：基于通用容器索引（ItemIndex.lookupSearch，含 misc）O(1) 命中；未激活时本地倒排兜底 */
@@ -139,7 +156,9 @@ export function startMarkerParticles(
   isToken: (itemTypeId: string) => boolean
 ): void {
   // 每玩家独立会话：同一玩家重复搜索（含换仓）→ 清旧会话再重启（结果刷新、不重叠）
-  const oldHandle = activeMarkerHandles.get(player.name);
+  // 会话 key 用守卫解析出的名字（假人/半初始化实体裸读 `.name` 可能是 undefined）
+  const sessionKey = playerNameOf(player) ?? "";
+  const oldHandle = activeMarkerHandles.get(sessionKey);
   if (oldHandle !== undefined) system.clearRun(oldHandle);
 
   // 状态机（v1 修正口径，需求第 11 条）：
@@ -222,12 +241,12 @@ export function startMarkerParticles(
     }
   }, PARTICLE_INTERVAL);
 
-  activeMarkerHandles.set(player.name, handle);
+  activeMarkerHandles.set(sessionKey, handle);
 
   function cleanup(): void {
     phase = "done";
     system.clearRun(handle);
-    activeMarkerHandles.delete(player.name);
+    activeMarkerHandles.delete(sessionKey);
     try {
       player.sendMessage(`${uiColor.chat.muted}容器标记已结束`);
     } catch {

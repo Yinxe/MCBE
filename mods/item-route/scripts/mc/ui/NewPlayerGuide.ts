@@ -2,11 +2,14 @@
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder } from "@mc-toolchain/mod-common";
 import type { McModConfig } from "../storage/McModConfig";
+import { playerNameOf } from "../util/playerName";
 import { form, chat, btn } from "./uiColor";
 
 /** 首次使用主菜单时展示引导页；该玩家已看过则跳过 */
 export async function tryShowNewPlayerGuide(player: Player, config: McModConfig): Promise<boolean> {
-  if (config.hasSeenGuide(player.name)) return false;
+  const playerName = playerNameOf(player);
+  if (playerName === undefined) return false; // 取不到名（假人/半初始化）→ 不引导
+  if (config.hasSeenGuide(playerName)) return false;
   const dlg = new ActionFormBuilder()
     .title(`${form.success}物品路由 · 欢迎`)
     .body(
@@ -25,6 +28,6 @@ export async function tryShowNewPlayerGuide(player: Player, config: McModConfig)
     )
     .button(`${btn.primary}知道了`, () => undefined);
   await dlg.show(player);
-  config.markSeenGuide(player.name);
+  config.markSeenGuide(playerName);
   return true;
 }

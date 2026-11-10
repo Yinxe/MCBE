@@ -13,6 +13,7 @@ import type { MemberService } from "../../core/services/MemberService";
 import type { SelectionSessionStore, SelectionSession } from "../interaction/SelectionSessionStore";
 import { isPlayerNearby, type PlayerPosition } from "../../core/model/Area";
 import { color } from "../ui/uiColor";
+import { playerGuard } from "../util/playerGuard";
 import { playerNameOf } from "../util/playerName";
 
 /** 附近判定外扩格数（站仓库外稍远也能看到状态） */
@@ -109,21 +110,25 @@ export function registerWarehouseHUD(
     priority: PRIORITY_WAREHOUSE,
     // 就近取"成员身份 + 在附近"的仓库（同一玩家多仓时只显示最近一仓，避免刷屏）
     render: (p: Player) => {
-      const name = playerNameOf(p);
-      if (name === undefined) return undefined;
-      const pos: PlayerPosition = { dimension: p.dimension.id, x: p.location.x, z: p.location.z };
-      let best: Warehouse | undefined;
-      let bestDist = Infinity;
-      for (const w of loaded) {
-        if (!members.can(w, name, "member")) continue; // HUD 只给拥有/管理成员看（真实+模拟玩家同名判定）
-        if (!isPlayerNearby(w.area, [pos], HUD_MARGIN)) continue;
-        const d = distTo(w, pos);
-        if (d < bestDist) {
-          bestDist = d;
-          best = w;
+      // ⚠️ 渲染回调也可能收到瞬态失效句柄（玩家刚下线/维度切换）：整段包 safePlayerCall，
+      // 读取失败则本帧不渲染（返回 undefined），不影响其他玩家的 HUD。
+      return playerGuard.safePlayerCall(p, (player) => {
+        const name = playerNameOf(player);
+        if (name === undefined) return undefined;
+        const pos: PlayerPosition = { dimension: player.dimension.id, x: player.location.x, z: player.location.z };
+        let best: Warehouse | undefined;
+        let bestDist = Infinity;
+        for (const w of loaded) {
+          if (!members.can(w, name, "member")) continue; // HUD 只给拥有/管理成员看（真实+模拟玩家同名判定）
+          if (!isPlayerNearby(w.area, [pos], HUD_MARGIN)) continue;
+          const d = distTo(w, pos);
+          if (d < bestDist) {
+            bestDist = d;
+            best = w;
+          }
         }
-      }
-      return best === undefined ? undefined : hudLine(scheduler, best);
+        return best === undefined ? undefined : hudLine(scheduler, best);
+      });
     },
   });
   hud.start();

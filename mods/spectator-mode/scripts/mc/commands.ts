@@ -24,7 +24,15 @@ import { openAdminMenu } from "./menu";
 /** 从命令来源解析执行玩家;非玩家来源返回 undefined */
 function playerOf(origin: CustomCommandOrigin): Player | undefined {
   const source = origin.sourceEntity;
-  return source instanceof Player ? source : undefined;
+  if (!(source instanceof Player)) return undefined;
+  // ⚠️ 假人守卫：模拟玩家也能执行命令，但它们不实现 `getGameMode()`（直接抛错），
+  // 进 controller 后任何模式读写都会 TypeError。在入口就排除。
+  try {
+    if (source.getGameMode() === undefined) return undefined;
+  } catch {
+    return undefined;
+  }
+  return source;
 }
 
 /**

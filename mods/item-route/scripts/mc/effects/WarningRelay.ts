@@ -45,9 +45,10 @@ export function registerWarningRelay(bus: EventBus, warehouses: () => Warehouse[
       const containerInfo = e.containerId !== undefined ? containerDetail(warehouse, e.containerId) : "";
       const message = `${color.error}[容量预警] 仓库 "${warehouse.displayName}"${containerInfo ? ` ${containerInfo}` : ""}：${text}`;
       // ⚠️ 安全枚举（真实+模拟玩家）：namedPlayers 丢弃半初始化/字段不全项；单玩家 try 隔离不拦截其他玩家
-      for (const { player: p } of namedPlayers(world.getAllPlayers())) {
+      for (const { player: p, dimensionId, position } of namedPlayers(world.getAllPlayers())) {
         try {
-          if (near(warehouse, { dimension: p.dimension.id, x: p.location.x, z: p.location.z }, WARNING_MARGIN)) {
+          if (position === undefined || dimensionId === undefined) continue; // 位置不可读 → 跳过该玩家
+          if (near(warehouse, { dimension: dimensionId, x: position.x, z: position.z }, WARNING_MARGIN)) {
             p.sendMessage(message);
           }
         } catch {

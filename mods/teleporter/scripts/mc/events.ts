@@ -8,6 +8,7 @@
 
 import { system, world, type Player } from "@minecraft/server";
 import { MessageFormBuilder, runSafeDetached } from "@mc-toolchain/mod-common";
+import { playerGuard } from "./playerGuard";
 import { listDeathPoints, recordDeathPoint } from "../core/deathPoints";
 import { distanceBetween, formatLocation, formatTimeAgo } from "../core/naming";
 import { ensureTeleportToken, hasTeleportToken } from "./token";
@@ -58,11 +59,16 @@ function subscribeDeathEvent(): void {
 function subscribeSpawnEvent(): void {
   world.afterEvents.playerSpawn.subscribe((event) => {
     const player = event.player;
+    // ⚠️ 假人守卫：模拟玩家召唤也会触发 playerSpawn，且 event.player 可能是
+    // 半初始化/坏句柄（`getComponent` of undefined 的现场来源，m02292）。
+    // 推迟 2~3 tick 后实体也可能已失效，故每个回调入口都要重新校验。
+    if (!playerGuard.isUsablePlayer(player)) return;
 
     if (event.initialSpawn) {
       // 等 3 tick 让背包组件就绪,再检查信物
       system.runTimeout(() => {
         runSafeDetached(() => {
+          if (!playerGuard.isUsablePlayer(player)) return; // 推迟期间失效（假人下线）
           ensureTeleportToken(player);
         });
       }, 3);
@@ -71,7 +77,10 @@ function subscribeSpawnEvent(): void {
 
     // 死亡重生:稍等 2 tick 让玩家实体完全就绪
     system.runTimeout(() => {
-      runSafeDetached(() => showDeathTeleportDialog(player));
+      runSafeDetached(() => {
+        if (!playerGuard.isUsablePlayer(player)) return; // 推迟期间失效（假人下线）
+        void showDeathTeleportDialog(player);
+      });
     }, 2);
   });
 }
@@ -124,7 +133,12 @@ function subscribeTokenUseEvent(): void {
       return;
     event.cancel = true;
     const player = event.source;
-    runSafeDetached(() => showMainMenu(player));
+    // ⚠️ 假人守卫：模拟玩家也能使用物品；坏句柄进 `showMainMenu` 后裸读属性即 TypeError
+    if (!playerGuard.isUsablePlayer(player)) return;
+    runSafeDetached(() => {
+      if (!playerGuard.isUsablePlayer(player)) return; // 推迟期间失效
+      void showMainMenu(player);
+    });
   });
 
   world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
@@ -133,6 +147,10 @@ function subscribeTokenUseEvent(): void {
     if (!isTeleportToken({ typeId: item.typeId, lore: item.getLore() })) return;
     event.cancel = true;
     const player = event.player;
-    runSafeDetached(() => showMainMenu(player));
+    if (!playerGuard.isUsablePlayer(player)) return;
+    runSafeDetached(() => {
+      if (!playerGuard.isUsablePlayer(player)) return; // 推迟期间失效
+      void showMainMenu(player);
+    });
   });
 }

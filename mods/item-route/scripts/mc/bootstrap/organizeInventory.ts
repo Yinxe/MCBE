@@ -14,6 +14,7 @@ import { Organizer } from "../../core/organizing/Organizer";
 import { pickInventoryPhase } from "../../core/organizing/InventoryPhase";
 import { MoveJournal } from "../../core/routing/Move";
 import type { McItemAdapter } from "../adapters/McItemAdapter";
+import { playerNameOf } from "../util/playerName";
 import { PlayerInventoryContainer } from "../adapters/PlayerInventoryContainer";
 
 /** 背包不可用（无 inventory 组件）时的占位结果——整理失败 */
@@ -60,11 +61,20 @@ export function createInventoryOrganizer(
   item: McItemAdapter
 ): (player: Player) => PlayerInventoryResult {
   return (player): PlayerInventoryResult => {
-    const inv = player.getComponent("inventory")?.container;
+    // ⚠️ 背包整理会被推迟到 `system.run` 执行（ToolInteractionController.organizePlayerInventory），
+    // 届时句柄可能已失效（假人/刚下线/维度切换）——裸读 `getComponent` 即 TypeError。
+    // 整体包进 try：整理失败只回一条可读提示，绝不让异常穿到交互事件外层。
+    let inv;
+    try {
+      inv = player.getComponent("inventory")?.container;
+    } catch {
+      return NO_INVENTORY_RESULT;
+    }
     if (inv === undefined) return NO_INVENTORY_RESULT;
-    const main = new PlayerInventoryContainer(`player:${player.name}:main`, inv, item, MAIN_START, MAIN_CAPACITY);
+    const playerName = playerNameOf(player) ?? "unknown"; // 假人/半初始化可能取不到名
+    const main = new PlayerInventoryContainer(`player:${playerName}:main`, inv, item, MAIN_START, MAIN_CAPACITY);
     const hotbar = new PlayerInventoryContainer(
-      `player:${player.name}:hotbar`,
+      `player:${playerName}:hotbar`,
       inv,
       item,
       HOTBAR_START,

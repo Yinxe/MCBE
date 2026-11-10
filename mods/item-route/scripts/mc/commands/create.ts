@@ -11,6 +11,7 @@ import { registerPlayerCommand } from "./register";
 import { chat } from "../ui/uiColor";
 import { regionCommand } from "./defs";
 import type { CommandDeps } from "./deps";
+import { playerGuard } from "../util/playerGuard";
 
 /**
  * 注册 `ir:create <名称> <pos1> <pos2>`：按两对角坐标创建物品路由仓库。
@@ -20,16 +21,22 @@ import type { CommandDeps } from "./deps";
  * @param deps     - 命令共享依赖门面（含 WarehouseService）
  */
 export function registerCreate(registry: CustomCommandRegistry, deps: CommandDeps): void {
-  registerPlayerCommand(registry, regionCommand("ir:create", "创建物品路由仓库区域"), ({ player, params }) => {
+  registerPlayerCommand(registry, regionCommand("ir:create", "创建物品路由仓库区域"), ({ player, playerName, params }) => {
+    // ⚠️ 维度读取走守卫：命令推迟后句柄可能失效，裸读 `.dimension.id` 会 TypeError
+    const dimensionId = playerGuard.safePlayerCall(player, (p) => p.dimension.id);
+    if (dimensionId === undefined) {
+      player.sendMessage(`${chat.error}无法读取你的维度，请稍后重试`);
+      return;
+    }
     const name = (params.name as string).trim();
     const p1 = params.pos1 as { x: number; y: number; z: number };
     const p2 = params.pos2 as { x: number; y: number; z: number };
     const area = {
-      dimension: player.dimension.id,
+      dimension: dimensionId,
       corner1: { x: Math.floor(p1.x), y: Math.floor(p1.y), z: Math.floor(p1.z) },
       corner2: { x: Math.floor(p2.x), y: Math.floor(p2.y), z: Math.floor(p2.z) },
     };
-    const result = deps.warehouses.createWarehouse(name, player.name, area);
+    const result = deps.warehouses.createWarehouse(name, playerName, area);
     if (!result.ok) {
       player.sendMessage(`${chat.error}${result.error}`);
       return;

@@ -155,7 +155,14 @@ export class SoulController {
 
     // 已是旁观者:有残留锚点(重进未恢复/事件漏触等遗留灵魂)→ 强制回归本体作逃生出口;
     // 无锚点则只是普通旁观者,仅提示不代办。
-    if (player.getGameMode() === GameMode.Spectator) {
+    // ⚠️ `getGameMode()` 在假人/半初始化实体上直接抛错,包 try 并当作“非旁观者”。
+    let mode: GameMode | undefined;
+    try {
+      mode = player.getGameMode();
+    } catch {
+      return "§c无法读取你的游戏模式,请稍后重试";
+    }
+    if (mode === GameMode.Spectator) {
       const anchor = readSoulAnchor(player);
       if (anchor !== undefined) {
         this.returnToAnchor(player, anchor, "手动回归");
@@ -327,13 +334,26 @@ export class SoulController {
 
   /** 进入旁观:先切模式成功再落盘锚点,避免切换失败留下无会话的残留锚点 */
   private enterSoul(player: Player): string {
-    const location = player.location;
+    // ⚠️ 位置/维度/模式读取在假人/半初始化实体上可能抛错,一次性快照并包 try
+    let snapshot: { x: number; y: number; z: number; dimensionId: string; gameMode: string };
+    try {
+      const location = player.location;
+      snapshot = {
+        x: location.x,
+        y: location.y,
+        z: location.z,
+        dimensionId: player.dimension.id,
+        gameMode: player.getGameMode() as string,
+      };
+    } catch {
+      return "§c无法读取你的位置或游戏模式,请稍后重试";
+    }
     const anchor: SoulAnchor = {
-      dimensionId: player.dimension.id,
-      x: location.x,
-      y: location.y,
-      z: location.z,
-      gameMode: player.getGameMode() as string,
+      dimensionId: snapshot.dimensionId,
+      x: snapshot.x,
+      y: snapshot.y,
+      z: snapshot.z,
+      gameMode: snapshot.gameMode,
     };
 
     // 先切模式:失败(极限模式/权限/引擎拒绝)时不留任何状态,玩家保持原样
@@ -354,7 +374,7 @@ export class SoulController {
     // 夜视:先快照玩家原有状态再施加模组夜视(顺序不可颠倒)
     this.applyNightVision(player);
     try {
-      spawnBodyGlow(player.dimension, location, 24);
+      spawnBodyGlow(player.dimension, { x: snapshot.x, y: snapshot.y, z: snapshot.z }, 24);
     } catch (e) {
       this.warnOnce(player.id, e);
     }

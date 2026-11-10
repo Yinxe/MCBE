@@ -14,6 +14,7 @@ import type { ContainerRole } from "../../core/model/Container";
 import type { Location } from "../../core/model/types";
 import type { EventBus, VisualEffectEvent } from "../../core/events/DomainEvents";
 import { SORT_PARTICLE, DEPOSIT_PARTICLE } from "./ParticleIds";
+import { playerGuard } from "../util/playerGuard";
 
 export { SORT_PARTICLE, DEPOSIT_PARTICLE };
 
@@ -122,11 +123,14 @@ function playAt(
 
 /** 向粒子坐标附近玩家显式播放音效（`player.playSound` 带位置；半径内玩家都能听到） */
 function playSoundNearby(dim: Dimension, center: Vector3): void {
-  for (const p of dim.getPlayers()) {
-    const d = Math.hypot(p.location.x - center.x, p.location.y - center.y, p.location.z - center.z);
-    if (d > SOUND_RANGE) continue;
+  // ⚠️ 安全枚举：`dim.getPlayers()` 可能返回 undefined 项或半初始化实体（假人/刚进出者），
+  // 裸读 `p.location` 即 TypeError（m02349 现场报错）。safePlayers 丢弃不可用项，
+  // 单玩家 playSound 再包 try —— 一个玩家失效不影响其余玩家听到音效。
+  for (const { player } of playerGuard.safePlayers(dim.getPlayers())) {
     try {
-      p.playSound(SORT_SOUND, { location: center, pitch: SORT_PITCH, volume: SORT_VOLUME });
+      const d = Math.hypot(player.location.x - center.x, player.location.y - center.y, player.location.z - center.z);
+      if (d > SOUND_RANGE) continue;
+      player.playSound(SORT_SOUND, { location: center, pitch: SORT_PITCH, volume: SORT_VOLUME });
     } catch {
       /* 玩家离线/维度切换：忽略 */
     }

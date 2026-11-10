@@ -1,0 +1,4 @@
+packages:
+  - mods/*
+  - packages/*
+  - tools/*
