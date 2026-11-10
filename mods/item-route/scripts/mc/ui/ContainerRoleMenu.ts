@@ -1,0 +1,292 @@
+// ─── 容器配置：列表 + 单一复杂模态（信息展示 + 属性修改 + 整理动作，对齐 v1） ──
+// 列表：仓库内容器按钮（漏斗标 [输入]），点击进入该容器的配置模态。
+// 配置模态（v1 ContainerRoleMenu 设计）：
+//   · 顶部 label 实时扫描该容器 → 仓库/类型/容量/混乱度/容器ID/状态/角色
+//   · 属性字段：启用 toggle、角色 dropdown（漏斗强制 input，带中文说明）
+//   · 动作 toggle：立即整理（就地单容器整理 + 详细报告）
+//   · 提交：角色/启用变更 → 刷新 inputs 镜像 + 更新索引 + invalidate 统计 + 触发
+//     containerRegistryChanged（持久化由中央订阅处理，单容器最小单位）
+import { type Player } from "@minecraft/server";
+import { ActionFormBuilder, ModalFormBuilder } from "@mc-toolchain/mod-common";
+import { canManage } from "../auth/admin";
+import type { CommandDeps } from "../commands/deps";
+import { requireRole } from "../auth/commands";
+import { ROLE_LABELS, type ContainerRole } from "../../core/model/Container";
+import { isHopperType } from "../../core/model/ContainerTypes";
+import { containerShortName } from "../../core/model/ContainerId";
+import { getChineseName } from "../../core/data/ItemNameMap";
+import { isMenuInfoOn } from "../../core/data/MenuInfo";
+import { scanContainer } from "../../core/model/ContainerScan";
+import { containerFamilyRanks, formatFamilyRankBody } from "../../core/stats/familyRanks";
+import { refreshInputMembership } from "../../core/model/ContainerRegistry";
+import type { Warehouse } from "../../core/model/Warehouse";
+import type { Container } from "../../core/model/Container";
+import { Organizer } from "../../core/organizing/Organizer";
+import { MoveJournal } from "../../core/routing/Move";
+import { formatOrganizeResult } from "./OrganizeFormatter";
+import { showItemSearchMultiPicker } from "./ItemSearchMultiPicker";
+import * as uiColor from "./uiColor";
+
+/** 容器角色下拉（漏斗强制 input，其余可选；v1 语义带说明） */
+const ROLE_OPTIONS: ContainerRole[] = ["input", "single", "multi", "misc"];
+
+/** 容器实时信息文本（按 OPInfoConfigUI 开关逐行渲染；关 → 跳过对应计算），ModalForm 深底 → 浅色 */
+function formatContainerInfo(deps: CommandDeps, warehouse: Warehouse, container: Container): string {
+  const info = deps.config.menuInfo;
+  const blockType = (container as { blockType?: string }).blockType ?? "未知";
+  const roleLabel = ROLE_LABELS[container.role];
+
+  // 容量/混乱度/族榜都依赖 scan：仅当至少一项开着才执行单趟扫描（避免无效计算）
+  const needScan =
+    isMenuInfoOn(info, "containerCapacity") ||
+    isMenuInfoOn(info, "containerMessiness") ||
+    isMenuInfoOn(info, "containerFamilyRank");
+  const scan = needScan ? scanContainer(container) : undefined;
+
+  const lines: string[] = [];
+  if (isMenuInfoOn(info, "containerWhName"))
+    lines.push(`${uiColor.form.muted}仓库 ${uiColor.form.body}${warehouse.displayName}`);
+  if (isMenuInfoOn(info, "containerType"))
+    lines.push(
+      `${uiColor.form.muted}类型 ${uiColor.form.body}${getChineseName(blockType)}${isHopperType(blockType) ? "（漏斗→输入容器）" : ""}`
+    );
+
+  if (scan !== undefined && isMenuInfoOn(info, "containerCapacity")) {
+    // 容量行对齐 v1 formatContainerCapacityLine：usage% 按档着色 + ⚠ 告急（≥ warningThreshold）
+    const usage = container.capacity > 0 ? Math.round((scan.usedSlots / container.capacity) * 100) : 0;
+    const usageColor =
+      usage >= 100
+        ? uiColor.form.error
+        : usage >= 80
+          ? uiColor.form.warn
+          : usage >= 50
+            ? uiColor.form.accent
+            : uiColor.form.success;
+    const warnMark =
+      container.capacity > 0 && usage >= Math.round(warehouse.settings.warningThreshold * 100) ? ` ${usageColor}⚠` : "";
+    lines.push(
+      `${uiColor.form.muted}容量 ${uiColor.form.body}${scan.usedSlots}${uiColor.form.muted}/${uiColor.form.body}${container.capacity}[${usageColor}${usage}%${uiColor.form.muted}]  ${uiColor.form.body}${scan.totalItems}${uiColor.form.muted} 个物品  ${uiColor.form.body}${Object.keys(scan.byType).length}${uiColor.form.muted} 种类型${warnMark}`
+    );
+  }
+  if (scan !== undefined && isMenuInfoOn(info, "containerMessiness")) {
+    const messiness = new Organizer().messinessFromScan(scan).total;
+    lines.push(`${uiColor.form.muted}混乱度 ${uiColor.form.body}${(messiness * 100).toFixed(0)}%`);
+  }
+  if (isMenuInfoOn(info, "containerId")) lines.push(`${uiColor.form.muted}容器ID ${uiColor.form.body}${container.id}`);
+  if (isMenuInfoOn(info, "containerStatus"))
+    lines.push(
+      `${uiColor.form.muted}状态 ${container.enabled ? uiColor.form.success + "已启用" : uiColor.form.error + "已禁用"}`
+    );
+  if (isMenuInfoOn(info, "containerRole")) lines.push(`${uiColor.form.muted}角色 ${uiColor.form.accent}${roleLabel}`);
+  if (isMenuInfoOn(info, "containerPriority"))
+    lines.push(`${uiColor.form.muted}优先级 ${uiColor.form.body}${container.priority}`);
+  // 族榜：多物容器启用同族收纳 + 开关开 → 信息区显示容器内族排行榜（族类型数降序，全排）
+  if (
+    scan !== undefined &&
+    isMenuInfoOn(info, "containerFamilyRank") &&
+    container.role === "multi" &&
+    container.familyEnabled
+  ) {
+    const ranks = containerFamilyRanks(scan);
+    if (ranks.length > 0) {
+      lines.push(`${uiColor.form.muted}族榜:`);
+      // 前三名序号特殊着色（金/银/紫铜），正文保持正文色；其余 muted
+      const medalColors = [uiColor.color.gold, uiColor.color.white, uiColor.color.lightPurple];
+      ranks.forEach((r, i) => {
+        const no = i + 1;
+        const color = no <= 3 ? medalColors[no - 1]! : uiColor.form.muted;
+        lines.push(`${color}#${no}. ${uiColor.form.body}${formatFamilyRankBody(r)}`);
+      });
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
+ * 展示容器列表（member+）：仓库内容器按钮（漏斗标 [输入]）。点击进入配置模态。
+ */
+export async function showContainerRoleMenu(player: Player, deps: CommandDeps, warehouse: Warehouse): Promise<void> {
+  deps.ensureContainersLoaded(warehouse); // 仓库可能未激活 → 容器按需加载（列表才有容器可编辑）
+  const info = deps.config.menuInfo;
+  const form = new ActionFormBuilder()
+    .title(`${uiColor.form.title}容器角色 · ${warehouse.displayName}`)
+    .body(`${uiColor.form.body}选择容器（漏斗为强制输入容器）：`);
+  for (const container of warehouse.containers.values()) {
+    const roleLabel = ROLE_LABELS[container.role] ?? container.role;
+    const blockType = (container as { blockType?: string }).blockType ?? "";
+    const parts: string[] = [`${uiColor.btn.nav}${container.id} ${uiColor.btn.info}[${roleLabel}]`];
+    if (blockType && isMenuInfoOn(info, "containerType")) {
+      parts.push(` ${uiColor.form.muted}${getChineseName(blockType)}`);
+    }
+    form.button(parts.join(""), () => void showContainerConfigMenu(player, deps, warehouse, container));
+  }
+  await form.show(player);
+}
+
+/**
+ * 单容器配置模态（member+，信物点击容器 / 容器列表项直通）：信息展示 + 启用/角色修改 + 立即整理动作。
+ * 漏斗强制 input（角色不可改）。提交变更 → inputs 镜像 + 索引 + 统计失效 + containerRegistryChanged
+ * （持久化由中央订阅处理，单容器最小单位）。
+ */
+export async function showContainerConfigMenu(
+  player: Player,
+  deps: CommandDeps,
+  warehouse: Warehouse,
+  container: Container
+): Promise<void> {
+  if (!requireRole(deps.members, warehouse, player.name, "member", canManage(player))) {
+    player.sendMessage(`${uiColor.chat.error}需要成员及以上权限`);
+    return;
+  }
+  // 菜单打开即刷新该容器：重建索引 + 失效统计。MC 无内容变更事件，玩家手动放入某类型
+  // （如本会话坐标：A[1,2,3] B[2,3,4] C[3,4,5] D[] 手动放 3 进 D）后，下一次交互代理
+  // 信号只在**开箱瞬间** reconcile（物品尚未放入），路由始终看不到 D[3]。打开此配置菜单
+  // 是天然的重逢锚——formatContainerInfo 本就要 scanContainer 全读该容器，喂给索引零额外
+  // 成本，且这正是玩家期望"敏捷/机动"的落点：改优先级前路由就已把 D 当成候选中。
+  deps.resolveIndex(warehouse.id)?.reconcile(container);
+  deps.stats.invalidate(container.id);
+  const forced = isHopperType((container as { blockType?: string }).blockType ?? "");
+  const info = formatContainerInfo(deps, warehouse, container);
+
+  const form = new ModalFormBuilder()
+    .title(`${uiColor.form.title}容器配置`)
+    .label("info", info)
+    .toggle("enabled", `${uiColor.form.accent}启用容器`, {
+      defaultValue: container.enabled,
+      tooltip: "开启后参与路由，关闭则跳过",
+    });
+
+  if (forced) {
+    form.label("hopperHint", `${uiColor.form.muted}此容器是漏斗，只能作为输入容器使用。`);
+  } else {
+    const roleIndex = ROLE_OPTIONS.indexOf(container.role);
+    form.dropdown(
+      "role",
+      "容器角色",
+      ROLE_OPTIONS.map((r) => ROLE_LABELS[r]),
+      {
+        defaultValueIndex: roleIndex >= 0 ? roleIndex : 1,
+        tooltip: "角色决定路由去向：输入→单物→多物→其他",
+      }
+    );
+  }
+
+  // 路由优先级（1-100，数字小先处理；默认 50）
+  form.slider("priority", `${uiColor.form.muted}路由优先级（1-100，小者先）`, 1, 100, {
+    defaultValue: container.priority,
+    valueStep: 1,
+    tooltip: "决定路由处理先后（输入容器按优先级升序处理；默认 50）",
+  });
+
+  form.toggle("organize", `${uiColor.form.success}立即整理（就地排序合并堆叠）`, {
+    tooltip: "忽略混乱度强制就地整理：清空→按类型排序→合并可堆叠堆",
+  });
+
+  form.toggle("warnThis", `${uiColor.form.warn}该容器容量预警`, {
+    defaultValue: container.warningEnabled,
+    tooltip: "关闭后该容器不再触发容量预警",
+  });
+
+  // 同族收纳：仅多物容器有意义（按内容派生：装某族任一 → 收全族）
+  if (container.role === "multi") {
+    form.toggle("familyEnabled", `${uiColor.form.accent}同族收纳（允许接受同族物品）`, {
+      defaultValue: container.familyEnabled,
+      tooltip: "容器启用后允许接受同族物品：装入某族任一成员 → 该族其余成员也能进入。仅多物容器生效",
+    });
+  }
+
+  // 容器级黑白名单编辑入口（漏斗/单物/多物/其他 皆支持）
+  form
+    .toggle("editWhitelist", `${uiColor.form.success}编辑白名单[${container.whitelist.length}]`, {
+      tooltip: "白名单 = 允许（声明式）：名单内物品即使容器没装也能进（预分配）。空 = 不限制",
+    })
+    .toggle("editBlacklist", `${uiColor.form.warn}编辑黑名单[${container.blacklist.length}]`, {
+      tooltip: "黑名单内物品永不进入此容器",
+    });
+
+  const values = await form.show(player);
+  if (!values) return;
+
+  // 整理动作优先执行
+  if (values.organize === true) {
+    const res = deps.organize.organizeContainer(warehouse, container, new MoveJournal());
+    const name = containerShortName(container.id);
+    for (const line of formatOrganizeResult(res, name)) player.sendMessage(line);
+    return;
+  }
+
+  // 黑白名单编辑（单容器最小单位：应用后重建索引 + 触发注册表持久化）
+  if (values.editWhitelist === true) {
+    await showItemSearchMultiPicker(player, deps, {
+      title: "容器白名单",
+      hint: "白名单内物品即使容器未装也能进（预分配）；空 = 不限",
+      getItems: () => container.whitelist,
+      setItems: (next) => {
+        container.whitelist = next;
+        deps.resolveIndex(warehouse.id)?.onContainerChanged(container);
+        deps.bus.containerRegistryChanged.trigger({
+          type: "container-registry-changed",
+          warehouseId: warehouse.id,
+          containerId: container.id,
+        });
+      },
+    });
+    return;
+  }
+  if (values.editBlacklist === true) {
+    await showItemSearchMultiPicker(player, deps, {
+      title: "容器黑名单",
+      hint: "黑名单内物品永不进入此容器",
+      getItems: () => container.blacklist,
+      setItems: (next) => {
+        container.blacklist = next;
+        deps.resolveIndex(warehouse.id)?.onContainerChanged(container);
+        deps.bus.containerRegistryChanged.trigger({
+          type: "container-registry-changed",
+          warehouseId: warehouse.id,
+          containerId: container.id,
+        });
+      },
+    });
+    return;
+  }
+
+  // 提交角色/启用/预警/优先级/同族变更
+  const newRole = forced ? container.role : (ROLE_OPTIONS[values.role as number] ?? container.role);
+  const newPriority = values.priority as number;
+  const newFamilyEnabled = container.role === "multi" ? values.familyEnabled === true : container.familyEnabled;
+  const changed =
+    newRole !== container.role ||
+    values.enabled !== container.enabled ||
+    values.warnThis !== container.warningEnabled ||
+    newPriority !== container.priority ||
+    newFamilyEnabled !== container.familyEnabled;
+  if (!changed) {
+    player.sendMessage(`${uiColor.chat.muted}容器设置未变化`);
+    return;
+  }
+  container.role = newRole;
+  container.enabled = values.enabled as boolean;
+  container.warningEnabled = values.warnThis === true;
+  container.priority = newPriority;
+  if (container.role === "multi") container.familyEnabled = newFamilyEnabled;
+  refreshInputMembership(warehouse, container); // 角色/启用变更 → 刷新 inputs 成员资格
+  deps.resolveIndex(warehouse.id)?.onContainerChanged(container); // 该仓自己的索引（含族桶重算）
+  deps.stats.invalidate(container.id);
+  // 持久化（注册表 + 索引条目）由中央订阅订阅 containerRegistryChanged 统一处理（单容器最小单位）
+  deps.bus.containerRegistryChanged.trigger({
+    type: "container-registry-changed",
+    warehouseId: warehouse.id,
+    containerId: container.id,
+  });
+  // 配置更新通知打印 layout 信息（v1 风格，避免仅"已更新"）
+  const shortName = containerShortName(container.id);
+  player.sendMessage(
+    [
+      `${uiColor.chat.success}容器 ${shortName} 配置已更新`,
+      `${uiColor.chat.muted}角色: ${uiColor.chat.info}${ROLE_LABELS[container.role]}${forced ? "（漏斗强制输入容器）" : ""}`,
+      `${uiColor.chat.muted}启用: ${uiColor.chat.info}${container.enabled ? "开启" : "关闭"}${uiColor.chat.muted}  ·  容量预警: ${uiColor.chat.info}${container.warningEnabled ? "开启" : "关闭"}`,
+      `${uiColor.chat.muted}优先级: ${uiColor.chat.info}${container.priority}`,
+    ].join("\n")
+  );
+}

@@ -9,6 +9,7 @@ mc-toolchain/
 ├── mods/                  # Bedrock 模组（游戏内行为包与资源包），规则见 mods/README.md
 │   ├── auto-refill/
 │   ├── craftablerarities/
+│   ├── item-route/
 │   ├── keepinventory/
 │   ├── spectator-mode/
 │   └── teleporter/
@@ -29,6 +30,7 @@ mc-toolchain/
 | `keepinventory` | 死亡不掉落：玩家死亡时保留背包物品                           | [mods/keepinventory/README.md](mods/keepinventory/README.md) |
 | `craftablerarities` | 合成配方扩展：79 个工作台配方合成稀有、不可再生物品与隐藏方块（纯内容包，无脚本） | [mods/craftablerarities/README.md](mods/craftablerarities/README.md) |
 | `spectator-mode` | 灵魂出窍：飞离真身侦查，超出距离容忍 5 秒后自动回归 | [mods/spectator-mode/README.md](mods/spectator-mode/README.md) |
+| `item-route` | 物品路由仓库：木锄圈定仓库，按物品族自动分拣、容器整理、统计、容量预警与搜索定位；仓库内唯一带资源包（自定义粒子）的模组 | [mods/item-route/README.md](mods/item-route/README.md) |
 | `teleporter` | 传送：传送点、死亡点、玩家间传送请求；无需作弊、保留成就 | [mods/teleporter/README.md](mods/teleporter/README.md) |
 
 `mods/` 下的目录布局、`mct` 用法、新建模组流程等共同规则见 [mods/README.md](mods/README.md)。

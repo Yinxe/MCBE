@@ -1,0 +1,275 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { ItemIndex } from "../scripts/core/index/ItemIndex";
+import { InMemoryContainer } from "./helpers/InMemoryContainer";
+import { SimpleItemStack } from "../scripts/core/model/ItemStack";
+
+function stoneMulti() {
+  const c = new InMemoryContainer("m1", "multi", 3);
+  c.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  return c;
+}
+
+test("ItemIndex: onContainerAdded 后 lookup O(1) 命中", () => {
+  const index = new ItemIndex();
+  index.onContainerAdded(stoneMulti());
+  const got = index.lookup("minecraft:stone");
+  assert.deepEqual(got.multi, ["m1"]);
+  assert.deepEqual(index.lookup("minecraft:dirt"), { single: [], multi: [] });
+});
+
+test("ItemIndex: 单物容器绑定由 deriveBinding 推导并缓存", () => {
+  const index = new ItemIndex();
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  index.onContainerAdded(single);
+  assert.deepEqual(index.lookup("minecraft:stone").single, ["s1"]);
+  assert.equal(index.getBinding("s1"), "minecraft:stone");
+});
+
+test("ItemIndex: onContainerRoleChanged 迁移条目", () => {
+  const index = new ItemIndex();
+  const c = stoneMulti();
+  index.onContainerAdded(c);
+  c.role = "single"; // 槽内 stone 变为绑定
+  index.onContainerRoleChanged(c, "multi");
+  assert.deepEqual(index.lookup("minecraft:stone").multi, []);
+  assert.deepEqual(index.lookup("minecraft:stone").single, ["m1"]);
+});
+
+test("ItemIndex: onContainerRemoved 清理全部条目", () => {
+  const index = new ItemIndex();
+  const c = stoneMulti();
+  index.onContainerAdded(c);
+  index.onContainerRemoved(c);
+  assert.deepEqual(index.lookup("minecraft:stone"), { single: [], multi: [] });
+});
+
+test("ItemIndex: reconcile 容器实际为空 → 移除全部条目", () => {
+  const index = new ItemIndex();
+  const c = stoneMulti();
+  index.onContainerAdded(c);
+  c.setItem(0, undefined); // 玩家手动清空（无事件）
+  index.reconcile(c); // 按真实内容重建：空 → 条目清空
+  assert.deepEqual(index.lookup("minecraft:stone").multi, []);
+});
+
+test("ItemIndex: reconcile 单物绑定漂移 → 修复", () => {
+  const index = new ItemIndex();
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  index.onContainerAdded(single);
+  single.setItem(0, new SimpleItemStack("minecraft:dirt", 5, 64)); // 首槽被替换
+  index.reconcile(single); // 绑定修复（stone 已无 → 移除；dirt 加入）
+  assert.deepEqual(index.lookup("minecraft:stone").single, []);
+  assert.deepEqual(index.lookup("minecraft:dirt").single, ["s1"]);
+  assert.equal(index.getBinding("s1"), "minecraft:dirt");
+});
+
+test("ItemIndex: onItemMoved 轻量更新目标侧", () => {
+  const index = new ItemIndex();
+  const from = new InMemoryContainer("in", "input", 3);
+  from.setItem(0, new SimpleItemStack("minecraft:stone", 10, 64));
+  const to = stoneMulti();
+  index.onContainerAdded(from);
+  index.onContainerAdded(to);
+  index.onItemMoved(from, to, "minecraft:stone");
+  assert.deepEqual(index.lookup("minecraft:stone").multi, ["m1"]);
+});
+
+/** 纯运行时索引：不提供序列化——激活时按真实内容全量重建（见 createIndexRuntimeLifecycle），
+ *  此前的 serialize/restore 用例已随索引持久化一起移除。 */
+test("ItemIndex: selfHeal 扫描存储容器找 hasItem 并重建条目（漏索引兜底）", () => {
+  const index = new ItemIndex();
+  const m1 = new InMemoryContainer("m1", "multi", 4);
+  m1.setItem(0, new SimpleItemStack("minecraft:stone", 5, 64));
+  index.onContainerAdded(m1); // 索引只记录 stone
+  // 用户手动放入 diamond（无交互信号 → 索引不知情）
+  m1.setItem(1, new SimpleItemStack("minecraft:diamond", 2, 64));
+  assert.deepEqual(index.lookup("minecraft:diamond"), { single: [], multi: [] }); // miss
+  // 自愈：扫描存储容器找 diamond → 重建 m1 条目
+  index.selfHeal(new SimpleItemStack("minecraft:diamond", 2, 64), [m1]);
+  assert.deepEqual(index.lookup("minecraft:diamond"), { single: [], multi: ["m1"] }); // 自愈命中
+  // stone 条目不受影响
+  assert.deepEqual(index.lookup("minecraft:stone"), { single: [], multi: ["m1"] });
+});
+
+test("ItemIndex: selfHeal 跳过 input/misc 容器（非路由候选）", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 4);
+  input.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  const misc = new InMemoryContainer("mx", "misc", 4);
+  misc.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  index.onContainerAdded(input);
+  index.onContainerAdded(misc);
+  index.selfHeal(new SimpleItemStack("minecraft:diamond", 2, 64), [input, misc]);
+  assert.deepEqual(index.lookup("minecraft:diamond"), { single: [], multi: [] }); // 都跳过
+});
+
+// ── 同族索引（familyContainers）跟随触发点联动 ────────────────────
+function familyBox(): InMemoryContainer {
+  const c = new InMemoryContainer("mF", "multi", 3);
+  c.familyEnabled = true;
+  c.setItem(0, new SimpleItemStack("minecraft:white_wool", 5, 64));
+  return c;
+}
+
+test("ItemIndex: 族桶由内容派生——onContainerChanged 换族则桶迁移", () => {
+  const index = new ItemIndex();
+  const c = familyBox(); // 白羊毛 → 羊毛族桶
+  index.onContainerAdded(c);
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  // 手动改成红石（属于 redstone 族）→ reconcile 重建 → 族桶从 wool 迁到 redstone
+  c.setItem(0, new SimpleItemStack("minecraft:redstone", 3, 64));
+  index.onContainerChanged(c);
+  assert.deepEqual(index.lookupFamily("wool"), []);
+  assert.deepEqual(index.lookupFamily("redstone"), ["mF"]);
+});
+
+test("ItemIndex: 关闭启族开关 → 从族桶移除（onContainerChanged 重建）", () => {
+  const index = new ItemIndex();
+  const c = familyBox();
+  index.onContainerAdded(c);
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  c.familyEnabled = false;
+  index.onContainerChanged(c);
+  assert.deepEqual(index.lookupFamily("wool"), []);
+});
+
+test("ItemIndex: onContainerRemoved 清理族桶成员资格", () => {
+  const index = new ItemIndex();
+  const c = familyBox();
+  index.onContainerAdded(c);
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  index.onContainerRemoved(c);
+  assert.deepEqual(index.lookupFamily("wool"), []);
+});
+
+test("ItemIndex: onItemMoved 路由进启族多物容器 → 增补族桶（同族后续成员感知）", () => {
+  const index = new ItemIndex();
+  const target = familyBox(); // 已含白羊毛 → 羊毛桶
+  index.onContainerAdded(target);
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  // 路由把橙羊毛移动进目标（目标是多物启族容器）→ 族桶幂等
+  index.onItemMoved(input, target, "minecraft:orange_wool");
+  assert.deepEqual(index.lookupFamily("wool"), ["mF"]);
+  // 移动一个不同族物品（红石）进启族容器 → 新增 redstone 桶
+  index.onItemMoved(input, target, "minecraft:redstone");
+  assert.deepEqual(index.lookupFamily("redstone"), ["mF"]);
+});
+
+// ── 通用搜索索引（byItem 含 misc 桶） ────────────────────
+test("ItemIndex: lookupSearch 含 misc（全容器通用索引），lookup 路由仍仅 single/multi", () => {
+  const index = new ItemIndex();
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  const multi = new InMemoryContainer("m1", "multi", 3);
+  multi.setItem(0, new SimpleItemStack("minecraft:diamond", 3, 64));
+  const misc = new InMemoryContainer("x1", "misc", 3);
+  misc.setItem(0, new SimpleItemStack("minecraft:diamond", 4, 64));
+  index.onContainerAdded(single);
+  index.onContainerAdded(multi);
+  index.onContainerAdded(misc);
+  // 路由只看 single/multi
+  assert.deepEqual(index.lookup("minecraft:diamond").single, ["s1"]);
+  assert.deepEqual(index.lookup("minecraft:diamond").multi, ["m1"]);
+  // 搜索含全部存储容器（含 misc）
+  assert.deepEqual(index.lookupSearch("minecraft:diamond").sort(), ["m1", "s1", "x1"]);
+});
+
+test("ItemIndex: onContainerRemoved 清 misc 桶（搜索索引同步移除）", () => {
+  const index = new ItemIndex();
+  const misc = new InMemoryContainer("x1", "misc", 3);
+  misc.setItem(0, new SimpleItemStack("minecraft:stone", 2, 64));
+  index.onContainerAdded(misc);
+  assert.deepEqual(index.lookupSearch("minecraft:stone"), ["x1"]);
+  index.onContainerRemoved(misc);
+  assert.deepEqual(index.lookupSearch("minecraft:stone"), []);
+});
+
+// ── onItemMoved：路由移动后 byItem 桶即时更新（搜索可见） ──
+test("ItemIndex: 路由到 misc → byItem.misc 即时登记（lookupSearch 可见）", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const misc = new InMemoryContainer("x1", "misc", 3);
+  index.onContainerAdded(misc);
+  assert.deepEqual(index.lookupSearch("minecraft:stone"), []); // 初始无
+  index.onItemMoved(input, misc, "minecraft:stone"); // 路由把石头放进 misc
+  assert.deepEqual(index.lookupSearch("minecraft:stone"), ["x1"]); // misc 桶已登记 → 搜索可见
+});
+
+test("ItemIndex: 路由到 multi（白名单声明型，缺卡也进）→ byItem.multi 即时登记", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const multi = new InMemoryContainer("m1", "multi", 3);
+  index.onContainerAdded(multi);
+  // 白名单声明：multi 容器 whitelist 含 diamond，空箱也进（MultiItemStrategy 声明候选）
+  assert.deepEqual(index.lookup("minecraft:diamond").multi, []); // 未登记（空箱白名单不入内容索引）
+  index.onItemMoved(input, multi, "minecraft:diamond"); // 路由放入
+  assert.deepEqual(index.lookup("minecraft:diamond").multi, ["m1"]); // 移动后补 multi 桶
+  assert.deepEqual(index.lookupSearch("minecraft:diamond"), ["m1"]); // 搜索同步可见
+});
+
+test("ItemIndex: 路由到 single（绑定吻合）→ byItem.single 即时登记；漂移不强行登记", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64)); // 绑定 diamond
+  index.onContainerAdded(single);
+  // 绑定吻合 → 路由补 single 桶（幂等）
+  index.onItemMoved(input, single, "minecraft:diamond");
+  assert.deepEqual(index.lookup("minecraft:diamond").single, ["s1"]);
+  // 漂移：路由放了个与绑定不符的类型 → 不强行登记（留 reconcile）
+  const before = index.lookup("minecraft:stone");
+  index.onItemMoved(input, single, "minecraft:stone");
+  assert.deepEqual(index.lookup("minecraft:stone").single, before.single);
+});
+
+// ── 白名单空单物首件进箱：onItemMoved 实时绑定登记（P1 回归） ──
+test("ItemIndex: onItemMoved 白名单空单物首件 → single 桶即时登记（实时绑定）", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.whitelist = ["minecraft:diamond"]; // 白名单声明：空单物缺物预分配
+  index.onContainerAdded(single); // 空箱 → 无绑定、无 single 桶
+  assert.deepEqual(index.lookup("minecraft:diamond").single, []);
+  single.setItem(0, new SimpleItemStack("minecraft:diamond", 1, 64)); // transfer 后容器已装物
+  index.onItemMoved(input, single, "minecraft:diamond"); // 白名单首件进箱
+  // 实时绑定（getDedicatedItemId=首槽 diamond）→ 立即登记 single 桶 + 回填缓存
+  assert.deepEqual(index.lookup("minecraft:diamond").single, ["s1"]);
+  assert.deepEqual(index.lookupSearch("minecraft:diamond"), ["s1"]);
+  // 缓存已回填：直接 getBinding 也能读到
+  assert.equal(index.getBinding("s1"), "minecraft:diamond");
+});
+
+test("ItemIndex: onItemMoved 容器首槽被换（stone→diamond）→ 实时绑定登记 diamond（single 桶随实际首槽）", () => {
+  const index = new ItemIndex();
+  const input = new InMemoryContainer("in", "input", 3);
+  index.onContainerAdded(input);
+  const single = new InMemoryContainer("s1", "single", 3);
+  single.setItem(0, new SimpleItemStack("minecraft:stone", 2, 64)); // 绑定 stone
+  index.onContainerAdded(single);
+  assert.deepEqual(index.lookup("minecraft:stone").single, ["s1"]);
+  // 玩家替换首槽为 diamond 后再路由 diamond 进箱：实时绑定=首槽 diamond → 登记 diamond
+  single.setItem(0, new SimpleItemStack("minecraft:diamond", 2, 64));
+  index.onItemMoved(input, single, "minecraft:diamond");
+  assert.deepEqual(index.lookup("minecraft:diamond").single, ["s1"]);
+});
+
+// ── selfHeal 类型级判定：源物品带 NBT，容器存白板同类 → 仍命中（与 multi 语义一致） ──
+test("ItemIndex: selfHeal 类型级——源带 NBT、容器存白板 → 仍重建命中", () => {
+  const index = new ItemIndex();
+  const m1 = new InMemoryContainer("m1", "multi", 4);
+  m1.setItem(0, new SimpleItemStack("minecraft:stone", 3, 64)); // 白板 stone
+  index.onContainerAdded(m1);
+  // 源物品"带 NBT"（模拟附魔/耐久）：selfHeal 按 typeId 逐槽比对 → 命中并重建
+  const enchanted = new SimpleItemStack("minecraft:stone", 1, 64);
+  (enchanted as unknown as { nbt?: string }).nbt = "minecraft:sharpness:1";
+  index.selfHeal(enchanted, [m1]);
+  assert.deepEqual(index.lookup("minecraft:stone").multi, ["m1"]);
+});

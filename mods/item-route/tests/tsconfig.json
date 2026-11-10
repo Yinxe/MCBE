@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "../.test-build",
+    "rootDir": "..",
+    "types": ["node"]
+  },
+  "include": [
+    "../scripts/core/**/*.ts",
+    "../scripts/mc/storage/**/*.ts",
+    "../scripts/mc/ui/Table.ts",
+    "../scripts/mc/interaction/SelectionSessionStore.ts",
+    "../scripts/mc/interaction/interactionLogic.ts",
+    "../scripts/mc/auth/commands.ts",
+    "../scripts/mc/auth/admin.ts",
+    "../scripts/mc/commands/register.ts",
+    "../scripts/mc/effects/SortEffects.ts",
+    "../scripts/mc/util/playerName.ts",
+    "**/*.ts"
+  ],
+  "exclude": ["../node_modules", "../.test-build", "../scripts/mc/storage/DynamicPropertyStore.ts"]
+}
