@@ -1,0 +1,151 @@
+{
+  "namespace": "mockplayer",
+  "source_sha256": "9461ea488dc798a9a7b10e89e5c93168d3e0f953a3250dd7d6ae5923e64d5512",
+  "size": 256,
+  "icons": [
+    {
+      "file": "create_bot",
+      "label": "创建模拟玩家",
+      "action": "create",
+      "path": "textures/ui/mockplayer/create_bot"
+    },
+    {
+      "file": "bot_list",
+      "label": "模拟玩家列表",
+      "action": "list",
+      "path": "textures/ui/mockplayer/bot_list"
+    },
+    {
+      "file": "delete_bot",
+      "label": "删除模拟玩家",
+      "action": "delete",
+      "path": "textures/ui/mockplayer/delete_bot"
+    },
+    {
+      "file": "online_management",
+      "label": "在线管理",
+      "action": "online",
+      "path": "textures/ui/mockplayer/online_management"
+    },
+    {
+      "file": "help",
+      "label": "帮助",
+      "action": "help",
+      "path": "textures/ui/mockplayer/help"
+    },
+    {
+      "file": "admin_settings",
+      "label": "管理员菜单",
+      "action": "admin",
+      "path": "textures/ui/mockplayer/admin_settings"
+    },
+    {
+      "file": "toggle_online",
+      "label": "安全上线/下线",
+      "action": "toggleOnline",
+      "path": "textures/ui/mockplayer/toggle_online"
+    },
+    {
+      "file": "teleport",
+      "label": "传送过去",
+      "action": "tpToBot",
+      "path": "textures/ui/mockplayer/teleport"
+    },
+    {
+      "file": "sync_pose",
+      "label": "同步姿态",
+      "action": "syncPose",
+      "path": "textures/ui/mockplayer/sync_pose"
+    },
+    {
+      "file": "select_mainhand",
+      "label": "选择主手",
+      "action": "selectMainhand",
+      "path": "textures/ui/mockplayer/select_mainhand"
+    },
+    {
+      "file": "swap_items",
+      "label": "物品互换",
+      "action": "swap",
+      "path": "textures/ui/mockplayer/swap_items"
+    },
+    {
+      "file": "reclaim",
+      "label": "回收资源",
+      "action": "reclaim",
+      "path": "textures/ui/mockplayer/reclaim"
+    },
+    {
+      "file": "discard",
+      "label": "丢弃物品",
+      "action": "discard",
+      "path": "textures/ui/mockplayer/discard"
+    },
+    {
+      "file": "inventory",
+      "label": "背包/库存",
+      "action": "inventory",
+      "path": "textures/ui/mockplayer/inventory"
+    },
+    {
+      "file": "use_item",
+      "label": "使用物品",
+      "action": "useItem",
+      "path": "textures/ui/mockplayer/use_item"
+    },
+    {
+      "file": "set_spawn",
+      "label": "设置重生点",
+      "action": "updateSpawn",
+      "path": "textures/ui/mockplayer/set_spawn"
+    },
+    {
+      "file": "rename",
+      "label": "重命名",
+      "action": "rename",
+      "path": "textures/ui/mockplayer/rename"
+    },
+    {
+      "file": "throw_trident",
+      "label": "投三叉戟",
+      "action": "throwTrident",
+      "path": "textures/ui/mockplayer/throw_trident"
+    },
+    {
+      "file": "recall",
+      "label": "召回假人",
+      "action": "recall",
+      "path": "textures/ui/mockplayer/recall"
+    },
+    {
+      "file": "view_data",
+      "label": "查看数据",
+      "action": "viewData",
+      "path": "textures/ui/mockplayer/view_data"
+    },
+    {
+      "file": "kill_bot",
+      "label": "击杀假人",
+      "action": "kill",
+      "path": "textures/ui/mockplayer/kill_bot"
+    },
+    {
+      "file": "clear_equipment",
+      "label": "清除装备",
+      "action": "clearEquipment",
+      "path": "textures/ui/mockplayer/clear_equipment"
+    },
+    {
+      "file": "cancel",
+      "label": "取消",
+      "action": "cancel",
+      "path": "textures/ui/mockplayer/cancel"
+    },
+    {
+      "file": "back",
+      "label": "返回",
+      "action": "back",
+      "path": "textures/ui/mockplayer/back"
+    }
+  ]
+}

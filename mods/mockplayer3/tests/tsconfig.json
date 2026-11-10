@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": [
+      "node"
+    ],
+    "outDir": "../.test-build",
+    "rootDir": "..",
+    "paths": {
+      "@minecraft/server": [
+        "../node_modules/@minecraft/server"
+      ],
+      "@minecraft/server-ui": [
+        "../node_modules/@minecraft/server-ui"
+      ],
+      "@minecraft/server-gametest": [
+        "../node_modules/@minecraft/server-gametest"
+      ],
+      "@minecraft/vanilla-data": [
+        "../node_modules/@minecraft/vanilla-data"
+      ],
+      "@minecraft/math": [
+        "../node_modules/@minecraft/math"
+      ]
+    }
+  },
+  "include": [
+    "../scripts/domain/**/*.ts",
+    "**/*.ts"
+  ],
+  "exclude": [
+    "../node_modules",
+    "../.test-build",
+    "../lib",
+    "../dist"
+  ]
+}

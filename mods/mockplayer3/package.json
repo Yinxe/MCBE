@@ -1,0 +1,53 @@
+{
+  "name": "@mc-toolchain/mockplayer3",
+  "version": "3.0.32",
+  "productName": "模拟玩家III",
+  "description": "模拟玩家（假人）v3 重写 - 单会话模型、资源租约、显式生命周期管线",
+  "author": {
+    "name": "Yinx",
+    "email": "1423716216@qq.com",
+    "url": "https://github.com/Yinxe/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yinxe/MCBE.git"
+  },
+  "private": true,
+  "dependencies": {
+    "@minecraft/math": "2.2.7",
+    "@minecraft/server": "2.8.0",
+    "@minecraft/server-gametest": "1.0.0-beta.1.26.0-stable",
+    "@minecraft/server-ui": "^2.0.0",
+    "@minecraft/vanilla-data": "1.26.20"
+  },
+  "devDependencies": {
+    "@mc-toolchain/mod-common": "*",
+    "@mc-toolchain/mod-packaging": "*",
+    "@mc-toolchain/nbt-data-storage": "*",
+    "@minecraft/core-build-tasks": "5.5.0",
+    "@types/node": "24.10.1",
+    "@typescript-eslint/eslint-plugin": "8.72.1",
+    "@typescript-eslint/parser": "8.72.1",
+    "eslint-plugin-minecraft-linting": "2.0.10",
+    "just-scripts": "2.6.2",
+    "prettier": "3.9.10",
+    "source-map": "0.7.4",
+    "ts-node": "10.9.1",
+    "typescript": "5.5.4"
+  },
+  "scripts": {
+    "lint": "just-scripts lint",
+    "build": "just-scripts build",
+    "clean": "just-scripts clean",
+    "pack": "just-scripts pack",
+    "generate:icon": "node tools/generate-pack-icon.js",
+    "local-deploy": "just-scripts local-deploy",
+    "test": "tsc -p tests/tsconfig.json && node --test \".test-build/tests/**/*.test.js\""
+  },
+  "packing": {
+    "mode": "auto",
+    "output": "../../release/",
+    "minimum_engine_version": [1, 21, 130],
+    "qq_group": "632178498"
+  }
+}

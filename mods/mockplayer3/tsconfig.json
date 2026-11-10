@@ -1,0 +1,58 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "lib": [
+      "es2017"
+    ],
+    "moduleResolution": "bundler",
+    "module": "ES2020",
+    "declaration": false,
+    "noLib": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "sourceMap": true,
+    "pretty": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "allowUnreachableCode": true,
+    "allowUnusedLabels": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": false,
+    "noImplicitUseStrict": false,
+    "outDir": "lib",
+    "rootDir": ".",
+    "listFiles": false,
+    "noEmitHelpers": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "types": [],
+    "skipLibCheck": true,
+    "paths": {
+      "@minecraft/server": [
+        "./node_modules/@minecraft/server"
+      ],
+      "@minecraft/server-ui": [
+        "./node_modules/@minecraft/server-ui"
+      ],
+      "@minecraft/server-gametest": [
+        "./node_modules/@minecraft/server-gametest"
+      ],
+      "@minecraft/vanilla-data": [
+        "./node_modules/@minecraft/vanilla-data"
+      ],
+      "@minecraft/math": [
+        "./node_modules/@minecraft/math"
+      ]
+    }
+  },
+  "include": [
+    "scripts/**/*"
+  ],
+  "exclude": [
+    "lib",
+    "dist",
+    "node_modules",
+    ".test-build"
+  ],
+  "compileOnSave": false
+}

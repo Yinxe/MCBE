@@ -11,11 +11,13 @@ mc-toolchain/
 │   ├── craftablerarities/
 │   ├── item-route/
 │   ├── keepinventory/
+│   ├── mockplayer3/
 │   ├── spectator-mode/
 │   └── teleporter/
 ├── packages/              # 仓库内共享包（不对外发布，以 TS 源码被模组直接消费）
 │   ├── mod-common/        # 模组通用代码：文本样式码、HUD 仲裁、表单构建器、安全执行助手
-│   └── mod-packaging/     # 打包实现：包目录探测、版本同步、产物归档
+│   ├── mod-packaging/     # 打包实现：包目录探测、版本同步、产物归档
+│   └── nbt-data-storage/  # 区块锚定木桶阵列：O(1) 槽位寻址、完整 NBT 存取、原子传输
 ├── tools/                 # 可独立发布的工具包
 │   └── mcwiki-search/     # Minecraft Wiki 只读查询（库 / CLI / pi 工具）
 ├── docs/research/         # 调研记录（实测结论与可复现的验证方式）
@@ -31,6 +33,7 @@ mc-toolchain/
 | `craftablerarities` | 合成配方扩展：79 个工作台配方合成稀有、不可再生物品与隐藏方块（纯内容包，无脚本） | [mods/craftablerarities/README.md](mods/craftablerarities/README.md) |
 | `spectator-mode` | 灵魂出窍：飞离真身侦查，超出距离容忍 5 秒后自动回归 | [mods/spectator-mode/README.md](mods/spectator-mode/README.md) |
 | `item-route` | 物品路由仓库：木锄圈定仓库，按物品族自动分拣、容器整理、统计、容量预警与搜索定位；仓库内唯一带资源包（自定义粒子）的模组 | [mods/item-route/README.md](mods/item-route/README.md) |
+| `mockplayer3` | 模拟玩家III：创建假人，11 种工作模式（跟随/闲逛/劫掠/宝库/定点挖掘/放置/攻击/资源采集/自动钓鱼等），物品与经验回收；**需开启 Beta APIs 实验开关** | [mods/mockplayer3/README.md](mods/mockplayer3/README.md) |
 | `teleporter` | 传送：传送点、死亡点、玩家间传送请求；无需作弊、保留成就 | [mods/teleporter/README.md](mods/teleporter/README.md) |
 
 `mods/` 下的目录布局、`mct` 用法、新建模组流程等共同规则见 [mods/README.md](mods/README.md)。
@@ -41,6 +44,7 @@ mc-toolchain/
 | --------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
 | `@mc-toolchain/mod-packaging` | 打包逻辑的唯一实现：包目录探测与类型判定、版本与最低游戏版本同步、按 `mode` 产出归档 | [packages/mod-packaging/README.md](packages/mod-packaging/README.md) |
 | `@mc-toolchain/mod-common`    | 模组通用代码：`§` 文本样式码、跨行为包 HUD 逐玩家优先级仲裁、模态/动作/消息表单构建器、受限上下文的安全执行助手、消息提示 | [packages/mod-common/README.md](packages/mod-common/README.md) |
+| `@mc-toolchain/nbt-data-storage` | 区块锚定木桶阵列存储：O(1) 槽位寻址、完整 NBT 存取、动态扩容、原子传输、原位覆写、阵列巡检修复、自定义事件总线 | [packages/nbt-data-storage/README.md](packages/nbt-data-storage/README.md) |
 
 `packages/` 下的包均为 `private`，不发布到 npm。它们以 TypeScript 源码直出（`main` / `types` 均指向 `src/index.ts`），由模组通过 npm workspace 直接消费，无构建步骤。
 
