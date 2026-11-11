@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "传送 v0.0.6",
+    "name": "传送 v0.0.7",
     "description": "传送管理 · 传送点、死亡点、玩家间传送请求 · 无需作弊 · 保留成就\n作者：Yinx\n邮箱：1423716216@qq.com\n主页：https://github.com/Yinxe/\nQQ群：632178498\n仓库：https://github.com/Yinxe/MCBE",
     "uuid": "7bfad58c-1cb5-4232-9c29-5da35272822e",
     "version": [
       0,
       0,
-      6
+      7
     ],
     "min_engine_version": [
       1,
@@ -23,7 +23,7 @@
       "version": [
         0,
         0,
-        6
+        7
       ]
     }
   ],
@@ -33,7 +33,7 @@
       "version": [
         0,
         0,
-        6
+        7
       ]
     }
   ],

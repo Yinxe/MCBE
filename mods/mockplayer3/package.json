@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/mockplayer3",
-  "version": "3.0.32",
+  "version": "3.0.33",
   "productName": "模拟玩家III",
   "description": "模拟玩家（假人）v3 重写 - 单会话模型、资源租约、显式生命周期管线",
   "author": {
@@ -47,7 +47,11 @@
   "packing": {
     "mode": "auto",
     "output": "../../release/",
-    "minimum_engine_version": [1, 21, 130],
+    "minimum_engine_version": [
+      1,
+      21,
+      130
+    ],
     "qq_group": "632178498"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/auto-refill",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "productName": "自动替换",
   "description": "自动替换主手消耗物品 · 无需作弊 · 保留成就",
   "author": {
@@ -41,7 +41,11 @@
   "packing": {
     "mode": "auto",
     "output": "../../release/",
-    "minimum_engine_version": [1, 21, 100],
+    "minimum_engine_version": [
+      1,
+      21,
+      100
+    ],
     "qq_group": "632178498"
   }
 }

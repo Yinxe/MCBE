@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/craftablerarities",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "productName": "合成配方扩展",
   "description": "合成各种稀有、不可再生物品，创造模式快速获取隐藏方块",
   "author": {
@@ -26,7 +26,11 @@
   "packing": {
     "mode": "auto",
     "output": "../../release/",
-    "minimum_engine_version": [1, 21, 0],
+    "minimum_engine_version": [
+      1,
+      21,
+      0
+    ],
     "qq_group": "632178498"
   }
 }

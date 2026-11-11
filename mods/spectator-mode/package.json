@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/spectator-mode",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "productName": "灵魂出窍",
   "description": "灵魂出窍 · 旁观模式：飞离真身侦查，超出距离容忍 5 秒后自动回归",
   "author": {

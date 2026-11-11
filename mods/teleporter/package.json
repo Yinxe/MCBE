@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/teleporter",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "productName": "传送",
   "description": "传送管理 · 传送点、死亡点、玩家间传送请求 · 无需作弊 · 保留成就",
   "author": {
@@ -42,7 +42,11 @@
   "packing": {
     "mode": "auto",
     "output": "../../release/",
-    "minimum_engine_version": [1, 21, 120],
+    "minimum_engine_version": [
+      1,
+      21,
+      120
+    ],
     "qq_group": "632178498"
   }
 }
