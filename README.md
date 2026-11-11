@@ -66,6 +66,29 @@ npm run typecheck -w @mc-toolchain/mcwiki-search
 
 ## 发布
 
+### 模组（GitHub Release）
+
+模组的发布走 GitHub Actions，**手动触发**，不使用推送 tag 触发。
+
+触发方式：在该仓库的 Actions 页面选择 `Release Mod` → `Run workflow`，填写模组目录名（`mods/` 下的目录名，如 `mockplayer3`），按需勾选 `dry_run`。
+
+发版顺序：
+
+1. 先提升版本并提交。版本号只有 `mods/<模组>/package.json` 一个来源，workflow **不会**修改它；提升后要先推送，否则发布的仍是旧版本。
+2. 用 `dry_run` 跑一遍，核对 Step Summary 里的资产清单与标题。
+3. 取消 `dry_run` 正式发布。
+
+约定：
+
+- **Release 标题用中文**：`<productName> <version>`（如 `模拟玩家III 3.0.33`），`productName` 取自模组 `package.json`。
+- **资产文件名保持英文原名**：`<name>-v<version>_bp.mcpack` / `_rp.mcpack` / `.mcaddon`，不做重命名（中文文件名在下载与解压链路里有编码问题）。
+- tag 名为 `<name>@<version>`；已存在的 tag 不会被覆盖，重发必须提升版本。
+- 发布目标固定为 `Yinxe/MCBE`，workflow 文件也住在该仓库。
+
+workflow 定义见 [.github/workflows/release-mod.yml](.github/workflows/release-mod.yml)。推送前可用 `act` 在本地跑通同一份 workflow，见 [docs/research/github-actions-local-act.md](docs/research/github-actions-local-act.md)。
+
+### 工具包（npm）
+
 `tools/` 下的包可独立发布到 npm。发布为**本地手动执行**，不使用 CI 自动发布。
 
 前置条件：

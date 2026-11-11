@@ -1,0 +1,201 @@
+name: Release Mod
+
+# 手动发版：构建并打包单个模组，然后在该仓库创建 tag 与 Release。
+# 版本号一律取自 mods/<mod>/package.json#version，不由触发输入提供；
+# Release 标题用中文 productName，上传的资产保持打包产物原名（英文）。
+on:
+  workflow_dispatch:
+    inputs:
+      mod:
+        description: "模组目录名（mods/ 下的目录名，例如 mockplayer3）"
+        required: true
+        type: string
+      dry_run:
+        description: "只验证构建与打包，不创建 tag 与 Release"
+        required: false
+        type: boolean
+        default: false
+
+# gh release create 需要创建 tag 与 Release 的权限
+permissions:
+  contents: write
+
+# 同一模组不并发发布；不同模组互不阻塞
+concurrency:
+  group: release-${{ inputs.mod }}
+  cancel-in-progress: false
+
+env:
+  # 发布目标仓库固定，避免发布目标随远程配置漂移
+  RELEASE_REPOSITORY: Yinxe/MCBE
+
+jobs:
+  release:
+    name: 发布 ${{ inputs.mod }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@v4
+        with:
+          # 生成 Release Notes 需要完整历史与既有 tag
+          fetch-depth: 0
+
+      - name: 准备 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 打印 gh 版本
+        run: gh --version
+
+      - name: 解析模组元数据
+        id: meta
+        env:
+          MOD: ${{ inputs.mod }}
+        run: |
+          set -euo pipefail
+          manifest="mods/${MOD}/package.json"
+          if [ ! -f "$manifest" ]; then
+            echo "::error::模组名 ${MOD} 不存在：未找到 ${manifest}"
+            exit 1
+          fi
+
+          # 产物文件名使用去掉 scope 的模块名（与 @mc-toolchain/mod-packaging 一致）
+          name=$(node -p "require('./${manifest}').name.replace(/^@[^/]+\//, '')")
+          version=$(node -p "require('./${manifest}').version")
+          product_name=$(node -p "require('./${manifest}').productName || ''")
+
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "product_name=${product_name}" >> "$GITHUB_OUTPUT"
+          echo "tag=${name}@${version}" >> "$GITHUB_OUTPUT"
+          echo "title=${product_name} ${version}" >> "$GITHUB_OUTPUT"
+          echo "模组：${name} 版本：${version} 标题：${product_name} ${version}"
+
+      - name: 校验发布前置条件
+        env:
+          NAME: ${{ steps.meta.outputs.name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          PRODUCT_NAME: ${{ steps.meta.outputs.product_name }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PRODUCT_NAME" ]; then
+            echo "::error::模组 ${NAME} 的 package.json 缺少 productName，无法生成中文 Release 标题"
+            exit 1
+          fi
+
+          # 已存在的 tag 一律不覆盖。
+          # checkout 已 fetch-depth: 0，既有 tag 都在本地，故先查本地 tag（无需网络）；
+          # 再补一次远程检查，兼顾「本地 clone 陈旧」的情况。远程不可达时只警告，
+          # 便于本地模拟在无凭据环境下跑通试运行。
+          if [ -n "$(git tag --list "$TAG")" ]; then
+            echo "::error::tag ${TAG} 已存在于本地仓库，不能覆盖既有 tag 与 Release；请先提升版本号"
+            exit 1
+          fi
+
+          if remote_tags=$(git ls-remote --tags origin "refs/tags/${TAG}" 2>/dev/null); then
+            if [ -n "$remote_tags" ]; then
+              echo "::error::tag ${TAG} 已存在于远程仓库，不能覆盖既有 tag 与 Release；请先提升版本号"
+              exit 1
+            fi
+            echo "tag ${TAG} 未被占用"
+          else
+            echo "::warning::无法访问远程仓库，跳过远程 tag 占用检查（本地模拟的正常现象）"
+          fi
+
+      - name: 构建并打包
+        env:
+          MOD: ${{ inputs.mod }}
+        run: npm run pack -w "@mc-toolchain/${MOD}"
+
+      - name: 收集发布资产
+        id: assets
+        env:
+          NAME: ${{ steps.meta.outputs.name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=()
+          # 精确匹配本次模组本次版本的三类最终产物，排除其它模组、旧版本与中间产物
+          for candidate in release/*; do
+            base=$(basename "$candidate")
+            case "$base" in
+              "${NAME}-v${VERSION}_bp.mcpack" | "${NAME}-v${VERSION}_rp.mcpack" | "${NAME}-v${VERSION}.mcaddon")
+                files+=("$candidate")
+                ;;
+            esac
+          done
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::构建与打包完成，但 release/ 下没有 ${NAME}-v${VERSION} 的 .mcpack 或 .mcaddon 产物"
+            exit 1
+          fi
+
+          printf '%s\n' "${files[@]}" > "${RUNNER_TEMP}/release-assets.txt"
+          {
+            echo "files<<ASSETS_EOF"
+            printf '%s\n' "${files[@]}"
+            echo "ASSETS_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "待发布资产："
+          cat "${RUNNER_TEMP}/release-assets.txt"
+
+      - name: 试运行输出（不发布）
+        if: inputs.dry_run
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          TITLE: ${{ steps.meta.outputs.title }}
+          ASSETS: ${{ steps.assets.outputs.files }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## 试运行：${{ inputs.mod }}"
+            echo
+            echo "- tag：\`${TAG}\`"
+            echo "- Release 标题：\`${TITLE}\`"
+            echo "- 发布目标：\`${RELEASE_REPOSITORY}\`"
+            echo "- 资产（保持英文原名）："
+            echo
+            echo '```'
+            printf '%s\n' "$ASSETS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "试运行结束，未创建 tag 与 Release"
+
+      - name: 创建 tag 与 Release
+        if: inputs.dry_run == false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          TITLE: ${{ steps.meta.outputs.title }}
+        run: |
+          set -euo pipefail
+          notes_file="${RUNNER_TEMP}/release-notes.md"
+          mapfile -t assets < "${RUNNER_TEMP}/release-assets.txt"
+
+          # Release Notes 取「上一个同名 tag → HEAD」的提交标题；没有上一个 tag 时只取 HEAD 一条
+          previous_tag=$(git tag --list "${TAG%@*}@*" --sort=-v:refname | head -1 || true)
+          if [ -n "$previous_tag" ]; then
+            git log --no-merges --pretty='* %s' "${previous_tag}..HEAD" > "$notes_file"
+            echo "变更范围：${previous_tag}..HEAD"
+          else
+            git log --no-merges --pretty='* %s' -1 > "$notes_file"
+            echo "没有上一个同名 tag，Notes 只取 HEAD 一条提交"
+          fi
+
+          if [ ! -s "$notes_file" ]; then
+            echo "（本次发布无提交标题可列出）" > "$notes_file"
+          fi
+
+          gh release create "$TAG" \
+            --repo "$RELEASE_REPOSITORY" \
+            --title "$TITLE" \
+            --notes-file "$notes_file" \
+            --target "$GITHUB_SHA" \
+            "${assets[@]}"

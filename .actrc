@@ -1,0 +1,16 @@
+# nektos/act 的默认参数（本地模拟 GitHub Actions 用，见 docs/research/github-actions-local-act.md）
+#
+# -P：固定 runner 镜像。本机网络拉不动 catthehacker/ubuntu:act-22.04（Docker Hub TLS 中断 +
+#     镜像源限速），因此用 tools/release-local/runner.Dockerfile 自建的精简镜像，
+#     底座是本地已有的 node:24-bookworm-slim，构建十几秒、不依赖外部 registry。
+#     首次使用前先构建：
+#       docker build -f tools/release-local/runner.Dockerfile -t mc-toolchain/act-runner:local .
+-P ubuntu-latest=mc-toolchain/act-runner:local
+
+# --pull=false：act 默认每次强制 pull 镜像；本地自建镜像不该被当成远程镜像去拉。
+--pull=false
+
+# --bind：把工作目录挂载进容器（默认是复制）。
+# 这是本地验证的关键：只有挂载，容器内 npm run pack 产出到 release/ 的文件才会回到宿主机，
+# 才能核对资产命名。副作用是容器内 npm ci 会按锁文件重装宿主机的 node_modules。
+--bind
