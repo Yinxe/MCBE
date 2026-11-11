@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/teleporter",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "productName": "传送",
   "description": "传送管理 · 传送点、死亡点、玩家间传送请求 · 无需作弊 · 保留成就",
   "author": {
