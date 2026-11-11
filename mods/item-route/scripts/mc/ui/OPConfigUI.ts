@@ -36,9 +36,9 @@ export async function showOPConfigUI(player: Player, deps: CommandDeps): Promise
         `${uiColor.form.muted}信物：${uiColor.form.body}${deps.config.tokenItemId}`,
       ].join("\n")
     )
-    .button(`${uiColor.btn.primary}修改设置`, () => void editConfig(player, deps))
-    .button(`${uiColor.btn.info}全服统计`, () => void serverStats(player, deps))
-    .button(`${uiColor.btn.accent}菜单信息显示`, () => void showOPInfoConfigUI(player, deps));
+    .buttonWithIcon(`${uiColor.btn.primary}修改设置`, "textures/ui/item-route/config", () => void editConfig(player, deps))
+    .buttonWithIcon(`${uiColor.btn.info}全服统计`, "textures/ui/item-route/stats", () => void serverStats(player, deps))
+    .buttonWithIcon(`${uiColor.btn.accent}菜单信息显示`, "textures/ui/item-route/help", () => void showOPInfoConfigUI(player, deps));
   await form.show(player);
 }
 

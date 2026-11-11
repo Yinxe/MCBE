@@ -74,7 +74,7 @@ export function showHelpSection(player: Player, index: number): void {
 export async function showHelpGuide(player: Player): Promise<void> {
   const dlg = new ActionFormBuilder().title(`${form.title}物品路由 · 帮助手册`).body(`${form.body}选择一个章节：`);
   HELP_SECTIONS.forEach((section) => {
-    dlg.button(`${btn.nav}${section}`, () => showHelpSection(player, HELP_SECTIONS.indexOf(section)));
+    dlg.buttonWithIcon(`${btn.nav}${section}`, "textures/ui/item-route/help", () => showHelpSection(player, HELP_SECTIONS.indexOf(section)));
   });
   await dlg.show(player);
 }

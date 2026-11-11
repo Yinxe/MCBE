@@ -74,8 +74,8 @@ export async function showWarpManagement(player: Player): Promise<void> {
       showWaypointActions(player, waypoint.id),
     );
   }
-  form.button("§a✚ 新建传送点", () => showCreateWarpForm(player));
-  form.button("§c← 返回主菜单", () => showMainMenu(player));
+  form.buttonWithIcon("§a✚ 新建传送点", "textures/ui/teleporter/warp_create", () => showCreateWarpForm(player));
+  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () => showMainMenu(player));
 
   await form.show(player);
 }

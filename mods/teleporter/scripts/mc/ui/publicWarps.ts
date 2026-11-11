@@ -78,7 +78,7 @@ export async function showPublicWarpsList(
     }
   }
 
-  form.button("§c← 返回主菜单", () => showMainMenu(player));
+  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () => showMainMenu(player));
 
   await form.show(player);
 }

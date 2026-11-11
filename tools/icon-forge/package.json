@@ -1,0 +1,10 @@
+{
+  "name": "@mc-toolchain/icon-forge",
+  "version": "1.0.0",
+  "description": "模组包图标与 UI 按钮徽章集中切片、处理与分发工具",
+  "private": true,
+  "main": "src/png.js",
+  "scripts": {
+    "slice": "node bin/slice-all.js"
+  }
+}

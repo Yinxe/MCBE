@@ -21,7 +21,7 @@
     "build:production": "just-scripts build --production",
     "clean": "just-scripts clean",
     "pack": "just-scripts pack",
-    "generate:icon": "node tools/generate-pack-icon.js",
+    "generate:icon": "node ../../tools/icon-forge/bin/slice-all.js",
     "local-deploy": "just-scripts local-deploy",
     "mcaddon": "just-scripts mcaddon",
     "mcaddon:production": "just-scripts mcaddon --production",

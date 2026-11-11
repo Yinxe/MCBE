@@ -39,14 +39,14 @@ export async function showMainMenu(player: Player, deps: CommandDeps): Promise<v
   const form = new ActionFormBuilder()
     .title("物品路由")
     .body("选择一个操作")
-    .button(`${btn.nav}容器搜索`, () => void showSearchUI(player, deps))
-    .button(`${btn.nav}管理仓库`, () => void manageNearest(player, deps))
-    .button(`${btn.nav}仓库列表`, () => void showWarehouseManageMenu(player, deps))
-    .button(`${btn.primary}创建仓库`, () => void showWarehouseCreateForm(player, deps))
-    .button(`${btn.info}帮助`, () => void showHelpGuide(player));
+    .buttonWithIcon(`${btn.nav}容器搜索`, "textures/ui/item-route/search", () => void showSearchUI(player, deps))
+    .buttonWithIcon(`${btn.nav}管理仓库`, "textures/ui/item-route/manage", () => void manageNearest(player, deps))
+    .buttonWithIcon(`${btn.nav}仓库列表`, "textures/ui/item-route/warehouse_list", () => void showWarehouseManageMenu(player, deps))
+    .buttonWithIcon(`${btn.primary}创建仓库`, "textures/ui/item-route/create_warehouse", () => void showWarehouseCreateForm(player, deps))
+    .buttonWithIcon(`${btn.info}帮助`, "textures/ui/item-route/help", () => void showHelpGuide(player));
 
   if (isAdmin) {
-    form.button(`${btn.accent}模组配置`, () => void showOPConfigUI(player, deps));
+    form.buttonWithIcon(`${btn.accent}模组配置`, "textures/ui/item-route/config", () => void showOPConfigUI(player, deps));
   }
 
   await form.show(player);

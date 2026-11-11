@@ -368,7 +368,7 @@ async function confirmRepair(player: Player, deps: CommandDeps, warehouse: Wareh
         `${uiColor.form.body}3. 重置存储统计缓存\n` +
         `${uiColor.form.body}4. 检查数据完整性`
     )
-    .button(`${uiColor.btn.accent}确认修复`, () => {
+    .buttonWithIcon(`${uiColor.btn.accent}确认修复`, "textures/ui/item-route/config", () => {
       // 1) 重建运行时索引：逐容器 reconcile（惰性校验/修复候选条目，索引未激活时激活重建兜底）
       const index = deps.resolveIndex(warehouse.id);
       if (index !== undefined) {
@@ -380,7 +380,7 @@ async function confirmRepair(player: Player, deps: CommandDeps, warehouse: Wareh
       rescanArea(player, deps, warehouse);
       player.sendMessage(`${uiColor.chat.success}仓库修复完成！共发现 ${warehouse.containers.size} 个容器，统计已重置`);
     })
-    .button(`${uiColor.btn.info}取消`, () => undefined)
+    .buttonWithIcon(`${uiColor.btn.info}取消`, "textures/ui/item-route/exit", () => undefined)
     .show(player);
 }
 
@@ -389,10 +389,10 @@ async function confirmDelete(player: Player, deps: CommandDeps, warehouse: Wareh
   await new ActionFormBuilder()
     .title(`${uiColor.form.error}确认删除`)
     .body(`${uiColor.form.body}确定删除仓库 ${warehouse.displayName} 吗？此操作不可恢复。`)
-    .button(`${uiColor.btn.danger}确认删除`, () => {
+    .buttonWithIcon(`${uiColor.btn.danger}确认删除`, "textures/ui/item-route/role_overflow", () => {
       deps.warehouses.deleteWarehouse(warehouse.id);
       player.sendMessage(`${uiColor.chat.success}仓库 ${warehouse.displayName} 已删除`);
     })
-    .button(`${uiColor.btn.info}取消`, () => undefined)
+    .buttonWithIcon(`${uiColor.btn.info}取消`, "textures/ui/item-route/exit", () => undefined)
     .show(player);
 }

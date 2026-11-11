@@ -26,15 +26,15 @@ export async function showMainMenu(player: Player): Promise<void> {
 
   const form = new ActionFormBuilder()
     .title("§l传送系统")
-    .button("§b传送", () => showWarpSelector(player))
-    .button("§e管理传送点", () => showWarpManagement(player))
-    .button("§a✚新建传送点", () => showCreateWarpForm(player))
-    .button("§a公共传送点", () => showPublicWarpsList(player))
-    .button("§c死亡传送点", () => showDeathPointsList(player))
-    .button("§6玩家传送", () => showPlayerTeleportMenu(player));
+    .buttonWithIcon("§b传送", "textures/ui/teleporter/warp", () => showWarpSelector(player))
+    .buttonWithIcon("§e管理传送点", "textures/ui/teleporter/warp_manage", () => showWarpManagement(player))
+    .buttonWithIcon("§a✚新建传送点", "textures/ui/teleporter/warp_create", () => showCreateWarpForm(player))
+    .buttonWithIcon("§a公共传送点", "textures/ui/teleporter/public_warps", () => showPublicWarpsList(player))
+    .buttonWithIcon("§c死亡传送点", "textures/ui/teleporter/death_points", () => showDeathPointsList(player))
+    .buttonWithIcon("§6玩家传送", "textures/ui/teleporter/player_teleport", () => showPlayerTeleportMenu(player));
 
   if (isAdmin(player)) {
-    form.button("§6⚙ 管理设置", () => showAdminConfig(player));
+    form.buttonWithIcon("§6⚙ 管理设置", "textures/ui/teleporter/admin_settings", () => showAdminConfig(player));
   }
 
   await form.show(player);

@@ -40,7 +40,7 @@
     "build": "just-scripts build",
     "clean": "just-scripts clean",
     "pack": "just-scripts pack",
-    "generate:icon": "node tools/generate-pack-icon.js",
+    "generate:icon": "node ../../tools/icon-forge/bin/slice-all.js",
     "local-deploy": "just-scripts local-deploy",
     "test": "tsc -p tests/tsconfig.json && node --test \".test-build/tests/**/*.test.js\""
   },

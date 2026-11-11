@@ -38,7 +38,7 @@ export async function showPlayerTeleportMenu(player: Player): Promise<void> {
     );
   }
 
-  form.button("§c← 返回主菜单", () => showMainMenu(player));
+  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () => showMainMenu(player));
 
   await form.show(player);
 }
@@ -55,9 +55,9 @@ async function showTeleportDirection(
         `§b维度: §f${dimensionFullName(target.dimension.id)}\n` +
         `§b坐标: §f${formatCoordinates(target.location)}`,
     )
-    .button("§a传送到他身边", () => goToTarget(player, target))
-    .button("§b让他传送过来", () => pullTarget(player, target))
-    .button("§c← 返回", () => showPlayerTeleportMenu(player))
+    .buttonWithIcon("§a传送到他身边", "textures/ui/teleporter/teleport_to", () => goToTarget(player, target))
+    .buttonWithIcon("§b让他传送过来", "textures/ui/teleporter/teleport_bring", () => pullTarget(player, target))
+    .buttonWithIcon("§c← 返回", "textures/ui/teleporter/back", () => showPlayerTeleportMenu(player))
     .show(player);
 }
 
