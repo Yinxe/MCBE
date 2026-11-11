@@ -172,6 +172,8 @@ jobs:
         if: inputs.dry_run == false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MOD: ${{ inputs.mod }}
+          NAME: ${{ steps.meta.outputs.name }}
           TAG: ${{ steps.meta.outputs.tag }}
           TITLE: ${{ steps.meta.outputs.title }}
         run: |
@@ -179,14 +181,30 @@ jobs:
           notes_file="${RUNNER_TEMP}/release-notes.md"
           mapfile -t assets < "${RUNNER_TEMP}/release-assets.txt"
 
-          # Release Notes 取「上一个同名 tag → HEAD」的提交标题；没有上一个 tag 时只取 HEAD 一条
-          previous_tag=$(git tag --list "${TAG%@*}@*" --sort=-v:refname | head -1 || true)
+          # Release Notes 取「上一个同名 tag → HEAD」的提交标题。
+          # 两个约束，否则会列出整仓历史：
+          #   1. 上一个 tag 必须是 HEAD 的祖先（历史上有旧结构时期的同名 tag，
+          #      它指向不可达提交，`tag..HEAD` 会退化成全仓历史）；
+          #   2. 只取改动本模组或其依赖的提交，避免把其它模组的提交混进本模组的 Release。
+          # 注意：历史 tag 均指向重写前的旧提交（不可达），所以实际大多数情况会退化为单条。
+          previous_tag=""
+          while IFS= read -r candidate; do
+            [ -n "$candidate" ] || continue
+            if git merge-base --is-ancestor "$candidate" HEAD 2>/dev/null; then
+              previous_tag="$candidate"
+              break
+            fi
+          done < <(git tag --list "${NAME}@*" --sort=-v:refname)
+
+          # 模组自身目录 + 共享包（共享包改动会影响所有模组的行为）
+          paths=("mods/${MOD}" "packages/")
+
           if [ -n "$previous_tag" ]; then
-            git log --no-merges --pretty='* %s' "${previous_tag}..HEAD" > "$notes_file"
-            echo "变更范围：${previous_tag}..HEAD"
+            git log --no-merges --pretty='* %s' "${previous_tag}..HEAD" -- "${paths[@]}" > "$notes_file"
+            echo "变更范围：${previous_tag}..HEAD（仅本模组与共享包）"
           else
-            git log --no-merges --pretty='* %s' -1 > "$notes_file"
-            echo "没有上一个同名 tag，Notes 只取 HEAD 一条提交"
+            git log --no-merges --pretty='* %s' -3 -- "${paths[@]}" > "$notes_file"
+            echo "没有可作为基准的上一个同名 tag，Notes 只取本模组与共享包最近 3 条提交"
           fi
 
           if [ ! -s "$notes_file" ]; then

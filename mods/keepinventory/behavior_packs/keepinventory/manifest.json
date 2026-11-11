@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "死亡不掉落 v0.0.2",
+    "name": "死亡不掉落 v0.0.3",
     "description": "死亡不掉落 · 无需作弊 · 保留成就",
     "uuid": "a5037a73-862b-49bf-9a7c-1a47a4e474c7",
     "version": [
       0,
       0,
-      2
+      3
     ],
     "min_engine_version": [
       1,
@@ -24,7 +24,7 @@
       "version": [
         0,
         0,
-        2
+        3
       ],
       "entry": "scripts/main.js"
     }

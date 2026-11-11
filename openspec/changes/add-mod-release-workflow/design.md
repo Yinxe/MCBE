@@ -76,15 +76,29 @@ jobs.release
 
 创建前用 `git ls-remote --tags origin "refs/tags/<name>@<version>"` 判占用，命中则失败退出——`gh release create` 遇到已存在 tag 的行为依版本而异，显式判断更可控，也满足 spec 里「不覆盖既有 tag」的场景。
 
-### 决策 6：Release Notes 取「上个同名 tag → HEAD」的提交标题
+### 决策 6：Release Notes 只列「本模组与共享包」的提交标题，且基准 tag 必须是 HEAD 祖先
 
 ```bash
-prev=$(git tag --list "<name>@*" --sort=-v:refname | head -1)
-range=${prev:+$prev..HEAD}
-git log --no-merges --pretty='* %s' $range
+# 基准：从新到旧找第一个「HEAD 可达」的同名 tag
+previous_tag=""
+while IFS= read -r c; do
+  git merge-base --is-ancestor "$c" HEAD 2>/dev/null && { previous_tag="$c"; break; }
+done < <(git tag --list "${NAME}@*" --sort=-v:refname)
+
+paths=("mods/${MOD}" "packages/")
+[ -n "$previous_tag" ] \
+  && git log --no-merges --pretty='* %s' "${previous_tag}..HEAD" -- "${paths[@]}" \
+  || git log --no-merges --pretty='* %s' -3 -- "${paths[@]}"
 ```
 
-没有上一个同名 tag 时退化为 HEAD 单条提交标题。理由：历史 Release 的 notes 就是提交标题（如 `* Merge feat/auto-refill：...`），保持形态一致；比 `--generate-notes` 更可控（后者在首个 tag 时可能产出空 notes，且依赖 API 排序规则）。
+**两个约束缺一不可，这是实测踩出来的**：首次真实发布（`keepinventory` 0.0.2/0.0.3）把**整仓 32 条历史提交**写进了 Release Notes，原因有两个叠加：
+
+1. **基准 tag 不可达**。仓库历史被重写过，`keepinventory@1.0.0`、`mockplayer3@3.0.32` 等全部历史 tag 都指向重写前的旧提交，`git merge-base HEAD <tag>` 无共同祖先。此时 `tag..HEAD` 不是「两个版本之间的差异」而是「整条历史」，于是列出全部提交。故必须用 `git merge-base --is-ancestor` 过滤掉不可达的 tag。
+2. **没做路径过滤**。即使基准可达，`tag..HEAD` 仍会带上其它模组与纯文档的提交。故限定 `mods/<mod>` 与 `packages/`（共享包改动会影响所有模组的行为，必须列）。
+
+因为历史 tag 全部不可达，**当前实际效果是退化为「本模组与共享包最近 3 条提交」**——与历史 Release 的 1–2 条形态相符。一旦将来产生第一个可达 tag，自动切换为区间差异。
+
+不列全仓历史也是产品判断：Release Notes 面向玩家，玩家只关心这个模组改了什么。
 
 ### 决策 7：本地模拟用 `act` + `--bind`，包一层 `tools/release-local` 入口
 
@@ -115,7 +129,8 @@ git log --no-merges --pretty='* %s' $range
 - **[`--bind` 下本地残留的其它模组产物会污染资产收集]**：→ 资产收集按 `release/<name>-v<version>*` 精确过滤，不按目录全量取。
 - **[workflow 只有推送到 `Yinxe/MCBE` 后才生效，本地无法验证 Actions 语义]**：→ act 覆盖了步骤语义；剩余风险（`permissions`、`concurrency`、表达式求值）在首次真实运行时确认，任务里保留「首次发布用 dry_run 跑一遍线上」的步骤。
 - **[中文标题在 `gh release create --title` 传递时的编码]**：→ 标题走 `--title` 参数、资产名保持 ASCII，历史上中文文件名才是问题源；任务里加一步本地 act 打印实际标题字符串核对。
-- **[`git log` 生成 notes 依赖 `fetch-depth: 0`]**：→ checkout 显式 `fetch-depth: 0`；漏了会退化成 HEAD 单条，属降级而非失败。
+- **[`git log` 生成 notes 依赖 `fetch-depth: 0`]**：→ checkout 显式 `fetch-depth: 0`；漏了会退化成单条，属降级而非失败。
+- **[历史 tag 全部指向重写前的不可达提交]**：→ 基准 tag 用 `--is-ancestor` 过滤，不可达则退化为最近 3 条；已在首次发布时因缺此过滤而把 32 条历史写进 Release，属已修复的真实事故。
 
 ## Migration Plan
 

@@ -95,6 +95,20 @@ Release 的标题 MUST 为 `<productName> <version>`(`productName` 取自 `mods/
 - **WHEN** 以试运行选项触发且构建失败
 - **THEN** 运行失败并保留失败步骤的日志,不进入发布步骤
 
+### Requirement: Release Notes 只包含本模组的改动
+
+Release 正文 MUST 只列出与本次发布模组相关的提交，MUST NOT 列出整个仓库的历史提交。基准 tag MUST 为 `HEAD` 的祖先；无可达基准 tag 时 MUST 退化为少量最近提交。
+
+#### Scenario: 历史 tag 指向不可达提交
+
+- **WHEN** 目标模组存在同名历史 tag，但它指向的提交不是 `HEAD` 的祖先（仓库历史被重写过）
+- **THEN** 该 tag 不被选为基准，Release 正文只含本模组与共享包最近的少量提交，不含全仓历史
+
+#### Scenario: 存在可达的上一个同名 tag
+
+- **WHEN** 目标模组存在指向 `HEAD` 祖先的上一个同名 tag
+- **THEN** Release 正文列出该 tag 到 `HEAD` 之间改动本模组或其共享包的提交，不含其它模组的提交
+
 ### Requirement: 流水线可在本地以同一份 workflow 复现
 
 仓库 MUST 提供本地模拟入口，使开发者能在推送前用同一份 workflow 文件在本机容器中跑完整流程并核对产物；本地模拟 MUST 覆盖试运行与真实发布两条路径，且 MUST 能在不接触真实 GitHub 仓库的前提下验证到「资产已产出、命名与标题符合约定」这一步。
