@@ -8,7 +8,7 @@
 
 ### Requirement: 图标文件的位置与格式
 
-行为包 MUST 在其包目录根部提供名为 `pack_icon.png` 的图标文件,供游戏与分发平台展示该包。图标 MUST 为 PNG 格式,尺寸 MUST 为 128×128 像素,色彩 MUST 带 alpha 通道(RGBA)。
+行为包 MUST 在其包目录根部提供名为 `pack_icon.png` 的图标文件,供游戏与分发平台展示该包。图标 MUST 为 PNG 格式,尺寸 MUST 为 256×256 像素,色彩 MUST 带 alpha 通道(RGBA)。同时具备资源包的模组,MUST 在资源包目录根部同样提供一份满足相同约束的 `pack_icon.png`。
 
 #### Scenario: 图标位于包目录根部
 
@@ -18,12 +18,17 @@
 #### Scenario: 图标尺寸与格式符合约定
 
 - **WHEN** 读取该图标文件的图像信息
-- **THEN** 格式为 PNG、尺寸为 128×128、色彩类型为带 alpha 通道的 RGBA
+- **THEN** 格式为 PNG、尺寸为 256×256、色彩类型为带 alpha 通道的 RGBA
 
 #### Scenario: 图标缺失被检出
 
 - **WHEN** 包目录根部没有 `pack_icon.png`
 - **THEN** 校验流程报出图标缺失,而不是静默通过
+
+#### Scenario: 资源包同样提供图标
+
+- **WHEN** 检查一个同时具备行为包与资源包的模组的资源包目录
+- **THEN** 其根部也存在满足 256×256 RGBA 约束的 `pack_icon.png`
 
 ### Requirement: 图标内容反映模组功能
 
@@ -46,12 +51,22 @@
 
 ### Requirement: 图标风格一致性
 
-图标 MUST 使用有限色板与硬边像素块,MUST NOT 依赖抗锯齿渐变、照片素材或外部字体渲染的文字;如需文字 MUST 以像素块手工绘制且不得作为传达主要语义的唯一手段。
+图标 MUST 以 32×32 的逻辑造型网格构图,并在每格内部呈现柔和明暗,使主体具备体积感;风格基准 MUST 为 `mods/mockplayer3/resource_packs/mockplayer3/textures/ui/mockplayer/` 下的既有图标。图标 MUST 使用硬边轮廓,每个像素的 alpha MUST 为 0 或 255,MUST NOT 出现半透明抗锯齿像素;MUST NOT 使用照片素材或外部字体渲染的文字,如需文字 MUST 以像素块绘制且不得作为传达主要语义的唯一手段。
 
 #### Scenario: 像素画风格
 
 - **WHEN** 放大观察图标
-- **THEN** 边缘由离散像素块构成,色板数量有限,不出现照片级渐变
+- **THEN** 边缘由离散像素块构成,不出现半透明过渡像素,格内存在明暗层次而非一格一色的平涂
+
+#### Scenario: alpha 为二值
+
+- **WHEN** 遍历图标全部像素的 alpha 值
+- **THEN** 只存在 0 与 255 两种取值
+
+#### Scenario: 风格与基准图标一致
+
+- **WHEN** 把图标与 `textures/ui/mockplayer/` 下的任一图标并列观察
+- **THEN** 两者的轮廓硬度、明暗处理与色彩层次属于同一画法
 
 #### Scenario: 不依赖文字传达语义
 
