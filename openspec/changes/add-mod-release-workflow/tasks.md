@@ -29,8 +29,8 @@
 
 ## 4. 线上首次验证
 
-- [ ] 4.1 `git push mcbe master`（workflow 只有进入 `Yinxe/MCBE` 后才出现在 Actions 界面；`origin` 不存在，不能用它）
-- [ ] 4.2 线上以 `dry_run: true` 跑一个模组，核对 Step Summary 中的资产清单与标题
-- [ ] 4.3 线上真实发布一个低风险模组（如 `keepinventory`），核对 tag 名、标题、资产、notes 形态
-- [ ] 4.4 验证失败路径：重复发布同一版本应被 tag 占用检查拦下；输入不存在的模组名应快速失败
-- [ ] 4.5 回滚演练确认：`gh release delete <tag> --cleanup-tag` 后可正常以新 patch 版本重发
+- [x] 4.1 `git push mcbe master`（workflow 只有进入 `Yinxe/MCBE` 后才出现在 Actions 界面；`origin` 不存在，不能用它）
+- [x] 4.2 线上以 `dry_run: true` 跑一个模组，核对 Step Summary 中的资产清单与标题
+- [x] 4.3 线上真实发布一个低风险模组（如 `keepinventory`），核对 tag 名、标题、资产、notes 形态
+- [x] 4.4 验证失败路径：重复发布同一版本应被 tag 占用检查拦下；输入不存在的模组名应快速失败
+- [x] 4.5 回滚演练确认：`gh release delete <tag> --cleanup-tag` 后可正常以新 patch 版本重发
