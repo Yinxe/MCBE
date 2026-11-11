@@ -100,6 +100,8 @@ paths=("mods/${MOD}" "packages/")
 
 不列全仓历史也是产品判断：Release Notes 面向玩家，玩家只关心这个模组改了什么。
 
+**手写优先**：`notes` 为可选输入，填了就直接作为正文（`source=manual`），不填才走上面的自动生成（`source=auto`）。理由：发版人比提交记录更清楚「玩家该知道什么」，而自动生成只能看到提交标题；试运行会把最终正文与来源一起打进 Step Summary，方便发前核对。
+
 ### 决策 7：本地模拟用 `act` + `--bind`，包一层 `tools/release-local` 入口
 
 `act workflow_dispatch -W .github/workflows/release-mod.yml --input mod=<mod> --input dry_run=true`

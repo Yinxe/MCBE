@@ -70,13 +70,35 @@ npm run typecheck -w @mc-toolchain/mcwiki-search
 
 模组的发布走 GitHub Actions，**手动触发**，不使用推送 tag 触发。
 
-触发方式：在该仓库的 Actions 页面选择 `Release Mod` → `Run workflow`，填写模组目录名（`mods/` 下的目录名，如 `mockplayer3`），按需勾选 `dry_run`。
+触发方式：在该仓库的 Actions 页面选择 `Release Mod` → `Run workflow`，填写模组目录名（`mods/` 下的目录名，如 `mockplayer3`），按需勾选 `dry_run`、按需填写 `notes`。
+
+命令行等价形式：
+
+```bash
+# 试运行（不建 tag、不建 Release，但会预览正文）
+gh workflow run release-mod.yml --repo Yinxe/MCBE -f mod=mockplayer3 -f dry_run=true
+
+# 正式发布，手写说明
+gh workflow run release-mod.yml --repo Yinxe/MCBE \
+  -f mod=mockplayer3 -f dry_run=false \
+  -f notes="- 修复了开箱钥匙复制问题
+- 新增自动补货开关"
+```
 
 发版顺序：
 
 1. 先提升版本并提交。版本号只有 `mods/<模组>/package.json` 一个来源，workflow **不会**修改它；提升后要先推送，否则发布的仍是旧版本。
-2. 用 `dry_run` 跑一遍，核对 Step Summary 里的资产清单与标题。
+2. 用 `dry_run` 跑一遍，核对 Step Summary 里的资产清单、标题与正文。
 3. 取消 `dry_run` 正式发布。
+
+### Release 正文（notes）
+
+两种来源，**手写优先**：
+
+- **手写**（推荐）：填 `notes` 输入，内容原样作为正文。玩家能看懂「这个版本改了什么」，比从提交记录推断准确。
+- **自动生成**（不填 `notes` 时）：取本模组与 `packages/` 的提交标题。基准为上一个 `HEAD` 可达的同名 tag；历史 tag 全部指向仓库重写前的旧提交（不可达），所以当前实际效果是「最近 3 条提交」。
+
+自动生成**不会**列出全仓历史——早期版本曾因此把一个模组的 Release 写成整仓 32 条提交，现已修复。
 
 约定：
 

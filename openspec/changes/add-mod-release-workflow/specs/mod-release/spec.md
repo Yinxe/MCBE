@@ -97,7 +97,17 @@ Release 的标题 MUST 为 `<productName> <version>`(`productName` 取自 `mods/
 
 ### Requirement: Release Notes 只包含本模组的改动
 
-Release 正文 MUST 只列出与本次发布模组相关的提交，MUST NOT 列出整个仓库的历史提交。基准 tag MUST 为 `HEAD` 的祖先；无可达基准 tag 时 MUST 退化为少量最近提交。
+Release 正文 MUST 支持两种来源：由触发者手写的说明优先，未手写时从提交记录自动生成。自动生成时 MUST 只列出与本次发布模组相关的提交，MUST NOT 列出整个仓库的历史提交。基准 tag MUST 为 `HEAD` 的祖先；无可达基准 tag 时 MUST 退化为少量最近提交。
+
+#### Scenario: 手写说明优先
+
+- **WHEN** 触发发布时填写了手写的说明文本
+- **THEN** Release 正文为该文本原样，不掺入自动生成的提交标题
+
+#### Scenario: 未手写时自动生成
+
+- **WHEN** 触发发布时未填写说明
+- **THEN** Release 正文由提交记录自动生成，且仅含本模组与共享包的提交
 
 #### Scenario: 历史 tag 指向不可达提交
 
@@ -108,6 +118,11 @@ Release 正文 MUST 只列出与本次发布模组相关的提交，MUST NOT 列
 
 - **WHEN** 目标模组存在指向 `HEAD` 祖先的上一个同名 tag
 - **THEN** Release 正文列出该 tag 到 `HEAD` 之间改动本模组或其共享包的提交，不含其它模组的提交
+
+#### Scenario: 试运行预览正文
+
+- **WHEN** 以试运行选项触发发布
+- **THEN** 试运行输出中可见最终的 Release 正文及其来源（手写/自动），且未创建 tag 与 Release
 
 ### Requirement: 流水线可在本地以同一份 workflow 复现
 

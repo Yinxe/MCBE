@@ -15,6 +15,10 @@ on:
         required: false
         type: boolean
         default: false
+      notes:
+        description: "Release 说明（可选）。填写后直接作为正文，不填则从提交记录自动生成"
+        required: false
+        type: string
 
 # gh release create 需要创建 tag 与 Release 的权限
 permissions:
@@ -146,47 +150,31 @@ jobs:
           echo "待发布资产："
           cat "${RUNNER_TEMP}/release-assets.txt"
 
-      - name: 试运行输出（不发布）
-        if: inputs.dry_run
+      - name: 生成 Release 正文
+        id: notes
         env:
-          TAG: ${{ steps.meta.outputs.tag }}
-          TITLE: ${{ steps.meta.outputs.title }}
-          ASSETS: ${{ steps.assets.outputs.files }}
-        run: |
-          set -euo pipefail
-          {
-            echo "## 试运行：${{ inputs.mod }}"
-            echo
-            echo "- tag：\`${TAG}\`"
-            echo "- Release 标题：\`${TITLE}\`"
-            echo "- 发布目标：\`${RELEASE_REPOSITORY}\`"
-            echo "- 资产（保持英文原名）："
-            echo
-            echo '```'
-            printf '%s\n' "$ASSETS"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "试运行结束，未创建 tag 与 Release"
-
-      - name: 创建 tag 与 Release
-        if: inputs.dry_run == false
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MOD: ${{ inputs.mod }}
           NAME: ${{ steps.meta.outputs.name }}
-          TAG: ${{ steps.meta.outputs.tag }}
-          TITLE: ${{ steps.meta.outputs.title }}
+          MANUAL_NOTES: ${{ inputs.notes }}
         run: |
           set -euo pipefail
           notes_file="${RUNNER_TEMP}/release-notes.md"
-          mapfile -t assets < "${RUNNER_TEMP}/release-assets.txt"
+          echo "notes_file=${notes_file}" >> "$GITHUB_OUTPUT"
 
-          # Release Notes 取「上一个同名 tag → HEAD」的提交标题。
-          # 两个约束，否则会列出整仓历史：
-          #   1. 上一个 tag 必须是 HEAD 的祖先（历史上有旧结构时期的同名 tag，
+          # 手写说明优先：发版人明确知道本次改了什么，比从提交记录推断更准
+          if [ -n "${MANUAL_NOTES// /}" ]; then
+            printf '%s\n' "$MANUAL_NOTES" > "$notes_file"
+            echo "source=manual" >> "$GITHUB_OUTPUT"
+            echo "使用手写的 Release 说明"
+            cat "$notes_file"
+            exit 0
+          fi
+
+          # 未手写则从提交记录自动生成。两个约束，否则会列出整仓历史：
+          #   1. 基准 tag 必须是 HEAD 的祖先（历史上有旧结构时期的同名 tag，
           #      它指向不可达提交，`tag..HEAD` 会退化成全仓历史）；
-          #   2. 只取改动本模组或其依赖的提交，避免把其它模组的提交混进本模组的 Release。
-          # 注意：历史 tag 均指向重写前的旧提交（不可达），所以实际大多数情况会退化为单条。
+          #   2. 只取改动本模组或其依赖的提交，避免把其它模组的提交混进来。
+          # 注意：历史 tag 均指向重写前的旧提交（不可达），所以实际大多数情况会退化为最近 3 条。
           previous_tag=""
           while IFS= read -r candidate; do
             [ -n "$candidate" ] || continue
@@ -210,10 +198,56 @@ jobs:
           if [ ! -s "$notes_file" ]; then
             echo "（本次发布无提交标题可列出）" > "$notes_file"
           fi
+          echo "source=auto" >> "$GITHUB_OUTPUT"
+
+      - name: 试运行输出（不发布）
+        if: inputs.dry_run
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          TITLE: ${{ steps.meta.outputs.title }}
+          ASSETS: ${{ steps.assets.outputs.files }}
+          NOTES_SOURCE: ${{ steps.notes.outputs.source }}
+          NOTES_FILE: ${{ steps.notes.outputs.notes_file }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## 试运行：${{ inputs.mod }}"
+            echo
+            echo "- tag：\`${TAG}\`"
+            echo "- Release 标题：\`${TITLE}\`"
+            echo "- 发布目标：\`${RELEASE_REPOSITORY}\`"
+            echo "- 资产（保持英文原名）："
+            echo
+            echo '```'
+            printf '%s\n' "$ASSETS"
+            echo '```'
+            echo
+            if [ "$NOTES_SOURCE" = "manual" ]; then
+              echo "- Release 正文（手写）："
+            else
+              echo "- Release 正文（自动生成）："
+            fi
+            echo
+            echo '```'
+            cat "$NOTES_FILE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "试运行结束，未创建 tag 与 Release"
+
+      - name: 创建 tag 与 Release
+        if: inputs.dry_run == false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          TITLE: ${{ steps.meta.outputs.title }}
+          NOTES_FILE: ${{ steps.notes.outputs.notes_file }}
+        run: |
+          set -euo pipefail
+          mapfile -t assets < "${RUNNER_TEMP}/release-assets.txt"
 
           gh release create "$TAG" \
             --repo "$RELEASE_REPOSITORY" \
             --title "$TITLE" \
-            --notes-file "$notes_file" \
+            --notes-file "$NOTES_FILE" \
             --target "$GITHUB_SHA" \
             "${assets[@]}"

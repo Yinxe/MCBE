@@ -15,3 +15,8 @@ FROM node:24-bookworm-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates curl gh zip unzip \
  && rm -rf /var/lib/apt/lists/*
+
+# act 用 --bind 把宿主机工作目录直接挂进容器，容器内 UID 与宿主机文件所有者不同，
+# git 会以 "detected dubious ownership" 拒绝操作。放开所有目录（仅本地模拟镜像）。
+# 线上 runner 是全新 checkout，不存在此问题。
+RUN git config --system --add safe.directory '*'
