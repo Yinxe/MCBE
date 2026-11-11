@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/keepinventory",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "productName": "死亡不掉落",
   "description": "死亡不掉落 · 无需作弊 · 保留成就",
   "private": true,
