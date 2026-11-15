@@ -1,0 +1,53 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "API 探针 v0.0.1",
+    "description": "开发期 API 探针：按坐标读取容器真实 Script API 数据并以表单呈现",
+    "uuid": "3f6b1c58-9d24-4b7e-8a51-6c2d9e04f7b3",
+    "version": [
+      0,
+      0,
+      1
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      100
+    ]
+  },
+  "modules": [
+    {
+      "description": "Script resources",
+      "language": "javascript",
+      "type": "script",
+      "uuid": "bc88d2ec-a6ee-48b4-8a70-898ae7229148",
+      "version": [
+        0,
+        0,
+        1
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": [
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": [
+        2,
+        0,
+        0
+      ]
+    }
+  ],
+  "metadata": {
+    "product_type": "addon"
+  }
+}

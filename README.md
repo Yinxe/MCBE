@@ -13,7 +13,8 @@ mc-toolchain/
 │   ├── keepinventory/
 │   ├── mockplayer3/
 │   ├── spectator-mode/
-│   └── teleporter/
+│   ├── teleporter/
+│   └── api-probe/
 ├── packages/              # 仓库内共享包（不对外发布，以 TS 源码被模组直接消费）
 │   ├── mod-common/        # 模组通用代码：文本样式码、HUD 仲裁、表单构建器、安全执行助手
 │   ├── mod-packaging/     # 打包实现：包目录探测、版本同步、产物归档
@@ -35,6 +36,7 @@ mc-toolchain/
 | `item-route` | 物品路由仓库：木锄圈定仓库，按物品族自动分拣、容器整理、统计、容量预警与搜索定位；仓库内唯一带资源包（自定义粒子）的模组 | [mods/item-route/README.md](mods/item-route/README.md) |
 | `mockplayer3` | 模拟玩家III：创建假人，11 种工作模式（跟随/闲逛/劫掠/宝库/定点挖掘/放置/攻击/资源采集/自动钓鱼等），物品与经验回收；**需开启 Beta APIs 实验开关** | [mods/mockplayer3/README.md](mods/mockplayer3/README.md) |
 | `teleporter` | 传送：传送点、死亡点、玩家间传送请求；无需作弊、保留成就 | [mods/teleporter/README.md](mods/teleporter/README.md) |
+| `api-probe` | API 探针：按坐标读取方块容器的真实 Script API 数据并用表单展示；**开发期调试用，不要用于正式世界** | [mods/api-probe/README.md](mods/api-probe/README.md) |
 
 `mods/` 下的目录布局、`mct` 用法、新建模组流程等共同规则见 [mods/README.md](mods/README.md)。
 

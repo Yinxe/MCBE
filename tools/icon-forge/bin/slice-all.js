@@ -212,6 +212,7 @@ function saveIcon(relPath, sliceKey) {
 
 console.log('\n===== 1. 重新分发 7 个模组的 Pack Icons =====');
 saveIcon('mods/auto-refill/behavior_packs/auto-refill/pack_icon.png', '0_0');
+saveIcon('mods/api-probe/behavior_packs/api-probe/pack_icon.png', '1_2');
 saveIcon('mods/craftablerarities/behavior_packs/craftablerarities/pack_icon.png', '0_1');
 saveIcon('mods/item-route/behavior_packs/item-route/pack_icon.png', '3_3');
 saveIcon('mods/item-route/resource_packs/item-route/pack_icon.png', '3_3');
