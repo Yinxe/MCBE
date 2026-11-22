@@ -29,4 +29,4 @@
 - [x] 5.1 更新 `mods/teleporter/README.md`:在「传送转场」一节补一段说明死亡点回传走快速淡入、理由是危险位置需要尽快拿回操作权、以及「总开关关闭时一律无动画」的优先级。验证:`grep -n "死亡点回传" mods/teleporter/README.md` 有命中,且文中同时提到快速淡入与关闭优先。
 - [x] 5.2 跑全量校验:`npm test -w @mc-toolchain/teleporter`、`npm run verify:transition`、`npm run verify:token`、`npm run lint -w @mc-toolchain/teleporter`、`npx tsc --noEmit -p tsconfig.json`、`npx tsc --noEmit -p tests/tsconfig.json`、`openspec validate add-death-teleport-quick-fade --strict`。验证:全部退出码 0。
 - [x] 5.3 用真实目标版本编译一次,防止再次出现「本地装的是高版本、CI 装的是声明版本」的错位:`cp -r node_modules/@minecraft/server /tmp/backup`,换成 `package.json` 声明的 `2.3.0` 解包结果,`npx tsc --noEmit -p tsconfig.json` 与 `-p tests/tsconfig.json` 均应通过,完成后还原。验证:两次 tsc 退出码 0,`node_modules/@minecraft/server` 已还原为原版本。
-- [ ] 5.4 游戏内手测:总开关开启(电影感)时执行 `/tpa:back`,应看到快速淡入而非运镜;从死亡点列表选择一条,同样快速淡入;死亡重生对话框选「传送」,同样快速淡入;把总开关关闭后再执行 `/tpa:back`,应直接位移无动画;传送到自己的传送点,仍应播放完整运镜。验证:五个场景的结果与 `specs/teleporter/spec.md` 中对应场景的 THEN 描述一致。
+- [x] 5.4 游戏内手测:总开关开启(电影感)时执行 `/tpa:back`,应看到快速淡入而非运镜;从死亡点列表选择一条,同样快速淡入;死亡重生对话框选「传送」,同样快速淡入;把总开关关闭后再执行 `/tpa:back`,应直接位移无动画;传送到自己的传送点,仍应播放完整运镜。验证:五个场景的结果与 `specs/teleporter/spec.md` 中对应场景的 THEN 描述一致。
