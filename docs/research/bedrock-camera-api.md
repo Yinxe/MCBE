@@ -1,4 +1,4 @@
-# 基岩版相机 API:自由相机、淡入淡出、输入冻结与区块预加载
+# 基岩版相机 API:自由相机、淡入淡出与输入冻结
 
 本文记录为移植 GTA 风格传送转场而做的实测与静态核对。每条结论都给出**可复现的验证方式**,
 便于日后升级 `@minecraft/server` 时重新确认。
@@ -17,7 +17,7 @@
 | 跨维度时相机是否存续 | 否。必须降档为淡入淡出 |
 | 淡入淡出的三段时长语义 | `fadeInTime` / `holdTime` / `fadeOutTime`,单位秒,各自 ≤ 10 |
 | 能否冻结玩家移动与视角 | 能。`InputPermissionCategory.Movement` + `Camera` |
-| 能否为落点区块预加载 | 能。`world.tickingAreaManager.createTickingArea()`,返回 Promise |
+| 能否为落点区块预加载 | 技术上能,但**不该做**:常加载只管服务端 tick,不影响客户端渲染 |
 | 有没有「传送完成」事件 | **没有**。转场结束只能靠自计时 |
 | 能否查询「相机当前是否被脚本接管」 | **没有**。因此必须自己记账 |
 
@@ -168,24 +168,57 @@ player.inputPermissions.setPermissionCategory(InputPermissionCategory.Camera, fa
 ⚠ 这两项是**布尔开关而非引用计数**。如果将来出现别的系统也要关同一个开关,需要改成引用计数;
 当前模组是唯一的写入方,所以直接置 `true` 恢复。
 
-## 9. 落点区块预加载
+## 9. 为什么不做落点区块预加载
 
-```ts
-await world.tickingAreaManager.createTickingArea(identifier, { dimension, from, to });
-world.tickingAreaManager.removeTickingArea(identifier);
+**结论:不该做。** 曾经实现过一版,后来删掉了——理由不是技术不可行,而是**出发点就错了**。
+
+区块的加载与渲染由**客户端**按玩家实体所在位置决定。转场期间玩家位置要到横越阶段才提交,
+在那之前客户端不会去加载落点区块;此时服务端开常加载(ticking area)只会让那些区块
+**tick**(刷怪、方块更新、红石),对「相机能不能看见地形」毫无帮助,反而白占世界名额。
+
+所以远距离横越时「地形在相机抵达后才出现」是基岩版的固有限制,只能接受,
+不能靠服务端手段绕过。上游 Fabric 模组能缓解是因为它有客户端渲染侧能力
+(Voxy / Distant Horizons / Bobby),基岩版脚本 API 没有对应物。
+
+### 附带记录:版本差异
+
+顺带记下实测到的版本差异,以后要用到时能省一次踩坑。各版本是否提供 `TickingAreaManager`:
+
+| 版本 | `class TickingAreaManager` |
+| --- | --- |
+| 2.3.0 | 不存在 |
+| 2.4.0 | 不存在 |
+| 2.5.0 | 不存在 |
+| 2.6.0 | 存在 |
+
+复现:
+
+```bash
+for v in 2.3.0 2.4.0 2.5.0 2.6.0; do
+  rm -rf /tmp/s$v && mkdir -p /tmp/s$v && cd /tmp/s$v
+  npm pack @minecraft/server@$v --silent >/dev/null && tar -xzf *.tgz
+  echo "$v -> $(grep -c 'class TickingAreaManager' package/index.d.ts)"
+done
 ```
 
-要点:
+本模组声明 `2.3.0`,所以即便要做也用不了这个 API,只能用 `/tickingarea` 命令。
 
-- 管理器挂在 **`World`** 上,不是 `Dimension`(容易踩的坑:`dimension.tickingAreaManager` 不存在);
-- `TickingAreaOptions` 是 `{ dimension, from, to }` 两个对角点,**不是** `min`/`max`;
-- `createTickingArea` 返回 `Promise<void>`,**在区域内所有区块加载完成并开始 tick 后才 resolve**;
-- 有容量上限:`maxChunkCount` 与 `chunkCount` 可读,`hasCapacity(options)` 可预检;
-  重叠的区块会重复计数;
-- 标识符必须唯一。本项目用 `teleporter:transition/<playerId>`,玩家同时只会有一次转场。
+### 教训:读类型声明要读项目实际声明的那个版本
 
-本项目把预加载当作**优化而非前置条件**:创建失败(名额已满、维度不可用)只记一条警告,
-不改变转场流程。这条取舍对应 spec 的「加载失败仍完成传送」场景。
+本机 `node_modules` 里装的是 `2.6.0`,而 `package-lock.json` 锁定 `2.3.0`。两者不一致时,
+本地 `tsc` 通过**不能**证明 CI 会通过——CI 跑 `npm ci` 装 2.3.0,编译直接失败在
+`Property 'tickingAreaManager' does not exist on type 'World'`。
+
+验证方式:
+
+```bash
+cd mods/teleporter
+cp -r node_modules/@minecraft/server /tmp/backup
+rm -rf node_modules/@minecraft/server
+cp -r /tmp/s230/package node_modules/@minecraft/server   # 2.3.0 的解包结果
+npx tsc --noEmit -p tsconfig.json
+mv /tmp/backup node_modules/@minecraft/server            # 还原
+```
 
 ## 10. 两个「没有」
 
@@ -203,7 +236,7 @@ world.tickingAreaManager.removeTickingArea(identifier);
 elapsed > timeline.totalTicks * 2 + 20   // 最长转场 182 tick → 兜底 384 tick ≈ 19 秒
 ```
 
-命中即强制 `finish()`:清相机、恢复输入、释放 ticking area、补一次位移、resolve 挂起的 Promise。
+命中即强制 `finish()`:清相机、恢复输入、补一次位移、resolve 挂起的 Promise。
 没有这条兜底,一次相机异常就会让玩家永久失去移动能力。
 
 ## 12. 复现清单

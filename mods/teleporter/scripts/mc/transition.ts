@@ -47,8 +47,6 @@ interface TransitionSession {
   startTick: number;
   /** 位移是否已提交 */
   committed: boolean;
-  /** 已创建的 ticking area 标识;创建失败时为 undefined */
-  tickingAreaId: string | undefined;
   /** 本次转场是否成功完成 */
   resolve: (ok: boolean) => void;
   /** 是否已经结束,避免重复清理 */
@@ -57,9 +55,6 @@ interface TransitionSession {
 
 /** 进行中的转场,按玩家 ID 索引。 */
 const active = new Map<string, TransitionSession>();
-
-/** 落点区块预加载的半径(格)。3×3 区块,覆盖玩家视野中心。 */
-const PRELOAD_RADIUS = 24;
 
 /** 每 tick 的相机插值时长(秒),20 tick/秒。 */
 const CAMERA_EASE_SECONDS = 0.05;
@@ -172,7 +167,6 @@ function startSession(
     volume: config.transitionVolume,
     startTick: system.currentTick,
     committed: false,
-    tickingAreaId: undefined,
     resolve,
     finished: false,
   };
@@ -180,7 +174,6 @@ function startSession(
   active.set(player.id, session);
 
   freezeInput(player);
-  preloadTargetChunks(session, target);
 
   driveSession(session);
 }
@@ -335,58 +328,6 @@ function unfreezeInput(player: Player): void {
 }
 
 /**
- * 预加载落点区块。
- *
- * 这是**优化**:创建失败(名额已满、维度不可用)只记日志,
- * 不改变转场流程,也不阻塞传送。
- */
-function preloadTargetChunks(
-  session: TransitionSession,
-  target: TransitionTarget,
-): void {
-  const identifier = `teleporter:transition/${session.playerId}`;
-  try {
-    const dimension = world.getDimension(target.dimensionId);
-    const from: Vector3 = {
-      x: target.location.x - PRELOAD_RADIUS,
-      y: Math.max(-64, target.location.y - PRELOAD_RADIUS),
-      z: target.location.z - PRELOAD_RADIUS,
-    };
-    const to: Vector3 = {
-      x: target.location.x + PRELOAD_RADIUS,
-      y: Math.min(320, target.location.y + PRELOAD_RADIUS),
-      z: target.location.z + PRELOAD_RADIUS,
-    };
-
-    // createTickingArea 返回 Promise;这里不 await,失败在 catch 里只记日志
-    void world.tickingAreaManager
-      .createTickingArea(identifier, { dimension, from, to })
-      .then(() => {
-        // 创建是异步的,转场可能已经结束。若已结束就立即释放,
-        // 否则 releasePreload 当时看不到 id,会永久泄露这个 ticking area
-        if (session.finished) {
-          try {
-            world.tickingAreaManager.removeTickingArea(identifier);
-          } catch {
-            // 已被引擎回收
-          }
-          return;
-        }
-        session.tickingAreaId = identifier;
-      })
-      .catch((error: unknown) => {
-        console.warn(
-          `[Teleporter] 落点区块预加载失败(不影响传送): ${String(error)}`,
-        );
-      });
-  } catch (error) {
-    console.warn(
-      `[Teleporter] 落点区块预加载失败(不影响传送): ${String(error)}`,
-    );
-  }
-}
-
-/**
  * 结束会话并清理。
  *
  * @param forced 是否由兜底触发。强制结束时若位移尚未提交,补一次位移,
@@ -419,31 +360,16 @@ function finish(
 
   unfreezeInput(session.player);
 
-  releasePreload(session);
-
   session.resolve(session.committed);
-}
-
-/** 释放落点区块预加载。 */
-function releasePreload(session: TransitionSession): void {
-  const identifier = session.tickingAreaId;
-  if (identifier === undefined) return;
-  session.tickingAreaId = undefined;
-  try {
-    world.tickingAreaManager.removeTickingArea(identifier);
-  } catch {
-    // 维度已卸载或区块已被引擎回收
-  }
 }
 
 /**
  * 把相机交还给玩家。
  *
- * 为什么要两道:只调 `clear()` 在部分情况下不够——引擎推进已排队的
- * easeOptions 写入时会把 free 相机重新挂回去,表现就是「转场结束了
- * 但人还在相机位」。因此:
+ * 为什么要三道:只调 `clear()` 不够——引擎推进已排队的 easeOptions 写入时
+ * 会把 free 相机重新挂回去,表现就是「转场结束了但人还在相机位」。因此:
  *   1. 立即 `clear()` 终止当前相机与进行中的缓动
- *   2. 显式 `setDefaultCamera("minecraft:first_person")` 把预设重置回第一人称
+ *   2. 显式 `setDefaultCamera("minecraft:first_person")` 重置预设
  *   3. 下一 tick 再 `clear()` 一次,清掉可能被缓动重新挂上的状态
  */
 function releaseCamera(player: Player): void {
@@ -459,7 +385,6 @@ function releaseCamera(player: Player): void {
     // 部分版本/上下文不支持,忽略
   }
 
-  // 下一 tick 兜底再清一次,处理「已排队的缓动把相机挂回去」
   try {
     system.runTimeout(() => {
       try {
