@@ -98,18 +98,62 @@ export interface TeleportRequest {
 /** 请求有效期,超时后自动作废。 */
 export const TELEPORT_REQUEST_TIMEOUT_MS = 60_000;
 
+/**
+ * 传送转场风格。顺序即管理界面下拉框顺序。
+ *
+ * - `off`:不播任何动画,直接位移
+ * - `fade`:黑屏淡入淡出
+ * - `cinematic`:GTA 风格运镜(默认)
+ */
+export const TRANSITION_STYLES = ["off", "fade", "cinematic"] as const;
+
+export type TransitionStyle = (typeof TRANSITION_STYLES)[number];
+
+/** 变焦高度表按维度分三套。维度无法识别时用主世界那一套。 */
+export const TRANSITION_DIMENSIONS = ["overworld", "nether", "end"] as const;
+
+export type TransitionDimension = (typeof TRANSITION_DIMENSIONS)[number];
+
+/** 三段变焦的高度(格)。 */
+export type TransitionZoomHeights = [number, number, number];
+
+/** 按维度划分的三段变焦高度表。 */
+export type TransitionZoomHeightTable = Record<
+  TransitionDimension,
+  TransitionZoomHeights
+>;
+
 /** 模组配置。 */
 export interface ModConfig {
   /** 单人最大传送点数,允许范围 10–100 */
   maxWaypointsPerPlayer: number;
   /** 是否允许把传送点设为公共 */
   publicWaypointEnabled: boolean;
+  /** 传送转场总开关。关闭等价于风格为 off */
+  transitionEnabled: boolean;
+  /** 传送转场风格 */
+  transitionStyle: TransitionStyle;
+  /** 三段变焦高度,按维度划分 */
+  transitionZoomHeights: TransitionZoomHeightTable;
+  /** 三段变焦各自的时长(tick),不分维度 */
+  transitionZoomTicks: TransitionZoomHeights;
+  /** 转场音效音量,0–1 */
+  transitionVolume: number;
 }
 
 /** 配置默认值。 */
 export const DEFAULT_CONFIG: ModConfig = {
   maxWaypointsPerPlayer: 30,
   publicWaypointEnabled: true,
+  transitionEnabled: true,
+  transitionStyle: "cinematic",
+  transitionZoomHeights: {
+    overworld: [20, 40, 60],
+    nether: [20, 40, 60],
+    end: [20, 40, 60],
+  },
+  transitionZoomTicks: [13, 13, 13],
+  transitionVolume: 0.5,
 };
 
 /** 单人传送点上限的可调范围。 */

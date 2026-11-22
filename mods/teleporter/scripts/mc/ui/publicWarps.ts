@@ -49,7 +49,7 @@ export async function showPublicWarpsList(
   for (const waypoint of paged.items) {
     form.button(publicWaypointSummary(waypoint), async () => {
       // 先确认传送成功再计次,避免失败也涨次数
-      const ok = teleportToSavedPoint(
+      const ok = await teleportToSavedPoint(
         player,
         waypoint.name,
         waypoint.location,
@@ -78,7 +78,9 @@ export async function showPublicWarpsList(
     }
   }
 
-  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () => showMainMenu(player));
+  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () =>
+    showMainMenu(player),
+  );
 
   await form.show(player);
 }

@@ -1,0 +1,5 @@
+# 转场驱动验证脚本的中间产物
+.test-build/
+tests/harness/.bundle.js
+tests/harness/.entry.ts
+tests/harness/node_modules/

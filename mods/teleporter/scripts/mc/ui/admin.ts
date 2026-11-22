@@ -12,8 +12,7 @@ import { showMainMenu } from "./menu";
 
 /** 单人传送点上限的滑条步长。 */
 const LIMIT_STEP = 5;
-
-/** 管理设置:调整上限与公共传送点开关。 */
+/** 管理设置:传送点上限与公共传送点开关。转场配置见 transitionSettings.ts。 */
 export async function showAdminConfig(player: Player): Promise<void> {
   const config = loadConfig();
 
@@ -32,6 +31,7 @@ export async function showAdminConfig(player: Player): Promise<void> {
     .toggle("publicEnabled", "启用公共传送点", {
       defaultValue: config.publicWaypointEnabled,
     })
+    .label("_hint", "§7传送转场请用主菜单的「✦ 传送转场」")
     .show(player);
 
   if (!values) return;

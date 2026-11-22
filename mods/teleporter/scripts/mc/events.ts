@@ -14,6 +14,7 @@ import { distanceBetween, formatLocation, formatTimeAgo } from "../core/naming";
 import { ensureTeleportToken, hasTeleportToken } from "./token";
 import { loadPlayerData, savePlayerData } from "./store";
 import { teleportToSavedPoint } from "./teleport";
+import { abortTransition } from "./transition";
 import { isTeleportToken } from "../core/token";
 import { showMainMenu } from "./ui/menu";
 
@@ -26,6 +27,24 @@ export function registerAllEvents(): void {
   subscribeDeathEvent();
   subscribeSpawnEvent();
   subscribeTokenUseEvent();
+  subscribeTransitionCleanup();
+}
+
+/**
+ * 转场期间的主动清理。
+ *
+ * 玩家下线或死亡时中止运镜,恢复输入权限并交还相机。这一步不能省:
+ * 只靠转场自身的超时兜底会让玩家在最坏情况下卡住好几秒。
+ */
+function subscribeTransitionCleanup(): void {
+  world.afterEvents.playerLeave.subscribe((event) => {
+    abortTransition(event.playerId);
+  });
+
+  world.afterEvents.entityDie.subscribe((event) => {
+    if (event.deadEntity.typeId !== "minecraft:player") return;
+    abortTransition(event.deadEntity.id);
+  });
 }
 
 /**
@@ -113,7 +132,12 @@ async function showDeathTeleportDialog(player: Player): Promise<void> {
     .show(player);
 
   if (!confirmed) return;
-  teleportToSavedPoint(player, "死亡点", latest.location, latest.dimensionId);
+  await teleportToSavedPoint(
+    player,
+    "死亡点",
+    latest.location,
+    latest.dimensionId,
+  );
 }
 
 /**

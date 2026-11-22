@@ -5,6 +5,7 @@
 
 export * from "./types";
 export * from "./config";
+export * from "./transition";
 export * from "./waypoints";
 export * from "./deathPoints";
 export * from "./requests";

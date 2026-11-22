@@ -38,7 +38,9 @@ export async function showPlayerTeleportMenu(player: Player): Promise<void> {
     );
   }
 
-  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () => showMainMenu(player));
+  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () =>
+    showMainMenu(player),
+  );
 
   await form.show(player);
 }
@@ -55,15 +57,29 @@ async function showTeleportDirection(
         `§b维度: §f${dimensionFullName(target.dimension.id)}\n` +
         `§b坐标: §f${formatCoordinates(target.location)}`,
     )
-    .buttonWithIcon("§a传送到他身边", "textures/ui/teleporter/teleport_to", () => goToTarget(player, target))
-    .buttonWithIcon("§b让他传送过来", "textures/ui/teleporter/teleport_bring", () => pullTarget(player, target))
-    .buttonWithIcon("§c← 返回", "textures/ui/teleporter/back", () => showPlayerTeleportMenu(player))
+    .buttonWithIcon(
+      "§a传送到他身边",
+      "textures/ui/teleporter/teleport_to",
+      () => goToTarget(player, target),
+    )
+    .buttonWithIcon(
+      "§b让他传送过来",
+      "textures/ui/teleporter/teleport_bring",
+      () => pullTarget(player, target),
+    )
+    .buttonWithIcon("§c← 返回", "textures/ui/teleporter/back", () =>
+      showPlayerTeleportMenu(player),
+    )
     .show(player);
 }
 
 /** 我传送到目标身边。 */
-function goToTarget(player: Player, target: Player): void {
-  const ok = teleportPlayerTo(player, target.location, target.dimension.id);
+async function goToTarget(player: Player, target: Player): Promise<void> {
+  const targetLocation = target.location;
+  const targetDimensionId = target.dimension.id;
+  const targetName = target.name;
+
+  const ok = await teleportPlayerTo(player, targetLocation, targetDimensionId);
   if (!ok) {
     player.sendMessage("§c传送失败");
     return;
@@ -71,14 +87,17 @@ function goToTarget(player: Player, target: Player): void {
 
   notifySuccess(
     player,
-    `已传送到 §e${target.name}§a 身边 §6（${formatLocation(target.location, target.dimension.id)}§6）`,
+    `已传送到 §e${targetName}§a 身边 §6（${formatLocation(targetLocation, targetDimensionId)}§6）`,
   );
   target.sendMessage(`§e${player.name}§a 传送到了你身边`);
 }
 
 /** 把目标拉到我身边。无需目标同意,与上游一致。 */
-function pullTarget(player: Player, target: Player): void {
-  const ok = teleportPlayerTo(target, player.location, player.dimension.id);
+async function pullTarget(player: Player, target: Player): Promise<void> {
+  const playerLocation = player.location;
+  const playerDimensionId = player.dimension.id;
+
+  const ok = await teleportPlayerTo(target, playerLocation, playerDimensionId);
   if (!ok) {
     target.sendMessage("§c传送失败");
     return;
@@ -86,7 +105,7 @@ function pullTarget(player: Player, target: Player): void {
 
   notifySuccess(
     target,
-    `§e${player.name}§a 将你传送到了他身边 §6（${formatLocation(player.location, player.dimension.id)}§6）`,
+    `§e${player.name}§a 将你传送到了他身边 §6（${formatLocation(playerLocation, playerDimensionId)}§6）`,
   );
   player.sendMessage(`§e${target.name}§a 已传送到你身边`);
 }

@@ -100,10 +100,10 @@ export function createTeleportRequest(
  *
  * @returns 是否成功传送
  */
-export function acceptTeleportRequest(
+export async function acceptTeleportRequest(
   player: Player,
   request: TeleportRequest,
-): boolean {
+): Promise<boolean> {
   book.remove(player.id);
 
   const requester = findOnlinePlayerById(request.fromId);
@@ -115,7 +115,7 @@ export function acceptTeleportRequest(
   if (request.type === "tpa") {
     // 请求方来到目标身边
     const targetLocation = formatLocation(player.location, player.dimension.id);
-    const ok = teleportPlayerTo(
+    const ok = await teleportPlayerTo(
       requester,
       player.location,
       player.dimension.id,
@@ -138,7 +138,7 @@ export function acceptTeleportRequest(
     requester.location,
     requester.dimension.id,
   );
-  const ok = teleportPlayerTo(
+  const ok = await teleportPlayerTo(
     player,
     requester.location,
     requester.dimension.id,

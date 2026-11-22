@@ -22,8 +22,8 @@ export async function showPendingRequest(player: Player): Promise<boolean> {
   await new ActionFormBuilder()
     .title("§l传送请求")
     .body(`§f来自: ${describeRequest(request)}\n§7（60秒超时）`)
-    .button("§a✓ 接受", () => {
-      acceptTeleportRequest(player, request);
+    .button("§a✓ 接受", async () => {
+      await acceptTeleportRequest(player, request);
     })
     .button("§c✗ 拒绝", () => denyTeleportRequest(player, request))
     .button("§c← 稍后处理", () => showMainMenu(player))

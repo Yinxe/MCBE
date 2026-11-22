@@ -16,6 +16,7 @@
 | [packaging-naming-and-modes.md](./packaging-naming-and-modes.md) | 打包产物命名、`mode` 语义、包类型判定与只认官方全名目录的约定,以及 `mcaddon` 与 `mcaddon:production` 的实测结论 |
 | [lint-and-prettier.md](./lint-and-prettier.md) | 官方模板 lint 链路的结构与它自带的一个缺陷(缺 `@typescript-eslint/eslint-plugin`) |
 | [read-only-context.md](./read-only-context.md) | 只读上下文与安全上下文的区别、`@minecraft/server@2.1.0` 中 341 个受限成员的完整清单、判据(以声明标注为准而非「是否写操作」)、实践规则与逐个成员提取的脚本 |
+| [bedrock-camera-api.md](./bedrock-camera-api.md) | 自由相机预设与位姿参数、相机成员全部属于受限上下文的证据、`easeOptions` 插值、跨维度时相机不存续、`fade` 三段时长语义、输入权限冻结的覆盖范围、ticking area 预加载,以及「没有传送完成事件」与「没有相机接管查询」这两个缺失 |
 | [bedrock-item-data-values.md](./bedrock-item-data-values.md) | 配方的 `identifier` 与 `result.item` 是两套独立 ID 体系(附原版 50.7% 不一致的实测)、`data` 辅助值的可证明等价改写规则、30 条映射表、`format_version` 与 `unlock` 的关系、本次无法静态证明的部分 |
 | [github-actions-local-act.md](./github-actions-local-act.md) | 用 `nektos/act` 在本地跑 `Release Mod` workflow:runner 镜像拉不动时的自建方案、`--pull=false` 与 `--bind` 的必要性、三个代表模组的实测耗时与产物核对 |
 

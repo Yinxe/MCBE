@@ -53,7 +53,7 @@ export async function showWarpSelector(player: Player): Promise<void> {
   const waypoint = waypoints[values.warp as number];
   if (!waypoint) return;
 
-  warpToWaypoint(player, waypoint.id);
+  await warpToWaypoint(player, waypoint.id);
 }
 
 /** 管理列表:每个传送点一个按钮,底部是新建与返回。 */
@@ -74,8 +74,14 @@ export async function showWarpManagement(player: Player): Promise<void> {
       showWaypointActions(player, waypoint.id),
     );
   }
-  form.buttonWithIcon("§a✚ 新建传送点", "textures/ui/teleporter/warp_create", () => showCreateWarpForm(player));
-  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () => showMainMenu(player));
+  form.buttonWithIcon(
+    "§a✚ 新建传送点",
+    "textures/ui/teleporter/warp_create",
+    () => showCreateWarpForm(player),
+  );
+  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () =>
+    showMainMenu(player),
+  );
 
   await form.show(player);
 }
@@ -181,7 +187,7 @@ async function showWaypointActions(
   }
 
   if (wantTeleport) {
-    warpToWaypoint(player, waypointId);
+    await warpToWaypoint(player, waypointId);
     return;
   }
 

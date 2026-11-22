@@ -31,6 +31,7 @@ import {
   getPendingRequest,
 } from "./requests";
 import { loadConfig, loadPlayerData } from "./store";
+import type { TransitionStyle } from "../core/types";
 import { teleportToSavedPoint } from "./teleport";
 import { giveTeleportToken } from "./token";
 import { showAdminConfig } from "./ui/admin";
@@ -169,10 +170,10 @@ function registerWarpCommands(registry: CustomCommandRegistry): void {
       description: "传送到指定传送点(不带名称则打开选择界面)",
       optional: ["name"],
     },
-    ({ player, params }) => {
+    async ({ player, params }) => {
       const name = asOptionalString(params.name);
       if (!name) return showWarpSelector(player);
-      warpToWaypointByName(player, name);
+      await warpToWaypointByName(player, name);
     },
   );
 
@@ -226,14 +227,14 @@ function registerDeathAndBackCommands(registry: CustomCommandRegistry): void {
   registerPlayerCommand(
     registry,
     { name: "tpa:back", description: "传送到最近的死亡点" },
-    ({ player }) => {
+    async ({ player }) => {
       const points = listDeathPoints(loadPlayerData(player.id));
       const latest = points[0];
       if (!latest) {
         player.sendMessage("§c没有找到死亡记录");
         return;
       }
-      teleportToSavedPoint(
+      await teleportToSavedPoint(
         player,
         "最近的死亡点",
         latest.location,
@@ -288,13 +289,13 @@ function registerPlayerTeleportCommands(registry: CustomCommandRegistry): void {
   registerPlayerCommand(
     registry,
     { name: "tpa:tpaccept", description: "接受传送请求" },
-    ({ player }) => {
+    async ({ player }) => {
       const request = getPendingRequest(player.id);
       if (!request) {
         player.sendMessage("§c你没有任何待处理的传送请求 §6(可能已超时)");
         return;
       }
-      acceptTeleportRequest(player, request);
+      await acceptTeleportRequest(player, request);
     },
   );
 
@@ -369,7 +370,7 @@ function registerAdminCommands(registry: CustomCommandRegistry): void {
 function registerTokenCommand(registry: CustomCommandRegistry): void {
   registerPlayerCommand(
     registry,
-    { name: "tpa:token", description: "获得传送信物(右键打开传送菜单)" },
+    { name: "tpa:token", description: "获得传送磁石(右键打开传送菜单)" },
     ({ player }) => giveTeleportToken(player),
   );
 }
@@ -396,6 +397,18 @@ function requestTeleportToPlayer(
   );
 }
 
+/** 把转场风格翻译成给玩家看的文案。 */
+function describeTransitionStyle(style: TransitionStyle): string {
+  switch (style) {
+    case "off":
+      return "§c关闭(即时位移)";
+    case "fade":
+      return "§e淡入淡出";
+    case "cinematic":
+      return "§a电影感";
+  }
+}
+
 /** 打印当前配置。 */
 function printConfig(player: Player): void {
   const config = loadConfig();
@@ -403,6 +416,9 @@ function printConfig(player: Player): void {
   player.sendMessage(`§6单人最大传送点: §f${config.maxWaypointsPerPlayer}`);
   player.sendMessage(
     `§6公共传送点: ${config.publicWaypointEnabled ? "§a启用" : "§c禁用"}`,
+  );
+  player.sendMessage(
+    `§6传送转场: ${describeTransitionStyle(config.transitionStyle)}`,
   );
   player.sendMessage(
     `§6当前维度: §f${dimensionDisplayName(player.dimension.id)}`,

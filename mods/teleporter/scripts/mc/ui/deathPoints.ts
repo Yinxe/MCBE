@@ -40,7 +40,7 @@ export async function showDeathPointsList(
 
   for (const point of paged.items) {
     form.button(deathPointLabel(player, point), async () => {
-      const ok = teleportToSavedPoint(
+      const ok = await teleportToSavedPoint(
         player,
         "死亡点",
         point.location,
@@ -64,16 +64,22 @@ export async function showDeathPointsList(
   }
 
   if (points.length > 0) {
-    form.buttonWithIcon("§c清除所有死亡点", "textures/ui/teleporter/delete_all", () => {
-      const fresh = loadPlayerData(player.id);
-      const count = clearDeathPoints(fresh);
-      savePlayerData(player.id, fresh);
-      player.sendMessage(`§c已清除 ${count} 条死亡记录`);
-      showDeathPointsList(player);
-    });
+    form.buttonWithIcon(
+      "§c清除所有死亡点",
+      "textures/ui/teleporter/delete_all",
+      () => {
+        const fresh = loadPlayerData(player.id);
+        const count = clearDeathPoints(fresh);
+        savePlayerData(player.id, fresh);
+        player.sendMessage(`§c已清除 ${count} 条死亡记录`);
+        showDeathPointsList(player);
+      },
+    );
   }
 
-  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () => showMainMenu(player));
+  form.buttonWithIcon("§c← 返回主菜单", "textures/ui/teleporter/back", () =>
+    showMainMenu(player),
+  );
 
   await form.show(player);
 }

@@ -32,14 +32,17 @@ export function findOwnWarp(player: Player, name: string) {
  *
  * 先确认传送成功再累加次数,避免失败也涨计数。
  *
- * @returns 传送是否成功
+ * @returns 传送是否成功(转场结束、位移确认后才知道)
  */
-export function warpToWaypoint(player: Player, waypointId: string): boolean {
+export async function warpToWaypoint(
+  player: Player,
+  waypointId: string,
+): Promise<boolean> {
   const data = loadPlayerData(player.id);
   const waypoint = data.waypoints.filter((item) => item.id === waypointId)[0];
   if (!waypoint) return false;
 
-  const ok = teleportToSavedPoint(
+  const ok = await teleportToSavedPoint(
     player,
     waypoint.name,
     waypoint.location,
@@ -53,7 +56,10 @@ export function warpToWaypoint(player: Player, waypointId: string): boolean {
 }
 
 /** 按名字传送到自己的传送点。找不到时提示并返回 false。 */
-export function warpToWaypointByName(player: Player, name: string): boolean {
+export async function warpToWaypointByName(
+  player: Player,
+  name: string,
+): Promise<boolean> {
   const waypoint = findOwnWarp(player, name);
   if (!waypoint) {
     player.sendMessage(

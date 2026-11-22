@@ -35,7 +35,7 @@ mc-toolchain/
 | `spectator-mode` | 灵魂出窍：飞离真身侦查，超出距离容忍 5 秒后自动回归 | [mods/spectator-mode/README.md](mods/spectator-mode/README.md) |
 | `item-route` | 物品路由仓库：木锄圈定仓库，按物品族自动分拣、容器整理、统计、容量预警与搜索定位；仓库内唯一带资源包（自定义粒子）的模组 | [mods/item-route/README.md](mods/item-route/README.md) |
 | `mockplayer3` | 模拟玩家III：创建假人，11 种工作模式（跟随/闲逛/劫掠/宝库/定点挖掘/放置/攻击/资源采集/自动钓鱼等），物品与经验回收；**需开启 Beta APIs 实验开关** | [mods/mockplayer3/README.md](mods/mockplayer3/README.md) |
-| `teleporter` | 传送：传送点、死亡点、玩家间传送请求；无需作弊、保留成就 | [mods/teleporter/README.md](mods/teleporter/README.md) |
+| `teleporter` | 传送：传送点、死亡点、玩家间传送请求；带 GTA 风格传送转场（可关闭）；无需作弊、保留成就 | [mods/teleporter/README.md](mods/teleporter/README.md) |
 | `api-probe` | API 探针：按坐标读取方块容器的真实 Script API 数据并用表单展示；**开发期调试用，不要用于正式世界** | [mods/api-probe/README.md](mods/api-probe/README.md) |
 
 `mods/` 下的目录布局、`mct` 用法、新建模组流程等共同规则见 [mods/README.md](mods/README.md)。
