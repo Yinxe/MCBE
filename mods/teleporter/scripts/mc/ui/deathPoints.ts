@@ -45,6 +45,7 @@ export async function showDeathPointsList(
         "死亡点",
         point.location,
         point.dimensionId,
+        "deathPoint",
       );
       if (ok) await showDeathPointsList(player);
     });

@@ -137,6 +137,7 @@ async function showDeathTeleportDialog(player: Player): Promise<void> {
     "死亡点",
     latest.location,
     latest.dimensionId,
+    "deathPoint",
   );
 }
 

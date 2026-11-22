@@ -13,9 +13,11 @@
 
 const path = require("path");
 const fs = require("fs");
-const esbuild = require(require.resolve("esbuild", {
-  paths: [path.resolve(__dirname, "../../../..")],
-}));
+const esbuild = require(
+  require.resolve("esbuild", {
+    paths: [path.resolve(__dirname, "../../../..")],
+  }),
+);
 
 const MOD_ROOT = path.resolve(__dirname, "../..");
 const HARNESS = __dirname;
@@ -26,7 +28,9 @@ const ENTRY = path.join(HARNESS, ".entry.ts");
 /** 写出 mock 包与入口,再构建。 */
 function build() {
   fs.mkdirSync(MOCK_DIR, { recursive: true });
-  fs.mkdirSync(path.join(HARNESS, "node_modules/@minecraft/server-ui"), { recursive: true });
+  fs.mkdirSync(path.join(HARNESS, "node_modules/@minecraft/server-ui"), {
+    recursive: true,
+  });
 
   fs.copyFileSync(
     path.join(HARNESS, "mock-minecraft-server.js"),
@@ -34,7 +38,11 @@ function build() {
   );
   fs.writeFileSync(
     path.join(MOCK_DIR, "package.json"),
-    JSON.stringify({ name: "@minecraft/server", version: "2.3.0", main: "index.js" }),
+    JSON.stringify({
+      name: "@minecraft/server",
+      version: "2.3.0",
+      main: "index.js",
+    }),
   );
   fs.copyFileSync(
     path.join(HARNESS, "mock-minecraft-server.js"),
@@ -42,7 +50,11 @@ function build() {
   );
   fs.writeFileSync(
     path.join(HARNESS, "node_modules/@minecraft/server-ui/package.json"),
-    JSON.stringify({ name: "@minecraft/server-ui", version: "2.0.0", main: "index.js" }),
+    JSON.stringify({
+      name: "@minecraft/server-ui",
+      version: "2.0.0",
+      main: "index.js",
+    }),
   );
 
   fs.writeFileSync(
@@ -68,11 +80,15 @@ let failures = 0;
 function check(name, actual, expected) {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);
   if (!ok) failures += 1;
-  console.log(`  ${ok ? "✓" : "✗"} ${name}: ${JSON.stringify(actual)}${ok ? "" : ` (期望 ${JSON.stringify(expected)})`}`);
+  console.log(
+    `  ${ok ? "✓" : "✗"} ${name}: ${JSON.stringify(actual)}${ok ? "" : ` (期望 ${JSON.stringify(expected)})`}`,
+  );
 }
 function checkTrue(name, cond, detail) {
   if (!cond) failures += 1;
-  console.log(`  ${cond ? "✓" : "✗"} ${name}${detail === undefined ? "" : `: ${detail}`}`);
+  console.log(
+    `  ${cond ? "✓" : "✗"} ${name}${detail === undefined ? "" : `: ${detail}`}`,
+  );
 }
 
 // ─── 时序驱动 ──────────────────────────────────────────────────
@@ -80,12 +96,30 @@ function checkTrue(name, cond, detail) {
 function makeDriver(mock) {
   let tick = 0;
   let intervalFn = null;
-  const calls = { setCamera: [], fade: [], clear: [], teleport: [], perm: [], sound: [] };
+  const calls = {
+    setCamera: [],
+    fade: [],
+    clear: [],
+    teleport: [],
+    perm: [],
+    sound: [],
+  };
 
-  mock.system.run = (fn) => { fn(); return 0; };
-  mock.system.runTimeout = (fn) => { fn(); return 0; };
-  mock.system.runInterval = (fn) => { intervalFn = fn; return 0; };
-  mock.system.clearRun = () => { intervalFn = null; };
+  mock.system.run = (fn) => {
+    fn();
+    return 0;
+  };
+  mock.system.runTimeout = (fn) => {
+    fn();
+    return 0;
+  };
+  mock.system.runInterval = (fn) => {
+    intervalFn = fn;
+    return 0;
+  };
+  mock.system.clearRun = () => {
+    intervalFn = null;
+  };
   Object.defineProperty(mock.system, "currentTick", {
     get: () => tick,
     configurable: true,
@@ -124,7 +158,13 @@ function makeDriver(mock) {
     }
   }
 
-  return { calls, mkPlayer, reset, advance, isRunning: () => intervalFn !== null };
+  return {
+    calls,
+    mkPlayer,
+    reset,
+    advance,
+    isRunning: () => intervalFn !== null,
+  };
 }
 
 // ─── 用例 ──────────────────────────────────────────────────────
@@ -148,7 +188,10 @@ async function main() {
     transitionZoomTicks: [13, 13, 13],
     transitionVolume: 0.5,
   };
-  const TARGET = { location: { x: 0, y: 70, z: 120 }, dimensionId: "minecraft:overworld" };
+  const TARGET = {
+    location: { x: 0, y: 70, z: 120 },
+    dimensionId: "minecraft:overworld",
+  };
 
   console.log("\n[1] 同维度 cinematic:完整运镜");
   {
@@ -163,11 +206,13 @@ async function main() {
     check("setCamera 帧数", d.calls.setCamera.length, 162);
     checkTrue(
       "末帧不带 easeOptions",
-      d.calls.setCamera[d.calls.setCamera.length - 1].opts.easeOptions === undefined,
+      d.calls.setCamera[d.calls.setCamera.length - 1].opts.easeOptions ===
+        undefined,
     );
     checkTrue(
       "倒数第二帧带 easeOptions",
-      d.calls.setCamera[d.calls.setCamera.length - 2].opts.easeOptions !== undefined,
+      d.calls.setCamera[d.calls.setCamera.length - 2].opts.easeOptions !==
+        undefined,
     );
     check("preset", d.calls.setCamera[0].preset, "minecraft:free");
     check("位移次数", d.calls.teleport.length, 1);
@@ -175,10 +220,17 @@ async function main() {
     // 2 次:立即 clear + 下一 tick 兜底 clear
     check("camera.clear", d.calls.clear.length, 2);
     check("音效数", d.calls.sound.length, 8);
-    checkTrue("输入冻结后恢复", d.calls.perm.filter((x) => x.v === true).length === 2);
+    checkTrue(
+      "输入冻结后恢复",
+      d.calls.perm.filter((x) => x.v === true).length === 2,
+    );
     check("resolve", v, true);
     const last = d.calls.setCamera[d.calls.setCamera.length - 1].opts.location;
-    checkTrue("末帧落在落点眼睛高度", Math.abs(last.y - 71.62) < 0.01, JSON.stringify(last));
+    checkTrue(
+      "末帧落在落点眼睛高度",
+      Math.abs(last.y - 71.62) < 0.01,
+      JSON.stringify(last),
+    );
   }
 
   console.log("\n[2] 中途句柄失效:必须仍然清理");
@@ -191,7 +243,10 @@ async function main() {
     d.advance(1);
     const v = await r;
     check("camera.clear", d.calls.clear.length, 2);
-    checkTrue("输入已恢复(玩家不会卡死)", d.calls.perm.filter((x) => x.v === true).length === 2);
+    checkTrue(
+      "输入已恢复(玩家不会卡死)",
+      d.calls.perm.filter((x) => x.v === true).length === 2,
+    );
     check("resolve", v, false);
   }
 
@@ -222,16 +277,30 @@ async function main() {
     const v2 = await r2;
     check("第一次 resolve", v1, false);
     check("第二次 resolve", v2, true);
-    checkTrue("两次都清理了相机", d.calls.clear.length >= 2, String(d.calls.clear.length));
+    checkTrue(
+      "两次都清理了相机",
+      d.calls.clear.length >= 2,
+      String(d.calls.clear.length),
+    );
   }
 
   console.log("\n[5] 执行方式分派");
   {
     const cases = [
-      ["同维度 cinematic", "cinematic", "minecraft:overworld", { cam: true, fade: false }],
+      [
+        "同维度 cinematic",
+        "cinematic",
+        "minecraft:overworld",
+        { cam: true, fade: false },
+      ],
       ["转场关闭", "off", "minecraft:overworld", { cam: false, fade: false }],
       ["风格 fade", "fade", "minecraft:overworld", { cam: false, fade: true }],
-      ["跨维度降档", "cinematic", "minecraft:the_nether", { cam: false, fade: true }],
+      [
+        "跨维度降档",
+        "cinematic",
+        "minecraft:the_nether",
+        { cam: false, fade: true },
+      ],
     ];
     for (const [name, style, dim, expect] of cases) {
       d.reset();
@@ -243,19 +312,91 @@ async function main() {
       const v = await r;
       checkTrue(
         name,
-        (d.calls.setCamera.length > 0) === expect.cam &&
-          (d.calls.fade.length > 0) === expect.fade &&
+        d.calls.setCamera.length > 0 === expect.cam &&
+          d.calls.fade.length > 0 === expect.fade &&
           v === true,
         `cam=${d.calls.setCamera.length} fade=${d.calls.fade.length} ok=${v}`,
       );
     }
   }
 
-  console.log(
-    failures === 0
-      ? "\n全部通过 ✓"
-      : `\n${failures} 项失败 ✗`,
-  );
+  console.log("\n[6] 死亡点回传:快速淡入");
+  {
+    d.reset();
+    mock.world.getDynamicProperty = () =>
+      JSON.stringify({ ...CONFIG, transitionStyle: "cinematic" });
+    const p = d.mkPlayer("dp-quick");
+    // 同维度 + deathPoint 意图:必须走 fade,不写相机
+    const r = api.teleportToSavedPoint(
+      p,
+      "死亡点",
+      { x: 0, y: 70, z: 500 },
+      "minecraft:overworld",
+      "deathPoint",
+    );
+    d.advance(250);
+    const v = await r;
+    check("死亡点不写相机", d.calls.setCamera.length, 0);
+    check("死亡点走 fade", d.calls.fade.length, 1);
+    check("死亡点位移成功", v, true);
+    if (d.calls.fade.length > 0) {
+      const t = d.calls.fade[0].fadeTime;
+      check("fadeIn 为快速时长", t.fadeInTime, 0.15);
+      check("hold 为快速时长", t.holdTime, 0.05);
+      check("fadeOut 为快速时长", t.fadeOutTime, 0.15);
+    }
+  }
+
+  console.log("\n[7] 死亡点回传:总开关关闭时无动画");
+  {
+    d.reset();
+    mock.world.getDynamicProperty = () =>
+      JSON.stringify({
+        ...CONFIG,
+        transitionEnabled: false,
+        transitionStyle: "off",
+      });
+    const p = d.mkPlayer("dp-off");
+    const r = api.teleportToSavedPoint(
+      p,
+      "死亡点",
+      { x: 0, y: 70, z: 500 },
+      "minecraft:overworld",
+      "deathPoint",
+    );
+    d.advance(250);
+    const v = await r;
+    check("关闭时不写相机", d.calls.setCamera.length, 0);
+    check("关闭时无 fade", d.calls.fade.length, 0);
+    check("仍然位移成功", d.calls.teleport.length >= 1, true);
+    check("返回成功", v, true);
+  }
+
+  console.log("\n[8] 普通传送对照:仍走运镜");
+  {
+    d.reset();
+    mock.world.getDynamicProperty = () =>
+      JSON.stringify({ ...CONFIG, transitionStyle: "cinematic" });
+    const p = d.mkPlayer("normal-cam");
+    const r = api.teleportToSavedPoint(
+      p,
+      "传送点",
+      { x: 0, y: 70, z: 500 },
+      "minecraft:overworld",
+      "normal",
+    );
+    d.advance(250);
+    const v = await r;
+    checkTrue(
+      "普通传送写相机",
+      d.calls.setCamera.length > 0,
+      `cam=${d.calls.setCamera.length}`,
+    );
+    check("普通传送无 fade", d.calls.fade.length, 0);
+    check("普通传送成功", v, true);
+  }
+
+  console.log(failures === 0 ? "\n全部通过 ✓" : `\n${failures} 项失败 ✗`);
   process.exit(failures === 0 ? 0 : 1);
 }
 

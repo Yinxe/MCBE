@@ -239,6 +239,7 @@ function registerDeathAndBackCommands(registry: CustomCommandRegistry): void {
         "最近的死亡点",
         latest.location,
         latest.dimensionId,
+        "deathPoint",
       );
     },
   );

@@ -751,29 +751,50 @@ export function transitionStyleToIndex(style: TransitionStyle): number {
 /** 一次传送的执行方式。 */
 export type TransitionMode = "immediate" | "fade" | "cinematic";
 
+/**
+ * 本次传送的意图。
+ *
+ * - `normal`:普通传送(传送点、公共传送点、玩家间传送、玩家传送界面)
+ * - `deathPoint`:死亡点回传。目标位置往往危险,必须尽快拿回操作权,
+ *   因此降档为快速淡入而不是完整运镜
+ *
+ * 由调用方**显式声明**,不根据坐标、维度或目标名称推断。
+ */
+export type TeleportIntent = "normal" | "deathPoint";
+
 /** 分派所需的全部输入。 */
 export interface TransitionModeInput {
   /** 配置里的风格。`off` / `fade` / `cinematic` */
   style: TransitionStyle;
   /** 起点与落点是否不同维度 */
   crossDimension: boolean;
+  /** 本次传送的意图 */
+  intent: TeleportIntent;
 }
 
 /**
  * 决定这次传送用哪种执行方式。
  *
- * 三条规则,按优先级:
- *   1. 风格为 `off` → 即时位移,不播任何动画
- *   2. 风格为 `fade`,或起点与落点跨维度 → 黑屏淡入淡出
- *   3. 其余 → 电影感运镜
+ * 判定顺序即语义,不可调换:
+ *   1. 风格为 `off` → 即时位移。关闭语义是「不要任何动画」,
+ *      优先级高于一切入口特例(含死亡点回传)
+ *   2. 意图为 `deathPoint` → 淡入淡出。放在风格与跨维度判断之前,
+ *      因为死亡点回传无论同维度、跨维度、还是全局为淡入淡出,
+ *      都该用**快速**淡入
+ *   3. 全局风格为 `fade` → 淡入淡出(常规时长)
+ *   4. 跨维度 → 淡入淡出(常规时长;相机无法随玩家跨维度存续)
+ *   5. 其余 → 电影感运镜
  *
- * 跨维度之所以降档,是因为相机绑定在玩家连接上,玩家换维度时
- * 会被引擎重置,无法做「相机横越维度」。
+ * ⚠ 返回值刻意**不区分淡入淡出的快慢**:第 2、3、4 条都返回 `"fade"`,
+ * 具体用哪组时长由适配层根据 `intent` 决定。时长是执行细节,不是行为契约;
+ * 若让本函数返回 `"quickFade"` 之类,`TransitionMode` 就会混进「多快」这个
+ * 维度,将来加第三种时长会继续膨胀。
  */
 export function resolveTransitionMode(
   input: TransitionModeInput,
 ): TransitionMode {
   if (input.style === "off") return "immediate";
+  if (input.intent === "deathPoint") return "fade";
   if (input.style === "fade") return "fade";
   if (input.crossDimension) return "fade";
   return "cinematic";

@@ -431,6 +431,7 @@ test("场景:同维度近距离(<600 格)走运镜", () => {
   const mode = resolveTransitionMode({
     style: "cinematic",
     crossDimension: false,
+    intent: "normal",
   });
   assert.equal(mode, "cinematic");
 });
@@ -445,13 +446,18 @@ test("场景:同维度远距离(>1800 格)走运镜且横越取最长", () => {
   const mode = resolveTransitionMode({
     style: "cinematic",
     crossDimension: false,
+    intent: "normal",
   });
   assert.equal(mode, "cinematic");
 });
 
 test("场景:跨维度(主世界 ↔ 下界/末地)降档为淡入淡出", () => {
   assert.equal(
-    resolveTransitionMode({ style: "cinematic", crossDimension: true }),
+    resolveTransitionMode({
+      style: "cinematic",
+      crossDimension: true,
+      intent: "normal",
+    }),
     "fade",
     "跨维度即使风格是电影感也必须降档",
   );
@@ -459,11 +465,19 @@ test("场景:跨维度(主世界 ↔ 下界/末地)降档为淡入淡出", () =>
 
 test("场景:转场关闭时即时位移", () => {
   assert.equal(
-    resolveTransitionMode({ style: "off", crossDimension: false }),
+    resolveTransitionMode({
+      style: "off",
+      crossDimension: false,
+      intent: "normal",
+    }),
     "immediate",
   );
   assert.equal(
-    resolveTransitionMode({ style: "off", crossDimension: true }),
+    resolveTransitionMode({
+      style: "off",
+      crossDimension: true,
+      intent: "normal",
+    }),
     "immediate",
     "关闭优先于跨维度降档",
   );
@@ -471,7 +485,11 @@ test("场景:转场关闭时即时位移", () => {
 
 test("场景:风格为淡入淡出时同维度也走淡入淡出", () => {
   assert.equal(
-    resolveTransitionMode({ style: "fade", crossDimension: false }),
+    resolveTransitionMode({
+      style: "fade",
+      crossDimension: false,
+      intent: "normal",
+    }),
     "fade",
   );
 });
@@ -564,4 +582,86 @@ test("场景:ticking area 名额耗尽时传送仍完成(时间轴与位移点�
   });
   assert.equal(teleportTick(timeline), timeline.travelStart);
   assert.ok(timeline.totalTicks > 0, "即使没有预加载,转场仍有完整时长");
+});
+
+// ─── 传送意图与分派顺序 ─────────────────────────────────────────
+
+test("死亡点回传同维度走淡入淡出,不走运镜", () => {
+  assert.equal(
+    resolveTransitionMode({
+      style: "cinematic",
+      crossDimension: false,
+      intent: "deathPoint",
+    }),
+    "fade",
+  );
+});
+
+test("死亡点回传跨维度也走淡入淡出", () => {
+  assert.equal(
+    resolveTransitionMode({
+      style: "cinematic",
+      crossDimension: true,
+      intent: "deathPoint",
+    }),
+    "fade",
+  );
+});
+
+test("死亡点回传在全局淡入淡出风格下仍是淡入淡出", () => {
+  assert.equal(
+    resolveTransitionMode({
+      style: "fade",
+      crossDimension: false,
+      intent: "deathPoint",
+    }),
+    "fade",
+  );
+});
+
+test("总开关关闭优先于死亡点意图:一律即时位移", () => {
+  assert.equal(
+    resolveTransitionMode({
+      style: "off",
+      crossDimension: false,
+      intent: "deathPoint",
+    }),
+    "immediate",
+    "关闭语义是「不要任何动画」,不能被死亡点特例覆盖",
+  );
+  assert.equal(
+    resolveTransitionMode({
+      style: "off",
+      crossDimension: true,
+      intent: "deathPoint",
+    }),
+    "immediate",
+  );
+});
+
+test("普通传送同维度仍走运镜,与死亡点意图区分开", () => {
+  const normal = resolveTransitionMode({
+    style: "cinematic",
+    crossDimension: false,
+    intent: "normal",
+  });
+  const deathPoint = resolveTransitionMode({
+    style: "cinematic",
+    crossDimension: false,
+    intent: "deathPoint",
+  });
+  assert.equal(normal, "cinematic");
+  assert.equal(deathPoint, "fade");
+  assert.notEqual(normal, deathPoint, "同一目标两种意图应得到不同执行方式");
+});
+
+test("全局淡入淡出风格下普通传送仍是淡入淡出", () => {
+  assert.equal(
+    resolveTransitionMode({
+      style: "fade",
+      crossDimension: false,
+      intent: "normal",
+    }),
+    "fade",
+  );
 });

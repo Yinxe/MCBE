@@ -440,20 +440,53 @@ function pickStageHeights(
 
 // ─── 淡入淡出降档 ────────────────────────────────────────────────
 
-/** 淡入淡出时长(秒):淡入 0.2、保持 0.15、淡出 0.3。 */
-const FADE_IN_SECONDS = 0.2;
-const FADE_HOLD_SECONDS = 0.15;
-const FADE_OUT_SECONDS = 0.3;
+/** 淡入淡出的三段时长(秒)。 */
+export interface FadeTiming {
+  fadeInTime: number;
+  holdTime: number;
+  fadeOutTime: number;
+}
+
+/**
+ * 常规淡入淡出:淡入 0.2、保持 0.15、淡出 0.3,合计 0.65 秒。
+ *
+ * 用于风格为 `fade` 的传送与跨维度传送。
+ */
+export const NORMAL_FADE_TIMING: FadeTiming = {
+  fadeInTime: 0.2,
+  holdTime: 0.15,
+  fadeOutTime: 0.3,
+};
+
+/**
+ * 快速淡入:淡入 0.15、保持 0.05、淡出 0.15,合计 0.35 秒。
+ *
+ * 用于死亡点回传——目标位置往往危险,必须尽快拿回操作权。
+ *
+ * ⚠ 引擎在三段之和不足 0.5 秒时会把保持段自动补足到 0.5 秒(见
+ * `docs/research/bedrock-camera-api.md` §7),所以实际总时长约为 0.5 秒。
+ * 这里的设定值只是让三段尽可能短,最终由引擎夹取;这仍然比常规的 0.65 秒
+ * 与运镜的 3–5 秒短得多,达到了「尽快恢复操作」的目的。
+ */
+export const QUICK_FADE_TIMING: FadeTiming = {
+  fadeInTime: 0.15,
+  holdTime: 0.05,
+  fadeOutTime: 0.15,
+};
 
 /**
  * 用黑屏淡入淡出完成一次传送。
  *
- * 用于两种场合:风格为 `fade`,以及**跨维度传送**——相机无法随玩家
- * 跨维度存续,所以即使风格是电影感也只能降档到这里。
+ * 用于三种场合:风格为 `fade`、**跨维度传送**(相机无法随玩家跨维度存续),
+ * 以及**死亡点回传**(目标危险,要尽快拿回操作权)。
+ *
+ * @param timing 三段时长。缺省为常规时长;死亡点回传由调用方传
+ *               `QUICK_FADE_TIMING`
  */
 export function playFadeTransition(
   player: Player,
   target: TransitionTarget,
+  timing: FadeTiming = NORMAL_FADE_TIMING,
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     system.run(() => {
@@ -466,9 +499,9 @@ export function playFadeTransition(
         player.camera.fade({
           fadeColor: { red: 0, green: 0, blue: 0 },
           fadeTime: {
-            fadeInTime: FADE_IN_SECONDS,
-            holdTime: FADE_HOLD_SECONDS,
-            fadeOutTime: FADE_OUT_SECONDS,
+            fadeInTime: timing.fadeInTime,
+            holdTime: timing.holdTime,
+            fadeOutTime: timing.fadeOutTime,
           },
         });
       } catch {
@@ -477,9 +510,10 @@ export function playFadeTransition(
         return;
       }
 
-      // 在 hold 段内完成位移:淡入结束(0.2s ≈ 4 tick)之后、淡出开始之前
+      // 在 hold 段内完成位移:淡入结束之后、淡出开始之前。
+      // hold 段中点能同时避开两端,是最稳的提交点。
       const holdTick = Math.round(
-        (FADE_IN_SECONDS + FADE_HOLD_SECONDS / 2) * 20,
+        (timing.fadeInTime + timing.holdTime / 2) * 20,
       );
       system.runTimeout(() => {
         const ok = isUsable(player)
@@ -487,7 +521,7 @@ export function playFadeTransition(
           : false;
 
         // 淡出结束后交还相机
-        const clearTick = Math.round(FADE_OUT_SECONDS * 20);
+        const clearTick = Math.round(timing.fadeOutTime * 20);
         system.runTimeout(() => {
           if (isUsable(player)) {
             try {
