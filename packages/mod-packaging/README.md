@@ -1,6 +1,6 @@
 # @mc-toolchain/mod-packaging
 
-Minecraft Bedrock 行为包 / 资源包的共享打包逻辑：同步清单版本、推导最低游戏版本、探测包目录，并按 `packing.mode` 产出 `.mcpack` / `.mcaddon`。
+Minecraft Bedrock 行为包 / 资源包的共享打包逻辑：同步清单版本、校正包间依赖方向、推导最低游戏版本、探测包目录，并按 `packing.mode` 产出 `.mcpack` / `.mcaddon`。
 
 模组不再各自维护一份打包脚本，只在 `just.config.ts` 里导入本包编排任务。
 
@@ -14,6 +14,7 @@ packages/mod-packaging/
 │   ├── metadata.ts       # 清单显示名与描述的拼接（纯逻辑）
 │   ├── configuration.ts  # package.json#packing 读取与校验（纯逻辑 + 读文件）
 │   ├── discovery.ts      # 包目录探测与包类型判定（文件系统）
+│   ├── dependencies.ts   # 包间依赖方向校正（纯逻辑）
 │   ├── packs.ts          # 清单元信息/版本同步 + 产物生成（依赖 zipTask）
 │   └── index.ts          # 对外入口
 ├── tests/                # node --test 单测
@@ -71,6 +72,15 @@ task("pack", series("build", "sync-versions", createPackagesByMode(__dirname)));
 - 顶层使用缩写 `BP` / `RP` 会报错并提示改名。
 - 包类型以各包 `manifest.json` 的 `modules[].type` 为准：含 `data` / `script` 为行为包，含 `resources` 为资源包。
 - 同一类型下探测到多个包目录时报歧义错误，不猜测。
+
+### 包间依赖方向
+
+同时探测到行为包与资源包时，`synchronizePackVersions` 把依赖方向校正为**行为包 → 资源包**：
+
+- 行为包缺对资源包的依赖 → 按资源包 `header.uuid` 补上，`version` 与资源包 `header.version` 一致。
+- 资源包声明了对行为包的依赖 → 删除；删完为空时整个 `dependencies` 字段去掉，不留下 `[]`。
+
+匹配按 `uuid` 进行（不区分大小写），`module_name` 形式的脚本模块依赖不受影响。依赖方向不开放配置：反向依赖在游戏里没有加载效果，只会在行为包缺失时让资源包报「缺少依赖」。
 
 ### 最低游戏版本
 

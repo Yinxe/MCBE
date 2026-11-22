@@ -137,7 +137,7 @@ npm run pack -w @mc-toolchain/keepinventory
 
 ### 版本同步
 
-`pack` 在压缩前把 `package.json#version` 写成 `[major, minor, patch]` 写入包内所有 `manifest.json`(`header.version`、`modules[].version` 与资源包对行为包的依赖 `version`),因此 `package.json` 是版本的唯一来源。版本号无法解析为三段数字时打包中止。
+`pack` 在压缩前把 `package.json#version` 写成 `[major, minor, patch]` 写入包内所有 `manifest.json`(`header.version`、`modules[].version` 与包间依赖 `version`),因此 `package.json` 是版本的唯一来源。版本号无法解析为三段数字时打包中止。
 
 ### 最低游戏版本
 

@@ -11,6 +11,13 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["src/versions.ts", "src/types.ts", "src/configuration.ts", "src/discovery.ts", "tests/**/*.ts"],
+  "include": [
+    "src/versions.ts",
+    "src/types.ts",
+    "src/configuration.ts",
+    "src/discovery.ts",
+    "src/dependencies.ts",
+    "tests/**/*.ts"
+  ],
   "exclude": ["node_modules", ".test-build"]
 }

@@ -210,7 +210,7 @@ npx mct validate -i . 2>&1 | grep UNKJSON     # 期望:UNKJSON001 ... completed 
 
 ### 6.4 `mct add` 不修改清单标识字段
 
-对已有包执行 `mct add -i . -o .` 前后对比 `manifest.json`:`header.uuid`、`modules[].uuid`、资源包依赖的 `uuid` 均未改变。新增内容为 `blocks/*.json`、`blocks.json`、`terrain_texture.json`、`textures/**`、`texts/**`;连续两次 `add` 后 `blocks.json` 中两个条目并存。
+对已有包执行 `mct add -i . -o .` 前后对比 `manifest.json`:`header.uuid`、`modules[].uuid`、包间依赖的 `uuid` 均未改变。新增内容为 `blocks/*.json`、`blocks.json`、`terrain_texture.json`、`textures/**`、`texts/**`;连续两次 `add` 后 `blocks.json` 中两个条目并存。
 
 因此从临时脚手架项目移入内容时,**不得拷贝临时项目的 `manifest.json` 与 `pack_icon.png`**,否则会覆盖目标模组的 UUID 与已设计的图标。
 

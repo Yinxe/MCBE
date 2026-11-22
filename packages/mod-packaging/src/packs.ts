@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { zipTask } from "@minecraft/core-build-tasks";
 import { getModuleName, readPackageJson, resolvePackingConfiguration } from "./configuration";
+import { reconcilePackDependencyDirection } from "./dependencies";
 import { readPackManifestFile, resolvePackDirectories } from "./discovery";
 import { resolvePackDescription, resolvePackDisplayName } from "./metadata";
 import {
@@ -25,11 +26,13 @@ function writePackManifest(packDirectory: string, manifest: PackManifest): void 
  * 把 `package.json` 派生的声明同步进所有包清单。
  *
  * 写入 `header.name`、`header.description`、`header.version`、各 `modules[].version`、
- * `header.min_engine_version`,并把资源包对行为包的依赖版本同步为行为包版本。
+ * `header.min_engine_version`,并校正两包之间的依赖方向。
  *
  * 这些字段同属「从 package.json 派生到清单」的声明字段,因此合并在同一处一次读写,
  * 避免多个任务分别对同一批清单读改写而产生中间态(任一任务失败会留下部分字段已改、
  * 部分未改的清单)。任一解析失败均报错中止。
+ *
+ * 依赖方向由本函数统一保证,见下方 `syncPackDependencyDirection`。
  */
 export function synchronizePackVersions(projectRoot: string): void {
   const packageJson = readPackageJson(projectRoot);
@@ -51,48 +54,96 @@ export function synchronizePackVersions(projectRoot: string): void {
     throw new Error("模组目录下没有探测到任何行为包或资源包(需要含 manifest.json 的包目录),打包中止。");
   }
 
-  let behaviorPackUuid: string | undefined;
-  if (behaviorPackDirectory) {
-    const manifest = readPackManifestFile(path.join(behaviorPackDirectory, "manifest.json"));
-    behaviorPackUuid = manifest.header.uuid;
-    manifest.header.name = displayName;
-    manifest.header.description = description;
-    manifest.header.version = version;
-    manifest.header.min_engine_version = minimumEngineVersion;
-    for (const module of manifest.modules) {
-      module.version = version;
-    }
-    for (const dependency of manifest.dependencies ?? []) {
-      if (behaviorPackUuid && dependency.uuid === behaviorPackUuid) {
-        dependency.version = version;
-      }
-    }
-    writePackManifest(behaviorPackDirectory, manifest);
+  const behaviorManifest = behaviorPackDirectory
+    ? readPackManifestFile(path.join(behaviorPackDirectory, "manifest.json"))
+    : undefined;
+  const resourceManifest = resourcePackDirectory
+    ? readPackManifestFile(path.join(resourcePackDirectory, "manifest.json"))
+    : undefined;
+
+  if (behaviorManifest && behaviorPackDirectory) {
+    applyDerivedHeader(behaviorManifest, displayName, description, version, minimumEngineVersion);
+  }
+  if (resourceManifest && resourcePackDirectory) {
+    applyDerivedHeader(resourceManifest, displayName, description, version, minimumEngineVersion);
+  }
+
+  // 依赖方向:行为包 → 资源包(单向)。两包都在时由这里统一保证,
+  // 无论清单里原先写的是哪个方向、还是根本没写。
+  if (behaviorManifest && resourceManifest) {
+    syncPackDependencyDirection(behaviorManifest, resourceManifest, version);
+  }
+
+  if (behaviorManifest && behaviorPackDirectory) {
+    writePackManifest(behaviorPackDirectory, behaviorManifest);
     console.log(
       `[packaging] 已同步行为包显示名、描述、版本与最低游戏版本 ${minimumEngineVersion.join(".")}:` +
         `${path.relative(projectRoot, behaviorPackDirectory)}`
     );
   }
 
-  if (resourcePackDirectory) {
-    const manifest = readPackManifestFile(path.join(resourcePackDirectory, "manifest.json"));
-    manifest.header.name = displayName;
-    manifest.header.description = description;
-    manifest.header.version = version;
-    manifest.header.min_engine_version = minimumEngineVersion;
-    for (const module of manifest.modules) {
-      module.version = version;
-    }
-    for (const dependency of manifest.dependencies ?? []) {
-      if (behaviorPackUuid && dependency.uuid === behaviorPackUuid) {
-        dependency.version = version;
-      }
-    }
-    writePackManifest(resourcePackDirectory, manifest);
+  if (resourceManifest && resourcePackDirectory) {
+    writePackManifest(resourcePackDirectory, resourceManifest);
     console.log(
       `[packaging] 已同步资源包显示名、描述、版本与最低游戏版本 ${minimumEngineVersion.join(".")}:` +
         `${path.relative(projectRoot, resourcePackDirectory)}`
     );
+  }
+}
+
+/** 把 `package.json` 派生的显示名、描述、版本与最低游戏版本写入清单 */
+function applyDerivedHeader(
+  manifest: PackManifest,
+  displayName: string,
+  description: string,
+  version: number[],
+  minimumEngineVersion: [number, number, number]
+): void {
+  manifest.header.name = displayName;
+  manifest.header.description = description;
+  manifest.header.version = version;
+  manifest.header.min_engine_version = minimumEngineVersion;
+  for (const module of manifest.modules) {
+    module.version = version;
+  }
+}
+
+/**
+ * 校正行为包与资源包之间的依赖方向:行为包依赖资源包,资源包不依赖行为包。
+ *
+ * 依赖的 `version` 与目标包的 `header.version` 保持一致(两者都已同步为
+ * `package.json#version`),避免版本不匹配导致依赖被判为未满足。
+ * 方向规则与纯逻辑见 `dependencies.ts`。
+ */
+function syncPackDependencyDirection(
+  behaviorManifest: PackManifest,
+  resourceManifest: PackManifest,
+  version: number[]
+): void {
+  const behaviorPackUuid = behaviorManifest.header.uuid;
+  const resourcePackUuid = resourceManifest.header.uuid;
+
+  const result = reconcilePackDependencyDirection(
+    behaviorPackUuid,
+    resourcePackUuid,
+    behaviorManifest.dependencies ?? [],
+    resourceManifest.dependencies ?? [],
+    version
+  );
+
+  behaviorManifest.dependencies = result.behaviorDependencies;
+  if (result.resourceDependencies) {
+    resourceManifest.dependencies = result.resourceDependencies;
+  } else {
+    // 删空就整个去掉这个字段:空数组在清单里是无意义的噪声
+    delete resourceManifest.dependencies;
+  }
+
+  if (result.appended) {
+    console.log(`[packaging] 行为包补上对资源包的依赖:${resourcePackUuid}`);
+  }
+  if (result.removed) {
+    console.log(`[packaging] 已移除资源包对行为包的反向依赖:${behaviorPackUuid}`);
   }
 }
 

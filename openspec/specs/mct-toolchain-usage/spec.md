@@ -32,12 +32,12 @@
 
 ### Requirement: `mct add` 不修改包清单的标识字段
 
-`mct add` 直接写入既有包目录时,MUST 保持该包 `manifest.json` 的 `header.uuid`、`modules[].uuid` 与资源包对行为包的依赖 `uuid` 不变;内容生成 MUST 只新增或按条目合并内容与清单类文件。因此 MUST NOT 用其它项目(含临时脚手架项目)的 `manifest.json` 或 `pack_icon.png` 覆盖目标模组的同名文件。
+`mct add` 直接写入既有包目录时,MUST 保持该包 `manifest.json` 的 `header.uuid`、`modules[].uuid` 与包间依赖的 `uuid` 不变;内容生成 MUST 只新增或按条目合并内容与清单类文件。因此 MUST NOT 用其它项目(含临时脚手架项目)的 `manifest.json` 或 `pack_icon.png` 覆盖目标模组的同名文件。
 
 #### Scenario: UUID 在 add 后保持不变
 
 - **WHEN** 对已有包执行 `mct add -i . -o .` 前后对比 `manifest.json`
-- **THEN** `header.uuid` 与资源包依赖的 `uuid` 均未改变,仅内容文件与清单条目增加
+- **THEN** `header.uuid` 与包间依赖的 `uuid` 均未改变,仅内容文件与清单条目增加
 
 #### Scenario: 清单文件按条目合并
 

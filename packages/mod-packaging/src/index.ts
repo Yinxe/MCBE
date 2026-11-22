@@ -25,6 +25,8 @@ export {
 } from "./types";
 
 export { getModuleName, readPackageJson, resolvePackingConfiguration, resolvePackingConfigurationFrom, validatePackingKeys } from "./configuration";
+export { ensurePackDependency, reconcilePackDependencyDirection, removePackDependency } from "./dependencies";
+export type { PackDependency, PackDependencyDirectionResult } from "./dependencies";
 export {
   assertNoLegacyPackDirectories,
   collectCandidatePackDirectories,

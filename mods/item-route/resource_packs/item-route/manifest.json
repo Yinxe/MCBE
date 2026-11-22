@@ -27,16 +27,6 @@
       ]
     }
   ],
-  "dependencies": [
-    {
-      "uuid": "746aab1e-dd00-4f24-bdbb-42bc411a3003",
-      "version": [
-        0,
-        1,
-        21
-      ]
-    }
-  ],
   "metadata": {
     "product_type": "addon"
   }

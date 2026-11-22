@@ -89,22 +89,48 @@
 - **THEN** 产物文件名、包内文件清单与清单中的版本字段与替换前一致
 ### Requirement: 打包前同步 npm 版本号
 
-`pack` MUST 在压缩之前把 `package.json#version` 解析为 `[major, minor, patch]`,写入包内所有 `manifest.json` 的 `header.version` 与 `modules[].version`,并同步资源包对行为包的依赖 `version`。当版本号无法解析为三段数字时,MUST 报错中止且不产生产物。
+`pack` MUST 在压缩之前把 `package.json#version` 解析为 `[major, minor, patch]`,写入包内所有 `manifest.json` 的 `header.version` 与 `modules[].version`,并同步包间依赖的 `version`(见「包间依赖方向」要求)。当版本号无法解析为三段数字时,MUST 报错中止且不产生产物。
 
 #### Scenario: 版本号被写入 manifest
 
 - **WHEN** `package.json#version` 为 `0.0.1` 并执行 `pack`
 - **THEN** 行为包与资源包 `manifest.json` 的 `header.version` 与 `modules[].version` 均为 `[0, 0, 1]`
 
-#### Scenario: 资源包依赖版本同步
+#### Scenario: 包间依赖版本同步
 
-- **WHEN** 资源包声明了对行为包 UUID 的依赖并执行 `pack`
-- **THEN** 该依赖的 `version` 与行为包 `header.version` 一致
+- **WHEN** 行为包声明了对资源包 UUID 的依赖并执行 `pack`
+- **THEN** 该依赖的 `version` 与资源包 `header.version` 一致
 
 #### Scenario: 非法版本号被拒绝
 
 - **WHEN** `package.json#version` 不能被解析为三段数字
 - **THEN** 打包中止并输出可定位的错误信息,不产生产物
+
+### Requirement: 包间依赖方向
+
+同时含行为包与资源包的模组,`pack` MUST 保证依赖方向为**行为包 → 资源包**,MUST NOT 让资源包依赖行为包。行为包缺少对资源包的依赖时 MUST 补上;资源包若声明了对行为包的依赖 MUST 删除(删除后 `dependencies` 为空时 MUST 整个去掉该字段)。依赖的 `version` MUST 与目标包的 `header.version` 一致。依赖项 MUST 按 `uuid` 匹配(不区分大小写),MUST NOT 误改 `module_name` 形式的脚本模块依赖。
+
+方向由依赖语义决定:行为包声明对资源包的依赖后,启用行为包时游戏会自动挂上资源包并在缺失时提示玩家;反方向的依赖没有任何加载效果,只会在行为包缺失时让资源包报「缺少依赖」。
+
+#### Scenario: 行为包缺依赖时补上
+
+- **WHEN** 一个双包模组的行为包清单没有对资源包的依赖,执行 `pack`
+- **THEN** 行为包的 `dependencies` 增加一项 `uuid` 等于资源包 `header.uuid` 的依赖,`version` 与资源包版本一致
+
+#### Scenario: 资源包的反向依赖被删除
+
+- **WHEN** 资源包清单声明了对行为包 UUID 的依赖,执行 `pack`
+- **THEN** 该依赖被删除,资源包清单不再依赖行为包
+
+#### Scenario: 资源包删空后不保留空数组
+
+- **WHEN** 资源包清单只有一项指向行为包的依赖,执行 `pack`
+- **THEN** 资源包清单不再含 `dependencies` 字段,而不是留下 `"dependencies": []`
+
+#### Scenario: 脚本模块依赖不受影响
+
+- **WHEN** 行为包清单同时含 `@minecraft/server` 模块依赖与包依赖,执行 `pack`
+- **THEN** 模块依赖的 `module_name` 与 `version` 保持原值,只有包依赖被增删或改版本
 
 ### Requirement: 产物命名与位置
 
