@@ -1,8 +1,8 @@
 {
   "name": "@mc-toolchain/api-probe",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "productName": "API 探针",
-  "description": "开发期 API 探针：按坐标读取容器真实 Script API 数据并以表单呈现",
+  "description": "开发期 API 探针：按坐标读取容器真实 Script API 数据并以表单呈现，并用粒子绘制 3D 框选线框",
   "private": true,
   "dependencies": {
     "@minecraft/server": "2.1.0",
@@ -29,6 +29,16 @@
   },
   "packing": {
     "mode": "auto",
-    "output": "../../release/"
+    "output": "../../release/",
+    "qq_group": "632178498"
+  },
+  "author": {
+    "name": "Yinx",
+    "email": "1423716216@qq.com",
+    "url": "https://github.com/Yinxe/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yinxe/MCBE.git"
   }
 }

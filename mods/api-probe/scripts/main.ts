@@ -4,7 +4,9 @@
 // 这里的启动日志用于确认行为包确实被游戏加载。
 
 import { registerProbeCommand } from "./ProbeCommand";
+import { registerBoxCommand } from "./BoxCommand";
 
 console.log("[api-probe] 启动");
 
 registerProbeCommand();
+registerBoxCommand();

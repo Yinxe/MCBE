@@ -1,0 +1,8 @@
+{
+  "materials": {
+    "version": "1.0.0",
+    "apitest_blend_cull:particles_blend": {
+      "-states": ["DisableCulling"]
+    }
+  }
+}
