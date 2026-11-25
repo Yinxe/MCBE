@@ -1,18 +1,18 @@
 {
   "format_version": 2,
   "header": {
-    "name": "API 探针 v0.3.1",
+    "name": "API 探针 v0.3.2",
     "description": "开发期 API 探针：按坐标读取容器真实 Script API 数据并以表单呈现，并用粒子绘制 3D 框选线框\n作者：Yinx\n邮箱：1423716216@qq.com\n主页：https://github.com/Yinxe/\nQQ群：632178498\n仓库：https://github.com/Yinxe/MCBE",
     "uuid": "3f6b1c58-9d24-4b7e-8a51-6c2d9e04f7b3",
     "version": [
       0,
       3,
-      1
+      2
     ],
     "min_engine_version": [
       1,
       21,
-      100
+      130
     ]
   },
   "modules": [
@@ -24,7 +24,7 @@
       "version": [
         0,
         3,
-        1
+        2
       ],
       "entry": "scripts/main.js"
     }
@@ -34,7 +34,7 @@
       "module_name": "@minecraft/server",
       "version": [
         2,
-        1,
+        4,
         0
       ]
     },
@@ -42,7 +42,7 @@
       "module_name": "@minecraft/server-ui",
       "version": [
         2,
-        0,
+        1,
         0
       ]
     },
@@ -55,8 +55,12 @@
       "version": [
         0,
         3,
-        1
+        2
       ]
+    },
+    {
+      "module_name": "@minecraft/server-graphics",
+      "version": "1.0.0"
     }
   ],
   "metadata": {

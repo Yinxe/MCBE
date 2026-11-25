@@ -84,15 +84,19 @@ export function runMotionProbeCommand(player: Player): void {
     }
 
     // ── 第 2 步:改 location 会不会移动 ──
+    //
+    // 注意:`DebugShape.location` 在 1.21.130 起变成 **readonly**,
+    // 1.21.100 时它还是可写属性。所以这里必须走 `setLocation()`,
+    // 直接赋值会编译失败。这也是本次升级带来的第一个破坏性变更。
     if (step === 2) {
       const moved = { x: origin.x + 2, y: origin.y, z: origin.z };
       const write = attempt(() => {
-        box.location = moved;
+        box.setLocation(moved);
         return box.location;
       });
       report(player, [
         heading(`采样 ${step}:改 location`),
-        `  ${kv("写入并读回", write)}`,
+        `  ${kv("setLocation 并读回", write)}`,
         "  §7预期:盒子向右平移 2 格。",
         "  §c若画面里纹丝不动,说明 location 只在 addShape 时读一次,改它无效。",
       ]);

@@ -11,6 +11,8 @@
 //   /apitest:debugstats             运行时与插件统计(内存、句柄)
 //   /apitest:debugwatchdog <0|1>    开关看门狗卡顿告警
 //   /apitest:debugall               能力总览(只跑统计类,不画形状)
+//   /apitest:graphics [reset]       server-graphics 探针(逐生物群系改天空/调色/光照/水)
+//   /apitest:panel                  DDUI 面板:把上面所有探针做成按钮
 //
 // 全部沿用既有约定:GameDirectors、cheatsRequired: false、只用整数/浮点参数、
 // 经 runSafeDetached 推迟到安全 tick、错误走 §c[API 探针] 提示。
@@ -37,6 +39,8 @@ import {
 } from "./DebugMotionProbe";
 import { runShapeProbeCommand } from "./DebugShapeProbe";
 import { runStatsProbeCommand, runWatchdogProbeCommand, runAllProbesCommand } from "./DebugStatsProbe";
+import { runGraphicsProbeCommand, runGraphicsResetCommand } from "./GraphicsProbe";
+import { showProbePanel, reportPanel, type ProbeAction } from "./ProbePanel";
 
 /** 命令名(必须带命名空间) */
 export const DEBUG_SHAPE_COMMAND = "apitest:debugshape";
@@ -46,6 +50,8 @@ export const DEBUG_CONTEXT_COMMAND = "apitest:debugcontext";
 export const DEBUG_STATS_COMMAND = "apitest:debugstats";
 export const DEBUG_WATCHDOG_COMMAND = "apitest:debugwatchdog";
 export const DEBUG_ALL_COMMAND = "apitest:debugall";
+export const GRAPHICS_COMMAND = "apitest:graphics";
+export const PANEL_COMMAND = "apitest:panel";
 
 /** 从命令来源取玩家;控制台/命令方块来源返回 undefined */
 function playerOf(origin: CustomCommandOrigin): Player | undefined {
@@ -214,5 +220,112 @@ export function registerDebugProbeCommands(): void {
         return undefined;
       }
     );
+
+    // ── /apitest:graphics [reset] ──
+    //
+    // `@minecraft/server-graphics` 的全部 112 个方法都是
+    // `no-restricted-execution`,因此必须推迟到安全 tick —— 这条没有
+    // 模糊地带,不像 debug-utilities 那样「没标注也要推迟」。
+    //
+    // 参数用 Integer 当开关(0/1)而不是布尔:`CustomCommandParamType`
+    // 没有布尔类型,而 `reset` 这种词作为可选枚举参数在不同版本上
+    // 表现不稳,整数最可靠。
+    event.customCommandRegistry.registerCommand(
+      {
+        name: GRAPHICS_COMMAND,
+        description: "server-graphics 探针:逐生物群系改天空/调色/光照/水,并验证关键帧与逐玩家覆盖",
+        permissionLevel: CommandPermissionLevel.GameDirectors,
+        cheatsRequired: false,
+        optionalParameters: [{ name: "reset", type: CustomCommandParamType.Integer }],
+      },
+      (origin, reset?: number) => {
+        const target = requirePlayer(origin);
+        if (!isPlayer(target)) return target;
+        deferToSafeTick(target, () => {
+          if (reset === 1) {
+            runGraphicsResetCommand(target);
+          } else {
+            runGraphicsProbeCommand(target);
+          }
+        });
+        return undefined;
+      }
+    );
+
+    // ── /apitest:panel ──
+    //
+    // DDUI 面板。与其它命令不同,这里**不**用 deferToSafeTick:
+    // 面板要在安全上下文构造并 show,而 runSafeDetached 本身就是
+    // 那个安全上下文。回调里只做「收集动作清单 + 调 showProbePanel」。
+    //
+    // 注意 `debugcontext` 不在面板里 —— 它的实验本体必须在受限
+    // 上下文同步执行,面板按钮的回调不是那个上下文。
+    event.customCommandRegistry.registerCommand(
+      {
+        name: PANEL_COMMAND,
+        description: "打开 DDUI 面板,把全部探针做成按钮(点按钮后表单不关闭,可连续执行)",
+        permissionLevel: CommandPermissionLevel.GameDirectors,
+        cheatsRequired: false,
+      },
+      (origin) => {
+        const target = requirePlayer(origin);
+        if (!isPlayer(target)) return target;
+        deferToSafeTick(target, () => {
+          showProbePanel(target, buildPanelActions());
+        });
+        return undefined;
+      }
+    );
   });
+}
+
+/**
+ * 面板上要列出的探针动作。
+ *
+ * 顺序按「从基础到进阶」排:先确认渲染前提(graphics),再测形状,
+ * 最后测统计与规模。`debugcontext` 故意不在列 —— 见上面的注释。
+ */
+function buildPanelActions(): ProbeAction[] {
+  return [
+    {
+      label: "§bgraphics§r 图形能力",
+      tooltip: "server-graphics:天空/调色/光照/水,先报告图形模式",
+      run: (player) => runGraphicsProbeCommand(player),
+    },
+    {
+      label: "§bgraphics reset§r 复位",
+      tooltip: "把 graphics 探针改过的参数退回资源包设定值",
+      run: (player) => runGraphicsResetCommand(player),
+    },
+    {
+      label: "§edebugshape§r 逐参数",
+      tooltip: "debug-utilities:逐形状逐参数探写入/读回",
+      run: (player) => runShapeProbeCommand(player),
+    },
+    {
+      label: "§edebugmotion§r 动态",
+      tooltip: "改属性会不会真的动(证明渲染器读了值)",
+      run: (player) => runMotionProbeCommand(player),
+    },
+    {
+      label: "§edebugstats§r 统计",
+      tooltip: "collectRuntimeStats / collectPluginStats",
+      run: (player) => runStatsProbeCommand(player),
+    },
+    {
+      label: "§edebugall§r 总览",
+      tooltip: "能力总览:哪些导出可用、本版有哪些形状类",
+      run: (player) => runAllProbesCommand(player),
+    },
+    {
+      label: "§edebuglimits 200§r 规模",
+      tooltip: "一次画 200 个形状,看加到第几个失败",
+      run: (player) => runLimitsProbeCommand(player, 200),
+    },
+    {
+      label: "§7面板自检",
+      tooltip: "确认 DDUI 成员在当前版本可用",
+      run: (player) => reportPanel(player),
+    },
+  ];
 }

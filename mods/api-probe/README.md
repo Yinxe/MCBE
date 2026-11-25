@@ -5,10 +5,15 @@
 本模组不提供任何玩法功能，它只做一件事：把某个坐标处方块的容器，按 Script API 真实返回的数据原样摊开给人看。用途是在开发其它模组时核对「API 说容器里是什么」与「游戏里实际是什么」，尤其是容器自报统计与逐槽遍历结果不一致、或者某些槽位读取出错的时候。
 
 - 包名：`@mc-toolchain/api-probe`
-- 版本：`0.3.0`
-- 脚本 API 依赖：`@minecraft/server 2.1.0`、`@minecraft/server-ui 2.0.0`、`@minecraft/debug-utilities 1.0.0-beta.1.21.100-stable`
+- 版本：`0.3.2`
+- 最低引擎版本：`1.21.130`
+- 脚本 API 依赖：`@minecraft/server 2.4.0`、`@minecraft/server-ui 2.1.0`、`@minecraft/debug-utilities 1.0.0-beta.1.21.130-stable`、`@minecraft/server-graphics 1.0.0`
 
-> ⚠️ `@minecraft/debug-utilities` 是 **beta 模块**，凡是用到它的命令（`debugbox` / `debugshow` / `debugclear` / `debugshape` / `debugmotion` / `debuglimits` / `debugcontext` / `debugstats` / `debugwatchdog` / `debugall`）都必须在世界设置里开启 **Beta APIs** 实验开关。未开启时整条脚本模块都会加载失败（内容日志会写 `requesting dependency on beta APIs ... but the Beta APIs experiment is not enabled`）。其余两条命令（`container` / `box`）不依赖 beta 模块，但同一个包里只要声明了 beta 依赖就同样受这个开关约束。
+> ⚠️ `@minecraft/debug-utilities` 是 **beta 模块**，凡是用到它的命令（`debugbox` / `debugshow` / `debugclear` / `debugshape` / `debugmotion` / `debuglimits` / `debugcontext` / `debugstats` / `debugwatchdog` / `debugall` / `panel`）都必须在世界设置里开启 **Beta APIs** 实验开关。未开启时整条脚本模块都会加载失败（内容日志会写 `requesting dependency on beta APIs ... but the Beta APIs experiment is not enabled`）。其余命令（`container` / `box` / `graphics`）不依赖 beta 模块，但同一个包里只要声明了 beta 依赖就同样受这个开关约束。
+
+> ⚠️ **最低引擎版本是 1.21.130**，因为 `@minecraft/server-graphics` 最早出现在这个版本。若你的客户端低于 1.21.130，请使用 `v0.3.1`。
+>
+> ⚠️ `@minecraft/server-graphics` 改的是**延迟渲染管线参数**，要求客户端图形模式为 **Deferred（鲜艳视觉）**。非 Deferred 时 setter 往往不报错、读回值也正确，但画面完全不变。`/apitest:graphics` 的第一节会报告当前图形模式。
 
 ## 命令
 
@@ -33,6 +38,8 @@
 | `/apitest:debugstats` | **运行时统计**：`collectRuntimeStats()` 的内存/对象数、`collectPluginStats()` 的各插件句柄计数 | 无 |
 | `/apitest:debugwatchdog <0\|1>` | **看门狗告警**：`1` 关闭（压测用），`0` 恢复 | 可选：`0` 或 `1` |
 | `/apitest:debugall` | **能力总览**：哪些导出可用、本版有哪些形状类 | 无 |
+| `/apitest:graphics [reset]` | **`server-graphics` 探针**：先报告图形模式，再测 4 个 `getBiome*` / 4 个 `getPlayer*` 入口、天空色单色 vs 关键帧、set/reset 配对、参数越界行为、逐玩家覆盖 | 可选：`reset=1` 只做复位 |
+| `/apitest:panel` | **DDUI 面板**：把全部探针做成按钮，点按钮后表单不关闭，可连续执行 | 无 |
 
 #### 两类探针的区别（很重要）
 
