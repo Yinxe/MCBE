@@ -12,7 +12,7 @@
 // 所以本探针的第一件事是报告 `Player.graphicsMode`,并在非 Deferred
 // 时明确警告「以下读数不证明渲染生效」。这一条比任何单项测试都重要。
 
-import { GraphicsMode, Player, system, world, type BiomeType } from "@minecraft/server";
+import { GraphicsMode, Player, type BiomeType } from "@minecraft/server";
 import {
   getBiomeAtmospherics,
   getBiomeColorGrading,
@@ -33,20 +33,38 @@ import {
   vibrantVisualsVerdict,
   type SetResetOutcome,
 } from "./GraphicsProbeMath";
-import {
-  attempt,
-  errorText,
-  formatValue,
-  heading,
-  kv,
-  report,
-  verdict,
-  warning,
-  type Attempt,
-} from "./DebugProbeShared";
+import { attempt, errorText, heading, kv, report, verdict, warning, type Attempt } from "./DebugProbeShared";
 
-/** 探针操作的生物群系。选平原:最常见,且默认天空色容易辨认 */
-const PROBE_BIOME = "minecraft:plains" as unknown as BiomeType;
+/**
+ * 取玩家当前所在位置的生物群系。
+ *
+ * 这是本探针踩到的第一个真实坑:`BiomeType` 是**类,不是字符串**。
+ * 直接把 `"minecraft:plains"` 传进去会报:
+ *   TypeError: Native type conversion failed.
+ *   Function argument [0] expected type: BiomeType
+ *
+ * `@minecraft/server 2.4.0` 里 `BiomeType` 没有公开构造器,也没有
+ * `BiomeTypes.get(name)` 这类静态查表(那是 2.10.0 才加的),唯一
+ * 的来源是 `dimension.getBiome(location)`。所以只能从玩家脚下取。
+ *
+ * 好处是这比硬编码「平原」更符合探针意图:测的就是玩家眼前这个群系。
+ */
+function biomeAt(player: Player): BiomeType {
+  return player.dimension.getBiome(player.location);
+}
+
+/**
+ * 探针操作的生物群系,在每次探针执行时按玩家位置解析。
+ *
+ * 用 `undefined` 表示解析失败,由调用方决定如何呈现 —— 不在这里
+ * 抛错,因为「拿不到群系」本身也是一条值得报告的探针结论。
+ */
+function resolveBiome(player: Player): { biome: BiomeType; id: string } | undefined {
+  const result = attempt(() => biomeAt(player));
+  if (!result.ok) return undefined;
+  const id = attempt(() => result.value.id);
+  return { biome: result.value, id: id.ok ? id.value : "(未知)" };
+}
 
 /**
  * 把 `Player.graphicsMode` 读成字符串。
@@ -88,19 +106,19 @@ function probePrecondition(player: Player, lines: string[]): boolean {
  * 这一组只测「拿到对象」,不测读写。拿不到说明模块版本或
  * 生物群系 id 有问题,后面的测试就没必要跑。
  */
-function probeBiomeAccessors(lines: string[]): void {
-  lines.push(heading("1. getBiome* 入口"));
+function probeBiomeAccessors(biome: BiomeType, biomeId: string, lines: string[]): void {
+  lines.push(heading("2. getBiome* 入口"));
   const accessors: { name: string; fn: () => unknown }[] = [
-    { name: "getBiomeAtmospherics", fn: () => getBiomeAtmospherics(PROBE_BIOME) },
-    { name: "getBiomeColorGrading", fn: () => getBiomeColorGrading(PROBE_BIOME) },
-    { name: "getBiomeLighting", fn: () => getBiomeLighting(PROBE_BIOME) },
-    { name: "getBiomeWater", fn: () => getBiomeWater(PROBE_BIOME) },
+    { name: "getBiomeAtmospherics", fn: () => getBiomeAtmospherics(biome) },
+    { name: "getBiomeColorGrading", fn: () => getBiomeColorGrading(biome) },
+    { name: "getBiomeLighting", fn: () => getBiomeLighting(biome) },
+    { name: "getBiomeWater", fn: () => getBiomeWater(biome) },
   ];
   for (const { name, fn } of accessors) {
     const result = callAndRead(name, fn);
     lines.push(`  ${kv(name, result.ok ? "§a可调用" : `§c抛错:${result.error}`)}`);
   }
-  lines.push(`  §7探针生物群系:${PROBE_BIOME}`);
+  lines.push(`  §7探针生物群系:${biomeId}§7(取自玩家脚下)`);
 }
 
 /**
@@ -109,13 +127,13 @@ function probeBiomeAccessors(lines: string[]): void {
  * 与 getBiome* 的区别是「只对该玩家生效」。这一组顺带验证
  * 文档所说的「Player 版本优先级高于 Biome 版本」是否成立。
  */
-function probePlayerAccessors(player: Player, lines: string[]): void {
-  lines.push(heading("2. getPlayer* 入口"));
+function probePlayerAccessors(player: Player, biome: BiomeType, lines: string[]): void {
+  lines.push(heading("3. getPlayer* 入口"));
   const accessors: { name: string; fn: () => unknown }[] = [
-    { name: "getPlayerAtmospherics", fn: () => getPlayerAtmospherics(PROBE_BIOME, player) },
-    { name: "getPlayerColorGrading", fn: () => getPlayerColorGrading(PROBE_BIOME, player) },
-    { name: "getPlayerLighting", fn: () => getPlayerLighting(PROBE_BIOME, player) },
-    { name: "getPlayerWater", fn: () => getPlayerWater(PROBE_BIOME, player) },
+    { name: "getPlayerAtmospherics", fn: () => getPlayerAtmospherics(biome, player) },
+    { name: "getPlayerColorGrading", fn: () => getPlayerColorGrading(biome, player) },
+    { name: "getPlayerLighting", fn: () => getPlayerLighting(biome, player) },
+    { name: "getPlayerWater", fn: () => getPlayerWater(biome, player) },
   ];
   for (const { name, fn } of accessors) {
     const result = callAndRead(name, fn);
@@ -133,12 +151,12 @@ function probePlayerAccessors(player: Player, lines: string[]): void {
  * 关键观察点:传关键帧表时引擎是否接受。若抛
  * InvalidArgumentError,说明该版本不支持关键帧。
  */
-function probeSkyColor(player: Player, lines: string[]): void {
-  lines.push(heading("3. 天空色:单色 vs 关键帧"));
+function probeSkyColor(player: Player, biome: BiomeType, lines: string[]): void {
+  lines.push(heading("4. 天空色:单色 vs 关键帧"));
 
   // 3a. 单色
   {
-    const atmos = attempt(() => getBiomeAtmospherics(PROBE_BIOME));
+    const atmos = attempt(() => getBiomeAtmospherics(biome));
     if (!atmos.ok) {
       lines.push(`  ${kv("单色", `§c拿不到对象:${atmos.error}`)}`);
     } else {
@@ -150,7 +168,7 @@ function probeSkyColor(player: Player, lines: string[]): void {
 
   // 3b. 关键帧表
   {
-    const atmos = attempt(() => getBiomeAtmospherics(PROBE_BIOME));
+    const atmos = attempt(() => getBiomeAtmospherics(biome));
     if (atmos.ok) {
       const set = attempt(() => atmos.value.setSkyHorizonColor(SKY_KEYFRAME_COLORS));
       lines.push(`  ${kv("关键帧 setSkyHorizonColor", describeSetterArgument(SKY_KEYFRAME_COLORS))}`);
@@ -165,7 +183,7 @@ function probeSkyColor(player: Player, lines: string[]): void {
 
   // 3c. reset 退回什么
   {
-    const atmos = attempt(() => getBiomeAtmospherics(PROBE_BIOME));
+    const atmos = attempt(() => getBiomeAtmospherics(biome));
     if (atmos.ok) {
       const reset = attempt(() => atmos.value.resetSkyHorizonColor());
       lines.push(`  ${kv("resetSkyHorizonColor", reset.ok ? "§a成功" : `§c抛错:${reset.error}`)}`);
@@ -182,11 +200,11 @@ function probeSkyColor(player: Player, lines: string[]): void {
  * 为什么只取代表:112 个方法逐个测会刷屏,而且同类方法的
  * 行为高度一致。取代表能回答「这一组能用吗」,细节留给人查文档。
  */
-function probeSetResetPairs(lines: string[]): void {
-  lines.push(heading("4. set / reset 配对"));
+function probeSetResetPairs(biome: BiomeType, lines: string[]): void {
+  lines.push(heading("5. set / reset 配对"));
   const pairs: { group: string; set: () => void; reset: () => void }[] = [];
 
-  const atmos = attempt(() => getBiomeAtmospherics(PROBE_BIOME));
+  const atmos = attempt(() => getBiomeAtmospherics(biome));
   if (atmos.ok) {
     pairs.push({
       group: "Atmospherics.setRayleighStrength",
@@ -195,7 +213,7 @@ function probeSetResetPairs(lines: string[]): void {
     });
   }
 
-  const grading = attempt(() => getBiomeColorGrading(PROBE_BIOME));
+  const grading = attempt(() => getBiomeColorGrading(biome));
   if (grading.ok) {
     pairs.push({
       group: "ColorGrading.setTemperature",
@@ -204,7 +222,7 @@ function probeSetResetPairs(lines: string[]): void {
     });
   }
 
-  const lighting = attempt(() => getBiomeLighting(PROBE_BIOME));
+  const lighting = attempt(() => getBiomeLighting(biome));
   if (lighting.ok) {
     pairs.push({
       group: "Lighting.setSkyIntensity",
@@ -213,7 +231,7 @@ function probeSetResetPairs(lines: string[]): void {
     });
   }
 
-  const water = attempt(() => getBiomeWater(PROBE_BIOME));
+  const water = attempt(() => getBiomeWater(biome));
   if (water.ok) {
     pairs.push({
       group: "Water.setChlorophyll",
@@ -241,9 +259,9 @@ function probeSetResetPairs(lines: string[]): void {
  * 抛错还是夹取**。这个差异对调用方影响很大:抛错要自己防,
  * 夹取则静默改变意图。所以故意传越界值实测。
  */
-function probeRangeClamping(lines: string[]): void {
-  lines.push(heading("5. 参数越界行为"));
-  const atmos = attempt(() => getBiomeAtmospherics(PROBE_BIOME));
+function probeRangeClamping(biome: BiomeType, lines: string[]): void {
+  lines.push(heading("6. 参数越界行为"));
+  const atmos = attempt(() => getBiomeAtmospherics(biome));
   if (!atmos.ok) {
     lines.push(`  §c拿不到 Atmospherics:${atmos.error}`);
     return;
@@ -268,9 +286,9 @@ function probeRangeClamping(lines: string[]): void {
  * 这一组无法用读数证明(没有 getter),只能靠观察。所以回执
  * 写明「该看到什么」,由玩家判定。
  */
-function probePlayerOverride(player: Player, lines: string[]): void {
-  lines.push(heading("6. 逐玩家覆盖(需肉眼判定)"));
-  const personal = attempt(() => getPlayerAtmospherics(PROBE_BIOME, player));
+function probePlayerOverride(player: Player, biome: BiomeType, lines: string[]): void {
+  lines.push(heading("7. 逐玩家覆盖(需肉眼判定)"));
+  const personal = attempt(() => getPlayerAtmospherics(biome, player));
   if (!personal.ok) {
     lines.push(`  ${kv("getPlayerAtmospherics", `§c抛错:${personal.error}`)}`);
     return;
@@ -284,11 +302,11 @@ function probePlayerOverride(player: Player, lines: string[]): void {
 }
 
 /** 清掉本探针改过的全部参数,恢复到资源包设定值 */
-export function resetGraphicsProbe(): string[] {
+export function resetGraphicsProbe(biome: BiomeType): string[] {
   const lines: string[] = [heading("graphics 探针复位")];
   const jobs: { name: string; fn: () => void }[] = [];
 
-  const atmos = attempt(() => getBiomeAtmospherics(PROBE_BIOME));
+  const atmos = attempt(() => getBiomeAtmospherics(biome));
   if (atmos.ok) {
     jobs.push(
       { name: "resetSkyHorizonColor", fn: () => atmos.value.resetSkyHorizonColor() },
@@ -297,15 +315,15 @@ export function resetGraphicsProbe(): string[] {
       { name: "resetHorizonBlendMax", fn: () => atmos.value.resetHorizonBlendMax() }
     );
   }
-  const grading = attempt(() => getBiomeColorGrading(PROBE_BIOME));
+  const grading = attempt(() => getBiomeColorGrading(biome));
   if (grading.ok) {
     jobs.push({ name: "resetTemperature", fn: () => grading.value.resetTemperature() });
   }
-  const lighting = attempt(() => getBiomeLighting(PROBE_BIOME));
+  const lighting = attempt(() => getBiomeLighting(biome));
   if (lighting.ok) {
     jobs.push({ name: "resetSkyIntensity", fn: () => lighting.value.resetSkyIntensity() });
   }
-  const water = attempt(() => getBiomeWater(PROBE_BIOME));
+  const water = attempt(() => getBiomeWater(biome));
   if (water.ok) {
     jobs.push({ name: "resetChlorophyll", fn: () => water.value.resetChlorophyll() });
   }
@@ -329,12 +347,43 @@ export function runGraphicsProbeCommand(player: Player): void {
   const lines: string[] = [heading("server-graphics 能力探针")];
 
   const conclusive = probePrecondition(player, lines);
-  probeBiomeAccessors(lines);
-  probePlayerAccessors(player, lines);
-  probeSkyColor(player, lines);
-  probeSetResetPairs(lines);
-  probeRangeClamping(lines);
-  probePlayerOverride(player, lines);
+
+  // 先解析生物群系。拿不到就只输出前提 + 失败原因,不再往下跑 ——
+  // 后面每一组都要 `BiomeType` 对象,没有它只会刷一屏同样的报错。
+  const resolved = resolveBiome(player);
+  if (!resolved) {
+    lines.push(heading("1. 生物群系解析"));
+    lines.push("  §c拿不到 BiomeType 对象,后续各组无法执行。");
+    lines.push("  §7BiomeType 是类而非字符串,只能通过 dimension.getBiome(location) 获取。");
+    lines.push("  §7常见原因:玩家所在区块未加载,或坐标越界。");
+    lines.push(warning("请站在已加载的区块里重试"));
+    report(player, lines);
+    return;
+  }
+
+  // 顺带验证一个真实的坑:BiomeType 是类而非字符串。
+  // 这条结论是实机踩出来的 —— 直接把 "minecraft:plains" 传进去会报
+  //   TypeError: Native type conversion failed.
+  //   Function argument [0] expected type: BiomeType
+  // 留在这里当回归:若哪天引擎接受字符串了,这一行会从「拒绝」变「接受」。
+  lines.push(heading("1. 生物群系对象"));
+  lines.push(`  ${kv("取自玩家脚下", resolved.id)}`);
+  const stringAttempt = attempt(() => getBiomeAtmospherics("minecraft:plains" as unknown as BiomeType));
+  lines.push(
+    `  ${kv(
+      "传字符串 minecraft:plains",
+      stringAttempt.ok ? "§e接受§7(该版本支持字符串)" : "§a拒绝§7(必须传 BiomeType 对象)"
+    )}`
+  );
+  lines.push("  §7BiomeType 是类,2.4.0 只能由 dimension.getBiome(location) 得到。");
+  lines.push("  §7BiomeTypes.get(name) 静态查表是 2.10.0 才有的。");
+
+  probeBiomeAccessors(resolved.biome, resolved.id, lines);
+  probePlayerAccessors(player, resolved.biome, lines);
+  probeSkyColor(player, resolved.biome, lines);
+  probeSetResetPairs(resolved.biome, lines);
+  probeRangeClamping(resolved.biome, lines);
+  probePlayerOverride(player, resolved.biome, lines);
 
   lines.push(heading("结论"));
   if (conclusive) {
@@ -348,25 +397,21 @@ export function runGraphicsProbeCommand(player: Player): void {
 
 /** graphics 复位命令 */
 export function runGraphicsResetCommand(player: Player): void {
-  report(player, resetGraphicsProbe());
+  const lines = [heading("graphics 探针复位")];
+  const resolved = resolveBiome(player);
+  if (!resolved) {
+    lines.push("  §c拿不到 BiomeType 对象,无法复位。");
+    lines.push(warning("请站在已加载的区块里重试"));
+    report(player, lines);
+    return;
+  }
+  report(player, resetGraphicsProbe(resolved.biome));
 }
 
 /** 供测试引用的重导出 */
 export { describeTimeOfDay, describeSetterArgument, vibrantVisualsVerdict };
 
-/** 世界维度数量,用于给探针一个「世界确实活着」的旁证 */
-export function worldSummary(): string {
-  const dimensions = attempt(() => world.getDimension("overworld").id);
-  return dimensions.ok ? `overworld=${dimensions.value}` : `读取失败:${dimensions.error}`;
-}
-
 /** 把一个可能抛错的调用转成一行文本(供命令层复用) */
 export function graphicsErrorText(error: unknown): string {
   return errorText(error);
 }
-
-/** 让 `system` 的引用不被 tree-shake(命令层需要它来推迟) */
-export const graphicsSystem = system;
-
-/** 供外部断言使用的格式函数 */
-export { formatValue };

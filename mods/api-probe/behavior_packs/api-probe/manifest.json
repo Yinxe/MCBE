@@ -1,13 +1,13 @@
 {
   "format_version": 2,
   "header": {
-    "name": "API 探针 v0.3.2",
+    "name": "API 探针 v0.3.3",
     "description": "开发期 API 探针：按坐标读取容器真实 Script API 数据并以表单呈现，并用粒子绘制 3D 框选线框\n作者：Yinx\n邮箱：1423716216@qq.com\n主页：https://github.com/Yinxe/\nQQ群：632178498\n仓库：https://github.com/Yinxe/MCBE",
     "uuid": "3f6b1c58-9d24-4b7e-8a51-6c2d9e04f7b3",
     "version": [
       0,
       3,
-      2
+      3
     ],
     "min_engine_version": [
       1,
@@ -24,7 +24,7 @@
       "version": [
         0,
         3,
-        2
+        3
       ],
       "entry": "scripts/main.js"
     }
@@ -55,7 +55,7 @@
       "version": [
         0,
         3,
-        2
+        3
       ]
     },
     {
