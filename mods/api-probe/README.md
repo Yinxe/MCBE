@@ -6,16 +6,47 @@
 
 - 包名：`@mc-toolchain/api-probe`
 - 版本：`0.3.0`
-- 脚本 API 依赖：`@minecraft/server 2.1.0`、`@minecraft/server-ui 2.0.0`
+- 脚本 API 依赖：`@minecraft/server 2.1.0`、`@minecraft/server-ui 2.0.0`、`@minecraft/debug-utilities 1.0.0-beta.1.21.100-stable`
+
+> ⚠️ `@minecraft/debug-utilities` 是 **beta 模块**，凡是用到它的命令（`debugbox` / `debugshow` / `debugclear` / `debugshape` / `debugmotion` / `debuglimits` / `debugcontext` / `debugstats` / `debugwatchdog` / `debugall`）都必须在世界设置里开启 **Beta APIs** 实验开关。未开启时整条脚本模块都会加载失败（内容日志会写 `requesting dependency on beta APIs ... but the Beta APIs experiment is not enabled`）。其余两条命令（`container` / `box`）不依赖 beta 模块，但同一个包里只要声明了 beta 依赖就同样受这个开关约束。
 
 ## 命令
 
 | 命令 | 说明 | 参数 |
 | --- | --- | --- |
-| `/apitest:box <x1> <y1> <z1> <x2> <y2> <z2> [秒数] [尺寸系数]` | 两个方块角点之间画 3D 框选线框 | 必填：两个角点（六个整数坐标）；可选：存活秒数（默认 10，上限 120）、尺寸系数（默认 1） |
+| `/apitest:container <目标>` | 读取指定坐标方块的容器，用表单展示槽位与物品详情 | 必填：`目标`（Location） |
+| `/apitest:box <角点1> <角点2> [秒数] [尺寸系数]` | 两个方块角点之间画 3D 框选线框（**粒子版**） | 必填：两个 `Location` 角点；可选：存活秒数（默认 10，上限 120）、尺寸系数（默认 1） |
+| `/apitest:debugbox <角点1> <角点2> [秒数] [尺寸系数]` | 同上，但用 `@minecraft/debug-utilities` 的**线框版** | 同上 |
+| `/apitest:debugshow [秒数]` | 在玩家面前把 debug-utilities 支持的全部形状各画一份 | 可选：存活秒数（默认 10，上限 120） |
+| `/apitest:debugclear` | 清除本模组用 debug-utilities 画的全部形状 | 无 |
 
-坐标参数用 `Integer` 而不是 `Location`：`Location` 在本项目的 `@minecraft/server 2.1.0` 上实测会导致整条命令不注册（命令从命令表里消失），六个整数参数则稳定可用。
-| `/apitest:container <x> <y> <z>` | 读取指定坐标方块的容器，用表单展示槽位与物品详情 | 必填：`x`、`y`、`z`（方块坐标整数） |
+### 测量命令（探 API 能力）
+
+前面几条是“画东西”，下面这几条是“测东西”——它们把 `@minecraft/debug-utilities` 的每个导出、每个参数逐项探一遍，并把“写入值 / 读回值 / 该看到什么”全部回执。
+
+| 命令 | 探什么 | 参数 |
+| --- | --- | --- |
+| `/apitest:debugshape [秒数]` | **逐形状逐参数**：`DebugLine` 的 `endLocation`、`DebugArrow` 的三个头部参数、`DebugBox` 的 `bound` 口径与 `scale`、Sphere/Circle 的 scale、`DebugText` 的朝向与长度、`rotation` 三个分量含义、`hasDuration`/`totalTimeLeft` 语义、`color` 是否夹取、`remove()` 后能否重加 | 可选：存活秒数 |
+| `/apitest:debugmotion` | **动态探针**：改 `location` / `bound` / `scale` / `color` 之后，已在世界上的形状会重新渲染吗？`timeLeft` 是实时倒数还是快照？ | 无 |
+| `/apitest:debuglimits [数量]` | **规模上限**：一次画 N 个（默认 200，上限 2000），看加到第几个失败、耗时多少 | 可选：数量 |
+| `/apitest:debugcontext` | **受限上下文**：在命令回调里**直接**调 `addShape` 会不会抛错 | 无 |
+| `/apitest:debugstats` | **运行时统计**：`collectRuntimeStats()` 的内存/对象数、`collectPluginStats()` 的各插件句柄计数 | 无 |
+| `/apitest:debugwatchdog <0\|1>` | **看门狗告警**：`1` 关闭（压测用），`0` 恢复 | 可选：`0` 或 `1` |
+| `/apitest:debugall` | **能力总览**：哪些导出可用、本版有哪些形状类 | 无 |
+
+#### 两类探针的区别（很重要）
+
+| | 静态探针（`debugshape`） | 动态探针（`debugmotion`） |
+| --- | --- | --- |
+| 能证明 | JS 侧 setter **存下了值** | 渲染器**真的读了这个值** |
+| 读回一致 | ✅ | ✅ |
+| 画面变化 | ❓ 不知道 | ✅ 直接看到 |
+
+**属性写入成功 ≠ 渲染生效。** 读回一致只能说明 setter 存下了值，不说明渲染器读了它。所以两条命令都要跑：`debugshape` 看读数，`debugmotion` 看画面。
+
+坐标参数统一用 `Location`，不是三个 `Integer`。好处是玩家既能直接敲坐标，也能「望准方块」取点，还能用 `~` 相对坐标；命令签名也从 8 个参数降到 4 个。
+
+运行时回调收到的是 `{ x, y, z }` 形状的对象——**不带维度**（维度跟随执行者），**也不保证是整数**（可以写 `100.7 64.2 -20.9`），所以取整要自己做，统一用 `Math.floor`（方块 5 占 `[5, 6)` 区间；负坐标下 `floor` 也正确，`trunc` 会错）。详见 `scripts/CommandLocation.ts`。
 
 要点：
 
@@ -102,12 +133,86 @@ SIZE_SCALE=0.5 node tools/verify-box-geometry.mjs
 
 变量名在 `scripts/BoxRenderer.ts#buildBoxMolang` 与粒子的 `emitter_initialization` 里各写一遍，**改一处必须同时改另一处**。
 
+## 调试线框（`@minecraft/debug-utilities`）
+
+`/apitest:debugbox` 画**同一个盒子**，但走的是完全不同的渲染路径：`@minecraft/debug-utilities` 的 `debugDrawer` 直接把形状塞给客户端渲染，不用粒子、不用资源包、也不用连接 VS Code 调试器。
+
+```text
+/apitest:debugbox 100 64 -20 109 71 -11        ← 盒体 + 三色轴 + 尺寸文字
+/apitest:debugbox 100 64 -20 109 71 -11 30     ← 存活 30 秒
+/apitest:debugshow 20                          ← 面前摆一份全部形状
+/apitest:debugclear                            ← 立即清掉
+```
+
+一次 `debugbox` 会画出 5 个形状：
+
+| 形状 | 内容 |
+| --- | --- |
+| `DebugBox` | 盒体线框（`bound` = 真实边长，`scale` = 尺寸系数） |
+| `DebugLine` × 3 | 最小角的三色坐标轴：X 红、Y 绿、Z 蓝，长度取 `min(4, 该轴边长)` |
+| `DebugText` | 盒子上方一格的尺寸文字，如 `10×8×10`，始终朝向屏幕 |
+
+`/apitest:debugshow` 是**版本探针**：它把当前 `@minecraft/debug-utilities` 类型定义里有的形状（`DebugLine`、`DebugArrow`、`DebugBox`、`DebugSphere`、`DebugCircle`、`DebugText`）各画一份。少一个就说明装的模块版本与代码不匹配，比翻 `.d.ts` 快。
+
+### 与粒子版的区别
+
+| | `/apitest:box`（粒子） | `/apitest:debugbox`（线框） |
+| --- | --- | --- |
+| 依赖 | 资源包 + 3 个粒子文件 | beta 模块，需开 Beta APIs |
+| 半透明填充面 | 有 | 无，纯线框 |
+| 可见范围 | 所有玩家 | 所有玩家（1.21.100 无 `dimension`/`visibleTo` 参数） |
+| 文字 | 无 | 有 |
+| 正式发布可用 | 是 | **不建议**，beta 会 breaking |
+
+两条命令画的盒子位置、尺寸、三色轴完全一致，适合横向对比两种渲染路径的效果与开销。
+
+### 尺寸系数同样适用
+
+`DebugBox.bound` 官方只写了「最终盒子 = bound × scale」，没说 `bound` 本身是全宽还是半宽。所以 `bound` 一律填真实边长，口径问题同样交给第二个可选参数：实测框大一倍就传 `0.5`，小一半就传 `2`。**与粒子版的 `尺寸系数` 是同一套约定**，现场一次就能标定。
+
+### 版本限制（`1.0.0-beta.1.21.100-stable`）
+
+本模组钉在 `1.21.100` 版的模块上，以匹配 `min_engine_version [1,21,100]`。这一版比后来的版本少不少东西：
+
+| 能力 | 1.21.100 | 首次出现 |
+| --- | --- | --- |
+| `color` 带 alpha（半透明） | ✗ 只有 `RGB` | 1.26.60 |
+| `addShape(shape, dimension)` 指定维度 | ✗ 全部维度可见 | 1.21.130 |
+| `visibleTo` / `hiddenFrom` 限定可见玩家 | ✗ | 1.26.0 / 1.26.60 |
+| `DebugCone` / `DebugCylinder` / `DebugEllipsoid` / `DebugPyramid` | ✗ | 1.26.60 |
+| `diagnosticsManager` | ✗ | 1.26.60 |
+
+要这些能力就得同时抬高 `min_engine_version`，那会让模组在旧版游戏上直接不可用。开发期调试模组不值得为半透明付这个代价，所以本版保持 `1.21.100`。
+
+### 三个引擎缺陷与对应写法
+
+`DebugRenderer.ts` 里的所有防御性写法都不是防御性编程习惯，而是踩过的坑。**这些是原生层崩溃，不是 JS 异常——`try/catch` 抓不到，游戏直接退出。** 所以写法只能是「不去触发」，不能靠兜底：
+
+1. **同一 shape 实例重复 `addShape` → 崩溃。** 所以重复执行命令时先 `remove()` 旧形状再 `addShape` 新的，而不是直接再画一个。
+2. **形状列表为空时调 `removeAll()` → 崩溃。** 所以只用逐个 `remove()`，不用 `removeAll()`。顺带避免了误清其它插件画的形状。
+3. **对已到期的形状再 `remove()` → 有崩溃风险。** 形状带 `timeLeft`，到期后引擎已自行移除句柄；此时再碰它就是操作已失效的原生句柄。所以 `activeShapes` 记的是 `{ shape, expiresAt }`，`removeShapes` 先比时间戳，**过期的不碰，只从账上划掉**。
+4. **绘制代码被注释掉后热重载 → 崩溃。** 所以每个形状都设了 `timeLeft`，脚本即使被热重载掉也会自行到期。
+
+另外，在 `worldLoad` / `world.afterEvents` 里**立即**绘制会出现「服务端有数据、客户端不显示」，所以本模组的绘制全部推迟到安全 tick（`runSafeDetached`）。
+
+### 能否在受限上下文调用
+
+**类型定义里查不到答案。** `@minecraft/server` 2.1.0 用散文标注受限成员（335 处 `can't be called in read-only mode`），但 `@minecraft/debug-utilities` **从 1.21.100 到 1.26.60 一个这样的标注都没有**——新版也只有 `diagnosticsManager` 的一条 `@privilege`，`debugDrawer` 相关成员完全没标。
+
+没标注有两种可能：真不受限，或只是没标。因此本模组不赌：**所有 `addShape` / `remove()` 调用都在 `runSafeDetached` 推迟后的安全 tick 里**，不在命令回调或 `beforeEvents` 里直接碰。代价是零，换掉一个未验证的前提。
+
+### 不持久
+
+线框只存在于客户端渲染层：不写方块、不写动态属性、不进存档。世界重载、切换维度或脚本热重载后一律消失。
+
 ## 已知边界
 
 - **没有 NBT 文本**：`@minecraft/server 2.1.0` 没有公开的 NBT 读写接口（`getNbt` / `saveToNbt` 在后续版本才出现，本模组刻意不追 beta）。详情页展示的是由公开只读接口拼出的结构化快照，覆盖玩家实际能观测到的状态，但不是原始 NBT。
 - **只读单个方块**：不做视线射线检测，也不扫描附近容器。要看哪个容器就传哪个坐标。
 - **区块必须已加载**：坐标处区块未加载时方块读不到，命令会提示「没有方块（超出世界边界，或区块未加载）」。框选绘制同样受此限制，未加载区块处 `spawnParticle` 会失败并给出提示。
 - **框选不持久**：粒子到时间自然消失，重登或重进维度不会恢复。需要长看就传一个更长的秒数。
+- **调试线框同样不持久**：`debugDrawer` 的形状在世界重载、切维度、脚本热重载后全部消失，需要重画。
+- **调试线框只在 1.21.100 的能力范围内**：无色透明度、无维度限定、无按玩家可见性，详见上文版本限制表。
 
 ## 开发
 
@@ -115,10 +220,10 @@ SIZE_SCALE=0.5 node tools/verify-box-geometry.mjs
 npm run build  -w @mc-toolchain/api-probe   # 编译并打包到 dist/
 npm run lint   -w @mc-toolchain/api-probe   # eslint + prettier
 npm run pack   -w @mc-toolchain/api-probe   # 产出 release/api-probe-v<版本>.mcaddon
-npm run test   -w @mc-toolchain/api-probe   # BoxGeometry 单测(需先 build)
+npm run test   -w @mc-toolchain/api-probe   # BoxGeometry + DebugShapeMath 单测(需先 build)
 
 # 不启动游戏校验框选几何跨度(配合 SIZE_SCALE 可验证任意尺寸系数)
 node mods/api-probe/tools/verify-box-geometry.mjs
 ```
 
-产物只有 `@minecraft/server` 与 `@minecraft/server-ui` 两个外部依赖，`mod-common` 等共享包会被打进同一个 bundle。
+产物有三个外部依赖：`@minecraft/server`、`@minecraft/server-ui`、`@minecraft/debug-utilities`。`mod-common` 等共享包会被打进同一个 bundle。

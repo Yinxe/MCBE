@@ -1,10 +1,11 @@
 {
   "name": "@mc-toolchain/api-probe",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "productName": "API 探针",
   "description": "开发期 API 探针：按坐标读取容器真实 Script API 数据并以表单呈现，并用粒子绘制 3D 框选线框",
   "private": true,
   "dependencies": {
+    "@minecraft/debug-utilities": "1.0.0-beta.1.21.100-stable",
     "@minecraft/server": "2.1.0",
     "@minecraft/server-ui": "2.0.0"
   },

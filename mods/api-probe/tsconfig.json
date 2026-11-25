@@ -26,7 +26,8 @@
     // 于是同一份代码里出现两个版本的 Player 类型而无法互相赋值。
     "paths": {
       "@minecraft/server": ["./node_modules/@minecraft/server"],
-      "@minecraft/server-ui": ["./node_modules/@minecraft/server-ui"]
+      "@minecraft/server-ui": ["./node_modules/@minecraft/server-ui"],
+      "@minecraft/debug-utilities": ["./node_modules/@minecraft/debug-utilities"]
     }
   },
   "include": ["scripts/**/*"],

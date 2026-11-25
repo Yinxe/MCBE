@@ -3,10 +3,15 @@
 // 与探针命令同样的约束:命令回调跑在受限上下文,因此「画粒子 + 发提示」
 // 整体推迟到安全 tick。绘制本身只调 spawnParticle,不写世界。
 //
-// 参数用六个 Integer 而不是两个 Location:
-//   · Location 参数在本项目的 @minecraft/server 2.1.0 上实测不注册命令
-//     (整条命令从命令表里消失),六个整数参数则稳定可用;
-//   · 坐标本来就是方块整数,取整没有信息损失。
+// 参数用两个 Location(而不是六个 Integer):
+//   · Location 让玩家既能敲坐标,也能「望准方块」直接取点,还能用 ~ 相对坐标;
+//   · 三个分量一次收完,命令签名从 8 个参数降到 4 个,少敲一半。
+//
+// 运行时传给回调的是 `{ x, y, z }` 形状的对象(没有维度信息,也不保证是整数),
+// 因此类型上按 `{ x, y, z }` 接收,取整交给 `BoxGeometry.boxFromCorners`
+// —— 它在内部用 `Math.floor`,负坐标也正确。
+//
+// 维度跟随执行者:命令不带维度参数,画在执行者当前所在维度。
 //
 // 参数是「两个角点」而不是「中心 + 尺寸」:角点是玩家在游戏里唯一能直接读到
 // 的量,而中心/尺寸要算一遍才得到。
@@ -21,6 +26,7 @@ import {
 } from "@minecraft/server";
 import { runSafeDetached } from "@mc-toolchain/mod-common";
 import { boxFromCorners } from "./BoxGeometry";
+import type { CommandLocation } from "./CommandLocation";
 import { drawTimedBox } from "./BoxRenderer";
 
 /** 命令名(必须带命名空间) */
@@ -54,8 +60,8 @@ function errorText(error: unknown): string {
  */
 export function runBoxCommand(
   player: Player,
-  cornerA: { x: number; y: number; z: number },
-  cornerB: { x: number; y: number; z: number },
+  cornerA: CommandLocation,
+  cornerB: CommandLocation,
   secondsInput?: number,
   scaleInput?: number
 ): void {
@@ -91,29 +97,15 @@ export function registerBoxCommand(): void {
         permissionLevel: CommandPermissionLevel.GameDirectors,
         cheatsRequired: false,
         mandatoryParameters: [
-          { name: "x1", type: CustomCommandParamType.Integer },
-          { name: "y1", type: CustomCommandParamType.Integer },
-          { name: "z1", type: CustomCommandParamType.Integer },
-          { name: "x2", type: CustomCommandParamType.Integer },
-          { name: "y2", type: CustomCommandParamType.Integer },
-          { name: "z2", type: CustomCommandParamType.Integer },
+          { name: "corner1", type: CustomCommandParamType.Location },
+          { name: "corner2", type: CustomCommandParamType.Location },
         ],
         optionalParameters: [
           { name: "seconds", type: CustomCommandParamType.Float },
           { name: "scale", type: CustomCommandParamType.Float },
         ],
       },
-      (
-        origin,
-        x1: number,
-        y1: number,
-        z1: number,
-        x2: number,
-        y2: number,
-        z2: number,
-        seconds?: number,
-        scale?: number
-      ) => {
+      (origin, corner1: CommandLocation, corner2: CommandLocation, seconds?: number, scale?: number) => {
         const player = playerOf(origin);
         if (!player) {
           return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
@@ -123,7 +115,7 @@ export function registerBoxCommand(): void {
         runSafeDetached(
           () => {
             if (!player.isValid) return;
-            runBoxCommand(player, { x: x1, y: y1, z: z1 }, { x: x2, y: y2, z: z2 }, seconds, scale);
+            runBoxCommand(player, corner1, corner2, seconds, scale);
           },
           (error) => {
             if (player.isValid) {

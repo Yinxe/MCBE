@@ -1,7 +1,11 @@
 // ─── 探针命令:/apitest:container <x> <y> <z> ─────────────────────
 //
-// 三个必填整数参数,维度跟随执行者。命令回调本身运行在受限上下文,
+// 一个必填 Location 参数,维度跟随执行者。命令回调本身运行在受限上下文,
 // 因此「读取容器 + 打开表单」整体推迟到安全上下文执行。
+//
+// 用 Location 而不是三个 Integer:玩家既能敲坐标,也能「望准方块」直接取点,
+// 还能用 ~ 相对坐标。运行时收到 `{ x, y, z }`(无维度、不保证整数),
+// 取整由 toBlockLocation 完成。详见 CommandLocation.ts。
 //
 // 权限等级取 GameDirectors(操作员/游戏导演),且 cheatsRequired: false
 // —— 探针不应该逼开发者为了看一眼容器就开作弊。
@@ -18,6 +22,7 @@ import { runSafeDetached } from "@mc-toolchain/mod-common";
 import { readBlockContainer, toBlockLocation } from "./ContainerReader";
 import { takeContainerSnapshot } from "./ContainerSnapshot";
 import { showContainerOverview } from "./ContainerForm";
+import type { CommandLocation } from "./CommandLocation";
 
 /** 命令名(必须带命名空间) */
 export const PROBE_COMMAND = "apitest:container";
@@ -33,8 +38,8 @@ function playerOf(origin: CustomCommandOrigin): Player | undefined {
  *
  * 已在安全上下文调用。所有失败都转成给玩家的提示,不抛异常。
  */
-export function runProbe(player: Player, x: number, y: number, z: number): void {
-  const location = toBlockLocation({ x, y, z });
+export function runProbe(player: Player, target: CommandLocation): void {
+  const location = toBlockLocation(target);
   const dimension = player.dimension;
 
   const read = readBlockContainer(dimension, location);
@@ -58,13 +63,9 @@ export function registerProbeCommand(): void {
         description: "读取指定坐标方块的容器,并用表单展示槽位与物品详情(开发期探针)",
         permissionLevel: CommandPermissionLevel.GameDirectors,
         cheatsRequired: false,
-        mandatoryParameters: [
-          { name: "x", type: CustomCommandParamType.Integer },
-          { name: "y", type: CustomCommandParamType.Integer },
-          { name: "z", type: CustomCommandParamType.Integer },
-        ],
+        mandatoryParameters: [{ name: "target", type: CustomCommandParamType.Location }],
       },
-      (origin, x: number, y: number, z: number) => {
+      (origin, location: CommandLocation) => {
         const player = playerOf(origin);
         if (!player) {
           return { status: CustomCommandStatus.Failure, message: "该命令只能由玩家执行" };
@@ -74,9 +75,8 @@ export function registerProbeCommand(): void {
         // 传 onError:否则意外异常只会写入 console.warn,玩家看不到任何反馈。
         runSafeDetached(
           () => {
-            const target = player.isValid ? player : undefined;
-            if (!target) return;
-            runProbe(target, x, y, z);
+            if (!player.isValid) return;
+            runProbe(player, location);
           },
           (error) => {
             if (player.isValid) {
