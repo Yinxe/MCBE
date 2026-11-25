@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/api-probe",
-  "version": "0.1.1",
+  "version": "0.3.0",
   "productName": "API 探针",
   "description": "开发期 API 探针：按坐标读取容器真实 Script API 数据并以表单呈现，并用粒子绘制 3D 框选线框",
   "private": true,
@@ -25,7 +25,9 @@
     "build": "just-scripts build",
     "clean": "just-scripts clean",
     "pack": "just-scripts pack",
-    "local-deploy": "just-scripts local-deploy"
+    "local-deploy": "just-scripts local-deploy",
+    "test": "node --test tests/*.test.mjs",
+    "verify:geometry": "node tools/verify-box-geometry.mjs"
   },
   "packing": {
     "mode": "auto",

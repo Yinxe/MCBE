@@ -10,7 +10,7 @@
     },
     "components": {
       "minecraft:emitter_initialization": {
-        "creation_expression": "v.size_x = v.size_x ?? 1; v.size_y = v.size_y ?? 1; v.size_z = v.size_z ?? 1; v.duration = v.duration ?? 10; v.fade_in = v.fade_in ?? 0.25; v.fade_out = v.fade_out ?? 0.25; v.face_opacity = v.face_opacity ?? 0.18; v.face_opacity_inner = v.face_opacity_inner ?? 0.06; v.face_color_r = v.face_color_r ?? 1; v.face_color_g = v.face_color_g ?? 1; v.face_color_b = v.face_color_b ?? 1; v.edge_color_r = v.edge_color_r ?? 1; v.edge_color_g = v.edge_color_g ?? 1; v.edge_color_b = v.edge_color_b ?? 1; v.edge_opacity = v.edge_opacity ?? 1; v.thickness = v.thickness ?? 0.03125;"
+        "creation_expression": "v.size_x = v.size_x ?? 1; v.size_y = v.size_y ?? 1; v.size_z = v.size_z ?? 1; v.duration = v.duration ?? 10; v.fade_in = v.fade_in ?? 0.25; v.fade_out = v.fade_out ?? 0.25; v.face_opacity = v.face_opacity ?? 0.18; v.face_opacity_inner = v.face_opacity_inner ?? 0.06; v.face_color_r = v.face_color_r ?? 1; v.face_color_g = v.face_color_g ?? 1; v.face_color_b = v.face_color_b ?? 1; v.edge_color_r = v.edge_color_r ?? 1; v.edge_color_g = v.edge_color_g ?? 1; v.edge_color_b = v.edge_color_b ?? 1; v.edge_opacity = v.edge_opacity ?? 1; v.thickness = v.thickness ?? 0.03125; v.size_scale = v.size_scale ?? 1;"
       },
       "minecraft:emitter_rate_instant": {
         "num_particles": 1
@@ -38,174 +38,174 @@
       "emit": {
         "sequence": [
           {
-            "expression": "t.size_x = v.size_x; t.size_y = v.size_y; t.size_z = v.size_z; t.duration = v.duration; t.fade_in = v.fade_in; t.fade_out = v.fade_out; t.face_opacity = v.face_opacity; t.face_opacity_inner = v.face_opacity_inner; t.face_r = v.face_color_r; t.face_g = v.face_color_g; t.face_b = v.face_color_b; t.edge_r = v.edge_color_r; t.edge_g = v.edge_color_g; t.edge_b = v.edge_color_b; t.edge_opacity = v.edge_opacity; t.thickness = v.thickness; t.half_x = t.size_x/2; t.half_y = t.size_y/2; t.half_z = t.size_z/2; t.eps = 0.03125; t.face_x = t.half_x + t.eps; t.face_y = t.half_y + t.eps; t.face_z = t.half_z + t.eps; t.delta = t.thickness/math.sqrt(2); t.edge_x = t.face_x + t.delta; t.edge_y = t.face_y + t.delta; t.edge_z = t.face_z + t.delta;"
+            "expression": "t.size_x = v.size_x; t.size_y = v.size_y; t.size_z = v.size_z; t.duration = v.duration; t.fade_in = v.fade_in; t.fade_out = v.fade_out; t.face_opacity = v.face_opacity; t.face_opacity_inner = v.face_opacity_inner; t.face_r = v.face_color_r; t.face_g = v.face_color_g; t.face_b = v.face_color_b; t.edge_r = v.edge_color_r; t.edge_g = v.edge_color_g; t.edge_b = v.edge_color_b; t.edge_opacity = v.edge_opacity; t.thickness = v.thickness; t.half_x = t.size_x/2; t.half_y = t.size_y/2; t.half_z = t.size_z/2; t.eps = 0.03125; t.k = v.size_scale;  t.face_x = t.half_x + t.eps; t.face_y = t.half_y + t.eps; t.face_z = t.half_z + t.eps; t.delta = t.thickness/math.sqrt(2); t.edge_x = t.face_x + t.delta; t.edge_y = t.face_y + t.delta; t.edge_z = t.face_z + t.delta;"
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = t.face_x; v.pos_y = 0; v.pos_z = 0; v.width = t.half_z; v.height = t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
-            }
-          },
-          {
-            "particle_effect": {
-              "effect": "apitest:box_face",
-              "type": "emitter",
-              "pre_effect_expression": "v.normal_x = -1; v.normal_y = 0; v.normal_z = 0; v.pos_x = -t.face_x; v.pos_y = 0; v.pos_z = 0; v.width = t.half_z; v.height = t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = t.face_x; v.pos_y = 0; v.pos_z = 0; v.width = t.k*t.half_z; v.height = t.k*t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = 0; v.pos_y = t.face_y; v.pos_z = 0; v.width = t.half_x; v.height = t.half_z; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = -1; v.normal_y = 0; v.normal_z = 0; v.pos_x = -t.face_x; v.pos_y = 0; v.pos_z = 0; v.width = t.k*t.half_z; v.height = t.k*t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = -1; v.normal_z = 0; v.pos_x = 0; v.pos_y = -t.face_y; v.pos_z = 0; v.width = t.half_x; v.height = t.half_z; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = 0; v.pos_y = t.face_y; v.pos_z = 0; v.width = t.k*t.half_x; v.height = t.k*t.half_z; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = 0; v.pos_y = 0; v.pos_z = t.face_z; v.width = t.half_x; v.height = t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = -1; v.normal_z = 0; v.pos_x = 0; v.pos_y = -t.face_y; v.pos_z = 0; v.width = t.k*t.half_x; v.height = t.k*t.half_z; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = -1; v.pos_x = 0; v.pos_y = 0; v.pos_z = -t.face_z; v.width = t.half_x; v.height = t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = 0; v.pos_y = 0; v.pos_z = t.face_z; v.width = t.k*t.half_x; v.height = t.k*t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = -1; v.normal_y = 0; v.normal_z = 0; v.pos_x = t.face_x; v.pos_y = 0; v.pos_z = 0; v.width = t.half_z; v.height = t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = -1; v.pos_x = 0; v.pos_y = 0; v.pos_z = -t.face_z; v.width = t.k*t.half_x; v.height = t.k*t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = -t.face_x; v.pos_y = 0; v.pos_z = 0; v.width = t.half_z; v.height = t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = -1; v.normal_y = 0; v.normal_z = 0; v.pos_x = t.face_x; v.pos_y = 0; v.pos_z = 0; v.width = t.k*t.half_z; v.height = t.k*t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = -1; v.normal_z = 0; v.pos_x = 0; v.pos_y = t.face_y; v.pos_z = 0; v.width = t.half_x; v.height = t.half_z; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = -t.face_x; v.pos_y = 0; v.pos_z = 0; v.width = t.k*t.half_z; v.height = t.k*t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = 0; v.pos_y = -t.face_y; v.pos_z = 0; v.width = t.half_x; v.height = t.half_z; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = -1; v.normal_z = 0; v.pos_x = 0; v.pos_y = t.face_y; v.pos_z = 0; v.width = t.k*t.half_x; v.height = t.k*t.half_z; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = -1; v.pos_x = 0; v.pos_y = 0; v.pos_z = t.face_z; v.width = t.half_x; v.height = t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = 0; v.pos_y = -t.face_y; v.pos_z = 0; v.width = t.k*t.half_x; v.height = t.k*t.half_z; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_face",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = 0; v.pos_y = 0; v.pos_z = -t.face_z; v.width = t.half_x; v.height = t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = -1; v.pos_x = 0; v.pos_y = 0; v.pos_z = t.face_z; v.width = t.k*t.half_x; v.height = t.k*t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+            }
+          },
+          {
+            "particle_effect": {
+              "effect": "apitest:box_face",
+              "type": "emitter",
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = 0; v.pos_y = 0; v.pos_z = -t.face_z; v.width = t.k*t.half_x; v.height = t.k*t.half_y; v.color_r = t.face_r; v.color_g = t.face_g; v.color_b = t.face_b; v.opacity = t.face_opacity_inner; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = 0; v.pos_y = 1*t.edge_y; v.pos_z = 1*t.edge_z; v.length = t.half_x; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = 0; v.pos_y = 1*t.edge_y; v.pos_z = 1*t.edge_z; v.length = t.k*t.half_x; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = 0; v.pos_y = 1*t.edge_y; v.pos_z = -1*t.edge_z; v.length = t.half_x; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = 0; v.pos_y = 1*t.edge_y; v.pos_z = -1*t.edge_z; v.length = t.k*t.half_x; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = 0; v.pos_y = -1*t.edge_y; v.pos_z = 1*t.edge_z; v.length = t.half_x; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = 0; v.pos_y = -1*t.edge_y; v.pos_z = 1*t.edge_z; v.length = t.k*t.half_x; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = 0; v.pos_y = -1*t.edge_y; v.pos_z = -1*t.edge_z; v.length = t.half_x; v.thickness = t.thickness; v.color_r = 1; v.color_g = 0; v.color_b = 0; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 1; v.normal_y = 0; v.normal_z = 0; v.pos_x = 0; v.pos_y = -1*t.edge_y; v.pos_z = -1*t.edge_z; v.length = t.k*t.half_x; v.thickness = t.thickness; v.color_r = 1; v.color_g = 0; v.color_b = 0; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = 1*t.edge_x; v.pos_y = 0; v.pos_z = 1*t.edge_z; v.length = t.half_y; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = 1*t.edge_x; v.pos_y = 0; v.pos_z = 1*t.edge_z; v.length = t.k*t.half_y; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = 1*t.edge_x; v.pos_y = 0; v.pos_z = -1*t.edge_z; v.length = t.half_y; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = 1*t.edge_x; v.pos_y = 0; v.pos_z = -1*t.edge_z; v.length = t.k*t.half_y; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = -1*t.edge_x; v.pos_y = 0; v.pos_z = 1*t.edge_z; v.length = t.half_y; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = -1*t.edge_x; v.pos_y = 0; v.pos_z = 1*t.edge_z; v.length = t.k*t.half_y; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = -1*t.edge_x; v.pos_y = 0; v.pos_z = -1*t.edge_z; v.length = t.half_y; v.thickness = t.thickness; v.color_r = 0; v.color_g = 1; v.color_b = 0; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 1; v.normal_z = 0; v.pos_x = -1*t.edge_x; v.pos_y = 0; v.pos_z = -1*t.edge_z; v.length = t.k*t.half_y; v.thickness = t.thickness; v.color_r = 0; v.color_g = 1; v.color_b = 0; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = 1*t.edge_x; v.pos_y = 1*t.edge_y; v.pos_z = 0; v.length = t.half_z; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = 1*t.edge_x; v.pos_y = 1*t.edge_y; v.pos_z = 0; v.length = t.k*t.half_z; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = 1*t.edge_x; v.pos_y = -1*t.edge_y; v.pos_z = 0; v.length = t.half_z; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = 1*t.edge_x; v.pos_y = -1*t.edge_y; v.pos_z = 0; v.length = t.k*t.half_z; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = -1*t.edge_x; v.pos_y = 1*t.edge_y; v.pos_z = 0; v.length = t.half_z; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = -1*t.edge_x; v.pos_y = 1*t.edge_y; v.pos_z = 0; v.length = t.k*t.half_z; v.thickness = t.thickness; v.color_r = t.edge_r; v.color_g = t.edge_g; v.color_b = t.edge_b; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           },
           {
             "particle_effect": {
               "effect": "apitest:box_edge",
               "type": "emitter",
-              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = -1*t.edge_x; v.pos_y = -1*t.edge_y; v.pos_z = 0; v.length = t.half_z; v.thickness = t.thickness; v.color_r = 0; v.color_g = 0; v.color_b = 1; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
+              "pre_effect_expression": "v.normal_x = 0; v.normal_y = 0; v.normal_z = 1; v.pos_x = -1*t.edge_x; v.pos_y = -1*t.edge_y; v.pos_z = 0; v.length = t.k*t.half_z; v.thickness = t.thickness; v.color_r = 0; v.color_g = 0; v.color_b = 1; v.opacity = t.edge_opacity; v.duration = t.duration; v.fade_in = t.fade_in; v.fade_out = t.fade_out;"
             }
           }
         ]

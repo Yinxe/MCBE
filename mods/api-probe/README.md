@@ -5,14 +5,16 @@
 本模组不提供任何玩法功能，它只做一件事：把某个坐标处方块的容器，按 Script API 真实返回的数据原样摊开给人看。用途是在开发其它模组时核对「API 说容器里是什么」与「游戏里实际是什么」，尤其是容器自报统计与逐槽遍历结果不一致、或者某些槽位读取出错的时候。
 
 - 包名：`@mc-toolchain/api-probe`
-- 版本：`0.1.1`
+- 版本：`0.3.0`
 - 脚本 API 依赖：`@minecraft/server 2.1.0`、`@minecraft/server-ui 2.0.0`
 
 ## 命令
 
 | 命令 | 说明 | 参数 |
 | --- | --- | --- |
-| `/apitest:box <x1> <y1> <z1> <x2> <y2> <z2> [秒数]` | 用粒子在两个方块角点之间画出 3D 框选线框 | 必填：两个角点（方块坐标整数）；可选：存活秒数，默认 10，上限 120 |
+| `/apitest:box <x1> <y1> <z1> <x2> <y2> <z2> [秒数] [尺寸系数]` | 两个方块角点之间画 3D 框选线框 | 必填：两个角点（六个整数坐标）；可选：存活秒数（默认 10，上限 120）、尺寸系数（默认 1） |
+
+坐标参数用 `Integer` 而不是 `Location`：`Location` 在本项目的 `@minecraft/server 2.1.0` 上实测会导致整条命令不注册（命令从命令表里消失），六个整数参数则稳定可用。
 | `/apitest:container <x> <y> <z>` | 读取指定坐标方块的容器，用表单展示槽位与物品详情 | 必填：`x`、`y`、`z`（方块坐标整数） |
 
 要点：
@@ -54,26 +56,33 @@
 
 ## 3D 框选线框
 
-`/apitest:box` 用**纯粒子**在指定区域上画出半透明盒子 + 12 条棱线，不放置方块、不写世界、不需要还原。
+`/apitest:box` 用**纯粒子**在指定区域上画出半透明盒子 + 12 条棱线 + 最小角 XYZ 三色轴，不放置方块、不写世界、不需要还原。
 
 ```text
-/apitest:box 100 64 -20 109 71 -11
-/apitest:box 100 64 -20 109 71 -11 30
+/apitest:box 100 64 -20 109 71 -11          ← 两个角点
+/apitest:box 100 64 -20 109 71 -11 30       ← 再加存活 30 秒
 ```
 
-回执会写出盒子尺寸、体积与两个角点：
+坐标是整数方块坐标，负坐标按 `floor` 归到所在方块（`-20.9` 属于 `-21` 号方块）。
+
+
+### 尺寸系数（`scale` 参数）
+
+`particle_appearance_billboard.size` 到底是**半径**还是**全宽**，官方文档没有写清，不同来源的说法互相矛盾。本模组按「半径」实现（`size` 传半尺寸），但留了一个现场可调的系数：
 
 ```text
-[API 探针] 框选 10×8×10(800 格),角点 100 64 -20 → 109 71 -11,10 秒后消失
+/apitest:box 100 64 -20 109 71 -11 10 0.5    ← 框大了一倍时
+/apitest:box 100 64 -20 109 71 -11 10 2      ← 框小了一半时
 ```
 
-要点：
+系数只乘在**尺寸**（面片宽高、棱线长度）上，位置始终落在盒子边界，所以调它不会让框跑偏，只会让面片/棱线在边界内伸缩。试出正确值后，把它写成 `BoxRenderer.ts` 里的默认值即可。
 
-- **角点是方块坐标**，框住的是两个方块各自占据的整个单位立方体，所以三轴边长是 `|Δ| + 1`。传 `100 64 -20` 与 `109 71 -11` 得到 `10×8×10`。
-- **两个角点顺序无关**，逐轴取 min / max。
-- **只看不改**：整个绘制只有一次 `spawnParticle`，不读写方块、不写动态属性。
-- **最小角画 XYZ 三色轴**（红=X、绿=Y、蓝=Z），一眼看出盒子原点与朝向。
-- 单边超过 256 格时拒绝绘制并提示，避免出现无法辨认的巨大面片。
+`tools/verify-box-geometry.mjs` 可以在不启动游戏的情况下校验跨度，配合 `SIZE_SCALE` 环境变量验证任意系数：
+
+```bash
+node tools/verify-box-geometry.mjs            # 按 k=1 校验
+SIZE_SCALE=0.5 node tools/verify-box-geometry.mjs
+```
 
 ### 实现要点（改粒子时必读）
 
@@ -103,9 +112,13 @@
 ## 开发
 
 ```bash
-npm run build -w @mc-toolchain/api-probe   # 编译并打包到 dist/
-npm run lint  -w @mc-toolchain/api-probe   # eslint + prettier
-npm run pack  -w @mc-toolchain/api-probe   # 产出 release/api-probe-v0.0.1_bp.mcpack
+npm run build  -w @mc-toolchain/api-probe   # 编译并打包到 dist/
+npm run lint   -w @mc-toolchain/api-probe   # eslint + prettier
+npm run pack   -w @mc-toolchain/api-probe   # 产出 release/api-probe-v<版本>.mcaddon
+npm run test   -w @mc-toolchain/api-probe   # BoxGeometry 单测(需先 build)
+
+# 不启动游戏校验框选几何跨度(配合 SIZE_SCALE 可验证任意尺寸系数)
+node mods/api-probe/tools/verify-box-geometry.mjs
 ```
 
 产物只有 `@minecraft/server` 与 `@minecraft/server-ui` 两个外部依赖，`mod-common` 等共享包会被打进同一个 bundle。

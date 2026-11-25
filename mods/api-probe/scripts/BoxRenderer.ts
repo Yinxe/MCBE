@@ -53,6 +53,14 @@ export interface DrawOptions {
   faceColor?: ColorComponents;
   /** 棱线颜色,默认白 */
   edgeColor?: ColorComponents;
+  /**
+   * 尺寸缩放系数(诊断用,默认 1)。
+   *
+   * `particle_appearance_billboard.size` 到底是半径还是全宽,官方文档没有写清,
+   * 实测会差 2 倍。这个系数乘在面片宽高与棱线长度上,让现场可以一键试出正确值:
+   * 框大了一倍就传 0.5,小了一半就传 2。位置不受影响,始终落在盒子边界上。
+   */
+  sizeScale?: number;
 }
 
 /**
@@ -85,6 +93,7 @@ export function buildBoxMolang(shape: BoxShape, options: DrawOptions = {}): Mola
   molang.setFloat("edge_color_g", edgeColor.green);
   molang.setFloat("edge_color_b", edgeColor.blue);
   molang.setFloat("thickness", EDGE_THICKNESS);
+  molang.setFloat("size_scale", options.sizeScale ?? 1);
   return molang;
 }
 

@@ -31,20 +31,26 @@ export interface BoxShape {
 export const MAX_BOX_EDGE = 256;
 
 /**
- * 把两个方块坐标角点规整成盒子形状。
+ * 把两个角点规整成盒子形状。
+ *
+ * 角点允许是带小数的坐标(命令的 Location 参数可以直接写 `100.7 64.2 -20.9`,
+ * 也可以用 `~` 相对坐标),这里先按所在方块取整 —— 用 `Math.floor` 而不是截断:
+ * 负坐标下截断会把 -20.9 算成 -20,而该位置实际属于 -21 号方块。
  *
  * 两个角点的传入顺序无关;逐轴取 min / max 即可。
  */
 export function boxFromCorners(cornerA: BlockPosition, cornerB: BlockPosition): BoxShape {
+  const a = toBlockPosition(cornerA);
+  const b = toBlockPosition(cornerB);
   const min: BlockPosition = {
-    x: Math.min(cornerA.x, cornerB.x),
-    y: Math.min(cornerA.y, cornerB.y),
-    z: Math.min(cornerA.z, cornerB.z),
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    z: Math.min(a.z, b.z),
   };
   const max: BlockPosition = {
-    x: Math.max(cornerA.x, cornerB.x),
-    y: Math.max(cornerA.y, cornerB.y),
-    z: Math.max(cornerA.z, cornerB.z),
+    x: Math.max(a.x, b.x),
+    y: Math.max(a.y, b.y),
+    z: Math.max(a.z, b.z),
   };
 
   // +1:两个方块之间的格子数包含两端,例如 x=0 与 x=2 框住 0/1/2 共 3 格
@@ -64,6 +70,15 @@ export function boxFromCorners(cornerA: BlockPosition, cornerB: BlockPosition): 
     min,
     max,
     volume: size.x * size.y * size.z,
+  };
+}
+
+/** 把任意坐标取整到所在方块 */
+export function toBlockPosition(position: BlockPosition): BlockPosition {
+  return {
+    x: Math.floor(position.x),
+    y: Math.floor(position.y),
+    z: Math.floor(position.z),
   };
 }
 
