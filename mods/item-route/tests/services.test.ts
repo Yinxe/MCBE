@@ -653,3 +653,30 @@ test("OrganizeService: organizeStandalone 就地整理但不发任何领域事�
   assert.equal(items[1]!.itemId, "minecraft:stone");
   assert.equal(items[1]!.amount, 15);
 });
+
+// ── showBoundary 默认开启（新仓库 + 旧档兼容） ──────────────
+test("设置: 新仓库 showBoundary 默认开启", () => {
+  assert.equal(createDefaultSettings().showBoundary, true);
+  const svc = new WarehouseService(new InMemoryWarehouseStore(), new EventBus());
+  const r = svc.createWarehouse("新仓", "p1", area1);
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  assert.equal(r.warehouse.settings.showBoundary, true, "新仓库应默认显示边界");
+});
+
+test("设置: 旧档 settings 缺 showBoundary → 合并默认后为开启", () => {
+  const store = new InMemoryWarehouseStore();
+  const legacySettings = { ...createDefaultSettings() } as Record<string, unknown>;
+  delete legacySettings["showBoundary"];
+  store.save({
+    id: "w@(0,0,0)-(10,10,10)@overworld",
+    displayName: "旧仓",
+    ownerName: "p1",
+    members: [{ playerName: "p1", role: "owner" }],
+    area: area1,
+    settings: legacySettings as never,
+  });
+
+  const wh = new WarehouseService(store, new EventBus()).loadAll()[0]!;
+  assert.equal(wh.settings.showBoundary, true, "旧档缺字段 → 补默认值 true");
+});

@@ -22,6 +22,7 @@ import { isSupportedContainerType } from "../../core/model/ContainerTypes";
 import { containerShortName } from "../../core/model/ContainerId";
 import type { Location } from "../../core/model/types";
 import { handleCornerClick } from "./interactionLogic";
+import { isWarehouseToken } from "../../core/token";
 import { showContainerConfigMenu } from "../ui/ContainerRoleMenu";
 import { showWarehouseSettingsMenu } from "../ui/WarehouseSettingsMenu";
 import { showMainMenu } from "../ui/MainMenu";
@@ -95,7 +96,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
       // ⚠️ 假人守卫：模拟玩家也能右键方块，且 `e.player` 可能是半初始化/坏句柄——
       // 裸读 `.name` / `.location` 即 TypeError。任何一项不可读就直接跳过（不 cancel）。
       if (!playerGuard.isUsablePlayer(player)) return;
-      if (e.itemStack === undefined || !deps.config.isToken(e.itemStack.typeId)) return; // 信物判定
+      if (e.itemStack === undefined || !isWarehouseToken(e.itemStack.typeId)) return; // 信物判定
       const playerName = playerNameOf(player);
       if (playerName === undefined) return; // 取不到名（半初始化）→ 不处理
       const isLongPress = !e.isFirstEvent; // 长按：按住产生的重复事件
@@ -163,7 +164,7 @@ export function registerToolInteraction(deps: CommandDeps): void {
       const player = e.source;
       // ⚠️ 假人守卫：模拟玩家也能使用物品；裸读 `.name` / `getBlockFromViewDirection` 可能 TypeError
       if (!playerGuard.isUsablePlayer(player)) return;
-      if (e.itemStack === undefined || !deps.config.isToken(e.itemStack.typeId)) return;
+      if (e.itemStack === undefined || !isWarehouseToken(e.itemStack.typeId)) return;
       const playerName = playerNameOf(player);
       if (playerName === undefined) return; // 取不到名（半初始化）→ 不处理
       const lastBlock = recentBlockUse.get(playerName);

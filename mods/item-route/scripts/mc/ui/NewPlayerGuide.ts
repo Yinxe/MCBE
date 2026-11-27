@@ -22,7 +22,7 @@ export async function tryShowNewPlayerGuide(player: Player, config: McModConfig)
         `${chat.info}3. 手持信物右键容器设置角色`,
         `${chat.info}4. 往输入容器放物品 → 自动路由`,
         "",
-        `${chat.muted}信物默认：${chat.info}木锄 ${chat.muted}（可在设置更换）`,
+        `${chat.muted}仓库信物：${chat.info}/ir:token ${chat.muted}领取（也可在工作台合成）`,
         `${chat.muted}更多见 /ir:help`,
       ].join("\n")
     )

@@ -1,0 +1,23 @@
+{
+  "format_version": "1.26.30",
+  "minecraft:item": {
+    "description": {
+      "identifier": "itemroute:warehouse_token",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:display_name": {
+        "value": "item.itemroute:warehouse_token.name"
+      },
+      "minecraft:icon": {
+        "textures": {
+          "default": "warehouse_token"
+        }
+      },
+      "minecraft:glint": true,
+      "minecraft:hand_equipped": false
+    }
+  }
+}

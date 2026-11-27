@@ -172,7 +172,7 @@ export async function showWarehouseSettingsMenu(
     })
     .toggle("showBoundary", `${uiColor.form.accent}显示边界光幕`, {
       defaultValue: settings.showBoundary,
-      tooltip: "在仓库区域边缘持续显示粒子边界（附近玩家手持信物时可见；v1 同款）",
+      tooltip: "以立体盒子线框显示仓库范围（附近玩家手持信物时可见，默认开启）",
     })
     .toggle("warningEnabled", `${uiColor.form.warn}容量预警`, {
       defaultValue: settings.warningEnabled,

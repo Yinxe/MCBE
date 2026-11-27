@@ -8,6 +8,7 @@ import type { Warehouse } from "../../core/model/Warehouse";
 import type { Location } from "../../core/model/types";
 import { searchMarkerMolang } from "../effects/SortEffects";
 import { playerGuard } from "../util/playerGuard";
+import { isWarehouseToken } from "../../core/token";
 import { playerNameOf } from "../util/playerName";
 import * as uiColor from "./uiColor";
 
@@ -126,7 +127,7 @@ export function runSearchAndDisplay(player: Player, deps: CommandDeps, warehouse
   if (locs.length > 0) {
     // 维度 id 用快照（不裸读 player.dimension）；取不到就不开粒子标记
     const dimensionId = playerGuard.safePlayerCall(player, (p) => p.dimension.id);
-    if (dimensionId !== undefined) startMarkerParticles(player, dimensionId, locs, (t) => deps.config.isToken(t));
+    if (dimensionId !== undefined) startMarkerParticles(player, dimensionId, locs, isWarehouseToken);
   }
 }
 
@@ -153,7 +154,7 @@ export function startMarkerParticles(
   player: Player,
   dimensionId: string,
   locations: Location[],
-  isToken: (itemTypeId: string) => boolean
+  tokenPredicate: (itemTypeId: string | undefined) => boolean
 ): void {
   // 每玩家独立会话：同一玩家重复搜索（含换仓）→ 清旧会话再重启（结果刷新、不重叠）
   // 会话 key 用守卫解析出的名字（假人/半初始化实体裸读 `.name` 可能是 undefined）
@@ -181,7 +182,7 @@ export function startMarkerParticles(
     try {
       const inv = player.getComponent("inventory")?.container;
       const held = inv?.getItem(player.selectedSlotIndex);
-      holdingToken = isToken(held?.typeId ?? "");
+      holdingToken = tokenPredicate(held?.typeId);
     } catch {
       /* 玩家离线：holdingToken 保持 false */
     }

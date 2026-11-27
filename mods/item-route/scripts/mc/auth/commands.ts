@@ -32,7 +32,7 @@ export function requireRole(
 
 /**
  * 权限矩阵：命令 → 最低角色；"any" = 任意玩家。
- * create/organize/help 任意；menu member+（无访客角色，成员即可进菜单）；rescan member+；
+ * create/organize/help/token 任意；menu member+（无访客角色，成员即可进菜单）；rescan member+；
  * delete/resize owner。
  */
 export type CommandAccess = MemberRole | "any";
@@ -46,6 +46,7 @@ export const COMMAND_MIN_ROLE: Record<string, CommandAccess> = {
   search: "member", // 容器搜索：仅仓库成员（就近需有权限），v1 语义
   organize: "any",
   help: "any",
+  token: "any", // 信物是使用模组的前提：任何玩家都能给自己领
 };
 
 /**

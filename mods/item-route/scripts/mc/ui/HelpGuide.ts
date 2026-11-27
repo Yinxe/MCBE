@@ -16,12 +16,12 @@ function sectionBody(index: number): string {
         `${chat.warn}快速上手`,
         `${chat.info}1. /ir:create 名称 x1 y1 z1 x2 y2 z2 建仓`,
         `${chat.info}2. 区域内放箱子/漏斗（自动注册为容器）`,
-        `${chat.info}3. 手持信物右键容器设置角色`,
+        `${chat.info}3. 手持仓库信物（${chat.info}/ir:token${chat.info} 领取）右键容器设置角色`,
         `${chat.info}4. 往输入容器放物品，自动路由`,
       ].join("\n");
     case 1:
       return [
-        `${chat.warn}命令一览（9 条）`,
+        `${chat.warn}命令一览（10 条）`,
         `${chat.info}/ir:create${chat.muted} 建仓（任意）`,
         `${chat.info}/ir:resize${chat.muted} 调整区域（owner）`,
         `${chat.info}/ir:rescan${chat.muted} 重扫容器（member+）`,
@@ -31,6 +31,7 @@ function sectionBody(index: number): string {
         `${chat.info}/ir:search${chat.muted} 在你有权限的最近仓库搜索物品（member+）`,
         `${chat.info}/ir:organize${chat.muted} 整理（任意）`,
         `${chat.info}/ir:help${chat.muted} 帮助（任意）`,
+        `${chat.info}/ir:token${chat.muted} 领取仓库信物（任意）`,
       ].join("\n");
     case 2:
       return [

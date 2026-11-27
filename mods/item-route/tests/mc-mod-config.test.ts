@@ -22,24 +22,7 @@ test("McModConfig: 设置持久化 + clamp", () => {
   assert.equal(McModConfig.load(new ShardStore(kv)).globalSpeedLimit, 1);
 });
 
-// ── Task 3: 信物 + 引导标记 ─────────────────────────────
-test("McModConfig: 默认信物 wooden_hoe + isToken", () => {
-  const cfg = McModConfig.load(new ShardStore(new InMemoryKeyValueStore()));
-  assert.equal(cfg.tokenItemId, "minecraft:wooden_hoe");
-  assert.equal(cfg.isToken("minecraft:wooden_hoe"), true);
-  assert.equal(cfg.isToken("minecraft:diamond"), false);
-});
-
-test("McModConfig: setTokenItemId 持久化", () => {
-  const kv = new InMemoryKeyValueStore();
-  const cfg = McModConfig.load(new ShardStore(kv));
-  cfg.setTokenItemId("minecraft:stick");
-  const reloaded = McModConfig.load(new ShardStore(kv));
-  assert.equal(reloaded.tokenItemId, "minecraft:stick");
-  assert.equal(reloaded.isToken("minecraft:stick"), true);
-  assert.equal(reloaded.isToken("minecraft:wooden_hoe"), false);
-});
-
+// ── 引导标记 ────────────────────────────────────────────
 test("McModConfig: 引导标记按玩家独立 hasSeenGuide/markSeenGuide", () => {
   const kv = new InMemoryKeyValueStore();
   const cfg = McModConfig.load(new ShardStore(kv));

@@ -1,0 +1,8 @@
+{
+  "materials": {
+    "version": "1.0.0",
+    "itemroute_blend_cull:particles_blend": {
+      "-states": ["DisableCulling"]
+    }
+  }
+}

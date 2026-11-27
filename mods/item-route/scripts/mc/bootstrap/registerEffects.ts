@@ -4,6 +4,8 @@
 import { world } from "@minecraft/server";
 import type { EventBus } from "../../core/events/DomainEvents";
 import type { Warehouse } from "../../core/model/Warehouse";
+import { isWarehouseToken } from "../../core/token";
+import { namedPlayers } from "../util/playerName";
 import { registerSortEffects } from "../effects/SortEffects";
 import { registerBoundaryDisplay } from "../effects/BoundaryDisplay";
 import { registerWarningRelay } from "../effects/WarningRelay";
@@ -16,6 +18,19 @@ import { registerNotifyRelay } from "../effects/NotifyRelay";
  * @param loaded - 运行时仓库表（Phase 4 填充；闭包实时读，激活/卸载即时生效）
  */
 export function registerRenderEffects(bus: EventBus, loaded: Warehouse[]): void {
+  // 边界可见性守卫：**附近任一玩家手持信物**才绘制（临时与持久边界同口径）
+  const guardTokenNearby = (): boolean => {
+    for (const { player: p } of namedPlayers(world.getAllPlayers())) {
+      try {
+        const held = p.getComponent("inventory")?.container?.getItem(p.selectedSlotIndex);
+        if (isWarehouseToken(held?.typeId)) return true;
+      } catch {
+        /* 玩家读取失败/半初始化 → 视为未持信物 */
+      }
+    }
+    return false;
+  };
+
   // 路由闪光 / 搜索标记：维度 + 命中容器（坐标/角色/方块类型 → 角色颜色粒子 + 尺寸）
   registerSortEffects(bus, {
     dimensionOf: (whId) => {
@@ -38,10 +53,14 @@ export function registerRenderEffects(bus: EventBus, loaded: Warehouse[]): void 
   });
 
   // 临时边界（建仓/调整区域后 boundary-glow）
-  registerBoundaryDisplay(bus, (whId) => {
-    const w = loaded.find((x) => x.id === whId);
-    return w === undefined ? undefined : { dimensionId: w.area.dimension, area: w.area };
-  });
+  registerBoundaryDisplay(
+    bus,
+    (whId) => {
+      const w = loaded.find((x) => x.id === whId);
+      return w === undefined ? undefined : { dimensionId: w.area.dimension, area: w.area };
+    },
+    guardTokenNearby
+  );
 
   // 容量预警 / 成员通知（都只需仓库解析）
   registerWarningRelay(bus, () => loaded);

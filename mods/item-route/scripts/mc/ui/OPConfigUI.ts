@@ -1,10 +1,8 @@
-// ─── 管理员配置 UI（OP 专属）：全局开关/信物/速度上限/建仓限制/全服统计/菜单信息开关 ──
+// ─── 管理员配置 UI（OP 专属）：全局开关/速度上限/建仓限制/全服统计/菜单信息开关 ──
 import { type Player } from "@minecraft/server";
 import { ActionFormBuilder, ModalFormBuilder } from "@mc-toolchain/mod-common";
 import type { CommandDeps } from "../commands/deps";
 import type { WarehouseSpec } from "../../core/services/WarehouseService";
-import { getChineseName } from "../../core/data/ItemNameMap";
-import { TOKEN_OPTIONS } from "../storage/McModConfig";
 import { showOPInfoConfigUI } from "./OPInfoConfigUI";
 import * as uiColor from "./uiColor";
 
@@ -33,7 +31,6 @@ export async function showOPConfigUI(player: Player, deps: CommandDeps): Promise
       [
         `${uiColor.form.muted}全局路由：${deps.config.globalEnabled ? uiColor.form.success + "开启" : uiColor.form.error + "关闭"}`,
         `${uiColor.form.muted}速度上限：${uiColor.form.body}${deps.config.globalSpeedLimit} tick/槽`,
-        `${uiColor.form.muted}信物：${uiColor.form.body}${deps.config.tokenItemId}`,
       ].join("\n")
     )
     .buttonWithIcon(`${uiColor.btn.primary}修改设置`, "textures/ui/item-route/config", () => void editConfig(player, deps))
@@ -42,9 +39,8 @@ export async function showOPConfigUI(player: Player, deps: CommandDeps): Promise
   await form.show(player);
 }
 
-/** 修改全局配置的表单：全局开关 / 更换信物 / 速度上限 / 建仓限制；保存即写穿 + 运行时生效 */
+/** 修改全局配置的表单：全局开关 / 速度上限 / 建仓限制；保存即写穿 + 运行时生效 */
 async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
-  const tokenIndex = Math.max(0, TOKEN_OPTIONS.indexOf(deps.config.tokenItemId));
   const speedIndex = Math.max(0, SPEED_OPTIONS.indexOf(deps.config.globalSpeedLimit));
   const spec = deps.config.maxWarehouseSpec;
   const specIndex = Math.max(
@@ -54,13 +50,6 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
   const form = new ModalFormBuilder()
     .title(`${uiColor.form.title}修改配置`)
     .toggle("globalEnabled", "全局路由", { defaultValue: deps.config.globalEnabled })
-    // 信物下拉：优先 name-maps 中文名，未覆盖的物品回退游戏 id（v1 同款中文展示）
-    .dropdown(
-      "token",
-      "信物",
-      TOKEN_OPTIONS.map((id) => `${getChineseName(id)}（${id}）`),
-      { defaultValueIndex: tokenIndex }
-    )
     .dropdown(
       "speed",
       "全局最快速度限制",
@@ -107,7 +96,6 @@ async function editConfig(player: Player, deps: CommandDeps): Promise<void> {
     if (w.settings.processingSpeed < newSpeedLimit)
       deps.warehouses.updateSettings(w, { processingSpeed: newSpeedLimit });
   }
-  deps.config.setTokenItemId(TOKEN_OPTIONS[values.token as number] ?? TOKEN_OPTIONS[0]!);
   deps.config.setMaxWarehouseSpec(maxSpec);
   deps.config.setMaxWarehousesPerPlayer(maxWarehouses);
   deps.config.setMaxContainers(maxContainers);

@@ -36,7 +36,11 @@ export interface WarehouseSettings {
   warningThreshold: number;
   /** 自动整理触发阈值（0-1，v1 混乱度模型；超过即触发） */
   autoSortThreshold: number;
-  /** 持久边界光幕：区域 12 棱持续显示粒子线框（附近玩家持信物可见；v1 showBoundary 口径） */
+  /**
+   * 持久边界光幕：区域以立体盒子线框显示（附近玩家持信物可见）。
+   * **默认开启**：仓库区域是虚拟的，玩家需要随时能看见自己的仓库到哪。
+   * 旧档缺该字段 → 合并默认值时即为 true。
+   */
   showBoundary: boolean;
   /** 容量预警全局开关（默认开；关闭后该仓不再触发任何预警消息） */
   warningEnabled: boolean;
@@ -60,7 +64,7 @@ export function createDefaultSettings(): WarehouseSettings {
     processingSpeed: 8,
     warningThreshold: 0.9,
     autoSortThreshold: 0.4,
-    showBoundary: false,
+    showBoundary: true,
     warningEnabled: true,
     defaultContainerRole: "single",
     defaultContainerEnabled: true,

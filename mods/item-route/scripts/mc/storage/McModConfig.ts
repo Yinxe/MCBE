@@ -1,4 +1,4 @@
-// ─── 模组全局配置：速度上限/全局开关/信物/建仓限制/引导标记 ──
+// ─── 模组全局配置：速度上限/全局开关/建仓限制/引导标记 ──
 // 单键 `ir2:modcfg`（overwrite + hash）存 ModConfigData，内存缓存一份副本；
 // setter 写穿透落盘。引导标记走独立 per-player 键 `ir2:guide_seen:{playerName}`
 // （v1 口径：每个玩家各自看一次新手引导）。
@@ -16,7 +16,6 @@ const SPEED_MAX = 40; // 与 core Scheduler clamp 一致
 export interface ModConfigData {
   globalEnabled: boolean;
   globalSpeedLimit: number;
-  tokenItemId: string;
   /** 单仓最大规格（各轴最大边长，v1 口径：规格限制而非体积格数，默认 32×16×32） */
   maxWarehouseSpec: WarehouseSpec;
   /** 每玩家最多仓库数（v1 默认 1） */
@@ -30,28 +29,11 @@ export interface ModConfigData {
 export const DEFAULT_MOD_CONFIG: ModConfigData = {
   globalEnabled: true,
   globalSpeedLimit: 8, // 全局"最快速度"下限（tick 越小越快）；默认与仓库默认速度 8 一致 → 默认不额外限速
-  tokenItemId: "minecraft:wooden_hoe",
   maxWarehouseSpec: { x: 32, y: 16, z: 32 },
   maxWarehousesPerPlayer: 1,
   maxContainers: 100,
   menuInfo: defaultMenuInfo(),
 };
-
-/** 信物可选列表（OPConfigUI 下拉；对齐 v1 smartwarehouse ModConfigStore.TOKEN_OPTIONS 的物品清单） */
-export const TOKEN_OPTIONS = [
-  "minecraft:wooden_hoe",
-  "minecraft:stick",
-  "minecraft:parrot_spawn_egg",
-  "minecraft:nautilus_shell",
-  "minecraft:disc_fragment_5",
-  "minecraft:nether_star",
-  "minecraft:blaze_powder",
-  "minecraft:feather",
-  "minecraft:flint",
-  "minecraft:blaze_rod",
-  "minecraft:breeze_rod",
-  "minecraft:arrow",
-];
 
 /**
  * 模组全局配置：单键 `ir2:modcfg`（overwrite + hash）存 ModConfigData，内存缓存一份副本；
@@ -94,7 +76,6 @@ export class McModConfig {
     this.data = {
       globalEnabled: data?.globalEnabled ?? DEFAULT_MOD_CONFIG.globalEnabled,
       globalSpeedLimit: McModConfig.clamp(data?.globalSpeedLimit ?? DEFAULT_MOD_CONFIG.globalSpeedLimit),
-      tokenItemId: data?.tokenItemId ?? DEFAULT_MOD_CONFIG.tokenItemId,
       maxWarehouseSpec: data?.maxWarehouseSpec ?? DEFAULT_MOD_CONFIG.maxWarehouseSpec,
       maxWarehousesPerPlayer: data?.maxWarehousesPerPlayer ?? DEFAULT_MOD_CONFIG.maxWarehousesPerPlayer,
       maxContainers: data?.maxContainers ?? DEFAULT_MOD_CONFIG.maxContainers,
@@ -108,9 +89,6 @@ export class McModConfig {
   }
   get globalSpeedLimit(): number {
     return this.data.globalSpeedLimit;
-  }
-  get tokenItemId(): string {
-    return this.data.tokenItemId;
   }
   get maxWarehouseSpec(): WarehouseSpec {
     return this.data.maxWarehouseSpec;
@@ -142,12 +120,6 @@ export class McModConfig {
     this.save();
   }
 
-  /** 更换信物物品 */
-  setTokenItemId(itemId: string): void {
-    this.data.tokenItemId = itemId;
-    this.save();
-  }
-
   /** 修改单仓最大规格（各轴最大边长，v1 OPConfigUI 下拉可配） */
   setMaxWarehouseSpec(spec: WarehouseSpec): void {
     this.data.maxWarehouseSpec = spec;
@@ -164,11 +136,6 @@ export class McModConfig {
   setMaxContainers(count: number): void {
     this.data.maxContainers = count;
     this.save();
-  }
-
-  /** 是否信物物品 */
-  isToken(itemTypeId: string): boolean {
-    return itemTypeId === this.data.tokenItemId;
   }
 
   /** 新手引导是否已看过（按玩家独立 DP 键，v1 口径） */

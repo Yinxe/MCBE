@@ -111,7 +111,7 @@ const organize = new OrganizeService(organizer, bus);
 // 选区会话存储（建仓/调整区域流程；HUD 显示会话状态也读它）
 const sessionStore = new SelectionSessionStore();
 // 持久边界光幕控制（showBoundary 设置启停；菜单/命令经 deps.boundary 调用）+ 生命周期订阅
-const boundary = setupPersistentBoundaryControl({ bus, config, loaded });
+const boundary = setupPersistentBoundaryControl({ bus, loaded });
 // 背包整理（潜行点非容器）：主栏包装成 core Container 就地整理，结果与容器整理同格式
 const organizeInventory = createInventoryOrganizer(organize, item);
 // 视觉/播报效果：路由闪光（角色颜色粒子）+ 临时边界 + 容量预警 + 成员通知

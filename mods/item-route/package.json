@@ -1,6 +1,6 @@
 {
   "name": "@mc-toolchain/item-route",
-  "version": "0.1.21",
+  "version": "0.1.24",
   "productName": "物品路由",
   "description": "物品路由仓库 — 自动分拣、容器整理、仓库统计、容量预警",
   "author": {
